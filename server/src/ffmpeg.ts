@@ -380,7 +380,8 @@ const WAVEFORM_FINE_BUCKETS = 1 << 16;
  * the failure mode) entirely: memory is O(WAVEFORM_FINE_BUCKETS), not
  * O(duration).
  */
-export async function extractWaveform(videoPath: string, barCount?: number): Promise<number[]> {
+export async function extractWaveform(videoPath: string, barCount?: number, streamIndex?: number, signal?: AbortSignal): Promise<number[]> {
+  signal?.throwIfAborted();
   const sumSq = new Float64Array(WAVEFORM_FINE_BUCKETS);
   const count = new Int32Array(WAVEFORM_FINE_BUCKETS);
   let samplesPerBucket = 1;
@@ -420,11 +421,14 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
       const child = spawn(
         FFMPEG,
         withQuietFfmpegArgs([
-          "-i", videoPath, "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1",
+          "-i", videoPath, "-map", streamIndex === undefined ? "0:a:0" : `0:${streamIndex}`, "-vn", "-ac", "1", "-ar", String(SAMPLE_RATE), "-f", "s16le", "pipe:1",
         ]),
         { stdio: ["ignore", "pipe", "pipe"] },
       );
 
+      const abort = () => child.kill("SIGTERM");
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
       let carry = -1; // a single low byte left over when a chunk splits a sample
       child.stdout.on("data", (chunk: Buffer) => {
         let offset = 0;
@@ -441,6 +445,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
       child.stderr.resume();
       child.on("error", reject);
       child.on("close", (code) => {
+        signal?.removeEventListener("abort", abort);
         // No samples means no decodable audio (no audio stream, or a decode
         // error). Surface it once, but return empty rather than rejecting so a
         // genuinely silent clip caches as "no waveform" instead of churning.
@@ -451,6 +456,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
       });
     });
 
+    signal?.throwIfAborted();
     if (totalSamples === 0) return [];
     if (inBucket > 0) count[writeIdx++] = inBucket; // finalise the partial bucket
     const usedBuckets = writeIdx;
@@ -479,6 +485,7 @@ export async function extractWaveform(videoPath: string, barCount?: number): Pro
     const max = Math.max(...peaks, 1);
     return peaks.map((p) => p / max);
   } catch (err) {
+    signal?.throwIfAborted();
     // Only reached if ffmpeg fails to spawn (e.g. binary missing). The stream
     // never buffers, so the old maxBuffer failure mode can't recur here.
     logger.error("waveform-failed", { error: err });

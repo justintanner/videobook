@@ -171,7 +171,7 @@ function videoFilter(
       || left.clip.timelineStartFrame - right.clip.timelineStartFrame);
   visual.forEach((item, index) => {
     const transform = item.clip.transform;
-    const fit = transform?.fit ?? "fill";
+    const fit = transform?.fit ?? "fit";
     const crop = transform
       ? `crop=iw*${1 - transform.cropLeft - transform.cropRight}:ih*${1 - transform.cropTop - transform.cropBottom}:iw*${transform.cropLeft}:ih*${transform.cropTop},`
       : "";

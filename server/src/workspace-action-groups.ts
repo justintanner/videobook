@@ -39,7 +39,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "audio_mix", "extract_notebook_audio", "extract_audio", "make_cover_song",
     "extend_audio_asset", "remove_sound", "replace_video_audio", "transcribe",
     "read_transcript", "translate_subtitles", "isolate_vocals", "clean_video_audio",
-    "export_transcript_srt",
+    "export_transcript_srt", "analyze_music", "get_music_analysis",
   ],
   Images: [
     "crop_image", "invert_image", "concat_images", "describe_image",
@@ -59,7 +59,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "get_edit_action", "restore_edit_action", "validate_sequence_export",
     "plan_sequence_export", "enqueue_sequence_export", "get_primary_sequence",
     "add_sequence_track", "remove_sequence_track", "plan_notebook_rough_cut",
-    "plan_sequence_sound_effects",
+    "plan_sequence_sound_effects", "plan_music_video", "commit_music_video", "get_sequence_rhythm", "update_sequence_rhythm",
   ],
   Search: [
     "search_library_moments", "search_moments", "suggest_sequence_coverage",

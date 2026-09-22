@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Film, Plus, Trash2, X } from 'lucide-react'
 import type { Sequence, SequenceClip, SequenceTrack } from 'videobook-engine'
@@ -6,6 +6,9 @@ import { notebookGrid } from '@/videobook/notebook-grid'
 import { handleModalDialogKeyDown } from '@/videobook/modal-dialog-interactions'
 import { restoreFocusElement } from '@/videobook/command-composer-focus'
 import type { TimelineAsset, useTimelineAssembly } from '@/videobook/useTimelineAssembly'
+import { clipWaveform, nearestBeat } from '../../../server/src/rhythm/timing'
+import type { MusicAnalysis } from '../../../server/src/rhythm/model'
+import { waveformEnvelopePath } from '@/videobook/waveform-path'
 import './NotebookTimeline.css'
 
 export interface NotebookTimelineProps {
@@ -20,6 +23,16 @@ export interface NotebookTimelineProps {
   onExport: () => void
   onRemove?: () => void
   presentation?: 'canvas' | 'preview'
+  toolbar?: ReactNode
+  onSelectClip?: (clip: SequenceClip) => void
+  onMoveClip?: (clip: SequenceClip, frame: number) => void
+  onRemoveClip?: (clip: SequenceClip) => void
+  rhythm?: {
+    masterClipId: string | null
+    markers: readonly { frame: number; bar: boolean; manual: boolean }[]
+    analysis: MusicAnalysis | null
+    snap: 'off' | 'beats' | 'bars'
+  }
 }
 
 const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
@@ -79,11 +92,13 @@ function TimelinePicker({ assembly }: Pick<NotebookTimelineProps, 'assembly'>) {
   )
 }
 
-export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas' }: NotebookTimelineProps) {
+export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas', toolbar, onSelectClip, onMoveClip, onRemoveClip, rhythm }: NotebookTimelineProps) {
   const [zoom, setZoom] = useState<number | 'fit'>(presentation === 'preview' ? 'fit' : 48)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const selectedClip = assembly.selectedClipId
+  const [drag, setDrag] = useState<{ clipId: string; clientX: number; start: number; frame: number } | null>(null)
+  const dragged = useRef(false)
   const audioViewport = useRef<HTMLDivElement>(null)
   const horizontalViewport = useRef<HTMLDivElement>(null)
   const [audioHeight, setAudioHeight] = useState(120)
@@ -125,8 +140,9 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
     observer.observe(horizontal)
     return () => observer.disconnect()
   }, [])
-  const firstTrack = Math.max(0, Math.min(Math.floor(scrollTop / laneHeight), tracks.length - 1) - 1)
-  const visibleTracks = tracks.slice(firstTrack, firstTrack + Math.ceil(audioHeight / laneHeight) + 3)
+  const trackHeight = presentation === 'preview' ? 64 : laneHeight
+  const firstTrack = Math.max(0, Math.min(Math.floor(scrollTop / trackHeight), tracks.length - 1) - 1)
+  const visibleTracks = tracks.slice(firstTrack, firstTrack + Math.ceil(audioHeight / trackHeight) + 3)
   const busy = disabled || assembly.busy
   const selected = sequence?.clips.find((clip) => clip.clipId === selectedClip)
   const selectedTrack = sequence?.tracks.find((track) => track.trackId === selected?.trackId)
@@ -135,6 +151,21 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
   const tickSeconds = Math.max(1, 2 ** Math.ceil(Math.log2(100 / pixelsPerSecond)))
   const firstTick = Math.floor(boundedLeft / pixelsPerSecond / tickSeconds)
   const ticks = Array.from({ length: Math.ceil(laneWidth / pixelsPerSecond / tickSeconds) + 2 }, (_, index) => (firstTick + index) * tickSeconds)
+  const visibleMarkers = useMemo(() => {
+    const visible: NonNullable<NotebookTimelineProps['rhythm']>['markers'][number][] = []
+    for (const marker of rhythm?.markers ?? []) {
+      const x = marker.frame / fps * pixelsPerSecond - boundedLeft
+      const previous = visible[visible.length - 1]
+      const previousX = previous ? previous.frame / fps * pixelsPerSecond - boundedLeft : -Infinity
+      if (x < 0 || x > laneWidth) continue
+      if (x - previousX < (marker.bar ? 8 : 14)) {
+        if (marker.bar && previous && !previous.bar) visible[visible.length - 1] = marker
+        continue
+      }
+      visible.push(marker)
+    }
+    return visible
+  }, [rhythm?.markers, fps, pixelsPerSecond, boundedLeft, laneWidth])
 
   function seekAt(clientX: number, element: HTMLElement) {
     const rect = element.getBoundingClientRect()
@@ -160,25 +191,49 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
         <div className="timeline-track-lane" onClick={(event) => seekAt(event.clientX, event.currentTarget)}>
           {visibleClips.map((clip) => {
             const asset = assetsById.get(clip.source.artifactId)
-            const left = clip.timelineStartFrame / fps * pixelsPerSecond - boundedLeft
+            const left = (drag?.clipId === clip.clipId ? drag.frame : clip.timelineStartFrame) / fps * pixelsPerSecond - boundedLeft
             const clipWidth = clip.durationFrames / fps * pixelsPerSecond
+            const analysis = rhythm?.analysis?.artifactId === clip.source.artifactId ? rhythm.analysis : null
+            const peaks = track.kind === 'audio' ? clipWaveform(clip, analysis?.waveform ?? asset?.waveform ?? [], analysis?.durationSeconds ?? asset?.duration ?? 0, fps, Math.min(2048, Math.max(32, Math.ceil(clipWidth / 2)))) : []
+            const waveform = waveformEnvelopePath(peaks)
             return (
               <button
-                className={`timeline-clip${selectedClip === clip.clipId ? ' selected' : ''}`}
+                className={`timeline-clip${selectedClip === clip.clipId ? ' selected' : ''}${rhythm?.masterClipId === clip.clipId ? ' timeline-master' : ''}`}
                 type="button"
                 key={clip.clipId}
                 data-clip-id={clip.clipId}
                 aria-pressed={selectedClip === clip.clipId}
                 title={`${asset?.label ?? 'Clip'} · ${(clip.durationFrames / fps).toFixed(2)}s`}
                 style={{ left, width: Math.max(2, clipWidth) }}
-                onClick={(event) => { event.stopPropagation(); assembly.selectClip(clip.clipId); onSeek(clip.timelineStartFrame) }}
+                onPointerDown={(event) => {
+                  if (!onMoveClip || readOnly || track.kind !== 'video' || track.locked || busy || event.button !== 0) return
+                  dragged.current = false
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  setDrag({ clipId: clip.clipId, clientX: event.clientX, start: clip.timelineStartFrame, frame: clip.timelineStartFrame })
+                }}
+                onPointerMove={(event) => {
+                  if (!drag || drag.clipId !== clip.clipId) return
+                  if (Math.abs(event.clientX - drag.clientX) > 4) dragged.current = true
+                  const raw = Math.max(0, drag.start + (event.clientX - drag.clientX) / pixelsPerSecond * fps)
+                  const target = event.altKey ? Math.round(raw) : nearestBeat(raw, rhythm?.markers ?? [], rhythm?.snap ?? 'off', 12 / pixelsPerSecond * fps)
+                  setDrag({ ...drag, frame: target })
+                }}
+                onPointerUp={() => {
+                  if (drag?.clipId === clip.clipId && dragged.current && drag.frame !== clip.timelineStartFrame) onMoveClip?.(clip, drag.frame)
+                  setDrag(null)
+                }}
+                onPointerCancel={() => { dragged.current = false; setDrag(null) }}
+                onKeyDown={(event) => { if (event.key === 'Escape' && drag) { event.stopPropagation(); dragged.current = false; setDrag(null) } }}
+                onClick={(event) => { event.stopPropagation(); if (dragged.current) { dragged.current = false; return } assembly.selectClip(clip.clipId); onSelectClip?.(clip); onSeek(clip.timelineStartFrame) }}
               >
+                {waveform && <svg className="timeline-waveform" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={waveform} /></svg>}
                 {asset?.thumbnailUrl && track.kind === 'video' && clipWidth > 55 && <img src={asset.thumbnailUrl} alt="" loading="lazy" />}
                 <span>{asset?.label ?? 'Clip'}</span>
               </button>
             )
           })}
           {clips.length === 0 && <span className="timeline-empty-lane">Add {track.kind} to begin</span>}
+          {visibleMarkers.map((marker) => <i key={marker.frame} className={`timeline-beat${marker.bar ? ' bar' : ''}${marker.manual ? ' manual' : ''}`} style={{ left: marker.frame / fps * pixelsPerSecond - boundedLeft }} aria-hidden="true" />)}
           <i className="timeline-playhead" style={{ left: frame / fps * pixelsPerSecond - boundedLeft }} />
         </div>
       </div>
@@ -193,14 +248,15 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
           <button type="button" disabled={busy || !sequence} onClick={() => void assembly.addTrack()}>+ Audio track</button>
           {onPreview && <button type="button" disabled={!sequence || endFrame === 0} onClick={onPreview}>Preview</button>}
           <button type="button" disabled={busy || endFrame === 0} onClick={onExport}>Export</button>
-          <button type="button" disabled={busy || !canRemove} onClick={() => selected && void assembly.removeClip(selected.clipId)}>Remove clip</button>
+          <button type="button" disabled={busy || !canRemove} onClick={() => { if (selected) { if (onRemoveClip) onRemoveClip(selected); else void assembly.removeClip(selected.clipId) } }}>Remove clip</button>
           <button type="button" aria-label="Zoom timeline out" onClick={() => setZoom(Math.max(Math.min(0.25, fittedZoom), pixelsPerSecond / 2))}>−</button>
           <button type="button" aria-label="Zoom timeline in" onClick={() => setZoom(Math.min(Math.max(768, fittedZoom), pixelsPerSecond * 2))}>+</button>
           <button type="button" aria-pressed={zoom === 'fit'} onClick={() => { setZoom('fit'); setScrollLeft(0); horizontalViewport.current?.scrollTo({ left: 0 }) }}>Fit</button>
           {onRemove && <button type="button" disabled={busy} aria-label="Remove Timeline element" onClick={onRemove}><Trash2 size={14} /></button>}
         </div>
       </header>
-      <div className="timeline-assembly nodrag nopan nowheel" onKeyDown={(event) => event.stopPropagation()}>
+      {toolbar && <div className="timeline-music-toolbar">{toolbar}</div>}
+      <div className="timeline-assembly nodrag nopan nowheel">
         {assembly.error && !assembly.picker && <div role="alert" className="timeline-error">{assembly.error}</div>}
         <div className="timeline-ruler-row">
           <span>{timeLabel(frame / fps)}</span>
@@ -210,8 +266,8 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
         </div>
         {mainVideo && lane(mainVideo)}
         <div className="timeline-audio-viewport" ref={audioViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-          <div className="timeline-audio-content" style={{ height: tracks.length * laneHeight }}>
-            {visibleTracks.map((track, index) => lane(track, { position: 'absolute', top: (firstTrack + index) * laneHeight, width: '100%' }))}
+          <div className="timeline-audio-content" style={{ height: tracks.length * trackHeight }}>
+            {visibleTracks.map((track, index) => lane(track, { position: 'absolute', top: (firstTrack + index) * trackHeight, height: trackHeight, width: '100%' }))}
           </div>
         </div>
         <div className="timeline-horizontal" ref={horizontalViewport} onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}>

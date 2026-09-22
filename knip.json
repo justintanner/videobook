@@ -23,6 +23,7 @@
         "src/**/*.test.ts",
         "scripts/**/*.ts",
         "src/remotion/index.tsx",
+        "src/rhythm/worker.ts",
         "src/quiet-probes/**"
       ]
     }

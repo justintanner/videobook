@@ -8,13 +8,14 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (301)
+## MCP endpoints (307)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
+- `analyze_music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio
 - `analyze_video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
@@ -39,6 +40,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
 - `clean_video_audio` — Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
+- `commit_music_video` — Apply a reviewed music-video draft once, checking its timeline, source and beat-map revisions. Returns the previous action on a retry.
 - `concat_images` — Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `configure_asset_tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
@@ -167,6 +169,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
 - `get_legacy_migration` — Read durable migration progress, job state, and the completed source archive link
+- `get_music_analysis` — Read cached music beats, waveform and analysis job status for the current source audio
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
 - `get_primary_sequence` — Read the canonical primary sequence
@@ -175,6 +178,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_scene_entity` — Read a reusable scene
 - `get_search_coverage` — Read progressive semantic-index coverage for a book or artifact
 - `get_search_index_status` — Read temporal search manifests, providers, and index statistics
+- `get_sequence_rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
@@ -214,6 +218,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `pin_search_moment` — Pin a revision-stable search moment into a notebook media selection cell
 - `plan_chat_command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools
 - `plan_generation_insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion
+- `plan_music_video` — Make a reviewable beat-aligned music video draft from selected sources. Does not save edits. Preview the returned sequence, then use commit_music_video with its intent, preview hash, rhythm revision and sequence content revision only after review. Uncovered spans require more footage or explicit reuse/retiming.
 - `plan_notebook_generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution
 - `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
 - `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
@@ -303,6 +308,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `update_prompt_entity` — Update a reusable prompt
 - `update_scene_entity` — Update a reusable scene
 - `update_script` — Update a script asset's markdown content (original.md).
+- `update_sequence_rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio
 - `update_timeline_audio` — Update an audio overlay's volume or fades
 - `upload_file` — Upload a media or markdown file into a Videobook project as an asset
 - `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new video artifact and enqueues a background job.
@@ -312,7 +318,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (371; 143 dedicated command routes)
+## Slash actions (377; 143 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -321,6 +327,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
+- `/analyze-music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.; MCP: `analyze_video`
 - `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
@@ -361,6 +368,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
 - `/collapse` — Close the project selector (left), chat controls (right), or both; UI: `sidebar_collapse`
 - `/commit-edit-intent` — Commit an unchanged previewed CommandPlan edit stage atomically; MCP: `commit_edit_intent`
+- `/commit-music-video` — Apply a reviewed music-video draft once, checking its timeline, source and beat-map revisions. Returns the previous action on a retry.; MCP: `commit_music_video`
 - `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
 - `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
@@ -495,6 +503,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
 - `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
 - `/get-legacy-migration` — Read durable migration progress, job state, and the completed source archive link; MCP: `get_legacy_migration`
+- `/get-music-analysis` — Read cached music beats, waveform and analysis job status for the current source audio; MCP: `get_music_analysis`
 - `/get-notebook` — Read a notebook graph; MCP: `get_notebook`
 - `/get-notebook-cell-details` — Return selected-cell details including raw Dolt row, edges, and action validation; MCP: `get_notebook_cell_details`
 - `/get-primary-sequence` — Read the canonical primary sequence; MCP: `get_primary_sequence`
@@ -503,6 +512,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-scene-entity` — Read a reusable scene; MCP: `get_scene_entity`
 - `/get-search-coverage` — Read progressive semantic-index coverage for a book or artifact; MCP: `get_search_coverage`
 - `/get-search-index-status` — Read temporal search manifests, providers, and index statistics; MCP: `get_search_index_status`
+- `/get-sequence-rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state; MCP: `get_sequence_rhythm`
 - `/get-timeline` — Get the selected book's typed v2 timeline; MCP: `get_timeline`
 - `/get-watermark-config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.; MCP: `get_watermark_config`
 - `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
@@ -559,6 +569,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/pin-search-moment` — Pin a revision-stable search moment into a notebook media selection cell; MCP: `pin_search_moment`
 - `/plan-chat-command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools; MCP: `plan_chat_command`
 - `/plan-generation-insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion; MCP: `plan_generation_insert`
+- `/plan-music-video` — Make a reviewable beat-aligned music video draft from selected sources. Does not save edits. Preview the returned sequence, then use commit_music_video with its intent, preview hash, rhythm revision and sequence content revision only after review. Uncovered spans require more footage or explicit reuse/retiming.; MCP: `plan_music_video`
 - `/plan-notebook-generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution; MCP: `plan_notebook_generation`
 - `/plan-notebook-rough-cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan; MCP: `plan_notebook_rough_cut`
 - `/plan-notebook-run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure; MCP: `plan_notebook_run`
@@ -674,6 +685,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/update-prompt-entity` — Update a reusable prompt; MCP: `update_prompt_entity`
 - `/update-scene-entity` — Update a reusable scene; MCP: `update_scene_entity`
 - `/update-script` — Update a script asset's markdown content (original.md).; MCP: `update_script`
+- `/update-sequence-rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio; MCP: `update_sequence_rhythm`
 - `/update-timeline-audio` — Update an audio overlay's volume or fades; MCP: `update_timeline_audio`
 - `/upload` — Upload a file; UI: `open_upload`
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`

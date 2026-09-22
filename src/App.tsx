@@ -68,6 +68,8 @@ import type {
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import { sequenceContentRevision } from './videobook/sequence-revision'
 import { useTimelineAssembly } from './videobook/useTimelineAssembly'
+import { useMusicRhythm } from './videobook/useMusicRhythm'
+import type { MusicDraftOptions, MusicVideoDraft } from '../server/src/rhythm/draft-model'
 import { NotebookTimeline, type NotebookTimelineProps } from './components/videobook/NotebookTimeline'
 
 import {
@@ -561,7 +563,6 @@ import {
 } from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
-const TimelinePreview = lazy(() => import('./components/videobook/TimelinePreview').then((module) => ({ default: module.TimelinePreview })))
 
 const WatermarkBody = lazy(async () => {
   const module = await import('@/components/videobook/confirm/bodies/WatermarkBody')
@@ -3382,8 +3383,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }) as CSSProperties, [commandRowHeight])
   const [composerDockOpen, setComposerDockOpen] = useState(false)
   const [imageDockHost, setImageDockHost] = useState<HTMLDivElement | null>(null)
-  const [musicDockHost, setMusicDockHost] = useState<HTMLDivElement | null>(null)
-  const [musicComposerTarget, setMusicComposerTarget] = useState<HTMLDivElement | null>(null)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [historyViewCellId, setHistoryViewCellId] = useState<string | null>(null)
   const [historyState, setHistoryState] = useState<{
@@ -3737,8 +3736,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return [...merged.values()]
     }),
   })
-  const timelinePlaybackAssets = useMemo(() => assets.flatMap((asset) => asset.mediaUrl
-    ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : []), [assets])
+  const musicRhythm = useMusicRhythm({
+    bookId, ready: mcp.state === 'ready', sequence, call,
+    onSequence: (value) => {
+      const next = asSequence(value)
+      if (next) { watchSnapshotClockRef.current = performance.now(); setSequence(next) }
+    },
+  })
   const timelinePreviewCell = timelinePreview?.bookId === bookId
     ? notebook?.cells.find((cell) => cell.id === timelinePreview.cellId && cell.type === 'timeline')
     : undefined
@@ -8450,6 +8454,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       setSequence(nextSequence)
       setLastEditActionId(actionId)
+      const master = nextSequence.clips.find((clip) => clip.trackId === prepared.audioTrackId && clip.source.artifactId === musicVideoSession.audioArtifactId)
+      if (master) await musicRhythm.save({ masterClipId: master.clipId, correction: null }, nextSequence)
       setMusicVideoSession((current) => current?.key === sessionKey
         ? {
             ...current,
@@ -8513,6 +8519,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       actionId,
       beforeRevision: stage.intent.baseRevision,
     }
+  }
+
+  const planMusicDraft = async (options: MusicDraftOptions, expectedSequence: Sequence): Promise<MusicVideoDraft> => {
+    return await call('plan_music_video', {
+      book_id: bookId, expected_revision: await sequenceContentRevision(expectedSequence),
+      rhythm_revision: musicRhythm.rhythm.revision, options, source_surface: 'ui', actor: 'videobook-user',
+    }) as MusicVideoDraft
+  }
+
+  const applyMusicDraft = async (draft: MusicVideoDraft): Promise<MusicVideoCommitResult> => {
+    const intent = draft.plan.stages[0]?.intent
+    if (!intent || draft.uncovered.length) throw new Error('Review a complete draft before applying it')
+    const result = recordValue(await call('commit_music_video', { book_id: bookId, intent, preview_hash: draft.preview.previewHash, rhythm_revision: draft.rhythmRevision, sequence_content_revision: draft.sequenceContentRevision }))
+    const next = asSequence(result?.sequence)
+    const actionId = asString(result?.actionId)
+    if (!next || !actionId) throw new Error('The server returned an invalid draft commit')
+    setSequence(next)
+    setLastEditActionId(actionId)
+    return { sequence: next, actionId, beforeRevision: intent.baseRevision }
   }
 
   const restoreMusicVideoRevision = async (
@@ -10890,6 +10915,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? document.activeElement
           : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
         setMediaFullscreen(null)
+        setTimelinePreview(null)
+        void musicRhythm.load()
         setMusicVideoSession({
           key: sessionKey,
           audioArtifactId: audioAsset.artifactId,
@@ -12046,7 +12073,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
-  const showCommandComposer = !timelinePreviewOpen && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
+  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -12535,6 +12562,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const openTimelinePreview = (cellId: string, frame = timeline.frame) => {
     if (!sequence) return
     selectCanvasCell(cellId)
+    setMusicVideoSession(null)
+    void musicRhythm.load()
     timeline.seek(frame)
     setTimelinePreview({
       bookId,
@@ -12545,6 +12574,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const closeTimelinePreview = () => {
     timeline.closePicker()
+    musicRhythm.stop()
     setTimelinePreview(null)
   }
   const timelineContext: TimelineContextValue = {
@@ -12728,9 +12758,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       </div>
       {fullscreenImageEditor
         ? <div ref={setImageDockHost} className="composer-image-dock-host" />
-        : null}
-      {musicVideoSession
-        ? <div ref={setMusicDockHost} className="composer-music-dock-host" />
         : null}
     </>
   ) : null
@@ -13203,16 +13230,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <Suspense fallback={<div role="status">Loading music-video editor…</div>}>
           <MusicVideoEditor
             key={musicVideoSession.key}
+            assembly={timeline}
+            rhythm={musicRhythm}
+            onFrameUpdate={timeline.seek}
+            onExport={() => { closeMusicVideoEditor(); timelineContext.onExport() }}
             sequence={sequence}
             assets={assets}
             audioArtifactId={musicVideoSession.audioArtifactId}
             setup={musicVideoSession.setup}
             returnFocus={musicVideoSession.returnFocus}
-            dockPortal={musicDockHost}
-            composerPortalRef={setMusicComposerTarget}
             onApplySetup={applyMusicVideoSetup}
-            onClose={closeMusicVideoEditor}
+            onClose={() => { musicRhythm.stop(); closeMusicVideoEditor() }}
             onCommit={commitMusicVideoEdit}
+            onPlanDraft={planMusicDraft}
+            onApplyDraft={applyMusicDraft}
             onCreateTrack={createMusicVideoTrack}
             onRefreshAssets={async () => {
               if (!bookId) throw new Error('Load or create a book first.')
@@ -13230,20 +13261,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
       {timelinePreviewOpen && timelinePreview && timelinePreviewCell && sequence && (
         <Suspense fallback={<div role="status">Opening timeline preview…</div>}>
-          <TimelinePreview
+          <MusicVideoEditor
             key={`${bookId}:${timelinePreviewCell.id}`}
             sequence={sequence}
             assets={assets}
             assembly={timeline}
-            disabled={busy || mcp.state !== 'ready'}
-            frame={timeline.frame}
+            rhythm={musicRhythm}
+            setup={{ status: 'timeline' }}
             address={notebookGridTag(timelinePreviewCell.slot)}
-            playbackAssets={timelinePlaybackAssets}
             initialFrame={timelinePreview.initialFrame}
             returnFocus={timelinePreview.returnFocus}
             onFrameUpdate={timeline.seek}
             onExport={() => { closeTimelinePreview(); timelineContext.onExport() }}
             onClose={closeTimelinePreview}
+            onApplySetup={applyMusicVideoSetup}
+            onCommit={commitMusicVideoEdit}
+            onPlanDraft={planMusicDraft}
+            onApplyDraft={applyMusicDraft}
+            onCreateTrack={createMusicVideoTrack}
+            onRefreshAssets={async () => { await refreshBookData(bookId, notebook?.id) }}
+            onRestore={restoreMusicVideoRevision}
+            onReviewSetup={async () => { await musicRhythm.load() }}
           />
         </Suspense>
       )}
@@ -13350,7 +13388,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         inputSession={composerSession}
         placeholder={fullscreenComposerPlaceholder}
         portalTarget={workspacePreview && currentActionComposer ? previewComposerTarget
-          : musicVideoSession ? musicComposerTarget
           : fullscreenImageEditor || (mediaFullscreen && currentActionComposer) ? mediaFullscreenComposerTarget : null}
         pendingInput={fullscreenImageEditor
           ? undefined

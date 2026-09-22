@@ -8,6 +8,9 @@ import {
   type Sequence,
 } from 'videobook-engine'
 import { afterEach, describe, expect, it } from 'vitest'
+import { planMusicVideo, commitMusicVideo } from '../../server/src/rhythm/music-draft.js'
+import { readSequenceRhythm, updateSequenceRhythm } from '../../server/src/rhythm/sequence-rhythm.js'
+import type { MusicDraftOptions } from '../../server/src/rhythm/draft-model.js'
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 
 function resultJson(result: {
@@ -583,4 +586,74 @@ describe('music-video canonical sequence plans', () => {
       speed: { numerator: 2, denominator: 5 },
     })
   })
+  async function draftFixture() {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-draft-'))
+    const engine = createEngine({ rootDir, initialBookName: 'music-draft' })
+    activeEngine = engine
+    const audio = await createTimedArtifact(engine, 'audio', 'song', 480_000)
+    const video = await createTimedArtifact(engine, 'video', 'portrait', 90)
+    const video2 = await createTimedArtifact(engine, 'video', 'landscape', 180)
+    let sequence = engine.sequences.getPrimary()
+    const videoTrack = sequence.tracks.find((track) => track.kind === 'video')!
+    const audioTrack = sequence.tracks.find((track) => track.kind === 'audio')!
+    sequence = await commitPlan(engine, { kind: 'append', artifact_id: audio.artifactId, track_id: audioTrack.trackId })
+    const master = sequence.clips.find((clip) => clip.trackId === audioTrack.trackId)!
+    const rhythm = await updateSequenceRhythm(engine, sequence.sequenceId, 'none', {
+      masterClipId: master.clipId, correction: { objectHash: audio.stream.objectHash, analysisId: null, bpm: 120, beatsPerBar: 4,
+        markers: Array.from({ length: 20 }, (_, index) => ({ id: `beat-${index}`, timeSeconds: index / 2, bar: index % 4 === 0, manual: true })) },
+    })
+    const options: MusicDraftOptions = { track_id: videoTrack.trackId, start_frame: 0, end_frame: 300,
+      sources: [{ artifact_id: video.artifactId }, { artifact_id: video2.artifactId }], interval: 4, unit: 'beats',
+      minimum_shot_frames: 8, preserve_existing: true, preserve_clip_ids: [], reuse_sources: false, allow_retiming: false }
+    const make = (overrides: Partial<MusicDraftOptions> = {}) => planMusicVideo(engine, { ...options, ...overrides }, engine.sequences.getPrimary().revision, rhythm.revision, 'draft-test', 'ui')
+    return { engine, video, video2, master, videoTrack, rhythm, options, make }
+  }
+
+  it('previews deterministic drafts without mutation, exposes uncovered spans, and applies one idempotent undoable edit', async () => {
+    const { engine, master, make } = await draftFixture()
+    const before = engine.sequences.getPrimary()
+    const incomplete = await make()
+    expect(incomplete.uncovered).not.toHaveLength(0)
+    expect(incomplete.shots.every((shot) => shot.speed === 1)).toBe(true)
+    const draft = await make({ reuse_sources: true })
+    expect(draft.uncovered).toEqual([])
+    expect(draft.shots.map((shot) => shot.startFrame)).toEqual([0, 60, 120, 180, 240])
+    expect((await make({ reuse_sources: true })).shots).toEqual(draft.shots)
+    expect(engine.sequences.getPrimary()).toEqual(before)
+    expect(draft.sequence.clips.find((clip) => clip.clipId === master.clipId)).toEqual(master)
+    expect(draft.sequence.clips.filter((clip) => clip.trackId !== master.trackId).every((clip) => clip.transform?.fit === 'fit')).toBe(true)
+    const intent = draft.plan.stages[0]!.intent
+    const commit = await commitMusicVideo(engine, intent, draft.preview.previewHash, draft.rhythmRevision, draft.sequenceContentRevision)
+    expect(commit.sequence.clips).toEqual(expect.arrayContaining(draft.sequence.clips))
+    const retry = await commitMusicVideo(engine, intent, draft.preview.previewHash, draft.rhythmRevision, draft.sequenceContentRevision)
+    expect(retry.actionId).toBe(commit.actionId)
+    expect(retry.sequence.clips).toHaveLength(6)
+    const restored = await engine.edits.restore({ targetRevision: intent.baseRevision, baseRevision: engine.head, actor: 'test', sourceSurface: 'ui' })
+    if (!restored.ok) throw new Error(restored.error.message)
+    expect(restored.value.sequence.clips).toEqual(before.clips)
+  })
+
+  it('preserves boundary clips, handles source limits and rejects stale beat maps and locked tracks', async () => {
+    const { engine, master, make, video, videoTrack, rhythm, options } = await draftFixture()
+    const first = await commitPlan(engine, { kind: 'append_clips', track_id: videoTrack.trackId, artifact_ids: [video.artifactId], timeline_limit_frame: 300, fit: 'source', visual_fit: 'fit' })
+    expect(first.clips.find((clip) => clip.trackId === videoTrack.trackId)).toMatchObject({ durationFrames: 90, speed: { numerator: 1, denominator: 1 }, transform: { fit: 'fit' } })
+    const boundary = await make({ start_frame: 60, preserve_existing: false, reuse_sources: true })
+    expect(boundary.shots[0]!.startFrame).toBe(90)
+    expect(boundary.sequence.clips.find((clip) => clip.trackId === videoTrack.trackId && clip.timelineStartFrame === 0)).toEqual(first.clips.find((clip) => clip.trackId === videoTrack.trackId))
+    expect(boundary.sequence.clips.find((clip) => clip.clipId === master.clipId)).toEqual(master)
+    const protectedDraft = await make({ preserve_existing: false, preserve_clip_ids: [first.clips.find((clip) => clip.trackId === videoTrack.trackId)!.clipId], reuse_sources: true })
+    expect(protectedDraft.shots[0]!.startFrame).toBe(90)
+    const short = await make({ sources: [{ artifact_id: video.artifactId, start_seconds: 1, end_seconds: 2 }], interval: 1, reuse_sources: true })
+    expect(short.shots.every((shot) => shot.sourceStartSeconds >= 1 && shot.sourceEndSeconds <= 2)).toBe(true)
+    const retimed = await make({ start_frame: 90, end_frame: 300, interval: 8, sources: [{ artifact_id: video.artifactId }], allow_retiming: true, reuse_sources: true })
+    expect(retimed.shots.some((shot) => shot.speed !== 1)).toBe(true)
+    const current = await readSequenceRhythm(engine, first.sequenceId)
+    await updateSequenceRhythm(engine, first.sequenceId, current.revision, { ...current.settings, correction: { ...current.settings.correction!, bpm: 121 } })
+    await expect(commitMusicVideo(engine, boundary.plan.stages[0]!.intent, boundary.preview.previewHash, boundary.rhythmRevision, boundary.sequenceContentRevision)).rejects.toThrow('beat map changed')
+    await expect(planMusicVideo(engine, options, engine.head, rhythm.revision, 'test', 'ui')).rejects.toThrow('beat map changed')
+    const latest = await readSequenceRhythm(engine, first.sequenceId)
+    expect((await engine.sequences.updateTrack(videoTrack.trackId, { locked: true })).ok).toBe(true)
+    await expect(planMusicVideo(engine, options, engine.head, latest.revision, 'test', 'ui')).rejects.toThrow('unlocked video track')
+  })
+
 })

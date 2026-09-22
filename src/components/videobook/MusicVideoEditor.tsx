@@ -17,13 +17,13 @@ import {
 } from 'lucide-react'
 import {
   useEffect,
+  useCallback,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
-  type DragEvent,
   type KeyboardEvent,
-  type PointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { Sequence, SequenceClip, TimedSequenceClip } from 'videobook-engine'
@@ -32,7 +32,13 @@ import {
   initialMusicDockView,
 } from '@/videobook/composer-dock'
 import { restoreFocusElement } from '@/videobook/command-composer-focus'
-import { waveformEnvelopePath } from '@/videobook/waveform-path'
+import { NotebookTimeline, type NotebookTimelineProps } from './NotebookTimeline'
+import { MusicRhythmControls } from './MusicRhythmControls'
+import { MusicDraftControls } from './MusicDraftControls'
+import type { MusicDraftOptions, MusicVideoDraft } from '../../../server/src/rhythm/draft-model'
+import type { useMusicRhythm } from '@/videobook/useMusicRhythm'
+import { nearestBeat } from '../../../server/src/rhythm/timing'
+import './TimelinePreview.css'
 import {
   CanonicalSequencePlayer,
   type CanonicalSequencePlayerHandle,
@@ -52,6 +58,7 @@ type MusicVideoAsset = {
 }
 
 export type MusicVideoSetupState =
+  | { status: 'timeline' }
   | { status: 'loading' }
   | { status: 'needs-audio-track'; message: string }
   | {
@@ -84,13 +91,20 @@ export type MusicVideoCommitResult = {
 }
 
 type MusicVideoEditorProps = {
+  assembly: NotebookTimelineProps['assembly']
+  rhythm: ReturnType<typeof useMusicRhythm>
+  address?: string
+  initialFrame?: number
+  onFrameUpdate: (frame: number) => void
+  onExport: () => void
+  onPlanDraft: (options: MusicDraftOptions, sequence: Sequence) => Promise<MusicVideoDraft>
+  onApplyDraft: (draft: MusicVideoDraft) => Promise<MusicVideoCommitResult>
+
   sequence: Sequence
   assets: MusicVideoAsset[]
-  audioArtifactId: string
+  audioArtifactId?: string
   setup: MusicVideoSetupState
   returnFocus: HTMLElement | null
-  dockPortal?: Element | null
-  composerPortalRef?: (element: HTMLDivElement | null) => void
   onApplySetup: () => Promise<MusicVideoCommitResult>
   onClose: () => void
   onCommit: (
@@ -132,7 +146,7 @@ const SPEEDS = [
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
   return [...dialog.querySelectorAll<HTMLElement>(
     'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )].filter((element) => !element.hidden)
+  )].filter((element) => element.getClientRects().length > 0 && !element.closest('[hidden], [inert]'))
 }
 
 function clipEnd(clip: SequenceClip): number {
@@ -146,15 +160,6 @@ function formatTime(frame: number, fps: number): string {
   return `${minutes}:${remainder.toFixed(2).padStart(5, '0')}`
 }
 
-function clipStyle(
-  clip: SequenceClip,
-  durationFrames: number,
-): CSSProperties {
-  return {
-    '--music-video-clip-start': `${clip.timelineStartFrame / durationFrames * 100}%`,
-    '--music-video-clip-width': `${clip.durationFrames / durationFrames * 100}%`,
-  } as CSSProperties
-}
 
 function orderedLaneClips(sequence: Sequence, trackId: string | null): SequenceClip[] {
   if (!trackId) return []
@@ -227,12 +232,9 @@ function sourceHandleFrames(
     timed.source.range.startTick + timed.source.range.durationTicks
   ) * timeBase
   const sourceDurationSeconds = asset?.duration ?? sourceEndSeconds
-  return {
-    before: Math.floor(sourceStartSeconds * fps / speed),
-    after: Math.floor(
-      Math.max(0, sourceDurationSeconds - sourceEndSeconds) * fps / speed,
-    ),
-  }
+  const before = Math.floor(sourceStartSeconds * fps / speed)
+  const after = Math.floor(Math.max(0, sourceDurationSeconds - sourceEndSeconds) * fps / speed)
+  return timed.reverse ? { before: after, after: before } : { before, after }
 }
 
 function isImageMediaUrl(url: string): boolean {
@@ -277,8 +279,14 @@ export function MusicVideoEditor({
   audioArtifactId,
   setup,
   returnFocus,
-  dockPortal = null,
-  composerPortalRef,
+  assembly,
+  rhythm,
+  address,
+  initialFrame = 0,
+  onFrameUpdate,
+  onExport,
+  onPlanDraft,
+  onApplyDraft,
   onApplySetup,
   onClose,
   onCommit,
@@ -287,38 +295,35 @@ export function MusicVideoEditor({
   onRestore,
   onReviewSetup,
 }: MusicVideoEditorProps) {
-  const dialogRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const closeDialog = useEffectEvent(onClose)
+  const [localDock, setLocalDock] = useState<HTMLDivElement | null>(null)
+  const dockPortal = localDock
+  const [dockOpen, setDockOpen] = useState(setup.status !== 'timeline')
+  const [timelineHeight, setTimelineHeight] = useState(30)
+  const [snap, setSnap] = useState<'off' | 'beats' | 'bars'>('beats')
   const playerRef = useRef<CanonicalSequencePlayerHandle>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const previewVideoRef = useRef<HTMLVideoElement>(null)
-  const [playheadFrame, setPlayheadFrame] = useState(0)
+  const [playheadFrame, setPlayheadFrame] = useState(initialFrame)
+  const updateFrame = useCallback((frame: number) => { setPlayheadFrame(frame); onFrameUpdate(frame) }, [onFrameUpdate])
+  const [draft, setDraft] = useState<MusicVideoDraft | null>(null)
   const [query, setQuery] = useState('')
   const [sourceSelection, setSourceSelection] = useState<string[]>([])
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
-  const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
+  const selectedClipId = assembly.selectedClipId
+  const setSelectedClipId = assembly.selectClip
   const [trimDraft, setTrimDraft] = useState<TrimDraft | null>(null)
   const [speedDraft, setSpeedDraft] = useState<string | null>(null)
   const [working, setWorking] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [timelineZoom, setTimelineZoom] = useState(1)
   const [undoSteps, setUndoSteps] = useState<RevisionStep[]>([])
   const [redoSteps, setRedoSteps] = useState<RevisionStep[]>([])
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null)
   const [dockView, setDockView] = useState<'sources' | 'soundtrack' | 'clip'>(
     () => initialMusicDockView(setup.status),
   )
-  const [waveformWait, setWaveformWait] = useState(false)
-  const audioAsset = assets.find((asset) => asset.artifactId === audioArtifactId)
-  const audioAssetRef = useRef(audioAsset)
-  const refreshAssetsRef = useRef(onRefreshAssets)
-  useEffect(() => {
-    audioAssetRef.current = audioAsset
-  }, [audioAsset])
-  useEffect(() => {
-    refreshAssetsRef.current = onRefreshAssets
-  }, [onRefreshAssets])
-  const mainTrack = sequence.tracks.find((track) =>
-    track.kind === 'video' && track.enabled && !track.locked) ?? null
+  const audioAsset = assets.find((asset) => asset.artifactId === (rhythm.master?.source.artifactId ?? audioArtifactId))
+  const mainTrack = [...sequence.tracks].sort((a, b) => a.ordinal - b.ordinal).find((track) => track.kind === 'video') ?? null
   const laneClips = orderedLaneClips(sequence, mainTrack?.trackId ?? null)
   const selectedClip = laneClips.find((clip) => clip.clipId === selectedClipId) ?? null
   const assetById = useMemo(
@@ -346,13 +351,13 @@ export function MusicVideoEditor({
         || asset.artifactId.toLowerCase().includes(normalized)
       ))
   }, [assets, query])
-  const durationFrames = setupLimit(setup, sequence)
+  const durationFrames = rhythm.master ? rhythm.master.timelineStartFrame + rhythm.master.durationFrames : setupLimit(setup, sequence)
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
   const laneEnd = Math.max(0, ...laneClips.map(clipEnd))
   const overflowFrames = Math.max(0, laneEnd - durationFrames)
   const editorEnabled = (
-    setup.status === 'ready' || setup.status === 'applied'
-  ) && mainTrack !== null
+    setup.status === 'ready' || setup.status === 'applied' || setup.status === 'timeline'
+  ) && mainTrack !== null && mainTrack.enabled && !mainTrack.locked
   const activeTrim = selectedClip
     ? trimDraft?.clipId === selectedClip.clipId
       ? trimDraft
@@ -388,7 +393,7 @@ export function MusicVideoEditor({
   const trimMaximum = selectedClip
     ? Math.min(
       durationFrames,
-      Math.max(clipEnd(selectedClip) + handles.after, stretchEnd),
+      clipEnd(selectedClip) + handles.after,
     )
     : durationFrames
   const selectedSpeed = currentSpeed(selectedClip)
@@ -399,76 +404,45 @@ export function MusicVideoEditor({
     : [{ label: speedLabel(selectedSpeed), value: selectedSpeed }, ...SPEEDS]
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     const dialog = dialogRef.current
-    const focusTarget = dialog?.querySelector<HTMLElement>('.canonical-player') ?? dialog
-    focusTarget?.focus()
+    dialog?.showModal()
+    dialog?.querySelector<HTMLButtonElement>('.music-video-close')?.focus()
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229 || !(event.target instanceof Element) || event.target.closest('dialog') !== dialog) return
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        closeDialog()
         return
       }
       if (event.key !== 'Tab' || !dialog) return
       const focusable = focusableElements(dialog)
-      if (focusable.length === 0) {
-        event.preventDefault()
-        dialog.focus()
-        return
-      }
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
-        last.focus()
+        last?.focus()
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault()
-        first.focus()
+        first?.focus()
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
+      dialog?.close()
       restoreFocusElement(returnFocus)
-      document.querySelector<HTMLElement>(
-        '[aria-label="Videobook command input"]',
-      )?.focus()
     }
-  }, [onClose, returnFocus])
-
-  useEffect(() => {
-    if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) return
-    let cancelled = false
-    setWaveformWait(true)
-    const poll = async () => {
-      for (let attempt = 0; attempt < 24 && !cancelled; attempt += 1) {
-        try {
-          await refreshAssetsRef.current()
-        } catch {
-          break
-        }
-        if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) break
-        await new Promise((resolve) => window.setTimeout(resolve, 1000))
-      }
-      if (!cancelled) setWaveformWait(false)
-    }
-    void poll()
-    return () => {
-      cancelled = true
-    }
-  }, [audioArtifactId])
+  }, [returnFocus])
 
   const runEdit = async (label: string, request: Record<string, unknown>) => {
-    if (working) return
+    if (working || draft) return false
     if (!mainTrack) {
       setError('Create a main video track before editing clips')
-      return
+      return false
     }
-    if (setup.status !== 'ready' && setup.status !== 'applied') {
+    if (setup.status !== 'ready' && setup.status !== 'applied' && setup.status !== 'timeline') {
       setError('Wait for the soundtrack duration before editing clips')
-      return
+      return false
     }
     setWorking(label)
     setError(null)
@@ -481,35 +455,27 @@ export function MusicVideoEditor({
       setRedoSteps([])
       setTrimDraft(null)
       setSpeedDraft(null)
+      return true
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
+      return false
     } finally {
       setWorking(null)
     }
   }
 
   const seekTo = (frame: number) => {
-    const next = Math.max(0, Math.min(durationFrames - 1, Math.round(frame)))
+    const next = Math.max(0, Math.min(Math.max(durationFrames, ...sequence.clips.map(clipEnd)) - 1, Math.round(frame)))
     setPreviewSourceId(null)
-    setPlayheadFrame(next)
+    updateFrame(next)
     playerRef.current?.seekTo(next)
-  }
-
-  const waveformPointer = (event: PointerEvent<HTMLButtonElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect()
-    seekTo((event.clientX - bounds.left) / Math.max(1, bounds.width) * durationFrames)
-  }
-
-  const waveformKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-    event.preventDefault()
-    seekTo(playheadFrame + (event.key === 'ArrowLeft' ? -1 : 1))
   }
 
   const selectClip = (clip: SequenceClip) => {
     setPreviewSourceId(null)
     setSelectedClipId(clip.clipId)
-    setDockView('clip')
+    setDockView(sequence.tracks.find((track) => track.trackId === clip.trackId)?.kind === 'audio' ? 'soundtrack' : 'clip')
+    setDockOpen(true)
     setTrimDraft({
       clipId: clip.clipId,
       startFrame: clip.timelineStartFrame,
@@ -529,12 +495,14 @@ export function MusicVideoEditor({
 
   const appendSelection = async () => {
     if (!mainTrack || sourceSelection.length === 0) return
-    await runEdit('Adding clips', {
+    const committed = await runEdit('Adding clips', {
       kind: 'append_clips',
       track_id: mainTrack.trackId,
       artifact_ids: sourceSelection,
-      timeline_limit_frame: durationFrames,
+      timeline_limit_frame: rhythm.master ? durationFrames : Math.max(durationFrames, laneEnd + sourceSelection.reduce((sum, id) => sum + Math.ceil((assetById.get(id)?.duration ?? 0) * fps), 0)),
+      fit: 'source', visual_fit: 'fit',
     })
+    if (!committed) return
     setSourceSelection([])
     setPreviewSourceId(null)
   }
@@ -585,7 +553,7 @@ export function MusicVideoEditor({
         timeline_start_frame: selectedClip.timelineStartFrame,
         duration_frames: target,
         edge: 'end',
-        ripple: true,
+        ripple: false,
         timeline_limit_frame: durationFrames,
       })
       return
@@ -599,55 +567,9 @@ export function MusicVideoEditor({
       denominator: target,
       reverse: timed.reverse,
       audio_policy: 'mute',
-      ripple: true,
+      ripple: false,
       timeline_limit_frame: durationFrames,
     })
-  }
-
-  const dropOnLane = async (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    if (!mainTrack) return
-    const sourceClipId = event.dataTransfer.getData('text/plain') || draggedClipId
-    const clip = laneClips.find((candidate) => candidate.clipId === sourceClipId)
-    if (!clip) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const frame = Math.round(
-      (event.clientX - bounds.left) / Math.max(1, bounds.width) * durationFrames,
-    )
-    const room = clipSlideRoom(clip, laneClips, durationFrames)
-    const minStart = clip.timelineStartFrame - room.left
-    const maxStart = clip.timelineStartFrame + room.right
-    const nextStart = Math.max(minStart, Math.min(maxStart, frame))
-    setDraggedClipId(null)
-    if (nextStart === clip.timelineStartFrame) return
-    await runEdit('Moving clip', {
-      kind: 'move',
-      clip_id: clip.clipId,
-      track_id: mainTrack.trackId,
-      timeline_start_frame: nextStart,
-    })
-  }
-
-  const dropClip = async (
-    event: DragEvent<HTMLElement>,
-    targetClipId: string,
-  ) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const sourceClipId = event.dataTransfer.getData('text/plain') || draggedClipId
-    if (!sourceClipId || sourceClipId === targetClipId) return
-    const order = laneClips.map((clip) => clip.clipId)
-    const from = order.indexOf(sourceClipId)
-    const target = order.indexOf(targetClipId)
-    if (from < 0 || target < 0) return
-    const [moved] = order.splice(from, 1)
-    if (!moved) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const after = event.clientX >= bounds.left + bounds.width / 2
-    const nextTarget = order.indexOf(targetClipId) + (after ? 1 : 0)
-    order.splice(nextTarget, 0, moved)
-    setDraggedClipId(null)
-    await reorder(order)
   }
 
   const commitTrim = async (
@@ -660,32 +582,18 @@ export function MusicVideoEditor({
       startFrame === selectedClip.timelineStartFrame
       && endFrame === clipEnd(selectedClip)
     ) return
-    if (
-      edge === 'end'
-      && selectedClip.source.kind === 'timed'
-      && endFrame > clipEnd(selectedClip) + handles.after
-    ) {
-      const timed = selectedClip as TimedSequenceClip
-      const target = endFrame - selectedClip.timelineStartFrame
-      await runEdit('Stretching clip', {
-        kind: 'speed',
-        clip_id: selectedClip.clipId,
-        numerator: sourceFramesAtOneX(selectedClip, fps),
-        denominator: target,
-        reverse: timed.reverse,
-        audio_policy: 'mute',
-        ripple: true,
-        timeline_limit_frame: durationFrames,
-      })
-      return
+    if (snap !== 'off') {
+      if (edge === 'start') startFrame = nearestBeat(startFrame, rhythm.mapped, snap)
+      else endFrame = nearestBeat(endFrame, rhythm.mapped, snap)
     }
+    if (endFrame <= startFrame) { setError('Choose distinct beat boundaries or turn snapping off'); return }
     await runEdit('Trimming clip', {
       kind: 'trim',
       clip_id: selectedClip.clipId,
       timeline_start_frame: startFrame,
       duration_frames: endFrame - startFrame,
       edge,
-      ripple: true,
+      ripple: false,
       timeline_limit_frame: durationFrames,
     })
   }
@@ -699,10 +607,15 @@ export function MusicVideoEditor({
       setError('Place the playhead inside the selected clip before cutting')
       return
     }
+    const cutFrame = nearestBeat(playheadFrame, rhythm.mapped, snap)
+    if (cutFrame <= selectedClip.timelineStartFrame || cutFrame >= clipEnd(selectedClip)) {
+      setError('Choose a beat inside the selected clip, or turn snapping off')
+      return
+    }
     await runEdit('Cutting clip', {
       kind: 'split',
       clip_id: selectedClip.clipId,
-      split_frame: playheadFrame,
+      split_frame: cutFrame,
     })
     setSelectedClipId(null)
   }
@@ -712,7 +625,7 @@ export function MusicVideoEditor({
     await runEdit('Deleting clip', {
       kind: 'delete',
       clip_id: selectedClip.clipId,
-      ripple: true,
+      ripple: false,
     })
     setSelectedClipId(null)
   }
@@ -736,7 +649,7 @@ export function MusicVideoEditor({
       denominator: speed.denominator,
       reverse: timed.reverse,
       audio_policy: 'mute',
-      ripple: true,
+      ripple: false,
       timeline_limit_frame: durationFrames,
     })
   }
@@ -783,8 +696,8 @@ export function MusicVideoEditor({
     if (action === 'undo') void undo()
     if (action === 'redo') void redo()
     if (action === 'search') searchRef.current?.focus()
-    if (action === 'zoom-in') setTimelineZoom((value) => Math.min(4, value + 0.25))
-    if (action === 'zoom-out') setTimelineZoom((value) => Math.max(1, value - 0.25))
+    if (action === 'zoom-in') dialogRef.current?.querySelector<HTMLButtonElement>('[aria-label="Zoom timeline in"]')?.click()
+    if (action === 'zoom-out') dialogRef.current?.querySelector<HTMLButtonElement>('[aria-label="Zoom timeline out"]')?.click()
     if (action === 'mark-in' && selectedClip) {
       const endFrame = activeTrim?.endFrame ?? clipEnd(selectedClip)
       if (frame < endFrame) {
@@ -828,28 +741,8 @@ export function MusicVideoEditor({
     }
   }
 
-  const refreshWaveform = async () => {
-    if (working) return
-    setWorking('Refreshing waveform')
-    setWaveformWait(true)
-    setError(null)
-    try {
-      for (let attempt = 0; attempt < 24; attempt += 1) {
-        await onRefreshAssets()
-        if ((audioAssetRef.current?.waveform?.length ?? 0) > 0) return
-        await new Promise((resolve) => window.setTimeout(resolve, 1000))
-      }
-      setError('Soundtrack waveform is still processing. Try refresh again in a moment.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setWaveformWait(false)
-      setWorking(null)
-    }
-  }
-
-  const dialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.defaultPrevented) return
+  const dialogKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     const target = event.target as HTMLElement
     if (target.closest('input, textarea, select, [contenteditable="true"], .canonical-player')) return
     if (playerRef.current) {
@@ -864,23 +757,41 @@ export function MusicVideoEditor({
     else preview.pause()
   }
 
-  const timelineStyle = {
-    '--music-video-timeline-width': `${timelineZoom * 100}%`,
-  } as CSSProperties
-  const path = waveformEnvelopePath(audioAsset?.waveform ?? [])
-  const rulerSegments = Math.max(4, Math.round(timelineZoom * 4))
-  const rulerMarks = Array.from(
-    { length: rulerSegments + 1 },
-    (_, index) => index / rulerSegments,
-  )
-  const clipActionsDisabled = !editorEnabled || Boolean(working)
+  const makeDraft = async (options: MusicDraftOptions) => {
+    if (working) return
+    setWorking('Planning draft')
+    setError(null)
+    playerRef.current?.pause()
+    try {
+      const result = await onPlanDraft(options, sequence)
+      setDraft(result)
+      setPreviewSourceId(null)
+      seekTo(options.start_frame)
+    } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)) }
+    finally { setWorking(null) }
+  }
+  const applyDraft = async () => {
+    if (!draft || working || draft.uncovered.length) return
+    setWorking('Applying draft')
+    setError(null)
+    playerRef.current?.pause()
+    try {
+      const committed = await onApplyDraft(draft)
+      setUndoSteps((current) => [...current, { beforeRevision: committed.beforeRevision, afterRevision: committed.sequence.revision }])
+      setRedoSteps([])
+      setDraft(null)
+      setSelectedClipId(null)
+    } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)) }
+    finally { setWorking(null) }
+  }
+  const clipActionsDisabled = !editorEnabled || Boolean(working) || Boolean(draft)
 
   return createPortal(
-    <div
-      className="music-video-editor"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Music video editor"
+    <dialog
+      className="music-video-editor timeline-preview-fullscreen"
+      aria-label={address ? `Timeline preview ${address}` : 'Music video editor'}
+      style={{ '--music-timeline-height': `${timelineHeight}dvh` } as CSSProperties}
+      onCancel={(event) => { event.preventDefault(); onClose() }}
       ref={dialogRef}
       tabIndex={-1}
       onKeyDown={dialogKeyDown}
@@ -888,10 +799,14 @@ export function MusicVideoEditor({
       <header className="music-video-editor-header">
         <div className="music-video-title">
           <span className="music-video-kicker"><AudioWaveform size={14} /> MUSIC VIDEO</span>
-          <h1>{audioAsset?.label ?? audioArtifactId}</h1>
-          <p>Master soundtrack · {formatTime(durationFrames, fps)} · {fps.toFixed(2)} fps</p>
+          <h1>{draft ? 'Draft preview' : address ? `Timeline ${address}` : audioAsset?.label ?? 'Timeline'}</h1>
+          <p>{sequence.width} × {sequence.height} · {formatTime(durationFrames, fps)} · {fps.toFixed(2)} fps</p>
         </div>
         <div className="music-video-header-actions">
+          {draft && <>
+            <button type="button" disabled={Boolean(working) || draft.uncovered.length > 0} onClick={() => void applyDraft()}>Apply draft</button>
+            <button type="button" disabled={Boolean(working)} onClick={() => { playerRef.current?.pause(); setDraft(null) }}>Cancel draft</button>
+          </>}
           {dockPortal && setup.status === 'needs-audio-track' && (
             <button type="button" disabled={Boolean(working)} onClick={() => void createTrack('audio')}>
               <Plus size={15} /> Create soundtrack track
@@ -907,26 +822,28 @@ export function MusicVideoEditor({
               <RefreshCw size={15} /> Review again
             </button>
           )}
-          <button type="button" disabled={Boolean(working) || undoSteps.length === 0} onClick={() => void undo()}>
+          <button type="button" hidden={Boolean(draft)} disabled={Boolean(working) || undoSteps.length === 0} onClick={() => void undo()}>
             <Undo2 size={16} /> Undo
           </button>
-          <button type="button" disabled={Boolean(working) || redoSteps.length === 0} onClick={() => void redo()}>
+          <button type="button" hidden={Boolean(draft)} disabled={Boolean(working) || redoSteps.length === 0} onClick={() => void redo()}>
             <Redo2 size={16} /> Redo
           </button>
-          <button className="music-video-close" type="button" onClick={onClose} aria-label="Close music video editor">
+          <button type="button" hidden={Boolean(draft)} onClick={onExport}>Export</button>
+          <button className="music-video-close" type="button" onClick={onClose} aria-label={address ? "Close timeline preview" : "Close music video editor"}>
             <X size={20} />
           </button>
         </div>
       </header>
 
-      <main className={`music-video-editor-main${dockPortal ? ' docked' : ''}`}>
-        {composerPortalRef ? <div ref={composerPortalRef} className="music-video-composer-host" /> : null}
+      <main className="music-video-editor-main docked">
+        <div ref={setLocalDock} className="music-video-local-dock" hidden={!dockOpen} />
         {dockPortal ? createPortal((
           <div className="music-video-dock">
             <nav className="music-video-dock-tabs" aria-label="Music editor views">
-              <button type="button" aria-pressed={dockView === 'sources'} onClick={() => setDockView('sources')}>Sources</button>
-              <button type="button" aria-pressed={dockView === 'soundtrack'} onClick={() => setDockView('soundtrack')}>Soundtrack</button>
-              <button type="button" aria-pressed={dockView === 'clip'} onClick={() => setDockView('clip')}>Clip</button>
+              <button type="button" aria-pressed={dockView === 'sources'} onClick={() => { setDockView('sources'); setDockOpen(true) }}>Sources</button>
+              <button type="button" aria-pressed={dockView === 'soundtrack'} onClick={() => { setDockView('soundtrack'); setDockOpen(true) }}>Soundtrack</button>
+              <button type="button" aria-pressed={dockView === 'clip'} onClick={() => { setDockView('clip'); setDockOpen(true) }}>Clip</button>
+              <button type="button" data-composer-dock-hide onClick={() => setDockOpen(false)}>Hide tools</button>
             </nav>
             <div hidden={dockView !== 'sources'}>
         <section className="music-video-source-panel" aria-label="Current book video sources">
@@ -934,6 +851,7 @@ export function MusicVideoEditor({
             <div className="music-video-panel-title">
               <span>SOURCE CLIPS</span>
               <strong>{sourceSelection.length} of {sourceAssets.length} selected</strong>
+              <button type="button" onClick={() => void onRefreshAssets().catch((caught: unknown) => setError(String(caught)))}>Refresh media</button>
             </div>
           </header>
           <label className="music-video-search">
@@ -976,17 +894,21 @@ export function MusicVideoEditor({
           <button
             type="button"
             className="music-video-add-selected"
-            disabled={!editorEnabled || Boolean(working) || sourceSelection.length === 0}
+            disabled={clipActionsDisabled || sourceSelection.length === 0}
             onClick={() => void appendSelection()}
           >
             <Plus size={15} /> Add selected
           </button>
         </section>
+        <MusicDraftControls sources={sourceSelection.flatMap((id) => { const asset = assetById.get(id); return asset ? [asset] : [] })}
+          trackId={mainTrack?.trackId ?? null} startFrame={rhythm.master?.timelineStartFrame ?? 0} endFrame={durationFrames} fps={fps}
+          hasBars={rhythm.mapped.some((marker) => marker.bar)} busy={Boolean(working)} draft={draft}
+          onPlan={(options) => void makeDraft(options)} onOrder={setSourceSelection} />
             </div>
           </div>
         ), dockPortal) : null}
 
-        <section className="music-video-preview-panel" aria-label="Program monitor">
+        <section className="music-video-preview-panel timeline-preview-body" aria-label="Program monitor">
           {previewAsset?.mediaUrl ? (
             <div className="music-video-source-preview">
               <video
@@ -1008,9 +930,13 @@ export function MusicVideoEditor({
           ) : (
             <CanonicalSequencePlayer
               ref={playerRef}
-              sequence={sequence}
+              sequence={draft?.sequence ?? sequence}
               assets={playbackAssets}
-              onFrameUpdate={setPlayheadFrame}
+              onFrameUpdate={updateFrame}
+              initialFrame={playheadFrame}
+              presentation="preview"
+              allowFullscreen={false}
+              editingEnabled={!draft}
               onKeyboardAction={playerKeyboard}
             />
           )}
@@ -1020,6 +946,7 @@ export function MusicVideoEditor({
         <section className="music-video-inspector" aria-label="Selected clip controls" hidden={dockView !== 'soundtrack' && dockView !== 'clip'}>
           <aside className="music-video-setup-card" data-status={setup.status} hidden={dockView !== 'soundtrack'}>
             <span><AudioWaveform size={13} /> MASTER SOUNDTRACK</span>
+            <MusicRhythmControls rhythm={rhythm} sequence={sequence} assets={assets} frame={playheadFrame} />
             {setup.status === 'loading' && <p>Building the exact canonical setup plan…</p>}
             {setup.status === 'needs-audio-track' && (
               <>
@@ -1064,7 +991,7 @@ export function MusicVideoEditor({
                 <span className="music-video-kicker">SELECTED CLIP</span>
                 <p>Select a main-lane clip to trim, cut, delete, move, or stretch it.</p>
                 {laneClips.length === 0 && (
-                  <p>Pick source clips on the left and press Add selected to fill the lane.</p>
+                  <p>Open Sources and add selected footage at its original speed.</p>
                 )}
               </div>
             )}
@@ -1170,6 +1097,9 @@ export function MusicVideoEditor({
                   <button className="music-video-span" type="button" disabled={clipActionsDisabled || !canStretch} onClick={() => void stretchSelected()}>
                     <Maximize2 size={15} /> Stretch to fill
                   </button>
+                  <label>Frame fit<select aria-label="Clip frame fit" value={selectedClip.transform?.fit ?? 'fit'} disabled={clipActionsDisabled} onChange={(event) => void runEdit('Fitting clip', { kind: 'transform', clip_id: selectedClip.clipId, fit: event.target.value })}>
+                    <option value="fit">Fit full frame</option><option value="fill">Fill frame</option><option value="crop">Crop</option>
+                  </select></label>
                   <label>
                     <Gauge size={15} /> Speed
                     <select value={speedDraft ?? selectedSpeed} disabled={Boolean(working) || selectedClip.source.kind !== 'timed'} onChange={(event) => setSpeedDraft(event.target.value)}>
@@ -1187,170 +1117,38 @@ export function MusicVideoEditor({
         ), dockPortal) : null}
 
         <section className="music-video-timeline-panel" aria-label="Music video timeline">
-          <header>
-            <div className="music-video-panel-title">
-              <span>MAIN VIDEO LANE</span>
-              <strong>{mainTrack?.name ?? 'No editable video track'}</strong>
-            </div>
-            {!mainTrack && (
-              <button type="button" disabled={Boolean(working)} onClick={() => void createTrack('video')}>
-                <Plus size={15} /> Create main video track
-              </button>
-            )}
-            <span className="music-video-playhead-readout">F{playheadFrame} · {formatTime(playheadFrame, fps)}</span>
-            <div className="music-video-zoom">
-              <button type="button" aria-label="Zoom timeline out" onClick={() => setTimelineZoom((value) => Math.max(1, value - 0.25))}>−</button>
-              <span>{Math.round(timelineZoom * 100)}%</span>
-              <button type="button" aria-label="Zoom timeline in" onClick={() => setTimelineZoom((value) => Math.min(4, value + 0.25))}>+</button>
-            </div>
-          </header>
-          <div className="music-video-timeline-scroll">
-            <div className="music-video-timeline" style={timelineStyle}>
-              <div className="music-video-ruler" aria-hidden="true">
-                {rulerMarks.map((ratio) => (
-                  <span key={ratio}>{formatTime(durationFrames * ratio, fps)}</span>
-                ))}
-              </div>
-              <div
-                className="music-video-lane"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => void dropOnLane(event)}
-              >
-                {laneClips.map((clip) => {
-                  const asset = assetById.get(clip.source.artifactId)
-                  const selected = selectedClip?.clipId === clip.clipId
-                  return (
-                    <div
-                      className={selected ? 'music-video-clip selected' : 'music-video-clip'}
-                      style={clipStyle(clip, durationFrames)}
-                      key={clip.clipId}
-                      onClick={() => selectClip(clip)}
-                      onDragOver={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                      }}
-                      onDrop={(event) => void dropClip(event, clip.clipId)}
-                    >
-                      <button
-                        type="button"
-                        className="music-video-clip-hit"
-                        draggable={editorEnabled && !working}
-                        onClick={() => selectClip(clip)}
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = 'move'
-                          event.dataTransfer.setData('text/plain', clip.clipId)
-                          setDraggedClipId(clip.clipId)
-                        }}
-                        onDragEnd={() => setDraggedClipId(null)}
-                        title={`${asset?.label ?? clip.source.artifactId} · ${formatTime(clip.durationFrames, fps)} · frames ${clip.timelineStartFrame}–${clipEnd(clip)}`}
-                      >
-                        <span>{asset?.label ?? clip.source.artifactId.slice(0, 8)}</span>
-                        <small>{formatTime(clip.durationFrames, fps)}</small>
-                      </button>
-                      {selected && (
-                        <div className="music-video-clip-actions">
-                          <button
-                            type="button"
-                            aria-label="Move clip earlier"
-                            disabled={clipActionsDisabled || !canMoveEarlier}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void moveSelected(-1)
-                            }}
-                          >
-                            <ChevronLeft size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Cut clip at playhead"
-                            disabled={clipActionsDisabled}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void splitSelected()
-                            }}
-                          >
-                            <Scissors size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-button"
-                            aria-label="Delete clip"
-                            disabled={clipActionsDisabled}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void deleteSelected()
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Move clip later"
-                            disabled={clipActionsDisabled || !canMoveLater}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void moveSelected(1)
-                            }}
-                          >
-                            <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-                <i className="music-video-playhead" style={{ left: `${playheadFrame / durationFrames * 100}%` }} />
-              </div>
-              <button
-                type="button"
-                className="music-video-waveform"
-                role="slider"
-                aria-label="Soundtrack waveform playhead"
-                aria-valuemin={0}
-                aria-valuemax={durationFrames - 1}
-                aria-valuenow={playheadFrame}
-                onPointerDown={waveformPointer}
-                onKeyDown={waveformKey}
-              >
-                {path
-                  ? (
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                      <path d={path} />
-                    </svg>
-                  )
-                  : (
-                    <span className="music-video-waveform-placeholder">
-                      {waveformWait
-                        ? 'Loading soundtrack waveform…'
-                        : 'Waveform unavailable'}
-                    </span>
-                  )}
-                <i style={{ left: `${playheadFrame / durationFrames * 100}%` }} />
-              </button>
-            </div>
-          </div>
-          {(overflowFrames > 0 || !path) && (
-            <footer>
-              {overflowFrames > 0 && <strong>{overflowFrames} frames beyond soundtrack</strong>}
-              {!path && (
-                <button type="button" disabled={Boolean(working)} onClick={() => void refreshWaveform()}>
-                  <RefreshCw size={14} /> Refresh waveform
-                </button>
-              )}
-            </footer>
-          )}
+          <NotebookTimeline
+            sequence={draft?.sequence ?? sequence} assets={assets} assembly={assembly}
+            disabled={Boolean(working) || Boolean(draft)} frame={playheadFrame} address={address ?? ''}
+            onSeek={seekTo} onSelectClip={selectClip} onExport={onExport} presentation="preview"
+            onMoveClip={editorEnabled ? (clip, frame) => void runEdit('Moving clip', { kind: 'move', clip_id: clip.clipId, track_id: clip.trackId, timeline_start_frame: frame }) : undefined}
+            onRemoveClip={(clip) => void runEdit('Removing clip', { kind: 'remove_clip', clip_id: clip.clipId, ripple: false })}
+            rhythm={{ masterClipId: rhythm.master?.clipId ?? null, markers: rhythm.mapped, analysis: rhythm.analysis, snap }}
+            toolbar={<>
+              <button type="button" aria-pressed={dockOpen && dockView === 'sources'} onClick={() => { setDockView('sources'); setDockOpen(true) }}>Sources</button>
+              <button type="button" aria-pressed={dockOpen && dockView === 'soundtrack'} onClick={() => { setDockView('soundtrack'); setDockOpen(true) }}>Soundtrack</button>
+              <button type="button" disabled={!selectedClip} onClick={() => { setDockView('clip'); setDockOpen(true) }}>Clip tools</button>
+              <button type="button" disabled={!rhythm.master || rhythm.busy || rhythm.status === 'analyzing' || rhythm.status === 'queued'} onClick={() => void rhythm.analyze()}>Analyze beats</button>
+              {rhythm.master && <span className="music-master-name" title={audioAsset?.label}>♪ {audioAsset?.label ?? 'Soundtrack'}</span>}
+              <label title="Hold Alt while dragging to ignore snapping">Snap<select aria-label="Snap to music" value={snap} onChange={(event) => setSnap(event.target.value as typeof snap)}>
+                <option value="off">Off</option><option value="beats">Beats</option><option value="bars" disabled={!rhythm.mapped.some((marker) => marker.bar)}>Bars</option>
+              </select></label>
+              <button type="button" disabled={!rhythm.mapped.some((marker) => marker.frame < playheadFrame)} onClick={() => { const marker = [...rhythm.mapped].reverse().find((item) => item.frame < playheadFrame); if (marker) seekTo(marker.frame) }}>Previous beat</button>
+              <button type="button" disabled={!rhythm.mapped.some((marker) => marker.frame > playheadFrame)} onClick={() => { const marker = rhythm.mapped.find((item) => item.frame > playheadFrame); if (marker) seekTo(marker.frame) }}>Next beat</button>
+              <button type="button" disabled={clipActionsDisabled || !selectedClip} onClick={() => void splitSelected()}>Split</button>
+              <label className="music-timeline-resize">Timeline height<input aria-label="Timeline height" type="range" min="20" max="55" value={timelineHeight} onChange={(event) => setTimelineHeight(Number(event.target.value))} /></label>
+              <span role="status">{rhythm.status === 'queued' || rhythm.status === 'analyzing' ? 'Analyzing beats…' : rhythm.mapped.length ? `${rhythm.mapped.length} beats` : ''}</span>
+            </>}
+          />
+          {overflowFrames > 0 && <p>{overflowFrames} frames beyond soundtrack</p>}
         </section>
       </main>
 
       <footer className="music-video-status" aria-live="polite">
-        <span>{working ?? 'Space/K play · J/L shuttle · arrows frame · I/O trim marks · S cut · Delete ripple · ⌘Z undo'}</span>
-        {error && <strong>{error}</strong>}
+        <span>{working ?? 'Space/K play · J/L shuttle · arrows frame · I/O trim marks · S cut · Delete · ⌘Z undo'}</span>
+        {(error || rhythm.error) && <strong role="alert">{error || rhythm.error}</strong>}
       </footer>
-    </div>,
+    </dialog>,
     document.body,
   )
 }

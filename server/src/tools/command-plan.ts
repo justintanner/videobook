@@ -19,6 +19,7 @@ import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
+import { fittedTransform } from "../rhythm/visual-fit.js";
 import { resolveArtifactRefs } from "../artifact-refs.js";
 
 const bookSchema = { book_id: z.string().uuid() };
@@ -151,6 +152,7 @@ const editRequestSchema = z.discriminatedUnion("kind", [
     artifact_ids: z.array(z.string().uuid()).min(1).max(20),
     timeline_limit_frame: z.number().int().positive(),
     fit: z.enum(["source", "fill"]).optional(),
+    visual_fit: z.enum(["fit", "fill"]).optional(),
   }),
   z.object({
     kind: z.literal("reorder_clips"),
@@ -319,6 +321,7 @@ function timedVideoPlacement(
   artifactId: string,
   stream: ReturnType<typeof requiredVideoStream>,
   nativeFrames: number,
+  visualFit?: "fit" | "fill",
 ): InsertClipOperation {
   return {
     kind: "insert-clip",
@@ -344,6 +347,7 @@ function timedVideoPlacement(
       },
       reverse: false,
       audioPolicy: "mute",
+      ...(visualFit ? { transform: fittedTransform(visualFit) } : {}),
     },
   };
 }
@@ -828,6 +832,7 @@ async function operationsForRequest(
           source.artifactId,
           source.stream,
           source.nativeFrames,
+          request.visual_fit,
         ));
         timelineStartFrame += source.nativeFrames;
       }

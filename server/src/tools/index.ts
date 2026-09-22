@@ -8,6 +8,9 @@ import type { ToolDef } from "./tool-def.js";
 import { videobookDomainDefs } from "./videobook-domain.js";
 import { semanticSearchDefs } from "./semantic-search.js";
 import { commandPlanDefs } from "./command-plan.js";
+import { musicDraftDefs } from "./music-draft.js";
+import { musicAnalysisDefs } from "./music-analysis.js";
+import { sequenceRhythmDefs } from "./sequence-rhythm.js";
 import { exportSequenceDefs } from "./export-sequence.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
@@ -500,6 +503,9 @@ export function getAllToolDefs(
     getWatermarkConfigDef(engine),
     ...commandPlanDefs(engine),
     ...exportSequenceDefs(engine),
+    ...musicAnalysisDefs(engine),
+    ...musicDraftDefs(engine),
+    ...sequenceRhythmDefs(engine),
     ...semanticSearchDefs(engine, books),
     ...mediaLibraryDefs(books),
     ...videobookDomainDefs(engine, books),

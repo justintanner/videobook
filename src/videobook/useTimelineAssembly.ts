@@ -11,6 +11,8 @@ export interface TimelineAsset {
   status: string
   mediaUrl: string | null
   thumbnailUrl: string | null
+  duration?: number | null
+  waveform?: number[] | null
 }
 
 interface TimelineOptions<Asset extends TimelineAsset> {
@@ -133,7 +135,7 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
     frame: playback.sequenceId === sequenceId ? playback.frame : 0,
     selectedClipId: playback.sequenceId === sequenceId ? playback.selectedClipId : null,
     seek,
-    selectClip: (selectedClipId: string) => setPlayback((current) => ({
+    selectClip: (selectedClipId: string | null) => setPlayback((current) => ({
       sequenceId,
       frame: current.sequenceId === sequenceId ? current.frame : 0,
       selectedClipId,

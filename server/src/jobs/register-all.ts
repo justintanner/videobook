@@ -29,6 +29,7 @@ import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractNotebookFrameJob } from "./extract-notebook-frame.js";
 import { registerExtractNotebookAudioJob } from "./extract-notebook-audio.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
+import { registerAnalyzeMusicJob } from "./analyze-music.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
 import { registerReplaceVideoAudioJob } from "./replace-video-audio.js";
 import { registerSpliceVideoJob } from "./splice-video.js";
@@ -179,6 +180,7 @@ export function registerAllJobHandlers(
   registerExtractNotebookAudioJob(engine);
   registerExtractAudioJob(engine);
   registerExtractWaveformJob(engine);
+  registerAnalyzeMusicJob(engine);
   registerReplaceVideoAudioJob(engine);
   registerSpliceVideoJob(engine);
   registerSmoothSceneConcatJob(engine);

@@ -45,6 +45,7 @@ interface CanonicalSequencePlayerProps {
 
 export interface CanonicalSequencePlayerHandle {
   seekTo: (frame: number) => void
+  pause: () => void
   focus: () => void
   handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }
@@ -107,11 +108,12 @@ export const CanonicalSequencePlayer = forwardRef<
   const [frame, setFrame] = useState(firstFrame)
   const isPreview = presentation === 'preview'
   const inputProps = useMemo(
-    () => ({ sequence, assets, defaultFit: isPreview ? 'fit' as const : 'fill' as const }),
-    [assets, isPreview, sequence],
+    () => ({ sequence, assets, defaultFit: 'fit' as const }),
+    [assets, sequence],
   )
 
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     const element = event.target as HTMLElement
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)) return
     const player = playerRef.current
@@ -145,15 +147,17 @@ export const CanonicalSequencePlayer = forwardRef<
   }, [durationInFrames, editingEnabled, fps, onKeyboardAction])
 
   useImperativeHandle(ref, () => ({
+    pause: () => playerRef.current?.pause(),
     seekTo: (nextFrame) => {
-      playerRef.current?.seekTo(Math.max(
-        0,
-        Math.min(durationInFrames - 1, Math.round(nextFrame)),
-      ))
+      const next = Math.max(0, Math.min(durationInFrames - 1, Math.round(nextFrame)))
+      frameRef.current = next
+      setFrame(next)
+      onFrameUpdate(next)
+      playerRef.current?.seekTo(next)
     },
     focus: () => sectionRef.current?.focus(),
     handleKeyDown,
-  }), [durationInFrames, handleKeyDown])
+  }), [durationInFrames, handleKeyDown, onFrameUpdate])
 
   useEffect(() => {
     const player = playerRef.current
@@ -199,7 +203,7 @@ export const CanonicalSequencePlayer = forwardRef<
       <footer>
         <span className="canonical-player-frame" title="Current frame">F{frame}</span>
         <span>{(frame / fps).toFixed(2)}s</span>
-        <span className="canonical-player-shortcuts">{editingEnabled ? 'Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete ripple · ⌘Z/⇧⌘Z restore' : 'Space/K play · J/L shuttle · ←/→ frame'}</span>
+        <span className="canonical-player-shortcuts">{editingEnabled ? 'Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete · ⌘Z/⇧⌘Z restore' : 'Space/K play · J/L shuttle · ←/→ frame'}</span>
       </footer>
     </section>
   )

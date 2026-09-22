@@ -360,7 +360,7 @@ describe('chat composer browser flow', () => {
     await execFileAsync(FFMPEG, [
       '-y',
       '-f', 'lavfi',
-      '-i', 'sine=frequency=440:sample_rate=48000:duration=8',
+      '-i', 'aevalsrc=sin(2*PI*880*t)*lt(mod(t\\,0.5)\\,0.035):s=48000:d=8',
       '-c:a', 'pcm_s16le',
       musicAudioPath,
     ])
@@ -956,7 +956,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(4)
       current = await call<Sequence>('get_primary_sequence')
       expect(current.clips.filter((clip) => clip.trackId !== mainTrack.trackId)).toEqual(audioBefore)
-      expect(current.clips.find((clip) => clip.trackId === mainTrack.trackId)?.timelineStartFrame).toBe(0)
+      expect(current.clips.find((clip) => clip.trackId === mainTrack.trackId)?.timelineStartFrame).toBe(90)
       await previewTimeline.getByRole('button', { name: '+ Audio track', exact: true }).click()
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(current.tracks.length + 1)
       await player.focus()
@@ -981,6 +981,8 @@ describe('chat composer browser flow', () => {
       await player.press('Space')
       await expect.poll(async () => Number((await player.locator('footer span').first().textContent())?.replace('F', '')), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(33)
       await player.press('k')
+      await previewTimeline.locator(`[data-clip-id="${secondClip.clipId}"]`).click()
+      await player.locator('video').waitFor({ state: 'visible' })
       expect(await player.locator('video').count()).toBe(1)
       expect(await player.locator('audio').count()).toBeGreaterThanOrEqual(2)
       const previewAudioTrack = (await call<Sequence>('get_primary_sequence')).tracks.find((track) => track.name === 'Audio 3')!
@@ -999,10 +1001,15 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(4)
       const retainedVideo = current.clips.find((clip) => clip.trackId === mainTrack.trackId)!
       await previewTimeline.locator(`[data-clip-id="${retainedVideo.clipId}"]`).click()
+      await previewTimeline.getByLabel('Timeline ruler', { exact: true }).click({ position: { x: 0, y: 8 } })
       await player.focus()
       await player.press('l')
       await expect.poll(() => player.locator('footer span').first().textContent()).toBe('F30')
       await expect.poll(() => previewTimeline.locator('.timeline-ruler-row > span').textContent()).toBe('0:01')
+      await previewTimeline.locator(`[data-clip-id="${retainedVideo.clipId}"]`).click()
+      await player.locator('video').waitFor({ state: 'visible' })
+      const hideTools = fullscreenPreview.getByRole('button', { name: 'Hide tools', exact: true })
+      if (await hideTools.isVisible()) await hideTools.click()
       for (const viewport of [
         { width: 1440, height: 1000 },
         { width: 390, height: 844 },
@@ -1083,7 +1090,7 @@ describe('chat composer browser flow', () => {
       const preview = await call<{ valid: boolean; previewHash: string }>('preview_edit_intent', { intent })
       expect(preview.valid).toBe(true)
       await call('commit_edit_intent', { intent, preview_hash: preview.previewHash })
-      await expect.poll(() => timeline.locator('.notebook-timeline-header').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('25:03')
+      await expect.poll(() => timeline.locator('.notebook-timeline-header').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('25:06')
       expect(await timeline.locator('.timeline-clip').count()).toBeLessThan(40)
       expect(await timeline.locator('.timeline-track-audio').count()).toBeLessThan(10)
       await horizontal.evaluate((element) => { element.scrollLeft = element.scrollWidth })
@@ -4636,181 +4643,124 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('edits a music video against a full-width master waveform', async () => {
+  it('edits a music video with analyzed beats, native-speed clips and a reviewed draft', async () => {
     if (!page) throw new Error('Browser page was not initialized')
-    expect(musicAudioCellId).toBeTruthy()
-    expect(musicAudioArtifactId).toBeTruthy()
     await openApp()
     observedCalls.length = 0
-    const input = page.getByLabel('Videobook command input')
-    await input.waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await input.isEnabled(), {
-      timeout: MCP_ROUNDTRIP_MS,
-    }).toBe(true)
-    const audioCell = notebookCellNode(page, musicAudioCellId)
-    await audioCell.waitFor({ state: 'visible' })
-    const address = (await audioCell.locator('.cell-node-footer strong').textContent())
-      ?.trim()
-    if (!address) throw new Error('Music audio cell address is missing')
-    await input.fill(`/music-video ${address}`)
-    await page.getByLabel('Send command').click()
-    const editor = page.getByRole('dialog', { name: 'Music video editor' })
-    await editor.waitFor({ state: 'visible', timeout: 60_000 })
-    const editorBox = await editor.boundingBox()
-    expect(editorBox?.x).toBe(0)
-    expect(editorBox?.width).toBe(1440)
-    const setupCard = editor.locator('.music-video-setup-card')
-    await expect.poll(async () => await setupCard.getAttribute('data-status'))
-      .not.toBe('loading')
-    if (await editor.getByRole('button', { name: 'Create soundtrack track' }).isVisible()) {
-      await editor.getByRole('button', { name: 'Create soundtrack track' }).click()
-    }
-    await expect.poll(async () => [
-      await setupCard.getAttribute('data-status'),
-      await setupCard.textContent(),
-      observedCalls.filter((call) => call.name.includes('sequence')).map((call) => call.name).join(','),
-    ].join(': '), { timeout: 30_000 }).toMatch(/^ready:/u)
-    await editor.getByRole('button', { name: 'Apply soundtrack' })
-      .waitFor({ state: 'visible', timeout: 30_000 })
-    const setupCall = observedCalls.find((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'music_video_setup')
-    expect(setupCall?.arguments.expected_revision).toEqual(expect.any(String))
-    expect(setupCall?.arguments.request).toMatchObject({
-      kind: 'music_video_setup',
-      audio_artifact_id: musicAudioArtifactId,
+    const client = new Client({ name: 'music-beats-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
     })
-    await editor.getByRole('button', { name: 'Apply soundtrack' }).click()
-    await editor.getByText('Soundtrack applied').waitFor({ state: 'visible' })
-    const sourcesTab = editor.getByRole('button', { name: 'Sources', exact: true })
-    if (await sourcesTab.count()) await sourcesTab.click({ force: true })
-    if (await editor.getByRole('button', { name: 'Create main video track' }).isVisible()) {
-      await editor.getByRole('button', { name: 'Create main video track' }).click()
-    }
-    if (await editor.getByText(/Waveform unavailable|Loading soundtrack waveform/).isVisible()) {
-      await editor.getByRole('button', { name: 'Refresh waveform' }).click()
-    }
-    await editor.locator('.music-video-waveform svg path')
-      .waitFor({ state: 'visible', timeout: 30_000 })
-    const sourceList = editor.locator('.music-video-source-list button')
-    await expect.poll(async () => await sourceList.count(), {
-      timeout: 30_000,
-    }).toBeGreaterThan(0)
-    const namedSource = sourceList.filter({ hasText: /split-source|vid-source-one/ })
-    const source = (await namedSource.count()) > 0 ? namedSource.first() : sourceList.first()
-    await source.evaluate((element) => {
-      if (element instanceof HTMLElement) element.click()
-    })
-    await editor.getByText(/Previewing source/).waitFor({ state: 'visible' })
-    await editor.getByRole('button', { name: 'Add selected' }).evaluate((element) => {
-      if (element instanceof HTMLElement) element.click()
-    })
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'append_clips').length, {
-      timeout: 30_000,
-    }).toBe(1)
-    const lane = editor.locator('.music-video-clip')
-    await expect.poll(async () => await lane.count(), { timeout: 30_000 }).toBe(1)
-    await lane.first().click()
-    await expect.poll(async () =>
-      await editor.getByRole('button', { name: 'Delete clip' }).first().isEnabled())
-      .toBe(true)
-    await editor.getByRole('button', { name: 'Move later' }).first()
-      .waitFor({ state: 'visible' })
-    await editor.getByRole('button', { name: 'Stretch to fill' })
-      .waitFor({ state: 'visible' })
-    const clipBox = await lane.first().boundingBox()
-    const laneBox = await editor.locator('.music-video-lane').boundingBox()
-    expect((clipBox?.width ?? 0) / Math.max(1, laneBox?.width ?? 1)).toBeGreaterThan(0.8)
-    const waveform = editor.getByRole('slider', { name: 'Soundtrack waveform playhead' })
-    const waveformBox = await waveform.boundingBox()
-    if (!waveformBox) throw new Error('Could not measure soundtrack waveform')
-    await page.mouse.click(
-      waveformBox.x + waveformBox.width * 0.18,
-      waveformBox.y + waveformBox.height / 2,
-    )
-    await editor.getByRole('button', { name: 'Cut at playhead' }).click()
-    await expect.poll(async () => await lane.count(), { timeout: 30_000 }).toBe(2)
-    const trimTarget = lane.first()
-    await trimTarget.click()
-    const trimOut = editor.locator('.music-video-trim-controls input').nth(1)
-    const trimOutValue = Number(await trimOut.inputValue())
-    await trimOut.fill(String(trimOutValue - 2))
-    await trimOut.dispatchEvent('pointerup')
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'trim').length, {
-      timeout: 30_000,
-    }).toBe(1)
-    await expect.poll(
-      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
-      { timeout: 30_000 },
-    )
-      .toBe('true')
-    await lane.nth(1).click()
-    await editor.locator('.music-video-inspector').getByRole('button', { name: 'Move earlier' }).click()
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'reorder_clips').length, {
-      timeout: 30_000,
-    }).toBe(1)
-    await expect.poll(
-      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
-      { timeout: 30_000 },
-    ).toBe('true')
-    await lane.first().click()
-    await editor.locator('.music-video-inspector').getByRole('combobox').selectOption('2/1')
-    await editor.getByRole('button', { name: 'Apply speed' }).click()
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'speed').length, {
-      timeout: 30_000,
-    }).toBe(1)
-    const restoreCallsBefore = observedCalls.filter((call) =>
-      call.name === 'restore_edit_action').length
-    await editor.getByRole('button', { name: 'Undo' }).click()
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'restore_edit_action').length, { timeout: 30_000 })
-      .toBe(restoreCallsBefore + 1)
-    await editor.getByRole('button', { name: 'Redo' }).click()
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'restore_edit_action').length, { timeout: 30_000 })
-      .toBe(restoreCallsBefore + 2)
-    await expect.poll(
-      async () => await lane.first().locator('.music-video-clip-hit').getAttribute('draggable'),
-      { timeout: 30_000 },
-    ).toBe('true')
-    await lane.first().click()
-    const deleteClip = editor.locator('.music-video-inspector').getByRole('button', { name: 'Delete clip' })
-    await expect.poll(async () => await deleteClip.isEnabled(), {
-      timeout: 30_000,
-    }).toBe(true)
-    await deleteClip.click()
-    await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'plan_sequence_edit'
-      && record(call.arguments.request)?.kind === 'delete').length, {
-      timeout: 30_000,
-    }).toBe(1)
-    await page.setViewportSize({ width: 600, height: 900 })
-    const sourcePanelBox = await editor.locator('.music-video-source-panel').boundingBox()
-    const timelinePanelBox = await editor.locator('.music-video-timeline-panel').boundingBox()
-    expect(Math.abs((sourcePanelBox?.x ?? 0) - (timelinePanelBox?.x ?? 1))).toBeLessThan(12)
-    for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 500 }]) {
-      await page.setViewportSize(viewport)
-      const closeBox = await editor.getByLabel('Close music video editor').boundingBox()
-      if (!closeBox) throw new Error('Could not measure the music editor Close button')
-      expect(closeBox.x).toBeGreaterThanOrEqual(0)
-      expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(viewport.width)
-      await editor.getByLabel('Zoom timeline in').click()
-      const main = editor.locator('.music-video-editor-main')
-      expect(await main.evaluate((element) => element.scrollLeft)).toBe(0)
-    }
-    await page.keyboard.press('Escape')
-    await editor.waitFor({ state: 'detached' })
-    await expect.poll(async () => await page!.evaluate(() =>
-      document.activeElement?.getAttribute('aria-label')))
-      .toBe('Videobook command input')
-    notebookDirty = true
-  }, 120_000)
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const currentSequence = async () => resultValue(await client.callTool({ name: 'get_primary_sequence', arguments: { book_id: bookId } })) as Sequence
+    try {
+      const input = page.getByLabel('Videobook command input')
+      await expect.poll(() => input.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      const audioCell = notebookCellNode(page, musicAudioCellId)
+      const address = (await audioCell.locator('.cell-node-footer strong').textContent())?.trim()
+      if (!address) throw new Error('Music audio cell address is missing')
+      await input.fill(`/music-video ${address}`)
+      await page.getByLabel('Send command').click()
+      const editor = page.getByRole('dialog', { name: 'Music video editor', exact: true })
+      await editor.waitFor({ state: 'visible', timeout: 60_000 })
+      expect(await editor.evaluate((element) => element.matches('dialog:modal'))).toBe(true)
+      await expect.poll(() => editor.locator('.music-video-setup-card').getAttribute('data-status'), { timeout: 30_000 }).not.toBe('loading')
+      const createTrack = editor.getByRole('button', { name: 'Create soundtrack track', exact: true })
+      if (await createTrack.isVisible()) await createTrack.click()
+      await editor.getByRole('button', { name: 'Apply soundtrack', exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
+      await editor.getByRole('button', { name: 'Apply soundtrack', exact: true }).click()
+      await expect.poll(() => editor.locator('.music-video-setup-card').getAttribute('data-status'), { timeout: 30_000 }).toBe('applied')
+      await editor.locator('.timeline-music-toolbar').getByRole('button', { name: 'Soundtrack', exact: true }).click()
+      await editor.getByRole('button', { name: 'Reload beats', exact: true }).click()
+      await editor.locator('.music-rhythm-controls').getByRole('button', { name: 'Analyze beats', exact: true }).click()
+      await editor.locator('.timeline-track-audio .timeline-waveform path').first().waitFor({ state: 'visible', timeout: 60_000 })
+      await expect.poll(() => editor.locator('.timeline-track-audio .timeline-beat').count(), { timeout: 30_000 }).toBeGreaterThan(5)
+      const initial = await currentSequence()
+      const audioClips = initial.clips.filter((clip) => initial.tracks.some((track) => track.trackId === clip.trackId && track.kind === 'audio'))
+      await editor.locator('.timeline-music-toolbar').getByRole('button', { name: 'Next beat', exact: true }).click()
+      await editor.getByRole('button', { name: 'Add beat at playhead', exact: true }).click()
+      await editor.getByLabel('BPM', { exact: true }).fill('120')
+      await editor.getByLabel('Beats per bar', { exact: true }).fill('4')
+      await editor.getByRole('button', { name: 'Set grid from playhead', exact: true }).click()
+      await expect.poll(async () => ({ corrected: await editor.getByText('Using your corrected beat map.', { exact: false }).isVisible(), alerts: await editor.getByRole('alert').allTextContents(), writes: observedCalls.filter((call) => call.name === 'update_sequence_rhythm').map((call) => call.arguments) }), { timeout: 15_000 }).toMatchObject({ corrected: true })
+      await expect.poll(() => editor.locator('.timeline-beat.bar').count()).toBeGreaterThan(0)
+      await editor.getByRole('button', { name: 'Undo beat change', exact: true }).click()
+      await expect.poll(() => editor.getByRole('button', { name: 'Redo beat change', exact: true }).isEnabled()).toBe(true)
+      await editor.getByRole('button', { name: 'Redo beat change', exact: true }).click()
+      await editor.locator('.timeline-music-toolbar').getByRole('button', { name: 'Sources', exact: true }).click()
+      const source = editor.locator('.music-video-source-list button').filter({ hasText: /split-source|vid-source-one/ }).first()
+      await source.waitFor({ state: 'visible' })
+      await source.click()
+      await editor.getByRole('button', { name: 'Add selected', exact: true }).click()
+      const lane = editor.locator('.timeline-assembly > .timeline-track-video .timeline-clip')
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBe(1)
+      let edited = await currentSequence()
+      const video = edited.clips.find((clip) => edited.tracks.some((track) => track.trackId === clip.trackId && track.kind === 'video'))!
+      expect(video).toMatchObject({ durationFrames: 90, speed: { numerator: 1, denominator: 1 }, transform: { fit: 'fit' } })
+      await lane.first().click()
+      await editor.locator('.timeline-music-toolbar').getByRole('button', { name: 'Next beat', exact: true }).click()
+      await editor.getByRole('button', { name: 'Cut at playhead', exact: true }).click()
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBe(2)
+      expect((await currentSequence()).clips.filter((clip) => audioClips.some((audio) => audio.clipId === clip.clipId))).toEqual(audioClips)
+      await editor.getByRole('button', { name: 'Undo', exact: true }).click()
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBe(1)
+      await editor.locator('.timeline-music-toolbar').getByRole('button', { name: 'Sources', exact: true }).click()
+      await source.click()
+      await editor.locator('.music-draft-controls summary').click()
+      await editor.getByLabel('Keep existing clips', { exact: true }).uncheck()
+      await editor.getByLabel('Allow repeated footage', { exact: true }).check()
+      const beforeDraft = await currentSequence()
+      await editor.getByRole('button', { name: 'Preview draft', exact: true }).click()
+      await editor.getByRole('button', { name: 'Apply draft', exact: true }).waitFor({ state: 'visible', timeout: 30_000 })
+      expect((await currentSequence()).clips).toEqual(beforeDraft.clips)
+      expect(await editor.locator('.canonical-player').count()).toBe(1)
+      await editor.locator('.canonical-player').focus()
+      await page.keyboard.press('Meta+z')
+      expect((await currentSequence()).clips).toEqual(beforeDraft.clips)
+      await page.setViewportSize({ width: 320, height: 568 })
+      for (const name of ['Apply draft', 'Cancel draft']) {
+        const bounds = await editor.getByRole('button', { name, exact: true }).boundingBox()
+        expect(bounds!.x).toBeGreaterThanOrEqual(0)
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320)
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await editor.getByRole('button', { name: 'Cancel draft', exact: true }).click()
+      expect((await currentSequence()).clips).toEqual(beforeDraft.clips)
+      await editor.getByRole('button', { name: 'Preview draft', exact: true }).click()
+      await editor.getByRole('button', { name: 'Apply draft', exact: true }).click()
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBeGreaterThan(2)
+      edited = await currentSequence()
+      expect(edited.clips.filter((clip) => audioClips.some((audio) => audio.clipId === clip.clipId))).toEqual(audioClips)
+      await editor.getByRole('button', { name: 'Undo', exact: true }).click()
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBe(1)
+      await editor.getByRole('button', { name: 'Redo', exact: true }).click()
+      await expect.poll(() => lane.count(), { timeout: 30_000 }).toBeGreaterThan(2)
+      await editor.getByRole('button', { name: 'Hide tools', exact: true }).click()
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 568 }, { width: 667, height: 375 }, { width: 1024, height: 500 }]) {
+        await page.setViewportSize(viewport)
+        await expect.poll(() => editor.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          const close = element.querySelector('.music-video-close')!.getBoundingClientRect()
+          const monitor = element.querySelector('.music-video-preview-panel')!.getBoundingClientRect()
+          const timeline = element.querySelector('.notebook-timeline')!.getBoundingClientRect()
+          return bounds.x === 0 && bounds.y === 0 && Math.abs(bounds.width - innerWidth) < 1 && Math.abs(bounds.height - innerHeight) < 1
+            && close.right <= innerWidth && monitor.height >= 100 && monitor.bottom <= timeline.top + 1 && timeline.bottom <= innerHeight
+        })).toBe(true)
+        await page.screenshot({ path: `/tmp/videobook-music-beats-${viewport.width}.png` })
+      }
+      await page.keyboard.press('Escape')
+      await editor.waitFor({ state: 'detached' })
+      await expect.poll(() => page!.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Videobook command input')
+      const persisted = await currentSequence()
+      await input.fill(`/music-video ${address}`)
+      await page.getByLabel('Send command').click()
+      await editor.waitFor({ state: 'visible' })
+      await editor.getByText('Using your corrected beat map.', { exact: false }).waitFor({ state: 'visible', timeout: 30_000 })
+      expect((await currentSequence()).clips).toEqual(persisted.clips)
+      await editor.dispatchEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true })
+      expect(await editor.isVisible()).toBe(true)
+      await page.keyboard.press('Escape')
+      await editor.waitFor({ state: 'detached' })
+      notebookDirty = true
+    } finally { await client.close() }
+  }, 180_000)
 })

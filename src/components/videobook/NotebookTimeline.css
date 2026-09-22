@@ -89,3 +89,19 @@
 .timeline-source-list button { display: flex; align-items: center; gap: 12px; text-align: left; min-height: 54px; }
 .timeline-source-list button > span { flex: 1; }
 .timeline-source-list img { width: 64px; height: 42px; object-fit: contain; }
+.timeline-waveform { position: absolute; inset: 3px 0; width: 100%; height: calc(100% - 6px); pointer-events: none; fill: #96cceb; opacity: .58; }
+.timeline-clip > span { position: relative; z-index: 1; text-shadow: 0 1px 3px #07111d; }
+.timeline-track-audio .timeline-clip > span { align-self: flex-start; padding-top: 3px; }
+.timeline-beat { position: absolute; inset-block: 0; width: 1px; background: #a9cdbf55; pointer-events: none; }
+.timeline-beat.bar { width: 2px; background: #f7d776a6; }
+.timeline-beat.manual { border-left: 1px dashed #a7ddc8; background: transparent; }
+.timeline-clip.timeline-master { border-color: #83c8e4; }
+.timeline-playhead { z-index: 2; }
+.notebook-timeline-preview .timeline-clip { touch-action: pan-y; }
+.timeline-waveform path { fill: none; stroke: #96cceb; stroke-width: 1.2px; vector-effect: non-scaling-stroke; }
+@media (max-width: 560px) {
+  .music-video-editor .notebook-timeline-header { gap: 4px; padding: 4px 6px; }
+  .music-video-editor .timeline-toolbar { gap: 2px; }
+  .music-video-editor .timeline-toolbar button { font-size: 10px; padding: 3px 4px; min-height: 24px; }
+  .music-video-editor .timeline-assembly > .timeline-track-video { height: 60px; }
+}

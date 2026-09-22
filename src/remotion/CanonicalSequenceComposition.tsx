@@ -204,7 +204,7 @@ function Caption({
 export function CanonicalSequenceComposition({
   sequence,
   assets,
-  defaultFit = 'fill',
+  defaultFit = 'fit',
 }: CanonicalSequenceCompositionProps) {
   const assetById = new Map(assets.map((asset) => [asset.artifactId, asset]))
   const trackById = new Map(sequence.tracks.map((track) => [track.trackId, track]))
