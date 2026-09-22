@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
-import type { Browser, ConsoleMessage, Page, Route } from 'playwright'
+import type { Browser, ConsoleMessage, Locator, Page, Route } from 'playwright'
+import sharp from 'sharp'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { MVP_CONTRACT_VERSION, type EditIntent, type NotebookDocument, type Sequence } from 'videobook-engine'
 import { v7 as uuidv7 } from 'uuid'
@@ -845,7 +846,29 @@ describe('chat composer browser flow', () => {
     try {
       timelineBookId = (await call<{ bookId: string }>('create_book', { name: 'timeline-ui-e2e' })).bookId
       const timelineNotebookId = (await call<Array<{ id: string }>>('list_notebooks'))[0]!.id
-      const uploadedVideo = await call<{ assetId: string }>('upload_file', { filename: 'split-source.mp4', data: (await readFile(join(rootDir, 'split-source.mp4'))).toString('base64') })
+      const portraitPath = join(rootDir, 'timeline-portrait.mp4')
+      await execFileAsync(FFMPEG, [
+        '-y', '-f', 'lavfi', '-i', 'testsrc2=s=96x170:r=24:d=3',
+        '-vf', 'drawbox=x=0:y=0:w=iw:h=26:color=red:t=fill,drawbox=x=0:y=144:w=iw:h=26:color=blue:t=fill',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', portraitPath,
+      ])
+      const expectFullFrame = async (media: Locator) => {
+        await expect.poll(async () => {
+          const { data, info } = await sharp(await media.screenshot()).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+          const edgeHeight = Math.max(1, Math.floor(info.height * 0.2))
+          const x = Math.floor(info.width / 2)
+          let red = 0
+          let blue = 0
+          for (let y = 0; y < edgeHeight; y += 1) {
+            const top = (y * info.width + x) * info.channels
+            const bottom = ((info.height - 1 - y) * info.width + x) * info.channels
+            if (data[top]! > 32 && data[top]! > 2 * Math.max(data[top + 1]!, data[top + 2]!)) red += 1
+            if (data[bottom + 2]! > 32 && data[bottom + 2]! > 2 * Math.max(data[bottom]!, data[bottom + 1]!)) blue += 1
+          }
+          return red / edgeHeight > 0.4 && blue / edgeHeight > 0.4
+        }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      }
+      const uploadedVideo = await call<{ assetId: string }>('upload_file', { filename: 'timeline-portrait.mp4', data: (await readFile(portraitPath)).toString('base64') })
       await call('upload_file', { filename: 'music-video-master.wav', data: (await readFile(join(rootDir, 'music-video-master.wav'))).toString('base64') })
       await call('create_notebook_cell', { notebook_id: timelineNotebookId, cell: { type: 'video', slot: { row: 0, column: 7 }, output_artifact_id: uploadedVideo.assetId } })
       await expect.poll(async () => (await call<Array<{ state: string }>>('list_jobs')).every((job) => job.state === 'done'), { timeout: 60_000 }).toBe(true)
@@ -899,6 +922,7 @@ describe('chat composer browser flow', () => {
         const picker = page.getByRole('dialog', { name: 'Add a timeline clip' })
         await picker.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
         expect(await picker.getByLabel('Filter timeline sources').evaluate((element) => element === document.activeElement)).toBe(true)
+        if (trackName === mainTrack.name) await expectFullFrame(picker.locator('.timeline-source-list img').first())
         await picker.locator('.timeline-source-list button').first().click()
         clipCount += 1
         await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(clipCount)
@@ -906,6 +930,7 @@ describe('chat composer browser flow', () => {
       }
       await append(mainTrack.name)
       await append(mainTrack.name)
+      await expectFullFrame(timeline.locator('.timeline-clip img').first())
       await append(audioTracks[0]!.name)
       await append(audioTracks[0]!.name)
       await timeline.getByRole('button', { name: '+ Audio track', exact: true }).click()
@@ -1003,9 +1028,11 @@ describe('chat composer browser flow', () => {
               return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight
             })
         }), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+        await expectFullFrame(player.locator('video'))
         await page.screenshot({ path: `/tmp/videobook-timeline-fullscreen-${viewport.width}.png` })
       }
       await page.setViewportSize({ width: 1440, height: 1000 })
+      await expectFullFrame(previewTimeline.locator('.timeline-clip img').first())
       await page.screenshot({ path: '/tmp/videobook-timeline-fullscreenPreview.png' })
       await page.keyboard.press('Escape')
       await fullscreenPreview.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })

@@ -107,8 +107,8 @@ export const CanonicalSequencePlayer = forwardRef<
   const [frame, setFrame] = useState(firstFrame)
   const isPreview = presentation === 'preview'
   const inputProps = useMemo(
-    () => ({ sequence, assets }),
-    [assets, sequence],
+    () => ({ sequence, assets, defaultFit: isPreview ? 'fit' as const : 'fill' as const }),
+    [assets, isPreview, sequence],
   )
 
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>) => {

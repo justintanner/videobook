@@ -23,6 +23,7 @@ export interface CanonicalPlaybackAsset {
 interface CanonicalSequenceCompositionProps {
   sequence: Sequence
   assets: CanonicalPlaybackAsset[]
+  defaultFit?: 'fit' | 'fill'
 }
 
 function frameRate(sequence: Sequence): number {
@@ -60,10 +61,12 @@ function VisualClip({
   sequence,
   clip,
   src,
+  defaultFit,
 }: {
   sequence: Sequence
   clip: SequenceClip
   src: string
+  defaultFit: 'fit' | 'fill'
 }) {
   const frame = useCurrentFrame()
   const transform = clip.transform
@@ -90,7 +93,7 @@ function VisualClip({
   const style = {
     width: '100%',
     height: '100%',
-    objectFit: transform?.fit === 'fit' ? 'contain' : 'cover',
+    objectFit: (transform?.fit ?? defaultFit) === 'fit' ? 'contain' : 'cover',
     objectPosition: 'center',
     opacity: (transform?.opacity ?? 1) * incomingOpacity * outgoingOpacity,
     transform: [
@@ -201,6 +204,7 @@ function Caption({
 export function CanonicalSequenceComposition({
   sequence,
   assets,
+  defaultFit = 'fill',
 }: CanonicalSequenceCompositionProps) {
   const assetById = new Map(assets.map((asset) => [asset.artifactId, asset]))
   const trackById = new Map(sequence.tracks.map((track) => [track.trackId, track]))
@@ -240,7 +244,7 @@ export function CanonicalSequenceComposition({
             durationInFrames={clip.durationFrames}
             key={clip.clipId}
           >
-            <VisualClip sequence={sequence} clip={clip} src={asset.mediaUrl} />
+            <VisualClip sequence={sequence} clip={clip} src={asset.mediaUrl} defaultFit={defaultFit} />
           </RemotionSequence>
         )
       })}
