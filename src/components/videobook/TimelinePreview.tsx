@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Ref } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Film, X } from 'lucide-react'
 import type { Sequence } from 'videobook-engine'
@@ -9,10 +9,10 @@ import { CanonicalSequencePlayer, type CanonicalSequencePlayerHandle } from './C
 import { NotebookTimeline, type NotebookTimelineProps } from './NotebookTimeline'
 import './TimelinePreview.css'
 
-type TimelinePreviewProps = Omit<NotebookTimelineProps, 'sequence' | 'onPreview' | 'onRemove' | 'presentation'> & {
+type TimelinePreviewProps = Omit<NotebookTimelineProps, 'sequence' | 'onSeek' | 'onPreview' | 'onRemove' | 'presentation'> & {
   sequence: Sequence
   playbackAssets: CanonicalPlaybackAsset[]
-  playerRef: Ref<CanonicalSequencePlayerHandle>
+  initialFrame: number
   returnFocus: HTMLElement | null
   onFrameUpdate: (frame: number) => void
   onClose: () => void
@@ -20,9 +20,10 @@ type TimelinePreviewProps = Omit<NotebookTimelineProps, 'sequence' | 'onPreview'
 
 const ignoreKeyboardAction = () => undefined
 
-export function TimelinePreview({ sequence, assets, assembly, disabled, frame, address, onSeek, onExport, playbackAssets, playerRef, returnFocus, onFrameUpdate, onClose }: TimelinePreviewProps) {
+export function TimelinePreview({ sequence, assets, assembly, disabled, frame, address, onExport, playbackAssets, initialFrame, returnFocus, onFrameUpdate, onClose }: TimelinePreviewProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const playerRef = useRef<CanonicalSequencePlayerHandle>(null)
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -37,7 +38,7 @@ export function TimelinePreview({ sequence, assets, assembly, disabled, frame, a
   return createPortal(
     <dialog
       ref={dialogRef}
-      className="timeline-preview-fullscreen timeline-preview-dock"
+      className="timeline-preview-fullscreen"
       aria-label={`Timeline preview ${address}`}
       data-composer-focus="preserve"
       onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose() }}
@@ -67,6 +68,7 @@ export function TimelinePreview({ sequence, assets, assembly, disabled, frame, a
           editingEnabled={false}
           presentation="preview"
           allowFullscreen={false}
+          initialFrame={initialFrame}
         />
       </div>
       <div className="timeline-preview-fullscreen-tracks">
@@ -77,7 +79,7 @@ export function TimelinePreview({ sequence, assets, assembly, disabled, frame, a
           disabled={disabled}
           frame={frame}
           address={address}
-          onSeek={onSeek}
+          onSeek={(nextFrame) => playerRef.current?.seekTo(nextFrame)}
           onExport={onExport}
           presentation="preview"
         />

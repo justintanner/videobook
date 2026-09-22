@@ -69,7 +69,6 @@ import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import { sequenceContentRevision } from './videobook/sequence-revision'
 import { useTimelineAssembly } from './videobook/useTimelineAssembly'
 import { NotebookTimeline, type NotebookTimelineProps } from './components/videobook/NotebookTimeline'
-import type { CanonicalSequencePlayerHandle } from './components/videobook/CanonicalSequencePlayer'
 
 import {
   clearReferencesConfirmation,
@@ -562,7 +561,6 @@ import {
 } from '@/videobook/media-insight-watch'
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
-const TimelineSequencePlayer = lazy(() => import('./components/videobook/CanonicalSequencePlayer').then((module) => ({ default: module.CanonicalSequencePlayer })))
 const TimelinePreview = lazy(() => import('./components/videobook/TimelinePreview').then((module) => ({ default: module.TimelinePreview })))
 
 const WatermarkBody = lazy(async () => {
@@ -3215,6 +3213,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
 type TimelinePreviewSession = {
   bookId: string
   cellId: string
+  initialFrame: number
   returnFocus: HTMLElement | null
 }
 
@@ -3720,17 +3719,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [mcp])
 
-  const [timelineFrame, setTimelineFrame] = useState(0)
   const [timelinePreview, setTimelinePreview] = useState<TimelinePreviewSession | null>(null)
-  const timelinePlayerRef = useRef<CanonicalSequencePlayerHandle>(null)
-  const pendingTimelineSeekRef = useRef<number | null>(null)
-  const attachTimelinePlayer = useCallback((player: CanonicalSequencePlayerHandle | null) => {
-    timelinePlayerRef.current = player
-    if (player && pendingTimelineSeekRef.current !== null) {
-      player.seekTo(pendingTimelineSeekRef.current)
-      pendingTimelineSeekRef.current = null
-    }
-  }, [])
   const timeline = useTimelineAssembly({
     bookId,
     ready: mcp.state === 'ready' && !busy,
@@ -12543,18 +12532,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
   const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
-  const openTimelinePreview = (cellId: string) => {
+  const openTimelinePreview = (cellId: string, frame = timeline.frame) => {
+    if (!sequence) return
     selectCanvasCell(cellId)
-    setComposerDockOpen(true)
-    pendingTimelineSeekRef.current = timelineFrame
+    timeline.seek(frame)
     setTimelinePreview({
       bookId,
       cellId,
+      initialFrame: frame,
       returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
     })
   }
   const closeTimelinePreview = () => {
-    pendingTimelineSeekRef.current = timelineFrame
     timeline.closePicker()
     setTimelinePreview(null)
   }
@@ -12563,14 +12552,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     assets,
     assembly: timelinePreviewOpen ? { ...timeline, picker: null } : timeline,
     disabled: busy || mcp.state !== 'ready',
-    frame: timelineFrame,
-    onSeek: (cellId, frame) => {
-      selectCanvasCell(cellId)
-      setComposerDockOpen(true)
-      setTimelineFrame(frame)
-      if (timelinePlayerRef.current) timelinePlayerRef.current.seekTo(frame)
-      else pendingTimelineSeekRef.current = frame
-    },
+    frame: timeline.frame,
+    onSeek: openTimelinePreview,
     onPreview: openTimelinePreview,
     onExport: () => { void executeCommand('/export-sequence').then((outcome) => { if (!outcome.ok) setNotice(outcome.message, 'error') }) },
     onRemove: (cellId) => {
@@ -12578,28 +12561,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cell) void deleteNotebookCells([cell])
     },
   }
-  const notebookDockContent = timelinePreviewOpen ? null : selectedNotebookCell?.type === 'timeline' && sequence ? (
-    <div className="composer-notebook-dock inspector timeline-preview-dock">
-      <header>
-        <span className="inspector-cell-title">
-          <Film size={16} /><strong>Timeline</strong>
-          <code className="inspector-cell-address">{notebookGridTag(selectedNotebookCell.slot)}</code>
-          <span className="timeline-preview-label">Preview</span>
-        </span>
-        <div className="inspector-header-actions">
-          <span className="timeline-preview-format">{sequence.width} × {sequence.height}<span>{Number((sequence.frameRate.numerator / sequence.frameRate.denominator).toFixed(2))} fps</span></span>
-          <ComposerDockClose />
-        </div>
-      </header>
-      <div className="timeline-preview-body">
-        {sequence.clips.length > 0 || sequence.captions.length > 0 ? <Suspense fallback={<p className="timeline-preview-message" role="status">Loading timeline preview…</p>}>
-          <TimelineSequencePlayer key={bookId} ref={attachTimelinePlayer} sequence={sequence} assets={timelinePlaybackAssets}
-            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} presentation="preview"
-            onExpand={() => openTimelinePreview(selectedNotebookCell.id)} />
-        </Suspense> : <div className="timeline-preview-message"><Film size={24} /><strong>Your timeline preview</strong><p>Add video or audio clips to start watching.</p></div>}
-      </div>
-    </div>
-  ) : selectedCell && selectedNotebookCell ? (
+  const notebookDockContent = !timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
     <div
       className={[
         'composer-notebook-dock',
@@ -12961,7 +12923,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           rememberLastWorkSlot(node.data.slot)
                         }
                         setSourceViewCellId(null)
-                        if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
+                        if (node.type !== 'timeline' && composerDockShouldOpen('selection')) setComposerDockOpen(true)
                       }}
                       onPaneClick={() => {
                         closeCellContextMenu()
@@ -13274,13 +13236,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             assets={assets}
             assembly={timeline}
             disabled={busy || mcp.state !== 'ready'}
-            frame={timelineFrame}
+            frame={timeline.frame}
             address={notebookGridTag(timelinePreviewCell.slot)}
             playbackAssets={timelinePlaybackAssets}
-            playerRef={attachTimelinePlayer}
+            initialFrame={timelinePreview.initialFrame}
             returnFocus={timelinePreview.returnFocus}
-            onFrameUpdate={setTimelineFrame}
-            onSeek={(frame) => timelineContext.onSeek(timelinePreviewCell.id, frame)}
+            onFrameUpdate={timeline.seek}
             onExport={() => { closeTimelinePreview(); timelineContext.onExport() }}
             onClose={closeTimelinePreview}
           />

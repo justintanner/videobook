@@ -12,10 +12,9 @@ import {
 import {
   Player,
   type PlayerRef,
-  type RenderFullscreenButton,
   type RenderPlayPauseButton,
 } from '@remotion/player'
-import { LoaderCircle, Maximize, Minimize, Pause, Play } from 'lucide-react'
+import { LoaderCircle, Pause, Play } from 'lucide-react'
 import type { Sequence } from 'videobook-engine'
 import {
   CanonicalSequenceComposition,
@@ -41,7 +40,7 @@ interface CanonicalSequencePlayerProps {
   editingEnabled?: boolean
   presentation?: 'default' | 'preview'
   allowFullscreen?: boolean
-  onExpand?: () => void
+  initialFrame?: number
 }
 
 export interface CanonicalSequencePlayerHandle {
@@ -51,19 +50,12 @@ export interface CanonicalSequencePlayerHandle {
 }
 
 const defaultPlayerStyle: CSSProperties = { width: '100%', maxHeight: 520 }
-const previewPlayerStyle: CSSProperties = {
-  width: 'min(100cqw, max(280px, calc(100cqh * var(--sequence-aspect-ratio))))',
-  height: '100cqh',
-}
+const previewPlayerStyle: CSSProperties = { width: '100%', height: '100%' }
 
 const renderPreviewPlayButton: RenderPlayPauseButton = ({ playing, isBuffering }) => (
   isBuffering
     ? <LoaderCircle size={16} className="timeline-preview-buffering" />
     : playing ? <Pause size={16} /> : <Play size={16} />
-)
-
-const renderPreviewFullscreenButton: RenderFullscreenButton = ({ isFullscreen }) => (
-  isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />
 )
 
 function sequenceDuration(sequence: Sequence): number {
@@ -104,16 +96,16 @@ export const CanonicalSequencePlayer = forwardRef<
   editingEnabled = true,
   presentation = 'default',
   allowFullscreen = true,
-  onExpand,
+  initialFrame = 0,
 }, ref) {
   const playerRef = useRef<PlayerRef>(null)
   const sectionRef = useRef<HTMLElement>(null)
-  const frameRef = useRef(0)
-  const [frame, setFrame] = useState(0)
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
   const durationInFrames = sequenceDuration(sequence)
+  const firstFrame = Math.max(0, Math.min(durationInFrames - 1, Math.round(initialFrame)))
+  const frameRef = useRef(firstFrame)
+  const [frame, setFrame] = useState(firstFrame)
   const isPreview = presentation === 'preview'
-  const previewStyle = { '--sequence-aspect-ratio': sequence.width / sequence.height } as CSSProperties
   const inputProps = useMemo(
     () => ({ sequence, assets }),
     [assets, sequence],
@@ -175,19 +167,6 @@ export const CanonicalSequencePlayer = forwardRef<
     return () => player.removeEventListener('frameupdate', handler)
   }, [onFrameUpdate])
 
-  const renderExpandControl = useCallback(() => onExpand ? (
-    <button
-      type="button"
-      className="timeline-preview-expand"
-      aria-label="Expand timeline preview"
-      title="Expand timeline preview"
-      onClick={onExpand}
-      onKeyDown={(event) => event.stopPropagation()}
-    >
-      <Maximize size={16} />
-    </button>
-  ) : null, [onExpand])
-
   const player = (
     <Player
       ref={playerRef}
@@ -197,22 +176,20 @@ export const CanonicalSequencePlayer = forwardRef<
       fps={fps}
       compositionWidth={sequence.width}
       compositionHeight={sequence.height}
+      initialFrame={firstFrame}
       controls
       spaceKeyToPlayOrPause={isPreview ? false : undefined}
-      allowFullscreen={allowFullscreen && !onExpand}
+      allowFullscreen={allowFullscreen}
       alwaysShowControls={isPreview}
       className={isPreview ? 'timeline-preview-screen' : undefined}
       style={isPreview ? previewPlayerStyle : defaultPlayerStyle}
       renderPlayPauseButton={isPreview ? renderPreviewPlayButton : undefined}
-      renderFullscreenButton={isPreview ? renderPreviewFullscreenButton : undefined}
-      renderCustomControls={onExpand ? renderExpandControl : undefined}
     />
   )
 
   return (
     <section
       className={isPreview ? 'canonical-player canonical-player-preview' : 'canonical-player'}
-      style={isPreview ? previewStyle : undefined}
       ref={sectionRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}

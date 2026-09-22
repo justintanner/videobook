@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditPreview, Sequence } from 'videobook-engine'
 import { validateCommandPlan, type CommandPlan } from './command-plan'
 import { sequenceContentRevision } from './sequence-revision'
@@ -24,11 +24,26 @@ interface TimelineOptions<Asset extends TimelineAsset> {
   onAssets: (assets: Asset[]) => void
 }
 
+interface TimelinePlayback {
+  sequenceId: string | undefined
+  frame: number
+  selectedClipId: string | null
+}
+
 export function useTimelineAssembly<Asset extends TimelineAsset>(options: TimelineOptions<Asset>) {
   const { bookId, call, sequence } = options
   const scope = useMemo(() => ({ bookId }), [bookId])
   const scopeRef = useRef({ key: scope, active: true, pending: false })
   const [work, setWork] = useState({ scope, busy: false, error: '' })
+  const sequenceId = sequence?.sequenceId
+  const [playback, setPlayback] = useState<TimelinePlayback>({ sequenceId, frame: 0, selectedClipId: null })
+  const seek = useCallback((frame: number) => {
+    setPlayback((current) => ({
+      sequenceId,
+      frame,
+      selectedClipId: current.sequenceId === sequenceId ? current.selectedClipId : null,
+    }))
+  }, [sequenceId])
   const [picker, setPicker] = useState<{
     scope: typeof scope
     trackId: string
@@ -115,6 +130,14 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
   }
 
   return {
+    frame: playback.sequenceId === sequenceId ? playback.frame : 0,
+    selectedClipId: playback.sequenceId === sequenceId ? playback.selectedClipId : null,
+    seek,
+    selectClip: (selectedClipId: string) => setPlayback((current) => ({
+      sequenceId,
+      frame: current.sequenceId === sequenceId ? current.frame : 0,
+      selectedClipId,
+    })),
     busy: work.scope === scope && work.busy,
     error: work.scope === scope ? work.error : '',
     picker: picker?.scope === scope ? picker : null,

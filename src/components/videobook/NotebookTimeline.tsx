@@ -83,7 +83,7 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
   const [zoom, setZoom] = useState<number | 'fit'>(presentation === 'preview' ? 'fit' : 48)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
-  const [selectedClip, setSelectedClip] = useState<string | null>(null)
+  const selectedClip = assembly.selectedClipId
   const audioViewport = useRef<HTMLDivElement>(null)
   const horizontalViewport = useRef<HTMLDivElement>(null)
   const [audioHeight, setAudioHeight] = useState(120)
@@ -171,7 +171,7 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
                 aria-pressed={selectedClip === clip.clipId}
                 title={`${asset?.label ?? 'Clip'} · ${(clip.durationFrames / fps).toFixed(2)}s`}
                 style={{ left, width: Math.max(2, clipWidth) }}
-                onClick={(event) => { event.stopPropagation(); setSelectedClip(clip.clipId); onSeek(clip.timelineStartFrame) }}
+                onClick={(event) => { event.stopPropagation(); assembly.selectClip(clip.clipId); onSeek(clip.timelineStartFrame) }}
               >
                 {asset?.thumbnailUrl && track.kind === 'video' && clipWidth > 55 && <img src={asset.thumbnailUrl} alt="" loading="lazy" />}
                 <span>{asset?.label ?? 'Clip'}</span>
