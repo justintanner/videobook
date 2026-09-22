@@ -858,7 +858,7 @@ describe('chat composer browser flow', () => {
         await page.getByRole('button', { name: 'Timeline', exact: true }).click()
       }
       await addTimeline()
-      const timeline = page.locator('.notebook-timeline')
+      const timeline = page.locator('.react-flow__node-timeline .notebook-timeline')
       await timeline.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
       const dimensions = await timeline.evaluate((element) => ({ width: (element as HTMLElement).offsetWidth, height: (element as HTMLElement).offsetHeight }))
       expect(dimensions).toEqual({ width: 2088, height: 240 })
@@ -927,24 +927,89 @@ describe('chat composer browser flow', () => {
       expect(current.clips.find((clip) => clip.trackId === mainTrack.trackId)?.timelineStartFrame).toBe(0)
       await timeline.getByRole('button', { name: '+ Audio track', exact: true }).click()
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(current.tracks.length + 1)
+      const dockPlayer = page.locator('.composer-notebook-dock .canonical-player')
+      await dockPlayer.focus()
+      await dockPlayer.press('l')
+      await expect.poll(() => dockPlayer.locator('footer span').first().textContent()).toBe('F30')
       await timeline.getByRole('button', { name: 'Preview', exact: true }).click()
-      const player = page.locator('.timeline-preview-body .canonical-player')
+      const fullscreenPreview = page.getByRole('dialog', { name: 'Timeline preview @b1', exact: true })
+      await fullscreenPreview.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      const previewTimeline = fullscreenPreview.locator('.notebook-timeline')
+      const player = fullscreenPreview.locator('.canonical-player')
       await player.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => player.locator('footer span').first().textContent()).toBe('F30')
+      expect(await page.locator('.canonical-player').count()).toBe(1)
+      await fullscreenPreview.getByLabel('Close timeline preview', { exact: true }).focus()
+      await page.keyboard.press('Shift+Tab')
+      expect(await fullscreenPreview.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+      await page.keyboard.press('Tab')
+      expect(await fullscreenPreview.getByLabel('Close timeline preview', { exact: true }).evaluate((element) => element === document.activeElement)).toBe(true)
       await player.focus()
       await player.press('Space')
-      await expect.poll(async () => Number((await player.locator('footer span').first().textContent())?.replace('F', '')), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(3)
+      await expect.poll(async () => Number((await player.locator('footer span').first().textContent())?.replace('F', '')), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(33)
       await player.press('k')
       expect(await player.locator('video').count()).toBe(1)
       expect(await player.locator('audio').count()).toBeGreaterThanOrEqual(2)
-      const contained = await player.locator('video').evaluate((element) => {
-        const media = element.getBoundingClientRect()
-        const dock = element.closest('.timeline-preview-body')!.getBoundingClientRect()
-        return media.top >= dock.top - 1 && media.bottom <= dock.bottom + 1
-      })
-      await page.screenshot({ path: '/tmp/videobook-timeline-preview.png' })
-      expect(contained).toBe(true)
+      const previewAudioTrack = (await call<Sequence>('get_primary_sequence')).tracks.find((track) => track.name === 'Audio 3')!
+      await previewTimeline.getByLabel(`Add clip to ${previewAudioTrack.name}`, { exact: true }).click()
+      const previewPicker = page.getByRole('dialog', { name: 'Add a timeline clip', exact: true })
+      await previewPicker.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      expect(await page.locator('.timeline-source-picker').count()).toBe(1)
+      await page.keyboard.press('Escape')
+      await previewPicker.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      expect(await fullscreenPreview.isVisible()).toBe(true)
+      await previewTimeline.getByLabel(`Add clip to ${previewAudioTrack.name}`, { exact: true }).click()
+      await previewPicker.locator('.timeline-source-list button').first().click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(5)
+      await previewTimeline.locator(`[data-track-id="${previewAudioTrack.trackId}"] .timeline-clip`).click()
+      await previewTimeline.getByRole('button', { name: 'Remove clip', exact: true }).click()
+      await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).clips.length, { timeout: MCP_ROUNDTRIP_MS }).toBe(4)
+      const retainedVideo = current.clips.find((clip) => clip.trackId === mainTrack.trackId)!
+      await previewTimeline.locator(`[data-clip-id="${retainedVideo.clipId}"]`).click()
+      await player.focus()
+      await player.press('l')
+      await expect.poll(() => player.locator('footer span').first().textContent()).toBe('F30')
+      await expect.poll(() => previewTimeline.locator('.timeline-ruler-row > span').textContent()).toBe('0:01')
+      for (const viewport of [
+        { width: 1440, height: 1000 },
+        { width: 390, height: 844 },
+        { width: 320, height: 568 },
+        { width: 667, height: 375 },
+        { width: 1024, height: 500 },
+      ]) {
+        await page.setViewportSize(viewport)
+        await expect.poll(() => fullscreenPreview.evaluate((element) => {
+          const dialog = element.getBoundingClientRect()
+          const stage = element.querySelector('.timeline-preview-body')!.getBoundingClientRect()
+          const tracks = element.querySelector('.notebook-timeline')!.getBoundingClientRect()
+          const video = element.querySelector('video')!.getBoundingClientRect()
+          return Math.abs(dialog.left) < 1 && Math.abs(dialog.top) < 1
+            && Math.abs(dialog.width - innerWidth) < 1 && Math.abs(dialog.height - innerHeight) < 1
+            && stage.height >= 100 && stage.bottom <= tracks.top + 1
+            && tracks.bottom <= innerHeight && tracks.width <= innerWidth
+            && video.top >= stage.top - 1 && video.bottom <= stage.bottom + 1
+            && [...element.querySelectorAll('.timeline-toolbar button, .timeline-preview-fullscreen-actions button')].every((button) => {
+              const bounds = button.getBoundingClientRect()
+              return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight
+            })
+        }), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+        await page.screenshot({ path: `/tmp/videobook-timeline-fullscreen-${viewport.width}.png` })
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await page.screenshot({ path: '/tmp/videobook-timeline-fullscreenPreview.png' })
+      await page.keyboard.press('Escape')
+      await fullscreenPreview.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      expect(await timeline.getByRole('button', { name: 'Preview', exact: true }).evaluate((element) => element === document.activeElement)).toBe(true)
+      await expect.poll(() => dockPlayer.locator('footer span').first().textContent()).toBe('F30')
+      await dockPlayer.getByRole('button', { name: 'Expand timeline preview', exact: true }).press('Enter')
+      await fullscreenPreview.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => player.locator('footer span').first().textContent()).toBe('F30')
+      await fullscreenPreview.getByLabel('Close timeline preview', { exact: true }).click()
+      await fullscreenPreview.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      await timeline.getByRole('button', { name: 'Preview', exact: true }).click()
       const exportCalls = observedCalls.filter((call) => call.name === 'plan_sequence_export').length
-      await timeline.getByRole('button', { name: 'Export', exact: true }).click()
+      await previewTimeline.getByRole('button', { name: 'Export', exact: true }).click()
+      await fullscreenPreview.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
       await expect.poll(() => observedCalls.filter((call) => call.name === 'plan_sequence_export').length, { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(exportCalls)
       await page.getByRole('dialog', { name: 'Command plan review' }).waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
       await page.keyboard.press('Escape')

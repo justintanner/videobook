@@ -16,9 +16,10 @@ export interface NotebookTimelineProps {
   frame: number
   address: string
   onSeek: (frame: number) => void
-  onPreview: () => void
+  onPreview?: () => void
   onExport: () => void
-  onRemove: () => void
+  onRemove?: () => void
+  presentation?: 'canvas' | 'preview'
 }
 
 const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
@@ -78,8 +79,8 @@ function TimelinePicker({ assembly }: Pick<NotebookTimelineProps, 'assembly'>) {
   )
 }
 
-export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove }: NotebookTimelineProps) {
-  const [zoom, setZoom] = useState<number | 'fit'>(48)
+export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas' }: NotebookTimelineProps) {
+  const [zoom, setZoom] = useState<number | 'fit'>(presentation === 'preview' ? 'fit' : 48)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [selectedClip, setSelectedClip] = useState<string | null>(null)
@@ -91,9 +92,10 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
   const clipEndFrame = sequence?.clips.reduce((end, clip) => Math.max(end, clip.timelineStartFrame + clip.durationFrames), 0) ?? 0
   const endFrame = sequence?.captions.reduce((end, cue) => Math.max(end, cue.timelineStartFrame + cue.durationFrames), clipEndFrame) ?? clipEndFrame
   const duration = endFrame / fps
-  const fittedZoom = Math.max(1, laneWidth - endPadding) / Math.max(1, duration)
+  const trailingSpace = presentation === 'preview' ? Math.min(endPadding, laneWidth / 10) : endPadding
+  const fittedZoom = Math.max(1, laneWidth - trailingSpace) / Math.max(1, duration)
   const pixelsPerSecond = Math.min(zoom === 'fit' ? fittedZoom : zoom, 8_000_000 / Math.max(1, duration))
-  const contentWidth = zoom === 'fit' ? laneWidth : Math.max(laneWidth, duration * pixelsPerSecond + endPadding)
+  const contentWidth = zoom === 'fit' ? laneWidth : Math.max(laneWidth, duration * pixelsPerSecond + trailingSpace)
   const boundedLeft = Math.min(scrollLeft, contentWidth - laneWidth)
   const mainVideo = sequence?.tracks.reduce<SequenceTrack | undefined>((main, track) =>
     track.kind === 'video' && (!main || track.ordinal < main.ordinal) ? track : main, undefined)
@@ -116,7 +118,8 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
     if (!element || !horizontal) return
     const observer = new ResizeObserver(() => {
       setAudioHeight(element.clientHeight)
-      setLaneWidth(Math.max(1, Math.min(horizontal.clientWidth, element.clientWidth - labelWidth)))
+      const measuredLabelWidth = Number.parseFloat(getComputedStyle(horizontal).marginLeft) || labelWidth
+      setLaneWidth(Math.max(1, Math.min(horizontal.clientWidth, element.clientWidth - measuredLabelWidth)))
     })
     observer.observe(element)
     observer.observe(horizontal)
@@ -183,18 +186,18 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
   }
 
   return (
-    <section className="notebook-timeline" style={blockStyle} aria-label={`Timeline ${address}`} data-composer-focus="preserve">
+    <section className={`notebook-timeline${presentation === 'preview' ? ' notebook-timeline-preview' : ''}`} style={presentation === 'canvas' ? blockStyle : undefined} aria-label={`Timeline ${address}`} data-composer-focus="preserve">
       <header className="notebook-timeline-header">
         <Film size={15} /><strong>Timeline</strong><code>{address}</code><span>{timeLabel(duration)}</span>
         <div className="timeline-toolbar nodrag nopan nowheel">
           <button type="button" disabled={busy || !sequence} onClick={() => void assembly.addTrack()}>+ Audio track</button>
-          <button type="button" disabled={!sequence || endFrame === 0} onClick={onPreview}>Preview</button>
+          {onPreview && <button type="button" disabled={!sequence || endFrame === 0} onClick={onPreview}>Preview</button>}
           <button type="button" disabled={busy || endFrame === 0} onClick={onExport}>Export</button>
           <button type="button" disabled={busy || !canRemove} onClick={() => selected && void assembly.removeClip(selected.clipId)}>Remove clip</button>
           <button type="button" aria-label="Zoom timeline out" onClick={() => setZoom(Math.max(Math.min(0.25, fittedZoom), pixelsPerSecond / 2))}>−</button>
           <button type="button" aria-label="Zoom timeline in" onClick={() => setZoom(Math.min(Math.max(768, fittedZoom), pixelsPerSecond * 2))}>+</button>
           <button type="button" aria-pressed={zoom === 'fit'} onClick={() => { setZoom('fit'); setScrollLeft(0); horizontalViewport.current?.scrollTo({ left: 0 }) }}>Fit</button>
-          <button type="button" disabled={busy} aria-label="Remove Timeline element" onClick={onRemove}><Trash2 size={14} /></button>
+          {onRemove && <button type="button" disabled={busy} aria-label="Remove Timeline element" onClick={onRemove}><Trash2 size={14} /></button>}
         </div>
       </header>
       <div className="timeline-assembly nodrag nopan nowheel" onKeyDown={(event) => event.stopPropagation()}>

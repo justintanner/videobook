@@ -563,6 +563,7 @@ import {
 import { guardedAsyncResult } from '@/videobook/async-request-guard'
 
 const TimelineSequencePlayer = lazy(() => import('./components/videobook/CanonicalSequencePlayer').then((module) => ({ default: module.CanonicalSequencePlayer })))
+const TimelinePreview = lazy(() => import('./components/videobook/TimelinePreview').then((module) => ({ default: module.TimelinePreview })))
 
 const WatermarkBody = lazy(async () => {
   const module = await import('@/components/videobook/confirm/bodies/WatermarkBody')
@@ -3211,6 +3212,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   )
 }
 
+type TimelinePreviewSession = {
+  bookId: string
+  cellId: string
+  returnFocus: HTMLElement | null
+}
+
 type TimelineContextValue = Omit<NotebookTimelineProps, 'address' | 'onSeek' | 'onPreview' | 'onRemove'> & {
   onSeek: (cellId: string, frame: number) => void
   onPreview: (cellId: string) => void
@@ -3714,6 +3721,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [mcp])
 
   const [timelineFrame, setTimelineFrame] = useState(0)
+  const [timelinePreview, setTimelinePreview] = useState<TimelinePreviewSession | null>(null)
   const timelinePlayerRef = useRef<CanonicalSequencePlayerHandle>(null)
   const pendingTimelineSeekRef = useRef<number | null>(null)
   const attachTimelinePlayer = useCallback((player: CanonicalSequencePlayerHandle | null) => {
@@ -3742,6 +3750,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   })
   const timelinePlaybackAssets = useMemo(() => assets.flatMap((asset) => asset.mediaUrl
     ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : []), [assets])
+  const timelinePreviewCell = timelinePreview?.bookId === bookId
+    ? notebook?.cells.find((cell) => cell.id === timelinePreview.cellId && cell.type === 'timeline')
+    : undefined
+  const timelinePreviewOpen = Boolean(timelinePreviewCell && sequence && screen === 'notebook')
 
   const handleToggleMcpCall = useCallback((id: number) => {
     setMcpCalls((log) => toggleMcpCall(log, id))
@@ -12045,7 +12057,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
-  const showCommandComposer = screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer)
+  const showCommandComposer = !timelinePreviewOpen && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -12531,10 +12543,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
   const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
+  const openTimelinePreview = (cellId: string) => {
+    selectCanvasCell(cellId)
+    setComposerDockOpen(true)
+    pendingTimelineSeekRef.current = timelineFrame
+    setTimelinePreview({
+      bookId,
+      cellId,
+      returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    })
+  }
+  const closeTimelinePreview = () => {
+    pendingTimelineSeekRef.current = timelineFrame
+    timeline.closePicker()
+    setTimelinePreview(null)
+  }
   const timelineContext: TimelineContextValue = {
     sequence,
     assets,
-    assembly: timeline,
+    assembly: timelinePreviewOpen ? { ...timeline, picker: null } : timeline,
     disabled: busy || mcp.state !== 'ready',
     frame: timelineFrame,
     onSeek: (cellId, frame) => {
@@ -12544,14 +12571,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (timelinePlayerRef.current) timelinePlayerRef.current.seekTo(frame)
       else pendingTimelineSeekRef.current = frame
     },
-    onPreview: (cellId) => { selectCanvasCell(cellId); setComposerDockOpen(true) },
+    onPreview: openTimelinePreview,
     onExport: () => { void executeCommand('/export-sequence').then((outcome) => { if (!outcome.ok) setNotice(outcome.message, 'error') }) },
     onRemove: (cellId) => {
       const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
       if (cell) void deleteNotebookCells([cell])
     },
   }
-  const notebookDockContent = selectedNotebookCell?.type === 'timeline' && sequence ? (
+  const notebookDockContent = timelinePreviewOpen ? null : selectedNotebookCell?.type === 'timeline' && sequence ? (
     <div className="composer-notebook-dock inspector timeline-preview-dock">
       <header>
         <span className="inspector-cell-title">
@@ -12567,7 +12594,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       <div className="timeline-preview-body">
         {sequence.clips.length > 0 || sequence.captions.length > 0 ? <Suspense fallback={<p className="timeline-preview-message" role="status">Loading timeline preview…</p>}>
           <TimelineSequencePlayer key={bookId} ref={attachTimelinePlayer} sequence={sequence} assets={timelinePlaybackAssets}
-            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} presentation="preview" />
+            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} presentation="preview"
+            onExpand={() => openTimelinePreview(selectedNotebookCell.id)} />
         </Suspense> : <div className="timeline-preview-message"><Film size={24} /><strong>Your timeline preview</strong><p>Add video or audio clips to start watching.</p></div>}
       </div>
     </div>
@@ -13234,6 +13262,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               musicVideoSession.audioArtifactId,
               nextSequence ?? sequence,
             )}
+          />
+        </Suspense>
+      )}
+
+      {timelinePreviewOpen && timelinePreview && timelinePreviewCell && sequence && (
+        <Suspense fallback={<div role="status">Opening timeline preview…</div>}>
+          <TimelinePreview
+            key={`${bookId}:${timelinePreviewCell.id}`}
+            sequence={sequence}
+            assets={assets}
+            assembly={timeline}
+            disabled={busy || mcp.state !== 'ready'}
+            frame={timelineFrame}
+            address={notebookGridTag(timelinePreviewCell.slot)}
+            playbackAssets={timelinePlaybackAssets}
+            playerRef={attachTimelinePlayer}
+            returnFocus={timelinePreview.returnFocus}
+            onFrameUpdate={setTimelineFrame}
+            onSeek={(frame) => timelineContext.onSeek(timelinePreviewCell.id, frame)}
+            onExport={() => { closeTimelinePreview(); timelineContext.onExport() }}
+            onClose={closeTimelinePreview}
           />
         </Suspense>
       )}

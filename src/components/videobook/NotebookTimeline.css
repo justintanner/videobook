@@ -35,7 +35,7 @@
 .notebook-timeline button:disabled { opacity: .4; cursor: default; }
 .notebook-timeline button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 .timeline-assembly { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.timeline-ruler-row, .timeline-track { display: grid; grid-template-columns: 200px minmax(0, 1fr); flex-shrink: 0; }
+.timeline-ruler-row, .timeline-track { display: grid; grid-template-columns: var(--timeline-label-width, 200px) minmax(0, 1fr); flex-shrink: 0; }
 .timeline-ruler-row { height: 28px; color: var(--muted); }
 .timeline-ruler-row > span { padding: 3px 10px; }
 .timeline-ruler { position: relative; overflow: hidden; cursor: crosshair; }
@@ -71,7 +71,7 @@
 .timeline-empty-lane { display: block; color: var(--muted); padding: 4px 12px; }
 .timeline-audio-viewport { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .timeline-audio-content { position: relative; }
-.timeline-horizontal { height: 14px; flex-shrink: 0; overflow-x: auto; margin-left: 200px; }
+.timeline-horizontal { height: 14px; flex-shrink: 0; overflow-x: auto; margin-left: var(--timeline-label-width, 200px); }
 .timeline-error { color: #ffb5a8; padding: 3px 10px; }
 .timeline-source-picker {
   color: var(--text);
@@ -171,6 +171,12 @@
 .timeline-preview-screen button svg {
   width: 16px;
   height: 16px;
+}
+
+.timeline-preview-screen .timeline-preview-expand {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .timeline-preview-screen button:focus-visible {

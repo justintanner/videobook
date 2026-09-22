@@ -40,6 +40,8 @@ interface CanonicalSequencePlayerProps {
   onKeyboardAction: (action: TimelineKeyboardAction, frame: number) => void
   editingEnabled?: boolean
   presentation?: 'default' | 'preview'
+  allowFullscreen?: boolean
+  onExpand?: () => void
 }
 
 export interface CanonicalSequencePlayerHandle {
@@ -101,6 +103,8 @@ export const CanonicalSequencePlayer = forwardRef<
   onKeyboardAction,
   editingEnabled = true,
   presentation = 'default',
+  allowFullscreen = true,
+  onExpand,
 }, ref) {
   const playerRef = useRef<PlayerRef>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -171,6 +175,19 @@ export const CanonicalSequencePlayer = forwardRef<
     return () => player.removeEventListener('frameupdate', handler)
   }, [onFrameUpdate])
 
+  const renderExpandControl = useCallback(() => onExpand ? (
+    <button
+      type="button"
+      className="timeline-preview-expand"
+      aria-label="Expand timeline preview"
+      title="Expand timeline preview"
+      onClick={onExpand}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <Maximize size={16} />
+    </button>
+  ) : null, [onExpand])
+
   const player = (
     <Player
       ref={playerRef}
@@ -181,11 +198,14 @@ export const CanonicalSequencePlayer = forwardRef<
       compositionWidth={sequence.width}
       compositionHeight={sequence.height}
       controls
+      spaceKeyToPlayOrPause={isPreview ? false : undefined}
+      allowFullscreen={allowFullscreen && !onExpand}
       alwaysShowControls={isPreview}
       className={isPreview ? 'timeline-preview-screen' : undefined}
       style={isPreview ? previewPlayerStyle : defaultPlayerStyle}
       renderPlayPauseButton={isPreview ? renderPreviewPlayButton : undefined}
       renderFullscreenButton={isPreview ? renderPreviewFullscreenButton : undefined}
+      renderCustomControls={onExpand ? renderExpandControl : undefined}
     />
   )
 
