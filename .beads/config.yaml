@@ -59,3 +59,5 @@
 sync.remote: "git+https://github.com/justintanner/videobook.git"
 # Agent git/commit authority profile for bd prime (conservative | minimal | team-maintainer)
 agent.profile: "team-maintainer"
+
+no-git-ops: false
