@@ -6,9 +6,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
 } from 'react'
-import { Player, type PlayerRef } from '@remotion/player'
+import {
+  Player,
+  type PlayerRef,
+  type RenderFullscreenButton,
+  type RenderPlayPauseButton,
+} from '@remotion/player'
+import { LoaderCircle, Maximize, Minimize, Pause, Play } from 'lucide-react'
 import type { Sequence } from 'videobook-engine'
 import {
   CanonicalSequenceComposition,
@@ -32,6 +39,7 @@ interface CanonicalSequencePlayerProps {
   onFrameUpdate: (frame: number) => void
   onKeyboardAction: (action: TimelineKeyboardAction, frame: number) => void
   editingEnabled?: boolean
+  presentation?: 'default' | 'preview'
 }
 
 export interface CanonicalSequencePlayerHandle {
@@ -39,6 +47,22 @@ export interface CanonicalSequencePlayerHandle {
   focus: () => void
   handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }
+
+const defaultPlayerStyle: CSSProperties = { width: '100%', maxHeight: 520 }
+const previewPlayerStyle: CSSProperties = {
+  width: 'min(100cqw, max(280px, calc(100cqh * var(--sequence-aspect-ratio))))',
+  height: '100cqh',
+}
+
+const renderPreviewPlayButton: RenderPlayPauseButton = ({ playing, isBuffering }) => (
+  isBuffering
+    ? <LoaderCircle size={16} className="timeline-preview-buffering" />
+    : playing ? <Pause size={16} /> : <Play size={16} />
+)
+
+const renderPreviewFullscreenButton: RenderFullscreenButton = ({ isFullscreen }) => (
+  isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />
+)
 
 function sequenceDuration(sequence: Sequence): number {
   return Math.max(
@@ -76,6 +100,7 @@ export const CanonicalSequencePlayer = forwardRef<
   onFrameUpdate,
   onKeyboardAction,
   editingEnabled = true,
+  presentation = 'default',
 }, ref) {
   const playerRef = useRef<PlayerRef>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -83,6 +108,8 @@ export const CanonicalSequencePlayer = forwardRef<
   const [frame, setFrame] = useState(0)
   const fps = sequence.frameRate.numerator / sequence.frameRate.denominator
   const durationInFrames = sequenceDuration(sequence)
+  const isPreview = presentation === 'preview'
+  const previewStyle = { '--sequence-aspect-ratio': sequence.width / sequence.height } as CSSProperties
   const inputProps = useMemo(
     () => ({ sequence, assets }),
     [assets, sequence],
@@ -144,29 +171,38 @@ export const CanonicalSequencePlayer = forwardRef<
     return () => player.removeEventListener('frameupdate', handler)
   }, [onFrameUpdate])
 
+  const player = (
+    <Player
+      ref={playerRef}
+      component={CanonicalSequenceComposition}
+      inputProps={inputProps}
+      durationInFrames={durationInFrames}
+      fps={fps}
+      compositionWidth={sequence.width}
+      compositionHeight={sequence.height}
+      controls
+      alwaysShowControls={isPreview}
+      className={isPreview ? 'timeline-preview-screen' : undefined}
+      style={isPreview ? previewPlayerStyle : defaultPlayerStyle}
+      renderPlayPauseButton={isPreview ? renderPreviewPlayButton : undefined}
+      renderFullscreenButton={isPreview ? renderPreviewFullscreenButton : undefined}
+    />
+  )
+
   return (
     <section
-      className="canonical-player"
+      className={isPreview ? 'canonical-player canonical-player-preview' : 'canonical-player'}
+      style={isPreview ? previewStyle : undefined}
       ref={sectionRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       aria-label="Canonical sequence player"
     >
-      <Player
-        ref={playerRef}
-        component={CanonicalSequenceComposition}
-        inputProps={inputProps}
-        durationInFrames={durationInFrames}
-        fps={fps}
-        compositionWidth={sequence.width}
-        compositionHeight={sequence.height}
-        controls
-        style={{ width: '100%', maxHeight: 520 }}
-      />
+      {isPreview ? <div className="timeline-preview-stage">{player}</div> : player}
       <footer>
-        <span>F{frame}</span>
+        <span className="canonical-player-frame" title="Current frame">F{frame}</span>
         <span>{(frame / fps).toFixed(2)}s</span>
-        <span>{editingEnabled ? 'Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete ripple · ⌘Z/⇧⌘Z restore' : 'Space/K play · J/L shuttle · ←/→ frame'}</span>
+        <span className="canonical-player-shortcuts">{editingEnabled ? 'Space/K play · J/L shuttle · ←/→ frame · I/O marks · S split · Delete ripple · ⌘Z/⇧⌘Z restore' : 'Space/K play · J/L shuttle · ←/→ frame'}</span>
       </footer>
     </section>
   )

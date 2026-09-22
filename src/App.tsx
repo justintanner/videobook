@@ -12553,12 +12553,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const notebookDockContent = selectedNotebookCell?.type === 'timeline' && sequence ? (
     <div className="composer-notebook-dock inspector timeline-preview-dock">
-      <header><span className="inspector-cell-title"><Film size={16} /><strong>Timeline</strong><code>{notebookGridTag(selectedNotebookCell.slot)}</code></span><ComposerDockClose /></header>
+      <header>
+        <span className="inspector-cell-title">
+          <Film size={16} /><strong>Timeline</strong>
+          <code className="inspector-cell-address">{notebookGridTag(selectedNotebookCell.slot)}</code>
+          <span className="timeline-preview-label">Preview</span>
+        </span>
+        <div className="inspector-header-actions">
+          <span className="timeline-preview-format">{sequence.width} × {sequence.height}<span>{Number((sequence.frameRate.numerator / sequence.frameRate.denominator).toFixed(2))} fps</span></span>
+          <ComposerDockClose />
+        </div>
+      </header>
       <div className="timeline-preview-body">
-        {sequence.clips.length > 0 || sequence.captions.length > 0 ? <Suspense fallback={<p>Loading timeline preview…</p>}>
+        {sequence.clips.length > 0 || sequence.captions.length > 0 ? <Suspense fallback={<p className="timeline-preview-message" role="status">Loading timeline preview…</p>}>
           <TimelineSequencePlayer key={bookId} ref={attachTimelinePlayer} sequence={sequence} assets={timelinePlaybackAssets}
-            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} />
-        </Suspense> : <p>Add video or audio clips to preview the timeline.</p>}
+            onFrameUpdate={setTimelineFrame} onKeyboardAction={() => undefined} editingEnabled={false} presentation="preview" />
+        </Suspense> : <div className="timeline-preview-message"><Film size={24} /><strong>Your timeline preview</strong><p>Add video or audio clips to start watching.</p></div>}
       </div>
     </div>
   ) : selectedCell && selectedNotebookCell ? (
