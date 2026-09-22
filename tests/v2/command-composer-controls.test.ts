@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, createRef, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -22,6 +23,29 @@ import {
 import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
 import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
+
+function cssDeclaration(source: string, selector: string, property: string): string {
+  const needle = `${selector} {`
+  const openAt = source.indexOf(needle)
+  if (openAt < 0) throw new Error(`missing rule ${selector}`)
+  const bodyStart = source.indexOf('{', openAt)
+  let depth = 0
+  let block = ''
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index]
+    if (character === '{') depth += 1
+    else if (character === '}') {
+      depth -= 1
+      if (depth === 0) {
+        block = source.slice(bodyStart + 1, index)
+        break
+      }
+    }
+  }
+  const match = block.match(new RegExp(`(?:^|\\n)\\s*${property}:\\s*([^;]+);`))
+  if (!match?.[1]) throw new Error(`missing ${property} on ${selector}`)
+  return match[1].trim()
+}
 
 function renderComposer(
   modelSelectionDisabled: boolean,
@@ -329,6 +353,16 @@ describe('CommandComposer controls', () => {
     expect(loading).toContain('Could not load actions')
     expect(loading).toContain('Loading actions')
     expect(loading).toContain('aria-label="Close action search"')
+    const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
+    const actionLayer = Number(cssDeclaration(css, '.command-suggestions', 'z-index'))
+    for (const selector of [
+      '.composer-notebook-dock.inspector > header',
+      '.command-composer-dock-bar',
+      '.notebook-subject-panel-controls',
+    ]) {
+      expect(Number(cssDeclaration(css, selector, 'z-index'))).toBeGreaterThan(actionLayer)
+      expect(cssDeclaration(css, selector, 'background')).toBe('#05150d')
+    }
 
     const reviewing = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [],

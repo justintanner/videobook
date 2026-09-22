@@ -252,10 +252,19 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Backspace')
     await page.getByLabel('Open actions', { exact: true }).click()
     await page.getByLabel('Close action search', { exact: true }).waitFor({ state: 'visible' })
-    await page.getByLabel('Collapse chat', { exact: true }).click()
+    const collapse = page.getByLabel('Collapse chat', { exact: true })
+    await expect.poll(async () => collapse.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      return hit === element || (hit instanceof Element && element.contains(hit))
+    })).toBe(true)
+    await collapse.click()
     await focused(input())
-    expect(await page.getByLabel('Close action search', { exact: true }).count()).toBe(0)
-    expect(await input().textContent()).toBe('draft')
+    const actionSearchCount = await page.getByLabel('Close action search', { exact: true }).count()
+    const draft = await input().textContent()
+    console.info(`vb-n5pb collapse result draft=${JSON.stringify(draft)} action-search-count=${actionSearchCount}`)
+    expect(actionSearchCount).toBe(0)
+    expect(draft).toBe('draft')
   })
 
   it('selects a clip from its play ring, the way a picture selects from anywhere', async () => {

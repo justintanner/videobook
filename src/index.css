@@ -4040,11 +4040,16 @@ textarea:focus-visible {
 
 .composer-notebook-dock.inspector > header {
   /* A flex item, so a tall panel would have taken the header's padding back
-     out of it rather than scrolling its own body. */
+     out of it rather than scrolling its own body. Action search floats at
+     z-index 120; this header stays above that layer so Collapse chat receives
+     the pointer. */
+  position: relative;
+  z-index: 140;
   flex: 0 0 auto;
   height: var(--dock-header-h, 40px);
   padding: 0 14px;
   border-bottom: 1px solid var(--line);
+  background: #05150d;
 }
 
 .inspector-deleting {
@@ -9981,10 +9986,11 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   position: relative;
-  z-index: 2;
+  z-index: 140;
   min-height: 36px;
   padding: 3px 8px 3px 17px;
   border-bottom: 1px solid rgba(114, 231, 170, 0.12);
+  background: #05150d;
 }
 
 .command-composer-dock-title {
@@ -10168,9 +10174,12 @@ textarea:focus-visible {
 
 .notebook-subject-panel-controls {
   display: flex;
+  position: relative;
+  z-index: 140;
   flex: 0 0 auto;
   align-items: center;
   margin-left: auto;
+  background: #05150d;
 }
 
 .notebook-subject-collapse {
