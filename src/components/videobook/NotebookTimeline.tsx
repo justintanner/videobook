@@ -27,6 +27,9 @@ export interface NotebookTimelineProps {
   onSelectClip?: (clip: SequenceClip) => void
   onMoveClip?: (clip: SequenceClip, frame: number) => void
   onRemoveClip?: (clip: SequenceClip) => void
+  /** Enables edge handles on the selected clip; frames stay inside `trimBounds`. */
+  onTrimClip?: (clip: SequenceClip, edge: 'start' | 'end', startFrame: number, endFrame: number) => void
+  trimBounds?: { min: number; max: number }
   rhythm?: {
     masterClipId: string | null
     markers: readonly { frame: number; bar: boolean; manual: boolean }[]
@@ -40,6 +43,13 @@ const labelWidth = 200
 const laneHeight = 36
 const endPadding = 120
 const blockStyle = { width, height: notebookGrid.squareSize }
+
+type TrimDrag = { clipId: string; edge: 'start' | 'end'; clientX: number; start: number; end: number; origin: number }
+
+function trimmedRange(drag: TrimDrag, frame: number, bounds: { min: number; max: number }): { start: number; end: number } {
+  if (drag.edge === 'start') return { start: Math.max(bounds.min, Math.min(drag.end - 1, frame)), end: drag.end }
+  return { start: drag.start, end: Math.min(bounds.max, Math.max(drag.start + 1, frame)) }
+}
 
 function timeLabel(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
@@ -92,13 +102,14 @@ function TimelinePicker({ assembly }: Pick<NotebookTimelineProps, 'assembly'>) {
   )
 }
 
-export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas', toolbar, onSelectClip, onMoveClip, onRemoveClip, rhythm }: NotebookTimelineProps) {
+export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas', toolbar, onSelectClip, onMoveClip, onRemoveClip, onTrimClip, trimBounds, rhythm }: NotebookTimelineProps) {
   const [zoom, setZoom] = useState<number | 'fit'>(presentation === 'preview' ? 'fit' : 48)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const selectedClip = assembly.selectedClipId
   const [drag, setDrag] = useState<{ clipId: string; clientX: number; start: number; frame: number } | null>(null)
   const dragged = useRef(false)
+  const [trim, setTrim] = useState<TrimDrag | null>(null)
   const audioViewport = useRef<HTMLDivElement>(null)
   const horizontalViewport = useRef<HTMLDivElement>(null)
   const [audioHeight, setAudioHeight] = useState(120)
@@ -191,8 +202,11 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
         <div className="timeline-track-lane" onClick={(event) => seekAt(event.clientX, event.currentTarget)}>
           {visibleClips.map((clip) => {
             const asset = assetsById.get(clip.source.artifactId)
-            const left = (drag?.clipId === clip.clipId ? drag.frame : clip.timelineStartFrame) / fps * pixelsPerSecond - boundedLeft
-            const clipWidth = clip.durationFrames / fps * pixelsPerSecond
+            const trimming = trim?.clipId === clip.clipId ? trim : null
+            const startFrame = trimming ? trimming.start : drag?.clipId === clip.clipId ? drag.frame : clip.timelineStartFrame
+            const left = startFrame / fps * pixelsPerSecond - boundedLeft
+            const clipWidth = (trimming ? trimming.end - trimming.start : clip.durationFrames) / fps * pixelsPerSecond
+            const trimmable = Boolean(onTrimClip && trimBounds && selectedClip === clip.clipId && track.kind === 'video' && !readOnly && !track.locked && !busy)
             const analysis = rhythm?.analysis?.artifactId === clip.source.artifactId ? rhythm.analysis : null
             const peaks = track.kind === 'audio' ? clipWaveform(clip, analysis?.waveform ?? asset?.waveform ?? [], analysis?.durationSeconds ?? asset?.duration ?? 0, fps, Math.min(2048, Math.max(32, Math.ceil(clipWidth / 2)))) : []
             const waveform = waveformEnvelopePath(peaks)
@@ -229,6 +243,37 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
                 {waveform && <svg className="timeline-waveform" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d={waveform} /></svg>}
                 {asset?.thumbnailUrl && track.kind === 'video' && clipWidth > 55 && <img src={asset.thumbnailUrl} alt="" loading="lazy" />}
                 <span>{asset?.label ?? 'Clip'}</span>
+                {trimmable && (['start', 'end'] as const).map((edge) => (
+                  <i
+                    key={edge}
+                    className={`timeline-trim-handle ${edge}`}
+                    title={`Drag to trim the ${edge === 'start' ? 'in' : 'out'} point`}
+                    aria-hidden="true"
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return
+                      event.stopPropagation()
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                      const end = clip.timelineStartFrame + clip.durationFrames
+                      setTrim({ clipId: clip.clipId, edge, clientX: event.clientX, start: clip.timelineStartFrame, end, origin: edge === 'start' ? clip.timelineStartFrame : end })
+                    }}
+                    onPointerMove={(event) => {
+                      if (!trim || trim.clipId !== clip.clipId || trim.edge !== edge || !trimBounds) return
+                      const raw = trim.origin + (event.clientX - trim.clientX) / pixelsPerSecond * fps
+                      const target = event.altKey ? Math.round(raw) : nearestBeat(raw, rhythm?.markers ?? [], rhythm?.snap ?? 'off', 12 / pixelsPerSecond * fps)
+                      setTrim({ ...trim, ...trimmedRange(trim, target, trimBounds) })
+                    }}
+                    onPointerUp={(event) => {
+                      event.stopPropagation()
+                      const final = trim
+                      setTrim(null)
+                      if (!final || final.clipId !== clip.clipId) return
+                      if (final.start === clip.timelineStartFrame && final.end === clip.timelineStartFrame + clip.durationFrames) return
+                      onTrimClip?.(clip, edge, final.start, final.end)
+                    }}
+                    onPointerCancel={() => setTrim(null)}
+                  />
+                ))}
               </button>
             )
           })}

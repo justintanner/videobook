@@ -71,18 +71,20 @@ export function composerDockHideSkipsBlurCommit(
   return Boolean(relatedTarget.closest('[data-composer-dock-hide]'))
 }
 
+export type MusicLibraryTab = 'media' | 'music' | 'autocut'
+
 export function initialMusicDockView(
   setupStatus: string,
-): 'sources' | 'soundtrack' {
-  return setupStatus === 'applied' ? 'sources' : 'soundtrack'
+): MusicLibraryTab {
+  return setupStatus === 'applied' || setupStatus === 'timeline' ? 'media' : 'music'
 }
 
 export function musicDockViewAfterSetup(
   setupStatus: string,
-  current: 'sources' | 'soundtrack' | 'clip',
-): 'sources' | 'soundtrack' | 'clip' {
-  return setupStatus === 'applied' && current === 'soundtrack'
-    ? 'sources'
+  current: MusicLibraryTab,
+): MusicLibraryTab {
+  return setupStatus === 'applied' && current === 'music'
+    ? 'media'
     : current
 }
 

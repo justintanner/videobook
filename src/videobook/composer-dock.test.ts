@@ -46,10 +46,10 @@ describe('composer dock close ownership', () => {
 })
 
 describe('music dock view after soundtrack apply', () => {
-  it('leaves soundtrack for the sources list once the master is applied', () => {
-    expect(musicDockViewAfterSetup('applied', 'soundtrack')).toBe('sources')
-    expect(musicDockViewAfterSetup('applied', 'clip')).toBe('clip')
-    expect(musicDockViewAfterSetup('ready', 'soundtrack')).toBe('soundtrack')
+  it('leaves the music tab for media once the master is applied', () => {
+    expect(musicDockViewAfterSetup('applied', 'music')).toBe('media')
+    expect(musicDockViewAfterSetup('applied', 'autocut')).toBe('autocut')
+    expect(musicDockViewAfterSetup('ready', 'music')).toBe('music')
   })
 })
 

@@ -474,9 +474,10 @@ describe('CommandComposer controls', () => {
     expect(composerDockShouldOpen('poll')).toBe(false)
     expect(composerDockReviewPriority(true)).toBe(true)
     expect(composerDockReviewPriority(false)).toBe(false)
-    expect(initialMusicDockView('applied')).toBe('sources')
-    expect(initialMusicDockView('needs-audio-track')).toBe('soundtrack')
-    expect(initialMusicDockView('ready')).toBe('soundtrack')
+    expect(initialMusicDockView('applied')).toBe('media')
+    expect(initialMusicDockView('timeline')).toBe('media')
+    expect(initialMusicDockView('needs-audio-track')).toBe('music')
+    expect(initialMusicDockView('ready')).toBe('music')
   })
 })
 

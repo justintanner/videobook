@@ -30,8 +30,8 @@ export function MusicDraftControls({ sources, trackId, startFrame, endFrame, fps
     ;[ids[index], ids[target]] = [ids[target]!, ids[index]!]
     onOrder(ids)
   }
-  return <details className="music-draft-controls">
-    <summary>Make a draft · cut selected footage to the music</summary>
+  return <section className="music-draft-controls" aria-label="Auto-cut to music">
+    <p>Cut the selected footage to the music. You review the draft before anything changes.</p>
     <form onSubmit={(event) => {
       event.preventDefault()
       if (!trackId) return
@@ -51,10 +51,10 @@ export function MusicDraftControls({ sources, trackId, startFrame, endFrame, fps
         <label><input type="checkbox" checked={retime} onChange={(event) => setRetime(event.target.checked)} />Allow speed changes</label>
         <button type="submit" disabled={busy || !trackId || sources.length === 0}>Preview draft</button>
       </div>
-      <div className="music-draft-order" aria-label="Draft source order">{sources.map((source, index) => <span key={source.artifactId}>
-        {index + 1}. {source.label}<button type="button" aria-label={`Move ${source.label} earlier`} disabled={busy || index === 0} onClick={() => move(index, -1)}>←</button><button type="button" aria-label={`Move ${source.label} later`} disabled={busy || index === sources.length - 1} onClick={() => move(index, 1)}>→</button>
-      </span>)}</div>
-      {!sources.length && <p>Select footage above, in the order you want it to appear.</p>}
+      <ol className="music-draft-order" aria-label="Draft source order">{sources.map((source, index) => <li key={source.artifactId}>
+        <b>{index + 1}</b><span>{source.label}</span><button type="button" aria-label={`Move ${source.label} earlier`} disabled={busy || index === 0} onClick={() => move(index, -1)}>↑</button><button type="button" aria-label={`Move ${source.label} later`} disabled={busy || index === sources.length - 1} onClick={() => move(index, 1)}>↓</button>
+      </li>)}</ol>
+      {!sources.length && <p>Select footage in Media, in the order you want it to appear.</p>}
     </form>
     {draft && <div className="music-draft-review" aria-label="Draft review">
       <strong>{draft.plan.summary} · {draft.preview.diff.removedClipIds.length} clips replaced</strong>
@@ -64,5 +64,5 @@ export function MusicDraftControls({ sources, trackId, startFrame, endFrame, fps
         {draft.shots.map((shot, index) => <tr key={shot.clipId}><td>{index + 1} · {sources.find((source) => source.artifactId === shot.artifactId)?.label ?? 'Source'}</td><td>{(shot.startFrame / fps).toFixed(2)}–{(shot.endFrame / fps).toFixed(2)}s</td><td>{shot.sourceStartSeconds.toFixed(2)}–{shot.sourceEndSeconds.toFixed(2)}s</td><td>{shot.speed.toFixed(2)}×</td></tr>)}
       </tbody></table>
     </div>}
-  </details>
+  </section>
 }

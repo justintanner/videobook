@@ -103,6 +103,8 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) 
     {master?.reverse && <p>Reversed audio is heard in the export. Render the reversed soundtrack to audition it in this preview.</p>}
     {rhythm.analysis?.lowConfidence && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
     {rhythm.rhythm.settings.correction && <p>Using your corrected beat map. Reanalysis preserves this map.</p>}
+    <details className="music-rhythm-fixes">
+    <summary>Correct the beat grid</summary>
     <div className="music-rhythm-row">
       <label>BPM<input type="number" min="20" max="400" value={tempo} placeholder={bpm?.toFixed(1) ?? '120'} onChange={(event) => setTempo(event.target.value)} /></label>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={tapTempo}>Tap tempo</button>
@@ -121,6 +123,7 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) 
       <button type="button" disabled={!rhythm.rhythm.canRedo || rhythm.busy} onClick={() => void rhythm.save('redo')}>Redo beat change</button>
       <button type="button" disabled={!rhythm.rhythm.settings.correction || rhythm.busy} onClick={() => void rhythm.save({ ...rhythm.rhythm.settings, correction: null })}>Use detected beats</button>
     </div>
+    </details>
     {(message || rhythm.error) && <p role="alert">{message || rhythm.error}</p>}
   </div>
 }

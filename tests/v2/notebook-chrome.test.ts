@@ -131,15 +131,13 @@ describe('notebook chrome tokens', () => {
     expect(app).not.toContain('className="inspector-reopen"')
   })
 
-  it('moves fullscreen image subject tools and music source/clip columns into the dock', () => {
+  it('docks fullscreen image subject tools and gives the music editor side columns it can hide', () => {
     expect(fullscreen).toContain('dockPortal')
     expect(fullscreen).toContain("dockPortal ? ' docked'")
     expect(declaration(rule(css, '.notebook-media-fullscreen.docked'), 'grid-template-columns'))
       .toBe('minmax(0, 1fr)')
-    expect(musicCss).toContain('.music-video-editor-main.docked')
-    expect(rule(musicCss, '.music-video-editor-main.docked')).toContain("'preview'")
-    expect(rule(musicCss, '.music-video-editor-main.docked')).toContain("'timeline'")
-    expect(rule(musicCss, '.music-video-editor-main.docked')).not.toContain("'sources preview inspector'")
+    expect(rule(musicCss, '.music-video-editor-main')).toContain("'library preview inspector' 'timeline timeline timeline'")
+    expect(rule(musicCss, '.music-video-editor-main.tools-hidden')).toContain("'preview' 'timeline'")
   })
 
   it('keeps confirm sheet actions outside the scrollable body', () => {

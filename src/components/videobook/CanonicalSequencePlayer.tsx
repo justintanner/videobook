@@ -46,6 +46,7 @@ interface CanonicalSequencePlayerProps {
 export interface CanonicalSequencePlayerHandle {
   seekTo: (frame: number) => void
   pause: () => void
+  togglePlay: () => void
   focus: () => void
   handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void
 }
@@ -148,6 +149,12 @@ export const CanonicalSequencePlayer = forwardRef<
 
   useImperativeHandle(ref, () => ({
     pause: () => playerRef.current?.pause(),
+    togglePlay: () => {
+      const player = playerRef.current
+      if (!player) return
+      if (player.isPlaying()) player.pause()
+      else player.play()
+    },
     seekTo: (nextFrame) => {
       const next = Math.max(0, Math.min(durationInFrames - 1, Math.round(nextFrame)))
       frameRef.current = next
