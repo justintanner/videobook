@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, Route } from 'playwright'
 import sharp from 'sharp'
 import type { Sequence } from 'videobook-engine'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -174,10 +174,21 @@ describe('music video recovery and export in the browser', () => {
     const frames = [...new Set(detected.beats.map(beat => Math.round(beat.timeSeconds * 30)))].filter(frame => frame > 0)
     const player = preview.locator('.canonical-player')
     const nextBeat = preview.getByRole('button', { name: 'Next beat', exact: true })
+    const video = clips.find(clip => clip.trackId === videoTrack.trackId)!
+    await preview.locator(`[data-clip-id="${video.clipId}"]`).click()
     await nextBeat.click()
     await expect.poll(() => player.locator('footer span').first().textContent()).toBe(`F${frames[0]}`)
-    await toolbar.getByRole('button', { name: 'Set bars', exact: true }).click()
+    await snap.getByRole('button', { name: 'Bars', exact: true }).click()
     await expect.poll(() => controls.getByLabel('Beats per bar', { exact: true }).isVisible()).toBe(true)
+    await expect.poll(() => controls.getByLabel('Beats per bar', { exact: true }).evaluate(input => document.activeElement === input)).toBe(true)
+    expect(await snap.getByRole('button', { name: 'Beats', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await snap.getByRole('button', { name: 'Bars', exact: true }).getAttribute('aria-pressed')).toBe('false')
+    await expect.poll(() => controls.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const sidebarSnap = preview.locator('#mv-panel-music').getByRole('group', { name: 'Snap to music', exact: true })
+    await sidebarSnap.getByRole('button', { name: 'Off', exact: true }).click()
+    await sidebarSnap.getByRole('button', { name: 'Bars', exact: true }).click()
+    await expect.poll(() => controls.getByLabel('Beats per bar', { exact: true }).evaluate(input => document.activeElement === input)).toBe(true)
+    expect(await snap.getByRole('button', { name: 'Off', exact: true }).getAttribute('aria-pressed')).toBe('true')
     await controls.getByText('Beat timing is uncertain. Listen and adjust the markers.', { exact: true }).waitFor()
     await controls.getByRole('button', { name: 'Set bars from playhead', exact: true }).click()
     await controls.getByRole('alert').filter({ hasText: 'Enter 1–16 beats per bar.' }).waitFor()
@@ -192,20 +203,50 @@ describe('music video recovery and export in the browser', () => {
     expect((await sequence()).clips).toEqual(clips)
     await preview.getByRole('button', { name: 'Hide tools', exact: true }).click()
     await page.setViewportSize({ width: 1440, height: 1000 })
-    const video = clips.find(clip => clip.trackId === videoTrack.trackId)!
-    for (const [mode, cutFrame] of [['Off', frames[1]! + 2], ['Beats', frames[1]!], ['Bars', frames[0]!]] as const) {
-      await snap.getByRole('button', { name: mode, exact: true }).click()
-      await preview.locator(`[data-clip-id="${video.clipId}"]`).click()
-      await nextBeat.click()
-      await nextBeat.click()
-      await player.focus()
-      await player.press('ArrowRight')
-      await player.press('ArrowRight')
-      await expect.poll(() => player.locator('footer span').first().textContent()).toBe(`F${frames[1]! + 2}`)
-      await toolbar.getByRole('button', { name: 'Split', exact: true }).click()
-      await expect.poll(async () => (await sequence()).clips.filter(clip => clip.trackId === videoTrack.trackId).map(clip => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, cutFrame])
-      await preview.getByRole('button', { name: 'Undo', exact: true }).click()
-      await expect.poll(async () => (await sequence()).clips).toEqual(clips)
+    let releaseSnapshot = () => {}
+    const released = new Promise<void>(resolve => { releaseSnapshot = resolve })
+    let held = false
+    let snapshotReady = false
+    let delivered = false
+    const delaySnapshot = async (route: Route) => {
+      if (!held && toolCalls(route.request().postDataJSON() as unknown).some(call => call.name === 'get_primary_sequence')) {
+        held = true
+        const response = await route.fetch()
+        snapshotReady = true
+        await released
+        await route.fulfill({ response })
+        delivered = true
+        return
+      }
+      await route.continue()
+    }
+    await page.route('**/mcp', delaySnapshot)
+    await expect.poll(() => snapshotReady, { timeout: 15_000 }).toBe(true)
+    try {
+      for (const [mode, cutFrame] of [['Off', frames[1]! + 2], ['Beats', frames[1]!], ['Bars', frames[0]!]] as const) {
+        await snap.getByRole('button', { name: mode, exact: true }).click()
+        await preview.locator(`[data-clip-id="${video.clipId}"]`).click()
+        await nextBeat.click()
+        await nextBeat.click()
+        await player.focus()
+        await player.press('ArrowRight')
+        await player.press('ArrowRight')
+        await expect.poll(() => player.locator('footer span').first().textContent()).toBe(`F${frames[1]! + 2}`)
+        await toolbar.getByRole('button', { name: 'Split', exact: true }).click()
+        await expect.poll(async () => (await sequence()).clips.filter(clip => clip.trackId === videoTrack.trackId).map(clip => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, cutFrame])
+        await expect.poll(() => preview.getByRole('button', { name: 'Undo', exact: true }).isEnabled()).toBe(true)
+        if (mode === 'Off') {
+          releaseSnapshot()
+          await expect.poll(() => delivered).toBe(true)
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))))
+          expect(await preview.locator('.timeline-track-video [data-clip-id]').count()).toBe(2)
+        }
+        await preview.getByRole('button', { name: 'Undo', exact: true }).click()
+        await expect.poll(async () => (await sequence()).clips).toEqual(clips)
+      }
+    } finally {
+      releaseSnapshot()
+      await page.unroute('**/mcp', delaySnapshot)
     }
     expect(await preview.getByRole('alert').allTextContents()).toEqual([])
     await preview.getByRole('button', { name: 'Close timeline preview', exact: true }).click()

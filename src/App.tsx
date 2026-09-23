@@ -8512,6 +8512,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!nextSequence || !actionId) {
       throw new Error('The server returned an invalid music-video edit commit')
     }
+    watchSnapshotClockRef.current = performance.now()
     setSequence(nextSequence)
     setLastEditActionId(actionId)
     return {
@@ -8535,6 +8536,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const next = asSequence(result?.sequence)
     const actionId = asString(result?.actionId)
     if (!next || !actionId) throw new Error('The server returned an invalid draft commit')
+    watchSnapshotClockRef.current = performance.now()
     setSequence(next)
     setLastEditActionId(actionId)
     return { sequence: next, actionId, beforeRevision: intent.baseRevision }
@@ -8557,6 +8559,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!nextSequence || !actionId) {
       throw new Error('The server returned an invalid sequence restore')
     }
+    watchSnapshotClockRef.current = performance.now()
     setSequence(nextSequence)
     setLastEditActionId(actionId)
     return {
@@ -8576,6 +8579,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       name: kind === 'audio' ? 'Master Soundtrack' : 'Music Video',
     }))
     if (!nextSequence) throw new Error('The server returned an invalid sequence')
+    watchSnapshotClockRef.current = performance.now()
     setSequence(nextSequence)
     return nextSequence
   }

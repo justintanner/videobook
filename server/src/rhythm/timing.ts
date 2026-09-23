@@ -18,6 +18,21 @@ export function effectiveMarkers(clip: TimedSequenceClip | null, settings: Rhyth
   }));
 }
 
+export function groupBeatBars(markers: readonly RhythmMarker[], anchorId: string, beatsPerBar: number, bpm: number | null): RhythmMarker[] {
+  const ordered = [...markers].sort((left, right) => left.timeSeconds - right.timeSeconds);
+  const anchor = ordered.findIndex(marker => marker.id === anchorId);
+  if (anchor < 0 || !Number.isInteger(beatsPerBar) || beatsPerBar < 1 || beatsPerBar > 16) throw new Error("Choose a first bar beat and 1–16 beats per bar");
+  const period = bpm !== null && Number.isFinite(bpm) && bpm > 0 ? 60 / bpm : null;
+  const positions = [0];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const gap = ordered[index]!.timeSeconds - ordered[index - 1]!.timeSeconds;
+    positions.push(positions[index - 1]! + (period === null ? 1 : Math.max(1, Math.round(gap / period))));
+  }
+  return ordered.map((marker, index) => ({
+    ...marker, bar: (positions[index]! - positions[anchor]!) % beatsPerBar === 0, manual: true,
+  }));
+}
+
 export function sourceTimeAtFrame(clip: TimedSequenceClip, frame: number, fps: number): number {
   const range = clip.source.range;
   const base = range.timeBase.numerator / range.timeBase.denominator;

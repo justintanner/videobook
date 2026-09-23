@@ -2,6 +2,8 @@
 
 The fullscreen timeline and `/music-video` use the same editor and canonical sequence. The soundtrack controls select the master clip, analyze its audio, and let the user confirm or correct its beat map. The timeline draws a source-aligned waveform, beat guides, and distinct bar starts. Unknown meter stays unknown. Snapping can be off, on beats, or on confirmed bars. New footage keeps its source speed; stretching and draft retiming are explicit choices.
 
+When beats are available but bar starts are unknown, selecting Bars opens bar setup and focuses beats per bar. Existing snapping remains active until the user sets the meter and anchors a bar at the playhead; then Bars snapping activates. Bar grouping preserves beat timestamps and uses the detected tempo to count gaps from missed beats, so later bars keep their phase. The user can review and correct these estimates.
+
 Drafts use selected footage in the displayed order and a selected soundtrack range. Preview and Cancel do not mutate the saved sequence. Apply uses one canonical edit action. Keep existing clips is enabled initially; boundary-crossing clips and explicitly preserved clip IDs survive replacement. Locked tracks cannot be targeted. A draft with uncovered spans cannot be applied from the editor. Video removal and trimming leave the soundtrack in place. Fit is the shared preview/export default; explicit Fill and Crop transforms remain authoritative.
 
 ## Analysis contract

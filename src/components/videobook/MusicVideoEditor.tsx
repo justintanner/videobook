@@ -310,7 +310,7 @@ export function MusicVideoEditor({
   const closeDialog = useEffectEvent(onClose)
   const [toolsOpen, setToolsOpen] = useState(setup.status !== 'timeline')
   const [timelineHeight, setTimelineHeight] = useState(34)
-  const [preferredSnap, setSnap] = useState<SnapMode>('beats')
+  const [snapChoice, setSnapChoice] = useState<{ mode: SnapMode; fallback: SnapMode }>({ mode: 'beats', fallback: 'off' })
   const [correctionsOpen, setCorrectionsOpen] = useState(false)
   const playerRef = useRef<CanonicalSequencePlayerHandle>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -415,19 +415,33 @@ export function MusicVideoEditor({
   const hasBeats = rhythm.mapped.length > 0
   const hasBars = rhythm.mapped.some((marker) => marker.bar)
   const analysisPending = rhythm.status === 'queued' || rhythm.status === 'analyzing'
-  const snap = preferredSnap === 'beats' && !hasBeats || preferredSnap === 'bars' && !hasBars ? 'off' : preferredSnap
+  const requestedSnap = snapChoice.mode === 'bars' && !hasBars ? snapChoice.fallback : snapChoice.mode
+  const snap = requestedSnap === 'beats' && !hasBeats || requestedSnap === 'bars' && !hasBars ? 'off' : requestedSnap
   const snapOptions: SegmentedOption<SnapMode>[] = [
     { value: 'off', label: 'Off' },
     { value: 'beats', label: 'Beats', disabled: !hasBeats, title: hasBeats ? 'Snap edits to beats' : 'Analyze beats or set a beat grid first' },
-    { value: 'bars', label: 'Bars', disabled: !hasBars, title: hasBars ? 'Snap edits to bar starts' : 'Set beats per bar and a first bar start' },
+    { value: 'bars', label: 'Bars', disabled: !hasBeats, title: hasBars ? 'Snap edits to bar starts' : 'Set up bar starts to enable bar snapping' },
   ]
 
   function openRhythmSettings(mode: SnapMode = 'beats') {
     setSelectedClipId(null)
     setToolsOpen(true)
     setLibraryTab('music')
-    setCorrectionsOpen(Boolean(rhythm.master))
-    setSnap(mode)
+    if (mode === 'beats') setCorrectionsOpen(Boolean(rhythm.master))
+    setSnapChoice({ mode, fallback: snap })
+    if (mode === 'bars') requestAnimationFrame(() => {
+      const input = dialogRef.current?.querySelector<HTMLInputElement>('input[name="beats-per-bar"]')
+      input?.focus()
+      input?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
+  function chooseSnap(mode: SnapMode) {
+    if (mode === 'bars' && !hasBars) {
+      openRhythmSettings(mode)
+      return
+    }
+    setSnapChoice({ mode, fallback: 'off' })
   }
 
   useEffect(() => {
@@ -992,7 +1006,7 @@ export function MusicVideoEditor({
             </div>
             <div className="mv-control">
               <span>Snap edits to</span>
-              <SegmentedControl label="Snap to music" options={snapOptions} value={snap} onChange={setSnap} />
+              <SegmentedControl label="Snap to music" options={snapOptions} value={snap} onChange={chooseSnap} />
               <p className="mv-hint">Hold Alt while dragging to ignore snapping.</p>
             </div>
             <MusicRhythmControls rhythm={rhythm} sequence={sequence} assets={assets} frame={playheadFrame}
@@ -1136,7 +1150,7 @@ export function MusicVideoEditor({
             rhythm={{ masterClipId: rhythm.master?.clipId ?? null, markers: rhythm.mapped, analysis: rhythm.analysis, snap }}
             toolbar={<>
               <span>Snap</span>
-              <SegmentedControl label="Snap to music" options={snapOptions} value={snap} onChange={setSnap} />
+              <SegmentedControl label="Snap to music" options={snapOptions} value={snap} onChange={chooseSnap} />
               {!rhythm.master && <button type="button" disabled={rhythm.busy} onClick={() => openRhythmSettings()}>Choose soundtrack</button>}
               {rhythm.master && !hasBeats && !analysisPending && <button type="button" disabled={rhythm.busy} onClick={() => void rhythm.analyze(Boolean(rhythm.analysis))}>
                 {rhythm.analysis ? 'Analyze again' : 'Analyze beats'}

@@ -187,14 +187,18 @@
 .mv-shortcuts { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Rhythm and draft panels sit in a 300px column: stack their rows. */
-.music-rhythm-controls { display: grid; gap: 10px; }
+.music-rhythm-controls { display: grid; min-width: 0; gap: 10px; }
+.music-rhythm-controls > * { min-width: 0; }
 .music-rhythm-controls [role='alert'] { color: #ffa99d; }
 .music-rhythm-controls [role='status'] { color: var(--mv-muted); }
 .music-video-edit-actions,
 .music-rhythm-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.music-rhythm-row label { display: flex; align-items: center; gap: 6px; }
+.music-rhythm-row label { display: flex; flex-wrap: wrap; min-width: 0; max-width: 100%; align-items: center; gap: 6px; }
 .music-rhythm-row input { width: 64px; }
 .music-rhythm-row select { max-width: 100%; }
+.music-bar-setup { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.music-bar-setup p { margin: 0; }
+.music-bar-setup small { color: var(--mv-muted); }
 .music-rhythm-fixes { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .music-rhythm-fixes summary { cursor: pointer; color: var(--mv-accent); padding: 4px 0; }
 .music-rhythm-fixes[open] > summary { margin-bottom: 6px; }

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Sequence } from 'videobook-engine'
 import type { useMusicRhythm } from '@/videobook/useMusicRhythm'
-import { sourceTimeAtFrame } from '../../../server/src/rhythm/timing'
+import { groupBeatBars, sourceTimeAtFrame } from '../../../server/src/rhythm/timing'
 import type { RhythmMarker } from '../../../server/src/rhythm/model'
 
 interface Props {
@@ -27,6 +27,7 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
     !best || Math.abs(marker.frame - frame) < Math.abs(best.frame - frame) ? marker : best, null)
   const bpm = rhythm.rhythm.settings.correction?.bpm ?? rhythm.analysis?.bpm
   const beatsPerBar = rhythm.rhythm.settings.correction?.beatsPerBar ?? rhythm.analysis?.beatsPerBar ?? null
+  const barCount = rhythm.mapped.filter(marker => marker.bar).length
   const canCorrect = master && !sequence.tracks.find((track) => track.trackId === master.trackId)?.locked
 
   function saveMarkers(markers: RhythmMarker[], nextBpm = bpm ?? null, nextMeter = beatsPerBar) {
@@ -94,9 +95,7 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
       setMessage('Place the playhead at the first beat of a bar inside the soundtrack.')
       return
     }
-    const first = rhythm.markers.findIndex(marker => marker.id === nearest.id)
-    if (first === -1) return
-    saveMarkers(rhythm.markers.map((marker, index) => ({ ...marker, bar: (index - first) % nextMeter === 0, manual: true })), bpm ?? null, nextMeter)
+    saveMarkers(groupBeatBars(rhythm.markers, nearest.id, nextMeter, bpm ?? null), bpm ?? null, nextMeter)
   }
 
   function nudge(direction: number) {
@@ -121,14 +120,20 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
     {master?.reverse && <p>Reversed audio is heard in the export. Render the reversed soundtrack to audition it in this preview.</p>}
     {rhythm.analysis?.lowConfidence && rhythm.mapped.length > 0 && !rhythm.rhythm.settings.correction && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
     {rhythm.rhythm.settings.correction && <p>Using your corrected beat map. Reanalysis preserves this map.</p>}
+    <section className="music-bar-setup" aria-label="Bar setup">
+      <strong>{barCount ? `${barCount} bar starts · ${beatsPerBar ?? 'Unknown'} beats per bar` : 'Set bar starts'}</strong>
+      <p>Place the playhead on the first beat of a bar, then enter the number of beats per bar.</p>
+      <div className="music-rhythm-row">
+        <label>Beats per bar<input name="beats-per-bar" type="number" min="1" max="16" value={meter} placeholder={beatsPerBar?.toString() ?? 'e.g. 4'} onChange={(event) => setMeter(event.target.value)} /></label>
+        <button type="button" disabled={!canCorrect || !nearest || rhythm.busy} onClick={setBars}>Set bars from playhead</button>
+      </div>
+      {nearest && <small>Use the beat at {(nearest.frame / fps).toFixed(3)}s as a bar start.</small>}
+    </section>
     <details className="music-rhythm-fixes" open={correctionsOpen} onToggle={(event) => onCorrectionsOpenChange(event.currentTarget.open)}>
     <summary>Correct the beat grid</summary>
-    {rhythm.mapped.length > 0 && !rhythm.mapped.some(marker => marker.bar) && <p>Bars are not set. Place the playhead at a bar’s first beat, enter beats per bar, then choose Set bars from playhead.</p>}
     <div className="music-rhythm-row">
       <label>BPM<input type="number" min="20" max="400" value={tempo} placeholder={bpm?.toFixed(1) ?? '120'} onChange={(event) => setTempo(event.target.value)} /></label>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={tapTempo}>Tap tempo</button>
-      <label>Beats per bar<input type="number" min="1" max="16" value={meter} placeholder="Optional" onChange={(event) => setMeter(event.target.value)} /></label>
-      <button type="button" disabled={!canCorrect || !nearest || rhythm.busy} onClick={setBars}>Set bars from playhead</button>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={grid}>Set grid from playhead</button>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={addBeat}>Add beat at playhead</button>
       <button type="button" disabled={!canCorrect || !nearest || rhythm.busy} onClick={() => saveMarkers(rhythm.markers.filter((marker) => marker.id !== nearest?.id))}>Remove nearest beat</button>

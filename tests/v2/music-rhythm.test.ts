@@ -12,7 +12,7 @@ import { musicAnalysisDefs } from '../../server/src/tools/music-analysis.js'
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 import { analyzeMusicSource, cachedMusicAnalysis, musicSource, readMusicAnalysis } from '../../server/src/rhythm/music-analysis.js'
 import { readSequenceRhythm, updateSequenceRhythm } from '../../server/src/rhythm/sequence-rhythm.js'
-import { clipWaveform, effectiveMarkers, frameAtSourceTime, nearestBeat, sourceTimeAtFrame, timelineMarkers } from '../../server/src/rhythm/timing.js'
+import { clipWaveform, effectiveMarkers, frameAtSourceTime, groupBeatBars, nearestBeat, sourceTimeAtFrame, timelineMarkers } from '../../server/src/rhythm/timing.js'
 import { synthesizeClicks } from '../../server/src/rhythm/synthesize.js'
 import type { MusicAnalysis, MusicAnalysisState, RhythmSettings } from '../../server/src/rhythm/model.js'
 import type { ToolResult } from '../../server/src/tools/tool-def.js'
@@ -271,5 +271,27 @@ describe('music analysis and rhythm persistence', () => {
     expect(waveform[0]).toBeGreaterThan(waveform.at(-1)!)
     const settings: RhythmSettings = { masterClipId: clip.clipId, correction: { objectHash: 'old', analysisId: null, bpm: null, beatsPerBar: null, markers: [] } }
     expect(effectiveMarkers(clip, settings, null)).toEqual([])
+  })
+
+  it('keeps bar phase across missing detections without moving or inventing beat times', async () => {
+    const { id } = await audio()
+    const sequence = await placeAudio(id)
+    const clip = sequence.clips[0] as TimedSequenceClip
+    const times = [0.5, 1, 1.5, 2, 2.5, 3.5, 4, 4.5, 5, 5.5, 6.5, 7, 7.5]
+    const markers = times.map(timeSeconds => ({ id: `beat-${timeSeconds}`, timeSeconds, bar: false, manual: false })).reverse()
+    const grouped = groupBeatBars(markers, 'beat-2.5', 4, 120)
+    expect(grouped.map(marker => marker.timeSeconds)).toEqual(times)
+    expect(grouped.filter(marker => marker.bar).map(marker => marker.timeSeconds)).toEqual([0.5, 2.5, 4.5, 6.5])
+    expect(markers.every(marker => !marker.bar && !marker.manual)).toBe(true)
+    const before = await readSequenceRhythm(engine, sequence.sequenceId)
+    await updateSequenceRhythm(engine, sequence.sequenceId, before.revision, { masterClipId: clip.clipId, correction: {
+      objectHash: clip.source.range.objectHash, analysisId: null, bpm: 120, beatsPerBar: 4, markers: grouped,
+    } })
+    const saved = await readSequenceRhythm(engine, sequence.sequenceId)
+    const mapped = timelineMarkers(clip, effectiveMarkers(clip, saved.settings, null), sequence)
+    expect(mapped.filter(marker => marker.bar).map(marker => marker.frame)).toEqual([15, 75, 135, 195])
+    expect(nearestBeat(108, mapped, 'beats')).toBe(105)
+    expect(nearestBeat(108, mapped, 'bars')).toBe(135)
+    expect(engine.sequences.getPrimary().clips).toEqual(sequence.clips)
   })
 })
