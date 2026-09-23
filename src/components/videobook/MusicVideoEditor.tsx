@@ -959,7 +959,7 @@ export function MusicVideoEditor({
                       {order >= 0 && <i>{order + 1}</i>}
                       {asset.duration !== null && <small>{formatTime(Math.round(asset.duration * fps), fps)}</small>}
                     </span>
-                    <span className="music-video-source-name">{asset.label}</span>
+                    <span className="music-video-source-name" title={asset.label}>{asset.label}</span>
                   </button>
                 )
               })}
