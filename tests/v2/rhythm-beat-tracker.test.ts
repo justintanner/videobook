@@ -93,6 +93,37 @@ describe('rhythm beat tracker', () => {
     expect(score.f1).toBeGreaterThanOrEqual(0.85)
   })
 
+  it('retains coherent beats under changing loudness as uncertain candidates', async () => {
+    for (const bpm of [80, 108, 120, 160]) {
+      const clip = synthesizeClicks({ bpm, seconds: 24, leadSilenceSeconds: 0.5 })
+      for (let index = 0; index < clip.samples.length; index += 1) {
+        const time = index / clip.sampleRate
+        const gain = time < 1 ? 0.95 : 0.2 * (1 + 0.3 * Math.sin(time))
+        clip.samples[index] = clip.samples[index]! * gain + 0.06 * Math.sin(2 * Math.PI * 220 * time)
+      }
+      await expectMusical(clip.samples, clip.beatSeconds, `changing loudness ${bpm}`)
+      const analysis = await analyzePcm(clip.samples)
+      expect(analysis.lowConfidence).toBe(true)
+      expect(analysis.bars).toBeNull()
+      expect(analysis.meter).toBeNull()
+    }
+  })
+
+  it('rejects unstructured noise even when a short excerpt has a spurious tempo peak', async () => {
+    for (const seconds of [2, 6, 12]) {
+      const samples = new Float32Array(RHYTHM_SAMPLE_RATE * seconds)
+      let seed = 12345
+      for (let index = 0; index < samples.length; index += 1) {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+        samples[index] = seed / 4294967296 * 2 - 1
+      }
+      const analysis = await analyzePcm(samples)
+      expect(analysis.noBeats).toBe(true)
+      expect(analysis.beats).toEqual([])
+      expect(analysis.bars).toBeNull()
+    }
+  })
+
   it('follows a tempo change without assuming 4/4', async () => {
     const clip = synthesizeTempoChange({
       firstBpm: 90,

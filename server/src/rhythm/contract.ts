@@ -1,5 +1,5 @@
 export const RHYTHM_ANALYZER_ID = "videobook-spectral-flux-dp";
-export const RHYTHM_ANALYZER_VERSION = "1";
+export const RHYTHM_ANALYZER_VERSION = "2";
 export const RHYTHM_SCHEMA_VERSION = 1;
 export const RHYTHM_SAMPLE_RATE = 22_050;
 export const RHYTHM_WINDOW_SAMPLES = 1_024;

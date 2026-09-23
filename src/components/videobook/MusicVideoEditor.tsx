@@ -840,8 +840,8 @@ export function MusicVideoEditor({
   const selectedSources = sourceSelection.flatMap((id) => { const asset = assetById.get(id); return asset ? [asset] : [] })
   const beatStatus = analysisPending
     ? 'Analyzing beats…'
-    : hasBeats ? `${rhythm.mapped.length} beats${hasBars ? '' : ' · Bars not set'}`
-      : rhythm.status === 'no-beats' ? 'No reliable beats found · Set a beat grid'
+    : hasBeats ? `${rhythm.mapped.length} beats${rhythm.analysis?.lowConfidence && !rhythm.rhythm.settings.correction ? ' · Review timing' : ''}${hasBars ? '' : ' · Bars not set'}`
+      : rhythm.status === 'no-beats' ? 'Analysis complete · No reliable beats found · Set a beat grid'
         : rhythm.master ? 'Analyze the soundtrack to enable snapping' : 'Choose a soundtrack for snapping'
 
   return createPortal(

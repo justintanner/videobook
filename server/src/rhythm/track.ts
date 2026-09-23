@@ -30,15 +30,16 @@ export function trackBeats(envelope: OnsetEnvelope): RhythmAnalysis {
     .filter((time) => time >= 0);
   const confidences = beatConfidences(envelope.strength, tracked);
   const global = globalConfidence(confidences, envelope.strength, tracked);
-  const noBeats = tempo.bpm === null || global < LOW_CONFIDENCE || beatTimes.length < 2;
-  const lowConfidence = noBeats || beatTimes.length < 8 || tempo.ambiguity !== "stable";
+  const weakBeats = global < LOW_CONFIDENCE;
+  const noBeats = tempo.bpm === null || global <= 0 || beatTimes.length < (weakBeats ? 8 : 2);
+  const lowConfidence = noBeats || weakBeats || beatTimes.length < 8 || tempo.ambiguity !== "stable";
   const beats: RhythmBeat[] = noBeats
     ? []
     : beatTimes.map((timeSeconds, index) => ({
       timeSeconds,
       confidence: confidences[index] ?? null,
     }));
-  const detectedMeter = noBeats ? null : detectMeter(envelope.strength, tracked);
+  const detectedMeter = noBeats || weakBeats ? null : detectMeter(envelope.strength, tracked);
   const meter = detectedMeter
     ? { beatsPerBar: detectedMeter.beatsPerBar, confidence: detectedMeter.confidence }
     : null;

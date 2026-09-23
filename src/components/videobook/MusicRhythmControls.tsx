@@ -114,12 +114,12 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
       </select></label>
       <button type="button" disabled={!master || rhythm.busy || pending} onClick={() => void rhythm.analyze(Boolean(rhythm.analysis))}>{rhythm.analysis ? 'Analyze again' : 'Analyze beats'}</button>
       {pending && <button type="button" disabled={rhythm.busy} onClick={() => void rhythm.cancel()}>Cancel analysis</button>}
-      <span role="status">{pending ? 'Analyzing soundtrack…' : rhythm.status === 'no-beats' ? 'No reliable beats found. Set a grid below.' : bpm ? `${bpm.toFixed(1)} BPM · ${rhythm.mapped.length} beats` : 'Analyze the song or set a beat grid.'}</span>
+      <span role="status">{pending ? 'Analyzing soundtrack…' : rhythm.status === 'no-beats' ? 'Analysis complete. No reliable beats found. Set a grid below.' : bpm ? `${bpm.toFixed(1)} BPM · ${rhythm.mapped.length} beats` : 'Analyze the song or set a beat grid.'}</span>
       <button type="button" disabled={rhythm.busy} onClick={() => void rhythm.load()}>Reload beats</button>
     </div>
     {master && (!master.enabled || master.audio?.muted || master.audioPolicy === 'mute' || sequence.tracks.some((track) => track.trackId === master.trackId && (!track.enabled || track.kind === 'audio' && track.muted))) && <p>Soundtrack is muted or disabled. Its beat map is a timing guide.</p>}
     {master?.reverse && <p>Reversed audio is heard in the export. Render the reversed soundtrack to audition it in this preview.</p>}
-    {rhythm.analysis?.lowConfidence && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
+    {rhythm.analysis?.lowConfidence && rhythm.mapped.length > 0 && !rhythm.rhythm.settings.correction && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
     {rhythm.rhythm.settings.correction && <p>Using your corrected beat map. Reanalysis preserves this map.</p>}
     <details className="music-rhythm-fixes" open={correctionsOpen} onToggle={(event) => onCorrectionsOpenChange(event.currentTarget.open)}>
     <summary>Correct the beat grid</summary>

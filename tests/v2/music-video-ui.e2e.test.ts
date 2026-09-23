@@ -36,10 +36,10 @@ describe('music video recovery and export in the browser', () => {
   const panel = () => editor().locator('.music-rhythm-controls')
   const tab = (name: string) => editor().getByRole('tab', { name, exact: true }).click()
 
-  async function openEditor() {
+  async function openEditor(address = '@a1') {
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
-    await input.fill('/music-video @a1')
+    await input.fill(`/music-video ${address}`)
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await editor().waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(() => editor().locator('.music-video-setup-card').getAttribute('data-status'), { timeout: 30_000 }).not.toBe('loading')
@@ -68,7 +68,8 @@ describe('music video recovery and export in the browser', () => {
     root = await mkdtemp(join(tmpdir(), 'videobook-music-ui-'))
     await mkdir(join(root, 'downloads'))
     await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'aevalsrc=0.3*sin(2*PI*880*t)*lt(mod(t\\,0.5)\\,0.06):s=48000:d=8', '-c:a', 'pcm_s16le', join(root, 'song.wav')])
-    await exec(FFMPEG, ['-v', 'error', '-y', '-i', join(root, 'song.wav'), '-c:a', 'aac', join(root, 'encoded-song.m4a')])
+    await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=22050:cl=mono', '-t', '8', join(root, 'silence.wav')])
+    await exec(FFMPEG, ['-v', 'error', '-y', '-i', join(root, 'song.wav'), '-af', 'volume=if(lt(t\\,1)\\,1\\,0.2):eval=frame', '-c:a', 'aac', join(root, 'encoded-song.m4a')])
     await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=red:s=90x160:r=30:d=4', '-vf', 'drawbox=x=0:y=0:w=iw:h=12:c=lime:t=fill,drawbox=x=0:y=148:w=iw:h=12:c=blue:t=fill', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(root, 'portrait.mp4')])
     const port = await availablePort()
     origin = `http://127.0.0.1:${port}`
@@ -167,6 +168,8 @@ describe('music video recovery and export in the browser', () => {
     await expect.poll(() => preview.locator('.timeline-track-audio .timeline-beat').count(), { timeout: 30_000 }).toBeGreaterThan(8)
     expect(await snap.getByRole('button', { name: 'Beats', exact: true }).getAttribute('aria-pressed')).toBe('true')
     const detected = (await call<MusicAnalysisState>('get_music_analysis', { asset_id: uploaded.assetId })).analysis!
+    expect(detected.lowConfidence).toBe(true)
+    expect(await toolbar.textContent()).toContain('Review timing')
     expect(detected.bars).toBeNull()
     const frames = [...new Set(detected.beats.map(beat => Math.round(beat.timeSeconds * 30)))].filter(frame => frame > 0)
     const player = preview.locator('.canonical-player')
@@ -175,6 +178,7 @@ describe('music video recovery and export in the browser', () => {
     await expect.poll(() => player.locator('footer span').first().textContent()).toBe(`F${frames[0]}`)
     await toolbar.getByRole('button', { name: 'Set bars', exact: true }).click()
     await expect.poll(() => controls.getByLabel('Beats per bar', { exact: true }).isVisible()).toBe(true)
+    await controls.getByText('Beat timing is uncertain. Listen and adjust the markers.', { exact: true }).waitFor()
     await controls.getByRole('button', { name: 'Set bars from playhead', exact: true }).click()
     await controls.getByRole('alert').filter({ hasText: 'Enter 1–16 beats per bar.' }).waitFor()
     expect((await rhythm()).settings.correction).toBeNull()
@@ -212,6 +216,35 @@ describe('music video recovery and export in the browser', () => {
     expect((await sequence()).clips).toEqual(clips)
     expect(errors).toEqual([])
   }, 120_000)
+
+  it('reports completion and starts a fresh job when retrying a soundtrack without beats', async () => {
+    const uploaded = await call<{ assetId: string }>('upload_file', {
+      filename: 'silence.wav', data: (await readFile(join(root, 'silence.wav'))).toString('base64'),
+    })
+    const notebook = (await call<Array<{ id: string }>>('list_notebooks'))[0]!
+    await call('create_notebook_cell', { notebook_id: notebook.id, cell: { type: 'audio', slot: { row: 0, column: 2 }, output_artifact_id: uploaded.assetId } })
+    await expect.poll(async () => (await call<Array<{ state: string }>>('list_jobs')).every(job => job.state === 'done'), { timeout: 30_000 }).toBe(true)
+    await page.reload()
+    await openEditor('@a3')
+    const create = editor().getByRole('button', { name: 'Create soundtrack track', exact: true })
+    if (await create.isVisible()) await create.click()
+    await editor().getByRole('button', { name: 'Apply soundtrack', exact: true }).click()
+    await expect.poll(() => editor().locator('.music-video-setup-card').getAttribute('data-status'), { timeout: 30_000 }).toBe('applied')
+    await tab('Music')
+    await panel().getByRole('button', { name: 'Analyze beats', exact: true }).click()
+    const message = panel().getByRole('status')
+    await expect.poll(() => message.textContent()).toBe('Analyzing soundtrack…')
+    await expect.poll(() => message.textContent(), { timeout: 30_000 }).toBe('Analysis complete. No reliable beats found. Set a grid below.')
+    const previous = await call<MusicAnalysisState>('get_music_analysis', { asset_id: uploaded.assetId })
+    expect(previous.status).toBe('no-beats')
+    await panel().getByRole('button', { name: 'Analyze again', exact: true }).click()
+    await expect.poll(() => message.textContent()).toBe('Analyzing soundtrack…')
+    await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: uploaded.assetId })).jobId).not.toBe(previous.jobId)
+    await expect.poll(() => message.textContent(), { timeout: 30_000 }).toBe('Analysis complete. No reliable beats found. Set a grid below.')
+    expect(await panel().getByText('Beat timing is uncertain.', { exact: false }).count()).toBe(0)
+    expect(await editor().locator('.timeline-music-toolbar').getByRole('button', { name: 'Beats', exact: true }).isDisabled()).toBe(true)
+    expect(errors).toEqual([])
+  }, 90_000)
 
   it('recovers incomplete and stale drafts, then exports the reviewed video and restores its beats after reload', async () => {
     await setupSoundtrack()

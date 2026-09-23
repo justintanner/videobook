@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,7 @@ import { analyzeMusicSource, cachedMusicAnalysis, musicSource, readMusicAnalysis
 import { readSequenceRhythm, updateSequenceRhythm } from '../../server/src/rhythm/sequence-rhythm.js'
 import { clipWaveform, effectiveMarkers, frameAtSourceTime, nearestBeat, sourceTimeAtFrame, timelineMarkers } from '../../server/src/rhythm/timing.js'
 import { synthesizeClicks } from '../../server/src/rhythm/synthesize.js'
-import type { MusicAnalysisState, RhythmSettings } from '../../server/src/rhythm/model.js'
+import type { MusicAnalysis, MusicAnalysisState, RhythmSettings } from '../../server/src/rhythm/model.js'
 import type { ToolResult } from '../../server/src/tools/tool-def.js'
 import { runRhythmWorker } from '../../server/src/rhythm/run-worker.js'
 import { FFMPEG, runFfmpeg } from '../../server/src/ffmpeg.js'
@@ -23,8 +24,15 @@ function decode<T>(result: ToolResult): T {
   return JSON.parse(result.content[0]!.text) as T
 }
 
-function wav(seconds: number, bpm: number) {
+function wav(seconds: number, bpm: number, varyingLoudness = false) {
   const { samples, sampleRate } = synthesizeClicks({ seconds, bpm, leadSilenceSeconds: 0.5 })
+  if (varyingLoudness) {
+    for (let index = 0; index < samples.length; index += 1) {
+      const time = index / sampleRate
+      const gain = time < 1 ? 0.95 : 0.2 * (1 + 0.3 * Math.sin(time))
+      samples[index] = samples[index]! * gain + 0.06 * Math.sin(2 * Math.PI * 220 * time)
+    }
+  }
   const buffer = Buffer.alloc(44 + samples.length * 2)
   buffer.write('RIFF', 0)
   buffer.writeUInt32LE(buffer.length - 8, 4)
@@ -57,8 +65,8 @@ describe('music analysis and rhythm persistence', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  async function audio(seconds = 8, bpm = 120) {
-    const data = wav(seconds, bpm)
+  async function audio(seconds = 8, bpm = 120, varyingLoudness = false) {
+    const data = wav(seconds, bpm, varyingLoudness)
     const created = await engine.artifacts.create('audio', 'Rhythm fixture')
     if (!created.ok) throw new Error(created.error.message)
     const id = created.value.artifactId
@@ -168,6 +176,35 @@ describe('music analysis and rhythm persistence', () => {
     expect(result.resources!.pcmRetainedSamples).toBeLessThanOrEqual(1280)
     expect(result.resources!.peakRssBytes).toBeLessThan(512 * 1024 * 1024)
   }, 15000)
+
+  it('invalidates legacy empty analysis and reruns a completed empty result into reviewable beats', async () => {
+    const { id } = await audio(24, 108, true)
+    const source = await musicSource(engine, id)
+    const legacyId = createHash('sha256').update(JSON.stringify([
+      source.objectHash, source.streamIndex, 'videobook-spectral-flux-dp', '1',
+    ])).digest('hex')
+    const legacy: MusicAnalysis = {
+      analysisId: legacyId, artifactId: id, objectHash: source.objectHash, streamId: source.streamId,
+      analyzerVersion: 'videobook-spectral-flux-dp@1', durationSeconds: source.durationSeconds,
+      beats: [], bpm: null, confidence: 0.75, bars: null, beatsPerBar: null, waveform: [], lowConfidence: true,
+    }
+    expect(await engine.metadata.artifacts.write(id, `music.analysis.${legacyId}`, legacy)).toMatchObject({ ok: true })
+    expect(await readMusicAnalysis(engine, id)).toMatchObject({ status: 'missing', analysis: null })
+    const tool = musicAnalysisDefs(engine).find(item => item.name === 'analyze_music')!
+    const args = { book_id: engine.book.get().bookId, asset_id: id }
+    const first = decode<MusicAnalysisState>(await tool.handler(args))
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
+    const result = (await readMusicAnalysis(engine, id)).analysis!
+    expect(result.beats.length).toBeGreaterThan(35)
+    expect(result).toMatchObject({ lowConfidence: true, bars: null, beatsPerBar: null })
+    expect(result.bpm).toBeCloseTo(108, 0)
+    expect(await engine.metadata.artifacts.write(id, `music.analysis.${source.analysisId}`, { ...result, beats: [], bpm: null })).toMatchObject({ ok: true })
+    expect((await readMusicAnalysis(engine, id)).status).toBe('no-beats')
+    const retry = decode<MusicAnalysisState>(await tool.handler({ ...args, force: true }))
+    expect(retry.jobId).not.toBe(first.jobId)
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
+    expect((await readMusicAnalysis(engine, id)).analysis).toEqual(result)
+  }, 30000)
 
   it('keeps failed decode and cancelled analysis distinct from a successful empty beat map', async () => {
     const { id, stream } = await audio(60)
