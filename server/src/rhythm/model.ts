@@ -13,6 +13,7 @@ export const musicAnalysisSchema = z.object({
   confidence: z.number().min(0).max(1).nullable(),
   bars: z.array(beatSchema).max(24000).nullable(),
   beatsPerBar: z.number().int().min(1).max(16).nullable(),
+  barSource: z.enum(["detected", "estimated"]).nullable().default(null),
   waveform: z.array(z.number().finite().min(0).max(1)).max(65536),
   lowConfidence: z.boolean(),
 });

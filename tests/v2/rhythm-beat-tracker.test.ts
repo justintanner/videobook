@@ -66,7 +66,10 @@ describe('rhythm beat tracker', () => {
       )
       expect(score.f1, `${bpm} f1`).toBeGreaterThanOrEqual(0.85)
       expect(score.medianAbsErrorSeconds ?? 1, `${bpm} median`).toBeLessThanOrEqual(0.025)
-      expect(analysis.meter === null || analysis.meter.beatsPerBar > 0).toBe(true)
+      expect(analysis.meter).toEqual({ beatsPerBar: 4, confidence: 0 })
+      expect(analysis.barSource).toBe('estimated')
+      expect(analysis.bars!.length).toBeGreaterThan(2)
+      expect(analysis.bars!.every(bar => analysis.beats.some(beat => beat.timeSeconds === bar.timeSeconds))).toBe(true)
     }
   })
 
@@ -75,6 +78,7 @@ describe('rhythm beat tracker', () => {
     expect(silence.noBeats).toBe(true)
     expect(silence.beats).toEqual([])
     expect(silence.bars).toBeNull()
+    expect(silence.barSource).toBeNull()
     const speech = await analyzePcm(synthesizeSpeechLike(6).samples)
     expect(speech.noBeats).toBe(true)
     expect(speech.beats).toEqual([])
@@ -104,9 +108,31 @@ describe('rhythm beat tracker', () => {
       await expectMusical(clip.samples, clip.beatSeconds, `changing loudness ${bpm}`)
       const analysis = await analyzePcm(clip.samples)
       expect(analysis.lowConfidence).toBe(true)
-      expect(analysis.bars).toBeNull()
-      expect(analysis.meter).toBeNull()
+      expect(analysis.barSource).toBe('estimated')
+      expect(analysis.meter).toEqual({ beatsPerBar: 4, confidence: 0 })
+      expect(analysis.bars!.length).toBeGreaterThan(6)
+      expect(analysis.bars![0]!.timeSeconds).toBe(analysis.beats[0]!.timeSeconds)
+      expect(analysis.bars!.every(bar => bar.confidence === 0 && analysis.beats.some(beat => beat.timeSeconds === bar.timeSeconds))).toBe(true)
     }
+  })
+
+  it('assigns a bar start even when only a few beats fit in a short clip', async () => {
+    const clip = synthesizeClicks({ bpm: 120, seconds: 2, leadSilenceSeconds: 0.2 })
+    const analysis = await analyzePcm(clip.samples)
+    expect(analysis.noBeats).toBe(false)
+    expect(analysis.barSource).toBe('estimated')
+    expect(analysis.bars).toEqual([{ timeSeconds: analysis.beats[0]!.timeSeconds, confidence: 0 }])
+  })
+
+  it('keeps estimated bars in phase across a missing beat without adding or moving beats', async () => {
+    const clip = synthesizeClicks({ bpm: 120, seconds: 12, leadSilenceSeconds: 0.5 })
+    const missingTime = clip.beatSeconds[6]!
+    clip.samples.fill(0, Math.round(missingTime * clip.sampleRate), Math.round((missingTime + 0.1) * clip.sampleRate))
+    const analysis = await analyzePcm(clip.samples)
+    expect(analysis.barSource).toBe('estimated')
+    expect(analysis.beats.every(beat => Math.abs(beat.timeSeconds - missingTime) > TOLERANCE_SECONDS)).toBe(true)
+    expect(analysis.bars!.every(bar => analysis.beats.some(beat => beat.timeSeconds === bar.timeSeconds))).toBe(true)
+    expect(scoreBeats(clip.beatSeconds.filter((_, index) => index % 4 === 0), analysis.bars!.map(bar => bar.timeSeconds), TOLERANCE_SECONDS).f1).toBe(1)
   })
 
   it('rejects unstructured noise even when a short excerpt has a spurious tempo peak', async () => {
@@ -145,7 +171,9 @@ describe('rhythm beat tracker', () => {
       TOLERANCE_SECONDS,
     )
     expect(score.f1).toBeGreaterThanOrEqual(0.85)
-    expect(analysis.meter?.beatsPerBar ?? null).not.toBe(4)
+    expect(analysis.meter?.beatsPerBar).toBe(3)
+    expect(analysis.barSource).toBe('detected')
+    expect(scoreBeats(pattern.barSeconds!, analysis.bars!.map(bar => bar.timeSeconds), TOLERANCE_SECONDS).f1).toBeGreaterThanOrEqual(0.85)
   })
 
   it('marks percussive, syncopated, and vocal-heavy patterns', async () => {

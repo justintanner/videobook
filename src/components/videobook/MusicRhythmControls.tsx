@@ -28,6 +28,7 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
   const bpm = rhythm.rhythm.settings.correction?.bpm ?? rhythm.analysis?.bpm
   const beatsPerBar = rhythm.rhythm.settings.correction?.beatsPerBar ?? rhythm.analysis?.beatsPerBar ?? null
   const barCount = rhythm.mapped.filter(marker => marker.bar).length
+  const estimatedBars = rhythm.analysis?.barSource === 'estimated' && !rhythm.rhythm.settings.correction
   const canCorrect = master && !sequence.tracks.find((track) => track.trackId === master.trackId)?.locked
 
   function saveMarkers(markers: RhythmMarker[], nextBpm = bpm ?? null, nextMeter = beatsPerBar) {
@@ -121,7 +122,8 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctio
     {rhythm.analysis?.lowConfidence && rhythm.mapped.length > 0 && !rhythm.rhythm.settings.correction && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
     {rhythm.rhythm.settings.correction && <p>Using your corrected beat map. Reanalysis preserves this map.</p>}
     <section className="music-bar-setup" aria-label="Bar setup">
-      <strong>{barCount ? `${barCount} bar starts · ${beatsPerBar ?? 'Unknown'} beats per bar` : 'Set bar starts'}</strong>
+      <strong>{barCount ? `${barCount} ${estimatedBars ? 'estimated bar starts' : 'bar starts'} · ${beatsPerBar ?? 'Unknown'} beats per bar` : 'Set bar starts'}</strong>
+      {estimatedBars && <p>Bars start at the first detected beat. Adjust them below if needed.</p>}
       <p>Place the playhead on the first beat of a bar, then enter the number of beats per bar.</p>
       <div className="music-rhythm-row">
         <label>Beats per bar<input name="beats-per-bar" type="number" min="1" max="16" value={meter} placeholder={beatsPerBar?.toString() ?? 'e.g. 4'} onChange={(event) => setMeter(event.target.value)} /></label>

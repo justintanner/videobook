@@ -177,16 +177,17 @@ describe('music analysis and rhythm persistence', () => {
     expect(result.resources!.peakRssBytes).toBeLessThan(512 * 1024 * 1024)
   }, 15000)
 
-  it('invalidates legacy empty analysis and reruns a completed empty result into reviewable beats', async () => {
+  it.each(['1', '2'])('invalidates version %s analysis and reruns a completed empty result into beats with automatic bars', async (version) => {
     const { id } = await audio(24, 108, true)
     const source = await musicSource(engine, id)
     const legacyId = createHash('sha256').update(JSON.stringify([
-      source.objectHash, source.streamIndex, 'videobook-spectral-flux-dp', '1',
+      source.objectHash, source.streamIndex, 'videobook-spectral-flux-dp', version,
     ])).digest('hex')
     const legacy: MusicAnalysis = {
       analysisId: legacyId, artifactId: id, objectHash: source.objectHash, streamId: source.streamId,
-      analyzerVersion: 'videobook-spectral-flux-dp@1', durationSeconds: source.durationSeconds,
-      beats: [], bpm: null, confidence: 0.75, bars: null, beatsPerBar: null, waveform: [], lowConfidence: true,
+      analyzerVersion: `videobook-spectral-flux-dp@${version}`, durationSeconds: source.durationSeconds,
+      beats: version === '1' ? [] : [{ timeSeconds: 0.5, confidence: 0.2 }], bpm: null, confidence: 0.75,
+      bars: null, beatsPerBar: null, barSource: null, waveform: [], lowConfidence: true,
     }
     expect(await engine.metadata.artifacts.write(id, `music.analysis.${legacyId}`, legacy)).toMatchObject({ ok: true })
     expect(await readMusicAnalysis(engine, id)).toMatchObject({ status: 'missing', analysis: null })
@@ -196,9 +197,11 @@ describe('music analysis and rhythm persistence', () => {
     await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
     const result = (await readMusicAnalysis(engine, id)).analysis!
     expect(result.beats.length).toBeGreaterThan(35)
-    expect(result).toMatchObject({ lowConfidence: true, bars: null, beatsPerBar: null })
+    expect(result).toMatchObject({ lowConfidence: true, barSource: 'estimated', beatsPerBar: 4 })
+    expect(result.bars!.length).toBeGreaterThan(8)
+    expect(result.bars!.every(bar => result.beats.some(beat => bar.timeSeconds === beat.timeSeconds))).toBe(true)
     expect(result.bpm).toBeCloseTo(108, 0)
-    expect(await engine.metadata.artifacts.write(id, `music.analysis.${source.analysisId}`, { ...result, beats: [], bpm: null })).toMatchObject({ ok: true })
+    expect(await engine.metadata.artifacts.write(id, `music.analysis.${source.analysisId}`, { ...result, beats: [], bpm: null, bars: null, beatsPerBar: null, barSource: null })).toMatchObject({ ok: true })
     expect((await readMusicAnalysis(engine, id)).status).toBe('no-beats')
     const retry = decode<MusicAnalysisState>(await tool.handler({ ...args, force: true }))
     expect(retry.jobId).not.toBe(first.jobId)

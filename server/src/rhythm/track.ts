@@ -11,6 +11,7 @@ import {
   type RhythmOnset,
   type RhythmTempoAmbiguity,
 } from "./contract.js";
+import { beatPositions } from "./timing.js";
 
 const MIN_BPM = 55;
 const MAX_BPM = 200;
@@ -39,11 +40,13 @@ export function trackBeats(envelope: OnsetEnvelope): RhythmAnalysis {
       timeSeconds,
       confidence: confidences[index] ?? null,
     }));
-  const detectedMeter = noBeats || weakBeats ? null : detectMeter(envelope.strength, tracked);
-  const meter = detectedMeter
-    ? { beatsPerBar: detectedMeter.beatsPerBar, confidence: detectedMeter.confidence }
+  const positions = beatPositions(beats, tempo.bpm);
+  const detectedMeter = noBeats || weakBeats ? null : detectMeter(envelope.strength, tracked, positions);
+  const assignedMeter = detectedMeter ?? (noBeats ? null : { beatsPerBar: 4, confidence: 0, phase: 0 });
+  const meter = assignedMeter
+    ? { beatsPerBar: assignedMeter.beatsPerBar, confidence: assignedMeter.confidence }
     : null;
-  const bars = detectedMeter ? barStarts(beats, detectedMeter) : null;
+  const bars = assignedMeter ? barStarts(beats, positions, assignedMeter) : null;
   return {
     schemaVersion: RHYTHM_SCHEMA_VERSION,
     analyzerId: RHYTHM_ANALYZER_ID,
@@ -59,6 +62,7 @@ export function trackBeats(envelope: OnsetEnvelope): RhythmAnalysis {
     tempoAmbiguity: tempo.ambiguity,
     meter: noBeats ? null : meter,
     bars: noBeats ? null : bars,
+    barSource: noBeats ? null : detectedMeter ? "detected" : "estimated",
     noBeats,
     lowConfidence,
   };
@@ -292,6 +296,7 @@ function globalConfidence(
 function detectMeter(
   strength: Float32Array,
   frames: number[],
+  positions: number[],
 ): (RhythmMeter & { phase: number }) | null {
   if (frames.length < 8) return null;
   let best: (RhythmMeter & { phase: number }) | null = null;
@@ -303,7 +308,8 @@ function detectMeter(
     for (let phase = 0; phase < beatsPerBar; phase += 1) {
       let sum = 0;
       let count = 0;
-      for (let index = phase; index < frames.length; index += beatsPerBar) {
+      for (let index = 0; index < frames.length; index += 1) {
+        if (positions[index]! % beatsPerBar !== phase) continue;
         sum += strength[frames[index]!] ?? 0;
         count += 1;
       }
@@ -326,14 +332,13 @@ function detectMeter(
   return best;
 }
 
-function barStarts(beats: RhythmBeat[], meter: RhythmMeter & { phase: number }): RhythmBar[] | null {
-  const phase = meter.phase;
-  if (beats.length <= phase) return null;
+function barStarts(beats: RhythmBeat[], positions: number[], meter: RhythmMeter & { phase: number }): RhythmBar[] | null {
   const bars: RhythmBar[] = [];
-  for (let index = phase; index < beats.length; index += meter.beatsPerBar) {
+  for (let index = 0; index < beats.length; index += 1) {
+    if (positions[index]! % meter.beatsPerBar !== meter.phase) continue;
     const beat = beats[index];
     if (!beat) continue;
     bars.push({ timeSeconds: beat.timeSeconds, confidence: meter.confidence });
   }
-  return bars.length > 1 ? bars : null;
+  return bars.length ? bars : null;
 }

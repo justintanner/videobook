@@ -53,6 +53,7 @@ export async function analyzeMusicSource(engine: Engine, artifactId: string, ana
     analyzerVersion: `${RHYTHM_ANALYZER_ID}@${RHYTHM_ANALYZER_VERSION}`,
     beats: analysis.beats.filter(withinSource), bpm: analysis.bpm, confidence: analysis.bpmConfidence,
     bars: analysis.bars?.filter(withinSource) ?? null, beatsPerBar: analysis.meter?.beatsPerBar ?? null,
+    barSource: analysis.barSource,
     waveform, lowConfidence: analysis.lowConfidence,
   });
   const saved = await engine.metadata.artifacts.write(artifactId, `music.analysis.${analysisId}`, result);

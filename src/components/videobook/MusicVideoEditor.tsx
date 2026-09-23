@@ -414,6 +414,7 @@ export function MusicVideoEditor({
   const beats = neighbourBeats(rhythm.mapped, playheadFrame)
   const hasBeats = rhythm.mapped.length > 0
   const hasBars = rhythm.mapped.some((marker) => marker.bar)
+  const estimatedBars = rhythm.analysis?.barSource === 'estimated' && !rhythm.rhythm.settings.correction
   const analysisPending = rhythm.status === 'queued' || rhythm.status === 'analyzing'
   const requestedSnap = snapChoice.mode === 'bars' && !hasBars ? snapChoice.fallback : snapChoice.mode
   const snap = requestedSnap === 'beats' && !hasBeats || requestedSnap === 'bars' && !hasBars ? 'off' : requestedSnap
@@ -852,9 +853,10 @@ export function MusicVideoEditor({
   }
   const discardDraft = () => { playerRef.current?.pause(); setDraft(null) }
   const selectedSources = sourceSelection.flatMap((id) => { const asset = assetById.get(id); return asset ? [asset] : [] })
+  const barStatus = !hasBars ? ' · Bars not set' : estimatedBars ? ` · Estimated ${rhythm.analysis?.beatsPerBar}-beat bars` : ''
   const beatStatus = analysisPending
     ? 'Analyzing beats…'
-    : hasBeats ? `${rhythm.mapped.length} beats${rhythm.analysis?.lowConfidence && !rhythm.rhythm.settings.correction ? ' · Review timing' : ''}${hasBars ? '' : ' · Bars not set'}`
+    : hasBeats ? `${rhythm.mapped.length} beats${rhythm.analysis?.lowConfidence && !rhythm.rhythm.settings.correction ? ' · Review timing' : ''}${barStatus}`
       : rhythm.status === 'no-beats' ? 'Analysis complete · No reliable beats found · Set a beat grid'
         : rhythm.master ? 'Analyze the soundtrack to enable snapping' : 'Choose a soundtrack for snapping'
 
