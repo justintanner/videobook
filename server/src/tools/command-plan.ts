@@ -10,6 +10,7 @@ import type {
   SourceSurface,
 } from "videobook-engine";
 import {
+  findAudioFile,
   findPrimaryMediaFile,
   MVP_CONTRACT_VERSION,
   sequenceFramesToSourceTicks,
@@ -759,7 +760,9 @@ async function operationsForRequest(
     if (!compatible) throw new Error(`Choose ${track.kind === "audio" ? "an audio" : "a video"} source for this track`);
     const manifest = await engine.files.manifest(request.artifact_id);
     if (!manifest.ok) throw new Error(manifest.error.message);
-    const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+    const file = track.kind === "audio"
+      ? findAudioFile(manifest.value.files, artifact.value.kind)
+      : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
     const streams = engine.streams.list(request.artifact_id);
     if (!streams.ok) throw new Error(streams.error.message);
     const stream = streams.value.find((entry) => entry.kind === track.kind

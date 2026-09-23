@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { findPrimaryMediaFile, type Engine } from "videobook-engine";
+import { findAudioFile, findPrimaryMediaFile, type Engine } from "videobook-engine";
 import { musicAnalysisSchema, type MusicAnalysis } from "./model.js";
 import { extractWaveform, FFMPEG } from "../ffmpeg.js";
 import { RHYTHM_ANALYZER_VERSION, RHYTHM_ANALYZER_ID } from "./contract.js";
@@ -12,7 +12,9 @@ export async function musicSource(engine: Engine, artifactId: string, streamId?:
   if (!["audio", "video", "final"].includes(artifact.value.kind)) throw new Error("Choose an audio or video source");
   const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+  const file = artifact.value.kind === "audio"
+    ? findAudioFile(manifest.value.files, artifact.value.kind)
+    : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
   const streams = engine.streams.list(artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
   const stream = streams.value.find((item) => item.kind === "audio" && item.sourcePath === file?.name

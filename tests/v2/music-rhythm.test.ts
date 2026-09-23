@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,6 +6,7 @@ import type { EditIntent, Engine, Sequence, TimedSequenceClip } from 'videobook-
 import { closeEngineForTest, createEngineForTest } from '../../server/src/engine.js'
 import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { registerAnalyzeMusicJob } from '../../server/src/jobs/analyze-music.js'
+import { processAudioFile } from '../../server/src/jobs/process-audio.js'
 import { musicAnalysisDefs } from '../../server/src/tools/music-analysis.js'
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 import { analyzeMusicSource, cachedMusicAnalysis, musicSource, readMusicAnalysis } from '../../server/src/rhythm/music-analysis.js'
@@ -15,7 +16,7 @@ import { synthesizeClicks } from '../../server/src/rhythm/synthesize.js'
 import type { MusicAnalysisState, RhythmSettings } from '../../server/src/rhythm/model.js'
 import type { ToolResult } from '../../server/src/tools/tool-def.js'
 import { runRhythmWorker } from '../../server/src/rhythm/run-worker.js'
-import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { FFMPEG, runFfmpeg } from '../../server/src/ffmpeg.js'
 
 function decode<T>(result: ToolResult): T {
   if (result.isError) throw new Error(result.content[0]!.text)
@@ -90,6 +91,46 @@ describe('music analysis and rhythm persistence', () => {
     if (!committed.ok) throw new Error(committed.error.message)
     return committed.value.sequence
   }
+
+  it.each([
+    ['m4a', 'aac'], ['aac', 'aac'], ['ogg', 'libvorbis'], ['flac', 'flac'], ['weba', 'libopus'], ['mp3', 'libmp3lame'],
+  ])('loads and analyzes a processed %s soundtrack through its exact timeline stream', async (extension, codec) => {
+    const workspace = await mkdtemp(join(tmpdir(), 'videobook-rhythm-audio-'))
+    try {
+      const inputPath = join(workspace, 'clicks.wav')
+      const outputPath = join(workspace, `clicks.${extension === 'weba' ? 'webm' : extension}`)
+      await writeFile(inputPath, wav(8, 120).buffer)
+      await runFfmpeg(['-y', '-i', inputPath, '-c:a', codec!, outputPath])
+      const created = await engine.artifacts.create('audio', 'Encoded soundtrack')
+      if (!created.ok) throw new Error(created.error.message)
+      const id = created.value.artifactId
+      const sourceFilename = `original.${extension}`
+      const written = await engine.files.writeFromPath(id, sourceFilename, outputPath)
+      if (!written.ok) throw new Error(written.error.message)
+      await processAudioFile(engine, {
+        type: 'process_audio', assetId: id, assetDir: created.value.path, audioPath: outputPath,
+        sourceFilename, bookId: engine.book.get().bookId, provenance: {},
+      })
+      expect((await readMusicAnalysis(engine, id)).status).toBe('missing')
+      const sequence = await placeAudio(id)
+      const clip = sequence.clips[0] as TimedSequenceClip
+      const args = { book_id: engine.book.get().bookId, asset_id: id, stream_id: clip.source.range.streamId }
+      const tools = musicAnalysisDefs(engine)
+      const analyze = tools.find((tool) => tool.name === 'analyze_music')!
+      const read = tools.find((tool) => tool.name === 'get_music_analysis')!
+      const first = decode<MusicAnalysisState>(await analyze.handler(args))
+      await expect.poll(async () => decode<MusicAnalysisState>(await read.handler(args)).status, { timeout: 15000 }).toBe('ready')
+      const ready = decode<MusicAnalysisState>(await read.handler(args))
+      expect(ready.error).toBeNull()
+      expect(ready.analysis).toMatchObject({ artifactId: id, streamId: clip.source.range.streamId, objectHash: clip.source.range.objectHash })
+      expect(ready.analysis!.beats.length).toBeGreaterThan(10)
+      expect(ready.analysis!.waveform.length).toBe(8192)
+      expect(decode<MusicAnalysisState>(await analyze.handler(args)).jobId).toBe(first.jobId)
+      expect(engine.sequences.getPrimary().clips).toEqual(sequence.clips)
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  }, 20000)
 
   it('runs the real decoder and queued analyzer once, caches by audio content, and fences replaced sources', async () => {
     const { id } = await audio()

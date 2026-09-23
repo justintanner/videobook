@@ -68,6 +68,7 @@ describe('music video recovery and export in the browser', () => {
     root = await mkdtemp(join(tmpdir(), 'videobook-music-ui-'))
     await mkdir(join(root, 'downloads'))
     await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'aevalsrc=0.3*sin(2*PI*880*t)*lt(mod(t\\,0.5)\\,0.06):s=48000:d=8', '-c:a', 'pcm_s16le', join(root, 'song.wav')])
+    await exec(FFMPEG, ['-v', 'error', '-y', '-i', join(root, 'song.wav'), '-c:a', 'aac', join(root, 'encoded-song.m4a')])
     await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=red:s=90x160:r=30:d=4', '-vf', 'drawbox=x=0:y=0:w=iw:h=12:c=lime:t=fill,drawbox=x=0:y=148:w=iw:h=12:c=blue:t=fill', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', join(root, 'portrait.mp4')])
     const port = await availablePort()
     origin = `http://127.0.0.1:${port}`
@@ -115,6 +116,50 @@ describe('music video recovery and export in the browser', () => {
     await stopProcess(server)
     if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   })
+
+  it('adds an M4A soundtrack and opens timeline preview without a stuck processing error', async () => {
+    const uploaded = await call<{ assetId: string }>('upload_file', {
+      filename: 'encoded-song.m4a', data: (await readFile(join(root, 'encoded-song.m4a'))).toString('base64'),
+    })
+    const notebook = (await call<Array<{ id: string }>>('list_notebooks'))[0]!
+    await call('create_notebook_cell', { notebook_id: notebook.id, cell: { type: 'audio', slot: { row: 0, column: 2 }, output_artifact_id: uploaded.assetId } })
+    await expect.poll(async () => (await call<Array<{ state: string }>>('list_jobs')).every(job => job.state === 'done'), { timeout: 30_000 }).toBe(true)
+    await page.reload()
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).isEnabled(), { timeout: 30_000 }).toBe(true)
+    await page.getByLabel('Add cell', { exact: true }).click()
+    await page.getByLabel('Search cell types').fill('Timeline')
+    await page.getByRole('button', { name: 'Timeline', exact: true }).click()
+    const timeline = page.locator('.react-flow__node-timeline .notebook-timeline')
+    await timeline.waitFor({ state: 'visible', timeout: 30_000 })
+    const audioTrack = (await sequence()).tracks.find(track => track.kind === 'audio')!
+    await timeline.getByLabel(`Add clip to ${audioTrack.name}`, { exact: true }).click()
+    const picker = page.getByRole('dialog', { name: 'Add a timeline clip' })
+    await picker.getByLabel('Filter timeline sources').fill('encoded-song')
+    await picker.locator('.timeline-source-list button').click()
+    await picker.waitFor({ state: 'hidden', timeout: 30_000 })
+    await expect.poll(async () => (await sequence()).clips.length, { timeout: 30_000 }).toBe(1)
+    const clips = (await sequence()).clips
+    expect(clips[0]!.source.artifactId).toBe(uploaded.assetId)
+    await timeline.getByRole('button', { name: 'Preview', exact: true }).click()
+    const preview = page.getByRole('dialog', { name: 'Timeline preview @b1', exact: true })
+    await preview.waitFor({ state: 'visible', timeout: 30_000 })
+    await preview.getByRole('button', { name: 'Show tools', exact: true }).click()
+    await preview.getByRole('tab', { name: 'Music', exact: true }).click()
+    const controls = preview.locator('.music-rhythm-controls')
+    const analyze = controls.getByRole('button', { name: 'Analyze beats', exact: true })
+    await expect.poll(() => analyze.isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await preview.getByRole('alert').allTextContents()).toEqual([])
+    await analyze.click()
+    await expect.poll(() => preview.locator('.timeline-track-audio .timeline-beat').count(), { timeout: 30_000 }).toBeGreaterThan(8)
+    await expect.poll(() => controls.getByRole('button', { name: 'Analyze again', exact: true }).isEnabled()).toBe(true)
+    expect(await preview.getByRole('alert').allTextContents()).toEqual([])
+    await preview.getByRole('button', { name: 'Close timeline preview', exact: true }).click()
+    await timeline.getByRole('button', { name: 'Preview', exact: true }).click()
+    await expect.poll(() => preview.locator('.timeline-track-audio .timeline-beat').count(), { timeout: 30_000 }).toBeGreaterThan(8)
+    expect(await preview.getByRole('alert').allTextContents()).toEqual([])
+    expect((await sequence()).clips).toEqual(clips)
+    expect(errors).toEqual([])
+  }, 90_000)
 
   it('recovers incomplete and stale drafts, then exports the reviewed video and restores its beats after reload', async () => {
     await setupSoundtrack()
