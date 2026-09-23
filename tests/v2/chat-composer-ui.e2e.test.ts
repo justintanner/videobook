@@ -632,6 +632,7 @@ describe('chat composer browser flow', () => {
         ...process.env,
         VIDEOBOOK_SERVER_URL: mcpOrigin,
         VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, 'vite-cache'),
+        VIDEOBOOK_VITE_HMR: '0',
       },
     )
     await waitForHttp(appUrl, viteProcess, 200)

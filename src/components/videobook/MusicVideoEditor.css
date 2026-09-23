@@ -173,8 +173,8 @@
 .music-video-editor .mv-resize-handle::after { content: ''; width: 36px; height: 4px; border-radius: 2px; background: var(--scrollbar-thumb); }
 .music-video-editor .mv-resize-handle:hover::after,
 .music-video-editor .mv-resize-handle:focus-visible::after { background: var(--mv-accent); }
-.music-video-editor .timeline-music-toolbar { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; flex-shrink: 0; }
-.timeline-music-toolbar [role='status'] { margin-left: auto; white-space: nowrap; color: var(--mv-muted); font-variant-numeric: tabular-nums; }
+.music-video-editor .timeline-music-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.timeline-music-toolbar [role='status'] { flex: 1 1 180px; margin-left: auto; text-align: right; color: var(--mv-muted); font-variant-numeric: tabular-nums; }
 .music-video-editor .timeline-music-toolbar > button { min-height: 30px; }
 .music-video-editor .notebook-timeline .timeline-clip { justify-content: flex-start; padding: 0 5px; border-radius: 4px; background: #284239; }
 .music-video-editor .timeline-track-audio .timeline-clip { background: #20354a; }

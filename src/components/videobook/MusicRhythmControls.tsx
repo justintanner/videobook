@@ -9,9 +9,11 @@ interface Props {
   sequence: Sequence
   assets: readonly { artifactId: string; label: string }[]
   frame: number
+  correctionsOpen: boolean
+  onCorrectionsOpenChange: (open: boolean) => void
 }
 
-export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) {
+export function MusicRhythmControls({ rhythm, sequence, assets, frame, correctionsOpen, onCorrectionsOpenChange }: Props) {
   const taps = useRef<number[]>([])
   const [tempo, setTempo] = useState('')
   const [meter, setMeter] = useState('')
@@ -81,6 +83,22 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) 
     saveMarkers([...rhythm.markers, { id: crypto.randomUUID(), timeSeconds, bar: false, manual: true }])
   }
 
+  function setBars() {
+    if (!master || !nearest) return
+    const nextMeter = meter ? Number(meter) : beatsPerBar
+    if (nextMeter === null || !Number.isInteger(nextMeter) || nextMeter < 1 || nextMeter > 16) {
+      setMessage('Enter 1–16 beats per bar.')
+      return
+    }
+    if (frame < master.timelineStartFrame || frame >= master.timelineStartFrame + master.durationFrames) {
+      setMessage('Place the playhead at the first beat of a bar inside the soundtrack.')
+      return
+    }
+    const first = rhythm.markers.findIndex(marker => marker.id === nearest.id)
+    if (first === -1) return
+    saveMarkers(rhythm.markers.map((marker, index) => ({ ...marker, bar: (index - first) % nextMeter === 0, manual: true })), bpm ?? null, nextMeter)
+  }
+
   function nudge(direction: number) {
     if (!master || !nearest) return
     const timeSeconds = nearest.timeSeconds + direction / fps * master.speed.numerator / master.speed.denominator * (master.reverse ? -1 : 1)
@@ -103,12 +121,14 @@ export function MusicRhythmControls({ rhythm, sequence, assets, frame }: Props) 
     {master?.reverse && <p>Reversed audio is heard in the export. Render the reversed soundtrack to audition it in this preview.</p>}
     {rhythm.analysis?.lowConfidence && <p>Beat timing is uncertain. Listen and adjust the markers.</p>}
     {rhythm.rhythm.settings.correction && <p>Using your corrected beat map. Reanalysis preserves this map.</p>}
-    <details className="music-rhythm-fixes">
+    <details className="music-rhythm-fixes" open={correctionsOpen} onToggle={(event) => onCorrectionsOpenChange(event.currentTarget.open)}>
     <summary>Correct the beat grid</summary>
+    {rhythm.mapped.length > 0 && !rhythm.mapped.some(marker => marker.bar) && <p>Bars are not set. Place the playhead at a bar’s first beat, enter beats per bar, then choose Set bars from playhead.</p>}
     <div className="music-rhythm-row">
       <label>BPM<input type="number" min="20" max="400" value={tempo} placeholder={bpm?.toFixed(1) ?? '120'} onChange={(event) => setTempo(event.target.value)} /></label>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={tapTempo}>Tap tempo</button>
       <label>Beats per bar<input type="number" min="1" max="16" value={meter} placeholder="Optional" onChange={(event) => setMeter(event.target.value)} /></label>
+      <button type="button" disabled={!canCorrect || !nearest || rhythm.busy} onClick={setBars}>Set bars from playhead</button>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={grid}>Set grid from playhead</button>
       <button type="button" disabled={!canCorrect || rhythm.busy} onClick={addBeat}>Add beat at playhead</button>
       <button type="button" disabled={!canCorrect || !nearest || rhythm.busy} onClick={() => saveMarkers(rhythm.markers.filter((marker) => marker.id !== nearest?.id))}>Remove nearest beat</button>

@@ -117,7 +117,7 @@ export function useMusicRhythm({ bookId, ready, sequence, call, onSequence }: Op
   async function analyze(force = false) {
     if (!ready || !master) return
     const ticket = ++epoch.current
-    setActivity({ scope, busy: false, error: '' })
+    setActivity({ scope, busy: true, error: '' })
     const args = { book_id: bookId, asset_id: master.source.artifactId, stream_id: master.source.range.streamId }
     try {
       const result = readAnalysis(await call('analyze_music', { ...args, force }, { background: true }))
