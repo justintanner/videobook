@@ -21,7 +21,11 @@ import {
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
-import { planStackedChainFromQuery, preflightChainPlan } from "../chain-plan.js";
+import {
+  ensureChainStepIds,
+  planStackedChainFromQuery,
+  preflightChainPlan,
+} from "../chain-plan.js";
 import { withoutUnrequestedSettings } from "../chat-generation-settings.js";
 import { rewriteChatGenerationPrompt } from "../chat-prompt-rewrite.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
@@ -251,6 +255,10 @@ export function normalizeChatRoutedParams(
         delete params.media_context;
       }
     }
+    return params;
+  }
+  if (tool === "chain") {
+    if ("steps" in params) params.steps = ensureChainStepIds(params.steps);
     return params;
   }
   if (tool !== "splice_video") return params;
@@ -538,6 +546,9 @@ async function applyChatActionPlan(
     definition.name === plan.tool);
   if (!targetDef) return error(`Tool handler not found: ${plan.tool}`);
   const params = { ...plan.params, book_id: bookId };
+  if (plan.tool === "chain" && "steps" in params) {
+    params.steps = ensureChainStepIds(params.steps);
+  }
   const validated = z.object(targetDef.schema).safeParse(params);
   if (!validated.success) {
     return error(

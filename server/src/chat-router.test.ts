@@ -248,6 +248,8 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("use extract_video_clip");
     expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
     expect(prompt).toContain("For splice_video:");
+    expect(prompt).toContain('{"id","tool","params"}');
+    expect(prompt).toContain("id is required and unique");
     expect(prompt).toContain("additional_asset_ids");
     expect(prompt).toContain("media_context is an optional single object");
     expect(prompt).not.toContain("\n- chat:");

@@ -2,13 +2,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ZodRawShape } from "zod";
+import { z, type ZodRawShape } from "zod";
 import {
   CHAIN_TOOL_CATALOG,
   chainApproveInputSchema,
   chainCancelInputSchema,
   chainPlanFingerprint,
   chainStatusInputSchema,
+  chainStepSchema,
+  ensureChainStepIds,
   isChainRef,
   planStackedChainFromQuery,
   preflightChainPlan,
@@ -100,6 +102,74 @@ describe("chain catalog and refs", () => {
         notebookId: "other",
         steps,
       }));
+  });
+});
+
+describe("ensureChainStepIds", () => {
+  it("fills the ids a router omits and points refs at those steps", () => {
+    const steps = ensureChainStepIds([
+      { tool: "extract_audio", params: { asset_id: "@b2" } },
+      {
+        tool: "replace_video_audio",
+        params: {
+          asset_id: "@c4",
+          audio_asset_id: {
+            $ref: { step_id: "extract_audio", output: "audio_asset_id" },
+          },
+        },
+      },
+    ]);
+    expect(z.array(chainStepSchema).safeParse(steps).success).toBe(true);
+    expect(steps).toEqual([
+      {
+        id: "extract_audio",
+        tool: "extract_audio",
+        params: { asset_id: "@b2" },
+      },
+      {
+        id: "replace_video_audio",
+        tool: "replace_video_audio",
+        params: {
+          asset_id: "@c4",
+          audio_asset_id: {
+            $ref: { step_id: "extract_audio", output: "audio_asset_id" },
+          },
+        },
+      },
+    ]);
+  });
+
+  it("keeps explicit ids and rewrites a numeric ref onto the earlier step", () => {
+    const steps = ensureChainStepIds([
+      { id: "extract", tool: "extract_audio", params: { asset_id: "@b2" } },
+      {
+        id: "replace",
+        tool: "replace_video_audio",
+        params: {
+          asset_id: "@c4",
+          audio_asset_id: { $ref: { step_id: "1", output: "audio_asset_id" } },
+        },
+      },
+    ]);
+    expect(steps).toMatchObject([
+      { id: "extract" },
+      {
+        id: "replace",
+        params: {
+          audio_asset_id: { $ref: { step_id: "extract", output: "audio_asset_id" } },
+        },
+      },
+    ]);
+  });
+
+  it("leaves a valid plan untouched, including duplicate ids", () => {
+    const steps = extractReplaceSteps();
+    expect(ensureChainStepIds(steps)).toBe(steps);
+    const duplicate = [
+      { id: "extract", tool: "extract_audio", params: { asset_id: "@b2" } },
+      { id: "extract", tool: "trim_video", params: { asset_id: "@b2" } },
+    ];
+    expect(ensureChainStepIds(duplicate)).toBe(duplicate);
   });
 });
 
@@ -262,6 +332,40 @@ describe("preflightChainPlan", () => {
       ["video_refs", 1],
     ]);
     expect(pins.map((pin) => pin.address.replace(/^@/, ""))).toEqual(["b2", "c4"]);
+  });
+
+  it("accepts router steps that omitted ids", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const schema = ctx.toolSchemas.get("chain");
+    if (!schema) throw new Error("missing chain schema");
+    const steps = ensureChainStepIds([
+      { tool: "extract_audio", params: { asset_id: "@b2" } },
+      {
+        tool: "replace_video_audio",
+        params: {
+          asset_id: "@c4",
+          audio_asset_id: { $ref: { step_id: "1", output: "audio_asset_id" } },
+        },
+      },
+    ]);
+    const params = {
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps,
+    };
+    const validated = z.object(schema).safeParse(params);
+    expect(validated.success).toBe(true);
+    if (!validated.success) return;
+    const result = await preflightChainPlan(params, ctx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.steps.map((step) => step.id)).toEqual([
+      "extract_audio",
+      "replace_video_audio",
+    ]);
   });
 
   it("accepts a valid extract then replace $ref plan", async () => {

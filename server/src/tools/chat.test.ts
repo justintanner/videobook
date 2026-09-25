@@ -65,6 +65,37 @@ describe("normalizeChatRoutedParams", () => {
     });
   });
 
+  it("assigns chain step ids the router left undefined", () => {
+    expect(normalizeChatRoutedParams("chain", {
+      action: "run",
+      version: 1,
+      steps: [
+        { tool: "extract_audio", params: { asset_id: "@b2" } },
+        {
+          tool: "replace_video_audio",
+          params: {
+            asset_id: "@c4",
+            audio_asset_id: {
+              $ref: { step_id: "extract_audio", output: "audio_asset_id" },
+            },
+          },
+        },
+      ],
+    })).toMatchObject({
+      steps: [
+        { id: "extract_audio", tool: "extract_audio" },
+        {
+          id: "replace_video_audio",
+          params: {
+            audio_asset_id: {
+              $ref: { step_id: "extract_audio", output: "audio_asset_id" },
+            },
+          },
+        },
+      ],
+    });
+  });
+
   it("expands splice asset_ids and defaults overlap to 0", () => {
     expect(normalizeChatRoutedParams("splice_video", {
       asset_ids: [

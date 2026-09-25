@@ -348,6 +348,106 @@ function walkValues(
   }
 }
 
+const CHAIN_STEP_ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+
+function chainStepRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function chainStepId(value: unknown): string | null {
+  return typeof value === "string" && CHAIN_STEP_ID.test(value) ? value : null;
+}
+
+function unusedChainStepId(
+  preferred: Array<string | null>,
+  used: ReadonlySet<string>,
+  index: number,
+): string {
+  for (const candidate of preferred) {
+    if (candidate && !used.has(candidate)) return candidate;
+  }
+  let number = index + 1;
+  while (used.has(`step${number}`)) number += 1;
+  return `step${number}`;
+}
+
+function chainStepIndexAlias(token: string, count: number): number | null {
+  const numbered = /^(?:step[_-]?)?(\d+)$/iu.exec(token);
+  if (!numbered) return null;
+  const number = Number(numbered[1]);
+  if (token === "0") return count > 0 ? 0 : null;
+  if (number >= 1 && number <= count) return number - 1;
+  return null;
+}
+
+export function ensureChainStepIds(steps: unknown): unknown {
+  if (!Array.isArray(steps)) return steps;
+  const records = steps.map(chainStepRecord);
+  const explicit = records.map((record) => chainStepId(record?.id));
+  const used = new Set(explicit.filter((id): id is string => id !== null));
+  const toolCounts = new Map<string, number>();
+  for (const record of records) {
+    const tool = typeof record?.tool === "string" ? record.tool : "";
+    if (!tool) continue;
+    toolCounts.set(tool, (toolCounts.get(tool) ?? 0) + 1);
+  }
+  const ids = records.map((record, index) => {
+    if (!record) return null;
+    const current = explicit[index];
+    if (current) return current;
+    const tool = typeof record.tool === "string" ? record.tool : "";
+    const toolId = toolCounts.get(tool) === 1 ? chainStepId(tool) : null;
+    const alias = chainStepId(record.step_id) ?? chainStepId(record.name);
+    const id = unusedChainStepId([alias, toolId], used, index);
+    used.add(id);
+    return id;
+  });
+  const idSet = new Set(ids.filter((id): id is string => id !== null));
+  const toolIds = new Map<string, string>();
+  records.forEach((record, index) => {
+    const tool = typeof record?.tool === "string" ? record.tool : "";
+    const id = ids[index];
+    if (!tool || !id || toolCounts.get(tool) !== 1) return;
+    toolIds.set(tool, id);
+  });
+  const resolveRef = (token: string): string => {
+    if (idSet.has(token)) return token;
+    const fromTool = toolIds.get(token);
+    if (fromTool) return fromTool;
+    const index = chainStepIndexAlias(token, ids.length);
+    return index === null ? token : ids[index] ?? token;
+  };
+  let refsChanged = false;
+  const next = steps.map((entry, index) => {
+    const record = records[index];
+    const id = ids[index];
+    if (!record || !id) return entry;
+    const params = chainStepRecord(record.params);
+    const nextParams = params
+      ? mapChainParams(params, (node) => {
+        if (!isChainRef(node)) return node;
+        const stepId = resolveRef(node.$ref.step_id);
+        if (stepId === node.$ref.step_id) return node;
+        refsChanged = true;
+        return { $ref: { step_id: stepId, output: node.$ref.output } };
+      }) as Record<string, unknown>
+      : record.params;
+    if (record.id === id && !refsChanged) return entry;
+    return { ...record, id, params: nextParams };
+  });
+  const unchanged = !refsChanged && next.every((entry, index) => entry === steps[index]);
+  return unchanged ? steps : next;
+}
+
+function chainInputWithStepIds(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  if (!Object.hasOwn(record, "steps")) return input;
+  const steps = ensureChainStepIds(record.steps);
+  return steps === record.steps ? input : { ...record, steps };
+}
+
 function mapChainParams(
   value: unknown,
   map: (node: unknown, path: string) => unknown,
@@ -501,7 +601,7 @@ export async function preflightChainPlan(
   ) {
     return { ok: false, error: "Chain preflight only accepts action=run" };
   }
-  const parsed = chainRunInputSchema.safeParse(input);
+  const parsed = chainRunInputSchema.safeParse(chainInputWithStepIds(input));
   if (!parsed.success) {
     return { ok: false, error: z.prettifyError(parsed.error) };
   }
