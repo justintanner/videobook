@@ -150,6 +150,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/sync-audio");
     expect(commandNames).toContain("/split");
     expect(commandNames).toContain("/split-clip");
+    expect(commandNames).toContain("/clip-audio");
     expect(commandNames).toContain("/export-to");
     expect(commandNames).toContain("/skeleton");
     expect(commandNames).toContain("/archive-restore");

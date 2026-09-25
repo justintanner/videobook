@@ -32,6 +32,7 @@ export const APPLICATION_COMMANDS: Command[] = [
   command("/track-add", "Add a video, audio or caption track", [text("kind", "video, audio or caption"), text("name", "Display name", false)], "/track-add audio Music"),
   command("/track-remove", "Remove an empty sequence track", [track]),
   command("/volume", "Preview a sequence clip's audio gain", [clip, number("gain_db", "Audio gain from -96 to 24 dB")]),
+  command("/clip-audio", "Edit a sequence audio clip's gain, mute, or fades", [clip, text("field", "gain, mute, fade-in, or fade-out"), text("value", "Gain from -96 to 24 dB, on or off, or fade length in frames")], "/clip-audio @clip-id gain -6"),
   command("/clip-delete", "Preview deleting a sequence clip while retaining its source media", [clip, text("ripple", "Use --ripple to close the gap", false)]),
   command("/clip-reverse", "Preview reversing a sequence clip while retaining its source media", [clip]),
   command("/clip-trim", "Preview trimming a sequence clip in frames", [clip, start, duration]),

@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and discoverable action is listed once. Use the Actions button on any screen, press Ctrl+Shift+K / Cmd+Shift+K, or type a slash in chat to browse the complete catalog. Search includes aliases and descriptions. A command with missing arguments opens its form; media, notebook, entity, track and clip selectors provide targets. Advanced provider alternatives retain shared input fields and show a cost review before generation.
 
-Media commands `/export`, `/delete`, `/reverse` and `/trim` target media. Sequence operations use `/export-sequence`, `/clip-delete`, `/clip-reverse` and `/clip-trim`; clip timing uses frames and media trimming uses seconds. Explicit legacy clip IDs and `/export @sequence-main` remain accepted. Use grid addresses such as `/crop @a1`, `/trim @a1 0 2` or `/insert @a1 0 60`.
+Media commands `/export`, `/delete`, `/reverse` and `/trim` target media. Sequence operations use `/export-sequence`, `/clip-delete`, `/clip-reverse`, `/clip-trim`, and `/clip-audio`; clip timing uses frames and media trimming uses seconds. `/clip-audio` edits gain, mute, and fades on an audio-track clip. Explicit legacy clip IDs and `/export @sequence-main` remain accepted. Use grid addresses such as `/crop @a1`, `/trim @a1 0 2` or `/insert @a1 0 60`.
 
 Historical MCP names remain lookup-only compatibility keys. Slash aliases match their canonical action in search. The legacy `/skeleton` shortcut opens a reviewed AI pose-guide request. Import owns upload transport and duplicate-byte checks; it uses a native file picker. Set `VIDEOBOOK_DOWNLOADS_DIR` to override the server's default Downloads directory.
 
@@ -320,7 +320,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (380; 144 dedicated command routes)
+## Slash actions (381; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -366,6 +366,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/check-kimi-coding-api` — Check whether the Kimi Coding API is reachable and its configured API key is valid; MCP: `check_kimi_coding_api`
 - `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
 - `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
+- `/clip-audio` — Edit a sequence audio clip's gain, mute, or fades; preview or workspace operation
 - `/clip-delete` — Preview deleting a sequence clip while retaining its source media; preview or workspace operation
 - `/clip-reverse` — Preview reversing a sequence clip while retaining its source media; preview or workspace operation
 - `/clip-trim` — Preview trimming a sequence clip in frames; preview or workspace operation

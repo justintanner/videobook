@@ -328,6 +328,11 @@ import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import {
+  clipAudioEditRequest,
+  parseClipAudioCommand,
+  resolveClipAudioTarget,
+} from '@/videobook/clip-audio-command'
+import {
   aliveErrorMessage,
   aliveSettingsArgs,
   parseAliveStudioData,
@@ -10828,6 +10833,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           reverse: !timedClip.reverse,
           audio_policy: timedClip.audioPolicy,
         }, 'slash')
+      }
+      if (commandToken === '/clip-audio') {
+        const parsed = parseClipAudioCommand(restParts)
+        if (!parsed.ok) return parsed
+        const target = resolveClipAudioTarget(sequence, parsed.clipRef)
+        if (!target.ok) return target
+        return await prepareSequenceEdit(
+          clipAudioEditRequest(target.clipId, target.audio, parsed.edit),
+          'slash',
+        )
       }
       if (commandToken === '/duck') {
         const clip = sequenceClipReference(sequence, restParts[0])

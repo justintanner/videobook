@@ -50,6 +50,8 @@ describe("workspace action exposure contract", () => {
     expect(crop.target).toEqual({ kind: "asset", argument: "asset_id", mediaKinds: ["image"] });
     expect(first.actions.find((action) => action.command === "/rewrite-script")?.initialArgs).toEqual({ variant: "full" });
     expect(first.actions.find((action) => action.command === "/tldr")?.initialArgs).toEqual({ variant: "tldr" });
+    expect(first.actions.find((action) => action.command === "/clip-audio")?.inputSchema.properties?.field?.enum)
+      .toEqual(["gain", "mute", "fade-in", "fade-out"]);
     const edit = first.actions.find((action) => action.id === "tool.plan_sequence_edit")!;
     expect(edit.inputSchema.properties?.request?.anyOf).toBeDefined();
   });

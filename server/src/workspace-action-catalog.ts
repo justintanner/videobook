@@ -137,6 +137,7 @@ function commandSchema(command: Command): ActionInputSchema {
   if (command.command === "/track-add") fields.kind!.enum = ["video", "audio", "caption"];
   if (command.command === "/caption") fields.style!.enum = ["clean", "bold", "high-contrast"];
   if (command.command === "/fit") fields.mode!.enum = ["fit", "fill", "crop"];
+  if (command.command === "/clip-audio") fields.field!.enum = ["gain", "mute", "fade-in", "fade-out"];
   if (command.command === "/clip-delete") fields.ripple!.enum = ["--ripple"];
   if (command.command === "/export-sequence") {
     Object.assign(fields.aspect!, { enum: ["16:9", "9:16", "1:1"], default: "16:9" });

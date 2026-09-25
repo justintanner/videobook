@@ -42,7 +42,7 @@ export function renderCommandReference(
 
 Every current MCP endpoint and discoverable action is listed once. Use the Actions button on any screen, press Ctrl+Shift+K / Cmd+Shift+K, or type a slash in chat to browse the complete catalog. Search includes aliases and descriptions. A command with missing arguments opens its form; media, notebook, entity, track and clip selectors provide targets. Advanced provider alternatives retain shared input fields and show a cost review before generation.
 
-Media commands \`/export\`, \`/delete\`, \`/reverse\` and \`/trim\` target media. Sequence operations use \`/export-sequence\`, \`/clip-delete\`, \`/clip-reverse\` and \`/clip-trim\`; clip timing uses frames and media trimming uses seconds. Explicit legacy clip IDs and \`/export @sequence-main\` remain accepted. Use grid addresses such as \`/crop @a1\`, \`/trim @a1 0 2\` or \`/insert @a1 0 60\`.
+Media commands \`/export\`, \`/delete\`, \`/reverse\` and \`/trim\` target media. Sequence operations use \`/export-sequence\`, \`/clip-delete\`, \`/clip-reverse\`, \`/clip-trim\`, and \`/clip-audio\`; clip timing uses frames and media trimming uses seconds. \`/clip-audio\` edits gain, mute, and fades on an audio-track clip. Explicit legacy clip IDs and \`/export @sequence-main\` remain accepted. Use grid addresses such as \`/crop @a1\`, \`/trim @a1 0 2\` or \`/insert @a1 0 60\`.
 
 Historical MCP names remain lookup-only compatibility keys. Slash aliases match their canonical action in search. The legacy \`/skeleton\` shortcut opens a reviewed AI pose-guide request. Import owns upload transport and duplicate-byte checks; it uses a native file picker. Set \`VIDEOBOOK_DOWNLOADS_DIR\` to override the server's default Downloads directory.
 
