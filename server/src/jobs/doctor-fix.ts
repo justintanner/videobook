@@ -43,7 +43,8 @@ async function statusOf(
  *
  * Tier 2 (Dolt restore): the current manifest itself is broken, so walk the
  * asset history newest-first and restore the first revision that yields a `ready`
- * asset.
+ * asset. If none do, put the asset back on the revision the fix started from
+ * so a failed walk cannot delete the only copy of the media.
  */
 async function fixAsset(
   engine: Engine,
@@ -93,8 +94,10 @@ async function fixAsset(
       asset_status: afterTier1,
     };
   }
+  const baseline = engine.head;
   const history = engine.history.artifact(artifact.value.artifactId);
   for (const commit of history) {
+    if (commit.hash === baseline) continue;
     const restored = await engine.history.restoreArtifact(
       artifact.value.artifactId,
       commit.hash,
@@ -114,6 +117,9 @@ async function fixAsset(
     }
   }
 
+  if (engine.head !== baseline) {
+    await engine.history.restoreArtifact(artifact.value.artifactId, baseline);
+  }
   return {
     status: "unfixable",
     asset_id: assetId,

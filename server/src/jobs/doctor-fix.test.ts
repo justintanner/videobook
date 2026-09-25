@@ -211,6 +211,31 @@ describe("doctor tool", () => {
     expect(manifest.ok && manifest.value.files.some((f) => f.name === "original.png")).toBe(true);
   });
 
+  it("keeps the current media when no historical revision is ready", async () => {
+    const assetId = await createAsset(fs, "video", "audio-only");
+    await fs.files.write(assetId, "original.mp4", Buffer.from("not-a-video"));
+    await fs.history.recordOperation("doctor-test-seed-unready", assetId, {});
+    await fs.files.delete(assetId, "original.mp4");
+    await fs.history.recordOperation("doctor-test-drop-unready", assetId, {});
+    await fs.files.write(assetId, "original.mp4", Buffer.from("still-not-a-video"));
+    await fs.history.recordOperation("doctor-test-current-unready", assetId, {});
+
+    const res = await client.callTool({
+      name: "doctor",
+      arguments: { book_id: bookId, asset_id: assetId, fix: true },
+    });
+    expect(res.isError).toBeFalsy();
+    const result = parse<DoctorFixResult>(res);
+    expect(result.status).toBe("unfixable");
+    const manifest = await fs.files.manifest(assetId);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    const file = manifest.value.files.find((entry) => entry.name === "original.mp4");
+    expect(file).toBeTruthy();
+    const bytes = await fs.files.read(assetId, "original.mp4");
+    expect(bytes.ok && bytes.value.toString()).toBe("still-not-a-video");
+  });
+
   it("rejects fix without an explicit asset_id", async () => {
     const res = await client.callTool({
       name: "doctor",
