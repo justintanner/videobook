@@ -121,6 +121,15 @@ const SUBTITLE_ALIASES: Record<string, Record<string, string>> = {
   font_size: { s: 'small', m: 'medium', l: 'large' },
 }
 
+export function parseFilePosition(value: unknown): number {
+  if (value === undefined || value === null || value === '') return 1
+  const position = typeof value === 'number' ? value : Number(String(value).trim())
+  if (!Number.isInteger(position) || position < 1) {
+    throw new Error('Usage: /files <position>')
+  }
+  return position
+}
+
 export function normalizePanelSide(value: string | null): 'left' | 'right' | 'both' {
   const side = (value ?? 'both').trim().toLowerCase()
   if (side === 'left' || side === 'right' || side === 'both') return side

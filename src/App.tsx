@@ -207,7 +207,7 @@ import type { WorkspaceActionReview, WorkspaceActionResult } from '@/components/
 import { asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
 import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
-import { WORKSPACE_UI_ROUTES, normalizePanelSide, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
+import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -10374,7 +10374,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         formValues.audio_id = audioTarget.clipId
       }
       if (uiAction === 'viewer_focus_file' && asset) {
-        await openWorkspaceMedia(asset, undefined, Number(values.position ?? 1))
+        await openWorkspaceMedia(asset, undefined, parseFilePosition(values.position))
       } else {
         await openWorkspaceActions(`tool.${tool}`, formValues)
       }

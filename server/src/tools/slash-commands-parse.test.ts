@@ -13,7 +13,7 @@ import { executeUiAction } from "../../../src/lib/ui-actions.js";
 import { parseExportSequenceCommand } from "../../../src/videobook/export-sequence-command.js";
 import { parseTrackAddCommand } from "../../../src/videobook/track-add-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
-import { normalizePanelSide, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
+import { normalizePanelSide, parseFilePosition, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
 import { getCanonicalCommands } from "./commands.js";
 
 describe("slash command parse/normalize/dispatch", () => {
@@ -610,6 +610,9 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "square" }, 30).ratio).toBe("1:1");
       expect(() => workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "4:3" }, 30))
         .toThrow("Usage: /crop @asset [16:9|9:16|1:1]");
+      expect(parseFilePosition(simulateParse("/files", "3").position)).toBe(3);
+      expect(parseFilePosition(undefined)).toBe(1);
+      expect(() => parseFilePosition(simulateParse("/files", "0").position)).toThrow("Usage: /files <position>");
       expect(normalizePanelSide("Left")).toBe("left");
       expect(normalizePanelSide(null)).toBe("both");
       expect(() => normalizePanelSide("middle")).toThrow("Choose left, right or both.");
