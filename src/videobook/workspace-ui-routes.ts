@@ -71,7 +71,6 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
   if (action === 'settings_bg') result.background_mode = values.mode
   if (['settings_landscape', 'settings_portrait', 'settings_square'].includes(action)) result.orientation = action.slice('settings_'.length)
   if (action.startsWith('timeline_audio_')) {
-    if (values.audio_ref) result.audio_id = values.audio_ref
     if (action === 'timeline_audio_add' || values.start !== undefined) result.start_frame = Math.round(Number(values.start ?? 0) * frameRate)
     if (values.duration !== undefined) result.duration_frames = Math.round(Number(values.duration) * frameRate)
   }

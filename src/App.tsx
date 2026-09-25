@@ -63,7 +63,6 @@ import type {
   NotebookDocument,
   PinnedSearchResult,
   Sequence,
-  TimedSequenceClip,
 } from 'videobook-engine'
 import { parseAssetTags, type AssetTags } from './videobook/asset-tags'
 import { sequenceContentRevision } from './videobook/sequence-revision'
@@ -327,11 +326,8 @@ import {
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
-import {
-  clipAudioEditRequest,
-  parseClipAudioCommand,
-  resolveClipAudioTarget,
-} from '@/videobook/clip-audio-command'
+import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
+import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import {
   aliveErrorMessage,
   aliveSettingsArgs,
@@ -1690,14 +1686,6 @@ function asCommandPlan(value: unknown): CommandPlan {
   const plan = value as CommandPlan
   validateCommandPlan(plan)
   return plan
-}
-
-function sequenceClipReference(sequence: Sequence | null, value: string | undefined) {
-  if (!sequence || !value) return null
-  const token = normalizeNotebookReference(value)
-  const matches = sequence.clips.filter((clip) =>
-    clip.clipId.toLowerCase().startsWith(token))
-  return matches.length === 1 ? matches[0] : null
 }
 
 function sequenceTrackReference(sequence: Sequence | null, value: string | undefined) {
@@ -10371,10 +10359,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const frameRate = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
       const formValues = workspaceUiFormValues(uiAction, values, frameRate)
       if (asset) formValues.asset_id = asset.artifactId
-      if (uiAction.startsWith('timeline_audio_') && values.audio_ref) {
-        const clip = sequenceClipReference(sequence, String(values.audio_ref))
-          ?? sequence?.clips.find((entry) => entry.source.kind === 'timed' && entry.source.artifactId === values.audio_ref)
-        if (clip) formValues.audio_id = clip.clipId
+      if (uiAction.startsWith('timeline_audio_') && uiAction !== 'timeline_audio_add' && values.audio_ref) {
+        const audioTarget = resolveTimelineAudioTarget(
+          String(values.audio_ref),
+          sequence,
+          assets,
+          commandMentionAssets,
+        )
+        if (!audioTarget.ok) return audioTarget
+        formValues.audio_id = audioTarget.clipId
       }
       if (uiAction === 'viewer_focus_file' && asset) {
         await openWorkspaceMedia(asset, undefined, Number(values.position ?? 1))
@@ -10700,251 +10693,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await previewCommandPlan(asCommandPlan(value))
       }
-      if (commandToken === '/caption') {
-        const [startValue, durationValue, styleValue, ...textParts] = restParts
-        const startFrame = Number(startValue)
-        const durationFrames = Number(durationValue)
-        const style = styleValue === 'clean'
-          || styleValue === 'bold'
-          || styleValue === 'high-contrast'
-          ? styleValue
-          : null
-        const text = textParts.join(' ').trim()
-        if (
-          !Number.isSafeInteger(startFrame)
-          || startFrame < 0
-          || !Number.isSafeInteger(durationFrames)
-          || durationFrames < 1
-          || !style
-          || !text
-        ) {
-          return {
-            ok: false,
-            message: 'Usage: /caption <start-frame> <duration-frames> clean|bold|high-contrast <text>',
-          }
-        }
-        return await prepareSequenceEdit({
-          kind: 'caption',
-          timeline_start_frame: startFrame,
-          duration_frames: durationFrames,
-          text,
-          style_id: style,
-        }, 'slash')
-      }
-      if (commandToken === '/move') {
-        const [clipValue, trackValue, startValue] = restParts
-        const clip = sequenceClipReference(sequence, clipValue)
-        const track = sequenceTrackReference(sequence, trackValue)
-        const startFrame = Number(startValue)
-        if (!clip || !track || !Number.isSafeInteger(startFrame) || startFrame < 0) {
-          return {
-            ok: false,
-            message: 'Usage: /move @clip-id @track-id <start-frame>',
-          }
-        }
-        return await prepareSequenceEdit({
-          kind: 'move',
-          clip_id: clip.clipId,
-          track_id: track.trackId,
-          timeline_start_frame: startFrame,
-        }, 'slash')
-      }
-      if (commandToken === '/split-clip') {
-        const [clipValue, frameValue] = restParts
-        const clip = sequenceClipReference(sequence, clipValue)
-        const splitFrame = Number(frameValue)
-        if (!clip || !Number.isSafeInteger(splitFrame)) {
-          return { ok: false, message: 'Usage: /split-clip @clip-id <sequence-frame>' }
-        }
-        return await prepareSequenceEdit({
-          kind: 'split',
-          clip_id: clip.clipId,
-          split_frame: splitFrame,
-        }, 'slash')
-      }
-      if (commandToken === '/clip-delete' || (commandToken === '/delete' && sequenceClipReference(sequence, restParts[0]))) {
-        const clip = sequenceClipReference(sequence, restParts[0])
-        const unknown = restParts.slice(1).filter((value) => value !== '--ripple')
-        if (!clip || unknown.length > 0) {
-          return { ok: false, message: 'Usage: /delete @clip-id [--ripple]' }
-        }
-        return await prepareSequenceEdit({
-          kind: 'delete',
-          clip_id: clip.clipId,
-          ripple: restParts.includes('--ripple'),
-        }, 'slash')
-      }
-      if (commandToken === '/gap') {
-        const startFrame = Number(restParts[0])
-        const durationFrames = Number(restParts[1])
-        const track = sequenceTrackReference(sequence, restParts[2])
-        if (
-          !Number.isSafeInteger(startFrame)
-          || startFrame < 0
-          || !Number.isSafeInteger(durationFrames)
-          || durationFrames < 1
-          || (restParts[2] !== undefined && !track)
-        ) {
-          return {
-            ok: false,
-            message: 'Usage: /gap <start-frame> <duration-frames> [@track-id]',
-          }
-        }
-        return await prepareSequenceEdit({
-          kind: 'gap',
-          timeline_start_frame: startFrame,
-          duration_frames: durationFrames,
-          ...(track ? { track_ids: [track.trackId] } : {}),
-        }, 'slash')
-      }
-      if (commandToken === '/fit') {
-        const clip = sequenceClipReference(sequence, restParts[0])
-        const fit = restParts[1]
-        if (!clip || (fit !== 'fit' && fit !== 'fill' && fit !== 'crop')) {
-          return { ok: false, message: 'Usage: /fit @clip-id fit|fill|crop' }
-        }
-        return await prepareSequenceEdit({
-          kind: 'transform',
-          clip_id: clip.clipId,
-          fit,
-        }, 'slash')
-      }
-      if (commandToken === '/reframe') {
-        const clip = sequenceClipReference(sequence, restParts[0])
-        if (!clip) {
-          return { ok: false, message: 'Usage: /reframe @visual-clip-id' }
-        }
-        return await prepareSequenceEdit({
-          kind: 'reframe',
-          clip_id: clip.clipId,
-        }, 'slash')
-      }
-      if (commandToken === '/clip-reverse' || (commandToken === '/reverse' && sequenceClipReference(sequence, restParts[0]))) {
-        const clip = sequenceClipReference(sequence, restParts[0])
-        if (!clip || clip.source.kind !== 'timed') {
-          return { ok: false, message: 'Usage: /reverse @timed-clip-id' }
-        }
-        const timedClip = clip as TimedSequenceClip
-        return await prepareSequenceEdit({
-          kind: 'speed',
-          clip_id: timedClip.clipId,
-          numerator: timedClip.speed.numerator,
-          denominator: timedClip.speed.denominator,
-          reverse: !timedClip.reverse,
-          audio_policy: timedClip.audioPolicy,
-        }, 'slash')
-      }
-      if (commandToken === '/clip-audio') {
-        const parsed = parseClipAudioCommand(restParts)
-        if (!parsed.ok) return parsed
-        const target = resolveClipAudioTarget(sequence, parsed.clipRef)
-        if (!target.ok) return target
-        return await prepareSequenceEdit(
-          clipAudioEditRequest(target.clipId, target.audio, parsed.edit),
-          'slash',
-        )
-      }
-      if (commandToken === '/duck') {
-        const clip = sequenceClipReference(sequence, restParts[0])
-        const reductionDb = restParts[1] === undefined
-          ? -12
-          : Number(restParts[1])
-        if (
-          !clip
-          || !Number.isFinite(reductionDb)
-          || reductionDb < -36
-          || reductionDb > -1
-        ) {
-          return {
-            ok: false,
-            message: 'Usage: /duck @narration-clip-id [reduction-db from -36 to -1]',
-          }
-        }
-        return await prepareSequenceEdit({
-          kind: 'duck',
-          narration_clip_id: clip.clipId,
-          reduction_db: reductionDb,
-        }, 'slash')
-      }
-      if (
-        commandToken === '/insert'
-        || commandToken === '/overwrite'
-        || commandToken === '/clip-trim'
-        || (commandToken === '/trim' && sequenceClipReference(sequence, restParts[0]))
-        || commandToken === '/volume'
-      ) {
-        const values = restParts.map((value) =>
-          value.startsWith('@') ? value.slice(1) : value)
-        if (commandToken === '/insert' || commandToken === '/overwrite') {
-          const [source, startValue, durationValue] = values
-          const mentionAsset = commandMentionAssets.find((candidate) =>
-            candidate.cellAddress.toLowerCase() === source?.toLowerCase())
-          const asset = mentionAsset ?? assets.find((candidate) =>
-            candidate.id === source || candidate.artifactId === source)
-          const startFrame = Number(startValue)
-          const durationFrames = durationValue === undefined
-            ? undefined
-            : Number(durationValue)
-          if (
-            !asset
-            || !Number.isSafeInteger(startFrame)
-            || startFrame < 0
-            || (
-              durationFrames !== undefined
-              && (!Number.isSafeInteger(durationFrames) || durationFrames < 1)
-            )
-          ) {
-            return {
-              ok: false,
-              message: `Usage: ${commandToken} @asset <start-frame> [duration-frames]`,
-            }
-          }
-          return await prepareSequenceEdit({
-            kind: 'insert',
-            mode: commandToken === '/overwrite' ? 'overwrite' : 'insert',
-            artifact_id: asset.artifactId,
-            timeline_start_frame: startFrame,
-            ...(durationFrames === undefined ? {} : { duration_frames: durationFrames }),
-          }, 'slash')
-        }
-        if (commandToken === '/clip-trim' || commandToken === '/trim') {
-          const [clipValue, startValue, durationValue] = values
-          const clip = sequenceClipReference(sequence, clipValue)
-          const startFrame = Number(startValue)
-          const durationFrames = Number(durationValue)
-          if (
-            !clip
-            || !Number.isSafeInteger(startFrame)
-            || startFrame < 0
-            || !Number.isSafeInteger(durationFrames)
-            || durationFrames < 1
-          ) {
-            return {
-              ok: false,
-              message: 'Usage: /trim @clip-id <start-frame> <duration-frames>',
-            }
-          }
-          return await prepareSequenceEdit({
-            kind: 'trim',
-            clip_id: clip.clipId,
-            timeline_start_frame: startFrame,
-            duration_frames: durationFrames,
-          }, 'slash')
-        }
-        const [clipValue, gainValue] = values
-        const clip = sequenceClipReference(sequence, clipValue)
-        const gainDb = Number(gainValue)
-        if (!clip || !Number.isFinite(gainDb) || gainDb < -96 || gainDb > 24) {
-          return {
-            ok: false,
-            message: 'Usage: /volume @clip-id <gain-db from -96 to 24>',
-          }
-        }
-        return await prepareSequenceEdit({
-          kind: 'volume',
-          clip_id: clip.clipId,
-          gain_db: gainDb,
-        }, 'slash')
+      const sequenceSlash = parseSequenceSlashCommand(commandToken, restParts, {
+        sequence,
+        assets,
+        mentionAssets: commandMentionAssets,
+      })
+      if (sequenceSlash.handled) {
+        if (!sequenceSlash.ok) return sequenceSlash
+        return await prepareSequenceEdit(sequenceSlash.request, 'slash')
       }
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }

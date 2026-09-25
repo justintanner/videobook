@@ -330,6 +330,11 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(args.fix).toBe(true);
     });
 
+    it("parses a leading fix flag instead of treating it as the asset id", () => {
+      expect(simulateParse("/doctor", "fix")).toEqual({ fix: true });
+      expect(simulateParse("/doctor", "fix @a1")).toEqual({ asset_id: "a1", fix: true });
+    });
+
     it("dispatches doctor via mcpTool with book_id auto-injected", () => {
       const cmd = findCommand("/doctor");
       expect(cmd.mcpTool?.tool).toBe("doctor");

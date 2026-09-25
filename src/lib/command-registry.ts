@@ -532,15 +532,18 @@ export const COMMAND_ADAPTERS = {
       if (nameValue) result.new_name = nameValue;
       return result;
     }
-    const [destinationCandidate = '', ...nameTokens] = nameValue.split(/\s+/);
-    if (NOTEBOOK_DESTINATION_PATTERN.test(destinationCandidate)) {
-      result.destination = stripAt(destinationCandidate).toLowerCase();
-      const newName = [nameTokens.join(' '), destinationValue].filter(Boolean).join(' ');
+    const tokens = [...nameValue.split(/\s+/), destinationValue].filter(Boolean);
+    const destinations = tokens.filter((token) => NOTEBOOK_DESTINATION_PATTERN.test(token));
+    if (destinations.length > 1) {
+      throw new Error('Usage: /duplicate @asset [@cell] [name]');
+    }
+    if (destinations.length === 1) {
+      result.destination = stripAt(destinations[0]!).toLowerCase();
+      const newName = tokens.filter((token) => token !== destinations[0]).join(' ');
       if (newName) result.new_name = newName;
       return result;
     }
-    const newName = [nameValue, destinationValue].filter(Boolean).join(' ');
-    if (newName) result.new_name = newName;
+    if (tokens.length > 0) result.new_name = tokens.join(' ');
     return result;
   },
   timewarp: (args) => {
@@ -616,11 +619,30 @@ function parseTokenValue(token: string, param: CommandParam): CommandArgValue {
   return stripAt(token);
 }
 
+function booleanFlag(token: string, param: CommandParam): boolean | null {
+  if (param.type !== 'boolean') return null;
+  const word = stripAt(token).toLowerCase();
+  if (word === param.name.toLowerCase()) return true;
+  if (['true', 'yes', 'y', 'on'].includes(word)) return true;
+  if (['false', 'no', 'n', 'off'].includes(word)) return false;
+  return null;
+}
+
 export function parseCommandArgs(rest: string, params: CommandParam[]): Record<string, CommandArgValue> {
   if (!rest || params.length === 0) return {};
 
-  const tokens = rest.split(/\s+/);
+  const rawTokens = rest.split(/\s+/).filter((token) => token.length > 0);
   const args: Record<string, CommandArgValue> = {};
+  const tokens: string[] = [];
+  for (const token of rawTokens) {
+    const claimant = params.find((param) =>
+      param.type === 'boolean' && !(param.name in args) && booleanFlag(token, param) !== null);
+    if (claimant) {
+      args[claimant.name] = booleanFlag(token, claimant)!;
+      continue;
+    }
+    tokens.push(token);
+  }
   const lastParam = params[params.length - 1];
   let tokenLimit = tokens.length;
 

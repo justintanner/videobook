@@ -21,7 +21,7 @@ export const APPLICATION_COMMANDS: Command[] = [
   command("/caption", "Preview a sequence caption with timing and style", [start, duration, text("style", "clean, bold or high-contrast"), text("text", "Caption text")], "/caption 0 90 clean Opening scene"),
   command("/duck", "Lower background audio beneath a narration clip", [text("narration_clip_id", "Narration clip"), number("reduction_db", "Reduction from -36 to -1 dB; default -12", false)]),
   command("/fit", "Fit, fill or crop a visual sequence clip", [clip, text("mode", "fit, fill or crop")]),
-  command("/gap", "Preview removing a gap from the sequence", [start, duration, { ...track, required: false }]),
+  command("/gap", "Preview inserting a gap that shifts later clips forward", [start, duration, { ...track, required: false }]),
   command("/generate-cell", "Review generation for a configured notebook cell", [text("cell_id", "Generation cell, such as @a1")], "/generate-cell @a1"),
   command("/insert", "Preview inserting media into the sequence", [media, start, { ...duration, required: false }], "/insert @a1 0 90"),
   command("/move", "Preview moving a sequence clip to a track and frame", [clip, track, start]),

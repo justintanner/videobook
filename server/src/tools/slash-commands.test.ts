@@ -367,6 +367,12 @@ describe("slash_commands tool", () => {
       destination: "b1",
       new_name: "copied scene",
     });
+    const trailing = parseCommandArgs("@a1 copied scene @b1", command.params);
+    expect(adaptCommandArgs(command.mcpTool.adapter, trailing)).toEqual({
+      asset_id: "a1",
+      destination: "b1",
+      new_name: "copied scene",
+    });
     expect(command.mcpTool.autoInject).toEqual(["book_id", "notebook_id"]);
   });
 

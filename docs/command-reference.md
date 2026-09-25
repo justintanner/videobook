@@ -434,7 +434,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
 - `/folder` — Show asset folder; MCP: `show_folder`
 - `/forget-asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept; MCP: `forget_asset`
-- `/gap` — Preview removing a gap from the sequence; preview or workspace operation
+- `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
 - `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation

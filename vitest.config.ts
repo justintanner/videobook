@@ -81,6 +81,8 @@ export default defineConfig({
       'src/videobook/mcp-client.test.ts',
       'src/videobook/music-video-command.test.ts',
       'src/videobook/clip-audio-command.test.ts',
+      'src/videobook/sequence-slash-command.test.ts',
+      'src/videobook/timeline-audio-command.test.ts',
       'scripts/search-benchmark-corpus.test.ts',
       'scripts/benchmark-startup.test.ts',
       'src/videobook/watermark-target.test.ts',
