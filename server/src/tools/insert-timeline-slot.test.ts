@@ -25,6 +25,16 @@ describe("insert_timeline_slot tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  it("accepts a capitalized slot and position and still refuses an empty slot", async () => {
+    const result = await client.callTool({
+      name: "insert_timeline_slot",
+      arguments: { book_id: "test-proj", slot: "S02", position: "Before" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Empty slots are not supported");
+  });
+
   it("rejects inserting an empty slot before a typed slot", async () => {
     const result = await client.callTool({
       name: "insert_timeline_slot",

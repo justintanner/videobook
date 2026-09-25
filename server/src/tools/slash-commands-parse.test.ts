@@ -14,6 +14,7 @@ import { parseExportSequenceCommand } from "../../../src/videobook/export-sequen
 import { parseTrackAddCommand } from "../../../src/videobook/track-add-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
 import { normalizePanelSide, parseFilePosition, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
+import { slotIndex } from "../timeline-helpers.js";
 import { getCanonicalCommands } from "./commands.js";
 
 describe("slash command parse/normalize/dispatch", () => {
@@ -523,6 +524,18 @@ describe("slash command parse/normalize/dispatch", () => {
         layer_asset_id: "a2",
         volume: 30,
       });
+    });
+  });
+
+  describe("timeline slot case", () => {
+    it("accepts a capitalized @S02 slot on assign, unassign, and remove", () => {
+      expect(simulateParse("/assign", "@a1 @S02")).toEqual({ asset_id: "a1", slot: "S02" });
+      expect(slotIndex(String(simulateParse("/assign", "@a1 @S02").slot))).toBe(1);
+      expect(slotIndex(String(simulateParse("/unassign", "@S02").slot))).toBe(1);
+      expect(slotIndex(String(simulateParse("/remove-slot", "@s02").slot))).toBe(1);
+      expect(slotIndex("@S02")).toBe(1);
+      expect(slotIndex("s00")).toBeNull();
+      expect(slotIndex("slot1")).toBeNull();
     });
   });
 

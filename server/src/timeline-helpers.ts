@@ -673,7 +673,7 @@ export function timelineFailure(message: string): ToolResult {
 }
 
 export function slotIndex(value: string): number | null {
-  const match = /^s(\d+)$/.exec(value);
+  const match = /^@?s(\d+)$/i.exec(value.trim());
   if (!match) return null;
   const index = Number.parseInt(match[1]!, 10) - 1;
   return index >= 0 ? index : null;

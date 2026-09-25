@@ -10,7 +10,10 @@ export function insertTimelineSlotDef(_engine: Engine): ToolDef {
     schema: {
       book_id: z.string().uuid(),
       slot: z.string(),
-      position: z.enum(["before", "after"]),
+      position: z.preprocess(
+        (value) => typeof value === "string" ? value.trim().toLowerCase() : value,
+        z.enum(["before", "after"]),
+      ),
     },
     handler: async (args) => {
       const index = slotIndex(String(args.slot));
