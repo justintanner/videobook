@@ -710,7 +710,10 @@ function parseNumberToken(token: string, paramName: string): string | number {
   const seconds = SECOND_COUNT_PARAMS.has(paramName)
     ? /^(\d+(?:\.\d+)?)(?:s|sec|secs|second|seconds)$/i.exec(stripped)
     : null;
-  const parsed = Number(seconds?.[1] ?? stripped);
+  const unit = seconds
+    ?? (paramName === 'boost' ? /^(\d+(?:\.\d+)?)x$/i.exec(stripped) : null)
+    ?? (paramName === 'volume' ? /^(\d+(?:\.\d+)?)%$/i.exec(stripped) : null);
+  const parsed = Number(unit?.[1] ?? stripped);
   return Number.isFinite(parsed) ? parsed : stripped;
 }
 

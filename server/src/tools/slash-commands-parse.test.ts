@@ -477,7 +477,7 @@ describe("slash command parse/normalize/dispatch", () => {
   });
 
   describe("duration suffixes", () => {
-    it("reads a seconds suffix on duration fields and leaves multipliers alone", () => {
+    it("reads unit suffixes on durations, boosts, and mix percents", () => {
       expect(simulateParse("/extend-audio", "@a1 15s add outro music")).toEqual({
         asset_id: "a1",
         target_duration_seconds: 15,
@@ -513,6 +513,15 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(simulateParse("/audio-boost", "@a1 2s")).toEqual({
         asset_id: "a1",
         boost: "2s",
+      });
+      expect(simulateParse("/audio-boost", "@a1 2x")).toEqual({
+        asset_id: "a1",
+        boost: 2,
+      });
+      expect(simulateParse("/audio-mix", "@a1 @a2 30%")).toEqual({
+        target_asset_id: "a1",
+        layer_asset_id: "a2",
+        volume: 30,
       });
     });
   });
