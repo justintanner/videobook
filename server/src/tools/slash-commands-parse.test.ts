@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  adaptCommandArgs,
   parseCommandArgs,
   normalizeApplySfxCommandArgs,
+  normalizePostCommandArgs,
   normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
   selectCommandForInput,
@@ -339,6 +341,41 @@ describe("slash command parse/normalize/dispatch", () => {
       const cmd = findCommand("/doctor");
       expect(cmd.mcpTool?.tool).toBe("doctor");
       expect(cmd.mcpTool?.autoInject).toContain("book_id");
+    });
+  });
+
+  describe("free text after an optional token", () => {
+    it("keeps a free-text /tldr instruction out of the platform field", () => {
+      const command = findCommand("/tldr");
+      const parsed = parseCommandArgs("@a1 make it shorter", command.params);
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parsed)).toEqual({
+        asset_id: "a1",
+        custom_prompt: "make it shorter",
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 tiktok punch the ending", command.params))).toEqual({
+        asset_id: "a1",
+        platform: "tiktok",
+        custom_prompt: "punch the ending",
+      });
+    });
+
+    it("keeps a multi-word /qrbtf value together unless the last token is a style", () => {
+      const command = findCommand("/qrbtf");
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("pay the invoice", command.params))).toEqual({
+        value: "pay the invoice",
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("hello world normal", command.params))).toEqual({
+        value: "hello world",
+        style: "normal",
+      });
+    });
+
+    it("treats a /post without an asset token as the caption", () => {
+      expect(normalizePostCommandArgs("Check this out")).toEqual({ text: "Check this out" });
+      expect(normalizePostCommandArgs("@hero-clip Check this out!")).toEqual({
+        asset_ref: "hero-clip",
+        text: "Check this out!",
+      });
     });
   });
 

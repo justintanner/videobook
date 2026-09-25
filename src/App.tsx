@@ -113,6 +113,7 @@ import {
 import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
+  normalizePostCommandArgs,
   parseCommandArgs,
   selectCommandForInput,
   type CommandToolArgs,
@@ -10705,7 +10706,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
       if (advertisedAction?.handler.kind === 'ui') {
-        const outcome = await executeWorkspaceUiRoute(advertisedAction, parseCommandArgs(resolvedRest, command.params))
+        const parsed = command.command === '/post'
+          ? normalizePostCommandArgs(resolvedRest)
+          : parseCommandArgs(resolvedRest, command.params)
+        const outcome = await executeWorkspaceUiRoute(advertisedAction, parsed)
         if (outcome) return outcome
       }
       if (command.uiAction === 'switch_book') {

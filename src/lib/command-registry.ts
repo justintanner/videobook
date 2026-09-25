@@ -1,4 +1,4 @@
-import { NOTEBOOK_GRID_ADDRESS_SOURCE } from 'videobook-engine/notebook-mentions'
+import { isNotebookGridAddress, NOTEBOOK_GRID_ADDRESS_SOURCE } from 'videobook-engine/notebook-mentions'
 
 interface CommandParam {
   name: string;
@@ -488,6 +488,76 @@ const NOTEBOOK_DESTINATION_PATTERN = new RegExp(
   'iu',
 );
 
+const REWRITE_PLATFORMS = new Set(['ig', 'tiktok', 'youtube']);
+const QR_STYLES = new Set(['normal', 'line', 'dsj', 'bubble', 'func']);
+const POST_ASSET_PREFIX = /^(?:vid|img|aud|asset|final|script)-[a-z0-9-]+$/i;
+const POST_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function normalizeRewriteScriptCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): CommandToolArgs {
+  const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+  const platformRaw = typeof args.platform === 'string' ? args.platform.trim() : '';
+  const prompt = typeof args.custom_prompt === 'string' ? args.custom_prompt.trim() : '';
+  const platform = platformRaw.toLowerCase();
+  if (platform && REWRITE_PLATFORMS.has(platform)) {
+    result.platform = platform;
+    if (prompt) result.custom_prompt = prompt;
+    else delete result.custom_prompt;
+    return result;
+  }
+  delete result.platform;
+  const custom = [platformRaw, prompt].filter(Boolean).join(' ');
+  if (custom) result.custom_prompt = custom;
+  else delete result.custom_prompt;
+  return result;
+}
+
+export function normalizeQrbtfCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): CommandToolArgs {
+  const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+  const value = typeof args.value === 'string' ? args.value.trim() : '';
+  const styleRaw = typeof args.style === 'string' ? args.style.trim() : '';
+  if (!value && !styleRaw) return result;
+  const styleTokens = styleRaw.split(/\s+/).filter(Boolean);
+  const last = styleTokens[styleTokens.length - 1]?.toLowerCase() ?? '';
+  if (styleTokens.length === 1 && QR_STYLES.has(last)) {
+    result.style = last;
+    if (value) result.value = value;
+    return result;
+  }
+  if (styleTokens.length > 1 && QR_STYLES.has(last)) {
+    result.style = last;
+    result.value = [value, styleTokens.slice(0, -1).join(' ')].filter(Boolean).join(' ');
+    return result;
+  }
+  delete result.style;
+  result.value = [value, styleRaw].filter(Boolean).join(' ');
+  return result;
+}
+
+function isPostAssetToken(token: string): boolean {
+  const bare = stripAt(token);
+  return token.startsWith('@')
+    || isNotebookGridAddress(bare)
+    || POST_UUID.test(bare)
+    || POST_ASSET_PREFIX.test(bare);
+}
+
+export function normalizePostCommandArgs(rest: string): { asset_ref?: string; text?: string } {
+  const tokens = rest.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return {};
+  const [first, ...more] = tokens;
+  if (first && isPostAssetToken(first)) {
+    return {
+      asset_ref: stripAt(first),
+      ...(more.length > 0 ? { text: more.join(' ') } : {}),
+    };
+  }
+  return { text: tokens.join(' ') };
+}
+
 export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {
     const inputs = args.inputs;
@@ -567,6 +637,8 @@ export const COMMAND_ADAPTERS = {
     delete result.description;
     return { ...result, ...normalized };
   },
+  rewrite_script: (args) => normalizeRewriteScriptCommandArgs(args),
+  qrbtf: (args) => normalizeQrbtfCommandArgs(args),
   trim: (args) => {
     const normalized = normalizeTrimCommandArgs(args);
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };

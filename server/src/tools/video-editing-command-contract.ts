@@ -15,6 +15,8 @@ export const COMMAND_ADAPTER_NAMES = [
   "duplicate",
   "keywords",
   "qr_outro",
+  "qrbtf",
+  "rewrite_script",
   "sync_audio",
   "timewarp",
   "translate_subtitles",

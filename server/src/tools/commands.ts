@@ -573,7 +573,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
       { name: "style", type: "string", required: false, description: "QR style: normal, line, dsj, bubble, or func (default: normal)" },
     ],
-    mcpTool: { tool: "create_qrbtf", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_qrbtf", adapter: "qrbtf", autoInject: ["book_id"] },
   },
   {
     command: "/outroqr",
@@ -636,7 +636,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
       { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
-    mcpTool: { tool: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "full" } },
+    mcpTool: { tool: "rewrite_script", adapter: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "full" } },
   },
   {
     command: "/tldr",
@@ -652,7 +652,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
       { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
-    mcpTool: { tool: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "tldr" } },
+    mcpTool: { tool: "rewrite_script", adapter: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "tldr" } },
   },
   {
     command: "/copy-media",
