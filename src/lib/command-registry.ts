@@ -145,15 +145,24 @@ function keywordToggle(
   }
 }
 
+function outroAspectRatio(token: string): QrOutroCommandArgs['aspect_ratio'] | null {
+  const word = token.toLowerCase();
+  if (word === '16:9' || word === 'landscape') return '16:9';
+  if (word === '9:16' || word === 'portrait') return '9:16';
+  if (word === '1:1' || word === 'square') return '1:1';
+  return null;
+}
+
 function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
   const inputs = tokens.map(stripAt);
   const qrImages: string[] = [];
   let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
 
   for (const token of inputs) {
-    if (token === '16:9' || token === '9:16' || token === '1:1') {
+    const ratio = outroAspectRatio(token);
+    if (ratio) {
       if (aspectRatio) throw new Error('/outroqr accepts only one aspect ratio');
-      aspectRatio = token;
+      aspectRatio = ratio;
       continue;
     }
     if (!ASSET_REF_PATTERN.test(token)) {

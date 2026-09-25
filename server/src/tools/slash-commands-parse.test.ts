@@ -543,6 +543,24 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
+  describe("/outroqr aspect words", () => {
+    it("treats portrait as a 9:16 outro instead of a second image", () => {
+      const command = findCommand("/outroqr");
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 portrait", command.params))).toEqual({
+        qr_image_refs: ["a1"],
+        aspect_ratio: "9:16",
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 @a2 Landscape", command.params))).toEqual({
+        qr_image_refs: ["a1", "a2"],
+        aspect_ratio: "16:9",
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 @a2 16:9", command.params))).toEqual({
+        qr_image_refs: ["a1", "a2"],
+        aspect_ratio: "16:9",
+      });
+    });
+  });
+
   describe("timeline slot case", () => {
     it("accepts a capitalized @S02 slot on assign, unassign, and remove", () => {
       expect(simulateParse("/assign", "@a1 @S02")).toEqual({ asset_id: "a1", slot: "S02" });
