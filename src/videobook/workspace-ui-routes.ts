@@ -66,9 +66,12 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
   const result = { ...values }
   if (action === 'open_osg' && values.image) result.osg_asset_id = values.image
   if (action === 'open_post_composer' && values.asset_ref) result.asset_id = values.asset_ref
-  if (action === 'sidebar_sort') result.sort = values.order ?? 'newest'
+  if (action === 'sidebar_sort') result.sort = sortOrder(values.order)
   if (action === 'viewer_toggle_info') result.name = 'original'
-  if (action === 'settings_bg') result.background_mode = values.mode
+  if (action === 'settings_bg') {
+    const mode = backgroundMode(values.mode)
+    if (mode) result.background_mode = mode
+  }
   if (['settings_landscape', 'settings_portrait', 'settings_square'].includes(action)) result.orientation = action.slice('settings_'.length)
   if (action.startsWith('timeline_audio_')) {
     if (action === 'timeline_audio_add' || values.start !== undefined) result.start_frame = Math.round(Number(values.start ?? 0) * frameRate)
@@ -83,12 +86,58 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
     stroke: 'stroke_width', strokeWidth: 'stroke_width', strokeColor: 'stroke_color',
     shadow: 'shadow_blur', shadowBlur: 'shadow_blur', shadowOpacity: 'shadow_opacity', language: 'subtitle_language',
   }
-  if (action === 'settings_subs' && ['on', 'off'].includes(field)) result.subtitles_enabled = field === 'on'
+  const subsToggle = field.toLowerCase()
+  if (action === 'settings_subs' && ['on', 'off'].includes(subsToggle)) result.subtitles_enabled = subsToggle === 'on'
   if (['settings_audio', 'settings_subs', 'timeline_audio_update'].includes(action) && field && values.value !== undefined) {
     const key = action === 'timeline_audio_update' ? field.replaceAll('-', '_') : aliases[field] ?? field
     const value = String(values.value)
     result[key] = ['on', 'off', 'true', 'false'].includes(value) ? ['on', 'true'].includes(value)
-      : value.trim() && Number.isFinite(Number(value)) ? Number(value) : value
+      : value.trim() && Number.isFinite(Number(value)) ? Number(value) : subtitleSetting(field, key, value)
   }
   return result
+}
+
+const SORT_ORDERS = ['newest', 'oldest'] as const
+const BACKGROUND_MODES = ['blur', 'black'] as const
+const SUBTITLE_CHOICES: Record<string, readonly string[]> = {
+  position: ['top', 'middle', 'bottom'],
+  highlight_style: ['impact', 'highlight', 'alive'],
+  font_size: ['small', 'medium', 'large'],
+}
+const SUBTITLE_ALIASES: Record<string, Record<string, string>> = {
+  position: { mid: 'middle' },
+  font_size: { s: 'small', m: 'medium', l: 'large' },
+}
+
+export function normalizePanelSide(value: string | null): 'left' | 'right' | 'both' {
+  const side = (value ?? 'both').trim().toLowerCase()
+  if (side === 'left' || side === 'right' || side === 'both') return side
+  throw new Error('Choose left, right or both.')
+}
+
+function sortOrder(value: unknown): 'newest' | 'oldest' {
+  const order = String(value ?? 'newest').trim().toLowerCase()
+  if (order === 'newest' || order === 'oldest') return order
+  throw new Error(`Usage: /sort ${SORT_ORDERS.join('|')}`)
+}
+
+function backgroundMode(value: unknown): 'blur' | 'black' | null {
+  if (value === undefined || value === null || String(value).trim() === '') return null
+  const mode = String(value).trim().toLowerCase()
+  if (mode === 'blur' || mode === 'black') return mode
+  throw new Error(`Usage: /bg ${BACKGROUND_MODES.join('|')}`)
+}
+
+function subtitleSetting(field: string, key: string, value: string): string {
+  if (key === 'subtitle_language') {
+    const language = value.trim().toLowerCase()
+    if (/^(original|[a-z]{2})$/u.test(language)) return language
+    throw new Error('Usage: /subs language original|en')
+  }
+  const choices = SUBTITLE_CHOICES[key]
+  if (!choices) return value
+  const lowered = value.trim().toLowerCase()
+  const normalized = SUBTITLE_ALIASES[key]?.[lowered] ?? lowered
+  if (choices.includes(normalized)) return normalized
+  throw new Error(`Usage: /subs ${field} ${choices.join('|')}`)
 }

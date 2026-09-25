@@ -10,6 +10,8 @@ import {
 } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 import { executeUiAction } from "../../../src/lib/ui-actions.js";
+import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
+import { normalizePanelSide, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
 import { getCanonicalCommands } from "./commands.js";
 
 describe("slash command parse/normalize/dispatch", () => {
@@ -376,6 +378,146 @@ describe("slash command parse/normalize/dispatch", () => {
         asset_ref: "hero-clip",
         text: "Check this out!",
       });
+    });
+
+    it("keeps a leading to in free text", () => {
+      expect(simulateParse("/say", "EXAVITQu4vr4xnSDxMaL to be or not to be")).toEqual({
+        voice_id: "EXAVITQu4vr4xnSDxMaL",
+        text: "to be or not to be",
+      });
+      expect(simulateParse("/speak", "to be or not to be")).toEqual({
+        text: "to be or not to be",
+      });
+      expect(simulateParse("/remove-sound", "@a1 to the left honk")).toEqual({
+        asset_id: "a1",
+        sound: "to the left honk",
+      });
+      expect(simulateParse("/rename", "@a1 To The Moon")).toEqual({
+        asset_id: "a1",
+        new_name: "To The Moon",
+      });
+      expect(simulateParse("/extend-audio", "@a1 15 to add drums")).toEqual({
+        asset_id: "a1",
+        target_duration_seconds: 15,
+        continuation_prompt: "to add drums",
+      });
+      const duplicate = findCommand("/duplicate");
+      expect(adaptCommandArgs(duplicate.mcpTool?.adapter, parseCommandArgs("@a1 To The Moon @b1", duplicate.params))).toEqual({
+        asset_id: "a1",
+        destination: "b1",
+        new_name: "To The Moon",
+      });
+    });
+
+    it("treats /keywords word lists as words when they are not the on/off form", () => {
+      const command = findCommand("/keywords");
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 On Fire", command.params))).toEqual({
+        asset_id: "a1",
+        keywords: ["On", "Fire"],
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 off the record", command.params))).toEqual({
+        asset_id: "a1",
+        keywords: ["off", "the", "record"],
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 on 4 1.2", command.params))).toEqual({
+        asset_id: "a1",
+        enabled: true,
+        max_keywords: 4,
+        linger_seconds: 1.2,
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 off", command.params))).toEqual({
+        asset_id: "a1",
+        enabled: false,
+      });
+    });
+  });
+
+  describe("/play slot targets", () => {
+    const sequence = {
+      tracks: [
+        { trackId: "music", kind: "audio", ordinal: 0 },
+        { trackId: "picture", kind: "video", ordinal: 1 },
+        { trackId: "overlay", kind: "video", ordinal: 2 },
+      ],
+      clips: [
+        { clipId: "b-audio", trackId: "music", timelineStartFrame: 0 },
+        { clipId: "b-overlay", trackId: "overlay", timelineStartFrame: 10 },
+        { clipId: "b-second", trackId: "picture", timelineStartFrame: 240 },
+        { clipId: "b-first", trackId: "picture", timelineStartFrame: 90 },
+      ],
+    };
+
+    it("opens the documented @s02 picture slot instead of an earlier audio clip", () => {
+      const parsed = simulateParse("/play", "@s02");
+      expect(parsed.slot).toBe("s02");
+      expect(resolvePlaySlot(String(parsed.slot), sequence)).toEqual({
+        ok: true,
+        initialFrame: 240,
+      });
+      expect(resolvePlaySlot(String(simulateParse("/play", "2").slot), sequence)).toEqual({
+        ok: true,
+        initialFrame: 240,
+      });
+      expect(resolvePlaySlot(null, sequence)).toEqual({ ok: true, initialFrame: 90 });
+      expect(resolvePlaySlot("s03", sequence)).toEqual({
+        ok: false,
+        message: "Choose an existing sequence slot.",
+      });
+      expect(resolvePlaySlot("nope", sequence)).toEqual({
+        ok: false,
+        message: "Usage: /play [@s01]",
+      });
+      expect(resolvePlaySlot("s02", null)).toEqual({
+        ok: false,
+        message: "Open a project with a sequence first.",
+      });
+    });
+  });
+
+  describe("slash enum tokens", () => {
+    it("reads a capitalized /speed duration suffix as seconds", () => {
+      const command = findCommand("/speed");
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 8.32S", command.params))).toEqual({
+        asset_id: "a1",
+        target_duration_seconds: 8.32,
+      });
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 2x", command.params))).toEqual({
+        asset_id: "a1",
+        speed: 2,
+      });
+      expect(() => adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 faster", command.params)))
+        .toThrow("Usage: /speed @asset <0.25-4 or 8.32s>");
+    });
+
+    it("folds a capitalized /final orientation and rejects an unknown one", () => {
+      const command = findCommand("/final");
+      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("Portrait", command.params))).toEqual({
+        orientation: "portrait",
+      });
+      const render = findCommand("/render-video");
+      expect(adaptCommandArgs(render.mcpTool?.adapter, parseCommandArgs("@a1 Square", render.params))).toEqual({
+        asset_id: "a1",
+        orientation: "square",
+      });
+      expect(() => adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("widescreen", command.params)))
+        .toThrow("Orientation must be landscape, portrait, or square");
+    });
+
+    it("folds /bg, /subs, /sort, and panel sides", () => {
+      expect(workspaceUiFormValues("settings_bg", { mode: "Blur" }, 30).background_mode).toBe("blur");
+      expect(() => workspaceUiFormValues("settings_bg", { mode: "white" }, 30)).toThrow("Usage: /bg blur|black");
+      expect(workspaceUiFormValues("settings_subs", { field: "On" }, 30).subtitles_enabled).toBe(true);
+      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "Top" }, 30).position).toBe("top");
+      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "mid" }, 30).position).toBe("middle");
+      expect(workspaceUiFormValues("settings_subs", { field: "size", value: "l" }, 30).font_size).toBe("large");
+      expect(workspaceUiFormValues("settings_subs", { field: "style", value: "Highlight" }, 30).highlight_style).toBe("highlight");
+      expect(() => workspaceUiFormValues("settings_subs", { field: "position", value: "sideways" }, 30))
+        .toThrow("Usage: /subs position top|middle|bottom");
+      expect(workspaceUiFormValues("sidebar_sort", { order: "Oldest" }, 30).sort).toBe("oldest");
+      expect(() => workspaceUiFormValues("sidebar_sort", { order: "random" }, 30)).toThrow("Usage: /sort newest|oldest");
+      expect(normalizePanelSide("Left")).toBe("left");
+      expect(normalizePanelSide(null)).toBe("both");
+      expect(() => normalizePanelSide("middle")).toThrow("Choose left, right or both.");
     });
   });
 

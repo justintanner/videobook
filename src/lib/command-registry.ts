@@ -109,30 +109,31 @@ function normalizeKeywordCommandArgs(
   const inputs = inputsValue.map((input) => input.trim()).filter(Boolean)
   if (inputs.length === 0) return { asset_id: assetId }
 
-  const mode = inputs[0].toLowerCase()
-  if (['off', 'false', 'no', '0'].includes(mode)) {
-    if (inputs.length > 1) throw new Error('/keywords off does not accept extra inputs')
-    return { asset_id: assetId, enabled: false }
-  }
-  if (['on', 'true', 'yes', '1'].includes(mode)) {
-    if (inputs.length > 3) throw new Error('/keywords on accepts only [max] [linger]')
-    const maxKeywords = inputs[1] === undefined ? undefined : Number(inputs[1])
-    const lingerSeconds = inputs[2] === undefined ? undefined : Number(inputs[2])
-    if (maxKeywords !== undefined && (!Number.isInteger(maxKeywords) || maxKeywords < 1 || maxKeywords > 20)) {
-      throw new Error('/keywords max must be an integer from 1 to 20')
-    }
-    if (lingerSeconds !== undefined && (!Number.isFinite(lingerSeconds) || lingerSeconds < 0.8 || lingerSeconds > 5)) {
-      throw new Error('/keywords linger must be between 0.8 and 5 seconds')
-    }
-    return {
-      asset_id: assetId,
-      enabled: true,
-      ...(maxKeywords === undefined ? {} : { max_keywords: maxKeywords }),
-      ...(lingerSeconds === undefined ? {} : { linger_seconds: lingerSeconds }),
-    }
-  }
-
+  const toggle = keywordToggle(inputs)
+  if (toggle) return { asset_id: assetId, ...toggle }
   return { asset_id: assetId, keywords: inputs }
+}
+
+function keywordToggle(
+  inputs: readonly string[],
+): Omit<KeywordCommandArgs, 'asset_id'> | null {
+  const mode = inputs[0]?.toLowerCase() ?? ''
+  const rest = inputs.slice(1)
+  if (['off', 'false', 'no', '0'].includes(mode)) {
+    return rest.length === 0 ? { enabled: false } : null
+  }
+  if (!['on', 'true', 'yes', '1'].includes(mode) || rest.length > 2) return null
+  if (rest.length === 0) return { enabled: true }
+  const maxKeywords = Number(rest[0])
+  if (!Number.isInteger(maxKeywords) || maxKeywords < 1 || maxKeywords > 20) return null
+  if (rest.length === 1) return { enabled: true, max_keywords: maxKeywords }
+  const lingerSeconds = Number(rest[1])
+  if (!Number.isFinite(lingerSeconds) || lingerSeconds < 0.8 || lingerSeconds > 5) return null
+  return {
+    enabled: true,
+    max_keywords: maxKeywords,
+    linger_seconds: lingerSeconds,
+  }
 }
 
 function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
@@ -490,6 +491,7 @@ const NOTEBOOK_DESTINATION_PATTERN = new RegExp(
 
 const REWRITE_PLATFORMS = new Set(['ig', 'tiktok', 'youtube']);
 const QR_STYLES = new Set(['normal', 'line', 'dsj', 'bubble', 'func']);
+const ORIENTATIONS = new Set(['landscape', 'portrait', 'square']);
 const POST_ASSET_PREFIX = /^(?:vid|img|aud|asset|final|script)-[a-z0-9-]+$/i;
 const POST_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -576,15 +578,21 @@ export const COMMAND_ADAPTERS = {
   },
   change_speed: (args) => {
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    if ('speed' in result) {
-      const val = result.speed;
-      delete result.speed;
-      if (typeof val === 'string' && val.endsWith('s')) {
-        result.target_duration_seconds = parseFloat(val);
-      } else if (val !== undefined) {
-        result.speed = parseFloat(String(val));
-      }
+    if (!('speed' in result)) return result;
+    const val = result.speed;
+    delete result.speed;
+    const token = typeof val === 'number' ? String(val) : typeof val === 'string' ? val.trim() : '';
+    const speedUsage = 'Usage: /speed @asset <0.25-4 or 8.32s>';
+    if (!token) throw new Error(speedUsage);
+    if (/s$/i.test(token)) {
+      const seconds = Number(token.slice(0, -1));
+      if (!Number.isFinite(seconds) || seconds <= 0) throw new Error(speedUsage);
+      result.target_duration_seconds = seconds;
+      return result;
     }
+    const speed = Number(token.replace(/x$/i, ''));
+    if (!Number.isFinite(speed)) throw new Error(speedUsage);
+    result.speed = speed;
     return result;
   },
   duplicate: (args) => {
@@ -662,14 +670,30 @@ export const COMMAND_ADAPTERS = {
 
 type CommandAdapterName = keyof typeof COMMAND_ADAPTERS;
 
+function foldOrientation(args: CommandToolArgs): CommandToolArgs {
+  const raw = args.orientation;
+  if (typeof raw !== 'string') return args;
+  const orientation = raw.trim().toLowerCase();
+  if (!orientation) {
+    const result = { ...args };
+    delete result.orientation;
+    return result;
+  }
+  if (!ORIENTATIONS.has(orientation)) {
+    throw new Error('Orientation must be landscape, portrait, or square');
+  }
+  if (raw === orientation) return args;
+  return { ...args, orientation };
+}
+
 export function adaptCommandArgs(
   adapterName: string | undefined,
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
-  if (!adapterName) return args as CommandToolArgs;
+  if (!adapterName) return foldOrientation(args as CommandToolArgs);
   const adapterFn = COMMAND_ADAPTERS[adapterName as CommandAdapterName];
   if (!adapterFn) throw new Error(`Unknown command adapter: ${adapterName}`);
-  return adapterFn(args);
+  return foldOrientation(adapterFn(args));
 }
 
 function parseNumberToken(token: string): string | number {
@@ -735,14 +759,11 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
     if (isLast && param.type === 'string[]') {
       args[param.name] = tokens.slice(i, tokenLimit).map(stripAt);
     } else if ((isLast || param.consumeRest) && param.type === 'string') {
-      // Last string param gets all remaining tokens joined.
-      // Strip leading "to" connector (e.g. "/rename @a3 to new-name")
       let remaining = tokens.slice(i, tokenLimit);
-      if (remaining.length > 1 && remaining[0].toLowerCase() === 'to') {
+      if (param.name === 'new_name' && remaining.length > 1 && remaining[0] === 'to') {
         remaining = remaining.slice(1);
       }
-      const raw = remaining.join(' ');
-      args[param.name] = stripAt(raw);
+      args[param.name] = stripAt(remaining.join(' '));
       if (param.consumeRest) break;
     } else {
       args[param.name] = parseTokenValue(tokens[i], param);

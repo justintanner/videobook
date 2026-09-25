@@ -207,7 +207,7 @@ import type { WorkspaceActionReview, WorkspaceActionResult } from '@/components/
 import { asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
 import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
-import { WORKSPACE_UI_ROUTES, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
+import { WORKSPACE_UI_ROUTES, normalizePanelSide, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -328,6 +328,7 @@ import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
+import { resolvePlaySlot } from '@/videobook/play-command'
 import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import {
   aliveErrorMessage,
@@ -10405,8 +10406,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.action === 'collapse' || route.action === 'expand') {
       const expand = route.action === 'expand'
-      const side = asString(values.side) ?? 'both'
-      if (!['left', 'right', 'both'].includes(side)) throw new Error('Choose left, right or both.')
+      const side = normalizePanelSide(asString(values.side))
       if (side !== 'left' && (expand ? composerDockShouldOpen('expand') : true)) {
         setComposerDockOpen(expand)
       }
@@ -10422,11 +10422,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: 'Viewer closed' }
     }
     if (route.action === 'play') {
-      if (!sequence) throw new Error('Open a project with a sequence first.')
-      const slot = asString(values.slot)?.replace(/^@s/iu, '')
-      const clip = slot ? [...sequence.clips].sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)[Number(slot) - 1] : undefined
-      if (slot && !clip) throw new Error('Choose an existing sequence slot.')
-      setWorkspacePreview({ initialFrame: clip?.timelineStartFrame ?? 0, opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+      const target = resolvePlaySlot(asString(values.slot), sequence)
+      if (!target.ok) return { ok: false, message: target.message }
+      setWorkspacePreview({ initialFrame: target.initialFrame, opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
       return { ok: true, message: 'Sequence preview opened' }
     }
     if (!asset) {
