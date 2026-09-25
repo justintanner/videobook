@@ -515,6 +515,12 @@ describe("slash command parse/normalize/dispatch", () => {
         .toThrow("Usage: /subs position top|middle|bottom");
       expect(workspaceUiFormValues("sidebar_sort", { order: "Oldest" }, 30).sort).toBe("oldest");
       expect(() => workspaceUiFormValues("sidebar_sort", { order: "random" }, 30)).toThrow("Usage: /sort newest|oldest");
+      expect(workspaceUiFormValues("timeline_audio_update", { field: "Volume", value: 80 }, 30).volume).toBe(80);
+      expect(workspaceUiFormValues("timeline_audio_update", { field: "Fade-In", value: "200" }, 30).fade_in).toBe(200);
+      expect(() => workspaceUiFormValues("timeline_audio_update", { field: "loudness", value: 1 }, 30))
+        .toThrow("Usage: /audio-set @clip volume|fade-in|fade-out <value>");
+      expect(workspaceUiFormValues("settings_audio", { field: "Volume", value: "80" }, 30).audio_volume).toBe(80);
+      expect(workspaceUiFormValues("settings_subs", { field: "FontSize", value: "Large" }, 30).font_size).toBe("large");
       expect(normalizePanelSide("Left")).toBe("left");
       expect(normalizePanelSide(null)).toBe("both");
       expect(() => normalizePanelSide("middle")).toThrow("Choose left, right or both.");

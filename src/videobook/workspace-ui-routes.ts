@@ -78,27 +78,36 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
     if (values.duration !== undefined) result.duration_frames = Math.round(Number(values.duration) * frameRate)
   }
   if (action === 'rewind_activity' && values.commit_hash) result.target_revision = values.commit_hash
-  const field = String(values.field ?? '')
-  const aliases: Record<string, string> = {
-    'fade-in': 'audio_fade_in', 'fade-out': 'audio_fade_out', volume: 'audio_volume',
-    enabled: 'subtitles_enabled', style: 'highlight_style', size: 'font_size', fontSize: 'font_size',
-    color: 'text_color', textColor: 'text_color', highlight: 'highlight_color', highlightColor: 'highlight_color',
-    stroke: 'stroke_width', strokeWidth: 'stroke_width', strokeColor: 'stroke_color',
-    shadow: 'shadow_blur', shadowBlur: 'shadow_blur', shadowOpacity: 'shadow_opacity', language: 'subtitle_language',
-  }
-  const subsToggle = field.toLowerCase()
-  if (action === 'settings_subs' && ['on', 'off'].includes(subsToggle)) result.subtitles_enabled = subsToggle === 'on'
+  const field = String(values.field ?? '').trim().toLowerCase()
+  if (action === 'settings_subs' && ['on', 'off'].includes(field)) result.subtitles_enabled = field === 'on'
   if (['settings_audio', 'settings_subs', 'timeline_audio_update'].includes(action) && field && values.value !== undefined) {
-    const key = action === 'timeline_audio_update' ? field.replaceAll('-', '_') : aliases[field] ?? field
+    const key = action === 'timeline_audio_update'
+      ? timelineAudioField(field)
+      : action === 'settings_audio'
+        ? audioSettingsField(field)
+        : FIELD_ALIASES[field] ?? field
     const value = String(values.value)
-    result[key] = ['on', 'off', 'true', 'false'].includes(value) ? ['on', 'true'].includes(value)
-      : value.trim() && Number.isFinite(Number(value)) ? Number(value) : subtitleSetting(field, key, value)
+    const numeric = Number(value)
+    if (action === 'timeline_audio_update' && !Number.isFinite(numeric)) {
+      throw new Error('Usage: /audio-set @clip volume|fade-in|fade-out <value>')
+    }
+    result[key] = ['on', 'off', 'true', 'false'].includes(value.toLowerCase())
+      ? ['on', 'true'].includes(value.toLowerCase())
+      : value.trim() && Number.isFinite(numeric) ? numeric : subtitleSetting(field, key, value)
   }
   return result
 }
 
 const SORT_ORDERS = ['newest', 'oldest'] as const
 const BACKGROUND_MODES = ['blur', 'black'] as const
+const FIELD_ALIASES: Record<string, string> = {
+  'fade-in': 'audio_fade_in', 'fade-out': 'audio_fade_out', volume: 'audio_volume',
+  enabled: 'subtitles_enabled', style: 'highlight_style', size: 'font_size', fontsize: 'font_size',
+  color: 'text_color', textcolor: 'text_color', highlight: 'highlight_color', highlightcolor: 'highlight_color',
+  stroke: 'stroke_width', strokewidth: 'stroke_width', strokecolor: 'stroke_color',
+  shadow: 'shadow_blur', shadowblur: 'shadow_blur', shadowopacity: 'shadow_opacity', language: 'subtitle_language',
+}
+
 const SUBTITLE_CHOICES: Record<string, readonly string[]> = {
   position: ['top', 'middle', 'bottom'],
   highlight_style: ['impact', 'highlight', 'alive'],
@@ -126,6 +135,18 @@ function backgroundMode(value: unknown): 'blur' | 'black' | null {
   const mode = String(value).trim().toLowerCase()
   if (mode === 'blur' || mode === 'black') return mode
   throw new Error(`Usage: /bg ${BACKGROUND_MODES.join('|')}`)
+}
+
+function timelineAudioField(field: string): string {
+  const key = field.replaceAll('-', '_')
+  if (key === 'volume' || key === 'fade_in' || key === 'fade_out') return key
+  throw new Error('Usage: /audio-set @clip volume|fade-in|fade-out <value>')
+}
+
+function audioSettingsField(field: string): string {
+  const key = FIELD_ALIASES[field]
+  if (key === 'audio_volume' || key === 'audio_fade_in' || key === 'audio_fade_out') return key
+  throw new Error('Usage: /audio volume|fade-in|fade-out <value>')
 }
 
 function subtitleSetting(field: string, key: string, value: string): string {
