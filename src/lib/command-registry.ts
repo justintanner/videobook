@@ -696,9 +696,21 @@ export function adaptCommandArgs(
   return foldOrientation(adapterFn(args));
 }
 
-function parseNumberToken(token: string): string | number {
+const SECOND_COUNT_PARAMS = new Set([
+  'target_duration_seconds',
+  'transition_seconds',
+  'overlap',
+  'timestamp',
+  'start',
+  'duration',
+]);
+
+function parseNumberToken(token: string, paramName: string): string | number {
   const stripped = stripAt(token);
-  const parsed = Number(stripped);
+  const seconds = SECOND_COUNT_PARAMS.has(paramName)
+    ? /^(\d+(?:\.\d+)?)(?:s|sec|secs|second|seconds)$/i.exec(stripped)
+    : null;
+  const parsed = Number(seconds?.[1] ?? stripped);
   return Number.isFinite(parsed) ? parsed : stripped;
 }
 
@@ -710,7 +722,7 @@ function parseBooleanToken(token: string): string | boolean {
 }
 
 function parseTokenValue(token: string, param: CommandParam): CommandArgValue {
-  if (param.type === 'number') return parseNumberToken(token);
+  if (param.type === 'number') return parseNumberToken(token, param.name);
   if (param.type === 'boolean') return parseBooleanToken(token);
   return stripAt(token);
 }

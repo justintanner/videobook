@@ -476,6 +476,47 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
+  describe("duration suffixes", () => {
+    it("reads a seconds suffix on duration fields and leaves multipliers alone", () => {
+      expect(simulateParse("/extend-audio", "@a1 15s add outro music")).toEqual({
+        asset_id: "a1",
+        target_duration_seconds: 15,
+        continuation_prompt: "add outro music",
+      });
+      expect(simulateParse("/extend-audio", "@a1 15seconds")).toEqual({
+        asset_id: "a1",
+        target_duration_seconds: 15,
+      });
+      expect(simulateParse("/scene-concat", "@a1 @a2 0.25s")).toEqual({
+        first_asset_id: "a1",
+        second_asset_id: "a2",
+        transition_seconds: 0.25,
+      });
+      expect(simulateParse("/audio-add", "@a1 2s 10sec")).toEqual({
+        asset_id: "a1",
+        start: 2,
+        duration: 10,
+      });
+      expect(simulateParse("/audio-move", "@a1 5s")).toEqual({
+        audio_ref: "a1",
+        start: 5,
+      });
+      expect(simulateParse("/extract-frame", "@vid-clip 2.5s")).toEqual({
+        asset_id: "vid-clip",
+        timestamp: 2.5,
+      });
+      expect(simulateParse("/splice", "@a1 @a2 1.5s")).toEqual({
+        first_asset_id: "a1",
+        second_asset_id: "a2",
+        overlap: 1.5,
+      });
+      expect(simulateParse("/audio-boost", "@a1 2s")).toEqual({
+        asset_id: "a1",
+        boost: "2s",
+      });
+    });
+  });
+
   describe("/track-add", () => {
     it("accepts a capitalized track kind and keeps the display name", () => {
       expect(parseTrackAddCommand(["Audio", "Score", "Bed"])).toEqual({
