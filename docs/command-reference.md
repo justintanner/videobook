@@ -8,11 +8,12 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (307)
+## MCP endpoints (309)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
+- `alive_captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
 - `analyze_music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio
@@ -278,6 +279,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `search_library_moments` — Federate a moment search across every current-schema book
 - `search_moments` — Search indexed book moments with text, media references, and filters
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
+- `set_alive_captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
@@ -318,13 +320,15 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (377; 143 dedicated command routes)
+## Slash actions (380; 144 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/add-asset-tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.; MCP: `add_asset_tag`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
+- `/alive` — Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals; UI: `open_alive_captions`
+- `/alive-captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.; MCP: `alive_captions`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
 - `/analyze-music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio; MCP: `analyze_music`
@@ -639,6 +643,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-library-moments` — Federate a moment search across every current-schema book; MCP: `search_library_moments`
 - `/search-moments` — Search indexed book moments with text, media references, and filters; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
+- `/set-alive-captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
 - `/set-notebook-cell-input` — Atomically replace or clear one named notebook cell input; MCP: `set_notebook_cell_input`

@@ -5,6 +5,7 @@ import { BlurFillVideo } from "./BlurFillVideo.js";
 import { SubtitleOverlay } from "./subtitles/SubtitleOverlay.js";
 import { OsgOverlay } from "./OsgOverlay.js";
 import { KeywordGraphicsOverlay } from "./KeywordGraphicsOverlay.js";
+import { AliveCaptions } from "./subtitles/AliveCaptions.js";
 
 export const RenderComposition: React.FC<RenderInputProps> = ({
   videoSrc,
@@ -34,7 +35,10 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   strokeColor,
   shadowBlur,
   shadowOpacity,
+  aliveCues,
+  aliveSettings,
 }) => {
+  const alive = style === "alive";
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
       <BlurFillVideo
@@ -46,7 +50,17 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
         audioFadeOut={audioFadeOut}
         backgroundMode={backgroundMode}
       />
-      {subtitlesEnabled && chunks.length > 0 && (
+      {subtitlesEnabled && alive && aliveSettings && aliveCues.length > 0 && (
+        <AliveCaptions
+          cues={aliveCues}
+          settings={aliveSettings}
+          strokeWidth={strokeWidth}
+          strokeColor={strokeColor}
+          shadowBlur={shadowBlur}
+          shadowOpacity={shadowOpacity}
+        />
+      )}
+      {subtitlesEnabled && !alive && chunks.length > 0 && (
         <SubtitleOverlay
           chunks={chunks}
           style={style}

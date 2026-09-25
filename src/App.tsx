@@ -328,6 +328,15 @@ import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import {
+  aliveErrorMessage,
+  aliveSettingsArgs,
+  parseAliveStudioData,
+  resolveAliveCommandAsset,
+  type AliveOrientation,
+} from '@/videobook/alive-captions'
+import type { AliveStudioAsset, AliveStudioState } from '@/components/videobook/AliveCaptionsStudio'
+import type { AliveSettings } from '../server/src/remotion/subtitles/alive-types'
+import {
   changedNotebookGridNodes,
   nextNotebookCreationSlot,
   parseNotebookGridAddress,
@@ -574,6 +583,11 @@ const MusicVideoEditor = lazy(async () => {
   return { default: module.MusicVideoEditor }
 })
 
+const AliveCaptionsStudio = lazy(async () => {
+  const module = await import('@/components/videobook/AliveCaptionsStudio')
+  return { default: module.AliveCaptionsStudio }
+})
+
 type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
   isError?: boolean
@@ -619,6 +633,13 @@ type MusicVideoSession = {
   setup:
     | Exclude<MusicVideoSetupState, { status: 'ready' }>
     | MusicVideoPreparedSetup
+}
+
+type AliveCaptionsSession = {
+  key: string
+  asset: AliveStudioAsset
+  returnFocus: HTMLElement | null
+  state: AliveStudioState
 }
 
 type MediaFullscreenSession = {
@@ -3353,6 +3374,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
+  const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
   const [mediaFullscreenEditSelection, setMediaFullscreenEditSelection] =
@@ -8590,6 +8612,46 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     restoreFocus()
   }, [])
 
+  const closeAliveCaptions = useCallback(() => {
+    const restoreFocus = capturePointerComposerFocus()
+    setAliveSession(null)
+    restoreFocus()
+  }, [])
+
+  const updateAliveState = (sessionKey: string, state: AliveStudioState) => {
+    setAliveSession((current) => current?.key === sessionKey ? { ...current, state } : current)
+  }
+
+  const loadAliveCaptions = async (sessionKey: string, artifactId: string, reanalyze: boolean) => {
+    try {
+      const result = await call('alive_captions', { book_id: bookId, asset_id: artifactId, reanalyze })
+      updateAliveState(sessionKey, { status: 'ready', data: parseAliveStudioData(result) })
+    } catch (error) {
+      // A failed re-run keeps the loaded analysis on screen and reports inline.
+      if (reanalyze) throw new Error(aliveErrorMessage(error), { cause: error })
+      updateAliveState(sessionKey, { status: 'error', message: aliveErrorMessage(error) })
+    }
+  }
+
+  const saveAliveCaptions = async (artifactId: string, settings: AliveSettings) => {
+    try {
+      await call('set_alive_captions', { book_id: bookId, asset_id: artifactId, ...aliveSettingsArgs(settings) })
+    } catch (error) {
+      throw new Error(aliveErrorMessage(error), { cause: error })
+    }
+  }
+
+  const renderAliveCaptions = async (artifactId: string, settings: AliveSettings, orientation: AliveOrientation) => {
+    await saveAliveCaptions(artifactId, settings)
+    await call('render_video', {
+      book_id: bookId,
+      asset_id: artifactId,
+      orientation,
+      subtitles_enabled: true,
+      highlight_style: 'alive',
+    })
+  }
+
   const completeVideoDownload = async (
     result: unknown,
     sourceUrl: string,
@@ -10935,6 +10997,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ).catch(() => undefined)
         return { ok: true, message: `Music-video editor opened for ${audioAsset.label}` }
       }
+      if (command.uiAction === 'open_alive_captions') {
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        const resolved = resolveAliveCommandAsset(asString(parsed.asset_ref), assets)
+        if (!resolved.ok) return resolved
+        const video = resolved.asset
+        const sessionKey = uuidv7()
+        const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+          ? document.activeElement
+          : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
+        setMediaFullscreen(null)
+        setTimelinePreview(null)
+        setMusicVideoSession(null)
+        setAliveSession({
+          key: sessionKey,
+          asset: {
+            artifactId: video.artifactId,
+            label: video.label,
+            mediaUrl: video.mediaUrl,
+            width: video.width,
+            height: video.height,
+            fps: video.fps,
+          },
+          returnFocus,
+          state: { status: 'loading' },
+        })
+        void loadAliveCaptions(sessionKey, video.artifactId, false)
+        return { ok: true, message: `Alive captions opened for ${video.label}` }
+      }
       if (command.uiAction === 'speak_preview') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
         const action = resolveSpeakPreviewAction({
@@ -12077,7 +12167,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
-  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
+  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -13259,6 +13349,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               musicVideoSession.audioArtifactId,
               nextSequence ?? sequence,
             )}
+          />
+        </Suspense>
+      )}
+
+      {aliveSession && (
+        <Suspense fallback={<div role="status">Loading alive captions…</div>}>
+          <AliveCaptionsStudio
+            key={aliveSession.key}
+            asset={aliveSession.asset}
+            state={aliveSession.state}
+            returnFocus={aliveSession.returnFocus}
+            onClose={closeAliveCaptions}
+            onSave={(settings) => saveAliveCaptions(aliveSession.asset.artifactId, settings)}
+            onRender={(settings, orientation) => renderAliveCaptions(aliveSession.asset.artifactId, settings, orientation)}
+            onReanalyze={() => loadAliveCaptions(aliveSession.key, aliveSession.asset.artifactId, true)}
           />
         </Suspense>
       )}

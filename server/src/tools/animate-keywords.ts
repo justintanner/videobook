@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { findVideoFile, type Engine } from "videobook-engine";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
+import { isSubtitleStyle } from "../remotion/subtitles/styles.js";
 import type { AnalyzeKeywordPlacementResult } from "../jobs/analyze-keyword-placement.js";
 import {
   isKeywordPlacementCacheValid,
@@ -31,7 +32,6 @@ import type {
   KeywordGraphic,
   Orientation,
   SubtitlePosition,
-  SubtitleStyle,
 } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { RENDER_ORIENTATIONS } from "./reconcile-project-work.js";
@@ -60,10 +60,6 @@ async function persistSettings(
 
 function isSubtitlePosition(value: unknown): value is SubtitlePosition {
   return value === "top" || value === "middle" || value === "bottom";
-}
-
-function isSubtitleStyle(value: unknown): value is SubtitleStyle {
-  return value === "impact" || value === "highlight";
 }
 
 function isFontSize(value: unknown): value is FontSizePreset {

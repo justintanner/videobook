@@ -5,7 +5,7 @@ import { logger } from "../logger.js";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
-import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
+import type { Orientation, OsgPosition, SubtitleStyle } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 import { isOsgPosition, isOsgSize, resolveOsgImagePath } from "../osg-assets.js";
@@ -41,9 +41,9 @@ export function renderVideoDef(engine: Engine): ToolDef {
         .optional()
         .describe("Subtitle language: 'original' or a two-letter ISO 639-1 code (e.g. 'en'). Lazily translates and caches elevenlabs.<lang>.json (default: original)"),
       highlight_style: z
-        .enum(["impact", "highlight"])
+        .enum(["impact", "highlight", "alive"])
         .optional()
-        .describe("Subtitle animation style (default: impact)"),
+        .describe("Subtitle animation style (default: impact). alive renders stacked, frame-aware, audio-timed captions configured by set_alive_captions"),
       position: z
         .enum(["top", "middle", "bottom"])
         .optional()
@@ -199,7 +199,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
         orientation?: Orientation;
         subtitles_enabled?: boolean;
         subtitle_language?: string;
-        highlight_style?: "impact" | "highlight";
+        highlight_style?: SubtitleStyle;
         position?: "top" | "middle" | "bottom";
         font_size?: "small" | "medium" | "large";
         text_color?: string;

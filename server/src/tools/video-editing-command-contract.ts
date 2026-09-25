@@ -255,6 +255,8 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "invert_image", exposure: "direct", command: "/invert", purpose: "Invert image colors" },
   { tool: "set_video_overlay", exposure: "ui", command: "/overlay", purpose: "Configure an on-screen graphic" },
   { tool: "animate_keywords", exposure: "direct", command: "/keywords", purpose: "Configure transcript-timed keyword graphics" },
+  { tool: "alive_captions", exposure: "ui", command: "/alive", purpose: "Analyze a video for stacked, frame-aware alive captions" },
+  { tool: "set_alive_captions", exposure: "ui", command: "/alive", purpose: "Save alive caption style, motion and placement" },
   { tool: "detect_scenes", exposure: "direct", command: "/detect-scenes", purpose: "Detect visual scene boundaries" },
   { tool: "suggest_cuts", exposure: "direct", command: "/suggest-cuts", purpose: "Suggest removable video ranges" },
   { tool: "analyze_jokes", exposure: "direct", command: "/analyze-jokes", purpose: "Analyze edit points around jokes" },

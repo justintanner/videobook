@@ -19,7 +19,7 @@ export interface Chunk {
 }
 
 export type Orientation = "landscape" | "portrait" | "square";
-export type SubtitleStyle = "impact" | "highlight";
+export type SubtitleStyle = "impact" | "highlight" | "alive";
 export type SubtitlePosition = "top" | "middle" | "bottom";
 export type FontSizePreset = "small" | "medium" | "large";
 export type OsgPosition =
@@ -45,6 +45,8 @@ export interface KeywordGraphic {
 }
 
 
+
+import type { AliveCue, AliveSettings } from "./alive-types.js";
 
 export interface RenderInputProps extends Record<string, unknown> {
   videoSrc: string;
@@ -78,4 +80,6 @@ export interface RenderInputProps extends Record<string, unknown> {
   strokeColor: string;
   shadowBlur: number;
   shadowOpacity: number;
+  aliveCues: AliveCue[];
+  aliveSettings: AliveSettings | null;
 }

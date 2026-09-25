@@ -56,6 +56,7 @@ import {
   readKeywordPlacementAnalysis,
 } from "../keyword-placement-cache.js";
 import { resolveKeywordPlacements } from "../remotion/keyword-placement.js";
+import { aliveRenderTrack, type AliveRenderTrack } from "../alive-captions/track.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
 const CLAIM_WAIT_MS = 30_000;
@@ -284,9 +285,17 @@ export function registerRenderProjectJob(engine: Engine): void {
             }
 
             let chunks: Chunk[] = [];
-            if (subtitlesEnabled && allSegments) {
+            if (subtitlesEnabled && allSegments && highlightStyle !== "alive") {
               chunks = chunkSegments(allSegments, orientation, highlightStyle);
             }
+            const alive: AliveRenderTrack | null = subtitlesEnabled && highlightStyle === "alive" && rawTranscript
+              ? await aliveRenderTrack(engine, asset.assetId, {
+                  sourceWidth: probe.width,
+                  sourceHeight: probe.height,
+                  targetWidth,
+                  targetHeight,
+                }, ctx.signal)
+              : null;
             const keywordSegments = rawTranscript ? parseKeywordTranscript(rawTranscript) : [];
             const selectedKeywordGraphics = keywordGraphicsEnabled && rawTranscript
               ? keywordGraphicsKeywords?.length
@@ -378,6 +387,8 @@ export function registerRenderProjectJob(engine: Engine): void {
                 strokeColor,
                 shadowBlur,
                 shadowOpacity,
+                aliveCues: alive?.cues ?? [],
+                aliveSettings: alive?.settings ?? null,
               };
 
               const outputPath = join(asset.assetDir, outputFilename);
@@ -471,6 +482,7 @@ export function registerRenderProjectJob(engine: Engine): void {
                 strokeColor,
                 shadowBlur,
                 shadowOpacity,
+                aliveSettings: alive?.settings ?? null,
                 osgImagePath: osgImagePath ?? undefined,
                 osgAssetId: osgAssetId ?? undefined,
                 osgPosition,

@@ -38,6 +38,8 @@ const defaultProps: RenderInputProps = {
   strokeColor: "#000000",
   shadowBlur: 6,
   shadowOpacity: 60,
+  aliveCues: [],
+  aliveSettings: null,
 };
 
 const defaultQrOutroProps: QrOutroInputProps = {

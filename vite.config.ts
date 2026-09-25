@@ -21,6 +21,9 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/MusicVideoEditor')) {
     return 'music-video'
   }
+  if (id.includes('/src/components/videobook/AliveCaptions') || id.includes('/src/remotion/AliveCaptionsPreview')) {
+    return 'alive-captions'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }

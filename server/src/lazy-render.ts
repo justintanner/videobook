@@ -1,10 +1,10 @@
+import { isSubtitleStyle } from "./remotion/subtitles/styles.js";
 import type { Artifact, Engine } from "videobook-engine";
 import type {
   BackgroundMode,
   FontSizePreset,
   Orientation,
   SubtitlePosition,
-  SubtitleStyle,
 } from "./remotion/subtitles/types.js";
 import { isOsgPosition, isOsgSize } from "./osg-assets.js";
 import { queue } from "./queue.js";
@@ -36,10 +36,6 @@ type LazyRenderResult = {
 type LazyAnalysisResult = {
   jobId: string;
 };
-
-function isSubtitleStyle(value: unknown): value is SubtitleStyle {
-  return value === "impact" || value === "highlight";
-}
 
 function isSubtitlePosition(value: unknown): value is SubtitlePosition {
   return value === "top" || value === "middle" || value === "bottom";

@@ -218,7 +218,7 @@ export function subtitleBand(
   fontSize: FontSizePreset,
 ): NormalizedRect {
   const y = getYPosition(position, orientation);
-  const fontPx = style === "impact"
+  const fontPx = style !== "highlight"
     ? getImpactFontSize(fontSize, orientation)
     : getHighlightFontSize(fontSize, orientation);
   const height = Math.max(targetHeight * 0.1, fontPx * 1.9) / targetHeight;

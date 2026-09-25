@@ -1,3 +1,4 @@
+import { isSubtitleStyle } from "../remotion/subtitles/styles.js";
 import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { getApiKey } from "../api-key.js";
@@ -20,7 +21,6 @@ import type {
   Orientation,
   OsgPosition,
   SubtitlePosition,
-  SubtitleStyle,
 } from "../remotion/subtitles/types.js";
 import { RENDER_ORIENTATIONS, readStoredRenderDefaults } from "../tools/reconcile-project-work.js";
 import { detectOccupiedRegions } from "../vision-regions.js";
@@ -54,10 +54,6 @@ Return one entry for every cue_id. Coordinates use a normalized image scale from
 
 function isSubtitlePosition(value: unknown): value is SubtitlePosition {
   return value === "top" || value === "middle" || value === "bottom";
-}
-
-function isSubtitleStyle(value: unknown): value is SubtitleStyle {
-  return value === "impact" || value === "highlight";
 }
 
 function isFontSizePreset(value: unknown): value is FontSizePreset {

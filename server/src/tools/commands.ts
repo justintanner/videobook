@@ -325,6 +325,21 @@ const CANONICAL_COMMANDS: Command[] = [
     exposure: "ui",
   },
   {
+    command: "/alive",
+    description: "Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals",
+    example: "/alive @c4",
+    category: "action",
+    icon: "captions",
+    size: "lg",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_ref", type: "string", required: true, description: "Video artifact or notebook address with a timed transcript" },
+    ],
+    uiAction: "open_alive_captions",
+    exposure: "ui",
+  },
+  {
     command: "/notebooks",
     description: "List first-class notebooks in the current project",
     example: "/notebooks",
