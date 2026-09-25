@@ -329,6 +329,7 @@ import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
+import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import {
@@ -10617,18 +10618,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await groupImageCells(anchor)
       }
       if (commandToken === '/track-add') {
-        const [kindValue, ...nameParts] = restParts
-        if (
-          kindValue !== 'video'
-          && kindValue !== 'audio'
-          && kindValue !== 'caption'
-        ) {
-          return {
-            ok: false,
-            message: 'Usage: /track-add video|audio|caption [name]',
-          }
-        }
-        return await addSequenceTrack(kindValue, nameParts.join(' '))
+        const parsedTrack = parseTrackAddCommand(restParts)
+        if (!parsedTrack.ok) return parsedTrack
+        return await addSequenceTrack(parsedTrack.kind, parsedTrack.name)
       }
       if (commandToken === '/track-remove') {
         const track = sequenceTrackReference(sequence, restParts[0])

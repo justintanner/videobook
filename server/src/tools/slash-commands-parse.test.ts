@@ -11,6 +11,7 @@ import {
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 import { executeUiAction } from "../../../src/lib/ui-actions.js";
 import { parseExportSequenceCommand } from "../../../src/videobook/export-sequence-command.js";
+import { parseTrackAddCommand } from "../../../src/videobook/track-add-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
 import { normalizePanelSide, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
 import { getCanonicalCommands } from "./commands.js";
@@ -471,6 +472,20 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(resolvePlaySlot("s02", null)).toEqual({
         ok: false,
         message: "Open a project with a sequence first.",
+      });
+    });
+  });
+
+  describe("/track-add", () => {
+    it("accepts a capitalized track kind and keeps the display name", () => {
+      expect(parseTrackAddCommand(["Audio", "Score", "Bed"])).toEqual({
+        ok: true,
+        kind: "audio",
+        name: "Score Bed",
+      });
+      expect(parseTrackAddCommand(["nope"])).toEqual({
+        ok: false,
+        message: "Usage: /track-add video|audio|caption [name]",
       });
     });
   });
