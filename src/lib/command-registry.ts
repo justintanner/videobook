@@ -86,6 +86,15 @@ interface KeywordCommandArgs {
 
 const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
 
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return trimmed;
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if ((first === '"' || first === "'") && first === last) return trimmed.slice(1, -1).trim();
+  return trimmed;
+}
+
 // A user-typed media reference is either a grid address (`@a1`) or a bare
 // artifact id. Media kind is not encoded in the token and cannot be resolved
 // client-side, so parsing only checks the token shape; the MCP tool looks the
@@ -607,7 +616,7 @@ export const COMMAND_ADAPTERS = {
     delete result.destination;
     if (NOTEBOOK_DESTINATION_PATTERN.test(destinationValue)) {
       result.destination = stripAt(destinationValue).toLowerCase();
-      if (nameValue) result.new_name = nameValue;
+      if (nameValue) result.new_name = stripWrappingQuotes(nameValue);
       return result;
     }
     const tokens = [...nameValue.split(/\s+/), destinationValue].filter(Boolean);
@@ -618,10 +627,10 @@ export const COMMAND_ADAPTERS = {
     if (destinations.length === 1) {
       result.destination = stripAt(destinations[0]!).toLowerCase();
       const newName = tokens.filter((token) => token !== destinations[0]).join(' ');
-      if (newName) result.new_name = newName;
+      if (newName) result.new_name = stripWrappingQuotes(newName);
       return result;
     }
-    if (tokens.length > 0) result.new_name = tokens.join(' ');
+    if (tokens.length > 0) result.new_name = stripWrappingQuotes(tokens.join(' '));
     return result;
   },
   timewarp: (args) => {
@@ -778,7 +787,7 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
       if (param.name === 'new_name' && remaining.length > 1 && remaining[0] === 'to') {
         remaining = remaining.slice(1);
       }
-      args[param.name] = stripAt(remaining.join(' '));
+      args[param.name] = stripWrappingQuotes(stripAt(remaining.join(' ')));
       if (param.consumeRest) break;
     } else {
       args[param.name] = parseTokenValue(tokens[i], param);

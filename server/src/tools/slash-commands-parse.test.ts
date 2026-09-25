@@ -300,6 +300,22 @@ describe("slash command parse/normalize/dispatch", () => {
       const args = simulateParse("/rewrite", "make it more cinematic");
       expect(args.prompt).toBe("make it more cinematic");
     });
+
+    it("drops wrapping quotes from the documented /rewrite example", () => {
+      expect(simulateParse("/rewrite", "\"make it more cinematic\"")).toEqual({
+        prompt: "make it more cinematic",
+      });
+      expect(simulateParse("/say", "EXAVITQu4vr4xnSDxMaL \"to be or not to be\"")).toEqual({
+        voice_id: "EXAVITQu4vr4xnSDxMaL",
+        text: "to be or not to be",
+      });
+      const duplicate = findCommand("/duplicate");
+      expect(adaptCommandArgs(duplicate.mcpTool?.adapter, parseCommandArgs("@a1 \"To The Moon\" @b1", duplicate.params))).toEqual({
+        asset_id: "a1",
+        destination: "b1",
+        new_name: "To The Moon",
+      });
+    });
   });
 
   // -----------------------------------------------------------------------
