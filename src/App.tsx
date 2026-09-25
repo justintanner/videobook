@@ -328,6 +328,7 @@ import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
+import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import {
@@ -10638,38 +10639,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (commandToken === '/export-sequence' || (commandToken === '/export' && restParts.some((value) => value === '@sequence-main' || value.startsWith('--') || value === `@${sequence?.sequenceId}`))) {
         if (!sequence) return { ok: false, message: 'Load the primary sequence first.' }
-        const aspectIndex = restParts.indexOf('--aspect')
-        const captionsIndex = restParts.indexOf('--captions')
-        const aspect = aspectIndex >= 0 ? restParts[aspectIndex + 1] : '16:9'
-        const captionValue = captionsIndex >= 0 ? restParts[captionsIndex + 1] : 'burned'
-        const orientation = aspect === '9:16'
-          ? 'portrait'
-          : aspect === '1:1'
-            ? 'square'
-            : aspect === '16:9'
-              ? 'landscape'
-              : null
-        const captions = captionValue === 'burned'
-          ? 'burn-in'
-          : captionValue === 'sidecar' || captionValue === 'omit'
-            ? captionValue
-            : null
-        const positional = restParts.filter((value, index) =>
-          value !== '--aspect'
-          && value !== '--captions'
-          && restParts[index - 1] !== '--aspect'
-          && restParts[index - 1] !== '--captions')
-        if (
-          !orientation
-          || !captions
-          || positional.some((value) =>
-            value !== '@sequence-main' && value !== `@${sequence.sequenceId}`)
-        ) {
-          return {
-            ok: false,
-            message: 'Usage: /export-sequence --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit',
-          }
-        }
+        const parsedExport = parseExportSequenceCommand(restParts, sequence.sequenceId)
+        if (!parsedExport.ok) return parsedExport
+        const { orientation, captions } = parsedExport
         const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }))
         if (!currentSequence) return { ok: false, message: 'Load the primary sequence first.' }
         setSequence(currentSequence)

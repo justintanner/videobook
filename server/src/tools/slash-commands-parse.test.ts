@@ -10,6 +10,7 @@ import {
 } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 import { executeUiAction } from "../../../src/lib/ui-actions.js";
+import { parseExportSequenceCommand } from "../../../src/videobook/export-sequence-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
 import { normalizePanelSide, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
 import { getCanonicalCommands } from "./commands.js";
@@ -470,6 +471,25 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(resolvePlaySlot("s02", null)).toEqual({
         ok: false,
         message: "Open a project with a sequence first.",
+      });
+    });
+  });
+
+  describe("/export-sequence flags", () => {
+    it("accepts capitalized caption and aspect flags", () => {
+      expect(parseExportSequenceCommand(["--captions", "Burned"], "seq-1")).toEqual({
+        ok: true,
+        orientation: "landscape",
+        captions: "burn-in",
+      });
+      expect(parseExportSequenceCommand(["--Aspect", "9:16", "--Captions", "Sidecar", "@sequence-main"], "seq-1")).toEqual({
+        ok: true,
+        orientation: "portrait",
+        captions: "sidecar",
+      });
+      expect(parseExportSequenceCommand(["--captions", "nope"], "seq-1")).toEqual({
+        ok: false,
+        message: "Usage: /export-sequence --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit",
       });
     });
   });
