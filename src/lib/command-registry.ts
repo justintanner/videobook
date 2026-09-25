@@ -737,14 +737,18 @@ function parseNumberToken(token: string, paramName: string): string | number {
 
 function parseBooleanToken(token: string): string | boolean {
   const stripped = stripAt(token).toLowerCase();
-  if (['true', '1', 'yes', 'y', 'on', 'full', 'fix'].includes(stripped)) return true;
+  if (['true', '1', 'yes', 'y', 'on'].includes(stripped)) return true;
   if (['false', '0', 'no', 'n', 'off'].includes(stripped)) return false;
   return stripAt(token);
 }
 
 function parseTokenValue(token: string, param: CommandParam): CommandArgValue {
   if (param.type === 'number') return parseNumberToken(token, param.name);
-  if (param.type === 'boolean') return parseBooleanToken(token);
+  if (param.type === 'boolean') {
+    const parsed = parseBooleanToken(token);
+    if (typeof parsed !== 'boolean') throw new Error(`${param.name} must be on or off`);
+    return parsed;
+  }
   return stripAt(token);
 }
 

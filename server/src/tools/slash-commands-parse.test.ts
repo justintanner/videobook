@@ -358,6 +358,19 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(simulateParse("/doctor", "fix @a1")).toEqual({ asset_id: "a1", fix: true });
     });
 
+    it("does not treat full or fix as on for a different command", () => {
+      expect(simulateParse("/download", "https://example.com/v full")).toEqual({
+        url: "https://example.com/v",
+        full: true,
+      });
+      expect(simulateParse("/clean-audio", "@a1 on")).toEqual({
+        asset_id: "a1",
+        add_light_music: true,
+      });
+      expect(() => simulateParse("/doctor", "@a1 full")).toThrow("fix must be on or off");
+      expect(() => simulateParse("/clean-audio", "@a1 fix")).toThrow("add_light_music must be on or off");
+    });
+
     it("dispatches doctor via mcpTool with book_id auto-injected", () => {
       const cmd = findCommand("/doctor");
       expect(cmd.mcpTool?.tool).toBe("doctor");
