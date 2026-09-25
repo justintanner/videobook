@@ -606,6 +606,10 @@ describe("slash command parse/normalize/dispatch", () => {
         .toThrow("Usage: /audio-set @clip volume|fade-in|fade-out <value>");
       expect(workspaceUiFormValues("settings_audio", { field: "Volume", value: "80" }, 30).audio_volume).toBe(80);
       expect(workspaceUiFormValues("settings_subs", { field: "FontSize", value: "Large" }, 30).font_size).toBe("large");
+      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "Portrait" }, 30).ratio).toBe("9:16");
+      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "square" }, 30).ratio).toBe("1:1");
+      expect(() => workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "4:3" }, 30))
+        .toThrow("Usage: /crop @asset [16:9|9:16|1:1]");
       expect(normalizePanelSide("Left")).toBe("left");
       expect(normalizePanelSide(null)).toBe("both");
       expect(() => normalizePanelSide("middle")).toThrow("Choose left, right or both.");

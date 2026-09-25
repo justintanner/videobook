@@ -66,6 +66,9 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
   const result = { ...values }
   if (action === 'open_osg' && values.image) result.osg_asset_id = values.image
   if (action === 'open_post_composer' && values.asset_ref) result.asset_id = values.asset_ref
+  if (action === 'open_crop' && values.ratio !== undefined && values.ratio !== null && String(values.ratio).trim() !== '') {
+    result.ratio = cropRatio(values.ratio)
+  }
   if (action === 'sidebar_sort') result.sort = sortOrder(values.order)
   if (action === 'viewer_toggle_info') result.name = 'original'
   if (action === 'settings_bg') {
@@ -135,6 +138,14 @@ function backgroundMode(value: unknown): 'blur' | 'black' | null {
   const mode = String(value).trim().toLowerCase()
   if (mode === 'blur' || mode === 'black') return mode
   throw new Error(`Usage: /bg ${BACKGROUND_MODES.join('|')}`)
+}
+
+function cropRatio(value: unknown): '16:9' | '9:16' | '1:1' {
+  const token = String(value).trim().toLowerCase()
+  if (token === '16:9' || token === 'landscape') return '16:9'
+  if (token === '9:16' || token === 'portrait') return '9:16'
+  if (token === '1:1' || token === 'square') return '1:1'
+  throw new Error('Usage: /crop @asset [16:9|9:16|1:1]')
 }
 
 function timelineAudioField(field: string): string {
