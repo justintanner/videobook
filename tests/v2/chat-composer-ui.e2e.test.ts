@@ -1623,12 +1623,20 @@ describe('chat composer browser flow', () => {
     expect(await fit.getAttribute('aria-pressed')).toBe('true')
   }, 60_000)
 
-  it('preserves selection, zoom, scroll, and drafts while external cells update', async () => {
+  it('keeps refreshing after a same-slot drag without losing selection, zoom, scroll, or drafts', async () => {
     const page = await openApp()
     const selected = notebookCellNode(page, videoCellId)
     await selected.click()
     await page.getByLabel('Fit grid to width', { exact: true }).click()
     await page.getByLabel('Zoom in', { exact: true }).click()
+    const dragHandle = await selected.locator('.cell-node-type-label').boundingBox()
+    if (!dragHandle) throw new Error('Could not measure the video cell drag handle')
+    const dragX = dragHandle.x + dragHandle.width / 2
+    const dragY = dragHandle.y + dragHandle.height / 2
+    await page.mouse.move(dragX, dragY)
+    await page.mouse.down()
+    await page.mouse.move(dragX + 12, dragY + 12, { steps: 4 })
+    await page.mouse.up()
     const input = page.getByLabel('Videobook command input')
     const draft = 'Keep this draft while other clients edit the notebook'
     await input.fill(draft)

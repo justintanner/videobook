@@ -12806,8 +12806,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         setPreviewSlot(notebookGridSlot(node.position))
                       }}
                       onNodeDragStop={(_event, node, draggedNodes) => {
-                        const nextNodes = resolveNotebookGridGroupMove(
+                        const settledNodes = applyNodeChanges<CanvasNode>(
+                          draggedNodes.map(({ id }) => ({
+                            id,
+                            type: 'position',
+                            dragging: false,
+                          })),
                           nodes,
+                        )
+                        const nextNodes = resolveNotebookGridGroupMove(
+                          settledNodes,
                           node.id,
                           draggedNodes.map((draggedNode) => draggedNode.id),
                           notebookGridSlot(node.position),
