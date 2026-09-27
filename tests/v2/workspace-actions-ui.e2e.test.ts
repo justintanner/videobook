@@ -37,6 +37,7 @@ describe('workspace action launcher with real endpoints', () => {
     if (await page.locator('.command-suggestions').isVisible()) await input.press('Escape')
     await input.press('Enter')
     await expect.poll(() => input.isEnabled(), { timeout: 15_000 }).toBe(true)
+    await expect.poll(() => page.locator('.command-send .busy-indicator').count(), { timeout: 15_000 }).toBe(0)
   }
 
   async function call(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
@@ -574,7 +575,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(browserErrors).toEqual([])
   })
 
-  it('keeps a preview accessible while opening and dismissing its media actions', async () => {
+  it('captures a preview target and closes the preview when sending a media action', async () => {
     await openActions('/open')
     await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(imageId)
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
@@ -588,16 +589,15 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByLabel('Videobook command input', { exact: true }).fill(action.command)
     await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
+    await preview.waitFor({ state: 'detached' })
     await expect.poll(() => page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
-    await expect.poll(() => preview.evaluate(element => element.contains(document.activeElement))).toBe(true)
-    await preview.getByRole('button', { name: 'Close preview', exact: true }).click()
     await expect.poll(() => page.locator('dialog[open]').count()).toBe(0)
     await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
     expect(browserErrors).toEqual([])
   })
 
-  it('keeps chat and Escape usable after dismissing a review message', async () => {
+  it('keeps chat and Escape usable alongside a review reply', async () => {
     await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: videoId }] })
     await page.reload()
     const sequence = record(await call('get_primary_sequence'))!
@@ -605,7 +605,7 @@ describe('workspace action launcher with real endpoints', () => {
     await sendCommand(`/clip-reverse @${String(clip.clipId)}`)
     const sheet = page.getByLabel('Command plan review', { exact: true })
     await sheet.waitFor()
-    await sheet.getByLabel('Dismiss message', { exact: true }).click()
+    await page.locator('.chat-turn[data-status="review"] .chat-bubble-assistant').waitFor()
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.evaluate(element => element === document.activeElement)).toBe(true)
     // Out of the input, Tab walks the composer's own row to the send control.

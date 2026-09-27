@@ -88,6 +88,7 @@ import {
   hideComposerDock,
   pauseComposerDockMedia,
 } from '@/videobook/composer-dock'
+import { chatTurnActive, type ChatExecution, type ChatTurn } from '@/videobook/chat-turns'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -110,11 +111,17 @@ export interface ComposerActionDiscovery {
 }
 
 export interface ComposerExecuteContext {
+  chat?: ChatExecution
   speakVoiceId?: string
   action?: { id: string; values?: Record<string, unknown> }
 }
 
 interface CommandComposerProps {
+  chatTurns?: readonly ChatTurn[]
+  previewTurnId?: number | null
+  connected?: boolean
+  editingDisabled?: boolean
+  onBeginTurn?: (input: string) => ChatExecution
   children?: ReactNode
   commands: ServerCommand[]
   references: ReadonlyMap<string, ComposerReference>
@@ -131,7 +138,7 @@ interface CommandComposerProps {
   contextualContent?: ReactNode
   contextualHasHeader?: boolean
   bookId: string
-  callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
+  callTool: (tool: string, args: Record<string, unknown>, options?: { chat?: ChatExecution }) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
   disabled: boolean
   hidden?: boolean
@@ -189,6 +196,11 @@ type Suggestion = CommandSuggestion | {
 const COMMAND_HISTORY_PAGE_SIZE = 250
 
 export function CommandComposer({
+  chatTurns = [],
+  previewTurnId = null,
+  connected = true,
+  editingDisabled,
+  onBeginTurn,
   children,
   commands,
   references,
@@ -245,6 +257,9 @@ export function CommandComposer({
   )
   const previewPlayer = useVoicePreviewPlayer()
   const [sending, setSending] = useState(false)
+  const draftVersionRef = useRef(0)
+  const sendingRef = useRef(false)
+  const [activityDetailsOpen, setActivityDetailsOpen] = useState(false)
   const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
   const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
   const [voiceReviewDraft, setVoiceReviewDraft] = useState(false)
@@ -302,8 +317,8 @@ export function CommandComposer({
   const [historyOpen, setHistoryOpen] = useState(true)
   const [voiceStartHistoryEpoch, setVoiceStartHistoryEpoch] = useState(0)
   const historyRows = useMemo(
-    () => composerHistory(voice?.captions ?? [], mcpCalls),
-    [mcpCalls, voice?.captions],
+    () => composerHistory(voice?.captions ?? [], mcpCalls, chatTurns),
+    [chatTurns, mcpCalls, voice?.captions],
   )
   const historyEpoch = composerHistoryEpoch(historyRows)
   const historyGeneration = composerHistoryGeneration(historyRows)
@@ -321,7 +336,7 @@ export function CommandComposer({
   const historyHeld = historyAutoCloseHeld({
     runningCalls: mcpCallsRunning(mcpCalls),
     voicePhase: voice?.phase,
-  }) || mcpCalls.calls.some((call) => call.expanded)
+  }) || mcpCalls.calls.some((call) => call.expanded) || chatTurns.some(chatTurnActive) || activityDetailsOpen
   const lastHistoryEpochRef = useRef(historyEpoch)
 
   useLayoutEffect(() => {
@@ -357,10 +372,11 @@ export function CommandComposer({
     setPreparedAction(null)
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   } else if (pendingInput !== renderedPendingInput) {
+    const replaceDraft = !input.trim() || input === renderedPendingInput
     setRenderedPendingInput(pendingInput)
     if (voice?.pendingReview || voiceReviewDraft) {
       setVoiceReviewDraft(pendingInput !== undefined)
-    } else setInput(pendingInput ?? '')
+    } else if (replaceDraft) setInput(pendingInput ?? '')
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   }
 
@@ -579,7 +595,7 @@ export function CommandComposer({
     if (speakPreviewOpen) ensureVoiceCatalog()
   }
 
-  const recordHistory = async (message: string) => {
+  const recordHistory = async (message: string, chat?: ChatExecution) => {
     historyRef.current = [...historyRef.current, message]
     historyCursorRef.current = -1
     if (!bookId) return
@@ -588,19 +604,29 @@ export function CommandComposer({
       surface: 'chat',
       prompt: message,
       params: { model: selectedModel },
-    }).catch(() => undefined)
+    }, { chat }).catch(() => undefined)
   }
 
   const execute = async (reviewCommand?: string) => {
     const preserveDraft = reviewCommand !== undefined
     const message = (reviewCommand ?? input).trim()
-    if (!message || sending || inputDisabled || actionDiscovery || composingRef.current) return
+    if (!message || sendingRef.current || inputDisabled || actionDiscovery || composingRef.current) return
     setDockOpen(true)
     if (!preserveDraft) setVoiceReviewDraft(false)
     const chosenAction = preparedAction?.action.command === message.split(/\s/u)[0] ? preparedAction : null
     const executionSession = inputSession
+    const chat = onBeginTurn?.(message)
+    const inScope = () => chat ? chat.isInScope() : inputSessionRef.current === executionSession
+    const draftVersion = draftVersionRef.current
+    const untouchedDraft = () => draftVersionRef.current === draftVersion && inputSessionRef.current === executionSession
+    sendingRef.current = true
     setSending(true)
+    setHistoryOpen(true)
+    setOutcome(null)
+    if (!preserveDraft) setInput('')
+    setDismissed(true)
     onSendingChange?.(true)
+    let settled = false
     let selectInput = false
     const restoreFocus = captureCommandComposerFocus(
       () => inputRef.current?.element() ?? null,
@@ -609,16 +635,14 @@ export function CommandComposer({
     try {
       if (!context || chosenAction) {
         await ensureHistory()
-        if (inputSessionRef.current !== executionSession) return
-        await recordHistory(message)
+        if (!inScope()) return
+        await recordHistory(message, chat)
       }
-      if (inputSessionRef.current !== executionSession) return
-      if (!preserveDraft) setInput('')
-      setDismissed(false)
+      if (!inScope()) return
       const loadedVoiceCatalog = !context && isSpeakCommandPreview(message)
         ? await voiceCatalog?.ensureLoaded()
         : null
-      if (inputSessionRef.current !== executionSession) return
+      if (!inScope()) return
       const voiceId = resolveSpeakVoiceId(
         loadedVoiceCatalog?.voices ?? catalogVoices,
         selectedVoiceId,
@@ -626,14 +650,16 @@ export function CommandComposer({
       const voiceContext = speakExecuteContext(message, voiceId)
       if (voiceContext?.speakVoiceId) persistSpeakVoiceId(voiceContext.speakVoiceId)
       const nextOutcome = await onExecute(message, {
+        chat,
         ...voiceContext,
         ...(chosenAction ? { action: { id: chosenAction.action.id, values: chosenAction.values } } : {}),
       })
-      if (inputSessionRef.current !== executionSession) return
+      settled = true
+      if (!inScope() || (chat && !chat.isCurrent())) return
       setPreparedAction(null)
-      showOutcome(nextOutcome)
+      if (!chat || (!nextOutcome.ok && outcomeSlot === 'sheet')) showOutcome(nextOutcome)
       const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
-      if (inputDecision && !preserveDraft) {
+      if (inputDecision && !preserveDraft && untouchedDraft()) {
         setInput(inputDecision.value)
         setDismissed(!isSpeakCommandPreview(inputDecision.value))
         ensureVoicesForInput(inputDecision.value)
@@ -641,20 +667,25 @@ export function CommandComposer({
       }
       if (nextOutcome.ok) onSuccessfulExecute()
     } catch (error) {
-      if (inputSessionRef.current !== executionSession) return
-      showOutcome({
+      const failure = {
         ok: false,
         message: error instanceof Error ? error.message : String(error),
-      })
-      if (pendingInput !== undefined && !preserveDraft) {
+      }
+      chat?.finish(failure)
+      settled = true
+      if (!inScope()) return
+      if (!chat) showOutcome(failure)
+      if (pendingInput !== undefined && !preserveDraft && untouchedDraft()) {
         setInput(pendingInput)
         setDismissed(true)
         selectInput = true
       }
     } finally {
+      if (!settled) chat?.finish({ ok: true, status: 'cancelled', message: 'Workspace changed before the command was sent.' })
+      sendingRef.current = false
       setSending(false)
       onSendingChange?.(false)
-      if (inputSessionRef.current === executionSession) restoreFocus()
+      if (inScope() && (!chat || chat.isCurrent())) restoreFocus()
     }
   }
 
@@ -858,7 +889,12 @@ export function CommandComposer({
   }
 
   const reviewPriority = composerDockReviewPriority(Boolean(children))
-  const historyVisible = !contextualContent || reviewPriority
+  const latestTurn = chatTurns.at(-1)
+  const currentPreview = latestTurn !== undefined && latestTurn.id === previewTurnId
+  const historyVisible = !contextualContent || reviewPriority || currentPreview
+  const visibleHistoryRows = contextualContent && !reviewPriority && currentPreview
+    ? historyRows.filter(row => row.kind === 'caption' && row.turn?.id === latestTurn.id)
+    : historyRows
   /* The row above the dock body is the dock's own header, so it stands down
      whenever a contextual panel draws one of its own for the close to sit in. */
   const closeOwner = {
@@ -885,7 +921,7 @@ export function CommandComposer({
     hideLabel: COMPOSER_DOCK_HIDE_LABEL,
   }
   const noticeInHeader = composerDockNoticeInHeader({ dockOpen: dockIsOpen, closeInPanel })
-  const noticeLine = !hidden && outcomeSlot === 'composer' && notice ? (
+  const noticeLine = !hidden && outcomeSlot === 'composer' && notice && !chatTurns.some(turn => turn.reply === notice.message) ? (
     <ComposerStatusLine
       message={notice.message}
       tone={notice.tone}
@@ -945,7 +981,9 @@ export function CommandComposer({
 
       {!hidden && historyVisible && (
         <ComposerHistory
-          rows={historyRows}
+          rows={visibleHistoryRows}
+          connected={connected}
+          onDetailsChange={setActivityDetailsOpen}
           phase={voice?.phase}
           voicePresent={Boolean(voice)}
           open={historyOpen && dockIsOpen}
@@ -980,8 +1018,9 @@ export function CommandComposer({
           else {
             const submitter = (event.nativeEvent as SubmitEvent).submitter
             const reviewSubmit = submitter?.getAttribute('form') === COMMAND_COMPOSER_FORM_ID || (!submitter && document.activeElement?.closest('.confirm-sheet'))
-            const reviewingVoice = (voice?.pendingReview || voiceReviewDraft) && pendingInput !== undefined && reviewSubmit
-            void execute(reviewingVoice ? pendingInput : undefined)
+            const reviewing = pendingInput !== undefined && reviewSubmit
+              && !/^\/apply(?:\s|$)/iu.test(input)
+            void execute(reviewing ? pendingInput : undefined)
           }
         }}
       >
@@ -1041,7 +1080,7 @@ export function CommandComposer({
           session={`${inputSession ?? 'chat'}:${actionDiscovery ? `actions-${actionDiscovery.key}` : 'draft'}`}
           sessions={editorSessions}
           references={references}
-          disabled={actionDiscovery ? actionsDisabled : inputDisabled || sending}
+          disabled={actionDiscovery ? actionsDisabled : editingDisabled ?? inputDisabled}
           rich={!actionDiscovery}
           placeholder={actionDiscovery ? 'Search actions by name, operation or alias…' : disabled
             ? connectionLabel : placeholder ?? 'Type a message or /command…'}
@@ -1056,6 +1095,7 @@ export function CommandComposer({
             setSelection(nextSelection)
             setSelectedIndex(0)
             if (actionDiscovery) { setActionQuery(value); return }
+            draftVersionRef.current += 1
             setInput(value)
             setDismissed(false)
             historyCursorRef.current = -1

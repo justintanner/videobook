@@ -18,6 +18,7 @@ export interface McpCallArg {
 
 export interface McpCall {
   readonly id: number
+  readonly turnId?: number
   readonly tool: string
   readonly args: readonly McpCallArg[]
   readonly phase: McpCallPhase
@@ -145,11 +146,13 @@ export function mcpCallState(call: McpCall): string {
 
 export function beginMcpCall(log: McpCallLog, call: {
   id: number
+  turnId?: number
   tool: string
   args: readonly McpCallArg[]
 }): McpCallLog {
   const started: McpCall = {
     id: call.id,
+    ...(call.turnId === undefined ? {} : { turnId: call.turnId }),
     tool: call.tool,
     args: call.args,
     phase: 'running',

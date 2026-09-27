@@ -195,17 +195,15 @@ describe('extract audio composer flow', () => {
   }
 
   async function waitForComposerResult(target: Page, text: string): Promise<void> {
-    await target.locator('.command-result-ok', { hasText: text })
+    await target.locator('.chat-bubble-assistant, .command-result-ok', { hasText: text }).last()
       .waitFor({ state: 'visible', timeout: 10_000 })
   }
 
-  // Composer results linger for a few seconds; wait them out so the second
-  // command's feedback cannot be satisfied by the first command's leftovers.
   async function waitForComposerToClear(target: Page): Promise<void> {
     await expect.poll(
-      async () => await target.locator('.command-result').count(),
+      async () => await target.locator('.chat-turn').last().getAttribute('data-status'),
       { timeout: 20_000, interval: 200 },
-    ).toBe(0)
+    ).toBe('completed')
   }
 
   it('extracts audio from the composer, then re-runs the same cell on repeat', async () => {

@@ -4,6 +4,7 @@
 }
 
 .command-line-shell > .composer-mode-switch { grid-area: mode; }
+.command-line-shell > .command-suggestions { z-index: 150; }
 
 .command-actions-controls {
   grid-area: actions;

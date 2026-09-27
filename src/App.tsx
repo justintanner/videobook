@@ -1,3 +1,5 @@
+import { presentChat, reviewChat, type ChatExecution } from '@/videobook/chat-turns'
+import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
   createContext,
   lazy,
@@ -3314,7 +3316,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
   const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
   const [previewComposerTarget, setPreviewComposerTarget] = useState<HTMLDivElement | null>(null)
-  const [workspacePreview, setWorkspacePreview] = useState<{ media?: WorkspaceMediaPreview; initialFrame?: number; opener: HTMLElement | null } | null>(null)
+  const [workspacePreview, setWorkspacePreview] = useState<{ media?: WorkspaceMediaPreview; initialFrame?: number; turnId?: number; opener: HTMLElement | null } | null>(null)
   const actionUploadRef = useRef<HTMLInputElement>(null)
   const [chatModelCatalog, setChatModelCatalog] = useState<ChatModelCatalog>(
     () => initialWorkspace?.chatModelCatalog ?? fallbackChatModelCatalog,
@@ -3430,6 +3432,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const voiceTypedTurnRef = useRef<((input: string, message: string) => void) | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [busy, setBusy] = useState(false)
+  const { turns: chatTurns, begin: beginChatTurn, observe: observeChat, cancelReview: cancelChatReview, claimVoice: claimVoiceTurn } = useChatTurns(bookId, notebook?.id ?? null)
+  const voiceChatRef = useRef<ChatExecution | undefined>(undefined)
+  const [previewTurnId, setPreviewTurnId] = useState<number | null>(null)
   const [mcpCalls, setMcpCalls] = useState<McpCallLog>(emptyMcpCallLog)
   const [mcpFlash, setMcpFlash] = useState<McpFlash>(null)
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
@@ -3467,7 +3472,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const callRef = useRef<(
     tool: string,
     args: Record<string, unknown>,
-    options?: { background?: boolean },
+    options?: { background?: boolean; chat?: ChatExecution },
   ) => Promise<unknown>>(async () => {
     throw new Error('MCP call is not ready')
   })
@@ -3695,21 +3700,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const call = useCallback(async (
     tool: string,
     args: Record<string, unknown>,
-    options?: { background?: boolean },
+    options?: { background?: boolean; chat?: ChatExecution },
   ) => {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
+    if (options?.chat && !options.chat.isInScope()) throw new Error('Workspace changed. Repeat the command in the current workspace.')
     if (options?.background || !shouldNotifyMcpActivity(tool)) {
-      return parseResult(await mcp.callTool(tool, args))
+      const value = parseResult(await mcp.callTool(tool, args))
+      options?.chat?.accept(tool, args, value)
+      return value
     }
     const sequence = nextHistorySequence()
     const startedAt = performance.now()
     activeMcpCallsRef.current.set(sequence, { tool, startedAt })
-    setMcpCalls((log) => beginMcpCall(log, { id: sequence, tool, args: mcpCallArgs(args) }))
+    setMcpCalls((log) => beginMcpCall(log, { id: sequence, turnId: options?.chat?.visible === false ? undefined : options?.chat?.id, tool, args: mcpCallArgs(args) }))
     let phase: Extract<McpCallPhase, 'done' | 'failed'> = 'done'
     let detail = ''
     try {
       const value = parseResult(await mcp.callTool(tool, args))
       detail = mcpResultSummary(value)
+      options?.chat?.accept(tool, args, value)
       return value
     } catch (error) {
       phase = 'failed'
@@ -3802,6 +3811,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   // matters for elapsed-time display on the jobs screen, so it advances only
   // when the list changes or that screen is watching a live job.
   const applyJobsSnapshot = useCallback((nextJobs: JobRecord[]) => {
+    observeChat(watchScopeRef.current.bookId ?? '', nextJobs)
     const changed = !jsonEqual(jobsRef.current, nextJobs)
     if (changed) {
       jobsRef.current = nextJobs
@@ -3810,7 +3820,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const ticking = screenRef.current === 'jobs'
       && nextJobs.some((job) => activeJobStates.has(job.state))
     if (changed || ticking) setJobSnapshotAt(Date.now())
-  }, [])
+  }, [observeChat])
 
   const setMediaSlotOperation = useCallback((
     cellId: string,
@@ -3867,6 +3877,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const createGenerationPlan = useCallback(async (
     cellId: string,
     sourceSurface: 'ui' | 'slash' | 'chat',
+    chat?: ChatExecution,
   ): Promise<CommandPlan> => {
     if (!bookId || !notebook) {
       throw new Error('Load a notebook first.')
@@ -3878,17 +3889,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       source_surface: sourceSurface,
       actor: 'videobook-user',
       timeline_start_frame: 0,
-    }))
+    }, { chat }))
   }, [bookId, call, notebook])
 
   const prepareGenerationPlan = useCallback(async (
     cellId: string,
     sourceSurface: 'ui' | 'slash' | 'chat',
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
-    const plan = await createGenerationPlan(cellId, sourceSurface)
-    setPendingChatAction(null)
-    setPendingCommandPlan({ plan, previews: {} })
-    focusCommandComposer()
+    const plan = await createGenerationPlan(cellId, sourceSurface, chat)
+    reviewChat(chat, false, () => setPendingChatAction(null))
+    reviewChat(chat, true, () => setPendingCommandPlan({ plan, previews: {} }))
+    presentChat(chat, () => focusCommandComposer())
     return applyReadyOutcome('Generation plan ready for review')
   }, [createGenerationPlan, focusCommandComposer])
 
@@ -3913,7 +3925,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSelectedCellIds(next)
   }, [])
 
-  const selectCanvasCell = useCallback((cellId: string | null) => {
+  const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution) => {
+    if (chat && !chat.isCurrent()) return
+    setPreviewTurnId(cellId ? chat?.id ?? null : null)
     setSelectedCellId(cellId)
     updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
     if (!cellId) return
@@ -3959,7 +3973,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     next: NotebookDocument,
     nextAssets: AssetRecord[],
     nextJobs: JobRecord[],
+    owningBookId = bookId,
   ) => {
+    observeChat(owningBookId, nextJobs, next, nextAssets)
     watchSnapshotClockRef.current = performance.now()
     setNotebook((current) => jsonEqual(current, next) ? current : next)
     const cellIds = new Set(next.cells.map((cell) => cell.id))
@@ -3995,7 +4011,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       current && next.cells.some((cell) => cell.id === current) ? current : null)
     setSourceViewCellId((current) =>
       current && cellIds.has(current) ? current : null)
-  }, [updateSelectedCellIds])
+  }, [bookId, observeChat, updateSelectedCellIds])
 
   useNotebookAutoRefresh({
     bookId,
@@ -4213,7 +4229,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     address: string
     runId: string
     jobOperationId: string
-  }) => {
+  }, chat?: ChatExecution) => {
     try {
       const outcome = await watchNotebookRun({
         ...params,
@@ -4222,25 +4238,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         maxPollFailures: 10,
       })
       if (outcome.kind === 'completed') {
-        setNotice(`@${params.address} generated`)
+        presentChat(chat, () => setNotice(`@${params.address} generated`))
         setCellRunError(params.cellId, null)
         return
       }
       if (outcome.kind === 'failed') {
         const message = outcome.message ?? `@${params.address} failed`
         setCellRunError(params.cellId, message)
-        setNotice(message, 'error')
+        presentChat(chat, () => setNotice(message, 'error'))
         return
       }
       if (outcome.kind === 'timeout') {
-        setNotice(
+        presentChat(chat, () => setNotice(
           `@${params.address} is still running — check the Jobs screen`,
-        )
+        ))
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setCellRunError(params.cellId, message)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
     } finally {
       setCellQueued(params.cellId, false)
     }
@@ -4445,6 +4461,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runCell = useCallback(async (
     cellId: string,
     providedNotebook?: NotebookSnapshot,
+    chat?: ChatExecution,
   ) => {
     if (!bookId || !notebook) return
     let generationWatchStarted = false
@@ -4456,7 +4473,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         {
           book_id: bookId,
           notebook_id: notebook.id,
-        },
+        }, { chat },
       ))
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -4475,7 +4492,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (requiresCloudConsent) {
         if (notebookCellSupportsGenerateCellCommand(cell)) {
-          const plan = await createGenerationPlan(cellId, 'ui')
+          const plan = await createGenerationPlan(cellId, 'ui', chat)
           const stage = plan.stages.find((candidate) =>
             candidate.kind === 'queued'
             && candidate.jobType === 'generation'
@@ -4491,8 +4508,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!acceptCloudGenerationConsent(stage)) {
             throw new Error('Cloud generation cancelled before sending data')
           }
-          setPendingChatAction(null)
-          setPendingCommandPlan(null)
+          reviewChat(chat, false, () => setPendingChatAction(null))
+          reviewChat(chat, false, () => setPendingCommandPlan(null))
           const accepted = await startNotebookCellRun({
             start: () => call('run_notebook_cell', {
               book_id: bookId,
@@ -4500,7 +4517,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               cell_id: cellId,
               plan,
               actor: 'videobook-user',
-            }),
+            }, { chat }),
             onStarting: () => setCellQueued(cellId, true),
             onAccepted: () => setCellQueued(cellId, false),
             onRejected: () => setCellQueued(cellId, false),
@@ -4520,7 +4537,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             const notebookValue = await call('get_notebook', {
               book_id: bookId,
               notebook_id: plannedNotebookId,
-            }, { background: true })
+            }, { background: true, chat })
             const nextNotebook = asNotebook(notebookValue)
             if (nextNotebook) {
               applyNotebook(nextNotebook, assets, jobs)
@@ -4528,13 +4545,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 candidate.id === outputCellId)
               if (output) address = notebookGridAddress(output.slot)
             }
-            revealCells([outputCellId])
+            presentChat(chat, () => revealCells([outputCellId]))
             setCellQueued(outputCellId, true)
             if (selectedCellIdsRef.current.has(cellId)) {
-              selectCanvasCell(outputCellId)
+              selectCanvasCell(outputCellId, chat)
             }
           }
-          setNotice(`${notebookGridTag(cell.slot)} queued`)
+          presentChat(chat, () => setNotice(`${notebookGridTag(cell.slot)} queued`))
           void watchGenerationRun({
             bookId,
             notebookId: plannedNotebookId,
@@ -4542,14 +4559,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             address,
             runId,
             jobOperationId,
-          })
+          }, chat)
           return {
             ok: true,
             message: `${notebookGridTag(cell.slot)} queued`,
           }
         }
-        const outcome = await prepareGenerationPlan(cellId, 'ui')
-        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+        const outcome = await prepareGenerationPlan(cellId, 'ui', chat)
+        presentChat(chat, () => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
         return outcome
       }
       const accepted = await startNotebookCellRun({
@@ -4561,7 +4578,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ...(currentNotebook.revision
             ? { expected_revision: currentNotebook.revision }
             : {}),
-        }),
+        }, { chat }),
         onStarting: () => setCellQueued(cellId, true),
         onRejected: () => setCellQueued(cellId, false),
       })
@@ -4570,7 +4587,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!runId || !jobOperationId) {
         throw new Error('The server did not return a notebook run')
       }
-      setNotice(`${notebookGridTag(cell.slot)} queued`)
+      presentChat(chat, () => setNotice(`${notebookGridTag(cell.slot)} queued`))
       const outcome = await watchNotebookRun({
         bookId,
         notebookId: currentNotebook.id,
@@ -4589,7 +4606,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         throw new Error('Notebook run did not finish within five minutes')
       }
       if (outcome.kind === 'completed') {
-        setNotice(`${notebookGridTag(cell.slot)} updated`)
+        presentChat(chat, () => setNotice(`${notebookGridTag(cell.slot)} updated`))
       }
       return {
         ok: true,
@@ -4598,7 +4615,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setCellRunError(cellId, message)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
       if (!generationWatchStarted) setCellQueued(cellId, false)
@@ -4737,6 +4754,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     revealNotebookResult(() => notebookScrollRef.current)
   }, [notebookScrollRef, screen])
   const dismissPendingCommandPlan = useCallback(() => {
+    cancelChatReview()
     voiceOutcomeRef.current?.({ status: 'cancelled', message: 'Pending action cancelled on screen.' })
     // Declining one step declines the chain: later steps consume its output, so
     // running them would act on something that was never made.
@@ -4750,7 +4768,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setPendingChatAction(null)
     setPendingWatermarkReview(null)
     focusCommandComposer()
-  }, [bookId, call, focusCommandComposer, pendingChatAction])
+  }, [bookId, call, cancelChatReview, focusCommandComposer, pendingChatAction])
   const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'routed') return current
@@ -4881,6 +4899,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const loadPendingGenerationPreview = useCallback(async (
     draft: NotebookChatGenerationDraft,
     document: NotebookDocument,
+    chat?: ChatExecution,
   ): Promise<unknown> => {
     if (!bookId) throw new Error('Open a book before previewing generation.')
     return await call('preview_notebook_generation', {
@@ -4902,11 +4921,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_cell_id: connection.sourceCellId,
         target_input: connection.targetInput,
       })),
-    })
+    }, { chat })
   }, [bookId, call])
   const requestPendingGenerationPreview = useCallback((
     draft: NotebookChatGenerationDraft,
     document: NotebookDocument,
+    chat?: ChatExecution,
   ) => {
     const requestKey = JSON.stringify({
       id: draft.cell.id,
@@ -4915,7 +4935,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       inputs: draft.cell.inputs,
       connections: draft.connections,
     })
-    setPendingChatAction((current) => current?.kind === 'generation'
+    presentChat(chat, () => setPendingChatAction((current) => current?.kind === 'generation'
       && current.draft.cell.id === draft.cell.id
       ? {
           ...current,
@@ -4923,10 +4943,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           previewLoading: true,
           previewStale: false,
         }
-      : current)
-    void loadPendingGenerationPreview(draft, document)
+      : current))
+    void loadPendingGenerationPreview(draft, document, chat)
       .then((preview) => {
-        setPendingChatAction((current) => {
+        presentChat(chat, () => setPendingChatAction((current) => {
           if (current?.kind !== 'generation') return current
           const currentKey = JSON.stringify({
             id: current.draft.cell.id,
@@ -4944,10 +4964,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 previewStale: false,
               }
             : current
-        })
+        }))
       })
       .catch((error: unknown) => {
-        setPendingChatAction((current) => {
+        presentChat(chat, () => setPendingChatAction((current) => {
           if (current?.kind !== 'generation') return current
           const currentKey = JSON.stringify({
             id: current.draft.cell.id,
@@ -4963,7 +4983,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 previewLoading: false,
               }
             : current
-        })
+        }))
       })
   }, [loadPendingGenerationPreview])
   const setPendingGenerationDraft = useCallback((
@@ -5410,36 +5430,37 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
   }, [bookId, call, setNotice])
 
-  const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
+  const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string, chat?: ChatExecution) => {
     const value = await call('get_notebook', {
       book_id: targetBookId,
       notebook_id: notebookId,
-    })
+    }, { background: true, chat })
     const next = asNotebook(value)
     if (!next) throw new Error('The server returned an invalid notebook')
-    applyNotebook(next, assets, jobs)
+    if (chat && !chat.isInScope()) throw new Error('Workspace changed while refreshing the notebook.')
+    applyNotebook(next, assets, jobs, targetBookId)
     return next
   }, [applyNotebook, assets, call, jobs])
 
-  const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string, isCurrent?: () => boolean) => {
-    if (isCurrent?.() === false) return
+  const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string, isCurrent?: () => boolean, chat?: ChatExecution) => {
+    if (isCurrent?.() === false || (chat && !chat.isInScope())) return
     const requestId = bookDataRequestRef.current + 1
     bookDataRequestRef.current = requestId
     const response = await guardedAsyncResult(
       async () => await Promise.all([
-        call('list_notebooks', { book_id: targetBookId }),
+        call('list_notebooks', { book_id: targetBookId }, { background: true, chat }),
         call('list_assets', {
           book_id: targetBookId,
           sort: 'newest',
           limit: 200,
           include_referenced: true,
-        }),
-        call('get_primary_sequence', { book_id: targetBookId }),
-        call('list_jobs', { book_id: targetBookId, limit: 200 }),
-        call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
-        call('list_notebook_actions', { book_id: targetBookId }),
+        }, { background: true, chat }),
+        call('get_primary_sequence', { book_id: targetBookId }, { background: true, chat }),
+        call('list_jobs', { book_id: targetBookId, limit: 200 }, { background: true, chat }),
+        call('list_ingest_status', { book_id: targetBookId, limit: 200 }, { background: true, chat }),
+        call('list_notebook_actions', { book_id: targetBookId }, { background: true, chat }),
       ]),
-      () => bookDataRequestRef.current === requestId && isCurrent?.() !== false,
+      () => bookDataRequestRef.current === requestId && isCurrent?.() !== false && (!chat || chat.isInScope()),
     )
     if (response.kind === 'stale') return
     if (response.kind === 'error') throw response.error
@@ -5474,7 +5495,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
-    applyNotebook(nextNotebook, nextAssets, nextJobs)
+    applyNotebook(nextNotebook, nextAssets, nextJobs, targetBookId)
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
   }, [applyNotebook, call, resumeMediaProcessingWatches])
 
@@ -5753,6 +5774,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const editFullscreenSubjects = useCallback(async (
     session: MediaFullscreenSession,
     input: ImageSubjectEditInput,
+    chat?: ChatExecution,
   ) => {
     if (!session.asset.objectHash) {
       throw new Error('This image does not expose an immutable object hash')
@@ -5792,7 +5814,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               })),
             }
           : {}),
-      }),
+      }, { chat }),
       () => {
         const scope = watchScopeRef.current
         return imageSubjectMapRequestRef.current === requestId
@@ -5804,14 +5826,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (response.kind === 'error') throw response.error
     const result = response.value
     const status = asString(recordValue(result)?.status) ?? 'queued'
-    setNotice(
+    presentChat(chat, () => setNotice(
       input.operation === 'remove'
         ? `Subject removal ${status}`
         : input.operation === 'replace'
           ? `Region replacement ${status}`
           : `Subject edit ${status}`,
-    )
-    await refreshBookData(session.bookId, session.notebookId).catch(() => undefined)
+    ))
+    await refreshBookData(session.bookId, session.notebookId, undefined, chat).catch(() => undefined)
     return true
   }, [bookId, call, refreshBookData, setNotice])
 
@@ -5885,7 +5907,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCommands(workspaceActionCommands(catalog.actions, asCommands(value)))
   }, [call])
 
-  const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null) => {
+  const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null, chat?: ChatExecution) => {
     if (mcp.state !== 'ready') return
     setComposerDockOpen(true)
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -5905,8 +5927,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setActionCatalogStatus({ loading: true, error: null })
     try {
       const catalog = actionId && workspaceActions.length ? { actions: workspaceActions }
-        : asWorkspaceActionCatalog(await call('list_workspace_actions', {}))
-      if (request !== actionCatalogRequestRef.current) return
+        : asWorkspaceActionCatalog(await call('list_workspace_actions', {}, { chat }))
+      if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
       setWorkspaceActions(catalog.actions)
       const action = catalog.actions.find((entry) => entry.id === actionId)
       if (action) {
@@ -5915,18 +5937,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (action.handler.kind === 'tool' && action.handler.tool === 'create_notebook_cell' && values?.slot) {
           seededValues.cell = { ...recordValue(seededValues.cell), slot: values.slot }
         }
-        const resources = await loadWorkspaceActionResources(action, seededValues, (name, args) => call(name, { book_id: seededValues.book_id ?? bookId, ...args }))
-        if (request !== actionCatalogRequestRef.current) return
+        const resources = await loadWorkspaceActionResources(action, seededValues, (name, args) => call(name, { book_id: seededValues.book_id ?? bookId, ...args }, { chat }))
+        if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
         const browse = action.handler.kind === 'tool' && ['list_notebooks', 'list_prompts', 'list_scenes', 'list_characters', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
         const result = browse && action.handler.kind === 'tool' ? {
-          message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues),
+          message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues, { chat }),
         } : undefined
-        if (request !== actionCatalogRequestRef.current) return
+        if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
         setActionDialog((current) => current?.key === request ? { ...current, values: { ...seededValues, ...resources.values }, resources, result } : current)
       }
       setActionCatalogStatus({ loading: false, error: null })
     } catch (cause) {
-      if (request !== actionCatalogRequestRef.current) return
+      if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
       setActionCatalogStatus({ loading: false, error: cause instanceof Error ? cause.message : String(cause) })
     }
   }
@@ -6469,6 +6491,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const arrangeVideoCellsOnAxis = async (
     axis: NotebookVideoAxis,
     anchor: NotebookGridSlot,
+    chat?: ChatExecution,
   ): Promise<{ ok: boolean; message: string }> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'No notebook is open' }
@@ -6480,7 +6503,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       axis,
     )
     if (!planned.ok) {
-      setNotice(planned.message, 'error')
+      presentChat(chat, () => setNotice(planned.message, 'error'))
       return { ok: false, message: planned.message }
     }
     const axisLabel = axis === 'column'
@@ -6488,7 +6511,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : `row ${String.fromCharCode(97 + anchor.row)}`
     if (planned.movedCount === 0) {
       const message = `Videos are already arranged in ${axisLabel}`
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     }
 
@@ -6500,17 +6523,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         ...(revision ? { expected_revision: revision } : {}),
         slots: planned.slots,
-      })
-      await refreshNotebook(bookId, notebook.id)
+      }, { chat })
+      await refreshNotebook(bookId, notebook.id, chat)
       rememberLastWorkSlot({ row: anchor.row, column: anchor.column })
       const videoCount = planned.slots.length - planned.displacedCount
       const message = `Arranged ${videoCount} ${videoCount === 1 ? 'video' : 'videos'} in ${axisLabel}`
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     } catch (error) {
-      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      await refreshNotebook(bookId, notebook.id, chat).catch(() => undefined)
       const message = error instanceof Error ? error.message : String(error)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
       setBusy(false)
@@ -6519,19 +6542,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const groupImageCells = async (
     anchor: NotebookGridSlot,
+    chat?: ChatExecution,
   ): Promise<{ ok: boolean; message: string }> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'No notebook is open' }
     }
     const planned = planImageGrouping(notebook, notebookImageCellIds, anchor)
     if (!planned.ok) {
-      setNotice(planned.message, 'error')
+      presentChat(chat, () => setNotice(planned.message, 'error'))
       return { ok: false, message: planned.message }
     }
     const anchorLabel = notebookGridTag(anchor)
     if (planned.movedCount === 0) {
       const message = `Images are already grouped from ${anchorLabel}`
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     }
 
@@ -6543,17 +6567,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         ...(revision ? { expected_revision: revision } : {}),
         slots: planned.slots,
-      })
-      await refreshNotebook(bookId, notebook.id)
+      }, { chat })
+      await refreshNotebook(bookId, notebook.id, chat)
       rememberLastWorkSlot({ row: anchor.row, column: anchor.column })
       const imageCount = planned.slots.length - planned.displacedCount
       const message = `Grouped ${imageCount} ${imageCount === 1 ? 'image' : 'images'} from ${anchorLabel}`
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     } catch (error) {
-      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      await refreshNotebook(bookId, notebook.id, chat).catch(() => undefined)
       const message = error instanceof Error ? error.message : String(error)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
       setBusy(false)
@@ -7004,6 +7028,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runSpeakGeneration = async (
     text: string,
     voiceId: string,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before speaking.' }
@@ -7024,13 +7049,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
       const created = await materializeNotebookSpeakCommand({
         bookId,
-        callTool: call,
+        callTool: (tool, args) => call(tool, args, { chat }),
         document: currentNotebook,
         lastWorkSlot,
         text,
@@ -7042,7 +7067,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       materialized = created
       const spokenSlot = parseNotebookGridAddress(created.cellAddress)
       if (spokenSlot) rememberLastWorkSlot(spokenSlot)
-      const plan = await createGenerationPlan(created.cellId, 'slash')
+      const plan = await createGenerationPlan(created.cellId, 'slash', chat)
       const stage = plan.stages.find((candidate) =>
         candidate.kind === 'queued'
         && candidate.jobType === 'generation'
@@ -7058,8 +7083,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!acceptCloudGenerationConsent(stage)) {
         throw new Error('Cloud generation cancelled before sending data')
       }
-      setPendingChatAction(null)
-      setPendingCommandPlan(null)
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
       const accepted = await startNotebookCellRun({
         start: () => call('run_notebook_cell', {
           book_id: bookId,
@@ -7067,7 +7092,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           cell_id: created.cellId,
           plan,
           actor: 'videobook-user',
-        }),
+        }, { chat }),
         onStarting: () => setCellQueued(created.cellId, true),
         onRejected: () => setCellQueued(created.cellId, false),
       })
@@ -7079,7 +7104,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       runAccepted = true
       persistSpeakVoiceId(voiceId)
-      setNotice(`${created.cellAddress} queued`)
+      presentChat(chat, () => setNotice(`${created.cellAddress} queued`))
       void watchGenerationRun({
         bookId,
         notebookId: plannedNotebookId,
@@ -7087,8 +7112,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         address: created.cellAddress.replace(/^@/, ''),
         runId,
         jobOperationId,
-      })
-      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      }, chat)
+      await refreshBookData(bookId, notebook.id, undefined, chat).catch(() => undefined)
       return { ok: true, message: `${created.cellAddress} queued` }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -7097,16 +7122,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           book_id: bookId,
           notebook_id: notebook.id,
           cell_id: materialized.cellId,
-        }).catch(() => undefined)
+        }, { chat }).catch(() => undefined)
         await call('delete_notebook_cell', {
           book_id: bookId,
           notebook_id: notebook.id,
           cell_id: materialized.outputCellId,
-        }).catch(() => undefined)
+        }, { chat }).catch(() => undefined)
         return { ok: false, message }
       }
       if (runAccepted) {
-        setNotice(message, 'error')
+        presentChat(chat, () => setNotice(message, 'error'))
         return { ok: false, message }
       }
       return { ok: false, message }
@@ -7138,11 +7163,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       fadeSeconds?: number
       saveDefault?: boolean
     } = {},
+    chat?: ChatExecution,
   ) => {
     const targetAsset = assets.find((asset) => asset.artifactId === assetId)
-    setPendingCommandPlan(null)
-    setPendingChatAction(null)
-    setPendingWatermarkReview({
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
+    reviewChat(chat, false, () => setPendingChatAction(null))
+    reviewChat(chat, true, () => setPendingWatermarkReview({
       assetId,
       targetLabel,
       mediaUrl: targetAsset?.mediaUrl ?? null,
@@ -7187,16 +7213,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       recent: [],
       loadingConfig: true,
       error: null,
-    })
+    }))
     void (async () => {
       try {
-        const config = recordValue(await call('get_watermark_config', { book_id: bookId }, { background: true }))
+        const config = recordValue(await call('get_watermark_config', { book_id: bookId }, { background: true, chat }))
         const savedHandle = asString(config?.savedHandle)
         const authenticatedHandle = asString(config?.authenticatedHandle)
         const recent = Array.isArray(config?.recent)
           ? config.recent.filter((entry): entry is string => typeof entry === 'string')
           : []
-        setPendingWatermarkReview((current) =>
+        presentChat(chat, () => setPendingWatermarkReview((current) =>
           current && current.assetId === assetId
             ? {
                 ...current,
@@ -7204,17 +7230,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 recent,
                 loadingConfig: false,
               }
-            : current)
+            : current))
       } catch {
-        setPendingWatermarkReview((current) =>
+        presentChat(chat, () => setPendingWatermarkReview((current) =>
           current && current.assetId === assetId
             ? { ...current, loadingConfig: false }
-            : current)
+            : current))
       }
     })()
   }
 
-  const submitWatermark = async (): Promise<ComposerOutcome> => {
+  const submitWatermark = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (!bookId || !pendingWatermarkReview) {
       return { ok: false, message: 'There is no pending watermark to apply.' }
     }
@@ -7268,10 +7294,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    setPendingWatermarkReview((current) =>
+    presentChat(chat, () => setPendingWatermarkReview((current) =>
       current && current.assetId === assetId
         ? { ...current, error: null }
-        : current)
+        : current))
     setBusy(true)
     try {
       const result = recordValue(await call('apply_watermark', {
@@ -7308,7 +7334,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         fade_seconds: fadeSeconds,
         ...(includeHandle && saveDefault ? { save_default: true } : {}),
         wait: false,
-      }))
+      }, { chat }))
       const applied = {
         includeQr,
         includeHandle,
@@ -7329,8 +7355,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           trimmedHandle,
           targetLabel,
         )
-        setNotice(message)
-        setPendingWatermarkReview(null)
+        presentChat(chat, () => setNotice(message))
+        reviewChat(chat, false, () => setPendingWatermarkReview(null))
         void watchWatermarkBurn({
           bookId,
           artifactId: assetId,
@@ -7341,25 +7367,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             corner: asString(burn?.corner),
             placementSource: asString(burn?.placementSource),
           }),
-        })
+        }, chat)
         return { ok: true, message }
       }
-      await refreshBookData(bookId, notebook?.id)
+      await refreshBookData(bookId, notebook?.id, undefined, chat)
       const message = watermarkAppliedMessage({
         ...applied,
         corner: asString(result?.position),
         placementSource: asString(result?.placement_source),
       })
-      setNotice(message)
-      setPendingWatermarkReview(null)
+      presentChat(chat, () => setNotice(message))
+      reviewChat(chat, false, () => setPendingWatermarkReview(null))
       return { ok: true, message }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setPendingWatermarkReview((current) =>
+      presentChat(chat, () => setPendingWatermarkReview((current) =>
         current && current.assetId === assetId
           ? { ...current, error: message }
-          : current)
-      setNotice(message, 'error')
+          : current))
+      presentChat(chat, () => setNotice(message, 'error'))
       return {
         ok: false,
         message,
@@ -7551,7 +7577,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     jobId: number
     targetLabel: string
     describe: (burn: Record<string, unknown> | null) => string
-  }) => {
+  }, chat?: ChatExecution) => {
     const deadline = Date.now() + mediaAssetWatchTimeoutMs
     let consecutiveFailures = 0
     let missingPolls = 0
@@ -7559,12 +7585,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       try {
         await refreshBookData(
           params.bookId,
-          watchScopeRef.current.notebookId ?? undefined,
+          watchScopeRef.current.notebookId ?? undefined, undefined, chat,
         )
       } catch {
         void 0
       }
-      setNotice(message, tone)
+      presentChat(chat, () => setNotice(message, tone))
     }
     while (Date.now() < deadline) {
       const scope = watchScopeRef.current
@@ -7623,26 +7649,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         missingPolls = step.kind === 'missing' ? missingPolls + 1 : 0
         if (missingPolls >= watermarkBurnMissingPollLimit) {
-          setNotice(
+          presentChat(chat, () => setNotice(
             `Lost track of the ${params.targetLabel} watermark job — check the Jobs screen`,
             'error',
-          )
+          ))
           return
         }
       } catch (error) {
         consecutiveFailures += 1
         if (consecutiveFailures >= 10) {
           const detail = error instanceof Error ? error.message : String(error)
-          setNotice(
+          presentChat(chat, () => setNotice(
             `Stopped watching the ${params.targetLabel} watermark: ${detail}. Check the Jobs screen.`,
             'error',
-          )
+          ))
           return
         }
       }
       await delay(mediaProcessWatchIntervalMs)
     }
-    setNotice(`${params.targetLabel} watermark is still processing — check the Jobs screen`)
+    presentChat(chat, () => setNotice(`${params.targetLabel} watermark is still processing — check the Jobs screen`))
   }, [applyJobsSnapshot, applyNotebook, refreshBookData, setNotice])
 
   const retryIngest = async (artifactId: string) => {
@@ -7885,6 +7911,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const previewCommandPlan = async (
     plan: CommandPlan,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     try {
       const editStages = plan.stages.filter(
@@ -7895,11 +7922,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         await call('preview_edit_intent', {
           book_id: bookId,
           intent: stage.intent,
-        }) as EditPreview,
+        }, { chat }) as EditPreview,
       ] as const))
       const previews = Object.fromEntries(previewEntries)
-      setPendingChatAction(null)
-      setPendingCommandPlan({ plan, previews })
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      reviewChat(chat, true, () => setPendingCommandPlan({ plan, previews }))
       const conflictCount = Object.values(previews)
         .reduce((count, preview) => count + preview.conflicts.length, 0)
       return conflictCount > 0
@@ -7941,6 +7968,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const prepareSequenceEdit = async (
     request: Record<string, unknown> | Record<string, unknown>[],
     sourceSurface: 'ui' | 'slash' | 'chat',
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
     try {
@@ -7949,8 +7977,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_surface: sourceSurface,
         actor: 'videobook-user',
         request,
-      }))
-      return await previewCommandPlan(plan)
+      }, { chat }))
+      return await previewCommandPlan(plan, chat)
     } catch (error) {
       return {
         ok: false,
@@ -7959,7 +7987,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const applyPendingCommandPlan = async (): Promise<ComposerOutcome> => {
+  const applyPendingCommandPlan = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (!bookId || !pendingCommandPlan) {
       return { ok: false, message: 'There is no pending command plan.' }
     }
@@ -8001,13 +8029,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           plan_id: pending.plan.planId,
           actor: 'videobook-user',
           confirm_unpriced: true,
-        }))
-        setPendingCommandPlan(null)
-        await refreshBookData(bookId, notebookId).catch(() => undefined)
+        }, { chat }))
+        reviewChat(chat, false, () => setPendingCommandPlan(null))
+        await refreshBookData(bookId, notebookId, undefined, chat).catch(() => undefined)
         const message = asString(queued?.status) === 'completed'
           ? 'Workbook is already current'
           : 'Workbook run accepted and queued'
-        setNotice(message)
+        presentChat(chat, () => setNotice(message))
         return { ok: true, message }
       }
       let latestActionId = ''
@@ -8022,7 +8050,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             book_id: bookId,
             intent: stage.intent,
             preview_hash: preview.previewHash,
-          }))
+          }, { chat }))
           latestActionId = asString(committed?.actionId) ?? latestActionId
           continue
         }
@@ -8031,7 +8059,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           && stage.jobType === 'export'
           && stage.tool === 'export_sequence'
         ) {
-          const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }))
+          const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }, { chat }))
           if (!currentSequence) throw new Error('The sequence is no longer available.')
           const reviewedContent = stage.input.sequence_content_revision
           if (typeof reviewedContent === 'string' && await sequenceContentRevision(currentSequence) !== reviewedContent) {
@@ -8043,7 +8071,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             sequence_revision: typeof reviewedContent === 'string' ? currentSequence.revision : stage.input.sequence_revision,
             orientation: stage.input.orientation,
             captions: stage.input.captions,
-          }))
+          }, { chat }))
           if (queued?.kind === 'invalid-export') {
             const validation = recordValue(queued.validation)
             const errors = Array.isArray(validation?.errors) ? validation.errors.map((entry) => asString(recordValue(entry)?.message)).filter(Boolean) : []
@@ -8084,7 +8112,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               cell_id: cellId,
               plan: pending.plan,
               actor: 'videobook-user',
-            }),
+            }, { chat }),
             onStarting: () => setCellQueued(cellId, true),
             onAccepted: () => setCellQueued(cellId, false),
             onRejected: () => setCellQueued(cellId, false),
@@ -8106,7 +8134,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             const notebookValue = await call('get_notebook', {
               book_id: bookId,
               notebook_id: notebookId,
-            }, { background: true })
+            }, { background: true, chat })
             const nextNotebook = asNotebook(notebookValue)
             if (nextNotebook) {
               applyNotebook(nextNotebook, assets, jobs)
@@ -8114,7 +8142,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 candidate.id === outputCellId)
               if (output) address = notebookGridAddress(output.slot)
             }
-            revealCells([outputCellId])
+            presentChat(chat, () => revealCells([outputCellId]))
             setCellQueued(outputCellId, true)
           }
           void watchGenerationRun({
@@ -8124,7 +8152,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             address,
             runId,
             jobOperationId,
-          })
+          }, chat)
           queuedCount += 1
           continue
         }
@@ -8132,17 +8160,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           throw new Error(`Queued ${stage.jobType} execution is not available from this plan yet`)
         }
       }
-      setPendingCommandPlan(null)
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
       setLastEditActionId(latestActionId)
-      await refreshBookData(bookId, notebook?.id).catch(() => undefined)
+      await refreshBookData(bookId, notebook?.id, undefined, chat).catch(() => undefined)
       const message = queuedCount > 0
         ? `CommandPlan accepted · ${queuedCount} queued job`
         : 'CommandPlan committed to a new sequence revision'
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       const hasGeneration = pending.plan.stages.some((stage) =>
         stage.kind === 'queued' && stage.jobType === 'generation')
       const hasExport = pending.plan.stages.some((stage) => stage.kind === 'export')
@@ -8152,16 +8180,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             requestFromEditStage(pending.plan.stages),
             pending.plan.sourceSurface === 'system'
               ? 'ui'
-              : pending.plan.sourceSurface,
+              : pending.plan.sourceSurface, chat,
           )
           if (!refreshed.ok) {
             message = refreshed.message
-            setNotice(message, 'error')
+            presentChat(chat, () => setNotice(message, 'error'))
           }
         } catch {
-          setPendingCommandPlan(null)
+          reviewChat(chat, false, () => setPendingCommandPlan(null))
           message = 'The sequence changed. Recreate this plan against the current cut.'
-          setNotice(message, 'error')
+          presentChat(chat, () => setNotice(message, 'error'))
         }
       }
       return {
@@ -8173,7 +8201,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     } finally {
       setBusy(false)
-      focusCommandComposer()
+      presentChat(chat, () => focusCommandComposer())
     }
   }
 
@@ -8211,6 +8239,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const prepareRoughCut = async (
     sourceSurface: 'ui' | 'slash' | 'chat',
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook || !sequence) {
       return { ok: false, message: 'Open a notebook sequence first.' }
@@ -8237,7 +8266,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         min_shot_frames: 30,
         max_shot_frames: 120,
         max_repeats_per_artifact: 1,
-      })
+      }, { chat })
       const result = recordValue(value)
       if (result?.kind === 'rough-cut-uncovered') {
         const uncovered = Array.isArray(result.uncoveredBeats)
@@ -8248,7 +8277,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: `No existing indexed coverage for ${uncovered} narration beats.`,
         }
       }
-      return await previewCommandPlan(asCommandPlan(value))
+      return await previewCommandPlan(asCommandPlan(value), chat)
     } catch (error) {
       return {
         ok: false,
@@ -8259,6 +8288,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const prepareSoundEffects = async (
     sourceSurface: 'ui' | 'slash' | 'chat',
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !sequence) {
       return { ok: false, message: 'Open a sequence first.' }
@@ -8282,7 +8312,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actor: 'videobook-user',
         moments,
         max_repeats_per_artifact: 1,
-      })
+      }, { chat })
       const result = recordValue(value)
       if (result?.kind === 'sound-effects-uncovered') {
         return {
@@ -8290,7 +8320,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: 'No existing indexed sound effects cover these beats. Generation is available as a fallback.',
         }
       }
-      return await previewCommandPlan(asCommandPlan(value))
+      return await previewCommandPlan(asCommandPlan(value), chat)
     } catch (error) {
       return {
         ok: false,
@@ -8302,6 +8332,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const addSequenceTrack = async (
     kind: 'video' | 'audio' | 'caption',
     name?: string,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
     try {
@@ -8309,7 +8340,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         kind,
         ...(name?.trim() ? { name: name.trim() } : {}),
-      }))
+      }, { chat }))
       if (!nextSequence) throw new Error('The server returned an invalid sequence')
       setSequence(nextSequence)
       return { ok: true, message: `Added ${kind} track` }
@@ -8321,13 +8352,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const removeSequenceTrack = async (trackId: string): Promise<ComposerOutcome> => {
+  const removeSequenceTrack = async (trackId: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
     try {
       const nextSequence = asSequence(await call('remove_sequence_track', {
         book_id: bookId,
         track_id: trackId,
-      }))
+      }, { chat }))
       if (!nextSequence) throw new Error('The server returned an invalid sequence')
       setSequence(nextSequence)
       return { ok: true, message: 'Removed empty track' }
@@ -8343,6 +8374,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     sessionKey: string,
     audioArtifactId: string,
     targetSequence: Sequence,
+    chat?: ChatExecution,
   ): Promise<void> => {
     if (!bookId) {
       setMusicVideoSession((current) => current?.key === sessionKey
@@ -8383,7 +8415,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           audio_artifact_id: audioArtifactId,
           audio_track_id: audioTrack.trackId,
         },
-      }))
+      }, { chat }))
       const stage = plan.stages.find(
         (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
       )
@@ -8391,7 +8423,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const preview = await call('preview_edit_intent', {
         book_id: bookId,
         intent: stage.intent,
-      }) as EditPreview
+      }, { chat }) as EditPreview
       const invalid = editPreviewError(preview)
       if (invalid) throw new Error(invalid)
       const timelineLimitFrame = musicVideoTimelineLimit(
@@ -8619,9 +8651,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setAliveSession((current) => current?.key === sessionKey ? { ...current, state } : current)
   }
 
-  const loadAliveCaptions = async (sessionKey: string, artifactId: string, reanalyze: boolean) => {
+  const loadAliveCaptions = async (sessionKey: string, artifactId: string, reanalyze: boolean, chat?: ChatExecution) => {
     try {
-      const result = await call('alive_captions', { book_id: bookId, asset_id: artifactId, reanalyze })
+      const result = await call('alive_captions', { book_id: bookId, asset_id: artifactId, reanalyze }, { chat })
       updateAliveState(sessionKey, { status: 'ready', data: parseAliveStudioData(result) })
     } catch (error) {
       // A failed re-run keeps the loaded analysis on screen and reports inline.
@@ -8653,9 +8685,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     result: unknown,
     sourceUrl: string,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!notebook) {
-      await refreshBookData(bookId, undefined, isCurrent)
+      await refreshBookData(bookId, undefined, isCurrent, chat)
       return { ok: true, message: messageFor(result, 'Download queued') }
     }
     const cell = downloadVideoCellInput(
@@ -8669,23 +8702,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         notebook_id: notebook.id,
         cell,
-      }))
+      }, { chat }))
       const nextCellId = asString(created?.id)
       if (!nextCellId) {
         throw new Error('The server did not return the new notebook cell')
       }
       createdCellId = nextCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Download queued in the previous workspace.' }
-      selectCanvasCell(nextCellId)
+      selectCanvasCell(nextCellId, chat)
     } catch (error) {
-      await refreshBookData(bookId, notebook.id, isCurrent)
+      await refreshBookData(bookId, notebook.id, isCurrent, chat)
       const message = error instanceof Error ? error.message : String(error)
       return {
         ok: false,
         message: `Download queued in Library, but board placement failed: ${message}`,
       }
     }
-    await refreshBookData(bookId, notebook.id, isCurrent)
+    await refreshBookData(bookId, notebook.id, isCurrent, chat)
     void watchDownloadedAsset({
       bookId,
       notebookId: notebook.id,
@@ -8706,7 +8739,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     outputAddresses: string[]
     run: NotebookSplitRun
     sourceAddress: string
-  }) => {
+  }, chat?: ChatExecution) => {
     let outcome: Awaited<ReturnType<typeof watchNotebookRun>>
     try {
       outcome = await watchNotebookRun({
@@ -8734,25 +8767,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setCellQueued(input.run.actionCellId, false)
     }
     if (outcome.kind === 'failed') {
-      setNotice(outcome.message ?? `${input.actionAddress} failed`, 'error')
+      presentChat(chat, () => setNotice(outcome.message ?? `${input.actionAddress} failed`, 'error'))
       return
     }
     if (outcome.kind === 'timeout') {
-      setNotice(
+      presentChat(chat, () => setNotice(
         `${input.sourceAddress} is still splitting — check the Jobs screen`,
-      )
+      ))
       return
     }
     if (outcome.kind === 'superseded') return
-    selectCanvasCell(input.run.outputs.at(-1)?.outputCellId ?? null)
-    setNotice(
+    selectCanvasCell(input.run.outputs.at(-1)?.outputCellId ?? null, chat)
+    presentChat(chat, () => setNotice(
       `Split ${input.sourceAddress} into ${input.outputAddresses.join(' and ')}`,
-    )
+    ))
   }
 
   const executeNotebookSplitCommand = async (
     command: NotebookSplitCommand,
     currentNotebook: NotebookSnapshot,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before splitting a video.' }
@@ -8765,7 +8799,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sort: 'newest',
         limit: 200,
         include_referenced: true,
-      })
+      }, { chat })
       const currentAssets = asAssets(assetValue)
       const source = resolveNotebookVideoSourceCell(
         currentNotebook,
@@ -8790,21 +8824,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       actionCellId = draft.actionCell.id
       setAssets(currentAssets)
       applyNotebook(draft.document, currentAssets, jobs)
-      revealCells(draft.createdCellIds)
+      presentChat(chat, () => revealCells(draft.createdCellIds))
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
-      selectCanvasCell(draft.outputs[0].outputCell.id)
-      setNotice(`Splitting ${sourceAddress} into ${draft.outputs.length} chunks`)
+      selectCanvasCell(draft.outputs[0].outputCell.id, chat)
+      presentChat(chat, () => setNotice(`Splitting ${sourceAddress} into ${draft.outputs.length} chunks`))
       const run = await enqueueNotebookSplitCommand({
         actor: 'videobook-user',
         bookId,
-        callTool: call,
+        callTool: (tool, args) => call(tool, args, { chat }),
         draft,
         ...(currentNotebook.revision
           ? { expectedRevision: currentNotebook.revision }
           : {}),
       })
-      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
       void watchNotebookSplitRun({
         actionAddress,
         bookId,
@@ -8812,7 +8846,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         outputAddresses,
         run,
         sourceAddress,
-      })
+      }, chat)
       return {
         ok: true,
         message: `Splitting ${sourceAddress} into ${outputAddresses.join(', ')}`,
@@ -8820,8 +8854,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (actionCellId) setCellQueued(actionCellId, false)
-      await refreshBookData(bookId, notebook.id).catch(() => undefined)
-      setNotice(message, 'error')
+      await refreshBookData(bookId, notebook.id, undefined, chat).catch(() => undefined)
+      presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
       setBusy(false)
@@ -8832,6 +8866,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     command: NotebookFrameCommand,
     currentNotebook: NotebookSnapshot,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -8847,7 +8882,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const run = await enqueueNotebookFrameCommand({
         actor: 'videobook-user',
         bookId,
-        callTool: call,
+        callTool: (tool, args) => call(tool, args, { chat }),
         command,
         document: currentNotebook,
         ...(currentNotebook.revision
@@ -8858,8 +8893,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (isCurrent?.() === false) return { ok: true, message: 'Frame extraction queued in the previous workspace.' }
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
-      selectCanvasCell(run.outputCellId ?? actionCellId)
-      setNotice(`Frame extraction queued for ${sourceAddress}`)
+      selectCanvasCell(run.outputCellId ?? actionCellId, chat)
+      presentChat(chat, () => setNotice(`Frame extraction queued for ${sourceAddress}`))
       const outcome = await watchNotebookRun({
         bookId,
         notebookId: currentNotebook.id,
@@ -8881,7 +8916,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (outcome.kind === 'superseded') {
         throw new Error(`Frame extraction for ${sourceAddress} was superseded by a newer run`)
       }
-      selectCanvasCell(run.outputCellId ?? actionCellId)
+      selectCanvasCell(run.outputCellId ?? actionCellId, chat)
       const successMessage = command.frameMode === 'time'
         ? `Extracted the frame at ${command.timestampSeconds ?? 0}s of ${sourceAddress}`
         : `Extracted the ${command.frameMode} frame of ${sourceAddress}`
@@ -8893,7 +8928,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const message = error instanceof Error ? error.message : String(error)
       if (isCurrent?.() !== false) {
         if (actionCellId) setCellRunError(actionCellId, message)
-        setNotice(message, 'error')
+        presentChat(chat, () => setNotice(message, 'error'))
       }
       return { ok: false, message }
     } finally {
@@ -8906,6 +8941,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     command: NotebookAudioCommand,
     currentNotebook: NotebookSnapshot,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting audio.' }
@@ -8921,7 +8957,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const run = await enqueueNotebookAudioCommand({
         actor: 'videobook-user',
         bookId,
-        callTool: call,
+        callTool: (tool, args) => call(tool, args, { chat }),
         command,
         document: currentNotebook,
         ...(currentNotebook.revision
@@ -8932,8 +8968,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (isCurrent?.() === false) return { ok: true, message: 'Audio extraction queued in the previous workspace.' }
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
-      selectCanvasCell(run.outputCellId ?? actionCellId)
-      setNotice(`Audio extraction queued for ${sourceAddress}`)
+      selectCanvasCell(run.outputCellId ?? actionCellId, chat)
+      presentChat(chat, () => setNotice(`Audio extraction queued for ${sourceAddress}`))
       const outcome = await watchNotebookRun({
         bookId,
         notebookId: currentNotebook.id,
@@ -8955,7 +8991,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (outcome.kind === 'superseded') {
         throw new Error(`Audio extraction for ${sourceAddress} was superseded by a newer run`)
       }
-      selectCanvasCell(run.outputCellId ?? actionCellId)
+      selectCanvasCell(run.outputCellId ?? actionCellId, chat)
       return {
         ok: true,
         message: `Extracted audio from ${sourceAddress}`,
@@ -8964,7 +9000,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const message = error instanceof Error ? error.message : String(error)
       if (isCurrent?.() !== false) {
         if (actionCellId) setCellRunError(actionCellId, message)
-        setNotice(message, 'error')
+        presentChat(chat, () => setNotice(message, 'error'))
       }
       return { ok: false, message }
     } finally {
@@ -8976,6 +9012,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runNotebookAudioCommandNow = async (
     command: NotebookAudioCommand,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting audio.' }
@@ -8984,7 +9021,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -8993,9 +9030,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         currentNotebook,
         command.sourceReference,
       )
-      setPendingCommandPlan(null)
-      setPendingChatAction(null)
-      return await executeNotebookAudioCommand(command, currentNotebook, isCurrent)
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      return await executeNotebookAudioCommand(command, currentNotebook, isCurrent, chat)
     } catch (error) {
       return {
         ok: false,
@@ -9007,6 +9044,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runNotebookFrameCommandNow = async (
     command: NotebookFrameCommand,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -9015,7 +9053,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -9024,9 +9062,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         currentNotebook,
         command.sourceReference,
       )
-      setPendingCommandPlan(null)
-      setPendingChatAction(null)
-      return await executeNotebookFrameCommand(command, currentNotebook, isCurrent)
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      return await executeNotebookFrameCommand(command, currentNotebook, isCurrent, chat)
     } catch (error) {
       return {
         ok: false,
@@ -9038,6 +9076,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const previewNotebookFrameCommand = async (
     command: NotebookFrameCommand,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before extracting a frame.' }
@@ -9046,7 +9085,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -9058,8 +9097,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const frameSummary = command.frameMode === 'time'
         ? `Extract the frame at ${command.timestampSeconds ?? 0}s from ${notebookGridTag(source.slot)}`
         : `Extract the ${command.frameMode} frame from ${notebookGridTag(source.slot)}`
-      setPendingCommandPlan(null)
-      setPendingChatAction({
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, true, () => setPendingChatAction({
         kind: 'frame',
         command,
         expectations: [{
@@ -9069,7 +9108,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebookId: currentNotebook.id,
         reason: 'This request extracts a frame into a new image cell',
         summary: frameSummary,
-      })
+      }))
       return applyReadyOutcome('Frame extraction ready to apply')
     } catch (error) {
       return {
@@ -9082,6 +9121,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const previewNotebookSplitCommand = async (
     command: NotebookSplitCommand,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before splitting a video.' }
@@ -9090,7 +9130,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -9141,8 +9181,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           `The notebook needs ${neededCells} empty cells to split a video`,
         )
       }
-      setPendingCommandPlan(null)
-      setPendingChatAction({
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, true, () => setPendingChatAction({
         kind: 'split',
         command: preparedCommand,
         expectations: [{
@@ -9159,7 +9199,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           sourceAddress: notebookGridTag(source.slot),
           sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
         }),
-      })
+      }))
       return applyReadyOutcome('Video split ready to apply')
     } catch (error) {
       return {
@@ -9177,6 +9217,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       routedParams?: Record<string, unknown>
       isCurrent?: () => boolean
     },
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before generating media.' }
@@ -9185,7 +9226,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: notebook.id,
-      }))
+      }, { chat }))
       if (options?.isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
@@ -9244,8 +9285,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             return cell ? [notebookGridTag(cell.slot)] : []
           }).join(', ')}`
         : ''
-      setPendingCommandPlan(null)
-      setPendingChatAction({
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, true, () => setPendingChatAction({
         kind: 'generation',
         draft,
         notebookId: currentNotebook.id,
@@ -9271,8 +9312,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         // actually run, down to the sources it really carries, so it cannot
         // promise a reference the draft does not have.
         summary: `Generate ${command.mediaKind} as ${notebookGridTag(draft.cell.slot)}${references}`,
-      })
-      requestPendingGenerationPreview(draft, currentNotebook)
+      }))
+      requestPendingGenerationPreview(draft, currentNotebook, chat)
       return generationApplyReadyOutcome(
         `Generation ready to apply as ${notebookGridTag(draft.cell.slot)}`,
       )
@@ -9300,6 +9341,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     book: string,
     accepted: ChainRunValue,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ChainRunValue> => {
     saveValue('videobook.active-chain', JSON.stringify({ bookId: book, chainId: accepted.chainId }))
     const deadline = Date.now() + 5 * 60_000
@@ -9309,12 +9351,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         action: 'status',
         book_id: book,
         chain_id: accepted.chainId,
-      }, { background: true }))
+      }, { background: true, chat }))
       if (isCurrent?.() === false) throw new Error('Workspace changed. Check the previous project for the accepted action.')
       if (!snapshot) break
       latest = snapshot
       const running = snapshot.steps.find((step) => step.status === 'running')
-      if (running) setNotice(`${running.tool.replaceAll('_', ' ')}…`)
+      if (running) presentChat(chat, () => setNotice(`${running.tool.replaceAll('_', ' ')}…`))
       if (isChainSettled(snapshot.status)) {
         if (snapshot.status !== 'awaiting-approval') saveValue('videobook.active-chain', '')
         return snapshot
@@ -9325,20 +9367,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   /** Put one paused step on screen and hand the decision back to the user. */
-  const openChainStepReview = (snapshot: ChainRunValue): ComposerOutcome => {
+  const openChainStepReview = (snapshot: ChainRunValue, chat?: ChatExecution): ComposerOutcome => {
     const paused = snapshot.steps.find((step) => step.id === snapshot.awaitingStepId)
     const review = paused?.review
     if (!review) {
       return { ok: false, message: 'The chain is waiting for approval but sent no review.' }
     }
     const remaining = snapshot.steps.filter((step) => step.status === 'pending').length
-    setPendingChatAction({
+    reviewChat(chat, true, () => setPendingChatAction({
       kind: 'chain-step',
       chainId: snapshot.chainId,
       review,
       remaining,
-    })
-    setNotice(review.reason)
+    }))
+    presentChat(chat, () => setNotice(review.reason))
     return { ok: true, message: review.reason, nextInput: '/apply', selectInput: false }
   }
 
@@ -9348,9 +9390,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
    */
   const approveChainStepNow = async (
     pending: Extract<PendingChatAction, { kind: 'chain-step' }>,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
-    setPendingChatAction(null)
+    reviewChat(chat, false, () => setPendingChatAction(null))
     setBusy(true)
     try {
       const approved = asChainRun(await call('chain', {
@@ -9359,22 +9402,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         chain_id: pending.chainId,
         step_id: pending.review.stepId,
         actor: 'chat',
-      }))
+      }, { chat }))
       if (!approved) throw new Error('The server did not return the chain run')
       const settled = isChainSettled(approved.status)
         ? approved
-        : await pollChainRun(bookId, approved)
-      if (settled.status === 'awaiting-approval') return openChainStepReview(settled)
-      await refreshBookData(bookId, notebook?.id)
+        : await pollChainRun(bookId, approved, undefined, chat)
+      if (settled.status === 'awaiting-approval') return openChainStepReview(settled, chat)
+      await refreshBookData(bookId, notebook?.id, undefined, chat)
       if (settled.status !== 'completed') {
         throw new Error(settled.error ?? `Chain ${settled.status}`)
       }
       const message = 'Chain complete'
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
     } finally {
       setBusy(false)
@@ -9384,25 +9427,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const executeRoutedChatActionNow = async (
     plan: ChatActionPlan,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
-    setPendingCommandPlan(null)
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
     setBusy(true)
     let applied = false
     try {
       const result = await call('chat', {
         book_id: bookId,
         action_plan: plan,
-      })
+      }, { chat })
       applied = true
       if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Check the previous project for the accepted action.' }
-      setPendingChatAction(null)
+      reviewChat(chat, false, () => setPendingChatAction(null))
       const acceptedChain = asChainRun(result)
       const settledChain = acceptedChain && !isChainSettled(acceptedChain.status)
-        ? await pollChainRun(bookId, acceptedChain, isCurrent)
+        ? await pollChainRun(bookId, acceptedChain, isCurrent, chat)
         : acceptedChain
       if (settledChain?.status === 'awaiting-approval') {
-        return openChainStepReview(settledChain)
+        return openChainStepReview(settledChain, chat)
       }
       const chainResult = settledChain
       if (settledChain && settledChain.status !== 'completed') {
@@ -9413,10 +9457,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const outcome = await completeVideoDownload(
           result,
           urlFromText(plan.prompt),
-          isCurrent,
+          isCurrent, chat,
         )
         if (isCurrent?.() === false) return outcome
-        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+        presentChat(chat, () => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
         return outcome.ok
           ? outcome
           : { ...outcome, nextInput: '', selectInput: false }
@@ -9433,7 +9477,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             book_id: bookId,
             notebook_id: notebook.id,
             cell,
-          }))
+          }, { chat }))
           const cellId = asString(created?.id)
           if (!cellId) {
             throw new Error('The server did not return the new notebook cell')
@@ -9442,21 +9486,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           placements.push(notebookGridTag(cell.slot))
         }
         if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
-        selectCanvasCell(firstCellId)
-        await refreshBookData(bookId, notebook.id, isCurrent)
+        selectCanvasCell(firstCellId, chat)
+        await refreshBookData(bookId, notebook.id, isCurrent, chat)
         const message = `Created ${placements.join(' and ')}`
-        if (isCurrent?.() !== false) setNotice(message)
+        if (isCurrent?.() !== false) presentChat(chat, () => setNotice(message))
         return { ok: true, message }
       }
       const resultRecord = recordValue(result)
       const createdCellId = asString(resultRecord?.cell_id)
-      await refreshBookData(bookId, notebook?.id, isCurrent)
+      await refreshBookData(bookId, notebook?.id, isCurrent, chat)
       if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
-      if (createdCellId) selectCanvasCell(createdCellId)
+      if (createdCellId) selectCanvasCell(createdCellId, chat)
       const message = chainResult
         ? plan.message || 'Chain complete'
         : messageFor(result, plan.message || 'Action applied')
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
@@ -9465,9 +9509,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? `Action completed, but its notebook result could not be shown: ${detail}`
         : detail
       if (applied) {
-        await refreshBookData(bookId, notebook?.id, isCurrent).catch(() => undefined)
+        await refreshBookData(bookId, notebook?.id, isCurrent, chat).catch(() => undefined)
       }
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return {
         ok: false,
         message,
@@ -9482,6 +9526,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const prepareXPostThreadReview = async (
     plan: ChatActionPlan,
     maxCharacters: number,
+    chat?: ChatExecution,
   ): Promise<XPostThreadReview | null> => {
     if (!bookId || !notebook) return null
     if (plan.tool !== 'post' && plan.routedTool !== 'post') return null
@@ -9510,7 +9555,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell_id: step.outputCellId ?? step.producerCellId,
         limit: 20,
-      }, { background: true }).catch(() => null)
+      }, { background: true, chat }).catch(() => null)
       const attemptValues = recordValue(payload)?.attempts
       const attempts = Array.isArray(attemptValues)
         ? attemptValues as CellGenerationAttempt[]
@@ -9558,7 +9603,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           asset_id: upstreamAssetId,
           name: 'original',
           book_id: bookId,
-        }, { background: true }).catch(() => null)
+        }, { background: true, chat }).catch(() => null)
         const record = recordValue(metadata)
         return record ? xPostSourceCredit(upstreamAssetId, record) : null
       }))
@@ -9572,6 +9617,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     plan: ChatActionPlan,
     originalInput: string,
     isCurrent?: () => boolean,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     const routedAssetReference = (value: unknown): string | null => {
       const assetId = asString(value)
@@ -9673,7 +9719,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(typeof plan.params.save_default === 'boolean'
           ? { saveDefault: plan.params.save_default }
           : {}),
-      })
+      }, chat)
       return applyReadyOutcome(`Watermark review ready for ${target.label}`)
     }
     if (plan.tool === 'extract_audio') {
@@ -9681,7 +9727,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!sourceReference) {
         return { ok: false, message: 'The chat model did not select a video source.' }
       }
-      return await runNotebookAudioCommandNow({ sourceReference }, isCurrent)
+      return await runNotebookAudioCommandNow({ sourceReference }, isCurrent, chat)
     }
     if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9693,9 +9739,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sourceReference,
       }
       if (plan.confirmation.required === false) {
-        return await runNotebookFrameCommandNow(command, isCurrent)
+        return await runNotebookFrameCommandNow(command, isCurrent, chat)
       }
-      return await previewNotebookFrameCommand(command, isCurrent)
+      return await previewNotebookFrameCommand(command, isCurrent, chat)
     }
     if (plan.tool === 'extract_frame') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9712,9 +9758,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         timestampSeconds,
       }
       if (plan.confirmation.required === false) {
-        return await runNotebookFrameCommandNow(command, isCurrent)
+        return await runNotebookFrameCommandNow(command, isCurrent, chat)
       }
-      return await previewNotebookFrameCommand(command, isCurrent)
+      return await previewNotebookFrameCommand(command, isCurrent, chat)
     }
     if (plan.tool === 'split_video') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
@@ -9725,7 +9771,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await previewNotebookSplitCommand({
         sourceReference,
         cutPointsSeconds: [splitAtSeconds],
-      }, isCurrent)
+      }, isCurrent, chat)
     }
     if (
       plan.tool === 'split_video_by_durations'
@@ -9743,7 +9789,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await previewNotebookSplitCommand({
           sourceReference,
           cutPointsSeconds: durationTargetsToCutPoints(targets as number[]),
-        }, isCurrent)
+        }, isCurrent, chat)
       }
     }
     if (plan.effect === 'generation') {
@@ -9786,10 +9832,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         preferredTool: plan.tool,
         reason: plan.confirmation.reason,
         routedParams: plan.params,
-      })
+      }, chat)
     }
     if (plan.confirmation.required === false) {
-      return await executeRoutedChatActionNow(plan, isCurrent)
+      return await executeRoutedChatActionNow(plan, isCurrent, chat)
     }
     const postPlan = plan.tool === 'post' || plan.routedTool === 'post'
     // Learn the account's post length before sizing the thread, so a Premium
@@ -9797,7 +9843,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const xConnectionStatus = postPlan ? await refreshXConnection() : null
     const xPostReview = await prepareXPostThreadReview(
       plan,
-      xPostMaxCharacters(xConnectionStatus ?? xConnection.status),
+      xPostMaxCharacters(xConnectionStatus ?? xConnection.status), chat,
     )
     const reviewedPlan = xPostReview
       ? {
@@ -9809,8 +9855,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       : plan
     if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
-    setPendingCommandPlan(null)
-    setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview })
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
+    reviewChat(chat, true, () => setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview }))
     return applyReadyOutcome('Action preview ready')
   }
 
@@ -9841,6 +9887,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const applyPendingGenerationAction = async (
     action: Extract<PendingChatAction, { kind: 'generation' }>,
     promptOverride: string | null = null,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     const preparedAction = promptOverride
       ? {
@@ -9865,7 +9912,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const value = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: preparedAction.notebookId,
-      }))
+      }, { chat }))
       if (!value) throw new Error('The server returned an invalid notebook')
       currentNotebook = value
     } catch (error) {
@@ -9880,7 +9927,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       currentNotebook,
       preparedAction.expectations,
     )) {
-      setPendingChatAction(null)
+      reviewChat(chat, false, () => setPendingChatAction(null))
       return {
         ok: false,
         message: 'Notebook changed since this preview; prepare the action again.',
@@ -9894,7 +9941,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    setPendingChatAction((current) => current?.kind === 'generation'
+    presentChat(chat, () => setPendingChatAction((current) => current?.kind === 'generation'
       && current.draft.cell.id === preparedAction.draft.cell.id
       ? {
           ...current,
@@ -9903,16 +9950,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           previewLoading: true,
           previewStale: false,
         }
-      : current)
+      : current))
     let validatedPreview: unknown
     try {
       validatedPreview = await loadPendingGenerationPreview(
         preparedAction.draft,
-        currentNotebook,
+        currentNotebook, chat,
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setPendingChatAction((current) => current?.kind === 'generation'
+      presentChat(chat, () => setPendingChatAction((current) => current?.kind === 'generation'
         && current.draft.cell.id === preparedAction.draft.cell.id
         ? {
             ...current,
@@ -9921,7 +9968,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             previewLoading: false,
             previewStale: false,
           }
-        : current)
+        : current))
       return {
         ok: false,
         message,
@@ -9929,7 +9976,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    setPendingChatAction((current) => current?.kind === 'generation'
+    presentChat(chat, () => setPendingChatAction((current) => current?.kind === 'generation'
       && current.draft.cell.id === preparedAction.draft.cell.id
       ? {
           ...current,
@@ -9939,7 +9986,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           previewLoading: false,
           previewStale: false,
         }
-      : current)
+      : current))
     const referenceError = providerPayloadPreviewReferenceError(validatedPreview)
     if (referenceError) {
       return {
@@ -9975,12 +10022,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
     rememberLastWorkSlot(preparedAction.draft.cell.slot)
-    selectCanvasCell(cellId)
+    selectCanvasCell(cellId, chat)
     showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
       await materializeNotebookChatGeneration({
         bookId,
-        callTool: call,
+        callTool: (tool, args) => call(tool, args, { chat }),
         document: currentNotebook,
         draft: preparedAction.draft,
         ...(currentNotebook.revision
@@ -9988,35 +10035,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
       })
       materialized = true
-      const plan = await createGenerationPlan(cellId, 'chat')
+      const plan = await createGenerationPlan(cellId, 'chat', chat)
       const accepted = await call('run_notebook_cell', {
         book_id: bookId,
         notebook_id: currentNotebook.id,
         cell_id: cellId,
         plan,
         actor: 'videobook-user',
-      })
+      }, { chat })
       runAccepted = true
       const acceptedRecord = recordValue(accepted)
       const runId = asString(acceptedRecord?.run_id)
       const jobOperationId = asString(acceptedRecord?.job_id)
       const outputCellId = asString(acceptedRecord?.output_cell_id)
-      setPendingChatAction(null)
+      reviewChat(chat, false, () => setPendingChatAction(null))
       setCellQueued(cellId, false)
       if (!runId || !jobOperationId) {
-        await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+        await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
         return {
           ok: true,
           message: `${cellAddress} was accepted; follow its status in Jobs`,
         }
       }
-      setNotice(`${cellAddress} queued`)
+      presentChat(chat, () => setNotice(`${cellAddress} queued`))
       const watchCellId = outputCellId ?? cellId
       let address = notebookGridAddress(preparedAction.draft.cell.slot)
       if (outputCellId) {
-        const refreshed = await refreshNotebook(bookId, currentNotebook.id)
+        const refreshed = await refreshNotebook(bookId, currentNotebook.id, chat)
           .catch(() => null)
-        revealCells([outputCellId])
+        presentChat(chat, () => revealCells([outputCellId]))
         setCellQueued(outputCellId, true)
         const output = refreshed?.cells.find((candidate) =>
           candidate.id === outputCellId)
@@ -10029,8 +10076,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         address,
         runId,
         jobOperationId,
-      })
-      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      }, chat)
+      await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
       return { ok: true, message: `${cellAddress} queued` }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -10040,23 +10087,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           book_id: bookId,
           notebook_id: currentNotebook.id,
           cell_id: cellId,
-        }).catch(() => undefined)
+        }, { chat }).catch(() => undefined)
       }
       if (!runAccepted) {
         setNodes((current) => current.filter((node) => node.id !== cellId))
         setCellQueued(cellId, false)
       }
       setCellRunError(cellId, message)
-      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
       if (stale) {
-        setPendingChatAction(null)
-        setNotice('Notebook changed since this preview; prepare the action again.', 'error')
+        reviewChat(chat, false, () => setPendingChatAction(null))
+        presentChat(chat, () => setNotice('Notebook changed since this preview; prepare the action again.', 'error'))
         return {
           ok: false,
           message: 'Notebook changed since this preview; prepare the action again.',
         }
       }
-      setNotice(message, 'error')
+      presentChat(chat, () => setNotice(message, 'error'))
       return {
         ok: false,
         message,
@@ -10070,12 +10117,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const applyPendingChatAction = async (
     promptOverride: string | null = null,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!pendingChatAction || !bookId) {
       return { ok: false, message: 'There is no pending chat action.' }
     }
     if (pendingChatAction.kind === 'generation') {
-      return await applyPendingGenerationAction(pendingChatAction, promptOverride)
+      return await applyPendingGenerationAction(pendingChatAction, promptOverride, chat)
     }
     if (
       pendingChatAction.kind === 'routed'
@@ -10108,7 +10156,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
         notebook_id: pendingChatAction.notebookId,
-      }))
+      }, { chat }))
       if (!currentNotebook) {
         return { ok: false, message: 'The server returned an invalid notebook' }
       }
@@ -10116,7 +10164,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? pendingChatAction.plan.expectations
         : pendingChatAction.expectations
       if (notebookAddressExpectationsAreStale(currentNotebook, expectations)) {
-        setPendingChatAction(null)
+        reviewChat(chat, false, () => setPendingChatAction(null))
         return {
           ok: false,
           message: 'Notebook changed since this preview; prepare the action again.',
@@ -10125,12 +10173,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (pendingChatAction.kind === 'frame') {
         const outcome = await executeNotebookFrameCommand(
           pendingChatAction.command,
-          currentNotebook,
+          currentNotebook, undefined, chat,
         )
         if (outcome.ok) {
-          setPendingChatAction(null)
+          reviewChat(chat, false, () => setPendingChatAction(null))
         } else if (outcome.message.startsWith('Stale notebook revision:')) {
-          setPendingChatAction(null)
+          reviewChat(chat, false, () => setPendingChatAction(null))
           return {
             ok: false,
             message: 'Notebook changed since this preview; prepare the action again.',
@@ -10141,12 +10189,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (pendingChatAction.kind === 'split') {
         const outcome = await executeNotebookSplitCommand(
           pendingChatAction.command,
-          currentNotebook,
+          currentNotebook, chat,
         )
         if (outcome.ok) {
-          setPendingChatAction(null)
+          reviewChat(chat, false, () => setPendingChatAction(null))
         } else if (outcome.message.startsWith('Stale notebook revision:')) {
-          setPendingChatAction(null)
+          reviewChat(chat, false, () => setPendingChatAction(null))
           return {
             ok: false,
             message: 'Notebook changed since this preview; prepare the action again.',
@@ -10157,10 +10205,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const action = pendingChatAction.plan.action
       if (action.kind === 'run') {
         const cell = notebookCellAtSlot(currentNotebook, action.source)!
-        const outcome = await runCell(cell.id, currentNotebook)
+        const outcome = await runCell(cell.id, currentNotebook, chat)
         if (!outcome?.ok) {
           if (outcome?.message.startsWith('Stale notebook revision:')) {
-            setPendingChatAction(null)
+            reviewChat(chat, false, () => setPendingChatAction(null))
             return {
               ok: false,
               message: 'Notebook changed since this preview; prepare the action again.',
@@ -10171,7 +10219,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             message: `Could not run ${notebookGridTag(cell.slot)}`,
           }
         }
-        setPendingChatAction(null)
+        reviewChat(chat, false, () => setPendingChatAction(null))
         return {
           ok: true,
           message: `Run requested for ${notebookGridTag(cell.slot)}`,
@@ -10197,9 +10245,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 ? { prompt: '' }
                 : {}),
             },
-          }))
+          }, { chat }))
           const cellId = asString(created?.id)
-          if (cellId) selectCanvasCell(cellId)
+          if (cellId) selectCanvasCell(cellId, chat)
         } else if (action.kind === 'move') {
           const source = notebookCellAtSlot(currentNotebook, action.source)!
           const target = notebookCellAtSlot(currentNotebook, action.destination)
@@ -10221,7 +10269,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   }]
                 : []),
             ],
-          })
+          }, { chat })
         } else if (action.kind === 'delete') {
           const cell = notebookCellAtSlot(currentNotebook, action.source)!
           await call('delete_notebook_cell', {
@@ -10229,7 +10277,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             notebook_id: currentNotebook.id,
             cell_id: cell.id,
             ...revisionInput,
-          })
+          }, { chat })
         } else if (action.kind === 'connect') {
           const source = notebookCellAtSlot(currentNotebook, action.source)!
           const target = notebookCellAtSlot(currentNotebook, action.target)!
@@ -10248,39 +10296,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             target_cell_id: target.id,
             target_input: targetInput,
             ...revisionInput,
-          })
+          }, { chat })
         } else {
           throw new Error('Unsupported notebook action')
         }
-        setPendingChatAction(null)
-        await refreshBookData(bookId, currentNotebook.id)
-        setNotice(pendingChatAction.plan.summary)
+        reviewChat(chat, false, () => setPendingChatAction(null))
+        await refreshBookData(bookId, currentNotebook.id, undefined, chat)
+        presentChat(chat, () => setNotice(pendingChatAction.plan.summary))
         return { ok: true, message: pendingChatAction.plan.summary }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (message.startsWith('Stale notebook revision:')) {
-          setPendingChatAction(null)
-          setNotice('Notebook changed since this preview; prepare the action again.', 'error')
+          reviewChat(chat, false, () => setPendingChatAction(null))
+          presentChat(chat, () => setNotice('Notebook changed since this preview; prepare the action again.', 'error'))
           return {
             ok: false,
             message: 'Notebook changed since this preview; prepare the action again.',
           }
         }
-        setNotice(message, 'error')
+        presentChat(chat, () => setNotice(message, 'error'))
         return { ok: false, message, nextInput: '/apply', selectInput: true }
       } finally {
         setBusy(false)
       }
     }
     if (pendingChatAction.kind === 'chain-step') {
-      return await approveChainStepNow(pendingChatAction)
+      return await approveChainStepNow(pendingChatAction, chat)
     }
-    return await executeRoutedChatActionNow(pendingChatAction.plan)
+    return await executeRoutedChatActionNow(pendingChatAction.plan, undefined, chat)
   }
 
-  const completeWorkspaceToolResult = async (tool: string, result: unknown, args: Record<string, unknown>, title: string): Promise<ComposerOutcome> => {
+  const completeWorkspaceToolResult = async (tool: string, result: unknown, args: Record<string, unknown>, title: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (tool === 'download_video' && notebook) {
-      return await completeVideoDownload(result, asString(args.url) ?? '')
+      return await completeVideoDownload(result, asString(args.url) ?? '', undefined, chat)
     }
     const routedCells = notebook
       ? routedMediaCellInputs(tool, result, notebook.cells, lastWorkSlot)
@@ -10293,7 +10341,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           book_id: bookId,
           notebook_id: notebook.id,
           cell,
-        }))
+        }, { chat }))
         const cellId = asString(created?.id)
         if (!cellId) {
           throw new Error('The server did not return the new notebook cell')
@@ -10302,14 +10350,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         placements.push(notebookGridTag(cell.slot))
       }
       if (watchScopeRef.current.bookId === bookId) {
-        selectCanvasCell(firstCellId)
-        await refreshBookData(bookId, notebook.id)
+        selectCanvasCell(firstCellId, chat)
+        await refreshBookData(bookId, notebook.id, undefined, chat)
       }
       const message = `Created ${placements.join(' and ')}`
-      setNotice(message)
+      presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     }
-    if (watchScopeRef.current.bookId === bookId) await refreshBookData(bookId, notebook?.id)
+    if (watchScopeRef.current.bookId === bookId) await refreshBookData(bookId, notebook?.id, undefined, chat)
     if (tool === 'rename_asset') {
       const renamed = recordValue(result)
       const newLabel = asString(renamed?.label)
@@ -10321,9 +10369,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { ok: true, message: messageFor(result, `${title} complete`) }
   }
 
-  const openWorkspaceMedia = async (asset: AssetRecord, orientation?: string, position?: number) => {
+  const openWorkspaceMedia = async (asset: AssetRecord, orientation?: string, position?: number, chat?: ChatExecution) => {
     const targetBookId = bookId
-    const manifest = recordValue(await call('asset_manifest', { book_id: targetBookId, asset_id: asset.artifactId }))
+    const manifest = recordValue(await call('asset_manifest', { book_id: targetBookId, asset_id: asset.artifactId }, { chat }))
     if (watchScopeRef.current.bookId !== targetBookId) return
     const files = (Array.isArray(manifest?.files) ? manifest.files : []).flatMap((entry) => {
       const name = asString(recordValue(entry)?.name)
@@ -10334,13 +10382,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         : position ? files[position - 1] : undefined
     if ((orientation || position) && !selected) throw new Error(orientation ? `No ${orientation} file exists yet. Use render video to create it.` : 'That file position does not exist.')
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setWorkspacePreview({ media: {
+    presentChat(chat, () => setWorkspacePreview({ media: {
       label: asset.label, assetId: asset.artifactId, type: asset.type, url: asset.mediaUrl,
       thumbnailUrl: asset.thumbnailUrl, files, initialFile: selected?.name, opener,
-    }, opener })
+    }, opener, turnId: chat?.id }))
   }
 
-  const executeWorkspaceUiRoute = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<ComposerOutcome | null> => {
+  const executeWorkspaceUiRoute = async (action: WorkspaceAction, values: Record<string, unknown>, chat?: ChatExecution): Promise<ComposerOutcome | null> => {
     if (action.handler.kind !== 'ui') return null
     const uiAction = action.handler.action
     const route = WORKSPACE_UI_ROUTES[uiAction]
@@ -10354,7 +10402,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const asset = assets.find((entry) => entry.artifactId === reference)
       ?? assets.find((entry) => commandMentionAssets.some((mention) => mention.artifactId === entry.artifactId && mention.cellAddress.toLowerCase() === reference?.replace(/^@/u, '').toLowerCase()))
     if (route.kind === 'search') {
-      await openWorkspaceActions(undefined, undefined, route.query)
+      await openWorkspaceActions(undefined, undefined, route.query, undefined, chat)
       return { ok: true, message: 'Actions opened' }
     }
     if (route.kind === 'form') {
@@ -10374,9 +10422,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         formValues.audio_id = audioTarget.clipId
       }
       if (uiAction === 'viewer_focus_file' && asset) {
-        await openWorkspaceMedia(asset, undefined, parseFilePosition(values.position))
+        await openWorkspaceMedia(asset, undefined, parseFilePosition(values.position), chat)
       } else {
-        await openWorkspaceActions(`tool.${tool}`, formValues)
+        await openWorkspaceActions(`tool.${tool}`, formValues, undefined, undefined, chat)
       }
       return { ok: true, message: `${action.title} options opened` }
     }
@@ -10387,15 +10435,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (route.action === 'notebook') {
       const name = asString(values.name)?.trim()
       if (name) {
-        const entries = asNotebooks(await call('list_notebooks', { book_id: bookId }))
+        const entries = asNotebooks(await call('list_notebooks', { book_id: bookId }, { chat }))
         const target = entries.find((entry) => entry.name === name || entry.id === name)
         if (!target) {
-          await openWorkspaceActions('tool.create_notebook', { name })
+          await openWorkspaceActions('tool.create_notebook', { name }, undefined, undefined, chat)
           return { ok: true, message: 'Create notebook options opened' }
         }
-        await refreshBookData(bookId, target.id)
+        await refreshBookData(bookId, target.id, undefined, chat)
       } else if (!notebook) {
-        await openWorkspaceActions('tool.create_notebook', { name: 'scratch' })
+        await openWorkspaceActions('tool.create_notebook', { name: 'scratch' }, undefined, undefined, chat)
         return { ok: true, message: 'Create notebook options opened' }
       }
       navigate('notebook')
@@ -10403,7 +10451,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.action === 'save') {
       if (!notebook) throw new Error('Open a notebook first.')
-      await refreshNotebook(bookId, notebook.id)
+      await refreshNotebook(bookId, notebook.id, chat)
       return { ok: true, message: 'Notebook changes are saved automatically. Saved state verified.' }
     }
     if (route.action === 'collapse' || route.action === 'expand') {
@@ -10420,17 +10468,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.action === 'close') {
       closeMediaFullscreen()
-      setWorkspacePreview(null)
+      presentChat(chat, () => setWorkspacePreview(null))
       return { ok: true, message: 'Viewer closed' }
     }
     if (route.action === 'play') {
       const target = resolvePlaySlot(asString(values.slot), sequence)
       if (!target.ok) return { ok: false, message: target.message }
-      setWorkspacePreview({ initialFrame: target.initialFrame, opener: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+      presentChat(chat, () => setWorkspacePreview({ initialFrame: target.initialFrame, turnId: chat?.id, opener: document.activeElement instanceof HTMLElement ? document.activeElement : null }))
       return { ok: true, message: 'Sequence preview opened' }
     }
     if (!asset) {
-      await openWorkspaceActions(action.id, values)
+      await openWorkspaceActions(action.id, values, undefined, undefined, chat)
       return { ok: true, message: 'Choose media for this action' }
     }
     if (route.action === 'copy') {
@@ -10440,7 +10488,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (route.action === 'history') {
       const cell = notebook?.cells.find((entry) => entry.outputArtifactId === asset.artifactId)
       if (cell) openCellHistory(cell.id, asset.artifactId)
-      else await openWorkspaceActions('tool.asset_history', { asset_id: asset.artifactId })
+      else await openWorkspaceActions('tool.asset_history', { asset_id: asset.artifactId }, undefined, undefined, chat)
       return { ok: true, message: 'Media history opened' }
     }
     if (route.action === 'skeleton') {
@@ -10448,16 +10496,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await openWorkspaceActions('tool.generate_kie_qwen_3_0_edit_image', {
         image_refs: [asset.artifactId],
         prompt: 'Create a pose skeleton guide from this reference image. Preserve the visible body poses, joint positions and framing. Show only clearly connected colored skeleton joints and limbs on a black background, without clothing, faces, scenery or text.',
-      })
+      }, undefined, undefined, chat)
       return { ok: true, message: 'AI pose guide options opened. Review the provider and cost before generating.' }
     }
-    await openWorkspaceMedia(asset, route.action === 'open' ? undefined : route.action)
+    await openWorkspaceMedia(asset, route.action === 'open' ? undefined : route.action, undefined, chat)
     return { ok: true, message: 'Media preview opened' }
   }
 
   const executeCommand = async (
     input: string,
     context?: { speakVoiceId?: string },
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     try {
       const normalizedInput = input.trim().toLowerCase()
@@ -10474,23 +10523,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             selectInput: false,
           }
         }
-        if (pendingWatermarkReview) return await submitWatermark()
+        if (pendingWatermarkReview) return await submitWatermark(chat)
         if (pendingChatAction) {
-          return await applyPendingChatAction(applyCommand.promptOverride)
+          return await applyPendingChatAction(applyCommand.promptOverride, chat)
         }
-        if (pendingCommandPlan) return await applyPendingCommandPlan()
+        if (pendingCommandPlan) return await applyPendingCommandPlan(chat)
         return { ok: false, message: 'There is no pending action to apply.' }
       }
       if (normalizedInput === '/cancel') {
         if (!pendingWatermarkReview && !pendingChatAction && !pendingCommandPlan) {
           return { ok: false, message: 'There is no pending action to cancel.' }
         }
-        setPendingWatermarkReview(null)
-        setPendingChatAction(null)
-        setPendingCommandPlan(null)
+        reviewChat(chat, false, () => setPendingWatermarkReview(null))
+        reviewChat(chat, false, () => setPendingChatAction(null))
+        reviewChat(chat, false, () => setPendingCommandPlan(null))
         return { ok: true, message: 'Pending action cancelled' }
       }
-      if (pendingWatermarkReview) setPendingWatermarkReview(null)
+      if (pendingWatermarkReview) reviewChat(chat, false, () => setPendingWatermarkReview(null))
       if (!bookId && !input.startsWith('/')) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
         const routed = await call('chat', {
@@ -10498,20 +10547,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ...(notebook ? { notebook_id: notebook.id } : {}),
           prompt: input,
           model: chatModel,
-        })
+        }, { chat })
         const routedRecord = recordValue(routed)
         if (routedRecord?.kind === 'chat-action-plan') {
           return await previewRoutedChatAction(
             asChatActionPlan(routed),
-            input,
+            input, undefined, chat,
           )
         }
-        setPendingChatAction(null)
-        setPendingCommandPlan(null)
+        reviewChat(chat, false, () => setPendingChatAction(null))
+        reviewChat(chat, false, () => setPendingCommandPlan(null))
         if (isDownloadVideoResult(routed)) {
-          return await completeVideoDownload(routed, urlFromText(input))
+          return await completeVideoDownload(routed, urlFromText(input), undefined, chat)
         }
-        await refreshBookData(bookId, notebook?.id)
+        await refreshBookData(bookId, notebook?.id, undefined, chat)
         return {
           ok: true,
           message: messageFor(routed, 'Command complete'),
@@ -10521,7 +10570,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const commandToken = rawCommandToken.toLowerCase()
       const rest = restParts.join(' ')
       if (commandToken.toLowerCase() === '/actions') {
-        await openWorkspaceActions(undefined, undefined, rest)
+        await openWorkspaceActions(undefined, undefined, rest, undefined, chat)
         return { ok: true, message: 'Actions opened' }
       }
       const resolvedRest = commandToken.toLowerCase() === '/duplicate'
@@ -10536,13 +10585,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             rest,
             gridMentionAssets,
           )
-      const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', {})).actions
+      const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', {}, { chat })).actions
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
       const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))
       if (advertisedCommand?.workspaceActionId || (advertisedAction && !rest && (advertisedAction.inputSchema.required ?? []).some((name) => !['book_id', 'notebook_id', 'sequence_id'].includes(name)))) {
         const values = advertisedCommand ? parseCommandArgs(resolvedRest, advertisedCommand.params) : {}
-        await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values)
+        await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values, undefined, undefined, chat)
         return { ok: true, message: 'Action options opened' }
       }
       if (commandToken === '/extract-audio') {
@@ -10551,14 +10600,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await runNotebookAudioCommandNow({
           sourceReference: normalizeNotebookReference(restParts[0]),
-        })
+        }, undefined, chat)
       }
       if (commandToken === '/split') {
         const command = parseNotebookSplitCommand(input)
         if (!command) {
           return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s] | keep 0.03-0.11 | remove 0.03-0.11' }
         }
-        return await previewNotebookSplitCommand(command)
+        return await previewNotebookSplitCommand(command, undefined, chat)
       }
       if (
         (commandToken === '/split-chunks' || commandToken === '/even-split')
@@ -10574,13 +10623,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return await previewNotebookSplitCommand({
           sourceReference: normalizeNotebookReference(sourceValue!),
           cutPointsSeconds: durationTargetsToCutPoints(targets),
-        })
+        }, undefined, chat)
       }
       if (commandToken === '/rough-cut') {
-        return await prepareRoughCut('slash')
+        return await prepareRoughCut('slash', chat)
       }
       if (commandToken === '/sound-effects') {
-        return await prepareSoundEffects('slash')
+        return await prepareSoundEffects('slash', chat)
       }
       if (commandToken === '/generate-cell') {
         if (!notebook || restParts.length !== 1) {
@@ -10595,7 +10644,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ) {
           return { ok: false, message: 'Choose a configured generation cell' }
         }
-        return await prepareGenerationPlan(cell.id, 'slash')
+        return await prepareGenerationPlan(cell.id, 'slash', chat)
       }
       if (
         commandToken === '/arrange-videos-column'
@@ -10607,7 +10656,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await arrangeVideoCellsOnAxis(
           commandToken === '/arrange-videos-column' ? 'column' : 'row',
-          anchor,
+          anchor, chat,
         )
       }
       if (commandToken === '/group-images') {
@@ -10615,26 +10664,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!anchor) {
           return { ok: false, message: 'Select a cell to anchor the grouping' }
         }
-        return await groupImageCells(anchor)
+        return await groupImageCells(anchor, chat)
       }
       if (commandToken === '/track-add') {
         const parsedTrack = parseTrackAddCommand(restParts)
         if (!parsedTrack.ok) return parsedTrack
-        return await addSequenceTrack(parsedTrack.kind, parsedTrack.name)
+        return await addSequenceTrack(parsedTrack.kind, parsedTrack.name, chat)
       }
       if (commandToken === '/track-remove') {
         const track = sequenceTrackReference(sequence, restParts[0])
         if (!track || restParts.length !== 1) {
           return { ok: false, message: 'Usage: /track-remove @track-id' }
         }
-        return await removeSequenceTrack(track.trackId)
+        return await removeSequenceTrack(track.trackId, chat)
       }
       if (commandToken === '/export-sequence' || (commandToken === '/export' && restParts.some((value) => value === '@sequence-main' || value.startsWith('--') || value === `@${sequence?.sequenceId}`))) {
         if (!sequence) return { ok: false, message: 'Load the primary sequence first.' }
         const parsedExport = parseExportSequenceCommand(restParts, sequence.sequenceId)
         if (!parsedExport.ok) return parsedExport
         const { orientation, captions } = parsedExport
-        const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }))
+        const currentSequence = asSequence(await call('get_primary_sequence', { book_id: bookId }, { chat }))
         if (!currentSequence) return { ok: false, message: 'Load the primary sequence first.' }
         setSequence(currentSequence)
         const value = await call('plan_sequence_export', {
@@ -10644,7 +10693,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           sequence_revision: currentSequence.revision,
           orientation,
           captions,
-        })
+        }, { chat })
         const invalid = recordValue(value)
         if (invalid?.kind === 'invalid-export') {
           const validation = recordValue(invalid.validation)
@@ -10654,7 +10703,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             : []
           return { ok: false, message: errors.join(' · ') || 'Export validation failed' }
         }
-        return await previewCommandPlan(asCommandPlan(value))
+        return await previewCommandPlan(asCommandPlan(value), chat)
       }
       const sequenceSlash = parseSequenceSlashCommand(commandToken, restParts, {
         sequence,
@@ -10663,7 +10712,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       if (sequenceSlash.handled) {
         if (!sequenceSlash.ok) return sequenceSlash
-        return await prepareSequenceEdit(sequenceSlash.request, 'slash')
+        return await prepareSequenceEdit(sequenceSlash.request, 'slash', chat)
       }
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
@@ -10671,7 +10720,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const parsed = command.command === '/post'
           ? normalizePostCommandArgs(resolvedRest)
           : parseCommandArgs(resolvedRest, command.params)
-        const outcome = await executeWorkspaceUiRoute(advertisedAction, parsed)
+        const outcome = await executeWorkspaceUiRoute(advertisedAction, parsed, chat)
         if (outcome) return outcome
       }
       if (command.uiAction === 'switch_book') {
@@ -10717,7 +10766,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
           ? document.activeElement
           : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
-        setMediaFullscreen(null)
+        presentChat(chat, () => setMediaFullscreen(null))
         setTimelinePreview(null)
         void musicRhythm.load()
         setMusicVideoSession({
@@ -10730,7 +10779,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         void prepareMusicVideoSetup(
           sessionKey,
           audioAsset.artifactId,
-          sequence,
+          sequence, chat,
         ).catch(() => undefined)
         return { ok: true, message: `Music-video editor opened for ${audioAsset.label}` }
       }
@@ -10743,7 +10792,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
           ? document.activeElement
           : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
-        setMediaFullscreen(null)
+        presentChat(chat, () => setMediaFullscreen(null))
         setTimelinePreview(null)
         setMusicVideoSession(null)
         setAliveSession({
@@ -10759,7 +10808,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           returnFocus,
           state: { status: 'loading' },
         })
-        void loadAliveCaptions(sessionKey, video.artifactId, false)
+        void loadAliveCaptions(sessionKey, video.artifactId, false, chat)
         return { ok: true, message: `Alive captions opened for ${video.label}` }
       }
       if (command.uiAction === 'speak_preview') {
@@ -10781,7 +10830,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (action.kind === 'error') {
           return { ok: false, message: action.message }
         }
-        return await runSpeakGeneration(action.text, action.voiceId)
+        return await runSpeakGeneration(action.text, action.voiceId, chat)
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -10792,7 +10841,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
         )
         if (!target.ok) return { ok: false, message: target.message }
-        openWatermarkReview(target.artifactId, target.label)
+        openWatermarkReview(target.artifactId, target.label, undefined, chat)
         return applyReadyOutcome(`Watermark review ready for ${target.label}`)
       }
       if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
@@ -10810,11 +10859,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         args.notebook_id = notebook.id
       }
       if (advertisedAction && advertisedAction.confirmation !== 'none') {
-        await openWorkspaceActions(advertisedAction.id, args)
+        await openWorkspaceActions(advertisedAction.id, args, undefined, undefined, chat)
         return { ok: true, message: 'Review the action before running it' }
       }
-      const result = await call(command.mcpTool.tool, args)
-      return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command)
+      const result = await call(command.mcpTool.tool, args, { chat })
+      return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command, chat)
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -10904,23 +10953,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : `${action.title} changes or removes the selected content. Review the target and values before confirming.` }
   }
 
-  const executeComposerCommand = async (
+  const runComposerCommand = async (
     input: string,
     context?: ComposerExecuteContext,
+    chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (context?.action) {
       const action = workspaceActions.find(entry => entry.id === context.action?.id)
       if (!action) return { ok: false, message: 'Reload Actions and choose the command again.', nextInput: input }
       const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
       const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
-      await openWorkspaceActions(action.id, { ...context.action.values, ...parseCommandArgs(rest, command.params) })
+      await openWorkspaceActions(action.id, { ...context.action.values, ...parseCommandArgs(rest, command.params) }, undefined, undefined, chat)
       return { ok: true, message: 'Action options opened' }
     }
     const session = mediaFullscreen?.asset.type === 'image'
       ? mediaFullscreen
       : null
     if (!session) {
-      const outcome = await executeCommand(input, context)
+      const outcome = await executeCommand(input, context, chat)
       if (parsePendingApplyCommand(input) || input.trim().toLowerCase() === '/cancel') {
         voiceOutcomeRef.current?.(pendingCommandVoiceOutcome(input, outcome))
       } else voiceTypedTurnRef.current?.(input, outcome.message)
@@ -10981,7 +11031,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         subjectIds: selectedSubjects.map((subject) => subject.id),
         ...(prompt ? { prompt } : {}),
         regions: regionReplacementPayload(targets, merged.replacements),
-      })
+      }, chat)
       if (!queued) {
         return {
           ok: false,
@@ -11017,7 +11067,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       operation: 'edit',
       subjectIds: selectedSubjects.map((subject) => subject.id),
       prompt: input,
-    })
+    }, chat)
     if (!queued) {
       return {
         ok: false,
@@ -11029,6 +11079,37 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return {
       ok: true,
       message: `Image edit queued for ${selectedSubjects.length} ${selectedSubjects.length === 1 ? 'subject' : 'subjects'}.`,
+    }
+  }
+
+  const beginComposerTurn = (input: string): ChatExecution => {
+    const continuingReview = /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)
+      && Boolean(pendingChatAction || pendingCommandPlan || pendingWatermarkReview)
+    if (!continuingReview) {
+      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      selectCanvasCell(null)
+      setSourceViewCellId(null)
+      setHistoryViewCellId(null)
+      setGenerationsViewCellId(null)
+      setWorkspacePreview(null)
+      setActionDialog(null)
+      closeMediaFullscreen()
+      setNoticeState(null)
+    }
+    return beginChatTurn(input)
+  }
+
+  const executeComposerCommand = async (input: string, context?: ComposerExecuteContext): Promise<ComposerOutcome> => {
+    const chat = context?.chat ?? (parsePendingApplyCommand(input) || input.trim().toLowerCase() === '/cancel' ? beginChatTurn(input) : undefined)
+    chat?.working()
+    try {
+      const outcome = await runComposerCommand(input, context, chat)
+      chat?.finish({ ...outcome, ...(input.trim().toLowerCase() === '/cancel' && outcome.ok ? { status: 'cancelled' as const } : {}) })
+      return outcome
+    } catch (error) {
+      const outcome = { ok: false, message: error instanceof Error ? error.message : String(error) }
+      chat?.finish(outcome)
+      return outcome
     }
   }
 
@@ -11903,6 +11984,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const composerSession = fullscreenImageEditor ? `image-edit:${fullscreenImageEditor.key}` : `chat:${bookId}`
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
+  const workspaceChatPreview = workspacePreview?.turnId !== undefined && workspacePreview.turnId === chatTurns.at(-1)?.id
   const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
   const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
   // A spoken decision about the review already on screen. Apply and cancel run
@@ -11975,12 +12057,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     scope: composerSession,
     available: showCommandComposer && mcp.state === 'ready' && Boolean(bookId) && !mediaFullscreen && !workspacePreview && !musicVideoSession,
     disabled: busy || Boolean(pendingWatermarkReview || pendingCommandPlan || pendingChatAction),
+    onUserTurn: () => {
+      if (pendingWatermarkReview || pendingCommandPlan || pendingChatAction) return
+      voiceChatRef.current = claimVoiceTurn()
+      selectCanvasCell(null)
+      setSourceViewCellId(null)
+      setHistoryViewCellId(null)
+      setGenerationsViewCellId(null)
+    },
     onAction: async (event, isCurrent) => {
+      const chat = voiceChatRef.current ?? claimVoiceTurn()
+      const current = () => isCurrent() && chat.isCurrent()
+      if (!current()) return { status: 'cancelled', message: 'A newer message replaced this request.' }
       if (busy || pendingChatAction || pendingCommandPlan || pendingWatermarkReview) return { status: 'failed', message: 'Finish the current command or use Apply or Cancel on screen first.' }
       const plan = asChatActionPlan(event.plan)
       if (plan.bookId !== bookId) return { status: 'cancelled', message: 'The project changed. Repeat the command here.' }
-      const outcome = await previewRoutedChatAction(plan, event.prompt, isCurrent)
-      if (!isCurrent()) return { status: 'cancelled', message: 'Workspace changed. Check the previous project for accepted work.' }
+      const outcome = await previewRoutedChatAction(plan, event.prompt, current, chat)
+      if (!current()) return { status: 'cancelled', message: 'Workspace changed. Check the previous project for accepted work.' }
       setNotice(outcome.message, outcome.ok ? 'info' : 'error')
       return {
         status: !outcome.ok ? 'failed' : outcome.nextInput?.startsWith('/apply') ? 'review' : /queued|started|running|processing/i.test(outcome.message) ? 'queued' : 'completed',
@@ -13182,7 +13275,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         sequence={workspacePreview.media ? undefined : sequence ?? undefined}
         assets={assets.flatMap((asset) => asset.mediaUrl ? [{ artifactId: asset.artifactId, mediaUrl: asset.mediaUrl }] : [])}
         opener={workspacePreview.opener} initialFrame={workspacePreview.initialFrame}
-        composerPortalRef={setPreviewComposerTarget} actionsOpen={Boolean(currentActionComposer)}
+        composerPortalRef={setPreviewComposerTarget} actionsOpen={Boolean(currentActionComposer || workspaceChatPreview)}
         onClose={() => { setWorkspacePreview(null); setActionDiscovery(null); setActionComposer(null) }}
         onActions={() => void openWorkspaceActions(undefined, workspacePreview.media ? { asset_id: workspacePreview.media.assetId } : undefined)} />}
       {actionDialog?.actionId && <WorkspaceActionsDialog key={actionDialog.key} actions={workspaceActions} context={{
@@ -13199,6 +13292,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onExecute={executeWorkspaceAction} onReview={reviewWorkspaceAction} />}
 
       <CommandComposer
+        chatTurns={chatTurns}
+        previewTurnId={previewTurnId}
+        connected={mcp.state === 'ready' && online}
+        editingDisabled={mediaFullscreenSidebarEditing || !bookId || mcp.state !== 'ready'}
+        onBeginTurn={beginComposerTurn}
         onCommandRowHeightChange={setCommandRowHeight}
         hidden={!showCommandComposer}
         dockOpen={composerDockOpen}
@@ -13241,7 +13339,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         mentionAssets={imageEditMentionAssets}
         inputSession={composerSession}
         placeholder={fullscreenComposerPlaceholder}
-        portalTarget={workspacePreview && currentActionComposer ? previewComposerTarget
+        portalTarget={workspacePreview && (currentActionComposer || workspaceChatPreview) ? previewComposerTarget
           : fullscreenImageEditor || (mediaFullscreen && currentActionComposer) ? mediaFullscreenComposerTarget : null}
         pendingInput={fullscreenImageEditor
           ? undefined

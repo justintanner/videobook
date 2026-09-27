@@ -60,6 +60,7 @@ describe('composer focus through real workspace interactions', () => {
   async function ready(): Promise<void> {
     await input().waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
+    await expect.poll(() => page.locator('.command-send .busy-indicator').count(), { timeout: 15_000 }).toBe(0)
   }
 
   async function selectProject(name: string): Promise<void> {
@@ -493,7 +494,7 @@ describe('composer focus through real workspace interactions', () => {
     }
   })
 
-  it('keeps chat history out of media previews and restores it after clearing selection', async () => {
+  it('hides history for manual media previews and closes those previews on a new message', async () => {
     const uploaded = record(await call('upload_file', {
       filename: 'image.png', data: (await readFile(imagePath)).toString('base64'),
     }))
@@ -513,8 +514,8 @@ describe('composer focus through real workspace interactions', () => {
     await ready()
     const history = page.getByRole('log', { name: 'Chat history' })
     await history.waitFor({ state: 'visible' })
-    let previousCalls = await history.locator('.mcp-call[data-tool="list_notebooks"]').count()
-    expect(previousCalls).toBeGreaterThan(0)
+    let previousTurn = Number(await history.locator('.chat-turn').last().getAttribute('data-turn-id'))
+    expect(await history.locator('.mcp-call[data-tool="list_notebooks"]').count()).toBeGreaterThan(0)
     const draft = 'Keep my draft while previewing'
     await input().fill(draft)
 
@@ -528,16 +529,12 @@ describe('composer focus through real workspace interactions', () => {
       await input().fill('/notebooks')
       await page.getByLabel('Send command', { exact: true }).click()
       await ready()
-      expect(await page.getByRole('region', { name: 'Cell output media' }).isVisible()).toBe(true)
-      expect(await history.count()).toBe(0)
-      expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
-      await input().fill(draft)
-      await input().press('Escape')
-      await page.getByLabel('Clear selection', { exact: true }).click()
+      expect(await page.getByRole('region', { name: 'Cell output media' }).count()).toBe(0)
       await history.waitFor({ state: 'visible' })
-      const currentCalls = await history.locator('.mcp-call[data-tool="list_notebooks"]').count()
-      expect(currentCalls).toBeGreaterThan(previousCalls)
-      previousCalls = currentCalls
+      const currentTurn = Number(await history.locator('.chat-turn').last().getAttribute('data-turn-id'))
+      expect(currentTurn).toBeGreaterThan(previousTurn)
+      previousTurn = currentTurn
+      await input().fill(draft)
       expect(await input().textContent()).toBe(draft)
     }
   })
@@ -642,7 +639,7 @@ describe('composer focus through real workspace interactions', () => {
   it('returns a real rejected command to chat', async () => {
     await input().fill('/invert missing-asset-for-focus')
     await page.getByLabel('Send command', { exact: true }).click()
-    await page.locator('.command-result-error').waitFor()
+    await page.locator('.chat-turn[data-status="failed"] .chat-bubble-assistant').last().waitFor()
     await ready()
     await focused(input())
     await page.keyboard.type('Try again')
@@ -690,11 +687,46 @@ describe('composer focus through real workspace interactions', () => {
       await input().fill('/notebooks')
       await page.getByLabel('Send command', { exact: true }).click()
       await responseReady
+      await cell(generationCellId).click()
       await prompt.fill('Keep editing this prompt')
       release()
       await ready()
       await focused(prompt)
       expect(await prompt.inputValue()).toBe('Keep editing this prompt')
+    } finally {
+      release()
+      await page.unroute('**/mcp')
+    }
+  })
+
+  it('cancels an unsent turn when switching away and back during prompt persistence', async () => {
+    let release = () => undefined as void
+    let arrived = () => undefined as void
+    const held = new Promise<void>(resolve => { release = resolve })
+    const pending = new Promise<void>(resolve => { arrived = resolve })
+    await page.route('**/mcp', async route => {
+      if (toolCalls(route.request().postDataJSON()).some(call => call.name === 'record_prompt')) {
+        arrived()
+        await held
+      }
+      await route.continue()
+    })
+    try {
+      await input().fill('/split @a1')
+      await page.getByLabel('Send command', { exact: true }).click()
+      await pending
+      for (const name of ['focus-secondary', 'focus-primary']) {
+        await page.locator('.brand-project-menu-toggle').click()
+        await page.locator('.book-project-select').filter({ hasText: name }).click()
+        await expect.poll(() => page.locator('.brand-project-menu-toggle').textContent()).toContain(name)
+        await expect.poll(() => page.locator('.book-project-menu').count()).toBe(0)
+      }
+      await input().fill('Draft after returning')
+      release()
+      await ready()
+      await expect.poll(() => page.locator('.chat-turn').last().getAttribute('data-status')).toBe('cancelled')
+      expect(await page.getByLabel('Video split review').count()).toBe(0)
+      expect(await input().textContent()).toBe('Draft after returning')
     } finally {
       release()
       await page.unroute('**/mcp')

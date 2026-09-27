@@ -1,12 +1,13 @@
 import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
 import type { McpCall, McpCallLog } from './mcp-activity'
+import { chatTurnActive, type ChatTurn } from './chat-turns'
 
 export const COMPOSER_HISTORY_CAP = 256
 export const HISTORY_AUTO_CLOSE_MS = 60_000
 const VISIBLE_EXCHANGES = 2
 
 export type ComposerHistoryRow =
-  | { kind: 'caption'; sequence: number; caption: VoiceCaption }
+  | { kind: 'caption'; sequence: number; caption: VoiceCaption; turn?: ChatTurn; calls?: readonly McpCall[] }
   | { kind: 'call'; sequence: number; call: McpCall }
 
 function captionCounts(caption: VoiceCaption): boolean {
@@ -21,18 +22,24 @@ function captionCounts(caption: VoiceCaption): boolean {
 export function composerHistory(
   captions: readonly VoiceCaption[],
   log: McpCallLog,
+  turns: readonly ChatTurn[] = [],
 ): ComposerHistoryRow[] {
   const captionRows: ComposerHistoryRow[] = captions.filter(captionCounts).map((caption) => ({
     kind: 'caption',
     sequence: caption.sequence ?? 0,
     caption,
   }))
-  const callRows: ComposerHistoryRow[] = log.calls.map((call) => ({
+  const turnRows: ComposerHistoryRow[] = turns.map(turn => ({
+    kind: 'caption', sequence: turn.id, turn,
+    caption: { id: `typed:${turn.id}`, sequence: turn.id, role: 'user', text: turn.text, final: true },
+    calls: log.calls.filter(call => call.turnId === turn.id),
+  }))
+  const callRows: ComposerHistoryRow[] = log.calls.filter(call => call.turnId === undefined).map((call) => ({
     kind: 'call',
     sequence: call.id,
     call,
   }))
-  const merged = [...captionRows, ...callRows].sort((left, right) => {
+  const merged = [...captionRows, ...turnRows, ...callRows].sort((left, right) => {
     if (left.sequence !== right.sequence) return left.sequence - right.sequence
     if (left.kind === right.kind) return 0
     return left.kind === 'caption' ? -1 : 1
@@ -40,7 +47,8 @@ export function composerHistory(
   const spoken = merged.flatMap((row, index) =>
     row.kind === 'caption' && row.caption.role === 'user' ? [index] : [])
   const from = spoken.at(-VISIBLE_EXCHANGES)
-  return from === undefined ? merged : merged.slice(from)
+  return from === undefined ? merged : merged.filter((row, index) => index >= from
+    || (row.kind === 'caption' && row.turn && chatTurnActive(row.turn)))
 }
 
 export function composerHistoryEpoch(rows: readonly ComposerHistoryRow[]): number {
@@ -49,7 +57,9 @@ export function composerHistoryEpoch(rows: readonly ComposerHistoryRow[]): numbe
 
 export function composerHistoryGeneration(rows: readonly ComposerHistoryRow[]): string {
   return rows.map((row) =>
-    row.kind === 'call' ? `${row.sequence}:${row.call.phase}` : String(row.sequence)).join(',')
+    row.kind === 'call' ? `${row.sequence}:${row.call.phase}` : row.turn
+      ? `${row.sequence}:${row.turn.status}:${row.turn.reply}:${row.turn.work.map(work => work.state).join(':')}`
+      : String(row.sequence)).join(',')
 }
 
 export function historyAutoCloseHeld(input: {

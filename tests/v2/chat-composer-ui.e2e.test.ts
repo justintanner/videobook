@@ -2020,8 +2020,8 @@ describe('chat composer browser flow', () => {
     await dialog.getByLabel('Send command').click()
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'edit_image_subjects')).toBeTruthy()
-    expect(await dialog.getByRole('button', { name: 'Remove' }).isDisabled()).toBe(true)
-    expect(await dialog.getByRole('button', { name: 'Hide subjects' }).isDisabled()).toBe(true)
+    await dialog.waitFor({ state: 'hidden' })
+    expect(await page.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe(editPrompt)
     const editCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
     expect(editCall?.arguments).toMatchObject({
       book_id: bookId,
@@ -2036,7 +2036,11 @@ describe('chat composer browser flow', () => {
     expect(observedCalls.some((call) => call.name === 'chat')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'record_prompt')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'list_prompt_history')).toBe(false)
-    await dialog.locator('.command-result-ok').waitFor({ state: 'visible' })
+    await page.locator('.chat-turn').last().getByLabel('Copilot reply').waitFor({ state: 'visible' })
+    await notebookCellNode(page, fullscreenImageCellId).click()
+    await editTrigger.click()
+    await dialog.waitFor({ state: 'visible' })
+    await subjectCheckbox.check()
     observedCalls.length = 0
     const remove = dialog.getByRole('button', { name: 'Remove' })
     await remove.click()
@@ -2368,7 +2372,7 @@ describe('chat composer browser flow', () => {
     const failedCommand = 'history command expected to fail'
     await input.fill(failedCommand)
     await page.getByLabel('Send command').click()
-    await page.locator('.command-result-error').waitFor({ state: 'visible' })
+    await page.locator('.chat-turn[data-status="failed"] .chat-bubble-assistant').last().waitFor({ state: 'visible' })
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
@@ -3121,6 +3125,149 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('shows a sent chat immediately, closes older previews and preserves the next draft through review and jobs', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    const composer = page.locator('.command-composer')
+    let release = () => undefined as void
+    const held = new Promise<void>(resolve => { release = resolve })
+    let waiting = false
+    const holdPrompt = async (route: Route) => {
+      const calls = toolCalls(await requestBody(route))
+      if (!waiting && calls.some(call => call.name === 'record_prompt')) {
+        waiting = true
+        await held
+      }
+      await route.fallback()
+    }
+    await page.route('**/mcp', holdPrompt)
+    try {
+      await notebookCellNode(page, videoCellId).click()
+      await composer.locator('.composer-notebook-dock').waitFor({ state: 'visible' })
+      await input.fill('/split @a1')
+      await page.getByLabel('Send command').click()
+      const turn = composer.locator('.chat-turn').last()
+      await turn.getByLabel('Your message').waitFor({ state: 'visible' })
+      expect(await turn.getByLabel('Your message').textContent()).toBe('/split @a1')
+      expect(await input.textContent()).toBe('')
+      expect(await input.isEnabled()).toBe(true)
+      expect(await composer.locator('.composer-notebook-dock').count()).toBe(0)
+      expect(await turn.getAttribute('data-status')).toBe('sending')
+      expect(await turn.locator('.chat-working-dots').isVisible()).toBe(true)
+      await input.fill('My next message stays here')
+      release()
+      const review = page.getByLabel('Video split review')
+      await review.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => turn.getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('review')
+      expect(await input.textContent()).toBe('My next message stays here')
+      const turnId = await turn.getAttribute('data-turn-id')
+      await review.getByRole('button', { name: 'Apply split' }).click()
+      await review.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => turn.getAttribute('data-status'), { timeout: 60_000 }).toBe('completed')
+      expect(await turn.getAttribute('data-turn-id')).toBe(turnId)
+      expect(await composer.locator('.chat-bubble-user').filter({ hasText: /^\/apply/u }).count()).toBe(0)
+      expect(await input.textContent()).toBe('My next message stays here')
+      await composer.locator('.composer-notebook-dock').waitFor({ state: 'visible' })
+      expect(await turn.isVisible()).toBe(true)
+      await input.fill('/not-a-command')
+      await page.getByLabel('Send command').click()
+      await expect.poll(() => composer.locator('.composer-notebook-dock').count()).toBe(0)
+      await expect.poll(() => composer.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
+      const newest = composer.locator('.chat-turn').last()
+      expect(await newest.getByLabel('Your message').textContent()).toBe('/not-a-command')
+      for (const viewport of [{ width: 390, height: 844 }, { width: 667, height: 375 }]) {
+        await page.setViewportSize(viewport)
+        expect(await newest.getByLabel('Your message').evaluate(element => {
+          const bounds = element.getBoundingClientRect()
+          return bounds.left >= 0 && bounds.right <= window.innerWidth
+        })).toBe(true)
+        expect(await input.isVisible()).toBe(true)
+      }
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      expect(await newest.getByLabel('Your message').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      for (const cellId of [fullscreenImageCellId, reviewGenerationCellId]) {
+        await notebookCellNode(page, cellId).click()
+        await composer.locator('.composer-notebook-dock').waitFor({ state: 'visible' })
+        await input.fill(`/not-a-command ${cellId}`)
+        await page.getByLabel('Send command').click()
+        await expect.poll(() => composer.locator('.composer-notebook-dock').count()).toBe(0)
+        await expect.poll(() => composer.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
+        expect(await composer.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe(`/not-a-command ${cellId}`)
+      }
+      await input.fill('/open @c3')
+      await page.getByLabel('Send command').click()
+      const preview = page.locator('.workspace-preview-dialog')
+      await preview.waitFor({ state: 'visible' })
+      await preview.getByLabel('Videobook command input').waitFor({ state: 'visible' })
+      expect(await preview.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe('/open @c3')
+      await input.fill('/not-a-command after-preview')
+      await page.getByLabel('Send command').click()
+      await preview.waitFor({ state: 'detached' })
+      await expect.poll(() => composer.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
+    } finally {
+      release()
+      await page.unroute('**/mcp', holdPrompt)
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      notebookDirty = true
+    }
+  }, 90_000)
+
+  it('keeps a late job result from reopening the preview after a newer message', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    const composer = page.locator('.command-composer')
+    let release = () => undefined as void
+    const held = new Promise<void>(resolve => { release = resolve })
+    let runStarted = false
+    let readsAfterRun = 0
+    let holding = false
+    const holdOldSnapshot = async (route: Route) => {
+      const calls = toolCalls(await requestBody(route))
+      if (calls.some(call => call.name === 'run_notebook')) runStarted = true
+      if (runStarted && calls.some(call => call.name === 'get_notebook')) {
+        readsAfterRun += 1
+        if (readsAfterRun === 2) {
+          const response = await route.fetch()
+          holding = true
+          await held
+          await route.fulfill({ response })
+          return
+        }
+      }
+      await route.fallback()
+    }
+    await page.route('**/mcp', holdOldSnapshot)
+    try {
+      await input.fill('/split @a1')
+      await page.getByLabel('Send command').click()
+      const review = page.getByLabel('Video split review')
+      await review.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      const firstId = await composer.locator('.chat-turn').last().getAttribute('data-turn-id')
+      await review.getByRole('button', { name: 'Apply split' }).click()
+      await review.waitFor({ state: 'hidden', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => holding, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await input.fill('/not-a-command')
+      await expect.poll(() => page!.getByLabel('Send command').isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await page.getByLabel('Send command').click()
+      const latest = composer.locator('.chat-turn').last()
+      await expect.poll(() => latest.getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
+      expect(await composer.locator('.composer-notebook-dock').count()).toBe(0)
+      release()
+      await expect.poll(() => composer.locator(`[data-turn-id="${firstId}"]`).getAttribute('data-status'), { timeout: 60_000 }).toBe('completed')
+      expect(await composer.locator('.composer-notebook-dock').count()).toBe(0)
+      expect(await latest.getByLabel('Your message').textContent()).toBe('/not-a-command')
+      expect(await input.evaluate(element => element === document.activeElement)).toBe(true)
+    } finally {
+      release()
+      await page.unroute('**/mcp', holdOldSnapshot)
+      notebookDirty = true
+    }
+  }, 90_000)
+
   it('shows MCP motion and sends the selected model through the real UI', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     delayChatResponses = true
@@ -3215,10 +3362,11 @@ describe('chat composer browser flow', () => {
     expect(chatCall?.arguments.notebook_id).toEqual(expect.any(String))
     expect(chatCall?.arguments.prompt).toBe(routedPrompt)
     expect(observedCalls.some((call) => call.name === 'plan_chat_command')).toBe(false)
-    const errorResult = page.locator('.command-result-error')
+    const errorResult = page.locator('.chat-turn[data-status="failed"] .chat-bubble-assistant').last()
     await errorResult.waitFor({ state: 'visible' })
     expect(await errorResult.textContent()).toContain('OPENAI_API_KEY')
 
+    await page.locator('.chat-turn').last().locator('.chat-turn-details > summary').click()
     const chatRow = page.locator('.mcp-call[data-tool="chat"]')
     await expect.poll(() => chatRow.getAttribute('class')).toContain('mcp-call-failed')
     const chatHead = chatRow.locator('.mcp-call-head')
@@ -3238,7 +3386,7 @@ describe('chat composer browser flow', () => {
     expect(openedHistoryBox?.y).toBe(historyBox?.y)
     const openedRowBox = await chatHead.boundingBox()
     expect(openedRowBox?.height).toBe(rowBox?.height)
-    expect(openedRowBox?.y).toBe(rowBox?.y)
+    expect(Math.abs(openedRowBox!.y - rowBox!.y)).toBeLessThanOrEqual(1)
     expect(await page.getByRole('dialog', { name: 'Routing chat details' }).isVisible()).toBe(true)
     expect(await chatBody.textContent()).toContain(routedPrompt)
     expect(await chatBody.textContent()).toContain('OPENAI_API_KEY')
@@ -3481,6 +3629,7 @@ describe('chat composer browser flow', () => {
       const captions = page.locator('[data-testid="composer-history"]')
       expect(await page.getByLabel('Hide history').isVisible()).toBe(true)
       expect(await captions.isVisible()).toBe(true)
+      await captions.locator('.chat-turn-details > summary').last().click()
       const action = captions.locator('.mcp-call-head').last()
       await action.click()
       const details = page.locator('.mcp-call-popover:popover-open')
@@ -3724,10 +3873,9 @@ describe('chat composer browser flow', () => {
       const cells = (Array.isArray(document?.cells) ? document.cells : [])
         .map(record)
         .filter((cell): cell is Record<string, unknown> => cell !== null)
-      const splitCell = cells.find((cell) =>
-        cell.type === 'split_video'
-        && cell.operation === 'split_at_points'
-        && record(cell.inputs)?.sourceCellId === videoCellId)
+      const submittedSplit = observedCalls.find(call => call.name === 'create_notebook_cell'
+        && record(call.arguments.cell)?.type === 'split_video')
+      const splitCell = cells.find(cell => cell.id === record(submittedSplit?.arguments.cell)?.id)
       expect(splitCell).toMatchObject({
         id: expect.any(String),
         inputs: { cutPointsSeconds: [0.85, 1.7] },

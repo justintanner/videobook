@@ -14,6 +14,7 @@ function savedVoiceMode(): VoiceMode {
 }
 
 interface VoiceConversationOptions {
+  onUserTurn?: () => void
   bookId: string
   notebookId?: string
   scope: string | null
@@ -64,6 +65,7 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     setRetrying(false)
     setPhase('connecting')
     setMessage('Connecting voice')
+    const userTurns = new Set<string>()
     const connection = new VoiceConnection({
       bookId: current.bookId, notebookId: current.notebookId,
       mode,
@@ -85,6 +87,10 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
       },
       onCaption: caption => {
         if (connectionRef.current !== connection) return
+        if (caption.role === 'user' && caption.final && caption.text.trim() && !userTurns.has(caption.id)) {
+          userTurns.add(caption.id)
+          latest.current.onUserTurn?.()
+        }
         setCaptions(previous => {
           const existing = previous.findIndex(value => value.id === caption.id)
           if (existing < 0) {
