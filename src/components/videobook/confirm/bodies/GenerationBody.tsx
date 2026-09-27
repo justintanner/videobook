@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
-import type {
-  GenerationControlValue,
-  GenerationInputMode,
-  NotebookGenerationAction,
+import {
+  generationModeLabel,
+  type GenerationControlValue,
+  type GenerationInputMode,
+  type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { GenerationControlField } from '@/components/videobook/GenerationControlField'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
@@ -30,6 +31,8 @@ export type GenerationReviewSource = {
   cellId: string
   address: string
   type: string
+  targetInput?: string
+  targetLabel?: string
   asset: (MediaLibraryPreviewAsset & ArtifactThumbAsset) | null
 }
 
@@ -45,12 +48,15 @@ type GenerationBodyProps = {
   sources: readonly GenerationReviewSource[]
   sourceOptions: readonly GenerationReviewSource[]
   voiceCatalog?: ElevenLabsVoicesState
+  promptEditor?: ReactNode
+  inputFooter?: ReactNode
+  compatibleModeIds?: ReadonlySet<string>
   onActionChange: (actionId: string) => void
-  onAddSource: (cellId: string) => void
+  onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
   onPromptChange: (prompt: string) => void
   onRefreshPreview: () => void
-  onRemoveSource: (cellId: string) => void
+  onRemoveSource: (cellId: string, targetInput?: string) => void
   onSelectSource: (cellId: string) => void
   onSettingChange: (
     name: string,
@@ -125,7 +131,7 @@ function SourceCard({
       </span>
       <span className="generation-review-source-copy">
         <strong>@{source.address}</strong>
-        <small>{source.type.replaceAll('_', ' ')}</small>
+        <small>{source.targetLabel ?? source.type.replaceAll('_', ' ')}</small>
       </span>
     </button>
   )
@@ -143,6 +149,9 @@ export function GenerationBody({
   sources,
   sourceOptions,
   voiceCatalog,
+  promptEditor,
+  inputFooter,
+  compatibleModeIds,
   onActionChange,
   onAddSource,
   onModeChange,
@@ -196,7 +205,7 @@ export function GenerationBody({
         <span className="confirm-section-label">Inputs</span>
         <div className="generation-review-sources">
           {sources.map((source) => (
-            <div className="generation-review-source-wrap" key={source.cellId}>
+            <div className="generation-review-source-wrap" key={`${source.cellId}:${source.targetInput ?? ''}`}>
               <SourceCard
                 badge="Input"
                 busy={busy}
@@ -210,7 +219,7 @@ export function GenerationBody({
                 disabled={busy}
                 aria-label={`Remove @${source.address} input`}
                 title={`Remove @${source.address} input`}
-                onClick={() => onRemoveSource(source.cellId)}
+                onClick={() => onRemoveSource(source.cellId, source.targetInput)}
               >
                 <X size={11} aria-hidden="true" />
               </button>
@@ -243,16 +252,20 @@ export function GenerationBody({
           >
             {sourceOptions.map((option) => (
               <SourceCard
-                key={option.cellId}
+                key={`${option.cellId}:${option.targetInput ?? ''}`}
                 badge="Add"
                 busy={busy}
                 source={option}
-                title={`Add @${option.address} as input`}
-                onClick={() => onAddSource(option.cellId)}
+                title={`Add @${option.address} as ${option.targetLabel ?? 'input'}`}
+                onClick={() => {
+                  onAddSource(option.cellId, option.targetInput)
+                  setShowSourcePicker(false)
+                }}
               />
             ))}
           </div>
         )}
+        {inputFooter}
       </section>
 
       <div className="generation-review-editor">
@@ -283,7 +296,8 @@ export function GenerationBody({
               >
                 {modes.map((mode) => (
                   <option key={mode.id} value={mode.id}>
-                    {mode.id.replaceAll('_', ' ').toUpperCase()}
+                    {generationModeLabel(mode.id)}
+                    {compatibleModeIds && !compatibleModeIds.has(mode.id) ? ' · needs inputs' : ''}
                   </option>
                 ))}
               </select>
@@ -293,7 +307,7 @@ export function GenerationBody({
         </section>
 
         <section className="confirm-section generation-review-prompt-section" aria-label="Prompt">
-          <label>
+          {promptEditor ?? <label>
             <span className="confirm-section-label">Prompt</span>
             <textarea
               rows={5}
@@ -302,7 +316,7 @@ export function GenerationBody({
               disabled={busy}
               onChange={(event) => onPromptChange(event.target.value)}
             />
-          </label>
+          </label>}
           {promptLeaks.length > 0 && (
             <div className="generation-review-reference-errors" role="alert">
               {promptLeaks.map((leak) => (

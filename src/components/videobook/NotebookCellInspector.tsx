@@ -25,9 +25,6 @@ import type {
 import { ArtifactThumb } from './ArtifactThumb'
 import { CellWaveform, CellWaveformSkeleton } from './CellWaveform'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
-import { VoiceOptionList } from './SpeakCommandPreview'
-import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
-import { persistSpeakVoiceId } from '@/videobook/speak-preview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import {
   notebookGridAddress,
@@ -75,11 +72,9 @@ import {
   effectiveGenerationSettings,
   generationActionForSelection,
   generationActionIsCompatible,
-  generationActionLabel,
   generationConnectedInputs,
   generationInputAttachments,
   generationModeIsCompatible,
-  generationModeLabel,
   generationSelectionForAction,
   initialGenerationSelection,
   initialGenerationMode,
@@ -91,7 +86,8 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
-import { GenerationControlField } from './GenerationControlField'
+import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
+import type { GenerationCellPreview } from '@/videobook/use-generation-cell-preview'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
@@ -468,6 +464,8 @@ type NotebookCellInspectorProps = {
   ) => Promise<{ text: string; file: string }>
   onDownloadTranscriptSrt?: (artifactId: string) => void
   onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
+  initialGenerationPreview?: GenerationCellPreview
+  onSelectSource?: (cellId: string) => void
   onPreviewPayload?: (
     cellId: string,
     draft: GenerationPreviewDraft,
@@ -1055,6 +1053,7 @@ function SourceCellPicker({
 }
 
 function attachmentTargetLabel(target: string): string {
+  if (target === 'input') return 'input'
   if (target === 'first_frame') return 'first frame input'
   if (target === 'last_frame') return 'last frame input'
   if (target === 'replace_audio') return 'replacement audio'
@@ -2166,6 +2165,8 @@ function ExecutableCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
+  initialGenerationPreview,
+  onSelectSource,
   generationActions = [],
   mentionAssets = [],
   voiceCatalog,
@@ -2186,6 +2187,8 @@ function ExecutableCellInspector({
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'onPreviewPayload'
+  | 'initialGenerationPreview'
+  | 'onSelectSource'
   | 'generationActions'
   | 'mentionAssets'
   | 'voiceCatalog'
@@ -2197,14 +2200,9 @@ function ExecutableCellInspector({
       generationConnectedInputs(cell.id, cells, edges),
     ))
   const [saving, setSaving] = useState(false)
-  const voicePreviewPlayer = useVoicePreviewPlayer()
   const ensureVoiceCatalog = () => {
     if (!voiceCatalog) return
     void voiceCatalog.ensureLoaded().catch(() => undefined)
-  }
-  const refreshVoiceCatalog = () => {
-    if (!voiceCatalog) return
-    void voiceCatalog.refresh().catch(() => undefined)
   }
   const [copyResult, setCopyResult] = useState<{
     error: string
@@ -2223,6 +2221,7 @@ function ExecutableCellInspector({
   // not raise it — nothing was asked for.
   const [promptMentionOpen, setPromptMentionOpen] = useState(false)
   const [promptMentionPreview, setPromptMentionPreview] = useState<{
+    key?: string
     error: string | null
     loading: boolean
     value: unknown
@@ -2274,6 +2273,7 @@ function ExecutableCellInspector({
         connectedGenerationInputs,
       )
     : []
+  const compatibleModeIds = new Set(compatibleModes.map((mode) => mode.id))
   const effectiveGenerationMode = selectedGenerationAction
     ? initialGenerationMode(
         selectedGenerationAction,
@@ -2303,19 +2303,6 @@ function ExecutableCellInspector({
   const generationControls = selectedGenerationAction?.controls ?? []
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
-  const primaryGenerationControls = generationControls.filter((control) =>
-    control.name === 'duration'
-    || control.name === 'aspect_ratio'
-    || control.name === 'resolution')
-  const hasVoiceControl = cell.type === 'generate_audio'
-    && generationControls.some((control) => control.name === 'voice_id')
-  const voicePickerVoices = hasVoiceControl
-    ? voiceCatalog?.voices ?? []
-    : []
-  const showVoicePicker = voicePickerVoices.length > 0
-  const advancedGenerationControls = generationControls.filter((control) =>
-    !primaryGenerationControls.includes(control)
-    && !(showVoicePicker && control.name === 'voice_id'))
   const generationSettingsValid = generationControlsAreValid(
     generationControls,
     draft.generationSettings,
@@ -2331,10 +2318,6 @@ function ExecutableCellInspector({
     : compatibleActions
   const selectedGenerationValue = selectedGenerationAction?.id
     ?? draft.tool
-  const payloadSettings = effectiveGenerationSettings(
-    generationControls,
-    draft.generationSettings,
-  )
   const cyclicInputMentions = useMemo(
     () => notebookCyclicInputMentionValues(cells, edges, cell.id),
     [cell.id, cells, edges],
@@ -2357,23 +2340,6 @@ function ExecutableCellInspector({
   }, [cells, cyclicInputMentions, draft.prompt, mentionAssets, promptCaret])
   const showPromptSuggestions = promptMentionOpen
     && promptSuggestionItems.length > 0
-  const promptMentions = providerPayloadPreviewMentions(
-    promptMentionPreview.value,
-  )
-  const payloadSummary = JSON.stringify({
-    ...(selectedGenerationAction
-      ? {
-          provider: selectedGenerationAction.providerLabel,
-          model: selectedGenerationAction.title,
-        }
-      : {
-          ...(draft.provider ? { provider: draft.provider } : {}),
-          ...(draft.model ? { model: draft.model } : {}),
-        }),
-    ...(effectiveGenerationMode ? { type: effectiveGenerationMode } : {}),
-    inputs: connectedGenerationInputs.length,
-    settings: payloadSettings,
-  })
   const action = notebookCellActionPresentation(
     generationCell
       ? {
@@ -2413,73 +2379,81 @@ function ExecutableCellInspector({
       ? 'Retry copy'
       : 'Copy'
 
-  const generationPreviewDraft = (prompt: string): GenerationPreviewDraft => ({
-    prompt,
-    provider: draft.provider,
-    model: draft.model,
-    operation: draft.operation,
-    tool: draft.tool,
-    inputs: generationInputsForDraft(
-      cell,
-      {
-        ...draft,
-        prompt,
-        generationMode: effectiveGenerationMode,
-        generationSettings: payloadSettings,
-      },
-      allGenerationControls,
-    ),
-  })
-  const requestPromptMentionPreview = (prompt: string) => {
-    const requestId = promptPreviewRequestRef.current + 1
-    promptPreviewRequestRef.current = requestId
-    if (!generationCell || !onPreviewPayload || !prompt.includes('@')) {
-      setPromptMentionPreview({ error: null, loading: false, value: undefined })
-      return
+  const generationPreviewDraft = (
+    value: CellFormDraft,
+    inputEdges = edges,
+  ): GenerationPreviewDraft => {
+    const selected = generationCellType
+      ? generationActionForSelection(generationActions, generationCellType, value)
+      : null
+    const inputs = generationConnectedInputs(cell.id, cells, inputEdges)
+    return {
+      prompt: value.prompt,
+      provider: value.provider,
+      model: value.model,
+      operation: value.operation,
+      tool: value.tool,
+      inputs: generationInputsForDraft(cell, {
+        ...value,
+        generationMode: selected
+          ? initialGenerationMode(selected, inputs, value.generationMode)
+          : value.generationMode,
+        generationSettings: effectiveGenerationSettings(
+          selected?.controls ?? [],
+          value.generationSettings,
+        ),
+      }, allGenerationControls),
     }
-    setPromptMentionPreview({ error: null, loading: true, value: undefined })
-    void onPreviewPayload(cell.id, generationPreviewDraft(prompt))
-      .then((value) => {
-        if (promptPreviewRequestRef.current !== requestId) return
-        setPromptMentionPreview({ error: null, loading: false, value })
-      })
-      .catch((previewError: unknown) => {
-        if (promptPreviewRequestRef.current !== requestId) return
-        setPromptMentionPreview({
-          error: previewError instanceof Error
-            ? previewError.message
-            : String(previewError),
-          loading: false,
-          value: undefined,
-        })
-      })
   }
-  const loadGenerationPreview = async (): Promise<unknown> => {
+  const previewKey = (value: CellFormDraft, inputEdges = edges) => JSON.stringify([
+    generationPreviewDraft(value, inputEdges),
+    inputEdges.filter((edge) => edge.target === cell.id)
+      .map((edge) => [edge.source, edge.targetInput]).sort(),
+  ])
+  const currentPreviewKey = previewKey(draft)
+  const [initialPreviewKey] = useState(currentPreviewKey)
+  const generationPreview = promptMentionPreview.key !== undefined
+    ? promptMentionPreview
+    : initialGenerationPreview ?? promptMentionPreview
+  const generationPreviewStale = (promptMentionPreview.key ?? initialPreviewKey) !== currentPreviewKey
+  const loadGenerationPreview = async (
+    value = draft,
+    inputEdges = edges,
+  ): Promise<unknown> => {
     if (!onPreviewPayload) throw new Error('Payload preview is unavailable')
-    const requestId = promptPreviewRequestRef.current + 1
-    promptPreviewRequestRef.current = requestId
-    setPromptMentionPreview({ error: null, loading: true, value: undefined })
+    const requestId = ++promptPreviewRequestRef.current
+    const key = previewKey(value, inputEdges)
+    setPromptMentionPreview({ key, error: null, loading: true, value: undefined })
     try {
-      const value = await onPreviewPayload(
+      const preview = await onPreviewPayload(
         cell.id,
-        generationPreviewDraft(draft.prompt),
+        generationPreviewDraft(value, inputEdges),
       )
       if (promptPreviewRequestRef.current === requestId) {
-        setPromptMentionPreview({ error: null, loading: false, value })
+        setPromptMentionPreview({ key, error: null, loading: false, value: preview })
       }
-      return value
-    } catch (previewError) {
+      return preview
+    } catch (error) {
       if (promptPreviewRequestRef.current === requestId) {
         setPromptMentionPreview({
-          error: previewError instanceof Error
-            ? previewError.message
-            : String(previewError),
+          key,
+          error: error instanceof Error ? error.message : String(error),
           loading: false,
           value: undefined,
         })
       }
-      throw previewError
+      throw error
     }
+  }
+  const refreshGenerationPreview = (value = draft, inputEdges = edges) => {
+    if (generationCell && onPreviewPayload) {
+      void loadGenerationPreview(value, inputEdges).catch(() => undefined)
+    }
+  }
+  const requestPromptMentionPreview = (prompt: string) => {
+    promptPreviewRequestRef.current += 1
+    setPromptMentionPreview((current) => ({ ...current, loading: false }))
+    if (prompt.includes('@')) refreshGenerationPreview({ ...draft, prompt })
   }
   const updatePrompt = (prompt: string, caret: number) => {
     setPromptCopyState('idle')
@@ -2520,26 +2494,28 @@ function ExecutableCellInspector({
       && selected.controls.some((control) => control.name === 'voice_id')) {
       ensureVoiceCatalog()
     }
-    setDraft((current) => ({
-      ...current,
+    const next = {
+      ...draft,
       ...generationSelectionForAction(selected),
       generationMode: initialGenerationMode(
         selected,
         connectedGenerationInputs,
       ),
       generationSettings: {},
-    }))
+    }
+    setDraft(next)
+    refreshGenerationPreview(next)
   }
   const updateGenerationSetting = (
     name: string,
     value: GenerationControlValue | undefined,
   ) => {
-    setDraft((current) => {
-      const generationSettings = { ...current.generationSettings }
-      if (value === undefined) delete generationSettings[name]
-      else generationSettings[name] = value
-      return { ...current, generationSettings }
-    })
+    const generationSettings = { ...draft.generationSettings }
+    if (value === undefined) delete generationSettings[name]
+    else generationSettings[name] = value
+    const next = { ...draft, generationSettings }
+    setDraft(next)
+    refreshGenerationPreview(next)
   }
   const copyRunError = async () => {
     try {
@@ -2609,9 +2585,158 @@ function ExecutableCellInspector({
     }
   }
 
+  const incomingEdges = edges.filter((edge) => edge.target === cell.id)
+  const sourceFor = (
+    sourceCellId: string,
+    targetInput: string,
+    targetLabel = attachmentTargetLabel(targetInput),
+  ): GenerationReviewSource[] => {
+    const source = cells.find((candidate) => candidate.id === sourceCellId)
+    return source ? [{
+      cellId: source.id,
+      address: notebookGridAddress(source.slot),
+      type: source.type,
+      targetInput,
+      targetLabel,
+      asset: cellAssets?.get(source.id) ?? null,
+    }] : []
+  }
+  const generationSources = incomingEdges.flatMap((edge) =>
+    sourceFor(edge.source, edge.targetInput))
+  const generationSourceOptions = generationAttachments.flatMap((attachment) =>
+    sourceFor(
+      attachment.sourceCellId,
+      attachment.targetInput,
+      attachmentTargetLabel(attachment.target),
+    ))
+  const editorAction: NotebookGenerationAction = selectedGenerationAction ?? {
+    id: draft.tool,
+    tool: draft.tool,
+    provider: draft.provider,
+    providerLabel: draft.provider,
+    model: draft.model,
+    operation: draft.operation,
+    title: draft.tool || 'No compatible models',
+    cellTypes: generationCellType ? [generationCellType] : [],
+    isDefault: false,
+    defaultPriority: 0,
+    controls: [],
+    inputContract: { modes: [] },
+  }
+  const generationEditorActions = generationPickerActions.map((candidate) =>
+    generationActionIsCompatible(candidate, connectedGenerationInputs)
+      ? candidate
+      : { ...candidate, providerLabel: `${candidate.providerLabel} · incompatible` })
+  if (!selectedGenerationAction) generationEditorActions.unshift(editorAction)
+  const generationEditorDraft = {
+    action: editorAction,
+    cell: { ...cell, ...generationPreviewDraft(draft) },
+    connections: incomingEdges.map((edge) => ({
+      sourceCellId: edge.source,
+      targetInput: edge.targetInput,
+    })),
+    sourceCellIds: generationSources.map((source) => source.cellId),
+    sourceAddresses: generationSources.map((source) => source.address),
+  }
+  const changeGenerationSource = async (
+    targetInput: string,
+    sourceCellId: string | null,
+  ) => {
+    const retained = edges.filter((edge) =>
+      edge.target !== cell.id || edge.targetInput !== targetInput)
+    const nextEdges = sourceCellId
+      ? [...retained, { id: targetInput, source: sourceCellId, target: cell.id, targetInput }]
+      : retained
+    await onSetInput(targetInput, sourceCellId)
+    refreshGenerationPreview(draft, nextEdges)
+  }
+  const promptEditor = textCell ? (
+    <section className="inspector-prompt-field">
+      <header className="inspector-prompt-header">
+        <h3>Prompt</h3>
+        <button
+          type="button"
+          className={`inspector-prompt-copy${promptCopyState === 'copied' ? ' copied' : ''}`}
+          aria-label={promptCopyState === 'copied'
+            ? 'Prompt copied'
+            : promptCopyState === 'failed'
+              ? 'Retry copying prompt'
+              : 'Copy prompt'}
+          title={promptCopyState === 'copied'
+            ? 'Prompt copied'
+            : promptCopyState === 'failed'
+              ? 'Retry copying prompt'
+              : 'Copy prompt'}
+          disabled={!draft.prompt}
+          onClick={() => void copyPrompt()}
+        >
+          {promptCopyState === 'copied'
+            ? <Check size={12} />
+            : <Copy size={12} />}
+          <span aria-live="polite">{promptCopyLabel}</span>
+        </button>
+      </header>
+      <div className="inspector-prompt-editor" ref={promptFieldRef}>
+        {showPromptSuggestions && (
+          <AutocompleteDropdown
+            items={promptSuggestionItems}
+            selectedIndex={promptSuggestionIndex}
+            onSelect={insertPromptSuggestion}
+            onHover={setPromptSuggestionIndex}
+            anchorRef={promptFieldRef}
+            preferAbove={false}
+          />
+        )}
+        <textarea
+          ref={promptTextareaRef}
+          aria-label="Prompt"
+          className="inspector-prompt-textarea"
+          value={draft.prompt}
+          disabled={generationCell && (busy || saving)}
+          aria-invalid={generationCell && !generationPreviewStale && providerPayloadPreviewMentions(generationPreview.value).promptLeaks.length > 0}
+          rows={generationCell ? 5 : 8}
+          onChange={(event) => updatePrompt(
+            event.target.value,
+            event.target.selectionStart,
+          )}
+          onClick={(event) => setPromptCaret(event.currentTarget.selectionStart)}
+          onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
+          onBlur={() => setPromptMentionOpen(false)}
+          onKeyDown={(event) => {
+            if (!showPromptSuggestions) return
+            if (event.key === 'ArrowDown') {
+              event.preventDefault()
+              setPromptSuggestionIndex((current) =>
+                (current + 1) % promptSuggestionItems.length)
+              return
+            }
+            if (event.key === 'ArrowUp') {
+              event.preventDefault()
+              setPromptSuggestionIndex((current) =>
+                (current - 1 + promptSuggestionItems.length)
+                % promptSuggestionItems.length)
+              return
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+              event.preventDefault()
+              insertPromptSuggestion(
+                promptSuggestionItems[promptSuggestionIndex]!,
+              )
+              return
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setPromptMentionOpen(false)
+            }
+          }}
+        />
+      </div>
+    </section>
+  ) : null
+
   return (
-    <div className="inspector-body inspector-executable-body">
-      {asset && previewCell && (
+    <div className={generationCell ? 'generation-cell-inspector' : 'inspector-body inspector-executable-body'}>
+      {asset && previewCell && !generationCell && (
         <NotebookCellMedia
           asset={asset}
           address={notebookGridAddress(cell.slot)}
@@ -2621,20 +2746,18 @@ function ExecutableCellInspector({
           onOpenFullscreen={onOpenFullscreen}
         />
       )}
-      <InputSources
-        cell={cell}
-        cells={cells}
-        edges={edges}
-        busy={busy}
-        cellAssets={cellAssets}
-        attachments={generationAttachments}
-        onSetInput={onSetInput}
-      />
+      {!generationCell && (
+        <InputSources
+          cell={cell}
+          cells={cells}
+          edges={edges}
+          busy={busy}
+          cellAssets={cellAssets}
+          onSetInput={onSetInput}
+        />
+      )}
       <form
-        className={[
-          'inspector-cell-form',
-          generationCell ? 'inspector-generation-form' : '',
-        ].filter(Boolean).join(' ')}
+        className={generationCell ? 'generation-cell-form' : 'inspector-cell-form'}
         aria-busy={saving}
         onSubmit={(event) => {
           event.preventDefault()
@@ -2645,107 +2768,50 @@ function ExecutableCellInspector({
           void save()
         }}
       >
-        {textCell && (
-          <section className="inspector-prompt-field">
-            <header className="inspector-prompt-header">
-              <h3>Prompt</h3>
-              <button
-                type="button"
-                className={`inspector-prompt-copy${promptCopyState === 'copied' ? ' copied' : ''}`}
-                aria-label={promptCopyState === 'copied'
-                  ? 'Prompt copied'
-                  : promptCopyState === 'failed'
-                    ? 'Retry copying prompt'
-                    : 'Copy prompt'}
-                title={promptCopyState === 'copied'
-                  ? 'Prompt copied'
-                  : promptCopyState === 'failed'
-                    ? 'Retry copying prompt'
-                    : 'Copy prompt'}
-                disabled={!draft.prompt}
-                onClick={() => void copyPrompt()}
-              >
-                {promptCopyState === 'copied'
-                  ? <Check size={12} />
-                  : <Copy size={12} />}
-                <span aria-live="polite">{promptCopyLabel}</span>
-              </button>
-            </header>
-            <div className="inspector-prompt-editor" ref={promptFieldRef}>
-              {showPromptSuggestions && (
-                <AutocompleteDropdown
-                  items={promptSuggestionItems}
-                  selectedIndex={promptSuggestionIndex}
-                  onSelect={insertPromptSuggestion}
-                  onHover={setPromptSuggestionIndex}
-                  anchorRef={promptFieldRef}
-                  preferAbove={false}
+        {generationCell ? (
+          <GenerationBody
+            actions={generationEditorActions}
+            busy={busy || saving}
+            draft={generationEditorDraft}
+            modes={generationModeOptions}
+            compatibleModeIds={compatibleModeIds}
+            preview={generationPreview.value}
+            previewError={generationPreview.error}
+            previewLoading={generationPreview.loading}
+            previewStale={generationPreviewStale}
+            sources={generationSources}
+            sourceOptions={generationSourceOptions}
+            voiceCatalog={voiceCatalog}
+            promptEditor={promptEditor}
+            inputFooter={asset ? (
+              <div className="generation-cell-output">
+                <span className="confirm-section-label">Output</span>
+                <NotebookCellMedia
+                  asset={asset}
+                  address={notebookGridAddress(cell.slot)}
+                  allowFullscreen={asset.type === 'image' || asset.type === 'video' || asset.type === 'final'}
+                  onOpenFullscreen={onOpenFullscreen}
                 />
-              )}
-              <textarea
-                ref={promptTextareaRef}
-                aria-label="Prompt"
-                className="inspector-prompt-textarea"
-                value={draft.prompt}
-                rows={8}
-                onChange={(event) => updatePrompt(
-                  event.target.value,
-                  event.target.selectionStart,
-                )}
-                onClick={(event) => setPromptCaret(event.currentTarget.selectionStart)}
-                onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
-                onBlur={() => setPromptMentionOpen(false)}
-                onKeyDown={(event) => {
-                  if (!showPromptSuggestions) return
-                  if (event.key === 'ArrowDown') {
-                    event.preventDefault()
-                    setPromptSuggestionIndex((current) =>
-                      (current + 1) % promptSuggestionItems.length)
-                    return
-                  }
-                  if (event.key === 'ArrowUp') {
-                    event.preventDefault()
-                    setPromptSuggestionIndex((current) =>
-                      (current - 1 + promptSuggestionItems.length)
-                      % promptSuggestionItems.length)
-                    return
-                  }
-                  if (event.key === 'Enter' || event.key === 'Tab') {
-                    event.preventDefault()
-                    insertPromptSuggestion(
-                      promptSuggestionItems[promptSuggestionIndex]!,
-                    )
-                    return
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    setPromptMentionOpen(false)
-                  }
-                }}
-              />
-            </div>
-            {(promptMentionPreview.loading
-              || promptMentionPreview.error
-              || promptMentions.promptLeaks.length > 0) && (
-              <div
-                className="inspector-prompt-mentions"
-                role={promptMentions.promptLeaks.length > 0 ? 'alert' : 'status'}
-              >
-                {promptMentionPreview.loading && <span>Checking references…</span>}
-                {promptMentionPreview.error && (
-                  <span>{promptMentionPreview.error}</span>
-                )}
-                {promptMentions.promptLeaks.map((leak) => (
-                  <span key={`${leak.token}:${leak.code}`} title={leak.message}>
-                    <CircleAlert size={11} aria-hidden="true" />
-                    <code>{leak.token}</code>
-                    {leak.message}
-                  </span>
-                ))}
               </div>
-            )}
-          </section>
-        )}
+            ) : undefined}
+            onActionChange={updateGenerationAction}
+            onAddSource={(sourceCellId, targetInput) => {
+              if (targetInput) void changeGenerationSource(targetInput, sourceCellId)
+            }}
+            onRemoveSource={(_sourceCellId, targetInput) => {
+              if (targetInput) void changeGenerationSource(targetInput, null)
+            }}
+            onSelectSource={(cellId) => onSelectSource?.(cellId)}
+            onModeChange={(generationMode) => {
+              const next = { ...draft, generationMode }
+              setDraft(next)
+              refreshGenerationPreview(next)
+            }}
+            onPromptChange={(prompt) => updatePrompt(prompt, prompt.length)}
+            onRefreshPreview={() => refreshGenerationPreview()}
+            onSettingChange={updateGenerationSetting}
+          />
+        ) : promptEditor}
         {cell.type === 'split_video'
           && (cell.operation === 'split_at_points'
             || cell.operation === 'split_ranges') && (
@@ -2815,165 +2881,6 @@ function ExecutableCellInspector({
             No generation model matches the current inputs.
           </span>
         )}
-        {generationCell && (
-          <div className="inspector-generation-controls">
-            <div className="inspector-generation-model">
-              <label>
-                Model
-                <select
-                  aria-label="Model"
-                  value={selectedGenerationValue}
-                  disabled={busy || compatibleActions.length === 0}
-                  onFocus={() => {
-                    if (hasVoiceControl) ensureVoiceCatalog()
-                  }}
-                  onChange={(event) => updateGenerationAction(event.target.value)}
-                >
-                  {!selectedGenerationAction && draft.tool && (
-                    <option value={draft.tool}>
-                      {draft.tool} · incompatible
-                    </option>
-                  )}
-                  {!selectedGenerationValue && (
-                    <option value="">No compatible models</option>
-                  )}
-                  {generationPickerActions.map((candidate) => {
-                    const compatible = generationActionIsCompatible(
-                      candidate,
-                      connectedGenerationInputs,
-                    )
-                    const label = generationActionLabel(
-                      candidate,
-                    )
-                    return (
-                      <option key={candidate.id} value={candidate.id}>
-                        {compatible ? label : `${label} · incompatible`}
-                      </option>
-                    )
-                  })}
-                </select>
-              </label>
-            </div>
-            {(selectedGenerationAction?.inputContract.modes.length ?? 0) > 1
-              || primaryGenerationControls.length > 0 ? (
-                <div className="inspector-generation-primary">
-                  {(selectedGenerationAction?.inputContract.modes.length ?? 0) > 1 && (
-                    <label>
-                      Type
-                      <select
-                        aria-label="Type"
-                        value={effectiveGenerationMode}
-                        disabled={busy || generationModeOptions.length === 0}
-                        onChange={(event) => updateDraft(
-                          'generationMode',
-                          event.target.value,
-                        )}
-                      >
-                        {generationModeOptions.map((mode) => (
-                          <option key={mode.id} value={mode.id}>
-                            {generationModeLabel(mode.id)}
-                            {!compatibleModes.some((candidate) =>
-                              candidate.id === mode.id)
-                              ? ' · needs inputs'
-                              : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {primaryGenerationControls.map((control) => (
-                    <GenerationControlField
-                      key={control.name}
-                      control={control}
-                      settings={draft.generationSettings}
-                      busy={busy || saving}
-                      toggleClassName="inspector-generation-toggle"
-                      booleanLabelFirst={false}
-                      labelAsSpan={false}
-                      onChange={(value) => updateGenerationSetting(
-                        control.name,
-                        value,
-                      )}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            {hasVoiceControl && voiceCatalog && (
-              <div className="inspector-voice-picker">
-                <span className="inspector-voice-picker-label">Voice</span>
-                {showVoicePicker && (
-                  <div
-                    className="generation-review-voices"
-                    role="listbox"
-                    aria-label="ElevenLabs voices"
-                    data-testid="inspector-voice-picker"
-                  >
-                    <VoiceOptionList
-                      voices={voicePickerVoices}
-                      selectedVoiceId={
-                        typeof draft.generationSettings.voice_id === 'string'
-                          ? draft.generationSettings.voice_id
-                          : ''
-                      }
-                      playingVoiceId={voicePreviewPlayer.playingVoiceId}
-                      disabled={busy || saving}
-                      onSelect={(voiceId) => {
-                        persistSpeakVoiceId(voiceId)
-                        updateGenerationSetting('voice_id', voiceId)
-                      }}
-                      onTogglePreview={voicePreviewPlayer.toggle}
-                    />
-                  </div>
-                )}
-                {voiceCatalog.loading && voicePickerVoices.length === 0 && (
-                  <small>Loading voices…</small>
-                )}
-                {voiceCatalog.error && (
-                  <small role="alert">{voiceCatalog.error}</small>
-                )}
-                <button
-                  type="button"
-                  disabled={busy || saving || voiceCatalog.loading}
-                  onClick={refreshVoiceCatalog}
-                >
-                  {voiceCatalog.loading
-                    ? 'Loading voices…'
-                    : voiceCatalog.error
-                      ? 'Retry voices'
-                      : showVoicePicker ? 'Refresh voices' : 'Load voices'}
-                </button>
-                {voiceCatalog.warning && (
-                  <small>{voiceCatalog.warning}</small>
-                )}
-              </div>
-            )}
-            {advancedGenerationControls.length > 0 && (
-              <details className="inspector-generation-options">
-                <summary>Options</summary>
-                <div className="inspector-generation-option-fields">
-                  {advancedGenerationControls.map((control) => (
-                    <GenerationControlField
-                      key={control.name}
-                      control={control}
-                      settings={draft.generationSettings}
-                      busy={busy || saving}
-                      toggleClassName="inspector-generation-toggle"
-                      booleanLabelFirst={false}
-                      labelAsSpan={false}
-                      onFocus={control.name === 'voice_id'
-                        ? ensureVoiceCatalog
-                        : undefined}
-                      onChange={(value) => updateGenerationSetting(
-                        control.name,
-                        value,
-                      )}
-                    />
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
-        )}
         {generationCell && selectedGenerationValue && !generationCompatible && (
           <div className="inspector-generation-warning" role="status">
             <CircleAlert size={14} />
@@ -2985,26 +2892,6 @@ function ExecutableCellInspector({
                   : 'Complete the required generation settings before running.'}
             </span>
           </div>
-        )}
-        {generationCell && onPreviewPayload && (
-          <AnalysisJsonDisclosure
-            key={[
-              cell.id,
-              draft.tool,
-              draft.prompt,
-              effectiveGenerationMode,
-              JSON.stringify(draft.generationSettings),
-              ...edges
-                .filter((edge) => edge.target === cell.id)
-                .map((edge) => `${edge.source}:${edge.targetInput}`)
-                .sort(),
-            ].join(':')}
-            className="inspector-payload-disclosure"
-            label="Payload"
-            summary={payloadSummary}
-            ariaLabel={`Provider payload preview for ${notebookGridTag(cell.slot)}`}
-            loadValue={loadGenerationPreview}
-          />
         )}
         {dirty && (
           <div
@@ -3404,6 +3291,8 @@ export function NotebookCellInspector({
   onDelete,
   onOpenFullscreen,
   onPreviewPayload,
+  initialGenerationPreview,
+  onSelectSource,
   onLoadGenerationPayload,
   onTranscribeAsset,
   onLoadTranscriptJson,
@@ -3525,6 +3414,8 @@ export function NotebookCellInspector({
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
       onPreviewPayload={onPreviewPayload}
+      initialGenerationPreview={initialGenerationPreview}
+      onSelectSource={onSelectSource}
       generationActions={generationActions}
       mentionAssets={mentionAssets}
       voiceCatalog={voiceCatalog}

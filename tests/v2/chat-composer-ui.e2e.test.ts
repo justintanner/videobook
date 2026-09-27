@@ -3698,6 +3698,110 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('opens generation cells in the shared preview editor with live source media', async () => {
+    const page = await openApp()
+    await collapseComposerDock(page)
+    observedCalls.length = 0
+    await notebookCellNode(page, reviewGenerationCellId).click()
+    const inspector = page.locator('.generation-cell-inspector')
+    const editor = inspector.locator('.confirm-generation')
+    const source = editor.getByLabel('Generation source JSON', { exact: true })
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('A moonlit garden ready for review')
+    expect(observedCalls.some((call) => call.name === 'preview_notebook_generation'
+      && call.arguments.cell_id === reviewGenerationCellId)).toBe(true)
+    expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
+
+    await editor.getByLabel('Generation model').selectOption(
+      'generation.generate_kie_nano_banana_pro_text_to_image',
+    )
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('generate_kie_nano_banana_pro_text_to_image')
+    await editor.getByLabel('Aspect ratio', { exact: true }).selectOption('string:9:16')
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('"aspect_ratio": "9:16"')
+
+    await editor.getByRole('button', { name: 'Add input', exact: true }).click()
+    await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
+    await expect.poll(async () => await editor.getByLabel('Remove @c3 input').count(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(1)
+    expect(await editor.getByLabel('Available input cells').count()).toBe(0)
+    const inlineImage = source.locator('.json-media-preview img').first()
+    await inlineImage.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+    await inlineImage.scrollIntoViewIfNeeded()
+    await expect.poll(async () => await inlineImage.evaluate((image) =>
+      (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    expect(await inlineImage.getAttribute('src')).toContain(fullscreenImageArtifactId)
+
+    const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
+    await prompt.fill('Use @c3 in a moonlit garden')
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('Use reference image 1 in a moonlit garden')
+    expect(await prompt.inputValue()).toBe('Use @c3 in a moonlit garden')
+    await prompt.fill('A revised moonlit garden')
+    expect(await editor.getByText('Needs refresh', { exact: true }).count()).toBe(1)
+    await editor.getByRole('button', { name: 'Refresh estimate', exact: true }).click()
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('A revised moonlit garden')
+    expect(await editor.getByText('Needs refresh', { exact: true }).count()).toBe(0)
+
+    const layout = await editor.evaluate((element) => {
+      const bounds = (selector: string) => {
+        const region = element.querySelector(selector)
+        if (!region) throw new Error(`Missing generation editor region: ${selector}`)
+        const rect = region.getBoundingClientRect()
+        return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+      }
+      return {
+        model: bounds('.generation-review-model-section'),
+        prompt: bounds('.generation-review-prompt-section'),
+        settings: bounds('.generation-review-settings-section'),
+        source: bounds('.generation-review-source-section'),
+        json: bounds('.generation-review-json'),
+      }
+    })
+    expect(layout.model.bottom).toBeLessThanOrEqual(layout.prompt.top)
+    expect(layout.prompt.bottom).toBeLessThanOrEqual(layout.settings.top)
+    expect(layout.prompt.right).toBeLessThan(layout.source.left)
+    expect(layout.source.width).toBeGreaterThan(200)
+    expect(layout.json.height).toBeGreaterThan(150)
+    await inspector.evaluate((element) => { element.scrollTop = 0 })
+    await page.screenshot({ path: '/tmp/videobook-2jtd-desktop.png' })
+
+    await page.setViewportSize({ width: 760, height: 1000 })
+    expect(await inspector.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+    const sourceBelowEditor = await editor.evaluate((element) => {
+      const fields = element.querySelector('.generation-review-editor')!.getBoundingClientRect()
+      const source = element.querySelector('.generation-review-source-section')!.getBoundingClientRect()
+      return source.top >= fields.bottom
+    })
+    expect(sourceBelowEditor).toBe(true)
+    await page.screenshot({ path: '/tmp/videobook-2jtd-narrow.png' })
+    await page.setViewportSize({ width: 1440, height: 1000 })
+
+    await editor.getByLabel('Remove @c3 input').click()
+    await expect.poll(async () => await editor.getByLabel('Remove @c3 input').count(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(0)
+    await expect.poll(async () => await source.locator('.json-media-preview img').count(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(0)
+    await collapseComposerDock(page)
+    await notebookCellNode(page, directVideoGenerationCellId).click()
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('A moonlit garden moving in a light breeze')
+    expect(await editor.getByLabel('Duration', { exact: true }).inputValue()).toBe('string:5')
+    expect(await source.textContent()).not.toContain('A revised moonlit garden')
+    notebookDirty = true
+  }, 90_000)
+
   it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()

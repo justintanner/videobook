@@ -344,7 +344,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('data-testid="inspector-voice-picker"')
+    expect(html).toContain('data-testid="generation-review-voices"')
     expect(html).toContain('Ada')
     expect(html).toContain('Bella')
     expect(html).toContain('custom · cloned')
@@ -388,7 +388,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).not.toContain('data-testid="inspector-voice-picker"')
+    expect(html).not.toContain('data-testid="generation-review-voices"')
     expect(html).toContain('aria-label="Voice id"')
   })
 
@@ -424,7 +424,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<select aria-label="Model">')
+    expect(html).toContain('<select aria-label="Generation model">')
     expect(html).toContain(
       '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro · Kie</option>',
     )
@@ -432,9 +432,9 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('<select aria-label="Operation">')
     expect(html).not.toContain('<select aria-label="Tool">')
     expect(html).toContain(
-      'class="inspector-cell-form inspector-generation-form"',
+      'class="generation-cell-form"',
     )
-    expect(html).toContain('class="inspector-generation-model"')
+    expect(html).toContain('class="confirm-section generation-review-model-section"')
     expect(html).toContain('Changes apply when you generate')
     expect(html).toContain(
       'class="inspector-cell-actions inspector-generation-actions"',
@@ -485,19 +485,19 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('Gemini Omni Video · Kie')
-    expect(html).toContain('<select aria-label="Type">')
+    expect(html).toContain('<select aria-label="Generation type">')
     expect(html).toContain('T2V · Text to video')
     expect(html).toContain('<select aria-label="Duration">')
     expect(html).toContain('Default · 8')
     expect(html).toContain('<select aria-label="Aspect ratio">')
     expect(html).toContain('<select aria-label="Resolution">')
-    expect(html).toContain(
-      'class="inspector-analysis-json-disclosure inspector-payload-disclosure"',
-    )
-    expect(html).toContain('class="inspector-json-summary"')
-    expect(html).toContain(
-      '{&quot;provider&quot;:&quot;Kie&quot;,&quot;model&quot;:&quot;Gemini Omni Video&quot;,&quot;type&quot;:&quot;t2v&quot;,&quot;inputs&quot;:0,&quot;settings&quot;:{&quot;duration&quot;:&quot;8&quot;}}',
-    )
+    expect(html).toContain('aria-label="Generation source JSON"')
+    expect(html).toContain('class="confirm-generation"')
+    expect(html.indexOf('generation-review-model-section'))
+      .toBeLessThan(html.indexOf('generation-review-prompt-section'))
+    expect(html.indexOf('generation-review-prompt-section'))
+      .toBeLessThan(html.indexOf('generation-review-settings-section'))
+    expect(html).not.toContain('Or type')
     expect(previewCalls).toBe(0)
   })
 
@@ -665,12 +665,9 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('aria-label="video input"')
-    expect(html).toContain('aria-label="Attach media input"')
-    expect(html).toContain('role="listbox" aria-label="Media input options"')
-    expect(html).toContain('<strong>@a2</strong>')
-    expect(html).toContain('image · image input')
-    expect(html).not.toContain('<strong>@a1</strong><small>image')
+    expect(html).toContain('<strong>@a1</strong><small>video input</small>')
+    expect(html).toContain('aria-label="Remove @a1 input"')
+    expect(html).toContain('<span>Add input</span>')
   })
 
   it('omits input sources that would make the notebook cyclic', () => {
@@ -735,7 +732,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('<strong>@a4</strong>')
   })
 
-  it('omits descendant media from generation attach options', () => {
+  it('does not offer an input picker when the only media would create a cycle', () => {
     const generationCell: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000040',
@@ -754,17 +751,11 @@ describe('NotebookCellInspector', () => {
       type: 'image',
       slot: { row: 0, column: 1 },
     }
-    const available: NotebookCell = {
-      ...cell,
-      id: '01900000-0000-7000-8000-000000000042',
-      type: 'image',
-      slot: { row: 0, column: 2 },
-    }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       bookId: '01900000-0000-7000-8000-000000000002',
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
-      cells: [generationCell, descendant, available],
+      cells: [generationCell, descendant],
       edges: [{
         id: '01900000-0000-7000-8000-000000000043',
         source: generationCell.id,
@@ -785,10 +776,8 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('aria-label="Attach media input"')
-    expect(html).toContain('<strong>@a3</strong>')
-    expect(html).toContain('image · image input')
-    expect(html).not.toContain('<strong>@a2</strong>')
+    expect(html).toContain('Prompt only')
+    expect(html).not.toContain('<span>Add input</span>')
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {
@@ -846,10 +835,7 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('This model does not accept the current inputs.')
     expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)
-    expect(html).toContain(
-      'class="inspector-analysis-json-disclosure inspector-payload-disclosure"',
-    )
-    expect(html).not.toContain('class="inspector-analysis-json-scroll"')
+    expect(html).toContain('aria-label="Generation source JSON"')
     expect(previewCalls).toBe(0)
   })
 

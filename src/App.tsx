@@ -117,6 +117,7 @@ import {
   MomentSearch,
   type MomentSearchHandle,
 } from '@/components/videobook/MomentSearch'
+import { useGenerationCellPreview } from '@/videobook/use-generation-cell-preview'
 import {
   NotebookCellInspector,
   type CellAssetRevision,
@@ -2040,6 +2041,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     : undefined
   const timelinePreviewOpen = Boolean(timelinePreviewCell && sequence && screen === 'notebook')
 
+  const { preview: generationCellPreview, select: selectGenerationCellPreview } = useGenerationCellPreview({
+    bookId, notebook, ready: mcp.state === 'ready', call,
+  })
+
   const handleToggleMcpCall = useCallback((id: number) => {
     setMcpCalls((log) => toggleMcpCall(log, id))
   }, [])
@@ -2193,6 +2198,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
     setSelectedCellId(cellId)
+    selectGenerationCellPreview(cellId)
     updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
     if (!cellId) return
     const fromNotebook = notebook?.cells.find((cell) => cell.id === cellId)
@@ -2202,7 +2208,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const fromNode = nodes.find((node) => node.id === cellId)
     if (fromNode) rememberLastWorkSlot(fromNode.data.slot)
-  }, [notebook, nodes, rememberLastWorkSlot, updateSelectedCellIds])
+  }, [selectGenerationCellPreview, notebook, nodes, rememberLastWorkSlot, updateSelectedCellIds])
 
   const closeCellContextMenu = useCallback(() => {
     setCellContextMenu(null)
@@ -10921,6 +10927,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           openMediaFullscreen(selectedNotebookCell, asset)
         }}
         onPreviewPayload={previewGenerationPayload}
+        initialGenerationPreview={generationCellPreview?.cellId === selectedNotebookCell.id
+          ? generationCellPreview
+          : undefined}
+        onSelectSource={selectCanvasCell}
         onLoadGenerationPayload={loadGenerationPayload}
         mediaInsightWork={mediaInsightWork}
         onTranscribeAsset={transcribeAsset}
@@ -11090,10 +11100,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           }
                           updateSelectedCellIds(nextSelection)
                           const nextId = [...nextSelection].at(-1) ?? null
-                          setSelectedCellId((current) =>
-                            current && nextSelection.has(current)
-                              ? current
-                              : nextId)
+                          const activeId = selectedCellId && nextSelection.has(selectedCellId)
+                            ? selectedCellId
+                            : nextId
+                          setSelectedCellId(activeId)
+                          selectGenerationCellPreview(activeId)
                           const rememberedCell = nextId
                             ? notebook?.cells.find((cell) => cell.id === nextId)
                             : undefined
@@ -11134,6 +11145,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           ? node.id
                           : [...currentSelection].at(-1) ?? null
                         setSelectedCellId(nextId)
+                        selectGenerationCellPreview(nextId)
                         if (nextId === node.id) {
                           rememberLastWorkSlot(node.data.slot)
                         }
