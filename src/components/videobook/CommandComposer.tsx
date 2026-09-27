@@ -55,7 +55,7 @@ import {
   historyIdle,
   scheduleHistoryAutoClose,
 } from '@/videobook/composer-history'
-import { composerActivityStatus } from '@/videobook/composer-status'
+import { composerActivityStatus, voiceActivityFeedback } from '@/videobook/composer-status'
 import {
   handleSpeakPreviewKey,
   isSpeakCommandPreview,
@@ -76,13 +76,12 @@ import {
   type ComposerOutcomeSlot,
 } from '@/components/videobook/composer-outcome-context'
 import { SpeakCommandPreview } from '@/components/videobook/SpeakCommandPreview'
-import { VoiceComms } from './VoiceComms'
+import { VoiceActivity } from './VoiceActivity'
 import { ComposerModeSwitch } from './ComposerModeSwitch'
 import type { VoiceConversation } from '@/videobook/use-voice-conversation'
 import {
   COMPOSER_DOCK_HIDE_LABEL,
   composerDockCloseInPanel,
-  composerDockNoticeInHeader,
   composerDockReviewPriority,
   composerHistoryChromeHosted,
   hideComposerDock,
@@ -322,6 +321,13 @@ export function CommandComposer({
   )
   const historyEpoch = composerHistoryEpoch(historyRows)
   const historyGeneration = composerHistoryGeneration(historyRows)
+  const voiceFeedback = voiceActivityFeedback(voice)
+  const noticeForLog = outcomeSlot === 'composer' && notice
+    && !chatTurns.some(turn => turn.reply === notice.message) ? notice : null
+  const outcomeForLog = outcomeSlot === 'composer' && outcome
+    && outcome.message !== notice?.message ? outcome : null
+  const feedbackPresent = Boolean(voiceFeedback || noticeForLog || outcomeForLog)
+  const feedbackKey = JSON.stringify([voiceFeedback, noticeForLog, outcomeForLog])
   const activity = composerActivityStatus({
     sending,
     mcpRunning: mcpCallsRunning(mcpCalls),
@@ -337,22 +343,27 @@ export function CommandComposer({
     runningCalls: mcpCallsRunning(mcpCalls),
     voicePhase: voice?.phase,
   }) || mcpCalls.calls.some((call) => call.expanded) || chatTurns.some(chatTurnActive) || activityDetailsOpen
+    || Boolean(voiceFeedback?.error || voiceFeedback?.playbackBlocked)
+    || noticeForLog?.tone === 'error' || outcomeForLog?.ok === false
   const lastHistoryEpochRef = useRef(historyEpoch)
+  const lastFeedbackKeyRef = useRef(feedbackKey)
 
   useLayoutEffect(() => {
     inputSessionRef.current = inputSession
   }, [inputSession])
 
   useEffect(() => {
-    if (historyEpoch > lastHistoryEpochRef.current) setHistoryOpen(true)
+    if (historyEpoch > lastHistoryEpochRef.current
+      || (feedbackPresent && feedbackKey !== lastFeedbackKeyRef.current)) setHistoryOpen(true)
     lastHistoryEpochRef.current = historyEpoch
-  }, [historyEpoch])
+    lastFeedbackKeyRef.current = feedbackKey
+  }, [feedbackKey, feedbackPresent, historyEpoch])
 
   useEffect(() => scheduleHistoryAutoClose({
     open: historyOpen,
     held: historyHeld,
     onClose: () => setHistoryOpen(false),
-  }), [historyOpen, historyHeld, historyGeneration])
+  }), [historyOpen, historyHeld, historyGeneration, feedbackKey])
 
   useLayoutEffect(() => { if (latestVoiceTurn) loadedHistoryProjectRef.current = '' }, [latestVoiceTurn])
 
@@ -398,6 +409,7 @@ export function CommandComposer({
     && historyEpoch <= voiceStartHistoryEpoch
     && !(historyOpen && historyRows.length > 0)
     && !voice.playbackBlocked
+    && !feedbackPresent
   const dockIsOpen = dockRequestedOpen && !voiceStatusOnly
   const catalogVoices = voiceCatalog?.voices ?? []
   const activeVoiceId = resolveSpeakVoiceId(catalogVoices, selectedVoiceId)
@@ -892,9 +904,11 @@ export function CommandComposer({
   const latestTurn = chatTurns.at(-1)
   const currentPreview = latestTurn !== undefined && latestTurn.id === previewTurnId
   const historyVisible = !contextualContent || reviewPriority || currentPreview
-  const visibleHistoryRows = contextualContent && !reviewPriority && currentPreview
-    ? historyRows.filter(row => row.kind === 'caption' && row.turn?.id === latestTurn.id)
-    : historyRows
+  const logVisible = historyVisible || feedbackPresent
+  const visibleHistoryRows = !historyVisible ? []
+    : contextualContent && !reviewPriority && currentPreview
+      ? historyRows.filter(row => row.kind === 'caption' && row.turn?.id === latestTurn.id)
+      : historyRows
   /* The row above the dock body is the dock's own header, so it stands down
      whenever a contextual panel draws one of its own for the close to sit in. */
   const closeOwner = {
@@ -903,8 +917,8 @@ export function CommandComposer({
     reviewPriority,
   }
   const closeInPanel = composerDockCloseInPanel(closeOwner)
-  const historyChromeHosted = historyVisible && composerHistoryChromeHosted(closeOwner)
-  const historyIsIdle = historyIdle(
+  const historyChromeHosted = logVisible && composerHistoryChromeHosted(closeOwner)
+  const historyIsIdle = !feedbackPresent && historyIdle(
     voice?.phase,
     historyRows.length,
     Boolean(voice),
@@ -920,14 +934,28 @@ export function CommandComposer({
     hide: hideDock,
     hideLabel: COMPOSER_DOCK_HIDE_LABEL,
   }
-  const noticeInHeader = composerDockNoticeInHeader({ dockOpen: dockIsOpen, closeInPanel })
-  const noticeLine = !hidden && outcomeSlot === 'composer' && notice && !chatTurns.some(turn => turn.reply === notice.message) ? (
-    <ComposerStatusLine
-      message={notice.message}
-      tone={notice.tone}
-      dismissLabel="Dismiss notice"
-      onDismiss={onDismissNotice}
-    />
+  const logFeedback = feedbackPresent ? (
+    <>
+      {noticeForLog && (
+        <ComposerStatusLine
+          message={noticeForLog.message}
+          tone={noticeForLog.tone}
+          dismissLabel="Dismiss notice"
+          onDismiss={onDismissNotice}
+        />
+      )}
+      {outcomeForLog && (
+        <ComposerStatusLine
+          message={outcomeForLog.message}
+          tone={outcomeForLog.ok ? 'info' : 'error'}
+          dismissLabel="Dismiss error"
+          onDismiss={outcomeForLog.ok ? undefined : () => setOutcome(null)}
+        />
+      )}
+      {voiceFeedback && voice && (
+        <VoiceActivity feedback={voiceFeedback} onResumePlayback={voice.resumePlayback} />
+      )}
+    </>
   ) : null
 
   const composer = (
@@ -939,16 +967,19 @@ export function CommandComposer({
       className="command-composer"
       data-composer-focus="return"
       data-dock-open={dockIsOpen ? 'true' : 'false'}
+      data-voice-phase={voice?.phase}
       hidden={hidden}
+      onKeyDown={event => {
+        if (!actionDiscovery || event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return
+        event.preventDefault()
+        event.stopPropagation()
+        closeActionSearch()
+      }}
     >
       {dockIsOpen && !closeInPanel && (
         <div className="command-composer-dock-bar">
           {historyIsIdle && <span className="command-composer-dock-title">chat</span>}
           <ComposerHistoryControls />
-          {noticeInHeader && noticeLine && (
-            <span className="command-composer-dock-divider" aria-hidden="true" />
-          )}
-          {noticeInHeader && noticeLine}
           <ComposerDockClose />
         </div>
       )}
@@ -966,20 +997,15 @@ export function CommandComposer({
           {contextualContent}
         </div>
       )}
-      {!noticeInHeader && noticeLine}
-
-      {!hidden && outcomeSlot === 'composer' && outcome && outcome.message !== notice?.message && (
-        <ComposerStatusLine
-          message={outcome.message}
-          tone={outcome.ok ? 'info' : 'error'}
-          dismissLabel="Dismiss error"
-          onDismiss={outcome.ok ? undefined : () => setOutcome(null)}
-        />
-      )}
-
       {!hidden && !context && children}
 
-      {!hidden && historyVisible && (
+      {actionDiscovery && <ComposerActionsPanel
+        actions={actionMatches} groups={actionGroups} group={actionGroup} context={actionContext}
+        loading={actionStatus.loading} error={actionStatus.error} listId={actionListId} selectedIndex={activeActionIndex}
+        onGroupChange={group => { setActionGroup(group); setSelectedIndex(0); focusInput() }}
+        onClose={closeActionSearch} onSelect={acceptAction} />}
+
+      {!hidden && logVisible && (
         <ComposerHistory
           rows={visibleHistoryRows}
           connected={connected}
@@ -989,15 +1015,9 @@ export function CommandComposer({
           open={historyOpen && dockIsOpen}
           onToggle={() => setHistoryOpen((current) => !current)}
           onToggleCall={onToggleMcpCall}
-        />
-      )}
-
-      {!hidden && voice && (historyVisible || voice.phase !== 'off' || voice.playbackBlocked) && (
-        <VoiceComms
-          voice={voice}
-          sending={sending}
-          mcpRunning={mcpCallsRunning(mcpCalls)}
-        />
+        >
+          {logFeedback}
+        </ComposerHistory>
       )}
       </div>
 
@@ -1006,12 +1026,6 @@ export function CommandComposer({
         id={COMMAND_COMPOSER_FORM_ID}
         className={`command-line-shell ${transmitting ? 'command-line-shell-transmitting' : ''} ${mcpSucceeded ? 'command-line-shell-success' : ''} ${mcpFailed ? 'command-line-shell-error' : ''}`}
         aria-busy={transmitting}
-        onKeyDown={event => {
-          if (!actionDiscovery || event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return
-          event.preventDefault()
-          event.stopPropagation()
-          closeActionSearch()
-        }}
         onSubmit={(event) => {
           event.preventDefault()
           if (actionDiscovery && actionMatches[activeActionIndex]) acceptAction(actionMatches[activeActionIndex]!)
@@ -1024,11 +1038,6 @@ export function CommandComposer({
           }
         }}
       >
-        {actionDiscovery && <ComposerActionsPanel
-          actions={actionMatches} groups={actionGroups} group={actionGroup} context={actionContext}
-          loading={actionStatus.loading} error={actionStatus.error} listId={actionListId} selectedIndex={activeActionIndex}
-          onGroupChange={group => { setActionGroup(group); setSelectedIndex(0); focusInput() }}
-          onClose={closeActionSearch} onSelect={acceptAction} />}
         {speakPreviewOpen && (
           <SpeakCommandPreview
             voices={catalogVoices}

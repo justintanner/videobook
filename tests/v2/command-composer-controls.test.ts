@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { createElement, createRef, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -13,39 +12,17 @@ import {
 } from '../../src/videobook/composer-dock'
 import { ComposerHistory, ComposerHistoryControls } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
-import { VoiceComms } from '../../src/components/videobook/VoiceComms'
+import { VoiceActivity } from '../../src/components/videobook/VoiceActivity'
+import { voiceActivityFeedback } from '../../src/videobook/composer-status'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
 import {
   composerEngineMenu,
   engineMenuInitialIndex,
   engineMenuItems,
 } from '../../src/videobook/composer-engine-menu'
-import { emptyMcpCallLog } from '../../src/videobook/mcp-activity'
+import { beginMcpCall, emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
 import type { VoiceCaption, VoicePhase } from '../../server/src/voice-contract'
-
-function cssDeclaration(source: string, selector: string, property: string): string {
-  const needle = `${selector} {`
-  const openAt = source.indexOf(needle)
-  if (openAt < 0) throw new Error(`missing rule ${selector}`)
-  const bodyStart = source.indexOf('{', openAt)
-  let depth = 0
-  let block = ''
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const character = source[index]
-    if (character === '{') depth += 1
-    else if (character === '}') {
-      depth -= 1
-      if (depth === 0) {
-        block = source.slice(bodyStart + 1, index)
-        break
-      }
-    }
-  }
-  const match = block.match(new RegExp(`(?:^|\\n)\\s*${property}:\\s*([^;]+);`))
-  if (!match?.[1]) throw new Error(`missing ${property} on ${selector}`)
-  return match[1].trim()
-}
 
 function renderComposer(
   modelSelectionDisabled: boolean,
@@ -119,15 +96,18 @@ function renderComms(
   captions: VoiceCaption[],
   extras: Partial<VoiceConversation> = {},
 ): string {
-  return renderToStaticMarkup(createElement(VoiceComms, {
-    voice: stubVoice({
-      phase,
-      captions,
-      active: phase !== 'off' && phase !== 'error',
-      message: phase === 'error' ? 'OPENAI_API_KEY is missing' : phase === 'connecting' ? 'Connecting voice' : 'Speak naturally. Interrupt anytime.',
-      ...extras,
-    }),
-  }))
+  const voice = stubVoice({
+    phase,
+    captions,
+    active: phase !== 'off' && phase !== 'error',
+    message: phase === 'error' ? 'OPENAI_API_KEY is missing' : phase === 'connecting' ? 'Connecting voice' : 'Speak naturally. Interrupt anytime.',
+    ...extras,
+  })
+  const feedback = voiceActivityFeedback(voice)
+  return feedback ? renderToStaticMarkup(createElement(VoiceActivity, {
+    feedback,
+    onResumePlayback: voice.resumePlayback,
+  })) : ''
 }
 
 function renderHistory(
@@ -156,6 +136,39 @@ function controlledRegion(html: string): { button: string; region: string; id: s
 }
 
 describe('CommandComposer controls', () => {
+  it('keeps typed work under its message after voice stops', () => {
+    const html = renderComposer(false, null, {
+      dockOpen: true,
+      voice: stubVoice({ phase: 'off', active: false, message: 'Comms off.' }),
+      chatTurns: [{
+        id: 10, bookId: 'book-1', notebookId: 'notebook-1', text: 'Make a video with @b1',
+        status: 'working', reply: '', executing: true, work: [],
+      }],
+      mcpCalls: beginMcpCall(emptyMcpCallLog, { id: 11, turnId: 10, tool: 'chat', args: [] }),
+    })
+    expect(html).toContain('aria-label="Chat log"')
+    expect(html).toContain('>Log</button>')
+    expect(html).toContain('Make a video with @b1')
+    expect(html.match(/class="chat-working-dots"/gu)).toHaveLength(1)
+    expect(html).not.toContain('Comms off.')
+    expect(html).not.toContain('chat-voice-activity')
+    expect(html).not.toContain('Preparing an action')
+  })
+
+  it('places notices and voice recovery inside the log', () => {
+    const html = renderComposer(false, null, {
+      dockOpen: true,
+      notice: { message: 'Import could not finish', tone: 'error' },
+      voice: stubVoice({ phase: 'error', active: false, message: 'Voice connection lost', playbackBlocked: true }),
+    })
+    const logAt = html.indexOf('aria-label="Chat log"')
+    expect(logAt).toBeGreaterThan(0)
+    expect(html.indexOf('Import could not finish')).toBeGreaterThan(logAt)
+    expect(html.indexOf('Voice connection lost')).toBeGreaterThan(logAt)
+    expect(html.indexOf('Enable spoken replies')).toBeGreaterThan(logAt)
+    expect(html).not.toContain('No captions. Voice could not connect.')
+  })
+
   it('hides previous conversation and idle voice status while a contextual preview is open', () => {
     const voice = stubVoice({
       phase: 'off',
@@ -170,7 +183,7 @@ describe('CommandComposer controls', () => {
     const chat = renderComposer(false, null, { dockOpen: true, voice })
     expect(chat).toContain('Previous question')
     expect(chat).toContain('Previous answer')
-    expect(chat).toContain('Comms off.')
+    expect(chat).not.toContain('Comms off.')
 
     const preview = renderComposer(false, null, {
       dockOpen: true, voice, contextualContent, contextualHasHeader: true,
@@ -180,7 +193,7 @@ describe('CommandComposer controls', () => {
     expect(preview).not.toContain('Previous question')
     expect(preview).not.toContain('Previous answer')
     expect(preview).not.toContain('Comms off.')
-    expect(preview).not.toContain('aria-label="Chat history"')
+    expect(preview).not.toContain('aria-label="Chat log"')
     expect(preview).not.toContain('voice-captions-toggle')
 
     const review = renderComposer(false, null, {
@@ -189,7 +202,7 @@ describe('CommandComposer controls', () => {
     })
     expect(review).toContain('Review action')
     expect(review).toContain('Previous question')
-    expect(review).toContain('aria-label="Chat history"')
+    expect(review).toContain('aria-label="Chat log"')
   })
 
   it('keeps voice errors and playback recovery available while previewing', () => {
@@ -205,7 +218,7 @@ describe('CommandComposer controls', () => {
       voice: stubVoice({ playbackBlocked: true }),
     })
     expect(playback).toContain('Enable spoken replies')
-    expect(playback).not.toContain('aria-label="Chat history"')
+    expect(playback).toContain('aria-label="Chat log"')
   })
 
   it('shows the model by name on the bar and keeps its full id for the menu', () => {
@@ -353,17 +366,6 @@ describe('CommandComposer controls', () => {
     expect(loading).toContain('Could not load actions')
     expect(loading).toContain('Loading actions')
     expect(loading).toContain('aria-label="Close action search"')
-    const css = readFileSync(new URL('../../src/index.css', import.meta.url), 'utf8')
-    const actionLayer = Number(cssDeclaration(css, '.command-suggestions', 'z-index'))
-    for (const selector of [
-      '.composer-notebook-dock.inspector > header',
-      '.command-composer-dock-bar',
-      '.notebook-subject-panel-controls',
-    ]) {
-      expect(Number(cssDeclaration(css, selector, 'z-index'))).toBeGreaterThan(actionLayer)
-      expect(cssDeclaration(css, selector, 'background')).toBe('#05150d')
-    }
-
     const reviewing = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [],
       references: new Map(),
@@ -481,16 +483,16 @@ describe('CommandComposer controls', () => {
   })
 })
 
-describe('VoiceComms caption visibility', () => {
+describe('Chat log visibility', () => {
   const phases: VoicePhase[] = ['off', 'connecting', 'listening', 'thinking', 'speaking', 'review', 'error']
 
   it('defaults to a visible transcript region whose name, expanded state and controls agree', () => {
     const html = renderHistory('listening', [])
     const { button, region, id } = controlledRegion(html)
     expect(button).toContain('aria-expanded="true"')
-    expect(button).toContain('aria-label="Hide history"')
-    expect(button).toContain('>History</button>')
-    expect(button).not.toMatch(/>Hide history</)
+    expect(button).toContain('aria-label="Hide log"')
+    expect(button).toContain('>Log</button>')
+    expect(button).not.toMatch(/>Hide log</)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
     expect(html).toContain('Listening… speak anytime.')
@@ -506,9 +508,9 @@ describe('VoiceComms caption visibility', () => {
     expect(shown).toContain('>three</span>')
     const { button, region } = controlledRegion(hidden)
     expect(button).toContain('aria-expanded="false"')
-    expect(button).toContain('aria-label="Show history"')
-    expect(button).toContain('>History</button>')
-    expect(button).not.toMatch(/>Show history</)
+    expect(button).toContain('aria-label="Show log"')
+    expect(button).toContain('>Log</button>')
+    expect(button).not.toMatch(/>Show log</)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
     expect(hidden).toContain('>three</span>')
@@ -519,7 +521,7 @@ describe('VoiceComms caption visibility', () => {
       if (phase === 'off') continue
       const html = renderHistory(phase, [], true)
       const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('aria-label="Hide history"')
+      expect(button, phase).toContain('aria-label="Hide log"')
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
@@ -618,7 +620,7 @@ describe('VoiceComms caption visibility', () => {
     expect(html).toContain('review on screen')
     expect(html).not.toContain('Use Apply or Cancel on screen.')
     expect(html).not.toContain('voice-comms-statusline')
-    expect(controlMarkup(html, 'Hide history')).toContain('type="button"')
+    expect(controlMarkup(html, 'Hide log')).toContain('type="button"')
     // Talking, the strip flips: the text cell becomes the way out and the voice
     // cell is the lit one, naming the provider that is carrying the call.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')

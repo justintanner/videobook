@@ -1,4 +1,4 @@
-import { useContext, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { McpCallRow } from './McpCallRows'
 import {
   captionToggleLabel,
@@ -41,13 +41,14 @@ function ComposerHistoryControlsStrip({
       <button
         type="button"
         className="voice-captions-toggle"
+        data-composer-focus="preserve"
         aria-controls={captionId}
         aria-expanded={open}
         aria-label={captionToggleLabel(open)}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onToggle}
       >
-        History
+        Log
       </button>
     </div>
   )
@@ -62,6 +63,7 @@ export function ComposerHistory({
   onToggleCall,
   connected = true,
   onDetailsChange,
+  children,
 }: {
   rows: readonly ComposerHistoryRow[]
   phase: VoicePhase | undefined
@@ -71,6 +73,7 @@ export function ComposerHistory({
   onToggleCall: (id: number) => void
   connected?: boolean
   onDetailsChange?: (open: boolean) => void
+  children?: ReactNode
 }) {
   const localCaptionId = useId()
   const chrome = useContext(ComposerHistoryChromeContext)
@@ -79,7 +82,7 @@ export function ComposerHistory({
   const pinnedRef = useRef(true)
   const newestTurnRef = useRef<number | undefined>(undefined)
   const [showLatest, setShowLatest] = useState(false)
-  const idle = historyIdle(phase, rows.length, voicePresent)
+  const idle = !children && historyIdle(phase, rows.length, voicePresent)
   const hosted = Boolean(chrome?.hosted)
 
   useLayoutEffect(() => {
@@ -93,7 +96,7 @@ export function ComposerHistory({
     const pinned = element.scrollHeight - element.scrollTop - element.clientHeight < PIN_THRESHOLD_PX
     pinnedRef.current = pinned
     setShowLatest(!pinned && rows.length > 0)
-  }, [idle, onDetailsChange, open, rows])
+  }, [children, idle, onDetailsChange, open, rows])
 
   if (idle) return null
 
@@ -112,7 +115,7 @@ export function ComposerHistory({
         className="composer-history voice-captions"
         data-testid="composer-history"
         hidden={!open}
-        aria-label="Chat history"
+        aria-label="Chat log"
         role="log"
         aria-live="off"
         onScroll={(event) => {
@@ -122,10 +125,11 @@ export function ComposerHistory({
           setShowLatest(!pinned && rows.length > 0)
         }}
       >
-        {rows.length === 0
+        {rows.length === 0 && !children
           ? <p className="composer-history-entry voice-captions-empty"><span className="composer-history-kind">STATUS</span><span>{captionsEmptyCopy(phase ?? 'off')}</span></p>
           : rows.map((row) => <HistoryRow key={rowKey(row)} row={row} active={open} connected={connected} onToggleCall={onToggleCall}
             onDetailsChange={() => onDetailsChange?.(Boolean(scrollerRef.current?.querySelector('.chat-turn-details[open]')))} />)}
+        {children}
       </div>
       {open && showLatest && (
         <button

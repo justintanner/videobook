@@ -1,3 +1,32 @@
+.command-composer-dock-body > .composer-history-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(248px, 30dvh);
+  overflow: hidden;
+}
+.command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel { max-height: min(140px, 20dvh); }
+.composer-history-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.composer-panel-controls { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 4px; min-height: 38px; padding: 6px 19px 0 17px; }
+.voice-captions, .composer-history { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.voice-captions[hidden], .composer-history[hidden] { display: none !important; }
+.composer-history-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.composer-history-entry[data-role='user'] { border-left-color: var(--green); background: rgba(114, 231, 170, .035); }
+.composer-history-entry[data-role='user'] .composer-history-kind { color: var(--green); }
+.composer-history-entry[data-role='assistant'] { border-left-color: #789d8b; }
+.voice-captions-empty { color: #6f9a80; }
+.voice-captions em { color: #6f9a80; font: inherit; }
+.voice-captions-latest { align-self: center; flex: 0 0 auto; height: 32px; margin: 8px 0 0; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
+.voice-captions-toggle { display: grid; flex: 0 0 auto; place-items: center; height: 30px; padding: 0 6px; border: 0; background: transparent; color: #7fa992; font: inherit; font-size: 13px; cursor: pointer; }
+.voice-captions-toggle:hover, .voice-captions-toggle[aria-expanded='true'] { color: var(--control-fg-hover); }
+.voice-captions-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+@media (max-height: 500px) {
+  .command-composer-dock-body > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
+  .command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel,
+  .command-composer-dock-body > .composer-history-panel { max-height: min(104px, 24dvh); }
+  .voice-captions, .composer-history { max-height: min(52px, 16dvh); }
+  .command-composer:has(.confirm-sheet) .confirm-sheet-foot { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+}
+
 .command-composer .composer-history {
   grid-auto-rows: max-content;
   gap: 8px;
@@ -44,6 +73,16 @@
 }
 
 .chat-bubble .composer-history-kind { display: block; font-size: 11px; opacity: .7; }
+.command-composer .composer-history .chat-feedback { display: flex; align-items: flex-start; gap: 8px; }
+.chat-feedback-content { min-width: 0; }
+.command-composer .composer-history .chat-feedback.command-result-error,
+.command-composer .composer-history .chat-voice-error { border-color: rgba(243, 160, 160, .3); color: var(--danger); }
+.chat-voice-activity > p { margin: 0; }
+.voice-fallback { margin: 4px 0 0; color: #dfd3a1; }
+.voice-fallback > summary { cursor: pointer; }
+.voice-fallback > p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.voice-resume { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; margin: 4px 0 0; padding: 4px 8px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 6px; background: transparent; color: #cfead9; font: inherit; font-size: 12px; cursor: pointer; }
+.voice-resume:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .chat-turn-details { min-width: 0; }
 .chat-turn-details > summary { width: fit-content; padding: 4px 8px; color: #9fc0ad; cursor: pointer; font-size: 12px; }
 .chat-turn-details > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }

@@ -5,7 +5,6 @@ import {
   COMPOSER_DOCK_MAX_PX,
   composerDockCloseInPanel,
   composerDockHeightPx,
-  composerDockNoticeInHeader,
   composerDockReviewPriority,
   composerHistoryChromeHosted,
   composerMediaRowHeightPx,
@@ -63,22 +62,5 @@ describe('composer dock height at 900px-tall viewports', () => {
     expect(composerDockHeightPx(1200)).toBe(560)
     expect(composerMediaRowHeightPx(900)).toBe(440)
     expect(composerMediaRowHeightPx(900)).toBeGreaterThan(426)
-  })
-})
-
-describe('where the composer status line reads', () => {
-  it('rides the dock header the composer draws for its own close', () => {
-    const closeInPanel = composerDockCloseInPanel(owner({ panelHasHeader: false }))
-    expect(composerDockNoticeInHeader({ dockOpen: true, closeInPanel })).toBe(true)
-  })
-
-  it('stays in the body when a panel took the close and drew no header for it', () => {
-    const closeInPanel = composerDockCloseInPanel(owner())
-    expect(composerDockNoticeInHeader({ dockOpen: true, closeInPanel })).toBe(false)
-  })
-
-  it('stays in the body while the dock is closed, where the body hides it', () => {
-    const closeInPanel = composerDockCloseInPanel(owner({ dockOpen: false }))
-    expect(composerDockNoticeInHeader({ dockOpen: false, closeInPanel })).toBe(false)
   })
 })

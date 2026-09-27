@@ -1,7 +1,8 @@
 import { createElement, createRef } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { VoiceComms } from '../../src/components/videobook/VoiceComms'
+import { VoiceActivity } from '../../src/components/videobook/VoiceActivity'
+import { voiceActivityFeedback } from '../../src/videobook/composer-status'
 import { ComposerModeSwitch } from '../../src/components/videobook/ComposerModeSwitch'
 import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
@@ -36,6 +37,14 @@ function stubVoice(overrides: Partial<VoiceConversation> = {}): VoiceConversatio
   }
 }
 
+function renderVoiceActivity(voice: VoiceConversation): string {
+  const feedback = voiceActivityFeedback(voice)
+  return feedback ? renderToStaticMarkup(createElement(VoiceActivity, {
+    feedback,
+    onResumePlayback: voice.resumePlayback,
+  })) : ''
+}
+
 function voiceButtonMarkup(voice: VoiceConversation): string {
   return renderToStaticMarkup(createElement(ComposerModeSwitch, {
     chatModels: [],
@@ -67,6 +76,42 @@ describe('composer activity status', () => {
       .toMatchObject({ kind: 'sending', label: 'Sending', busy: true })
     expect(composerActivityStatus({ sending: false, mcpRunning: 0, voicePhase: 'listening' }).busy)
       .toBe(false)
+    expect(composerActivityStatus({ sending: true, mcpRunning: 0, voicePhase: 'error' }))
+      .toMatchObject({ kind: 'sending', label: 'Sending', busy: true })
+    expect(composerActivityStatus({ sending: true, mcpRunning: 0, voicePhase: 'review' }))
+      .toMatchObject({ kind: 'sending', label: 'Sending', busy: true })
+  })
+
+  it('does not revive a stopped voice session for typed activity or a stale fallback', () => {
+    const voice = stubVoice({
+      phase: 'off',
+      active: false,
+      message: 'Comms off.',
+      retrying: true,
+      pendingReview: true,
+      fallbackReason: 'The previous OpenAI session ended.',
+    })
+    expect(voiceActivityFeedback(voice)).toBeNull()
+    expect(renderVoiceActivity(voice)).toBe('')
+  })
+
+  it('keeps actionable voice feedback in one bubble without a duplicate connection label', () => {
+    const error = renderVoiceActivity(stubVoice({
+      phase: 'error', active: false, message: 'Voice connection lost', playbackBlocked: true,
+    }))
+    expect(error).toContain('chat-bubble-assistant')
+    expect(error).toContain('role="alert"')
+    expect(error).toContain('Voice connection lost')
+    expect(error).not.toContain('Connection error')
+    expect(error).toContain('Enable spoken replies')
+    const paused = renderVoiceActivity(stubVoice({
+      phase: 'off', active: false, message: 'Comms off while the page is hidden.',
+    }))
+    expect(paused).toContain('Voice paused. Start voice to resume.')
+    expect(paused).not.toContain('Comms off')
+    const fallback = renderVoiceActivity(stubVoice({ fallbackReason: 'OpenAI is unavailable' }))
+    expect(fallback).toContain('Using xAI')
+    expect(fallback).toContain('OpenAI is unavailable')
   })
 
   it('names listening, preparing, review, speaking, retry, paused and error truthfully', () => {
@@ -131,12 +176,10 @@ describe('composer activity status', () => {
     })).toMatchObject({ kind: 'preparing', label: 'Preparing an action', busy: true })
   })
 
-  it('keeps connection status on the button and Waiting for reply visible when history is hidden', () => {
+  it('keeps connection status on the button and renders reply progress as a log bubble', () => {
     const voice = stubVoice({ phase: 'connecting', message: 'Connecting voice' })
     const connecting = voiceButtonMarkup(voice)
-    const waiting = renderToStaticMarkup(createElement(VoiceComms, {
-      voice: stubVoice({ phase: 'thinking', message: 'Speak naturally. Interrupt anytime.' }),
-    }))
+    const waiting = renderVoiceActivity(stubVoice({ phase: 'thinking' }))
     const hidden = renderToStaticMarkup(createElement(ComposerHistory, {
       rows: composerHistory([], emptyMcpCallLog),
       phase: 'connecting',
@@ -150,10 +193,10 @@ describe('composer activity status', () => {
     expect(waiting).toContain('Waiting for reply')
     expect(waiting).not.toContain('Connecting voice')
     expect(hidden).toContain(' hidden=""')
-    expect(hidden).toContain('aria-label="Show history"')
+    expect(hidden).toContain('aria-label="Show log"')
     expect(connecting).toContain('composer-mode-connecting')
     expect(connecting).toContain('role="status"')
-    expect(renderToStaticMarkup(createElement(VoiceComms, { voice }))).toBe('')
+    expect(renderVoiceActivity(voice)).toBe('')
   })
 
   it('says nothing the rest of the screen is already saying', () => {
@@ -171,9 +214,7 @@ describe('composer activity status', () => {
   })
 
   it('drops the review narration once the sheet is on screen to say it', () => {
-    const review = renderToStaticMarkup(createElement(VoiceComms, {
-      voice: stubVoice({ phase: 'review', message: 'Review on screen', active: true }),
-    }))
+    const review = renderVoiceActivity(stubVoice({ phase: 'review', message: 'Review on screen', active: true }))
     expect(review).not.toContain('Use Apply or Cancel on screen.')
     expect(review).not.toContain('voice-comms-statusline')
     expect(review).not.toContain('mic on')

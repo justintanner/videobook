@@ -6,9 +6,9 @@ import {
 } from '../../src/videobook/voice-captions'
 
 describe('voice caption visibility helpers', () => {
-  it('names the control Hide history or Show history from visibility', () => {
-    expect(captionToggleLabel(true)).toBe('Hide history')
-    expect(captionToggleLabel(false)).toBe('Show history')
+  it('names the control Hide log or Show log from visibility', () => {
+    expect(captionToggleLabel(true)).toBe('Hide log')
+    expect(captionToggleLabel(false)).toBe('Show log')
   })
 
   it('covers empty-state copy for idle, live, waiting, review and error', () => {

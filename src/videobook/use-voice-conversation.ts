@@ -54,6 +54,11 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     setPendingReview(false)
     setRetrying(false)
     connectionRef.current?.stop()
+    setPhase('off')
+    setMessage('Comms off.')
+    setPlaybackBlocked(false)
+    setProvider(null)
+    setFallbackReason(undefined)
   }
   const toggle = () => {
     if (connectionRef.current?.active) { stop(); return }

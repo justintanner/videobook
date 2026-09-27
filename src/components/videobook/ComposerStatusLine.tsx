@@ -9,10 +9,6 @@ export interface ComposerStatusLineProps {
   tone: ComposerStatusTone
 }
 
-/* One line of status inside the composer dock — the app-level notice and the
-   last execute outcome both read as this. The row is as wide as the words in
-   it, so the dismiss control sits beside the sentence it clears instead of at
-   the far edge of a dock that spans the window. */
 export function ComposerStatusLine({
   dismissLabel,
   message,
@@ -22,12 +18,14 @@ export function ComposerStatusLine({
   const failed = tone === 'error'
   return (
     <div
-      className={`command-result ${failed ? 'command-result-error' : 'command-result-ok'}`}
+      className={`chat-bubble chat-bubble-assistant chat-feedback command-result ${failed ? 'command-result-error' : 'command-result-ok'}`}
       role={failed ? 'alert' : 'status'}
       aria-live="polite"
     >
-      <span className="composer-history-kind">{failed ? 'ERROR' : 'STATUS'}</span>
-      <span>{message}</span>
+      <div className="chat-feedback-content">
+        <span className="composer-history-kind">{failed ? 'ERROR' : 'STATUS'}</span>
+        <span>{message}</span>
+      </div>
       {onDismiss && (
         <button
           type="button"

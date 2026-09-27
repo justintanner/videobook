@@ -38,6 +38,9 @@ function preparingFromReview(phase: VoicePhase | undefined, pendingReview: boole
 
 export function composerActivityStatus(input: ComposerActivityInput): ComposerActivityStatus {
   const phase = input.voicePhase
+  if (input.sending) {
+    return { kind: 'sending', label: 'Sending', busy: true }
+  }
   if (phase === 'error') {
     return { kind: 'error', label: 'Connection error', busy: false }
   }
@@ -46,9 +49,6 @@ export function composerActivityStatus(input: ComposerActivityInput): ComposerAc
   }
   if (input.retrying) {
     return { kind: 'retrying', label: 'Retrying reply', busy: true }
-  }
-  if (input.sending) {
-    return { kind: 'sending', label: 'Sending', busy: true }
   }
   if (input.mcpRunning > 0 || preparingFromReview(phase, input.pendingReview)) {
     return { kind: 'preparing', label: 'Preparing an action', busy: true }
@@ -83,4 +83,48 @@ const SILENT_ACTIVITY = new Set<ComposerActivityKind>(['idle', 'listening', 'rev
 
 export function composerActivityWorthShowing(status: ComposerActivityStatus): boolean {
   return !SILENT_ACTIVITY.has(status.kind) && status.label !== ''
+}
+
+export interface VoiceActivityFeedback {
+  message: string | null
+  busy: boolean
+  error: boolean
+  fallbackReason: string | null
+  playbackBlocked: boolean
+}
+
+export function voiceActivityFeedback(voice: {
+  phase: VoicePhase
+  message: string
+  retrying: boolean
+  pendingReview: boolean
+  fallbackReason?: string
+  playbackBlocked: boolean
+} | undefined): VoiceActivityFeedback | null {
+  if (!voice) return null
+  const status = composerActivityStatus({
+    sending: false,
+    mcpRunning: 0,
+    voicePhase: voice.phase,
+    voiceMessage: voice.message,
+    retrying: voice.phase !== 'off' && voice.retrying,
+    pendingReview: voice.pendingReview,
+  })
+  const showStatus = composerActivityWorthShowing(status)
+    && status.kind !== 'connecting'
+    && status.kind !== 'permission'
+  const message = showStatus
+    ? status.kind === 'error' ? voice.message || status.label : status.label
+    : null
+  const fallbackReason = voice.phase === 'off' || voice.phase === 'error'
+    ? null
+    : voice.fallbackReason ?? null
+  if (!message && !fallbackReason && !voice.playbackBlocked) return null
+  return {
+    message,
+    busy: showStatus && status.busy,
+    error: status.kind === 'error',
+    fallbackReason,
+    playbackBlocked: voice.playbackBlocked,
+  }
 }

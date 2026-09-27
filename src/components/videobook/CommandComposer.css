@@ -52,9 +52,17 @@
 .command-editor-mount { grid-area: editor; }
 .command-send { grid-area: send; }
 
-.command-line-shell > .composer-actions-panel {
+.command-composer-dock-body > .composer-actions-panel {
+  position: static;
   display: flex;
+  flex: 0 1 auto;
   flex-direction: column;
+  min-height: min(180px, 28dvh);
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   max-height: min(420px, 52dvh);
   overflow: hidden;
   padding: 10px 20px;
@@ -74,12 +82,12 @@
 .composer-actions-panel > header label { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; }
 .composer-actions-panel > header select { max-width: 150px; min-width: 0; min-height: 32px; background: #071a10; color: #bce6cf; border: 1px solid var(--line); }
 .composer-actions-panel > header > span { margin-left: auto; }
-.command-line-shell > .command-suggestions.composer-actions-panel > header > button { display: grid; grid-template-columns: none; width: 32px; min-height: 32px; padding: 6px; }
+.command-composer-dock-body > .command-suggestions.composer-actions-panel > header > button { display: grid; grid-template-columns: none; width: 32px; min-height: 32px; padding: 6px; }
 .composer-actions-panel .workspace-actions-list { min-height: 0; overflow-y: auto; margin-top: 5px; }
-.command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; }
-.command-line-shell > .composer-actions-panel .workspace-actions-list > button.active { color: var(--control-fg-hover); background: var(--control-bg-active); }
-.command-line-shell > .composer-actions-panel .workspace-actions-list > button > span { display: grid; gap: 3px; white-space: normal; }
-.command-line-shell > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 13px; }
+.command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; }
+.command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button.active { color: var(--control-fg-hover); background: var(--control-bg-active); }
+.command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button > span { display: grid; gap: 3px; white-space: normal; }
+.command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button strong { color: #c4ead5; font-size: 13px; }
 .composer-actions-panel .workspace-actions-list small { font-size: 11px; overflow-wrap: anywhere; }
 .composer-actions-panel .workspace-actions-list code { font-size: 11px; overflow-wrap: anywhere; }
 .composer-actions-panel .composer-action-unavailable { grid-column: 1 / -1; color: #e3b869; }
@@ -115,7 +123,6 @@
   }
 
   .command-composer-dock-bar { padding-left: 9px; padding-right: 4px; }
-  .command-composer-dock-divider { margin: 0 8px; }
 
   .command-line-shell,
   .command-result,
@@ -126,9 +133,9 @@
   .composer-history-entry { grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; padding-left: 8px; padding-right: 8px; }
   .mcp-call-trail { gap: 4px; }
   .command-composer-dock-bar .composer-panel-controls { padding: 0; }
-  .command-line-shell > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
+  .command-composer-dock-body > .composer-actions-panel { padding-left: 12px; padding-right: 12px; }
   .command-line-shell > .composer-mode-switch { justify-self: end; }
-  .command-line-shell > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .command-composer-dock-body > .composer-actions-panel .workspace-actions-list > button { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .composer-actions-panel > header label { font-size: 0; }
   .composer-actions-panel > header select { max-width: 110px; font-size: 11px; }
   .notebook-media-composer-host.actions-only { right: 12px; left: 12px; bottom: 12px; }
@@ -144,7 +151,7 @@
 }
 
 @media (max-height: 500px) {
-  .command-line-shell > .composer-actions-panel { max-height: min(280px, 48dvh); }
+  .command-composer-dock-body > .composer-actions-panel { max-height: min(280px, 48dvh); }
   .composer-actions-panel .composer-actions-help { display: none; }
 }
 

@@ -7166,7 +7166,7 @@ textarea:focus-visible {
   max-height: min(70dvh, calc(100dvh - 12rem));
 }
 
-.command-composer:has(.voice-comms) .command-composer-dock-body > .confirm-sheet {
+.command-composer:has(.chat-voice-activity) .command-composer-dock-body > .confirm-sheet {
   max-height: min(52dvh, calc(100dvh - 16rem));
 }
 
@@ -10000,22 +10000,6 @@ textarea:focus-visible {
   letter-spacing: 0.08em;
 }
 
-.command-composer-dock-divider {
-  flex: 0 0 auto;
-  width: 1px;
-  height: 12px;
-  margin: 0 12px;
-  background: rgba(101, 190, 145, 0.2);
-}
-
-/* The status line rides the header's own padding, and the close takes the far
-   end of the row whether or not a status line is there to share it with. */
-.command-composer-dock-bar .command-result {
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-}
-
 .command-composer-dock-bar .composer-dock-close-divider {
   margin-left: auto;
 }
@@ -10217,18 +10201,14 @@ textarea:focus-visible {
    voice phase sets it; an in-flight command outranks the phase for its duration.
    The transmitting selector doubles the class so it beats the voice-phase rules
    above, which are one class more specific than a bare state class would be. */
-.command-composer:has(.voice-comms.voice-review) {
+.command-composer[data-voice-phase='review'] {
   border-color: rgba(227, 184, 105, 0.3);
   border-left-color: #e3b869;
 }
 
-.command-composer:has(.voice-comms.voice-error) {
+.command-composer[data-voice-phase='error'] {
   border-color: rgba(240, 126, 126, 0.34);
   border-left-color: var(--danger);
-}
-
-.command-composer:has(.voice-comms.voice-off) {
-  border-left-color: #557663;
 }
 
 /* Focus brightens the hairline only: the rail belongs to the phase. */

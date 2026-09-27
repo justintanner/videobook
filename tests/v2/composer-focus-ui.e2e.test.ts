@@ -254,11 +254,20 @@ describe('composer focus through real workspace interactions', () => {
     await page.getByLabel('Open actions', { exact: true }).click()
     await page.getByLabel('Close action search', { exact: true }).waitFor({ state: 'visible' })
     const collapse = page.getByLabel('Collapse chat', { exact: true })
-    await expect.poll(async () => collapse.evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-      return hit === element || (hit instanceof Element && element.contains(hit))
-    })).toBe(true)
+    try {
+      for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 640, height: 320 }]) {
+        await page.setViewportSize(viewport)
+        for (const control of [collapse, page.getByLabel('Close action search', { exact: true })]) {
+          await expect.poll(async () => control.evaluate(element => {
+            const rect = element.getBoundingClientRect()
+            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+            return hit === element || (hit instanceof Element && element.contains(hit))
+          })).toBe(true)
+        }
+      }
+    } finally {
+      await page.setViewportSize({ width: 1440, height: 1000 })
+    }
     await collapse.click()
     await focused(input())
     const actionSearchCount = await page.getByLabel('Close action search', { exact: true }).count()
@@ -512,7 +521,7 @@ describe('composer focus through real workspace interactions', () => {
     await input().fill('/notebooks')
     await page.getByLabel('Send command', { exact: true }).click()
     await ready()
-    const history = page.getByRole('log', { name: 'Chat history' })
+    const history = page.getByRole('log', { name: 'Chat log' })
     await history.waitFor({ state: 'visible' })
     let previousTurn = Number(await history.locator('.chat-turn').last().getAttribute('data-turn-id'))
     expect(await history.locator('.mcp-call[data-tool="list_notebooks"]').count()).toBeGreaterThan(0)
