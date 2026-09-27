@@ -21,7 +21,7 @@ const GUIDES_DIR = join(__dirname, "../guides");
 
 const GUIDE_FILES: Record<string, string> = {
   nano_banana: "nano_banana_pro_prompting_guide.md",
-  gpt_image: "gpt_image_2_prompting_guide.md",
+  gpt_image: "gpt_image_2_5_prompting_guide.md",
   kling30: "kling_3_0_prompting_guide.md",
   grok_imagine: "grok_imagine_prompting_guide.md",
   grok_image: "grok_imagine_prompting_guide.md",

@@ -45,8 +45,8 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_google_flow_veo_3_1_lite_low_priority_video` | google_flow | `googleflow/video/veo-3.1-lite-low-priority` | video | text_to_video | visible | `generate_veo31_lite_low_priority_video` |
 | `generate_kie_grok_imagine_image_to_image` | kie | `GrokImageToImageRequestSchema` | image | image_to_image | visible | `generate_grok_imagine_image` |
 | `generate_kie_grok_imagine_text_to_image` | kie | `GrokTextToImageRequestSchema` | image | text_to_image | hidden_fal_variant | `generate_grok_imagine_text_image` |
-| `generate_kie_gpt_image_2_image_to_image` | kie | `GptImage2ImageToImageRequestSchema` | image | image_to_image | visible | `generate_gpt_image` |
-| `generate_kie_gpt_image_2_text_to_image` | kie | `GptImage2TextToImageRequestSchema` | image | text_to_image | hidden_fal_variant | `generate_gpt_image_text` |
+| `generate_kie_gpt_image_2_5_flare_image` | kie | `GptImage25FlareTextToImageRequestSchema` | image | generate_image | visible |  |
+| `generate_kie_gpt_image_2_5_sunburst_image` | kie | `GptImage25SunburstTextToImageRequestSchema` | image | generate_image | visible |  |
 | `generate_kie_nano_banana_pro_text_to_image` | kie | `NanoBananaProRequestSchema` | image | text_to_image | visible | `generate_nano_banana_image` |
 | `generate_kie_qwen_2_0_edit_image` | kie | `Qwen2ImageEditRequestSchema` | image | edit_image | visible | `generate_qwen2_image_edit` |
 | `generate_kie_qwen_3_0_edit_image` | kie | `Qwen3ImageToImageRequestSchema` | image | edit_image | visible |  |

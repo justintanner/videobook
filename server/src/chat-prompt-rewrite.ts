@@ -72,8 +72,8 @@ const GUIDE_BY_CANONICAL_TOOL: Record<string, RewriteGuideModel> = {
   generate_fal_nano_banana_2_lite_text_to_image: "nano_banana",
   generate_fal_nano_banana_2_lite_edit_image: "nano_banana",
 
-  generate_kie_gpt_image_2_text_to_image: "gpt_image",
-  generate_kie_gpt_image_2_image_to_image: "gpt_image",
+  generate_kie_gpt_image_2_5_flare_image: "gpt_image",
+  generate_kie_gpt_image_2_5_sunburst_image: "gpt_image",
 
   generate_kie_grok_imagine_text_to_video: "grok_imagine",
   generate_kie_grok_imagine_image_to_video: "grok_imagine",

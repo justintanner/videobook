@@ -528,7 +528,7 @@ describe('legacy book discovery and migration', () => {
     expect((await books.migrateLegacy(legacy.bookId, preview.sourceHeadRevision)).ok).toBe(true)
   })
 
-  it('keeps migrated generators executable, prepares the original prompts and adopts existing results without submitting jobs', async () => {
+  it('preserves retired generator definitions, prepares current renders and adopts existing results without submitting jobs', async () => {
     const legacy = await source({ generators: true })
     const before = await readFile(legacy.catalog)
     await books.ready()
@@ -551,13 +551,24 @@ describe('legacy book discovery and migration', () => {
     expect(validateCellConfiguration(image, document).ok).toBe(true)
     const normalized = normalizeCellActionFields(image, document)
     expect(normalized).toMatchObject({ type: 'generate_image', provider: 'kie', operation: 'text_to_image', tool: 'generate_kie_gpt_image_2_text_to_image' })
-    const prepared = await prepareNotebookGeneration(engine, document, normalized, legacy.bookId)
-    expect(prepared).toMatchObject({ tool: 'generate_kie_gpt_image_2_text_to_image', input: { prompt: 'Blue square\n\nIn a quiet harbor', aspect_ratio: '1:1' } })
-    const preparedDefault = await prepareNotebookGeneration(engine, document, defaultImage, legacy.bookId)
-    expect(preparedDefault).toMatchObject({ tool: 'generate_kie_gpt_image_2_text_to_image', input: { prompt: 'A lighthouse' } })
-    expect(await prepareNotebookGeneration(engine, document, connectedImage, legacy.bookId)).toMatchObject({
-      tool: 'generate_kie_gpt_image_2_text_to_image', input: { prompt: 'In a quiet harbor' },
-    })
+    for (const generator of [normalized, defaultImage, connectedImage]) {
+      await expect(prepareNotebookGeneration(engine, document, generator, legacy.bookId))
+        .rejects.toThrow('Unknown notebook generation model: generate_kie_gpt_image_2_text_to_image')
+    }
+    for (const [generator, prompt] of [
+      [normalized, 'Blue square\n\nIn a quiet harbor'],
+      [defaultImage, 'A lighthouse'],
+      [connectedImage, 'In a quiet harbor'],
+    ] as const) {
+      expect(await prepareNotebookGeneration(engine, document, {
+        ...generator,
+        tool: 'generate_kie_gpt_image_2_5_sunburst_image',
+        model: 'GptImage25SunburstTextToImageRequestSchema',
+        operation: 'generate_image',
+      }, legacy.bookId)).toMatchObject({
+        tool: 'generate_kie_gpt_image_2_5_sunburst_image', input: { prompt },
+      })
+    }
     expect(video.tool).toBe('generate_kie_wan_2_7_text_to_video')
     expect(selectedCellDetails(legacy.notebookId, document, video.id)).toMatchObject({
       action: { tool: video.tool }, resolvedRequest: { tool: video.tool },

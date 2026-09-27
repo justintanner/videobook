@@ -11,7 +11,7 @@ import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 
-describe("generate_gpt_image tool", () => {
+describe("GPT Image 2.5 tools", () => {
   let client: Client;
   let tempDir: string;
   const originalKey = process.env.KIE_API_KEY;
@@ -46,7 +46,7 @@ describe("generate_gpt_image tool", () => {
 
   it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -59,11 +59,11 @@ describe("generate_gpt_image tool", () => {
     expect(content[0].text).toContain("not set");
   });
 
-  it("returns error with empty image_refs", async () => {
+  it("enqueues text generation with empty image_refs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -71,16 +71,15 @@ describe("generate_gpt_image tool", () => {
       },
     });
 
-    expect(result.isError).toBe(true);
-    const content = result.content as TextContent;
-    expect(content[0].text).toMatch(/at least 1 element|>=1 items/);
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse((result.content as TextContent)[0].text).status).toBe("enqueued");
   });
 
   it("returns error with more than 16 images", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -101,7 +100,7 @@ describe("generate_gpt_image tool", () => {
     if (!video.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -118,7 +117,7 @@ describe("generate_gpt_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -140,7 +139,7 @@ describe("generate_gpt_image tool", () => {
     await fs.files.write(asset.value.artifactId, "notes.txt", "hello");
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -166,7 +165,7 @@ describe("generate_gpt_image tool", () => {
     await fs.files.write(asset.value.artifactId, "original.png", png);
 
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "test prompt",
         book_id: "test-proj",
@@ -182,5 +181,47 @@ describe("generate_gpt_image tool", () => {
     expect(created.ok).toBe(true);
     if (created.ok) expect(created.value.kind).toBe("image");
     expect(parsed.job_id).toBeDefined();
+  });
+
+  it("exposes only GPT Image 2.5 renderers", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.filter((tool) => tool.name.includes("gpt_image")).map((tool) => tool.name).sort()).toEqual([
+      "generate_kie_gpt_image_2_5_flare_image",
+      "generate_kie_gpt_image_2_5_sunburst_image",
+    ]);
+  });
+
+  it.each(["flare", "sunburst"])("validates %s aspect ratio and resolution before creating an artifact", async (variant) => {
+    process.env.KIE_API_KEY = "test-key";
+    const engine = createEngineForTest(tempDir);
+    const before = engine.artifacts.list();
+    const result = await client.callTool({
+      name: `generate_kie_gpt_image_2_5_${variant}_image`,
+      arguments: { book_id: "test-proj", prompt: "a cat", aspect_ratio: "9:8", resolution: "4K" },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("1K only");
+    expect(engine.artifacts.list()).toEqual(before);
+  });
+
+  it("enqueues Sunburst with transparent background and full-resolution square output", async () => {
+    process.env.KIE_API_KEY = "test-key";
+    const result = await client.callTool({
+      name: "generate_kie_gpt_image_2_5_sunburst_image",
+      arguments: {
+        book_id: "test-proj", prompt: "a cat", aspect_ratio: "1:1", resolution: "4K", background: "transparent",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    const engine = createEngineForTest(tempDir);
+    const job = engine.jobs.queue.list({ states: ["queued", "running", "completing", "done", "failed", "aborted"] })
+      .find((candidate) => candidate.payload.imgAssetId === parsed.img_asset_id);
+    expect(job?.payload).toMatchObject({
+      type: "generate_gpt_image_2_5",
+      variant: "sunburst",
+      input: { prompt: "a cat", aspect_ratio: "1:1", resolution: "4K", background: "transparent" },
+      imageInputs: [],
+    });
   });
 });

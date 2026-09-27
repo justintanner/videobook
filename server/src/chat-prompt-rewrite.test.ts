@@ -41,7 +41,8 @@ describe("rewriteGuideForTool", () => {
     expect(rewriteGuideForTool("generate_kie_seedance_2_0_video")).toBe("seedance2");
     expect(rewriteGuideForTool("generate_kie_kling_3_0_omni_reference_to_video")).toBe("kling30");
     expect(rewriteGuideForTool("generate_kie_nano_banana_pro_text_to_image")).toBe("nano_banana");
-    expect(rewriteGuideForTool("generate_kie_gpt_image_2_image_to_image")).toBe("gpt_image");
+    expect(rewriteGuideForTool("generate_kie_gpt_image_2_5_flare_image")).toBe("gpt_image");
+    expect(rewriteGuideForTool("generate_kie_gpt_image_2_5_sunburst_image")).toBe("gpt_image");
     expect(rewriteGuideForTool("generate_xai_grok_imagine_video")).toBe("grok_imagine");
     expect(rewriteGuideForTool("generate_kie_grok_imagine_text_to_image")).toBe("grok_image");
   });

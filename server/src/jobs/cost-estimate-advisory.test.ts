@@ -20,6 +20,19 @@ import { authorizeKiePaygate, mintKieOtp } from "./kie-paygate.js";
 import { canonicalHash, parseOtp } from "@apicity/cost";
 
 describe("advisory cost estimation", () => {
+  it("carries input-video duration into the provider request estimate", () => {
+    const assessment = assessKieRequestEstimate({
+      model: "bytedance/seedance-2-5",
+      input: {
+        prompt: "Continue the scene", duration: 5, resolution: "1080p",
+        reference_video_urls: ["https://example.test/source.mp4"],
+      },
+    }, { inputDuration: 10 });
+    expect(assessment.available).toBe(true);
+    expect(assessment.usd).toBeCloseTo(15 * 0.3425);
+    expect(assessment.warnings).toEqual([]);
+  });
+
   let rootDir: string;
   let engine: Engine;
   let previousSecret: string | undefined;

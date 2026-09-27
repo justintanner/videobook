@@ -1,3 +1,4 @@
+import { GPT_IMAGE_2_5_MODELS } from "./gpt-image-2-5.js";
 import type { EstimateRequest } from "@apicity/cost";
 import {
   GeminiOmniVideoRequestSchema,
@@ -328,13 +329,14 @@ const kieGeminiOmniVideo: CostAdapter = (input) => ({
 // and pass it here; mintKieOtp maps it to EstimateRequest.costHints.
 // durationSeconds, @apicity/cost's formal side channel (docs/apicity-gaps.md
 // §30) — it is never serialized into the wire.
-export type KieCostHints = { duration?: number };
+export type KieCostHints = { duration?: number; inputDuration?: number };
 
 /** Map videobook's cost hints to @apicity/cost's EstimateRequest.costHints. */
-export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: number } {
-  return typeof hints.duration === "number" && hints.duration > 0
-    ? { durationSeconds: hints.duration }
-    : {};
+export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: number; inputDurationSeconds?: number } {
+  return {
+    ...(typeof hints.duration === "number" && hints.duration > 0 ? { durationSeconds: hints.duration } : {}),
+    ...(typeof hints.inputDuration === "number" && hints.inputDuration > 0 ? { inputDurationSeconds: hints.inputDuration } : {}),
+  };
 }
 
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
@@ -400,6 +402,15 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_minimax_h3_reference_to_video: kieResolutionVideo("minimax-h3/reference-to-video", "2K", 6),
 
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
+  ...Object.fromEntries(Object.values(GPT_IMAGE_2_5_MODELS).map((model) => [
+    model.tool,
+    (input: Record<string, unknown>) => kieTieredImage(
+      Array.isArray(input.image_refs) && input.image_refs.length > 0
+        ? model.editSchema.shape.model.value
+        : model.textSchema.shape.model.value,
+      model.textSchema.shape.input.shape.resolution.parse(undefined),
+    )(input),
+  ])),
   generate_kie_gpt_image_2_image_to_image: kieTieredImage("gpt-image-2-image-to-image", GPT_IMAGE_I2I_RESOLUTION),
   generate_kie_gpt_image_2_text_to_image: kieTieredImage("gpt-image-2-text-to-image", GPT_IMAGE_T2I_RESOLUTION),
 
@@ -595,9 +606,30 @@ export function getCostAdapter(rawToolName: string): CostAdapter | null {
       }
       if (provider && provider !== "kie") return null;
       const kie = KIE_ADAPTERS[toolName];
-      return kie ? kie(input) : null;
+      const request = kie ? kie(input) : null;
+      if (!request || request.provider !== "kie" || !REFERENCE_VIDEO_COST_TOOLS.has(toolName)) return request;
+      const videoRefs = Array.isArray(input.video_refs) ? input.video_refs : [];
+      const payload = request.payload as { model: string; input: Record<string, unknown> };
+      return {
+        ...request,
+        payload: {
+          ...payload,
+          input: { ...payload.input, reference_video_urls: videoRefs },
+        },
+        costHints: { ...request.costHints, ...toUpstreamCostHints({ inputDuration: num(input.input_video_duration) }) },
+      };
     };
   }
 
   return ADAPTERS[toolName] ?? null;
 }
+
+const REFERENCE_VIDEO_COST_TOOLS = new Set([
+  "generate_kie_seedance_2_0_video",
+  "generate_kie_seedance_2_0_fast_video",
+  "generate_kie_seedance_2_0_mini_video",
+  "generate_kie_seedance_2_5_video",
+  "generate_kie_wan_3_0_video",
+  "generate_kie_wan_3_0_prime_video",
+  "generate_kie_minimax_h3_reference_to_video",
+]);

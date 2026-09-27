@@ -6,13 +6,12 @@
  *
  * Only identity, labels, and image slot limits are configured here.
  */
+import { GPT_IMAGE_2_5_MODELS, GPT_IMAGE_2_5_REFERENCE_SCHEMA } from "./gpt-image-2-5.js";
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";
 import {
-  GptImage2ImageToImageRequestSchema,
-  GptImage2TextToImageRequestSchema,
   GrokImageToImageRequestSchema,
   GrokTextToImageRequestSchema,
   NanoBananaProRequestSchema,
@@ -131,33 +130,20 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     defaultSchemas: { nsfw_checker: GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker },
     falToolNames: { withRefs: "generate_fal_grok_imagine_edit_image" },
   },
-  {
-    key: "gpt_image",
-    kieModelId: "gpt-image-2-image-to-image",
-    tool_name: "generate_kie_gpt_image_2_image_to_image",
-    label: "GPT Image 2.0 Edit",
-    description: "Image editing with 1-16 reference images, aspect ratio, resolution (1K/2K/4K), and NSFW filter",
-    imageFieldSchema: GptImage2ImageToImageRequestSchema.shape.input.shape.input_urls,
+  ...Object.values(GPT_IMAGE_2_5_MODELS).map((model): ImageModelConfig => ({
+    key: model.key,
+    kieModelId: model.editSchema.shape.model.value,
+    tool_name: model.tool,
+    label: model.label,
+    description: "Generate or edit images with up to 16 optional reference images, aspect ratio, resolution, and background control",
+    imageFieldSchema: GPT_IMAGE_2_5_REFERENCE_SCHEMA,
     kieImageField: "input_urls",
     defaultSchemas: {
-      aspect_ratio: GptImage2ImageToImageRequestSchema.shape.input.shape.aspect_ratio,
-      resolution: GptImage2ImageToImageRequestSchema.shape.input.shape.resolution,
-      nsfw_checker: GptImage2ImageToImageRequestSchema.shape.input.shape.nsfw_checker,
+      aspect_ratio: model.textSchema.shape.input.shape.aspect_ratio,
+      resolution: model.textSchema.shape.input.shape.resolution,
+      background: model.textSchema.shape.input.shape.background,
     },
-  },
-  {
-    key: "gpt_image_text",
-    kieModelId: "gpt-image-2-text-to-image",
-    tool_name: "generate_kie_gpt_image_2_text_to_image",
-    label: "GPT Image 2.0",
-    description: "Text-to-image generation (no reference images needed), with optional aspect ratio and resolution (1K/2K/4K)",
-    imageFieldSchema: null,
-    defaultSchemas: {
-      aspect_ratio: GptImage2TextToImageRequestSchema.shape.input.shape.aspect_ratio,
-      resolution: GptImage2TextToImageRequestSchema.shape.input.shape.resolution,
-      nsfw_checker: GptImage2TextToImageRequestSchema.shape.input.shape.nsfw_checker,
-    },
-  },
+  })),
   {
     key: "grok_imagine_text",
     kieModelId: "grok-imagine/text-to-image",
@@ -366,7 +352,7 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
   if (isImageField) {
     const slots = getImageSlotsForConfig(config);
     if (slots) {
-      if (slots.min > 0) param.minItems = slots.min;
+      param.minItems = slots.min;
       if (slots.max !== null) param.maxItems = slots.max;
     }
   }
@@ -482,7 +468,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     for (const [fieldName, field] of Object.entries(modelSchema.fields) as [string, PayloadFieldSchema][]) {
       const outputName = fieldName === config.kieImageField ? "image_refs" : fieldName;
       properties[outputName] = kieFieldToParam(field, config, fieldName);
-      if (field.required) required.push(outputName);
+      if (field.required && (outputName !== "image_refs" || (getImageSlotsForConfig(config)?.min ?? 0) > 0)) required.push(outputName);
     }
     return { type: "object", properties, required, defaults };
   }

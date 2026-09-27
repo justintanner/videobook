@@ -10,6 +10,7 @@ import { QUEUED_TASK_ID } from "videobook-engine";
 import type { PendingTask, TaskType, Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import type { KieCostHints } from "../cost-adapters.js";
+import { referenceVideoDuration } from "../reference-video-duration.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 import {
   assessKieRequestEstimate,
@@ -140,12 +141,22 @@ export async function submitKieTask(
   });
   const apiKey = requireApiKey("KIE_API_KEY");
   await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
-  if (args.costHints) {
-    await engine.metadata.artifacts.write(args.assetId, "generation-cost-hints", args.costHints);
+  const costHints = { ...args.costHints };
+  const requestInput = args.request.input as Record<string, unknown>;
+  const videoUrls = requestInput.reference_video_urls;
+  const sourceVideoIds = args.meta.sourceVideoIds;
+  if (costHints.inputDuration === undefined && Array.isArray(videoUrls) && videoUrls.length > 0
+    && Array.isArray(sourceVideoIds) && sourceVideoIds.length === videoUrls.length
+    && sourceVideoIds.every((id): id is string => typeof id === "string")) {
+    const duration = await referenceVideoDuration(engine, sourceVideoIds);
+    if (duration !== undefined) costHints.inputDuration = duration;
+  }
+  if (Object.keys(costHints).length > 0) {
+    await engine.metadata.artifacts.write(args.assetId, "generation-cost-hints", costHints);
   }
   const provider = createKieProvider(apiKey);
   const { otp } = await authorizeKiePaygate(args.request, {
-    costHints: args.costHints,
+    costHints,
     engine,
     correlation: {
       bookId: args.bookId,

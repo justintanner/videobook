@@ -7,6 +7,25 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
+Videobook now uses Apicity 0.13.0 (2026-09-27). GPT Image 2.5 Sunburst is
+the default image renderer, with Flare available; both choose text-to-image or
+image-to-image according to reference inputs. GPT Image 2 definitions remain
+only for historical records and already queued work. Saved cells explicitly
+configured for a retired GPT model can select either 2.5 renderer before running
+again; their prompts and existing results remain intact.
+
+Published `@apicity/openai` and `@apicity/xai` 0.13.0 still omit Videobook's
+existing server realtime transports. Their vendored 0.13.0 archives carry the
+same transport additions, with reproducible package patches and base URLs in
+`vendor/OPENAI_REVISION.txt` and `vendor/XAI_REVISION.txt`.
+
+The new cost tables price Seedance 2.5 by reference-video presence, and count
+input plus output video duration for Seedance, Wan 3.0, MiniMax H3 reference
+video, and HappyHorse edits. Estimates resolve local reference durations; job
+submission persists the same duration hints outside the provider payload.
+Unknown reference durations produce an unavailable estimate instead of an
+output-only quote.
+
 Legend: **bug** = the published contract is wrong or internally inconsistent;
 **gap** = the published contract omits required information; **quirk** = correct
 provider behavior that cannot be represented directly in Videocity's field-level

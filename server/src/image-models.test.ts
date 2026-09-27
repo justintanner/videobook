@@ -144,7 +144,7 @@ describe("extractLastUsedImageModel", () => {
     const log: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-gpt-image",
+        action: "tool-generate-kie-gpt-image-2-5-flare-image",
         payload: { prompt: "test" },
         date: "2026-03-08T02:00:00Z",
       },
@@ -236,7 +236,7 @@ describe("buildImageModelOption history integration", () => {
     const history: ActionLogEntry[] = [
       {
         hash: "h1",
-        action: "tool-generate-gpt-image",
+        action: "tool-generate-kie-gpt-image-2-5-flare-image",
         payload: { prompt: "test", aspect_ratio: "16:9", output_format: "png" },
         date: "2026-03-08T00:00:00Z",
       },
@@ -280,22 +280,22 @@ describe("getImageToolSchema", () => {
     expect(schema!.required).toContain("image_refs");
   });
 
-  it("gpt_image: both prompt and image_refs required, aspect_ratio + resolution enums", () => {
-    const schema = getImageToolSchema("generate_gpt_image");
+  it("gpt_image: prompt required with optional image_refs and current provider options", () => {
+    const schema = getImageToolSchema("generate_kie_gpt_image_2_5_flare_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
-    expect(schema!.required).toContain("image_refs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "5:4", "9:16", "21:9", "16:9", "4:3", "3:2", "4:5", "3:4", "2:3"]);
+    expect(schema!.required).not.toContain("image_refs");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
     expect(schema!.properties).not.toHaveProperty("quality");
   });
 
-  it("gpt_image_text: prompt required, no image_refs, aspect_ratio + resolution enums", () => {
-    const schema = getImageToolSchema("generate_gpt_image_text");
+  it("gpt_image_sunburst: prompt required with optional references", () => {
+    const schema = getImageToolSchema("generate_kie_gpt_image_2_5_sunburst_image");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("image_refs");
-    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "9:16", "16:9", "2:1", "1:2", "3:1", "1:3", "21:9", "9:21"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
   });
 });
@@ -330,19 +330,20 @@ describe("validateImageParams", () => {
   });
 
   it("gpt warns when >16 images (Zod array capped at 16)", () => {
-    const result = validateImageParams("generate_gpt_image", {
+    const result = validateImageParams("generate_kie_gpt_image_2_5_flare_image", {
       prompt: "edit this",
       image_refs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
     });
-    expect(result.warnings.some((w) => w.includes("supports 1-16 images"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("supports 0-16 images"))).toBe(true);
   });
 
-  it("gpt warns when no images (Zod array requires at least 1)", () => {
-    const result = validateImageParams("generate_gpt_image", {
+  it("gpt accepts text-only rendering without references", () => {
+    const result = validateImageParams("generate_kie_gpt_image_2_5_flare_image", {
       prompt: "edit this",
       image_refs: [],
     });
-    expect(result.warnings.some((w) => w.includes("requires at least 1"))).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([]);
   });
 
   it("qwen2 warns when no images provided", () => {
@@ -381,7 +382,8 @@ describe("getImageModels", () => {
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
-    expect(models).toHaveProperty("gpt_image_text");
+    expect(models).toHaveProperty("gpt_image_sunburst");
+    expect(models).not.toHaveProperty("gpt_image_text");
     expect(models).toHaveProperty("grok_imagine_text");
     expect(models).toHaveProperty("qwen2_image_edit");
     expect(models).toHaveProperty("qwen3_image_edit");

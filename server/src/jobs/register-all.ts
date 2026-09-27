@@ -68,6 +68,7 @@ import { registerGenerateSeedreamTextImageJob } from "./generate-seedream-text-i
 import { registerGenerateSeedreamImageJob } from "./generate-seedream-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineTextImageJob } from "./generate-grok-imagine-text-image.js";
+import { registerGenerateGptImage25Job } from "./generate-gpt-image-2-5.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
 import { registerGenerateGptImageTextJob } from "./generate-gpt-image-text.js";
 import { registerGenerateAlibabaQwenImageJob, registerGenerateAlibabaQwenImageEditJob } from "./generate-alibaba-qwen-image.js";
@@ -219,6 +220,7 @@ export function registerAllJobHandlers(
   registerGenerateSeedreamImageJob(engine);
   registerGenerateGrokImagineImageJob(engine);
   registerGenerateGrokImagineTextImageJob(engine);
+  registerGenerateGptImage25Job(engine);
   registerGenerateGptImageJob(engine);
   registerGenerateGptImageTextJob(engine);
   registerGenerateAlibabaQwenImageJob(engine);

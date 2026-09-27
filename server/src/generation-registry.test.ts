@@ -2,6 +2,7 @@ import { scopedEngine } from "./engine.js";
 import { describe, expect, it } from "vitest";
 import {
   GENERATION_ACTIONS,
+  RETIRED_GENERATION_ACTIONS,
   getActionSpec,
   getCanonicalName,
   isGenerationAction,
@@ -35,6 +36,17 @@ describe("generation-registry", () => {
     expect(isGenerationAction("generate_grok_imagine_video")).toBe(true);
     expect(isGenerationAction("prepare_video_generation")).toBe(true);
     expect(isGenerationAction("trim_video")).toBe(false);
+  });
+
+  it("keeps earlier GPT image history readable without exposing render tools", () => {
+    const retired = RETIRED_GENERATION_ACTIONS.filter((action) => action.canonical_name.includes("gpt_image"));
+    expect(retired).toHaveLength(2);
+    const names = getAllToolDefs(scopedEngine).map((tool) => tool.name);
+    for (const action of retired) {
+      expect(names).not.toContain(action.canonical_name);
+      expect(GENERATION_ACTIONS).not.toContain(action);
+      for (const alias of action.legacy_names) expect(getActionSpec(alias)).toBe(action);
+    }
   });
 
   it("keeps provider identity in provider-backed canonical names", () => {

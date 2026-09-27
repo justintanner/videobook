@@ -192,9 +192,9 @@ describe('v2 notebook domain tools', () => {
     }
     expect(image).toMatchObject({
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
-      operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      model: 'GptImage25SunburstTextToImageRequestSchema',
+      operation: 'generate_image',
+      tool: 'generate_kie_gpt_image_2_5_sunburst_image',
     })
     expect(image.output_cell).toBeUndefined()
 
@@ -490,7 +490,7 @@ describe('v2 notebook domain tools', () => {
       execution: {
         [generated.id]: {
           status: 'ready',
-          tool: 'generate_kie_gpt_image_2_text_to_image',
+          tool: 'generate_kie_gpt_image_2_5_sunburst_image',
         },
       },
       generationPlans: [{
@@ -1344,7 +1344,7 @@ describe('v2 notebook domain tools', () => {
         label: 'generate-image-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',
-        model: 'generate_kie_gpt_image_2_text_to_image',
+        model: 'generate_kie_gpt_image_2_5_sunburst_image',
       },
     })) as { id: string }
     const plan = resultJson(await invoke('plan_notebook_generation', {

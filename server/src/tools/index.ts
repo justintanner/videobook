@@ -137,8 +137,7 @@ import { previewImageGenDef } from "./preview-image-gen.js";
 import { generationPayloadDef } from "./generation-payload.js";
 import { generateGrokImagineImageDef } from "./generate-grok-imagine-image.js";
 import { generateGrokImagineTextImageDef } from "./generate-grok-imagine-text-image.js";
-import { generateGptImageDef } from "./generate-gpt-image.js";
-import { generateGptImageTextDef } from "./generate-gpt-image-text.js";
+import { generateGptImage25Defs } from "./generate-gpt-image-2-5.js";
 import { generateAlibabaQwenImageDef } from "./generate-alibaba-qwen-image.js";
 import { generateAlibabaQwenImageEditDef } from "./generate-alibaba-qwen-image-edit.js";
 import { concatImagesDef } from "./concat-images.js";
@@ -442,8 +441,7 @@ export function getAllToolDefs(
     generationPayloadDef(engine),
     generateGrokImagineImageDef(engine),
     generateGrokImagineTextImageDef(engine),
-    generateGptImageDef(engine),
-    generateGptImageTextDef(engine),
+    ...generateGptImage25Defs(engine),
     generateAlibabaQwenImageDef(engine),
     generateAlibabaQwenImageEditDef(engine),
     concatImagesDef(engine),

@@ -8,6 +8,7 @@ import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
 import { getCanonicalName } from "../generation-registry.js";
 import type { BookManager } from "../book-manager.js";
+import { referenceVideoDuration } from "../reference-video-duration.js";
 
 const callItem = z.object({
   tool_name: z.string().describe("Name of the generation tool whose cost to estimate"),
@@ -145,6 +146,13 @@ async function enrichInput(
   }
   if (toolName === "generate_kie_volcengine_video_to_video_lip_sync") {
     return enrichSourceDuration(engine, input, "video_ref", "video");
+  }
+  if (typeof input.book_id === "string" && Array.isArray(input.video_refs)) {
+    const refs = input.video_refs.filter((ref): ref is string => typeof ref === "string");
+    const duration = refs.length === input.video_refs.length
+      ? await referenceVideoDuration(engine, refs)
+      : undefined;
+    if (duration !== undefined) return { ...input, input_video_duration: duration };
   }
   return input;
 }

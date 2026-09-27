@@ -542,6 +542,17 @@ describe("notebook action catalog", () => {
       tool: string;
     };
     expect(generation.tool).toBe(DEFAULT_IMAGE_TOOL);
+    expect(DEFAULT_IMAGE_TOOL).toBe("generate_kie_gpt_image_2_5_sunburst_image");
+    expect(resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: generation.id,
+    }))).toMatchObject({
+      tool: DEFAULT_IMAGE_TOOL,
+      payload: {
+        model: "gpt-image-2-5-sunburst-text-to-image",
+        input: { prompt: "persisted prompt", resolution: "1K" },
+      },
+    });
 
     const preview = resultJson(await invoke("preview_notebook_generation", {
       notebook_id: notebookId,
@@ -549,9 +560,9 @@ describe("notebook action catalog", () => {
       draft: {
         prompt: "draft prompt",
         provider: "kie",
-        model: "GptImage2TextToImageRequestSchema",
-        operation: "text_to_image",
-        tool: "generate_kie_gpt_image_2_text_to_image",
+        model: "GptImage25FlareTextToImageRequestSchema",
+        operation: "generate_image",
+        tool: "generate_kie_gpt_image_2_5_flare_image",
       },
     })) as {
       tool: string;
@@ -559,9 +570,9 @@ describe("notebook action catalog", () => {
       estimate: { currency: string; usd: number };
     };
     expect(preview).toMatchObject({
-      tool: "generate_kie_gpt_image_2_text_to_image",
+      tool: "generate_kie_gpt_image_2_5_flare_image",
       payload: {
-        model: "gpt-image-2-text-to-image",
+        model: "gpt-image-2-5-flare-text-to-image",
         input: { prompt: "draft prompt" },
       },
       estimate: { currency: "USD", usd: expect.any(Number) },
@@ -585,9 +596,9 @@ describe("notebook action catalog", () => {
         slot: { row: 2, column: 1 },
         prompt: "pending draft prompt",
         provider: "kie",
-        model: "GptImage2TextToImageRequestSchema",
-        operation: "text_to_image",
-        tool: "generate_kie_gpt_image_2_text_to_image",
+        model: "GptImage25FlareTextToImageRequestSchema",
+        operation: "generate_image",
+        tool: "generate_kie_gpt_image_2_5_flare_image",
       },
       connections: [],
     })) as {
@@ -596,7 +607,7 @@ describe("notebook action catalog", () => {
       estimate: { usd: number };
     };
     expect(pendingPreview).toMatchObject({
-      tool: "generate_kie_gpt_image_2_text_to_image",
+      tool: "generate_kie_gpt_image_2_5_flare_image",
       payload: { input: { prompt: "pending draft prompt" } },
       estimate: { usd: expect.any(Number) },
     });

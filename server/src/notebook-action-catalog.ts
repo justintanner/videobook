@@ -1,3 +1,4 @@
+import { DEFAULT_GPT_IMAGE_MODEL } from "./gpt-image-2-5.js";
 import type {
   Generation,
   NotebookCell,
@@ -314,10 +315,12 @@ const LOCAL_ACTIONS: NotebookAction[] = [
 
 const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_5_video";
 const DEFAULT_VIDEO_TOOL = "generate_kie_gemini_omni_video";
-const DEFAULT_IMAGE_TOOL = "generate_kie_nano_banana_pro_text_to_image";
+const DEFAULT_IMAGE_TOOL = DEFAULT_GPT_IMAGE_MODEL.tool;
 const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
 
 const generationTitleOverrides: Record<string, string> = {
+  generate_kie_gpt_image_2_5_flare_image: "GPT Image 2.5 Flare",
+  generate_kie_gpt_image_2_5_sunburst_image: "GPT Image 2.5 Sunburst",
   generate_kie_gemini_omni_video: "Gemini Omni Video",
   generate_google_flow_omni_flash_video: "Gemini Omni Video",
   generate_kie_nano_banana_pro_text_to_image: "Nano Banana Pro",

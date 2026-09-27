@@ -3713,6 +3713,14 @@ describe('chat composer browser flow', () => {
       && call.arguments.cell_id === reviewGenerationCellId)).toBe(true)
     expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
 
+    const imageModel = editor.getByLabel('Generation model')
+    expect(await imageModel.inputValue()).toBe('generation.generate_kie_gpt_image_2_5_sunburst_image')
+    const gptModels = await imageModel.locator('option').allTextContents()
+    expect(gptModels.filter((label) => label.includes('GPT Image')).sort()).toEqual([
+      'GPT Image 2.5 Flare · Kie',
+      'GPT Image 2.5 Sunburst · Kie',
+    ])
+
     await editor.getByLabel('Generation model').selectOption(
       'generation.generate_kie_nano_banana_pro_text_to_image',
     )

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
+import { registerGenerateGptImage25Job } from "./generate-gpt-image-2-5.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
 import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
@@ -25,6 +26,22 @@ type MissingConfigCase = {
 };
 
 const cases: MissingConfigCase[] = [
+  {
+    name: "GPT Image 2.5",
+    type: "generate_gpt_image_2_5",
+    key: "KIE_API_KEY",
+    artifactKind: "image",
+    payload: (imgAssetId, imgAssetDir, bookId) => ({
+      type: "generate_gpt_image_2_5",
+      variant: "sunburst",
+      input: { prompt: "offline failure" },
+      imageInputs: [],
+      imgAssetId,
+      imgAssetDir,
+      sourceImageIds: [],
+      bookId,
+    }),
+  },
   {
     name: "GPT image",
     type: "generate_gpt_image",
@@ -139,6 +156,7 @@ describe("provider job missing configuration", () => {
     fs = createEngineForTest(engineRoot);
     await setEngineRoot(engineRoot, fs);
     registerGenerateGptImageJob(fs);
+    registerGenerateGptImage25Job(fs);
     registerGenerateGrokImagineImageJob(fs);
     registerGenerateGrokImagineRefVideoJob(fs);
     registerGenerateGrokImagineVideoJob(fs);

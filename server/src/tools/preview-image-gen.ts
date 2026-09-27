@@ -1,3 +1,4 @@
+import { DEFAULT_GPT_IMAGE_MODEL } from "../gpt-image-2-5.js";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import {
@@ -34,7 +35,7 @@ export function selectPreviewImageModel(
 ): string {
   if (modelOverride) return modelOverride;
 
-  const fallback = resolvedImageCount > 0 ? "gpt_image" : "gpt_image_text";
+  const fallback = DEFAULT_GPT_IMAGE_MODEL.key;
   if (!historicalModel || historicalModel === "nano_banana") return fallback;
 
   const historicalOption = modelOptions.find((option) => option.key === historicalModel);
@@ -102,7 +103,6 @@ export function previewImageGenDef(engine: Engine): ToolDef {
         buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries, providerOverride, projectAssetTags),
       );
 
-      // 5. Use explicit override, then a compatible non-Gemini historical model, then GPT Image 2
       //    If the chosen model doesn't support the requested provider, pick the first that does.
       const resolvedImageCount = resolvedAssets.filter(
         (asset) => asset.artifactType === "image" && asset.filePath,

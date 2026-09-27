@@ -1,3 +1,5 @@
+import { buildGptImage25Payload } from "./gpt-image-2-5.js";
+import type { GptImage25Input } from "./gpt-image-2-5.js";
 /**
  * Shared payload builders: MCP tool args → @apicity request bodies.
  *
@@ -1854,6 +1856,20 @@ function translateToolPayloadUnchecked(
         imageRefs,
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_kie_gpt_image_2_5_flare_image":
+    case "generate_kie_gpt_image_2_5_sunburst_image": {
+      const payload = buildGptImage25Payload(
+        toolName === "generate_kie_gpt_image_2_5_flare_image" ? "flare" : "sunburst",
+        {
+          prompt: args.prompt as string,
+          aspect_ratio: args.aspect_ratio as GptImage25Input["aspect_ratio"],
+          resolution: args.resolution as GptImage25Input["resolution"],
+          background: args.background as GptImage25Input["background"],
+        },
+        imageRefs,
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload };
     }
     case "generate_kie_gpt_image_2_image_to_image": {
       const payload = buildGptImagePayload(

@@ -892,12 +892,14 @@ async function completeGptImage(
 
   const origin = {
     source_assets: meta.sourceImageIds,
-    model: taskType === "gpt_image_text" ? "gpt-image-2-text-to-image" : "gpt-image-2-image-to-image",
+    model: typeof meta.model === "string" ? meta.model : taskType === "gpt_image_text" ? "gpt-image-2-text-to-image" : "gpt-image-2-image-to-image",
     prompt: meta.prompt,
     download_url: imageUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.aspectRatio !== undefined ? { aspect_ratio: meta.aspectRatio } : {}),
     ...(meta.nsfwChecker !== undefined ? { nsfw_checker: meta.nsfwChecker } : {}),
+    ...(meta.resolution !== undefined ? { resolution: meta.resolution } : {}),
+    ...(meta.background !== undefined ? { background: meta.background } : {}),
     generated_at: new Date().toISOString(),
   };
   const jobId = `process-image-${assetId}-${Date.now()}`;

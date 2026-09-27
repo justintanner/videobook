@@ -276,9 +276,9 @@ describe('notebook chat generation', () => {
         slot: { row: 0, column: 3 },
         prompt: 'neon rain',
         provider: 'kie',
-        model: 'NanoBananaProRequestSchema',
-        operation: 'text_to_image',
-        tool: 'generate_kie_nano_banana_pro_text_to_image',
+        model: 'GptImage25SunburstTextToImageRequestSchema',
+        operation: 'generate_image',
+        tool: 'generate_kie_gpt_image_2_5_sunburst_image',
       })
     expect(connected.value.edges).toContainEqual(expect.objectContaining({
       source: source.id,

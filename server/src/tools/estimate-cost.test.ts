@@ -144,6 +144,66 @@ describe("estimate_cost tool", () => {
     }
   }, 60_000);
 
+  it.each(["flare", "sunburst"])("prices GPT Image 2.5 %s in text and reference modes", async (variant) => {
+    for (const image_refs of [[], ["@reference"]]) {
+      const result = await client.callTool({
+        name: "estimate_cost",
+        arguments: {
+          calls: [undefined, "1K", "2K", "4K"].map((resolution) => ({
+            tool_name: `generate_kie_gpt_image_2_5_${variant}_image`,
+            input: { image_refs, ...(resolution ? { resolution } : {}) },
+          })),
+        },
+      });
+      const payload = parse(result);
+      expect(payload.per_call.map((call) => call.estimate.usd)).toEqual([0.03, 0.03, 0.05, 0.08]);
+      expect(payload.estimate.warnings).toEqual([]);
+    }
+  });
+
+  it("includes every reference video's duration in current Kie video pricing", async () => {
+    const engine = createEngineForTest(tempDir);
+    const videoRefs: string[] = [];
+    for (const duration of [3, 7]) {
+      const asset = await engine.artifacts.create("video", `reference-${duration}`);
+      if (!asset.ok) throw new Error(asset.error.message);
+      await engine.metadata.artifacts.write(asset.value.artifactId, "original", { duration });
+      videoRefs.push(`@${asset.value.artifactId}`);
+    }
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_kie_seedance_2_5_video", input: { resolution: "1080p" } },
+          { tool_name: "generate_kie_wan_3_0_video", input: { resolution: "720P" } },
+        ].map((call) => ({
+          ...call,
+          input: { ...call.input, book_id: engine.book.get().bookId, duration: 5, video_refs: videoRefs },
+        })),
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.per_call.map((call) => call.estimate.breakdown.units)).toEqual([15, 15]);
+    expect(payload.per_call[0].estimate.usd).toBeCloseTo(15 * 0.3425);
+    expect(payload.per_call[1].estimate.usd).toBeCloseTo(15 * 0.08);
+  });
+
+  it("reports unavailable reference-video pricing when source duration is unknown", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_kie_seedance_2_5_video",
+          input: { duration: 5, video_refs: ["https://example.test/source.mp4"] },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.usd).toBe(0);
+    expect(payload.estimate.warnings.join(" ")).toContain("inputDurationSeconds");
+  });
+
   it("prices kie Wan 3.0 tiers and estimates intelligent duration at the 5s default", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
@@ -157,7 +217,7 @@ describe("estimate_cost tool", () => {
     const payload = parse(result);
     expect(payload.per_call[0].estimate.source).toBe("per-unit-table");
     expect(payload.per_call[0].estimate.warnings).toEqual([]);
-    expect(payload.per_call[0].estimate.usd).toBeCloseTo(0.8);
+    expect(payload.per_call[0].estimate.usd).toBeCloseTo(0.4);
     expect(payload.per_call[1].estimate.source).toBe("per-unit-table");
     expect(payload.per_call[1].estimate.warnings).toEqual([]);
     expect(payload.per_call[1].estimate.usd).toBeCloseTo(1.26);
@@ -183,9 +243,9 @@ describe("estimate_cost tool", () => {
     const payload = parse(result);
     expect(payload.per_call[0].estimate.source).toBe("per-unit-table");
     expect(payload.per_call[0].estimate.warnings).toEqual([]);
-    expect(payload.per_call[0].estimate.usd).toBeCloseTo(1.7125);
+    expect(payload.per_call[0].estimate.usd).toBeCloseTo(2.85);
     expect(payload.per_call[1].estimate.warnings).toEqual([]);
-    expect(payload.per_call[1].estimate.usd).toBeCloseTo(1.7125);
+    expect(payload.per_call[1].estimate.usd).toBeCloseTo(2.85);
     expect(payload.per_call[1].estimate.breakdown.units).toBe(5);
   });
 
@@ -361,11 +421,6 @@ describe("estimate_cost tool", () => {
   });
 
   it("uses the source video's actual duration for happyhorse/video-edit", async () => {
-    // Regression: happyhorse/video-edit bills per second of the source video —
-    // there is no user-typed duration. The previous estimate always charged
-    // the 5s default, so a 30s source showed the price for 5s at /generate.
-    // Server now resolves the duration from `original` metadata, mirroring the
-    // cost hint the job handler forwards to the paygate.
     const fs = createEngineForTest(tempDir);
 
     const assetResult = await fs.artifacts.create("vid", "long-source");
@@ -378,7 +433,7 @@ describe("estimate_cost tool", () => {
     );
     expect(writeMeta.ok).toBe(true);
 
-    const fiveSecond = await client.callTool({
+    const fallback = await client.callTool({
       name: "estimate_cost",
       arguments: {
         calls: [{
@@ -387,8 +442,8 @@ describe("estimate_cost tool", () => {
         }],
       },
     });
-    const fiveSecondPayload = parse(fiveSecond);
-    expect(fiveSecondPayload.estimate.breakdown.units).toBe(5);
+    const fallbackPayload = parse(fallback);
+    expect(fallbackPayload.estimate.breakdown.units).toBe(10);
 
     const enriched = await client.callTool({
       name: "estimate_cost",
@@ -404,14 +459,14 @@ describe("estimate_cost tool", () => {
       },
     });
     const enrichedPayload = parse(enriched);
-    expect(enrichedPayload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
+    expect(enrichedPayload.estimate.breakdown.units).toBe(ACTUAL_DURATION * 2);
     expect(enrichedPayload.estimate.usd).toBeCloseTo(
-      fiveSecondPayload.estimate.usd * (ACTUAL_DURATION / 5),
+      fallbackPayload.estimate.usd * (ACTUAL_DURATION / 5),
       4,
     );
   });
 
-  it("falls back to the 5s happyhorse/video-edit default when source has no duration metadata", async () => {
+  it("bills input and output for the 5s happyhorse/video-edit fallback when source has no duration metadata", async () => {
     const fs = createEngineForTest(tempDir);
 
     const assetResult = await fs.artifacts.create("vid", "legacy-source");
@@ -432,7 +487,7 @@ describe("estimate_cost tool", () => {
       },
     });
     const payload = parse(result);
-    expect(payload.estimate.breakdown.units).toBe(5);
+    expect(payload.estimate.breakdown.units).toBe(10);
     expect(payload.estimate.warnings).toEqual([]);
   });
 

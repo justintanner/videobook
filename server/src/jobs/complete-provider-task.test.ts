@@ -13,6 +13,7 @@ import {
   completionFamilyForTaskType,
   registerCompleteProviderTaskJob,
 } from "./complete-provider-task.js";
+import { registerProcessImageJob } from "./process-image.js";
 
 // 1x1 PNG
 const TINY_PNG = Buffer.from(
@@ -126,6 +127,35 @@ describe("complete_kie_task fal_qwen branches", () => {
       fs: cfs,
     };
   }
+
+  it.each([
+    ["gpt_image", "gpt-image-2-5-sunburst-image-to-image"],
+    ["gpt_image_text", "gpt-image-2-5-flare-text-to-image"],
+    ["gpt_image", undefined],
+    ["gpt_image_text", undefined],
+  ] as const)("preserves completed GPT provenance for %s / %s", async (taskType, model) => {
+    const { assetId, assetDir, taskId, bookId, fs: engine } = await seedPendingTask(taskType);
+    registerCompleteProviderTaskJob(engine);
+    registerProcessImageJob(engine);
+    await appQueue.enqueueAndWait(`complete-gpt-${assetId}`, {
+      type: "complete_kie_task",
+      taskId, taskType, assetId, assetDir, bookId,
+      meta: {
+        prompt: "a cat", sourceImageIds: [],
+        ...(model ? { model, resolution: "2K", background: "transparent" } : {}),
+      },
+      resultUrls: [imageUrl],
+    }, 10_000);
+
+    const expectedModel = model ?? (taskType === "gpt_image" ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image");
+    await expect.poll(async () => {
+      const result = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+      return result.ok ? result.value : null;
+    }, { timeout: 10_000 }).toMatchObject({
+      model: expectedModel, prompt: "a cat", width: 1, height: 1,
+      ...(model ? { resolution: "2K", background: "transparent" } : {}),
+    });
+  });
 
   it("downloads fal_qwen_image_edit result instead of marking ready empty", async () => {
     const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image_edit");

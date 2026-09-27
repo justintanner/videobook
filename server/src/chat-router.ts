@@ -1,3 +1,4 @@
+import { DEFAULT_GPT_IMAGE_MODEL } from "./gpt-image-2-5.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { planStackedChainFromQuery } from "./chain-plan.js";
 import {
@@ -65,7 +66,7 @@ const CHAT_TOOL_ALIASES: ChatToolAlias[] = [
   },
   {
     name: "generate_image",
-    actualTool: "generate_kie_nano_banana_pro_text_to_image",
+    actualTool: DEFAULT_GPT_IMAGE_MODEL.tool,
     description: "Generate an image from a text prompt, optionally with reference images",
   },
 ];
