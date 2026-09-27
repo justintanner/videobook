@@ -3372,6 +3372,7 @@ describe('chat composer browser flow', () => {
     const chatHead = chatRow.locator('.mcp-call-head')
     expect(await chatHead.getAttribute('aria-expanded')).toBe('false')
     expect(await chatRow.locator('.mcp-call-body').isVisible()).toBe(false)
+    await chatHead.scrollIntoViewIfNeeded()
     const history = page.locator('[data-testid="composer-history"]')
     const historyBox = await history.boundingBox()
     const rowBox = await chatHead.boundingBox()

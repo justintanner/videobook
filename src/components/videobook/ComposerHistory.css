@@ -1,15 +1,23 @@
+.command-composer .composer-history {
+  grid-auto-rows: max-content;
+  gap: 8px;
+}
+
 .chat-turn {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px;
+  width: min(100%, 680px);
+  padding: 0;
   min-width: 0;
 }
 
 .command-composer .composer-history .chat-bubble {
   display: block;
   width: fit-content;
-  max-width: min(85%, 680px);
+  max-width: min(100%, 680px);
+  align-self: flex-start;
+  justify-self: start;
   min-height: 0;
   margin: 0;
   padding: 8px 12px;
@@ -17,6 +25,7 @@
   border-radius: 14px;
   color: var(--ink);
   font: inherit;
+  text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
@@ -24,9 +33,7 @@
 }
 
 .command-composer .composer-history .chat-bubble-user {
-  align-self: flex-end;
-  margin-left: auto;
-  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 4px;
   background: rgba(114, 231, 170, .13);
 }
 
@@ -36,18 +43,34 @@
   background: rgba(114, 231, 170, .035);
 }
 
-.composer-history > .chat-bubble { margin: 8px 12px !important; }
-.composer-history > .chat-bubble-user { margin-left: auto !important; }
-.chat-bubble .composer-history-kind { display: block; opacity: .7; }
+.chat-bubble .composer-history-kind { display: block; font-size: 11px; opacity: .7; }
 .chat-turn-details { min-width: 0; }
-.chat-turn-details > summary { width: fit-content; margin-left: auto; padding: 4px 8px; color: #9fc0ad; cursor: pointer; font-size: 12px; }
+.chat-turn-details > summary { width: fit-content; padding: 4px 8px; color: #9fc0ad; cursor: pointer; font-size: 12px; }
 .chat-turn-details > summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .chat-turn-status { display: inline-flex; align-items: center; gap: 8px; }
 .chat-turn[data-status='failed'] .chat-turn-status { color: var(--danger); }
 .chat-turn[data-status='review'] .chat-turn-status { color: #e3b869; }
 .chat-turn[data-status='completed'] .chat-turn-status { color: var(--green); }
-.chat-turn-work { margin-top: 4px; border: 1px solid rgba(114, 231, 170, .12); border-radius: 8px; }
+.chat-turn-work { display: grid; gap: 6px; margin-top: 4px; }
 .chat-turn-work > p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 0; padding: 6px 12px; font-size: 12px; }
+.command-composer .composer-history .mcp-call { width: min(100%, 680px); min-width: 0; justify-self: start; }
+.command-composer .composer-history .mcp-call-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(95, 196, 214, .2);
+  border-radius: 12px;
+  background: rgba(95, 196, 214, .045);
+}
+.command-composer .composer-history .mcp-call-head:hover,
+.command-composer .composer-history .mcp-call-head[aria-expanded='true'] { background: rgba(95, 196, 214, .09); }
+.command-composer .composer-history .mcp-call-channel { grid-column: 1; grid-row: 1; font-size: 11px; }
+.command-composer .composer-history .mcp-call-name { grid-column: 1 / -1; grid-row: 2; white-space: normal; overflow-wrap: anywhere; }
+.command-composer .composer-history .mcp-call-trail { grid-column: 2; grid-row: 1; gap: 6px; font-size: 11px; }
+.command-composer .composer-history .mcp-call-failed .mcp-call-head { border-color: rgba(243, 160, 160, .3); }
 .composer-history-panel > .voice-captions-latest { position: absolute; right: 16px; bottom: 8px; z-index: 2; margin: 0; background: var(--panel); }
 .chat-working-dots { display: inline-flex; align-items: center; gap: 3px; height: 12px; }
 .chat-working-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: chat-working-dot 1s ease-in-out infinite; }
