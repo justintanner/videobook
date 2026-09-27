@@ -1,3 +1,5 @@
+import type { NotebookCellType } from 'videobook-engine'
+
 export type PassiveMediaKind = 'audio' | 'image' | 'video'
 
 const mediaFileExtensions: Record<PassiveMediaKind, ReadonlySet<string>> = {
@@ -24,4 +26,24 @@ export function mediaKindForFile(
     if (mediaFileExtensions[kind].has(extension)) return kind
   }
   return null
+}
+
+export function passiveMediaKind(kind: NotebookCellType): PassiveMediaKind | null {
+  return kind === 'audio' || kind === 'image' || kind === 'video' ? kind : null
+}
+
+export function isEmptyPassiveMediaSlot(
+  kind: NotebookCellType,
+  outputArtifactId: string | undefined,
+  targetConnectionCount: number,
+): boolean {
+  return passiveMediaKind(kind) !== null
+    && outputArtifactId === undefined
+    && targetConnectionCount === 0
+}
+
+export function dataTransferHasFiles(
+  dataTransfer: Pick<DataTransfer, 'types'>,
+): boolean {
+  return dataTransfer.types.includes('Files')
 }

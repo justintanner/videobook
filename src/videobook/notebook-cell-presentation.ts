@@ -581,3 +581,7 @@ export function notebookSplitRange(
     ? { startSeconds, endSeconds }
     : null
 }
+
+export function cellTypeLabel(kind: NotebookCellType): string {
+  return kind.replace(/^generate_/, 'gen_').replaceAll('_', ' ').toUpperCase()
+}

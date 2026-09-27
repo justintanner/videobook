@@ -1399,7 +1399,7 @@ describe('chat composer browser flow', () => {
         && call.arguments.target_input === 'video'), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(true)
-      await expect.poll(async () => await input.isEnabled(), {
+      await expect.poll(async () => await page!.getByLabel('Open actions').isEnabled(), {
         timeout: 30_000,
       }).toBe(true)
 
@@ -1412,7 +1412,7 @@ describe('chat composer browser flow', () => {
         && call.arguments.target_input === 'image'), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(true)
-      await expect.poll(async () => await input.isEnabled(), {
+      await expect.poll(async () => await page!.getByLabel('Open actions').isEnabled(), {
         timeout: 30_000,
       }).toBe(true)
       await expect.poll(async () =>
