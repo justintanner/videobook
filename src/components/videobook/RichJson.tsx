@@ -62,14 +62,42 @@ function unquotedStringToken(value: string): string | null {
   }
 }
 
+function JsonMediaPreview({ asset }: { asset: ArtifactThumbAsset }) {
+  if (!asset.mediaUrl) return <ArtifactThumb asset={asset} />
+  if (asset.type === 'image') {
+    return (
+      <span className="json-media-preview">
+        <img src={asset.mediaUrl} alt="" loading="lazy" decoding="async" />
+      </span>
+    )
+  }
+  if (asset.type === 'video' || asset.type === 'final') {
+    return (
+      <span className="json-media-preview">
+        <video src={asset.mediaUrl} poster={asset.thumbnailUrl ?? undefined} controls playsInline preload="metadata" aria-label="Source video" />
+      </span>
+    )
+  }
+  if (asset.type === 'audio') {
+    return (
+      <span className="json-media-preview">
+        <audio src={asset.mediaUrl} controls preload="metadata" aria-label="Source audio" />
+      </span>
+    )
+  }
+  return <ArtifactThumb asset={asset} />
+}
+
 export function RichJson({
   value,
   ariaLabel = 'Formatted action source',
   artifactAssets,
+  mediaDisplay = 'thumbnail',
 }: {
   value: unknown
   ariaLabel?: string
   artifactAssets?: ReadonlyMap<string, ArtifactThumbAsset>
+  mediaDisplay?: 'thumbnail' | 'preview'
 }) {
   const tokens = tokenizeJson(value)
 
@@ -85,7 +113,9 @@ export function RichJson({
         return (
           <span className={`json-${token.kind}`} key={`${index}-${token.value}`}>
             {token.value}
-            {asset ? <ArtifactThumb asset={asset} /> : null}
+            {asset && (mediaDisplay === 'preview'
+              ? <JsonMediaPreview asset={asset} />
+              : <ArtifactThumb asset={asset} />)}
           </span>
         )
       })}

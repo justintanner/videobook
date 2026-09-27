@@ -146,8 +146,8 @@ textarea:focus-visible {
 .media-library-results:focus-visible,
 .video-split-boundaries > ol:focus,
 .video-split-boundaries > ol:focus-visible,
-.generation-review-json > div:focus,
-.generation-review-json > div:focus-visible,
+.generation-review-json:focus,
+.generation-review-json:focus-visible,
 .record-card pre:focus,
 .record-card pre:focus-visible {
   outline: none;
@@ -7124,18 +7124,24 @@ textarea:focus-visible {
   grid-area: inputs;
 }
 
-.generation-review-prompt-section {
-  grid-area: prompt;
+.generation-review-editor {
+  grid-area: editor;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }
 
-.generation-review-model-section {
-  grid-area: model;
+.confirm-generation .generation-review-source-section {
+  grid-area: source;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 260px;
+  align-content: stretch;
 }
 
 /* Label above, scrolling field grid below: the label stays put while a long
    settings list scrolls under it. */
 .generation-review-settings-section {
-  grid-area: settings;
   grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
 }
@@ -8416,28 +8422,19 @@ textarea:focus-visible {
   display: grid;
   min-height: 0;
   grid-template-columns:
-    190px
+    176px
+    minmax(0, 1.4fr)
     minmax(0, 1fr)
-    328px
     176px;
-  grid-template-areas:
-    'inputs prompt model estimate'
-    'inputs prompt settings estimate';
-  /* Both rows size to their content. The settings box carries however many
-     fields the provider declares, and a 1fr second row used to squeeze it to a
-     height its own controls exceeded -- they were cut off by its border with
-     no scrollbar to say so. */
-  grid-template-rows: auto auto;
+  grid-template-areas: 'inputs editor source estimate';
+  grid-template-rows: auto;
   gap: 12px;
   align-items: stretch;
 }
 
-.confirm-generation .generation-review-voice-section {
-  grid-column: 1 / -1;
-}
-
 .generation-review-prompt-section {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1 0 auto;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .generation-review-prompt-section > label {
@@ -8562,12 +8559,11 @@ textarea:focus-visible {
   }
 
   .confirm-generation {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 152px minmax(0, 1.2fr) minmax(0, 1fr);
     grid-template-areas:
-      'inputs prompt'
-      'model settings'
-      'estimate estimate';
-    grid-template-rows: auto auto auto;
+      'inputs editor source'
+      'estimate editor source';
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 }
 
@@ -8592,9 +8588,8 @@ textarea:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       'inputs'
-      'prompt'
-      'model'
-      'settings'
+      'editor'
+      'source'
       'estimate';
     grid-template-rows: auto;
   }
@@ -8724,8 +8719,7 @@ textarea:focus-visible {
 
 .generation-review-source-copy small,
 .generation-review-text-input small,
-.generation-review-model-section > small,
-.generation-review-prompt-section > small {
+.generation-review-model-section > small {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.45;
@@ -8862,11 +8856,6 @@ textarea:focus-visible {
   box-shadow: 0 0 0 1px rgba(114, 231, 170, 0.13);
 }
 
-.generation-review-prompt-section kbd {
-  color: #a6d8bd;
-  font: inherit;
-}
-
 .generation-review-reference-errors {
   display: grid;
   gap: 6px;
@@ -8936,43 +8925,46 @@ textarea:focus-visible {
 
 .generation-review-json {
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  contain: size;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   border: 1px solid var(--line);
   background: rgba(0, 7, 4, 0.72);
 }
 
-.generation-review-json > summary {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 9px;
-  color: #82ad94;
-  cursor: pointer;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.generation-review-json:focus-visible {
+  border-color: var(--green);
 }
 
-.generation-review-json > summary > span {
+.generation-review-json-stale {
   color: #d7ad7d;
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
 }
 
-.generation-review-json > div {
-  max-height: 180px;
-  overflow: auto;
-  border-top: 1px solid var(--line);
+.generation-review-json .inspector-source-json {
+  padding: 10px;
+  font-size: 11px;
 }
 
-.generation-review-json pre {
-  margin: 0;
-  padding: 10px;
-  color: #a8d5bd;
-  font: 9px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.json-media-preview {
+  display: block;
+  width: min(100%, 280px);
+  margin: 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #020a06;
+}
+
+.json-media-preview img,
+.json-media-preview video,
+.json-media-preview audio {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
 }
 
 .generation-review-json-status {

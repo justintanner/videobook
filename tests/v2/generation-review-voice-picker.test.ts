@@ -2,7 +2,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ConfirmSheet } from '../../src/components/videobook/confirm/ConfirmSheet'
-import { GenerationBody } from '../../src/components/videobook/confirm/bodies/GenerationBody'
+import { GenerationBody, type GenerationReviewSource } from '../../src/components/videobook/confirm/bodies/GenerationBody'
+import { applyPreviewPlaceholderUrls } from '../../server/src/preview-payload.js'
 import { generationValidation } from '../../src/videobook/confirm-validation'
 import {
   generationEstimate,
@@ -242,15 +243,16 @@ describe('GenerationBody input editing', () => {
   }
 
   function renderInputs(
-    sources: { cellId: string; address: string; type: string; asset: null }[],
-    sourceOptions: { cellId: string; address: string; type: string; asset: null }[],
+    sources: GenerationReviewSource[],
+    sourceOptions: GenerationReviewSource[],
+    preview: unknown = null,
   ): string {
     return renderToStaticMarkup(createElement(GenerationBody, {
       actions: [ttsAction],
       busy: false,
       draft: speechDraft(),
       modes: ttsAction.inputContract.modes,
-      preview: null,
+      preview,
       previewError: null,
       previewLoading: false,
       previewStale: false,
@@ -288,5 +290,32 @@ describe('GenerationBody input editing', () => {
 
     expect(html).toContain('Prompt only')
     expect(html).toContain('Add input')
+  })
+
+  it.each([
+    { type: 'image', filename: 'original.png', tag: 'img' },
+    { type: 'video', filename: 'original.mp4', tag: 'video' },
+    { type: 'audio', filename: 'original.wav', tag: 'audio' },
+  ])('resolves provider placeholder URLs to inline $type media while preserving the source JSON', ({ type, filename, tag }) => {
+    const artifactId = '01900000-0000-7000-8000-000000000001'
+    const mediaUrl = `/files/${artifactId}/${filename}`
+    const translated = applyPreviewPlaceholderUrls({ [`${type}_url`]: `@${artifactId}` })
+    const preview = {
+      payload: translated.payload,
+      mentions: { url_placeholders: translated.placeholders },
+    }
+    const html = renderInputs([{
+      ...imageSource,
+      type,
+      asset: { artifactId, type, mediaUrl, thumbnailUrl: null, duration: null },
+    }], [], preview)
+    const source = html.slice(html.indexOf('aria-label="Source"'))
+
+    expect(source).toContain('aria-label="Generation source JSON"')
+    expect(source).toContain('class="json-key"')
+    expect(source).toContain(translated.placeholders[0]!.url)
+    expect(source).toContain(`<${tag} src="${mediaUrl}"`)
+    expect(source).not.toContain(`<${tag} src="${translated.placeholders[0]!.url}"`)
+    if (type !== 'image') expect(source).toContain('controls=""')
   })
 })

@@ -1,7 +1,7 @@
 import type { VoicePhase } from '../../server/src/voice-contract'
 
-export function captionToggleLabel(visible: boolean): 'Hide log' | 'Show log' {
-  return visible ? 'Hide log' : 'Show log'
+export function captionToggleLabel(visible: boolean): 'Hide Captain’s Log' | 'Show Captain’s Log' {
+  return visible ? 'Hide Captain’s Log' : 'Show Captain’s Log'
 }
 
 export function captionsEmptyCopy(phase: VoicePhase): string {

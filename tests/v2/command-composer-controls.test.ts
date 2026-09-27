@@ -146,8 +146,8 @@ describe('CommandComposer controls', () => {
       }],
       mcpCalls: beginMcpCall(emptyMcpCallLog, { id: 11, turnId: 10, tool: 'chat', args: [] }),
     })
-    expect(html).toContain('aria-label="Chat log"')
-    expect(html).toContain('>Log</button>')
+    expect(html).toContain('aria-label="Captain’s Log"')
+    expect(html).toContain('>Captain’s Log</button>')
     expect(html).toContain('Make a video with @b1')
     expect(html.match(/class="chat-working-dots"/gu)).toHaveLength(1)
     expect(html).not.toContain('Comms off.')
@@ -161,7 +161,7 @@ describe('CommandComposer controls', () => {
       notice: { message: 'Import could not finish', tone: 'error' },
       voice: stubVoice({ phase: 'error', active: false, message: 'Voice connection lost', playbackBlocked: true }),
     })
-    const logAt = html.indexOf('aria-label="Chat log"')
+    const logAt = html.indexOf('aria-label="Captain’s Log"')
     expect(logAt).toBeGreaterThan(0)
     expect(html.indexOf('Import could not finish')).toBeGreaterThan(logAt)
     expect(html.indexOf('Voice connection lost')).toBeGreaterThan(logAt)
@@ -193,7 +193,7 @@ describe('CommandComposer controls', () => {
     expect(preview).not.toContain('Previous question')
     expect(preview).not.toContain('Previous answer')
     expect(preview).not.toContain('Comms off.')
-    expect(preview).not.toContain('aria-label="Chat log"')
+    expect(preview).not.toContain('aria-label="Captain’s Log"')
     expect(preview).not.toContain('voice-captions-toggle')
 
     const review = renderComposer(false, null, {
@@ -202,7 +202,7 @@ describe('CommandComposer controls', () => {
     })
     expect(review).toContain('Review action')
     expect(review).toContain('Previous question')
-    expect(review).toContain('aria-label="Chat log"')
+    expect(review).toContain('aria-label="Captain’s Log"')
   })
 
   it('keeps voice errors and playback recovery available while previewing', () => {
@@ -218,7 +218,7 @@ describe('CommandComposer controls', () => {
       voice: stubVoice({ playbackBlocked: true }),
     })
     expect(playback).toContain('Enable spoken replies')
-    expect(playback).toContain('aria-label="Chat log"')
+    expect(playback).toContain('aria-label="Captain’s Log"')
   })
 
   it('shows the model by name on the bar and keeps its full id for the menu', () => {
@@ -483,16 +483,16 @@ describe('CommandComposer controls', () => {
   })
 })
 
-describe('Chat log visibility', () => {
+describe('Captain’s Log visibility', () => {
   const phases: VoicePhase[] = ['off', 'connecting', 'listening', 'thinking', 'speaking', 'review', 'error']
 
   it('defaults to a visible transcript region whose name, expanded state and controls agree', () => {
     const html = renderHistory('listening', [])
     const { button, region, id } = controlledRegion(html)
     expect(button).toContain('aria-expanded="true"')
-    expect(button).toContain('aria-label="Hide log"')
-    expect(button).toContain('>Log</button>')
-    expect(button).not.toMatch(/>Hide log</)
+    expect(button).toContain('aria-label="Hide Captain’s Log"')
+    expect(button).toContain('>Captain’s Log</button>')
+    expect(button).not.toMatch(/>Hide Captain’s Log</)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
     expect(html).toContain('Listening… speak anytime.')
@@ -508,9 +508,9 @@ describe('Chat log visibility', () => {
     expect(shown).toContain('>three</span>')
     const { button, region } = controlledRegion(hidden)
     expect(button).toContain('aria-expanded="false"')
-    expect(button).toContain('aria-label="Show log"')
-    expect(button).toContain('>Log</button>')
-    expect(button).not.toMatch(/>Show log</)
+    expect(button).toContain('aria-label="Show Captain’s Log"')
+    expect(button).toContain('>Captain’s Log</button>')
+    expect(button).not.toMatch(/>Show Captain’s Log</)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
     expect(hidden).toContain('>three</span>')
@@ -521,7 +521,7 @@ describe('Chat log visibility', () => {
       if (phase === 'off') continue
       const html = renderHistory(phase, [], true)
       const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('aria-label="Hide log"')
+      expect(button, phase).toContain('aria-label="Hide Captain’s Log"')
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
@@ -620,7 +620,7 @@ describe('Chat log visibility', () => {
     expect(html).toContain('review on screen')
     expect(html).not.toContain('Use Apply or Cancel on screen.')
     expect(html).not.toContain('voice-comms-statusline')
-    expect(controlMarkup(html, 'Hide log')).toContain('type="button"')
+    expect(controlMarkup(html, 'Hide Captain’s Log')).toContain('type="button"')
     // Talking, the strip flips: the text cell becomes the way out and the voice
     // cell is the lit one, naming the provider that is carrying the call.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')

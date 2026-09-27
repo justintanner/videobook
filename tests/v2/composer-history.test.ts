@@ -172,8 +172,8 @@ describe('composerHistory', () => {
       onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
-    expect(html).toContain('aria-label="Hide log"')
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Hide log"/)
+    expect(html).toContain('aria-label="Hide Captain’s Log"')
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Hide Captain’s Log"/)
     expect(html).toContain('mcp-call-running')
     const closed = renderToStaticMarkup(createElement(ComposerHistory, {
       rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], log),
@@ -184,7 +184,7 @@ describe('composerHistory', () => {
       onToggleCall: () => undefined,
     }))
     expect(closed).toContain(' hidden=""')
-    expect(closed).toContain('aria-label="Show log"')
+    expect(closed).toContain('aria-label="Show Captain’s Log"')
     expect(closed).toContain('>hello</span>')
     expect(closed).toContain('mcp-call-running')
   })
@@ -246,7 +246,7 @@ describe('history auto-close', () => {
       onToggleCall: () => undefined,
     }))
     expect(html).toContain('composer-panel-controls')
-    expect(html).toContain('aria-label="Hide log"')
+    expect(html).toContain('aria-label="Hide Captain’s Log"')
     expect(html).not.toContain('aria-label="Close chat"')
     expect(html).not.toContain('lucide-chevron-down')
     expect(html.indexOf('composer-panel-controls')).toBeLessThan(html.indexOf('composer-history voice-captions'))

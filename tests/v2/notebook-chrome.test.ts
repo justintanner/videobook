@@ -156,10 +156,10 @@ describe('notebook chrome tokens', () => {
   it('keeps the generation body responsive arrangements', () => {
     const editor = rule(css, '.confirm-generation')
     expect(declaration(editor, 'grid-template-areas').replace(/\s+/g, ' '))
-      .toBe(`'inputs prompt model estimate' 'inputs prompt settings estimate'`)
+      .toBe(`'inputs editor source estimate'`)
     const tablet = braceBlock(css, css.indexOf('@media (max-width: 1180px) {'))
     expect(declaration(rule(tablet, '.confirm-generation'), 'grid-template-columns'))
-      .toBe('repeat(2, minmax(0, 1fr))')
+      .toBe('152px minmax(0, 1.2fr) minmax(0, 1fr)')
     const mobile = braceBlock(css, css.indexOf('@media (max-width: 900px) {'))
     expect(declaration(rule(mobile, '.confirm-generation'), 'grid-template-columns'))
       .toBe('minmax(0, 1fr)')
@@ -188,10 +188,8 @@ describe('notebook chrome tokens', () => {
   })
 
   it('lets the generation settings box grow or scroll instead of clipping', () => {
-    // Both rows size to their content, so the settings box is never squeezed to
-    // a height its own fields exceed.
     expect(declaration(rule(css, '.confirm-generation'), 'grid-template-rows'))
-      .toBe('auto auto')
+      .toBe('auto')
     const settings = rule(css, '.generation-review-settings')
     // 132px fits a whole provider default, so 'Default · adaptive' and
     // 'Output format' stop truncating in a 328px column.

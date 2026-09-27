@@ -48,7 +48,7 @@ function ComposerHistoryControlsStrip({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onToggle}
       >
-        Log
+        Captain’s Log
       </button>
     </div>
   )
@@ -115,7 +115,7 @@ export function ComposerHistory({
         className="composer-history voice-captions"
         data-testid="composer-history"
         hidden={!open}
-        aria-label="Chat log"
+        aria-label="Captain’s Log"
         role="log"
         aria-live="off"
         onScroll={(event) => {

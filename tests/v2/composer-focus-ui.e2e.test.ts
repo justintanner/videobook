@@ -521,7 +521,7 @@ describe('composer focus through real workspace interactions', () => {
     await input().fill('/notebooks')
     await page.getByLabel('Send command', { exact: true }).click()
     await ready()
-    const history = page.getByRole('log', { name: 'Chat log' })
+    const history = page.getByRole('log', { name: 'Captain’s Log' })
     await history.waitFor({ state: 'visible' })
     let previousTurn = Number(await history.locator('.chat-turn').last().getAttribute('data-turn-id'))
     expect(await history.locator('.mcp-call[data-tool="list_notebooks"]').count()).toBeGreaterThan(0)

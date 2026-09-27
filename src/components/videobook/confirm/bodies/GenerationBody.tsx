@@ -6,6 +6,8 @@ import type {
   NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { GenerationControlField } from '@/components/videobook/GenerationControlField'
+import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
+import { RichJson } from '@/components/videobook/RichJson'
 import {
   notebookChatGenerationSettings,
   type NotebookChatGenerationDraft,
@@ -28,7 +30,7 @@ export type GenerationReviewSource = {
   cellId: string
   address: string
   type: string
-  asset: MediaLibraryPreviewAsset | null
+  asset: (MediaLibraryPreviewAsset & ArtifactThumbAsset) | null
 }
 
 type GenerationBodyProps = {
@@ -61,6 +63,31 @@ function generationMode(draft: NotebookChatGenerationDraft): string {
   return inputs && typeof inputs.generationMode === 'string'
     ? inputs.generationMode
     : ''
+}
+
+function previewAssets(
+  sources: readonly GenerationReviewSource[],
+  preview: unknown,
+): ReadonlyMap<string, ArtifactThumbAsset> {
+  const assets = new Map<string, ArtifactThumbAsset>()
+  for (const source of sources) {
+    if (!source.asset) continue
+    for (const reference of [
+      source.cellId,
+      `@${source.address}`,
+      source.asset.artifactId,
+      `@${source.asset.artifactId}`,
+      source.asset.mediaUrl,
+      source.asset.thumbnailUrl,
+    ]) {
+      if (reference) assets.set(reference, source.asset)
+    }
+  }
+  for (const placeholder of providerPayloadPreviewMentions(preview).urlPlaceholders) {
+    const asset = assets.get(placeholder.reference)
+    if (asset) assets.set(placeholder.url, asset)
+  }
+  return assets
 }
 
 function SourceCard({
@@ -148,6 +175,7 @@ export function GenerationBody({
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
     : draft.action.controls
   const previewValue = recordValue(preview)
+  const artifactAssets = previewAssets(sources, preview)
   const estimate = generationEstimate(preview)
   const promptLeaks = previewStale ? [] : providerPayloadPreviewMentions(preview).promptLeaks
   const previewJson = previewValue ?? {
@@ -227,145 +255,152 @@ export function GenerationBody({
         )}
       </section>
 
-      <section className="confirm-section generation-review-prompt-section" aria-label="Prompt">
-        <label>
-          <span className="confirm-section-label">Prompt</span>
-          <textarea
-            rows={5}
-            value={draft.cell.prompt ?? ''}
-            aria-invalid={promptLeaks.length > 0}
-            disabled={busy}
-            onChange={(event) => onPromptChange(event.target.value)}
-          />
-        </label>
-        {promptLeaks.length > 0 && (
-          <div className="generation-review-reference-errors" role="alert">
-            {promptLeaks.map((leak) => (
-              <span key={`${leak.token}:${leak.code}`} title={leak.message}>
-                <CircleAlert size={12} aria-hidden="true" />
-                <code>{leak.token}</code>
-                {leak.message}
-              </span>
-            ))}
-          </div>
-        )}
-        <small>Or type <kbd>/apply your quick prompt</kbd> below.</small>
-      </section>
-
-      <section className="confirm-section generation-review-model-section" aria-label="Model">
-        <label>
-          <span className="confirm-section-label">Model</span>
-          <select
-            aria-label="Generation model"
-            value={draft.action.id}
-            disabled={busy || actions.length === 0}
-            onChange={(event) => onActionChange(event.target.value)}
-          >
-            {actions.map((action) => (
-              <option key={action.id} value={action.id}>
-                {action.title} · {action.providerLabel}
-              </option>
-            ))}
-          </select>
-        </label>
-        {modes.length > 1 && (
+      <div className="generation-review-editor">
+        <section className="confirm-section generation-review-model-section" aria-label="Model">
           <label>
-            <span className="confirm-section-label">Type</span>
+            <span className="confirm-section-label">Model</span>
             <select
-              aria-label="Generation type"
-              value={generationMode(draft)}
-              disabled={busy}
-              onChange={(event) => onModeChange(event.target.value)}
+              aria-label="Generation model"
+              value={draft.action.id}
+              disabled={busy || actions.length === 0}
+              onChange={(event) => onActionChange(event.target.value)}
             >
-              {modes.map((mode) => (
-                <option key={mode.id} value={mode.id}>
-                  {mode.id.replaceAll('_', ' ').toUpperCase()}
+              {actions.map((action) => (
+                <option key={action.id} value={action.id}>
+                  {action.title} · {action.providerLabel}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        <small>{draft.action.providerLabel} · {draft.action.model}</small>
-        <details className="generation-review-json">
-          <summary>
-            Preview JSON
-            {previewStale && <span>Needs refresh</span>}
-          </summary>
-          <div tabIndex={0}>
-            {previewLoading ? (
-              <span className="generation-review-json-status">Loading preview…</span>
-            ) : previewError ? (
-              <span className="generation-review-json-status generation-review-json-error">
-                {previewError}
-              </span>
-            ) : (
-              <pre>{JSON.stringify(previewJson, null, 2)}</pre>
-            )}
-          </div>
-        </details>
-      </section>
-
-      {voiceControl && voiceCatalog && (
-        <section className="confirm-section generation-review-voice-section" aria-label="Voice">
-          <span className="confirm-section-label">Voice</span>
-          {showVoicePicker && (
-            <div
-              className="generation-review-voices"
-              role="listbox"
-              aria-label="ElevenLabs voices"
-              data-testid="generation-review-voices"
-            >
-              <VoiceOptionList
-                voices={voiceOptions}
-                selectedVoiceId={selectedVoiceId}
-                playingVoiceId={previewPlayer.playingVoiceId}
+          {modes.length > 1 && (
+            <label>
+              <span className="confirm-section-label">Type</span>
+              <select
+                aria-label="Generation type"
+                value={generationMode(draft)}
                 disabled={busy}
-                onSelect={(voiceId) => {
-                  persistSpeakVoiceId(voiceId)
-                  onSettingChange('voice_id', voiceId)
-                }}
-                onTogglePreview={previewPlayer.toggle}
-              />
+                onChange={(event) => onModeChange(event.target.value)}
+              >
+                {modes.map((mode) => (
+                  <option key={mode.id} value={mode.id}>
+                    {mode.id.replaceAll('_', ' ').toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <small>{draft.action.providerLabel} · {draft.action.model}</small>
+        </section>
+
+        <section className="confirm-section generation-review-prompt-section" aria-label="Prompt">
+          <label>
+            <span className="confirm-section-label">Prompt</span>
+            <textarea
+              rows={5}
+              value={draft.cell.prompt ?? ''}
+              aria-invalid={promptLeaks.length > 0}
+              disabled={busy}
+              onChange={(event) => onPromptChange(event.target.value)}
+            />
+          </label>
+          {promptLeaks.length > 0 && (
+            <div className="generation-review-reference-errors" role="alert">
+              {promptLeaks.map((leak) => (
+                <span key={`${leak.token}:${leak.code}`} title={leak.message}>
+                  <CircleAlert size={12} aria-hidden="true" />
+                  <code>{leak.token}</code>
+                  {leak.message}
+                </span>
+              ))}
             </div>
           )}
-          {voiceCatalog.loading && voiceOptions.length === 0 && (
-            <small>Loading voices…</small>
-          )}
-          {voiceCatalog.error && (
-            <small role="alert">{voiceCatalog.error}</small>
-          )}
-          <button
-            type="button"
-            disabled={busy || voiceCatalog.loading}
-            onClick={refreshVoiceCatalog}
-          >
-            {voiceCatalog.loading
-              ? 'Loading voices…'
-              : voiceCatalog.error
-                ? 'Retry voices'
-                : showVoicePicker ? 'Refresh voices' : 'Load voices'}
-          </button>
-          {voiceCatalog?.warning && <small>{voiceCatalog.warning}</small>}
         </section>
-      )}
 
-      <section className="confirm-section generation-review-settings-section" aria-label="Settings">
-        <span className="confirm-section-label">Settings</span>
-        <div className="generation-review-settings">
-          {generalControls.length > 0 ? generalControls.map((control) => (
-            <GenerationControlField
-              key={control.name}
-              control={control}
-              settings={settings}
-              busy={busy}
-              toggleClassName="generation-review-toggle"
-              onFocus={control.name === 'voice_id'
-                ? ensureVoiceCatalog
-                : undefined}
-              onChange={(value) => onSettingChange(control.name, value)}
+        <section className="confirm-section generation-review-settings-section" aria-label="Settings">
+          <span className="confirm-section-label">Settings</span>
+          <div className="generation-review-settings">
+            {generalControls.length > 0 ? generalControls.map((control) => (
+              <GenerationControlField
+                key={control.name}
+                control={control}
+                settings={settings}
+                busy={busy}
+                toggleClassName="generation-review-toggle"
+                onFocus={control.name === 'voice_id'
+                  ? ensureVoiceCatalog
+                  : undefined}
+                onChange={(value) => onSettingChange(control.name, value)}
+              />
+            )) : (
+              <span className="generation-review-defaults">Provider defaults</span>
+            )}
+          </div>
+        </section>
+
+        {voiceControl && voiceCatalog && (
+          <section className="confirm-section generation-review-voice-section" aria-label="Voice">
+            <span className="confirm-section-label">Voice</span>
+            {showVoicePicker && (
+              <div
+                className="generation-review-voices"
+                role="listbox"
+                aria-label="ElevenLabs voices"
+                data-testid="generation-review-voices"
+              >
+                <VoiceOptionList
+                  voices={voiceOptions}
+                  selectedVoiceId={selectedVoiceId}
+                  playingVoiceId={previewPlayer.playingVoiceId}
+                  disabled={busy}
+                  onSelect={(voiceId) => {
+                    persistSpeakVoiceId(voiceId)
+                    onSettingChange('voice_id', voiceId)
+                  }}
+                  onTogglePreview={previewPlayer.toggle}
+                />
+              </div>
+            )}
+            {voiceCatalog.loading && voiceOptions.length === 0 && (
+              <small>Loading voices…</small>
+            )}
+            {voiceCatalog.error && (
+              <small role="alert">{voiceCatalog.error}</small>
+            )}
+            <button
+              type="button"
+              disabled={busy || voiceCatalog.loading}
+              onClick={refreshVoiceCatalog}
+            >
+              {voiceCatalog.loading
+                ? 'Loading voices…'
+                : voiceCatalog.error
+                  ? 'Retry voices'
+                  : showVoicePicker ? 'Refresh voices' : 'Load voices'}
+            </button>
+            {voiceCatalog?.warning && <small>{voiceCatalog.warning}</small>}
+          </section>
+        )}
+      </div>
+
+      <section className="confirm-section generation-review-source-section" aria-label="Source">
+        <div className="confirm-section-heading">
+          <span>Source</span>
+          {previewStale && <small className="generation-review-json-stale">Needs refresh</small>}
+        </div>
+        <div className="generation-review-json" tabIndex={0} aria-label="Generation source preview" aria-busy={previewLoading}>
+          {previewLoading ? (
+            <span className="generation-review-json-status" role="status">Loading preview…</span>
+          ) : previewError ? (
+            <span className="generation-review-json-status generation-review-json-error" role="alert">
+              {previewError}
+            </span>
+          ) : (
+            <RichJson
+              value={previewJson}
+              ariaLabel="Generation source JSON"
+              artifactAssets={artifactAssets}
+              mediaDisplay="preview"
             />
-          )) : (
-            <span className="generation-review-defaults">Provider defaults</span>
           )}
         </div>
       </section>

@@ -193,7 +193,7 @@ describe('composer activity status', () => {
     expect(waiting).toContain('Waiting for reply')
     expect(waiting).not.toContain('Connecting voice')
     expect(hidden).toContain(' hidden=""')
-    expect(hidden).toContain('aria-label="Show log"')
+    expect(hidden).toContain('aria-label="Show Captain’s Log"')
     expect(connecting).toContain('composer-mode-connecting')
     expect(connecting).toContain('role="status"')
     expect(renderVoiceActivity(voice)).toBe('')
