@@ -22,7 +22,7 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
     "fal_nano_banana_2_lite",
     "fal_nano_banana_2_lite_edit",
   ],
-  qwenImage: ["qwen2_image_edit", "qwen3_image_edit", "fal_qwen_image", "fal_qwen_image_edit", "fal_qwen3_image_edit"],
+  qwenImage: ["qwen2_image_edit", "qwen3_image_edit", "qwen21_text_image", "qwen21_image_edit", "fal_qwen_image", "fal_qwen_image_edit", "fal_qwen3_image_edit"],
   seedreamImage: ["seedream_text_image", "seedream_image"],
   seedreamV5Image: ["fal_seedream_v5_lite", "fal_seedream_v5_lite_edit"],
   klingVideo: ["kling30_video", "kling30_motion_control_video"],
@@ -495,7 +495,11 @@ async function completeQwen2ImageEdit(
       ? "qwen2/text-to-image"
       : taskType === "qwen3_image_edit" || taskType === "fal_qwen3_image_edit"
         ? "qwen3/image-to-image"
-        : "qwen2/image-edit";
+        : taskType === "qwen21_text_image"
+          ? "qwen2-1/text-to-image"
+          : taskType === "qwen21_image_edit"
+            ? "qwen2-1/image-to-image"
+            : "qwen2/image-edit";
 
   const origin = {
     source_assets: meta.sourceImageIds,

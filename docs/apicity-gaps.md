@@ -435,12 +435,33 @@ native pricing.
 
 ---
 
-## Open / partial summary (installed 0.8.8, re-audited 2026-08-07)
+## 38. (gap) KIE Qwen 2.1 ships schemas without cost slugs or pricing — OPEN in 0.13.1
+
+`@apicity/kie` 0.13.1 adds `qwen2-1/text-to-image` and
+`qwen2-1/image-to-image` (createTask schemas plus `modelInputSchemas`
+metadata) but `@apicity/cost` 0.13.1 registers neither a `MODEL_SLUGS.kie`
+entry nor a rate for either model, so `modelSlug("kie", "qwen2-1/…")`
+throws and `computeEstimate` reports "not found in pricing table".
+Videobook ships `generate_kie_qwen_2_1_text_to_image` and
+`generate_kie_qwen_2_1_edit_image` (Kie-only routes, labels use the literal
+`qwen2-1` slug) with deliberately NO cost adapter: `estimate_cost` returns
+$0 plus the "no cost adapter registered" warning, and the kie paygate logs
+the unavailable estimate without blocking submission. Add
+`kieQwen21*` adapters only when upstream publishes rates; do not invent
+per-image goldens. Also note the i2i schema accepts 1-10 reference images
+(up from qwen2/qwen3's 1-3) and an optional `mask_url` inpainting field
+that the picker deliberately does not surface (`skipKieFields`), matching
+the qwen2/qwen3 tools which expose no mask input.
+
+---
+
+
 
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
 | **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
+| **OPEN**     | §38 KIE Qwen 2.1 cost slugs/pricing                                 | no adapter; $0 estimate + warning                      |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |

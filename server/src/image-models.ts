@@ -17,6 +17,8 @@ import {
   NanoBananaProRequestSchema,
   Qwen2ImageEditRequestSchema,
   Qwen3ImageToImageRequestSchema,
+  Qwen21TextToImageRequestSchema,
+  Qwen21ImageToImageRequestSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
 } from "@apicity/kie/zod";
@@ -97,6 +99,9 @@ type ImageModelConfig = {
   /** Optional Google Flow (useapi.net) routing — when set, adds "google" as a
    *  provider option, resolved like falToolNames. */
   googleToolNames?: { noRefs?: string; withRefs?: string };
+  /** Kie schema fields deliberately not surfaced in the picker (and with no
+   *  matching execution param). Excludes them from params and the form schema. */
+  skipKieFields?: string[];
 };
 
 import { getCanonicalName, getActionSpec, isGenerationAction } from "./generation-registry.js";
@@ -190,6 +195,36 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       resolution: Qwen3ImageToImageRequestSchema.shape.input.shape.resolution,
     },
     falToolNames: { withRefs: "generate_fal_qwen_3_0_edit_image" },
+  },
+  {
+    key: "qwen2_1_text",
+    kieModelId: "qwen2-1/text-to-image",
+    tool_name: "generate_kie_qwen_2_1_text_to_image",
+    label: "Qwen 2.1 Image",
+    description: "Text-to-image generation with Qwen Image 2.1, with aspect ratio, resolution, background, and format control",
+    imageFieldSchema: null,
+    defaultSchemas: {
+      aspect_ratio: Qwen21TextToImageRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: Qwen21TextToImageRequestSchema.shape.input.shape.resolution,
+      background: Qwen21TextToImageRequestSchema.shape.input.shape.background,
+      output_format: Qwen21TextToImageRequestSchema.shape.input.shape.output_format,
+    },
+  },
+  {
+    key: "qwen2_1_edit",
+    kieModelId: "qwen2-1/image-to-image",
+    tool_name: "generate_kie_qwen_2_1_edit_image",
+    label: "Qwen 2.1 Image Edit",
+    description: "Prompt-driven image edit using Qwen Image 2.1 with 1-10 ordered reference images",
+    imageFieldSchema: Qwen21ImageToImageRequestSchema.shape.input.shape.image_urls,
+    kieImageField: "image_urls",
+    skipKieFields: ["mask_url"],
+    defaultSchemas: {
+      aspect_ratio: Qwen21ImageToImageRequestSchema.shape.input.shape.aspect_ratio,
+      resolution: Qwen21ImageToImageRequestSchema.shape.input.shape.resolution,
+      background: Qwen21ImageToImageRequestSchema.shape.input.shape.background,
+      output_format: Qwen21ImageToImageRequestSchema.shape.input.shape.output_format,
+    },
   },
   {
     key: "seedream_text",
@@ -466,6 +501,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     const properties: Record<string, ParamSchema> = {};
     const required: string[] = [];
     for (const [fieldName, field] of Object.entries(modelSchema.fields) as [string, PayloadFieldSchema][]) {
+      if (config.skipKieFields?.includes(fieldName)) continue;
       const outputName = fieldName === config.kieImageField ? "image_refs" : fieldName;
       properties[outputName] = kieFieldToParam(field, config, fieldName);
       if (field.required && (outputName !== "image_refs" || (getImageSlotsForConfig(config)?.min ?? 0) > 0)) required.push(outputName);
@@ -618,6 +654,7 @@ function getImageModels(): Record<string, ImageModelInfo> {
 
     if (modelSchema) {
       for (const fieldName of Object.keys(modelSchema.fields)) {
+        if (config.skipKieFields?.includes(fieldName)) continue;
         params.push(fieldName === config.kieImageField ? "image_refs" : fieldName);
       }
     } else if (config.xaiSchemaOverride) {

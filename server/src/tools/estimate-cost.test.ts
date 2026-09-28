@@ -658,18 +658,20 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeCloseTo(0.25);
   });
 
-  it("returns a $0 estimate for dynamic-pricing fal endpoints (base Wan 3.0, Qwen 3 edit)", async () => {
+  it("returns a $0 estimate for endpoints with no cost adapter (dynamic-pricing fal, unpriced kie Qwen 2.1)", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
       arguments: {
         calls: [
           { tool_name: "generate_fal_wan_3_0_text_to_video", input: { duration: 5 } },
           { tool_name: "generate_fal_qwen_3_0_edit_image", input: {} },
+          { tool_name: "generate_kie_qwen_2_1_text_to_image", input: {} },
+          { tool_name: "generate_kie_qwen_2_1_edit_image", input: { image_refs: ["@a"] } },
         ],
       },
     });
     const payload = parse(result);
-    expect(payload.per_call).toHaveLength(2);
+    expect(payload.per_call).toHaveLength(4);
     for (const call of payload.per_call) {
       expect(call.estimate.usd, call.tool_name).toBe(0);
       expect(call.estimate.warnings.join(" "), call.tool_name).toContain("no cost adapter registered");

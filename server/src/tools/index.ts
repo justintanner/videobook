@@ -123,6 +123,8 @@ import { generateOmnihumanVideoDef } from "./generate-omnihuman-video.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateQwen3ImageEditDef } from "./generate-qwen3-image-edit.js";
+import { generateQwen21TextImageDef } from "./generate-qwen21-text-image.js";
+import { generateQwen21ImageEditDef } from "./generate-qwen21-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { renderVideoDef } from "./render.js";
@@ -428,6 +430,8 @@ export function getAllToolDefs(
     generateNanoBananaImageDef(engine),
     generateQwen2ImageEditDef(engine),
     generateQwen3ImageEditDef(engine),
+    generateQwen21TextImageDef(engine),
+    generateQwen21ImageEditDef(engine),
     generateSeedreamTextImageDef(engine),
     generateSeedreamImageDef(engine),
     reconcileProjectWorkDef(engine),

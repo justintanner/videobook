@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (309)
+## MCP endpoints (311)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -153,6 +153,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_kie_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_image`) — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.
 - `generate_kie_omnihuman_1_5_video` (historical names, not exposed: `generate_omnihuman_video`) — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.
 - `generate_kie_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen2_image_edit`) — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.
+- `generate_kie_qwen_2_1_edit_image` — Edit or compose images using Qwen Image 2.1 via Kie with 1-10 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
+- `generate_kie_qwen_2_1_text_to_image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.
 - `generate_kie_qwen_3_0_edit_image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedance_2_5_video` (historical names, not exposed: `generate_seedance25_video`) — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
@@ -320,7 +322,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (381; 145 dedicated command routes)
+## Slash actions (383; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -491,6 +493,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-kie-nano-banana-pro-text-to-image` — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.; MCP: `generate_kie_nano_banana_pro_text_to_image`
 - `/generate-kie-omnihuman-1-5-video` — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_omnihuman_1_5_video`
 - `/generate-kie-qwen-2-0-edit-image` — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_0_edit_image`
+- `/generate-kie-qwen-2-1-edit-image` — Edit or compose images using Qwen Image 2.1 via Kie with 1-10 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_1_edit_image`
+- `/generate-kie-qwen-2-1-text-to-image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_1_text_to_image`
 - `/generate-kie-qwen-3-0-edit-image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_3_0_edit_image`
 - `/generate-kie-seedance-2-5-video` — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_seedance_2_5_video`
 - `/generate-kie-seedream-v5-lite-image-to-image` — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_image_to_image`

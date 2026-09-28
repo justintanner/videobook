@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 77
-- Provider actions: 68
+- Total actions: 79
+- Provider actions: 70
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -50,6 +50,8 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_kie_nano_banana_pro_text_to_image` | kie | `NanoBananaProRequestSchema` | image | text_to_image | visible | `generate_nano_banana_image` |
 | `generate_kie_qwen_2_0_edit_image` | kie | `Qwen2ImageEditRequestSchema` | image | edit_image | visible | `generate_qwen2_image_edit` |
 | `generate_kie_qwen_3_0_edit_image` | kie | `Qwen3ImageToImageRequestSchema` | image | edit_image | visible |  |
+| `generate_kie_qwen_2_1_text_to_image` | kie | `Qwen21TextToImageRequestSchema` | image | text_to_image | visible |  |
+| `generate_kie_qwen_2_1_edit_image` | kie | `Qwen21ImageToImageRequestSchema` | image | edit_image | visible |  |
 | `generate_kie_seedream_v5_lite_text_to_image` | kie | `SeedreamTextToImageRequestSchema` | image | text_to_image | hidden_fal_variant | `generate_seedream_text_image` |
 | `generate_kie_seedream_v5_lite_image_to_image` | kie | `SeedreamImageToImageRequestSchema` | image | image_to_image | visible | `generate_seedream_image` |
 | `generate_google_flow_omni_flash_video` | google_flow | `googleflow/video/omni-flash` | video | image_to_video | visible | `generate_google_omni_video` |

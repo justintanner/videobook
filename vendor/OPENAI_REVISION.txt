@@ -1,7 +1,7 @@
-version: 0.13.0
-base: https://registry.npmjs.org/@apicity/openai/-/openai-0.13.0.tgz
+version: 0.13.1
+base: https://registry.npmjs.org/@apicity/openai/-/openai-0.13.1.tgz
 git: https://github.com/justintanner/apicity.git
 realtime-patch-revision: 828e37730593c8fd069c2302c7ecab772906b4e6
 patch: vendor/apicity-openai-realtime.patch
-tarball: vendor/apicity-openai-0.13.0-e387e2a4.tgz
-sha256: e387e2a418cf115bbc0024a7f488e43fda80c0f7f792f408474fb283d14a96c3
+tarball: vendor/apicity-openai-0.13.1-cb0095e.tgz
+sha256: cb0095e0feb0587b9cd590dde34648fd4ef5c3174f03b81dd01cb4712ca1d15a

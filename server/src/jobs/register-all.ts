@@ -64,6 +64,8 @@ import { registerGenerateOmnihumanVideoJob } from "./generate-omnihuman-video.js
 import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
 import { registerGenerateQwen2ImageEditJob } from "./generate-qwen2-image-edit.js";
 import { registerGenerateQwen3ImageEditJob } from "./generate-qwen3-image-edit.js";
+import { registerGenerateQwen21TextImageJob } from "./generate-qwen21-text-image.js";
+import { registerGenerateQwen21ImageEditJob } from "./generate-qwen21-image-edit.js";
 import { registerGenerateSeedreamTextImageJob } from "./generate-seedream-text-image.js";
 import { registerGenerateSeedreamImageJob } from "./generate-seedream-image.js";
 import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
@@ -216,6 +218,8 @@ export function registerAllJobHandlers(
   registerGenerateNanoBananaImageJob(engine);
   registerGenerateQwen2ImageEditJob(engine);
   registerGenerateQwen3ImageEditJob(engine);
+  registerGenerateQwen21TextImageJob(engine);
+  registerGenerateQwen21ImageEditJob(engine);
   registerGenerateSeedreamTextImageJob(engine);
   registerGenerateSeedreamImageJob(engine);
   registerGenerateGrokImagineImageJob(engine);

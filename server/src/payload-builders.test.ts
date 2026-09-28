@@ -32,6 +32,8 @@ import {
   Omnihuman15RequestSchema,
   Qwen2ImageEditRequestSchema,
   Qwen3ImageToImageRequestSchema,
+  Qwen21TextToImageRequestSchema,
+  Qwen21ImageToImageRequestSchema,
   Seedance2FastRequestSchema,
   Seedance2MiniRequestSchema,
   Seedance2RequestSchema,
@@ -84,6 +86,8 @@ const payloadCases: Array<{ tool: string; provider?: string }> = [
   { tool: "generate_kie_seedream_v5_lite_image_to_image" },
   { tool: "generate_kie_qwen_2_0_edit_image" },
   { tool: "generate_kie_qwen_3_0_edit_image" },
+  { tool: "generate_kie_qwen_2_1_text_to_image" },
+  { tool: "generate_kie_qwen_2_1_edit_image" },
   { tool: "generate_kie_gpt_image_2_image_to_image" },
   { tool: "generate_kie_gpt_image_2_text_to_image" },
   { tool: "generate_kie_gpt_image_2_5_flare_image" },
@@ -369,6 +373,16 @@ const kieGuardCases: KieGuardCase[] = [
     args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
   },
   {
+    tool: "generate_kie_qwen_2_1_text_to_image",
+    schema: Qwen21TextToImageRequestSchema,
+    args: { prompt: "plain prompt" },
+  },
+  {
+    tool: "generate_kie_qwen_2_1_edit_image",
+    schema: Qwen21ImageToImageRequestSchema,
+    args: { prompt: "plain prompt", image_refs: ["https://example.test/image.png"] },
+  },
+  {
     tool: "generate_kie_gpt_image_2_5_flare_image",
     schema: GptImage25FlareTextToImageRequestSchema,
     args: { prompt: "plain prompt", background: "transparent", aspect_ratio: "16:9", resolution: "2K" },
@@ -495,6 +509,44 @@ describe("translateToolPayload", () => {
       },
     });
     expect(Qwen3ImageToImageRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("builds schema-valid Qwen 2.1 payloads with provider defaults", () => {
+    const text = translateToolPayload("generate_kie_qwen_2_1_text_to_image", {
+      prompt: "a red fox in snow",
+    });
+    expect(text?.payload).toEqual({
+      model: "qwen2-1/text-to-image",
+      input: {
+        prompt: "a red fox in snow",
+        aspect_ratio: "1:1",
+        background: "opaque",
+        output_format: "png",
+        resolution: "1K",
+        enhance_prompt: true,
+        nsfw_checker: false,
+      },
+    });
+    expect(Qwen21TextToImageRequestSchema.safeParse(text?.payload).success).toBe(true);
+
+    const edit = translateToolPayload("generate_kie_qwen_2_1_edit_image", {
+      prompt: "recolor the reference",
+      image_refs: ["https://example.test/image.png"],
+    });
+    expect(edit?.payload).toEqual({
+      model: "qwen2-1/image-to-image",
+      input: {
+        prompt: "recolor the reference",
+        image_urls: ["https://example.test/image.png"],
+        aspect_ratio: "auto",
+        background: "opaque",
+        output_format: "png",
+        resolution: "1K",
+        enhance_prompt: true,
+        nsfw_checker: false,
+      },
+    });
+    expect(Qwen21ImageToImageRequestSchema.safeParse(edit?.payload).success).toBe(true);
   });
 
   it("safeParses against the kie createTask guard schema for every kie model", () => {

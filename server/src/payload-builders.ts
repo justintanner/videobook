@@ -32,6 +32,8 @@ import type {
   SeedreamImageToImageRequest,
   Qwen2ImageEditRequest,
   Qwen3ImageToImageRequest,
+  Qwen21TextToImageRequest,
+  Qwen21ImageToImageRequest,
   HappyHorse11TextToVideoRequest,
   HappyHorse11ImageToVideoRequest,
   HappyHorse11ReferenceToVideoRequest,
@@ -88,6 +90,8 @@ import {
   Omnihuman15RequestSchema,
   Qwen2ImageEditRequestSchema,
   Qwen3ImageToImageRequestSchema,
+  Qwen21TextToImageRequestSchema,
+  Qwen21ImageToImageRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
@@ -1160,6 +1164,80 @@ function buildQwen3ImageEditPayload(
   };
 }
 
+type Qwen21TextToImageArgs = {
+  prompt: string;
+  aspect_ratio?: Qwen21TextToImageRequest["input"]["aspect_ratio"];
+  background?: Qwen21TextToImageRequest["input"]["background"];
+  output_format?: Qwen21TextToImageRequest["input"]["output_format"];
+  resolution?: Qwen21TextToImageRequest["input"]["resolution"];
+  enhance_prompt?: boolean;
+  nsfw_checker?: boolean;
+  seed?: number;
+};
+
+function buildQwen21TextToImagePayload(
+  args: Qwen21TextToImageArgs,
+): Qwen21TextToImageRequest {
+  const aspectRatio = valueOrZodDefault(args.aspect_ratio, Qwen21TextToImageRequestSchema.shape.input.shape.aspect_ratio);
+  const background = valueOrZodDefault(args.background, Qwen21TextToImageRequestSchema.shape.input.shape.background);
+  const outputFormat = valueOrZodDefault(args.output_format, Qwen21TextToImageRequestSchema.shape.input.shape.output_format);
+  const resolution = valueOrZodDefault(args.resolution, Qwen21TextToImageRequestSchema.shape.input.shape.resolution);
+  const enhancePrompt = valueOrZodDefault(args.enhance_prompt, Qwen21TextToImageRequestSchema.shape.input.shape.enhance_prompt);
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, Qwen21TextToImageRequestSchema.shape.input.shape.nsfw_checker);
+  const seed = valueOrZodDefault(args.seed, Qwen21TextToImageRequestSchema.shape.input.shape.seed);
+  return {
+    model: "qwen2-1/text-to-image",
+    input: {
+      prompt: args.prompt,
+      ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+      ...(background !== undefined ? { background } : {}),
+      ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(enhancePrompt !== undefined ? { enhance_prompt: enhancePrompt } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+    },
+  };
+}
+
+type Qwen21ImageEditArgs = {
+  prompt: string;
+  aspect_ratio?: Qwen21ImageToImageRequest["input"]["aspect_ratio"];
+  background?: Qwen21ImageToImageRequest["input"]["background"];
+  output_format?: Qwen21ImageToImageRequest["input"]["output_format"];
+  resolution?: Qwen21ImageToImageRequest["input"]["resolution"];
+  enhance_prompt?: boolean;
+  nsfw_checker?: boolean;
+  seed?: number;
+};
+
+function buildQwen21ImageEditPayload(
+  args: Qwen21ImageEditArgs,
+  imageUrls: string[],
+): Qwen21ImageToImageRequest {
+  const aspectRatio = valueOrZodDefault(args.aspect_ratio, Qwen21ImageToImageRequestSchema.shape.input.shape.aspect_ratio);
+  const background = valueOrZodDefault(args.background, Qwen21ImageToImageRequestSchema.shape.input.shape.background);
+  const outputFormat = valueOrZodDefault(args.output_format, Qwen21ImageToImageRequestSchema.shape.input.shape.output_format);
+  const resolution = valueOrZodDefault(args.resolution, Qwen21ImageToImageRequestSchema.shape.input.shape.resolution);
+  const enhancePrompt = valueOrZodDefault(args.enhance_prompt, Qwen21ImageToImageRequestSchema.shape.input.shape.enhance_prompt);
+  const nsfwChecker = valueOrZodDefault(args.nsfw_checker, Qwen21ImageToImageRequestSchema.shape.input.shape.nsfw_checker);
+  const seed = valueOrZodDefault(args.seed, Qwen21ImageToImageRequestSchema.shape.input.shape.seed);
+  return {
+    model: "qwen2-1/image-to-image",
+    input: {
+      prompt: args.prompt,
+      image_urls: imageUrls,
+      ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio } : {}),
+      ...(background !== undefined ? { background } : {}),
+      ...(outputFormat !== undefined ? { output_format: outputFormat } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(enhancePrompt !== undefined ? { enhance_prompt: enhancePrompt } : {}),
+      ...(nsfwChecker !== undefined ? { nsfw_checker: nsfwChecker } : {}),
+      ...(seed !== undefined ? { seed } : {}),
+    },
+  };
+}
+
 type GptImageArgs = {
   prompt: string;
   aspect_ratio?: GptImage2ImageToImageAspectRatio;
@@ -1857,6 +1935,17 @@ function translateToolPayloadUnchecked(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kie_qwen_2_1_text_to_image": {
+      const payload = buildQwen21TextToImagePayload(args as Qwen21TextToImageArgs);
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_kie_qwen_2_1_edit_image": {
+      const payload = buildQwen21ImageEditPayload(
+        args as Qwen21ImageEditArgs,
+        imageRefs,
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_kie_gpt_image_2_5_flare_image":
     case "generate_kie_gpt_image_2_5_sunburst_image": {
       const payload = buildGptImage25Payload(
@@ -2010,6 +2099,8 @@ export {
   buildNanoBananaImagePayload,
   buildQwen2ImageEditPayload,
   buildQwen3ImageEditPayload,
+  buildQwen21TextToImagePayload,
+  buildQwen21ImageEditPayload,
   buildGrokImagineTextPayload,
   buildGptImagePayload,
   buildGptImageTextPayload,

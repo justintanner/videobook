@@ -376,9 +376,9 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 11 image models", () => {
+  it("returns all 13 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(11);
+    expect(Object.keys(models)).toHaveLength(13);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
@@ -387,6 +387,8 @@ describe("getImageModels", () => {
     expect(models).toHaveProperty("grok_imagine_text");
     expect(models).toHaveProperty("qwen2_image_edit");
     expect(models).toHaveProperty("qwen3_image_edit");
+    expect(models).toHaveProperty("qwen2_1_text");
+    expect(models).toHaveProperty("qwen2_1_edit");
     expect(models).toHaveProperty("seedream_text");
     expect(models).toHaveProperty("seedream_image");
     expect(models).toHaveProperty("alibaba_qwen_image");
@@ -505,6 +507,28 @@ describe("getImageModels", () => {
     const edit = getImageToolSchema(models.alibaba_qwen_image_edit.tool_name);
     expect(edit?.required).toEqual(["prompt", "image_refs", "model"]);
     expect(edit?.properties.model.enum).toContain("qwen-image-edit");
+  });
+
+  it("routes Qwen 2.1 image models through Kie only", () => {
+    const models = getImageModels();
+    for (const key of ["qwen2_1_text", "qwen2_1_edit"]) {
+      expect(models[key].providers.map((provider) => provider.key)).toEqual(["kie"]);
+      expect(models[key].tool_name).toBe(
+        key === "qwen2_1_text" ? "generate_kie_qwen_2_1_text_to_image" : "generate_kie_qwen_2_1_edit_image",
+      );
+    }
+
+    const text = getImageToolSchema(models.qwen2_1_text.tool_name);
+    expect(text?.required).toEqual(["prompt"]);
+    expect(text?.properties).not.toHaveProperty("image_refs");
+
+    const edit = getImageToolSchema(models.qwen2_1_edit.tool_name);
+    expect(edit?.required).toHaveLength(2);
+    expect(edit?.required).toEqual(expect.arrayContaining(["prompt", "image_refs"]));
+    expect(edit?.properties.image_refs.minItems).toBe(1);
+    expect(edit?.properties.image_refs.maxItems).toBe(10);
+    expect(edit?.properties.aspect_ratio.enum).toContain("auto");
+    expect(edit?.properties).not.toHaveProperty("mask_url");
   });
 });
 
