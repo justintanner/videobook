@@ -602,7 +602,8 @@ describe("voice session boundaries", () => {
     const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
     function pause(ms: number): Promise<void> {
-      const { promise, resolve } = Promise.withResolvers<void>();
+      let resolve!: () => void;
+      const promise = new Promise<void>(done => { resolve = done; });
       setTimeout(resolve, ms);
       return promise;
     }

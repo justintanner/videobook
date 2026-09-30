@@ -39,7 +39,7 @@ function result(value: unknown): Record<string, unknown> | unknown[] {
   return JSON.parse(response.content[0]?.text ?? '{}') as Record<string, unknown> | unknown[]
 }
 
-const ACTIVATION_LINE = page =>
+const ACTIVATION_LINE = (page: Page) =>
   page.locator('.voice-captions p[data-role="assistant"] .composer-history-text').filter({ hasText: /^Voice Chat Activated$/ })
 
 function timingStages(page: Page) {

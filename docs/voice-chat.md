@@ -56,24 +56,43 @@ Apicity commit `7c5e2e56`. Its revision and checksum are recorded in
 | Turn detection | Server VAD, threshold 0.5, 350 ms silence, 300 ms prefix |
 | Input | Near-field noise reduction; native speech-to-speech |
 | Display transcription | `gpt-4o-mini-transcribe` |
-| Output | `cedar`, speed 1.05, concise replies, maximum 512 output tokens |
+| Output | `alloy`, speed 1, terse replies, maximum 512 output tokens |
 | Idle limit | 120 seconds; `VIDEOBOOK_VOICE_IDLE_TIMEOUT_MS` clamps to 10–600 seconds |
 | Lifetime/concurrency | 30 minutes; four sessions per server |
 | Startup deadline | 30 seconds for a pinned provider; 80 seconds for Auto, including failed-call cleanup and fallback |
 
-The copilot speaks as one character on both providers: dry and unimpressed, the
-outcome first and at most one short aside after it. It fills an action in from
-the request and the supplied workspace rather than interviewing the speaker, so
-a parameter the discovered schema marks optional is omitted rather than asked
-for. `expected_revision` is such a parameter on every tool that accepts it.
+The copilot speaks as one character on both providers: Videobook's computer, a
+1980s mainframe AI — literal, precise, impersonal. One short line per reply,
+outcome first; fixed vocabulary (`Affirmative.` `Negative.` `Complete.`
+`Standing by.` `Unable to comply. <reason>.` `Specify <detail>.` `Review
+pending. <what, where>.` `Queued. <what, where>.`) used verbatim, because
+repetition is the character. No jokes, asides, apologies, hedges, or filler.
+It fills an action in from the request and the supplied workspace rather than
+interviewing the speaker, so a parameter the discovered schema marks optional
+is omitted rather than asked for. `expected_revision` is such a parameter on
+every tool that accepts it.
 
-xAI uses `grok-voice-think-fast-2.0`, Eve's voice, reasoning effort `none`, and the
+xAI uses `grok-voice-think-fast-2.0`, Sal's voice, reasoning effort `none`, and the
 same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model, and
 `VIDEOBOOK_XAI_REALTIME_URL` points the same client at another realtime endpoint — a local
 gateway, or the integration test's server; unset, voice talks to xAI.
 Its native speech model supplies input captions. These settings follow the current
 [xAI voice API](https://docs.x.ai/developers/rest-api-reference/inference/voice);
 they do not establish a latency ranking against other providers.
+
+## Activation line
+
+Starting voice greets the speaker with exactly `Voice Chat Activated`, spoken in
+the session voice and shown as a COPILOT bubble. Nothing speaks when the session
+descriptor returns: OpenAI's audio rides the WebRTC track, which is not flowing
+yet, so the browser posts `ready` (`POST /api/voice/:id/ready`) once its media
+path is up, and only then does the server speak the line — once per session,
+and only while the session is pristine. xAI receives a `force_message`
+`conversation.item.create`; OpenAI receives a `response.create` with empty
+input and per-response instructions. The line is canonical in the caption
+whatever the transcript says, is excluded from the voice-chat log and
+workspace context (including after a barge-in), and errors it provokes drop
+the line instead of the session.
 
 Input transcription supplies captions and durable prompt history. It is not a
 separate speech-to-text/chat/text-to-speech response pipeline. Workspace actions wait
@@ -172,6 +191,7 @@ opt-in and run separately from the normal suite's credential/network restriction
 
 ```bash
 npx vitest run server/src/tools/voice-chat-action.test.ts server/src/tools/voice-session.test.ts
+npx vitest run --config vitest.e2e.config.ts tests/v2/voice-activation.e2e.test.ts
 npx vitest run --config vitest.e2e.config.ts tests/v2/voice-chat.e2e.test.ts
 op run --env-file=.env.tpl -- npm run test:voice:live
 VIDEOBOOK_VOICE_TEST_MODE=xai op run --env-file=.env.tpl -- npm run test:voice:live

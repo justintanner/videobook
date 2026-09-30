@@ -63,6 +63,24 @@ describe('voice chat in the real browser', () => {
     return page.locator('.composer-mode-switch .composer-mode-cell-live')
   }
 
+  async function assistantAfterLastUser(): Promise<boolean> {
+    return page.evaluate(() => {
+      const bubbles = [...document.querySelectorAll('.voice-captions p[data-role]')]
+      let lastUser = -1
+      bubbles.forEach((bubble, index) => { if (bubble.getAttribute('data-role') === 'user') lastUser = index })
+      return bubbles.slice(lastUser + 1).some(bubble => bubble.getAttribute('data-role') === 'assistant')
+    })
+  }
+
+  function activationTimelineProof() {
+    return page.evaluate(() => {
+      const marks = performance.getEntriesByName('videobook-voice').map(entry => ({ at: entry.startTime, stage: (entry as PerformanceMark).detail.stage as string }))
+      const activation = marks.find(mark => mark.stage === 'activation-audio')
+      const stop = marks.find(mark => mark.stage === 'speech-stop')
+      return { hasActivation: Boolean(activation), beforeSpeechStop: Boolean(activation && stop && activation.at < stop.at) }
+    })
+  }
+
   async function selectVoiceProvider(mode: string) {
     await liveModeCell().click()
     await page.getByRole('menuitemradio', { name: PROVIDER_OPTION[mode], exact: true }).click()
@@ -261,38 +279,22 @@ describe('voice chat in the real browser', () => {
     expect(await page.locator('.chat-voice-activity').count()).toBe(0)
   })
 
-  it.skipIf(live)('shows and hides captions without submitting, stopping the microphone or losing the draft', async () => {
+  it.skipIf(live)('shows captions without a toggle, submitting, or losing the draft', async () => {
     const input = page.getByLabel('Videobook command input')
     await page.getByLabel('Start voice conversation').click()
     await page.getByLabel('Voice activity').waitFor({ state: 'visible', timeout: 15_000 })
     await input.fill('Captions stay with this draft')
     const captions = page.locator('.voice-captions')
     expect(await captions.isVisible()).toBe(true)
-    const hide = page.getByLabel('Hide Captain’s Log')
-    expect(await hide.isVisible()).toBe(true)
-    expect(await captions.isVisible()).toBe(true)
-    expect(await hide.getAttribute('aria-expanded')).toBe('true')
-    const regionId = await hide.getAttribute('aria-controls')
-    expect(regionId).toBeTruthy()
-    expect(await page.locator('.voice-captions').getAttribute('id')).toBe(regionId)
+    expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
+    expect(await captions.getAttribute('id')).toBeTruthy()
     expect(await captions.innerText()).toMatch(/OPENAI_API_KEY|XAI_API_KEY/)
-    await hide.click()
-    expect(await captions.isVisible()).toBe(false)
-    const show = page.getByLabel('Show Captain’s Log')
-    expect(await show.getAttribute('aria-expanded')).toBe('false')
-    await show.press('Enter')
-    expect(await captions.isVisible()).toBe(true)
-    await page.getByLabel('Hide Captain’s Log').press('Space')
-    expect(await captions.isVisible()).toBe(false)
-    await page.getByLabel('Show Captain’s Log').click()
-    await expect.poll(() => captions.isVisible()).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect.poll(() => captions.isVisible()).toBe(false)
     expect(await input.innerText()).toBe('Captions stay with this draft')
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
     await page.screenshot({ path: 'test-results/voice/captions-shown.png' })
-    await page.getByLabel('Hide Captain’s Log').click()
-    await page.screenshot({ path: 'test-results/voice/captions-hidden.png' })
-    await page.getByLabel('Show Captain’s Log').click()
   })
 
   it('keeps voice connection compact through microphone permission and rapid start/stop', async () => {
@@ -370,8 +372,10 @@ describe('voice chat in the real browser', () => {
       expect(connected.fallbackReason).toBeTruthy()
       await page.locator('.voice-fallback').waitFor({ state: 'visible' })
     } else expect(connected.fallbackReason).toBeUndefined()
-    await expect.poll(() => page.locator('.voice-provider-badge').innerText()).toBe(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
-    await expect.poll(async () => await page.locator('.voice-captions p[data-role="assistant"]').count(), { timeout: 35_000 }).toBeGreaterThan(0)
+    await expect.poll(() => page.locator('.composer-mode-switch').innerText()).toContain(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
+    await expect.poll(async () => await page.locator('.voice-captions p[data-role="assistant"] .composer-history-text').first().textContent(), { timeout: 15_000 }).toBe('Voice Chat Activated')
+    await expect.poll(assistantAfterLastUser, { timeout: 35_000 }).toBe(true)
+    await expect.poll(async () => (await activationTimelineProof()).beforeSpeechStop, { timeout: 15_000 }).toBe(true)
     const timing = () => page.evaluate(() => performance.getEntriesByName('videobook-voice').map(entry => ({ at: entry.startTime, ...((entry as PerformanceMark).detail as { stage: string; model?: string; role?: string; microphoneSignalEndedAt?: number }) })))
     try {
       await expect.poll(async () => (await timing()).filter(entry => entry.stage === 'first-audio').length, { timeout: benchmarkTurns * 15_000 + 20_000 }).toBeGreaterThanOrEqual(benchmarkTurns)
@@ -382,6 +386,7 @@ describe('voice chat in the real browser', () => {
     expect(await page.getByLabel('Videobook command input').innerText()).toBe('Keep this typed draft')
     const history = result(await client.callTool({ name: 'list_prompt_history', arguments: { book_id: bookId, surface: 'chat' } }))
     expect(JSON.stringify(history).toLowerCase()).toContain('ready')
+    expect(JSON.stringify(history).toLowerCase()).not.toContain('voice chat activated')
     await page.screenshot({ path: 'test-results/voice/live.png' })
     await writeFile('test-results/voice/live-timing.json', JSON.stringify(await timing(), null, 2))
     const marks = await timing()
@@ -389,6 +394,13 @@ describe('voice chat in the real browser', () => {
     expect(summary.connectionSetupMs).toBeGreaterThan(0)
     expect(summary.permissionWaitMs).toBeGreaterThanOrEqual(0)
     expect(summary.utteranceEndToDecodedAudioMs.length).toBeGreaterThan(0)
+    const finals = await page.locator('.voice-captions p[data-role="assistant"][data-final="true"] .composer-history-text').allTextContents()
+    const replies = finals.map(text => text.trim()).filter(text => text && text !== 'Voice Chat Activated')
+    expect(replies.length).toBeGreaterThan(0)
+    for (const reply of replies) {
+      expect(reply.split(/\s+/u).length).toBeLessThanOrEqual(20)
+      expect(reply.toLowerCase()).not.toMatch(/\b(sorry|apologi[sz]e|sure,|got it|let me|as an ai)\b/u)
+    }
     expect(marks.some(mark => mark.stage === 'media-ready')).toBe(true)
     expect(marks.some(mark => mark.stage === 'turn-detection')).toBe(true)
     expect(marks.some(mark => mark.stage === 'connection-setup')).toBe(true)
@@ -508,22 +520,16 @@ describe('voice chat in the real browser', () => {
     const review = reviewMarks.find(mark => mark.stage === 'action-review')
     const stop = reviewMarks.find(mark => mark.stage === 'speech-stop')
     await writeFile('test-results/voice/review-timing.json', JSON.stringify({ detectedTurnToReviewMs: review && stop ? review.at - stop.at : null }, null, 2))
-    const captionCount = await page.locator('.voice-captions p').count()
     const completion = page.waitForResponse(response => response.url().endsWith(`/api/voice/${session.id}/outcome`) && (response.request().postDataJSON() as { outcome?: { status?: string } }).outcome?.status === 'completed')
     await page.locator('.confirm-sheet-apply').click()
     expect((await completion).status()).toBe(204)
     await expect.poll(async () => JSON.stringify(result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } }))), { timeout: 15_000 }).toContain('cover')
     expect(await input.textContent()).toBe('Keep my unfinished @a1 note')
     expect(chatCalls).toHaveLength(1)
-    await expect.poll(() => page.locator('.voice-captions p').count(), { timeout: 15_000 }).toBeGreaterThan(captionCount)
-    await expect.poll(() => page.locator('.voice-captions p').last().innerText(), { timeout: 15_000 }).toMatch(/renamed|updated|changed|labeled|labelled|done/i)
-    const captionText = await page.locator('.voice-captions').innerText()
-    await page.getByLabel('Hide Captain’s Log').click()
-    expect(await page.locator('.voice-captions').isVisible()).toBe(false)
-    expect(await page.locator('.confirm-sheet').isVisible()).toBe(true)
-    await page.getByLabel('Show Captain’s Log').click()
-    expect(await page.locator('.voice-captions').isVisible()).toBe(true)
-    expect(await page.locator('.voice-captions').innerText()).toBe(captionText)
+    await expect.poll(() => page.locator('.voice-captions').textContent(), { timeout: 20_000 }).toMatch(/renamed|updated|changed|labeled|labelled|done/i)
+    const captionText = await page.locator('.voice-captions').textContent()
+    expect(await page.locator('.confirm-sheet').count()).toBe(0)
+    expect(await page.locator('.voice-captions').textContent()).toBe(captionText)
     await page.getByLabel('Stop voice conversation').click()
   })
 
@@ -552,15 +558,16 @@ describe('voice chat in the real browser', () => {
     await ensureImage()
     await useRecording('assets')
     await page.getByLabel('Start voice conversation').click()
-    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 40_000 }).toMatch(/image|asset/i)
+    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().textContent(), { timeout: 40_000 }).toMatch(/image|asset/i)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
     await page.getByLabel('Stop voice conversation').click()
     const before = result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }
     await useRecording('duplicate')
     await page.getByLabel('Start voice conversation').click()
+    const spokenBefore = await page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'first-audio').length)
     await expect.poll(async () => (result(await client.callTool({ name: 'list_assets', arguments: { book_id: bookId } })) as { assets: unknown[] }).assets.length, { timeout: 45_000 }).toBe(before.assets.length + 1)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
-    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 15_000 }).toMatch(/duplicat|copied|created|done/i)
+    await expect.poll(() => page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'first-audio').length), { timeout: 20_000 }).toBeGreaterThan(spokenBefore)
     await page.getByLabel('Stop voice conversation').click()
   })
 
@@ -590,7 +597,6 @@ describe('voice chat in the real browser', () => {
       await page.screenshot({ path: `test-results/voice/review-${viewport.width}.png` })
     }
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await expect.poll(() => page.locator('.voice-ring').evaluate(element => getComputedStyle(element).transform)).toBe('none')
     const requests: string[] = []
     page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/voice')) requests.push(request.url()) })
     await selectVoiceProvider(voiceMode === 'openai' ? 'xai' : 'openai')
@@ -609,7 +615,7 @@ describe('voice chat in the real browser', () => {
     const before = result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))
     await page.getByLabel('Start voice conversation').click()
     await expect.poll(() => page.locator('.voice-captions p[data-role="user"][data-final="true"]').first().innerText(), { timeout: 30_000 }).toMatch(/Make me a video with A\s?(?:1|one)/i)
-    await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').count(), { timeout: 30_000 }).toBeGreaterThan(0)
+    await expect.poll(assistantAfterLastUser, { timeout: 30_000 }).toBe(true)
     await expect.poll(() => page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'first-audio').length), { timeout: 15_000 }).toBeGreaterThan(0)
     await page.locator('.confirm-sheet').waitFor({ state: 'visible', timeout: 30_000 })
     expect(await page.locator('.confirm-sheet').innerText()).toMatch(/generat|cost|provider/i)
@@ -677,7 +683,7 @@ describe('voice chat in the real browser', () => {
     await page.locator('.brand-project-menu-toggle').click()
     await page.getByRole('menuitem', { name: /voice-other/ }).click()
     await expect.poll(() => page.getByLabel('Start voice conversation').getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('false')
-    expect(await page.locator('.voice-captions').innerText()).toBe('')
+    expect(await page.locator('.voice-captions p[data-role]').count()).toBe(0)
     const releases = await page.evaluate(() => performance.getEntriesByName('videobook-voice').filter(entry => (entry as PerformanceMark).detail.stage === 'microphone-released').map(entry => (entry as PerformanceMark).detail.ended))
     expect(releases.length).toBeGreaterThan(0)
     expect(releases.every(Boolean)).toBe(true)

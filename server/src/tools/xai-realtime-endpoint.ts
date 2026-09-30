@@ -52,13 +52,14 @@ export class XaiRealtimeEndpoint {
 
   constructor() {
     this.wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-    const { promise, resolve, reject } = Promise.withResolvers<string>();
-    this.listening = promise;
-    this.wss.once("error", reject);
+    let resolveUrl!: (url: string) => void;
+    let rejectUrl!: (error: unknown) => void;
+    this.listening = new Promise<string>((resolve, reject) => { resolveUrl = resolve; rejectUrl = reject; });
+    this.wss.once("error", rejectUrl);
     this.wss.once("listening", () => {
       const address = this.wss.address();
-      if (!address || typeof address === "string") { reject(new Error("No endpoint address")); return; }
-      resolve(`ws://127.0.0.1:${address.port}`);
+      if (!address || typeof address === "string") { rejectUrl(new Error("No endpoint address")); return; }
+      resolveUrl(`ws://127.0.0.1:${address.port}`);
     });
     this.wss.on("connection", socket => {
       this.connections.push(socket);

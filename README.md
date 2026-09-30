@@ -157,7 +157,8 @@ it defaults to the repository's `.env`. This also allows isolated application fi
 
 The microphone beside Send enables voice input and spoken replies. Voice starts off.
 Click once to allow microphone access and open the COMMS panel; click Stop to release
-the microphone and audio immediately. The ring follows actual sound levels, and
+the microphone and audio immediately. Each start greets the speaker with a spoken
+"Voice Chat Activated" line. The ring follows actual sound levels, and
 expandable captions keep the conversation visible while you type. Speak over a reply
 to interrupt it. Reviewed actions still require Apply or Cancel on screen, including
 generation that can incur provider spend. Turning voice off preserves a pending review

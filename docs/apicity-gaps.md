@@ -455,6 +455,23 @@ the qwen2/qwen3 tools which expose no mask input.
 
 ---
 
+## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.13.1
+
+`XaiRealtimeSession` and the vendored realtime event types (`@apicity/xai`
+0.13.1, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
+speech-to-speech features Videobook uses. `conversation.item.create` with
+`item.type = "force_message"` (an assistant item forced into the transcript
+without a response.create round-trip) drives the voice activation line; the
+item and content shapes ride `Record<string, unknown>` fields, so no vendor
+patch is needed, but the events are untyped. `audio.output.speed` (0.7-1.5,
+default 1.0) is likewise absent from `XaiRealtimeAudioConfig`, so the xAI
+session leaves the pace at the provider default while the OpenAI session
+pins speed 1 explicitly. Add the fields upstream rather than patching the
+vendored tarball; until then the activation path stays dynamically shaped
+and xAI pace is not configurable.
+
+---
+
 
 
 | Status       | Sections                                                            | What Videocity still carries                           |
@@ -462,6 +479,7 @@ the qwen2/qwen3 tools which expose no mask input.
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
 | **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
 | **OPEN**     | §38 KIE Qwen 2.1 cost slugs/pricing                                 | no adapter; $0 estimate + warning                      |
+| **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
