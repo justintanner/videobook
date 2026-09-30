@@ -120,7 +120,6 @@ interface CommandComposerProps {
   chatTurns?: readonly ChatTurn[]
   previewTurnId?: number | null
   connected?: boolean
-  editingDisabled?: boolean
   onBeginTurn?: (input: string) => ChatExecution
   children?: ReactNode
   commands: ServerCommand[]
@@ -199,7 +198,6 @@ export function CommandComposer({
   chatTurns = [],
   previewTurnId = null,
   connected = true,
-  editingDisabled,
   onBeginTurn,
   children,
   commands,
@@ -1095,7 +1093,7 @@ export function CommandComposer({
           session={`${inputSession ?? 'chat'}:${actionDiscovery ? `actions-${actionDiscovery.key}` : 'draft'}`}
           sessions={editorSessions}
           references={references}
-          disabled={actionDiscovery ? actionsDisabled : editingDisabled ?? inputDisabled}
+          disabled={actionDiscovery ? actionsDisabled : inputDisabled}
           rich={!actionDiscovery}
           placeholder={actionDiscovery ? 'Search actions by name, operation or alias…' : disabled
             ? connectionLabel : placeholder ?? 'Type a message or /command…'}

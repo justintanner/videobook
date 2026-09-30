@@ -9396,7 +9396,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setGenerationsViewCellId(null)
       setWorkspacePreview(null)
       setActionDialog(null)
-      closeMediaFullscreen()
+      if (mediaFullscreen) closeMediaFullscreen()
       setNoticeState(null)
     }
     return beginChatTurn(input)
@@ -11612,7 +11612,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         chatTurns={chatTurns}
         previewTurnId={previewTurnId}
         connected={mcp.state === 'ready' && online}
-        editingDisabled={mediaFullscreenSidebarEditing || !bookId || mcp.state !== 'ready'}
         onBeginTurn={beginComposerTurn}
         onCommandRowHeightChange={setCommandRowHeight}
         hidden={!showCommandComposer}
