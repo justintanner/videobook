@@ -5,6 +5,9 @@ export const DEFAULT_VOICE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_XAI_VOICE_MODEL = "grok-voice-think-fast-2.0";
 export const VOICE_PCM_RATE = 24_000;
 export const VOICE_ACTIVATION_PHRASE = "Voice Chat Activated";
+// Neutral pair for the mainframe character; alternates: echo + leo (deep male), cedar + leo (quality first).
+export const OPENAI_VOICE = "alloy";
+export const XAI_VOICE = "sal";
 
 export function xaiVoiceActivationEvent(): { type: "conversation.item.create"; item: Record<string, unknown> } {
   return {
@@ -32,7 +35,7 @@ export function openAiVoiceActivationEvent(): { type: "response.create"; respons
 export function xaiVoiceSessionConfig(context: unknown, sampleRate: 8000 | 16000 | 22050 | 24000 | 32000 | 44100 | 48000): XaiRealtimeSession {
   const shared = voiceSessionConfig(context);
   return {
-    voice: "eve",
+    voice: XAI_VOICE,
     reasoning: { effort: "none" },
     instructions: shared.instructions,
     tools: shared.tools?.flatMap(tool => {
@@ -64,7 +67,7 @@ export function voiceSessionConfig(context: unknown, model = DEFAULT_VOICE_MODEL
         transcription: { model: "gpt-4o-mini-transcribe" },
         turn_detection: { type: "server_vad", threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 350, create_response: true, interrupt_response: true },
       },
-      output: { voice: "cedar", speed: 1.05 },
+      output: { voice: OPENAI_VOICE, speed: 1 },
     },
     instructions: voiceInstructions(context),
     tools: VOICE_TOOLS,

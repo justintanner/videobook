@@ -192,7 +192,9 @@ describe("voice session boundaries", () => {
   it("speaks as one terse character and fills optional parameters in itself", () => {
     const context = { book: "voice-session" };
     const session = voiceSessionConfig(context);
-    expect(session.audio?.output?.voice).toBe("cedar");
+    expect(session.audio?.output?.voice).toBe("alloy");
+    expect(session.audio?.output?.speed).toBe(1);
+    expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).voice).toBe("sal");
     // The model read an optional staleness guard as a precondition and asked
     // the speaker to recite a revision hash the cell details never display.
     expect(session.instructions).toMatch(/Never ask the user for a parameter the discovered schema marks optional/u);
