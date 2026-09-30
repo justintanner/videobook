@@ -209,6 +209,7 @@ describe('music video recovery and export in the browser', () => {
     await controls.getByLabel('Beats per bar', { exact: true }).fill('4')
     await controls.getByRole('button', { name: 'Set bars from playhead', exact: true }).click()
     await expect.poll(() => snap.getByRole('button', { name: 'Bars', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await expect.poll(async () => (await rhythm()).settings.correction, { timeout: MCP_ROUNDTRIP_MS }).not.toBeNull()
     const corrected = (await rhythm()).settings.correction!
     expect(corrected.beatsPerBar).toBe(4)
     expect(corrected.markers.map(marker => marker.timeSeconds)).toEqual(detected.beats.map(beat => beat.timeSeconds))
