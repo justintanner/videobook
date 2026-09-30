@@ -39,27 +39,39 @@ export function ConfirmSheetInitialFocus({
 export function useConfirmSheetKeys(options: {
   applyFormId: string
   applyDisabled: boolean
+  applyScopeSelector?: string
   busy: boolean
+  enabled?: boolean
   onCancel: () => void
 }): ConfirmSheetKeyHandlers {
   const sheetRef = useRef<HTMLElement | null>(null)
-  const { busy, onCancel } = options
+  const { applyDisabled, applyFormId, applyScopeSelector, busy, enabled = true, onCancel } = options
 
   useLayoutEffect(() => {
-    const dismissFromComposer = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || busy) return
+    if (!enabled) return
+    const handleComposerKey = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || busy) return
+      if (document.querySelector('dialog[open], :popover-open, [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]')) return
       const target = event.target
+      if (applyScopeSelector && event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.altKey) {
+        const form = document.getElementById(applyFormId)
+        if (!(form instanceof HTMLFormElement) || !(target instanceof Node) || !form.closest(applyScopeSelector)?.contains(target)) return
+        event.preventDefault()
+        if (!applyDisabled) form.requestSubmit()
+        return
+      }
+      if (event.key !== 'Escape') return
       if (target !== document.body && (!(target instanceof Element) || !target.closest('.command-composer'))) return
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return
-      if (document.querySelector('dialog[open], :popover-open, [aria-modal="true"], [role="menu"], details.canvas-add-menu[open]')) return
       event.preventDefault()
       onCancel()
     }
-    document.addEventListener('keydown', dismissFromComposer)
-    return () => document.removeEventListener('keydown', dismissFromComposer)
-  }, [busy, onCancel])
+    document.addEventListener('keydown', handleComposerKey)
+    return () => document.removeEventListener('keydown', handleComposerKey)
+  }, [applyDisabled, applyFormId, applyScopeSelector, busy, enabled, onCancel])
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!enabled || event.nativeEvent.isComposing || document.querySelector(':popover-open')) return
     const action = confirmSheetKeyAction({
       key: event.key,
       metaKey: event.metaKey,

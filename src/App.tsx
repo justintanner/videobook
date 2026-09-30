@@ -107,7 +107,6 @@ import {
 import { composerReferences } from '@/videobook/composer-references'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
-import { ComposerHistoryControls } from '@/components/videobook/ComposerHistory'
 import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
   BusRiverEdge,
@@ -118,6 +117,7 @@ import {
   type MomentSearchHandle,
 } from '@/components/videobook/MomentSearch'
 import { useGenerationCellPreview } from '@/videobook/use-generation-cell-preview'
+import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import {
   NotebookCellInspector,
   type CellAssetRevision,
@@ -1581,6 +1581,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
   const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
   const [previewComposerTarget, setPreviewComposerTarget] = useState<HTMLDivElement | null>(null)
+  const [inspectorActionHost, setInspectorActionHost] = useState<HTMLDivElement | null>(null)
   const [workspacePreview, setWorkspacePreview] = useState<{ media?: WorkspaceMediaPreview; initialFrame?: number; turnId?: number; opener: HTMLElement | null } | null>(null)
   const actionUploadRef = useRef<HTMLInputElement>(null)
   const [chatModelCatalog, setChatModelCatalog] = useState<ChatModelCatalog>(
@@ -3191,13 +3192,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_cell_id: connection.sourceCellId,
         target_input: connection.targetInput,
       })),
-    }, { chat })
+    }, { chat, background: true })
   }, [bookId, call])
+  const pendingGenerationPreviewRequestRef = useRef(0)
+  useEffect(() => () => {
+    pendingGenerationPreviewRequestRef.current += 1
+  }, [bookId, notebook?.id])
   const requestPendingGenerationPreview = useCallback((
     draft: NotebookChatGenerationDraft,
     document: NotebookDocument,
     chat?: ChatExecution,
   ) => {
+    const requestId = ++pendingGenerationPreviewRequestRef.current
     const requestKey = JSON.stringify({
       id: draft.cell.id,
       prompt: draft.cell.prompt,
@@ -3211,11 +3217,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ...current,
           previewError: null,
           previewLoading: true,
-          previewStale: false,
+          previewStale: true,
         }
       : current))
     void loadPendingGenerationPreview(draft, document, chat)
       .then((preview) => {
+        if (pendingGenerationPreviewRequestRef.current !== requestId) return
         presentChat(chat, () => setPendingChatAction((current) => {
           if (current?.kind !== 'generation') return current
           const currentKey = JSON.stringify({
@@ -3237,6 +3244,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }))
       })
       .catch((error: unknown) => {
+        if (pendingGenerationPreviewRequestRef.current !== requestId) return
         presentChat(chat, () => setPendingChatAction((current) => {
           if (current?.kind !== 'generation') return current
           const currentKey = JSON.stringify({
@@ -3251,15 +3259,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 ...current,
                 previewError: error instanceof Error ? error.message : String(error),
                 previewLoading: false,
+                previewStale: false,
               }
             : current
         }))
       })
   }, [loadPendingGenerationPreview])
+  const pendingGenerationRefresh = useGenerationPreviewRefresh(
+    requestPendingGenerationPreview,
+    `${bookId}:${notebook?.id}:${pendingGenerationDraft?.cell.id}`,
+  )
   const setPendingGenerationDraft = useCallback((
     draft: NotebookChatGenerationDraft,
     refreshPreview: boolean,
   ) => {
+    pendingGenerationPreviewRequestRef.current += 1
+    pendingGenerationRefresh.cancel()
     setPendingChatAction((current) => current?.kind === 'generation'
       && current.draft.cell.id === draft.cell.id
       ? {
@@ -3270,10 +3285,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           previewStale: true,
         }
       : current)
-    if (refreshPreview && notebook) {
-      requestPendingGenerationPreview(draft, notebook)
+    if (notebook) {
+      if (refreshPreview) requestPendingGenerationPreview(draft, notebook)
+      else pendingGenerationRefresh.schedule(draft, notebook)
     }
-  }, [notebook, requestPendingGenerationPreview])
+  }, [notebook, pendingGenerationRefresh, requestPendingGenerationPreview])
   const updatePendingGenerationPrompt = useCallback((prompt: string) => {
     if (!pendingGenerationDraft) return
     setPendingGenerationDraft(
@@ -3322,8 +3338,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [pendingGenerationDraft, setPendingGenerationDraft])
   const refreshPendingGenerationPreview = useCallback(() => {
     if (!pendingGenerationDraft || !notebook) return
+    pendingGenerationRefresh.cancel()
     requestPendingGenerationPreview(pendingGenerationDraft, notebook)
-  }, [notebook, pendingGenerationDraft, requestPendingGenerationPreview])
+  }, [notebook, pendingGenerationDraft, pendingGenerationRefresh, requestPendingGenerationPreview])
   const selectPendingGenerationSource = useCallback((cellId: string) => {
     selectCanvasCell(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
@@ -3366,11 +3383,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )} as ${notebookGridTag(next.cell.slot)}${references}`,
         }
       : current)
+    pendingGenerationRefresh.cancel()
     requestPendingGenerationPreview(next, notebook)
   }, [
     generationActions,
     notebook,
     pendingGenerationDraft,
+    pendingGenerationRefresh,
     requestPendingGenerationPreview,
     setNotice,
   ])
@@ -3517,7 +3536,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       notebook_id: notebook.id,
       cell_id: cellId,
       draft,
-    })
+    }, { background: true })
   }, [bookId, call, notebook])
 
   const loadGenerationPayload = useCallback(async (assetId: string) => {
@@ -8223,6 +8242,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : current))
     let validatedPreview: unknown
     try {
+      pendingGenerationRefresh.cancel()
+      pendingGenerationPreviewRequestRef.current += 1
       validatedPreview = await loadPendingGenerationPreview(
         preparedAction.draft,
         currentNotebook, chat,
@@ -10855,12 +10876,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           >
             <Braces size={15} />
           </button>
-          <ComposerHistoryControls />
-          <ComposerDockClose />
+          {selectedNotebookCell.type.startsWith('generate_') && (
+            <span className="composer-dock-close-divider" aria-hidden="true" />
+          )}
+          <div ref={setInspectorActionHost} className="inspector-header-action-host" />
+          <ComposerDockClose
+            label={selectedNotebookCell.type.startsWith('generate_') ? 'Close' : undefined}
+            shortcut={selectedNotebookCell.type.startsWith('generate_')}
+            divider={!selectedNotebookCell.type.startsWith('generate_')}
+          />
         </div>
       </header>
       <NotebookCellInspector
         key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
+        headerActionHost={inspectorActionHost}
         notebookId={notebook?.id ?? ''}
         bookId={bookId}
         tagTools={mcp.state === 'ready' ? call : undefined}

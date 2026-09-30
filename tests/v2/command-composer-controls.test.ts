@@ -10,7 +10,7 @@ import {
   hideComposerDock,
   initialMusicDockView,
 } from '../../src/videobook/composer-dock'
-import { ComposerHistory, ComposerHistoryControls } from '../../src/components/videobook/ComposerHistory'
+import { ComposerHistory } from '../../src/components/videobook/ComposerHistory'
 import { composerHistory } from '../../src/videobook/composer-history'
 import { VoiceActivity } from '../../src/components/videobook/VoiceActivity'
 import { voiceActivityFeedback } from '../../src/videobook/composer-status'
@@ -120,19 +120,8 @@ function renderHistory(
     phase,
     voicePresent: true,
     open,
-    onToggle: () => undefined,
     onToggleCall: () => undefined,
   }))
-}
-
-function controlledRegion(html: string): { button: string; region: string; id: string } {
-  const id = html.match(/aria-controls="([^"]+)"/)?.[1]
-  if (!id) throw new Error('captions control is missing aria-controls')
-  const button = html.match(new RegExp(`<button[^>]*aria-controls="${id}"[^>]*>[\\s\\S]*?</button>`))?.[0] ?? ''
-  const region = html.match(new RegExp(`<div[^>]*id="${id}"[^>]*>[\\s\\S]*?</div>`))?.[0]
-    ?? html.match(new RegExp(`<div[^>]*id="${id}"[^>]*hidden[^>]*>`))?.[0]
-    ?? ''
-  return { button, region, id }
 }
 
 describe('CommandComposer controls', () => {
@@ -146,8 +135,8 @@ describe('CommandComposer controls', () => {
       }],
       mcpCalls: beginMcpCall(emptyMcpCallLog, { id: 11, turnId: 10, tool: 'chat', args: [] }),
     })
-    expect(html).toContain('aria-label="Captain’s Log"')
-    expect(html).toContain('>Captain’s Log</button>')
+    expect(html).toContain('aria-label="Message log"')
+    expect(html).not.toContain('voice-captions-toggle')
     expect(html).toContain('Make a video with @b1')
     expect(html.match(/class="chat-working-dots"/gu)).toHaveLength(1)
     expect(html).not.toContain('Comms off.')
@@ -161,7 +150,7 @@ describe('CommandComposer controls', () => {
       notice: { message: 'Import could not finish', tone: 'error' },
       voice: stubVoice({ phase: 'error', active: false, message: 'Voice connection lost', playbackBlocked: true }),
     })
-    const logAt = html.indexOf('aria-label="Captain’s Log"')
+    const logAt = html.indexOf('aria-label="Message log"')
     expect(logAt).toBeGreaterThan(0)
     expect(html.indexOf('Import could not finish')).toBeGreaterThan(logAt)
     expect(html.indexOf('Voice connection lost')).toBeGreaterThan(logAt)
@@ -177,7 +166,9 @@ describe('CommandComposer controls', () => {
       captions: [caption('user-1', 'Previous question'), caption('assistant-1', 'Previous answer', 'assistant')],
     })
     const contextualContent = createElement('section', null,
-      createElement('header', null, createElement(ComposerHistoryControls)),
+      createElement('header', null,
+        createElement('span', { 'aria-label': 'Contextual header' }),
+      ),
       createElement('div', { 'aria-label': 'Media preview' }),
     )
     const chat = renderComposer(false, null, { dockOpen: true, voice })
@@ -193,7 +184,6 @@ describe('CommandComposer controls', () => {
     expect(preview).not.toContain('Previous question')
     expect(preview).not.toContain('Previous answer')
     expect(preview).not.toContain('Comms off.')
-    expect(preview).not.toContain('aria-label="Captain’s Log"')
     expect(preview).not.toContain('voice-captions-toggle')
 
     const review = renderComposer(false, null, {
@@ -202,7 +192,7 @@ describe('CommandComposer controls', () => {
     })
     expect(review).toContain('Review action')
     expect(review).toContain('Previous question')
-    expect(review).toContain('aria-label="Captain’s Log"')
+    expect(review).toContain('aria-label="Message log"')
   })
 
   it('keeps voice errors and playback recovery available while previewing', () => {
@@ -218,7 +208,7 @@ describe('CommandComposer controls', () => {
       voice: stubVoice({ playbackBlocked: true }),
     })
     expect(playback).toContain('Enable spoken replies')
-    expect(playback).toContain('aria-label="Captain’s Log"')
+    expect(playback).toContain('aria-label="Message log"')
   })
 
   it('shows the model by name on the bar and keeps its full id for the menu', () => {
@@ -483,18 +473,26 @@ describe('CommandComposer controls', () => {
   })
 })
 
-describe('Captain’s Log visibility', () => {
+describe('message log visibility', () => {
   const phases: VoicePhase[] = ['off', 'connecting', 'listening', 'thinking', 'speaking', 'review', 'error']
 
-  it('defaults to a visible transcript region whose name, expanded state and controls agree', () => {
+  function logRegion(html: string): { region: string; id: string } {
+    const id = html.match(/aria-label="Message log"[^>]*id="([^"]+)"/)?.[1]
+      ?? html.match(/id="([^"]+)"[^>]*aria-label="Message log"/)?.[1]
+    if (!id) throw new Error('message log region is missing its id')
+    const region = html.match(new RegExp(`<div[^>]*id="${id}"[^>]*>[\\s\\S]*?</div>`))?.[0]
+      ?? html.match(new RegExp(`<div[^>]*id="${id}"[^>]*hidden[^>]*>`))?.[0]
+      ?? ''
+    return { region, id }
+  }
+
+  it('defaults to a visible transcript region with no toggle chrome', () => {
     const html = renderHistory('listening', [])
-    const { button, region, id } = controlledRegion(html)
-    expect(button).toContain('aria-expanded="true"')
-    expect(button).toContain('aria-label="Hide Captain’s Log"')
-    expect(button).toContain('>Captain’s Log</button>')
-    expect(button).not.toMatch(/>Hide Captain’s Log</)
+    const { region, id } = logRegion(html)
     expect(region).toContain(`id="${id}"`)
     expect(region).not.toContain(' hidden')
+    expect(html).not.toContain('voice-captions-toggle')
+    expect(html).not.toContain('Captain’s Log')
     expect(html).toContain('Listening… speak anytime.')
     expect(html).not.toContain('max-height')
   })
@@ -506,11 +504,7 @@ describe('Captain’s Log visibility', () => {
     expect(shown).toContain('>one</span>')
     expect(shown).toContain('>two</span>')
     expect(shown).toContain('>three</span>')
-    const { button, region } = controlledRegion(hidden)
-    expect(button).toContain('aria-expanded="false"')
-    expect(button).toContain('aria-label="Show Captain’s Log"')
-    expect(button).toContain('>Captain’s Log</button>')
-    expect(button).not.toMatch(/>Show Captain’s Log</)
+    const { region } = logRegion(hidden)
     expect(region).toContain(' hidden=""')
     expect(hidden).toContain('>one</span>')
     expect(hidden).toContain('>three</span>')
@@ -520,8 +514,7 @@ describe('Captain’s Log visibility', () => {
     for (const phase of phases) {
       if (phase === 'off') continue
       const html = renderHistory(phase, [], true)
-      const { button, region } = controlledRegion(html)
-      expect(button, phase).toContain('aria-label="Hide Captain’s Log"')
+      const { region } = logRegion(html)
       expect(region, phase).toMatch(/Opening|Listening|Transcribing|Waiting|Review|No captions/)
       expect(region, phase).not.toContain(' hidden')
     }
@@ -572,7 +565,7 @@ describe('Captain’s Log visibility', () => {
     expect(long).toContain('newest reply')
   })
 
-  it('keeps Apply/Cancel guidance and the captions toggle as a non-submit button during review', () => {
+  it('keeps Apply/Cancel guidance off the transcript and names every button during review', () => {
     const html = renderToStaticMarkup(createElement(CommandComposer, {
       dockOpen: true,
       commands: [],
@@ -620,7 +613,7 @@ describe('Captain’s Log visibility', () => {
     expect(html).toContain('review on screen')
     expect(html).not.toContain('Use Apply or Cancel on screen.')
     expect(html).not.toContain('voice-comms-statusline')
-    expect(controlMarkup(html, 'Hide Captain’s Log')).toContain('type="button"')
+    expect(html).not.toContain('voice-captions-toggle')
     // Talking, the strip flips: the text cell becomes the way out and the voice
     // cell is the lit one, naming the provider that is carrying the call.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')

@@ -6,7 +6,6 @@
 }
 .command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel { max-height: min(140px, 20dvh); }
 .composer-history-panel { position: relative; display: flex; flex-direction: column; min-width: 0; }
-.composer-panel-controls { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 4px; min-height: 38px; padding: 6px 19px 0 17px; }
 .voice-captions, .composer-history { flex: 1 1 auto; min-height: 0; max-height: min(180px, 22dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .voice-captions[hidden], .composer-history[hidden] { display: none !important; }
 .composer-history-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
@@ -16,9 +15,6 @@
 .voice-captions-empty { color: #6f9a80; }
 .voice-captions em { color: #6f9a80; font: inherit; }
 .voice-captions-latest { align-self: center; flex: 0 0 auto; height: 32px; margin: 8px 0 0; padding: 0 12px; border: 1px solid rgba(114, 231, 170, .26); border-radius: 2px; background: transparent; color: #cfead9; font: inherit; font-size: 11px; cursor: pointer; }
-.voice-captions-toggle { display: grid; flex: 0 0 auto; place-items: center; height: 30px; padding: 0 6px; border: 0; background: transparent; color: #7fa992; font: inherit; font-size: 13px; cursor: pointer; }
-.voice-captions-toggle:hover, .voice-captions-toggle[aria-expanded='true'] { color: var(--control-fg-hover); }
-.voice-captions-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 @media (max-height: 500px) {
   .command-composer-dock-body > .confirm-sheet { min-height: 88px; max-height: min(42dvh, calc(100dvh - 8rem)); }
   .command-composer:has(.confirm-sheet) .command-composer-dock-body > .composer-history-panel,

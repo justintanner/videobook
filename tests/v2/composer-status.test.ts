@@ -185,7 +185,6 @@ describe('composer activity status', () => {
       phase: 'connecting',
       voicePresent: true,
       open: false,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(connecting).toContain('Connecting voice')
@@ -193,7 +192,7 @@ describe('composer activity status', () => {
     expect(waiting).toContain('Waiting for reply')
     expect(waiting).not.toContain('Connecting voice')
     expect(hidden).toContain(' hidden=""')
-    expect(hidden).toContain('aria-label="Show Captain’s Log"')
+    expect(hidden).toContain('aria-label="Message log"')
     expect(connecting).toContain('composer-mode-connecting')
     expect(connecting).toContain('role="status"')
     expect(renderVoiceActivity(voice)).toBe('')

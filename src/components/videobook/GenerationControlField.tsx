@@ -38,6 +38,7 @@ export function GenerationControlField({
         {booleanLabelFirst && label}
         <input
           type="checkbox"
+          role="switch"
           checked={value === true}
           disabled={busy}
           onFocus={onFocus}

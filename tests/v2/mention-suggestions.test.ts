@@ -306,13 +306,43 @@ describe('asset mention suggestions', () => {
     )).toBe('scene @a5, character @a1, fluffy kitten standing')
   })
 
-  it('restores a routed asset tag to the selected cell sharing its artifact', () => {
+  it('restores bare artifact ids the model echoed without the @ prefix', () => {
+    const scene = mentionCandidate({ row: 0, column: 4 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
+
+    expect(restoreNotebookMentionAliases(
+      `Create the image specified in source ${scene.artifactId}, preserving all subjects.`,
+      [scene],
+    )).toBe('Create the image specified in source @a5, preserving all subjects.')
+    expect(restoreNotebookMentionAliases(
+      `mix (${scene.artifactId}) with a new angle`,
+      [scene],
+    )).toBe('mix (@a5) with a new angle')
+  })
+
+  it('leaves bare artifact ids inside urls and longer tokens alone', () => {
+    const scene = mentionCandidate({ row: 0, column: 4 }, IMAGE_ARTIFACT, {
+      type: 'image',
+    })
+
+    expect(restoreNotebookMentionAliases(
+      `keep https://files.test/books/${scene.artifactId}/original.mp4 untouched`,
+      [scene],
+    )).toBe(`keep https://files.test/books/${scene.artifactId}/original.mp4 untouched`)
+    expect(restoreNotebookMentionAliases(
+      `prefix_${scene.artifactId} stays`,
+      [scene],
+    )).toBe(`prefix_${scene.artifactId} stays`)
+  })
+
+  it('restores a bare artifact id to the selected cell sharing its artifact', () => {
     const candidate = mentionCandidate({ row: 0, column: 0 }, IMAGE_ARTIFACT, {
       type: 'image',
     })
 
     expect(restoreSelectedNotebookMentionAliases(
-      `restyle @${candidate.artifactId}`,
+      `restyle ${candidate.artifactId}`,
       [candidate],
       [{
         id: 'cell-media',

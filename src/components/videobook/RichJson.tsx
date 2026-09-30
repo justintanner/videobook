@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import {
   ArtifactThumb,
   type ArtifactThumbAsset,
@@ -63,29 +63,72 @@ function unquotedStringToken(value: string): string | null {
 }
 
 function JsonMediaPreview({ asset }: { asset: ArtifactThumbAsset }) {
-  if (!asset.mediaUrl) return <ArtifactThumb asset={asset} />
-  if (asset.type === 'image') {
-    return (
-      <span className="json-media-preview">
-        <img src={asset.mediaUrl} alt="" loading="lazy" decoding="async" />
-      </span>
-    )
+  const id = useId()
+  const previewRef = useRef<HTMLSpanElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const video = asset.type === 'video' || asset.type === 'final'
+  const mediaUrl = asset.mediaUrl ?? (asset.type === 'image' ? asset.thumbnailUrl : null)
+  if (!mediaUrl || (!video && asset.type !== 'image' && asset.type !== 'audio')) {
+    return <ArtifactThumb asset={asset} />
   }
-  if (asset.type === 'video' || asset.type === 'final') {
-    return (
-      <span className="json-media-preview">
-        <video src={asset.mediaUrl} poster={asset.thumbnailUrl ?? undefined} controls playsInline preload="metadata" aria-label="Source video" />
-      </span>
-    )
+
+  const showPreview = () => {
+    const preview = previewRef.current
+    const trigger = triggerRef.current
+    if (!preview || !trigger) return
+    preview.showPopover()
+    const anchor = trigger.getBoundingClientRect()
+    const bounds = preview.getBoundingClientRect()
+    const left = anchor.right + bounds.width <= window.innerWidth - 12
+      ? anchor.right
+      : Math.max(12, anchor.left - bounds.width)
+    preview.style.left = `${left}px`
+    preview.style.top = `${Math.max(12, Math.min(anchor.top, window.innerHeight - bounds.height - 12))}px`
   }
-  if (asset.type === 'audio') {
-    return (
-      <span className="json-media-preview">
-        <audio src={asset.mediaUrl} controls preload="metadata" aria-label="Source audio" />
+  const hidePreview = () => previewRef.current?.hidePopover()
+
+  return (
+    <span
+      className="json-media-preview"
+      onMouseEnter={showPreview}
+      onMouseLeave={(event) => {
+        if (!event.currentTarget.contains(document.activeElement)) hidePreview()
+      }}
+      onFocus={showPreview}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) hidePreview()
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className="json-media-trigger"
+        aria-label={`Preview source ${video ? 'video' : asset.type}`}
+        aria-controls={id}
+        onClick={showPreview}
+      >
+        <ArtifactThumb asset={asset} />
+      </button>
+      <span
+        id={id}
+        ref={previewRef}
+        popover="auto"
+        className="json-media-popover"
+        onToggle={(event) => {
+          if (event.newState !== 'closed') return
+          event.currentTarget.querySelectorAll('video, audio').forEach((media) => {
+            if (media instanceof HTMLMediaElement) media.pause()
+          })
+        }}
+      >
+        {asset.type === 'image'
+          ? <img src={mediaUrl} alt="Source image preview" loading="lazy" decoding="async" />
+          : video
+            ? <video src={mediaUrl} poster={asset.thumbnailUrl ?? undefined} controls playsInline preload="none" aria-label="Source video" />
+            : <audio src={mediaUrl} controls preload="none" aria-label="Source audio" />}
       </span>
-    )
-  }
-  return <ArtifactThumb asset={asset} />
+    </span>
+  )
 }
 
 export function RichJson({

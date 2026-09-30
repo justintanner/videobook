@@ -14,7 +14,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useContext, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import type { CSSProperties } from 'react'
 import type {
   GenerationStatus,
@@ -87,6 +89,8 @@ import {
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
+import { useConfirmSheetKeys } from './confirm/useConfirmSheetKeys'
+import { ComposerDockContext } from './composer-dock-context'
 import type { GenerationCellPreview } from '@/videobook/use-generation-cell-preview'
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
@@ -422,6 +426,7 @@ export type CellAssetRevision = {
 }
 
 type NotebookCellInspectorProps = {
+  headerActionHost?: HTMLElement | null
   notebookId: string
   /** Book that owns the inspected asset; tag edits are scoped to it. */
   bookId: string
@@ -2150,6 +2155,8 @@ function AnalysisCellInspector({
 }
 
 function ExecutableCellInspector({
+  headerActionHost,
+  sourceVisible,
   cell,
   cells,
   edges,
@@ -2172,6 +2179,8 @@ function ExecutableCellInspector({
   voiceCatalog,
 }: Pick<
   NotebookCellInspectorProps,
+  | 'headerActionHost'
+  | 'sourceVisible'
   | 'cell'
   | 'cells'
   | 'edges'
@@ -2193,6 +2202,8 @@ function ExecutableCellInspector({
   | 'mentionAssets'
   | 'voiceCatalog'
 >) {
+  const formId = useId()
+  const dock = useContext(ComposerDockContext)
   const [draft, setDraft] = useState(() =>
     cellFormDraft(
       cell,
@@ -2445,15 +2456,16 @@ function ExecutableCellInspector({
       throw error
     }
   }
-  const refreshGenerationPreview = (value = draft, inputEdges = edges) => {
+  const promptPreviewRefresh = useGenerationPreviewRefresh((value: CellFormDraft = draft, inputEdges: NotebookEdge[] = edges) => {
     if (generationCell && onPreviewPayload) {
       void loadGenerationPreview(value, inputEdges).catch(() => undefined)
     }
-  }
+  }, cell.id)
+  const refreshGenerationPreview = promptPreviewRefresh.run
   const requestPromptMentionPreview = (prompt: string) => {
     promptPreviewRequestRef.current += 1
     setPromptMentionPreview((current) => ({ ...current, loading: false }))
-    if (prompt.includes('@')) refreshGenerationPreview({ ...draft, prompt })
+    if (generationCell && onPreviewPayload) promptPreviewRefresh.schedule({ ...draft, prompt })
   }
   const updatePrompt = (prompt: string, caret: number) => {
     setPromptCopyState('idle')
@@ -2551,6 +2563,7 @@ function ExecutableCellInspector({
     if (
       !saveOnRun
       || busy
+      || saving
       || action?.disabled
       || !valid
       || (generationCell && promptMentionPreview.loading)
@@ -2559,6 +2572,7 @@ function ExecutableCellInspector({
     try {
       if (generationCell) {
         try {
+          promptPreviewRefresh.cancel()
           const preview = await loadGenerationPreview()
           if (providerPayloadPreviewMentions(preview).promptLeaks.length > 0) {
             return
@@ -2694,7 +2708,7 @@ function ExecutableCellInspector({
           value={draft.prompt}
           disabled={generationCell && (busy || saving)}
           aria-invalid={generationCell && !generationPreviewStale && providerPayloadPreviewMentions(generationPreview.value).promptLeaks.length > 0}
-          rows={generationCell ? 5 : 8}
+          rows={generationCell ? 3 : 8}
           onChange={(event) => updatePrompt(
             event.target.value,
             event.target.selectionStart,
@@ -2734,8 +2748,82 @@ function ExecutableCellInspector({
     </section>
   ) : null
 
+  const runDisabled = busy
+    || saving
+    || Boolean(action?.disabled)
+    || !valid
+    || (generationCell && promptMentionPreview.loading)
+    || (!saveOnRun && dirty)
+  const { onKeyDown } = useConfirmSheetKeys({
+    applyFormId: formId,
+    applyDisabled: runDisabled,
+    applyScopeSelector: '.composer-notebook-dock',
+    busy: busy || saving,
+    enabled: generationCell && Boolean(dock),
+    onCancel: () => dock?.hide(),
+  })
+  const runAction = runLabel && (action || generationCell) ? (
+    <section
+      className={generationCell && headerActionHost
+        ? 'confirm-sheet-actions inspector-generation-header-actions'
+        : 'inspector-cell-actions'}
+      aria-label="Primary cell action"
+    >
+      <button
+        type="button"
+        className={generationCell && headerActionHost ? 'confirm-sheet-apply' : 'inspector-run-action'}
+        aria-busy={saveOnRun && saving}
+        aria-keyshortcuts={generationCell ? 'Meta+Enter Control+Enter' : undefined}
+        title={
+          action?.disabled
+            ? 'A run is already in progress for this cell'
+            : generationCell && !generationCompatible
+              ? 'Check the generation type and required settings'
+              : !saveOnRun && dirty
+                ? 'Save changes before running'
+                : generationCell ? 'Generate (⌘Enter / Ctrl+Enter)' : undefined
+        }
+        onClick={() => {
+          if (saveOnRun) {
+            void saveAndRun()
+            return
+          }
+          void onRun(cell.id)
+        }}
+        disabled={runDisabled}
+      >
+        {saveOnRun && saving
+          ? generationCell ? 'Generating…' : 'Applying…'
+          : runLabel}
+        {generationCell && !saving && <kbd aria-hidden="true">⌘↵</kbd>}
+      </button>
+    </section>
+  ) : null
+
+  const draftNotice = !generationCell && dirty ? (
+    <div
+      className={`inspector-dirty-notice${valid ? '' : ' invalid'}`}
+      role="status"
+    >
+      <CircleAlert size={14} />
+      <span>
+        {valid
+          ? saveOnRun
+            ? 'Changes apply when this action runs'
+            : 'Unsaved changes'
+          : saveOnRun
+            ? 'Check timing values before running'
+            : 'Check timing values before saving'}
+      </span>
+    </div>
+  ) : null
+
   return (
-    <div className={generationCell ? 'generation-cell-inspector' : 'inspector-body inspector-executable-body'}>
+    <div
+      className={generationCell ? 'generation-cell-inspector' : 'inspector-body inspector-executable-body'}
+      onKeyDown={onKeyDown}
+    >
+      {generationCell && headerActionHost ? createPortal(runAction, headerActionHost) : null}
       {asset && previewCell && !generationCell && (
         <NotebookCellMedia
           asset={asset}
@@ -2757,6 +2845,7 @@ function ExecutableCellInspector({
         />
       )}
       <form
+        id={formId}
         className={generationCell ? 'generation-cell-form' : 'inspector-cell-form'}
         aria-busy={saving}
         onSubmit={(event) => {
@@ -2775,6 +2864,7 @@ function ExecutableCellInspector({
             draft={generationEditorDraft}
             modes={generationModeOptions}
             compatibleModeIds={compatibleModeIds}
+            sourceVisible={sourceVisible}
             preview={generationPreview.value}
             previewError={generationPreview.error}
             previewLoading={generationPreview.loading}
@@ -2893,27 +2983,7 @@ function ExecutableCellInspector({
             </span>
           </div>
         )}
-        {dirty && (
-          <div
-            className={`inspector-dirty-notice${valid ? '' : ' invalid'}`}
-            role="status"
-          >
-            <CircleAlert size={14} />
-            <span>
-              {valid
-                ? generationCell
-                  ? 'Changes apply when you generate'
-                  : saveOnRun
-                  ? 'Changes apply when this action runs'
-                  : 'Unsaved changes'
-                : generationCell
-                  ? 'Check the generation type and required settings'
-                  : saveOnRun
-                  ? 'Check timing values before running'
-                  : 'Check timing values before saving'}
-            </span>
-          </div>
-        )}
+        {draftNotice}
         {!saveOnRun && !generationCell && (
           <button
             type="submit"
@@ -2925,49 +2995,7 @@ function ExecutableCellInspector({
           </button>
         )}
       </form>
-      {runLabel && (action || generationCell) && (
-        <section
-          className={[
-            'inspector-cell-actions',
-            generationCell ? 'inspector-generation-actions' : '',
-          ].filter(Boolean).join(' ')}
-          aria-label="Primary cell action"
-        >
-          <button
-            type="button"
-            className="inspector-run-action"
-            aria-busy={saveOnRun && saving}
-            title={
-              action?.disabled
-                ? 'A run is already in progress for this cell'
-                : generationCell && !generationCompatible
-                  ? 'Check the generation type and required settings'
-                : !saveOnRun && dirty
-                  ? 'Save changes before running'
-                  : undefined
-            }
-            onClick={() => {
-              if (saveOnRun) {
-                void saveAndRun()
-                return
-              }
-              void onRun(cell.id)
-            }}
-            disabled={
-              busy
-              || saving
-              || action?.disabled
-              || !valid
-              || (generationCell && promptMentionPreview.loading)
-              || (!saveOnRun && dirty)
-            }
-          >
-            {saveOnRun && saving
-              ? generationCell ? 'Generating…' : 'Applying…'
-              : runLabel}
-          </button>
-        </section>
-      )}
+      {generationCell && headerActionHost ? null : runAction}
       {(status === 'error' || error) && (
         <section
           className="inspector-run-error"
@@ -2991,11 +3019,13 @@ function ExecutableCellInspector({
           </div>
         </section>
       )}
-      <CellCleanupActions
-        busy={busy}
-        deleting={deleting}
-        onDelete={onDelete}
-      />
+      {!generationCell && (
+        <CellCleanupActions
+          busy={busy}
+          deleting={deleting}
+          onDelete={onDelete}
+        />
+      )}
     </div>
   )
 }
@@ -3269,6 +3299,7 @@ function CellGenerationsPanel({
 }
 
 export function NotebookCellInspector({
+  headerActionHost,
   notebookId,
   cell,
   cells,
@@ -3310,7 +3341,7 @@ export function NotebookCellInspector({
     versionAssets,
   )
 
-  if (sourceVisible) {
+  if (sourceVisible && !isNotebookGenerationCellType(cell.type)) {
     return (
       <div className="inspector-body inspector-source-body">
         <DoltCellSource
@@ -3399,6 +3430,8 @@ export function NotebookCellInspector({
 
   return (
     <ExecutableCellInspector
+      headerActionHost={headerActionHost}
+      sourceVisible={sourceVisible}
       cell={cell}
       cells={cells}
       edges={edges}

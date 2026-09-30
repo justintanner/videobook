@@ -91,10 +91,6 @@ export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean
   return owner.dockOpen && owner.panelHasHeader && !owner.reviewPriority
 }
 
-export function composerHistoryChromeHosted(owner: ComposerDockCloseOwner): boolean {
-  return owner.dockOpen
-}
-
 export interface ComposerPanelHeaders {
   musicSession: boolean
   imageEditorDocked: boolean

@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
 import {
@@ -13,7 +14,8 @@ import {
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { ComposerDockClose } from './ComposerDockClose'
-import { ComposerHistory, ComposerHistoryControls } from './ComposerHistory'
+import { PaneResizeHandle } from './PaneResizeHandle'
+import { ComposerHistory } from './ComposerHistory'
 import {
   ComposerHistoryChromeContext,
   type ComposerHistoryChromeValue,
@@ -83,7 +85,6 @@ import {
   COMPOSER_DOCK_HIDE_LABEL,
   composerDockCloseInPanel,
   composerDockReviewPriority,
-  composerHistoryChromeHosted,
   hideComposerDock,
   pauseComposerDockMedia,
 } from '@/videobook/composer-dock'
@@ -269,6 +270,7 @@ export function CommandComposer({
   const inputRef = useRef<ComposerEditorHandle>(null)
   const composerRootRef = useRef<HTMLElement | null>(null)
   const commandRowRef = useRef<HTMLFormElement | null>(null)
+  const [reviewHeight, setReviewHeight] = useState<number | null>(null)
 
   useLayoutEffect(() => {
     const row = commandRowRef.current
@@ -917,18 +919,13 @@ export function CommandComposer({
     reviewPriority,
   }
   const closeInPanel = composerDockCloseInPanel(closeOwner)
-  const historyChromeHosted = logVisible && composerHistoryChromeHosted(closeOwner)
   const historyIsIdle = !feedbackPresent && historyIdle(
     voice?.phase,
     historyRows.length,
     Boolean(voice),
   )
   const historyChrome: ComposerHistoryChromeValue = {
-    idle: historyIsIdle,
-    hosted: historyChromeHosted,
-    open: historyOpen,
     captionId: historyCaptionId,
-    onToggle: () => setHistoryOpen((current) => !current),
   }
   const dockControls: ComposerDockControls = {
     hide: hideDock,
@@ -967,6 +964,8 @@ export function CommandComposer({
       className="command-composer"
       data-composer-focus="return"
       data-dock-open={dockIsOpen ? 'true' : 'false'}
+      data-resizable-review={reviewPriority && dockIsOpen ? 'true' : undefined}
+      style={reviewHeight === null ? undefined : { '--composer-review-height': `${reviewHeight}px` } as CSSProperties}
       data-voice-phase={voice?.phase}
       hidden={hidden}
       onKeyDown={event => {
@@ -976,10 +975,18 @@ export function CommandComposer({
         closeActionSearch()
       }}
     >
+      {reviewPriority && dockIsOpen && (
+        <PaneResizeHandle
+          label="Resize review pane"
+          targetSelector=".command-composer"
+          edge="top"
+          minimum={280}
+          onResize={setReviewHeight}
+        />
+      )}
       {dockIsOpen && !closeInPanel && (
         <div className="command-composer-dock-bar">
           {historyIsIdle && <span className="command-composer-dock-title">chat</span>}
-          <ComposerHistoryControls />
           <ComposerDockClose />
         </div>
       )}
@@ -1013,7 +1020,6 @@ export function CommandComposer({
           phase={voice?.phase}
           voicePresent={Boolean(voice)}
           open={historyOpen && dockIsOpen}
-          onToggle={() => setHistoryOpen((current) => !current)}
           onToggleCall={onToggleMcpCall}
         >
           {logFeedback}

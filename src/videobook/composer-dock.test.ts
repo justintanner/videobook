@@ -6,7 +6,6 @@ import {
   composerDockCloseInPanel,
   composerDockHeightPx,
   composerDockReviewPriority,
-  composerHistoryChromeHosted,
   composerMediaRowHeightPx,
   musicDockViewAfterSetup,
   type ComposerDockCloseOwner,
@@ -34,13 +33,6 @@ describe('composer dock close ownership', () => {
     expect(composerDockCloseInPanel(owner({ dockOpen: false }))).toBe(false)
     expect(composerDockCloseInPanel(owner({ dockOpen: false, panelHasHeader: false })))
       .toBe(false)
-  })
-
-  it('hosts history chrome in whichever header row an open dock already draws', () => {
-    expect(composerHistoryChromeHosted(owner())).toBe(true)
-    expect(composerHistoryChromeHosted(owner({ panelHasHeader: false }))).toBe(true)
-    expect(composerHistoryChromeHosted(owner({ reviewPriority: true }))).toBe(true)
-    expect(composerHistoryChromeHosted(owner({ dockOpen: false }))).toBe(false)
   })
 })
 

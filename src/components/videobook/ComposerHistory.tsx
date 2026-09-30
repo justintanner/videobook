@@ -1,7 +1,6 @@
 import { useContext, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { McpCallRow } from './McpCallRows'
 import {
-  captionToggleLabel,
   captionsEmptyCopy,
 } from '@/videobook/voice-captions'
 import {
@@ -15,51 +14,11 @@ import './ComposerHistory.css'
 
 const PIN_THRESHOLD_PX = 28
 
-export function ComposerHistoryControls() {
-  const chrome = useContext(ComposerHistoryChromeContext)
-  if (!chrome || chrome.idle || !chrome.hosted) return null
-  return (
-    <ComposerHistoryControlsStrip
-      captionId={chrome.captionId}
-      open={chrome.open}
-      onToggle={chrome.onToggle}
-    />
-  )
-}
-
-function ComposerHistoryControlsStrip({
-  captionId,
-  open,
-  onToggle,
-}: {
-  captionId: string
-  open: boolean
-  onToggle: () => void
-}) {
-  return (
-    <div className="composer-panel-controls">
-      <button
-        type="button"
-        className="voice-captions-toggle"
-        data-composer-focus="preserve"
-        aria-controls={captionId}
-        aria-expanded={open}
-        aria-label={captionToggleLabel(open)}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onToggle}
-      >
-        Captain’s Log
-      </button>
-    </div>
-  )
-}
-
 export function ComposerHistory({
   rows,
   phase,
   voicePresent,
   open,
-  onToggle,
   onToggleCall,
   connected = true,
   onDetailsChange,
@@ -69,7 +28,6 @@ export function ComposerHistory({
   phase: VoicePhase | undefined
   voicePresent: boolean
   open: boolean
-  onToggle: () => void
   onToggleCall: (id: number) => void
   connected?: boolean
   onDetailsChange?: (open: boolean) => void
@@ -83,7 +41,6 @@ export function ComposerHistory({
   const newestTurnRef = useRef<number | undefined>(undefined)
   const [showLatest, setShowLatest] = useState(false)
   const idle = !children && historyIdle(phase, rows.length, voicePresent)
-  const hosted = Boolean(chrome?.hosted)
 
   useLayoutEffect(() => {
     const element = scrollerRef.current
@@ -102,20 +59,13 @@ export function ComposerHistory({
 
   return (
     <div className="composer-history-panel" data-history-open={open ? 'true' : 'false'}>
-      {!hosted && (
-        <ComposerHistoryControlsStrip
-          captionId={captionId}
-          open={open}
-          onToggle={onToggle}
-        />
-      )}
       <div
         ref={scrollerRef}
         id={captionId}
         className="composer-history voice-captions"
         data-testid="composer-history"
         hidden={!open}
-        aria-label="Captain’s Log"
+        aria-label="Message log"
         role="log"
         aria-live="off"
         onScroll={(event) => {

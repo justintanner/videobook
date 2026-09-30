@@ -392,7 +392,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Voice id"')
   })
 
-  it('defaults generation configuration to one catalog-backed model picker', () => {
+  it.each([false, true])('keeps generation configuration mounted with source visible: %s', (sourceVisible) => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_image',
@@ -415,7 +415,7 @@ describe('NotebookCellInspector', () => {
       error: null,
       busy: false,
       deleting: false,
-      sourceVisible: false,
+      sourceVisible,
       generationActions,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
@@ -434,15 +434,23 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       'class="generation-cell-form"',
     )
-    expect(html).toContain('class="confirm-section generation-review-model-section"')
-    expect(html).toContain('Changes apply when you generate')
+    expect(html).toContain('class="confirm-section generation-review-editor"')
+    expect(html).not.toContain('Changes apply when you generate')
+    expect(html).not.toContain('generation-cell-footer')
+    expect(html).toContain(`data-view="${sourceVisible ? 'source' : 'form'}"`)
+    expect(html).toContain(sourceVisible
+      ? 'class="confirm-section generation-review-editor" hidden=""'
+      : 'aria-label="Payload"')
+    expect(html).not.toContain('aria-label="Payload" hidden=""')
+    expect(html).not.toContain('aria-label="Raw Dolt cells row"')
+    expect(html).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
     expect(html).toContain(
-      'class="inspector-cell-actions inspector-generation-actions"',
+      'aria-label="Primary cell action"',
     )
     expect(html).toContain('Generate')
     expect(html).not.toContain('Save changes')
-    expect(html).toContain('inspector-delete-cell-button')
-    expect(html).toContain('Delete cell')
+    expect(html).not.toContain('inspector-delete-cell-button')
+    expect(html).not.toContain('Delete cell')
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
   })
@@ -491,7 +499,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Default · 8')
     expect(html).toContain('<select aria-label="Aspect ratio">')
     expect(html).toContain('<select aria-label="Resolution">')
-    expect(html).toContain('aria-label="Generation source JSON"')
+    expect(html).toContain('aria-label="Generation payload JSON"')
     expect(html).toContain('class="confirm-generation"')
     expect(html.indexOf('generation-review-model-section'))
       .toBeLessThan(html.indexOf('generation-review-prompt-section'))
@@ -835,12 +843,12 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('This model does not accept the current inputs.')
     expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)
-    expect(html).toContain('aria-label="Generation source JSON"')
+    expect(html).toContain('aria-label="Generation payload JSON"')
     expect(previewCalls).toBe(0)
   })
 
   it.each(NOTEBOOK_CELL_TYPES)(
-    'renders Video-style cleanup actions for %s cells',
+    'shows cleanup actions outside generation editors for %s cells',
     (type) => {
       const typedCell: NotebookCell = {
         ...cell,
@@ -866,6 +874,11 @@ describe('NotebookCellInspector', () => {
         onOpenFullscreen: () => undefined,
       }))
 
+      if (type.startsWith('generate_')) {
+        expect(html).not.toContain('aria-label="Cell cleanup actions"')
+        expect(html).not.toContain('inspector-delete-cell-button')
+        return
+      }
       expect(html).toContain(
         'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
       )

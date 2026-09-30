@@ -42,7 +42,7 @@ async function dismissConfirmStatus(target: Page | undefined): Promise<void> {
 async function collapseComposerDock(page: Page): Promise<void> {
   const composer = page.locator('.command-composer')
   if (await composer.getAttribute('data-dock-open') !== 'true') return
-  const collapse = page.getByLabel('Collapse chat', { exact: true })
+  const collapse = composer.locator('[data-composer-dock-hide]')
   if (await collapse.count()) await collapse.click()
   await expect.poll(async () => await composer.getAttribute('data-dock-open'), { timeout: MCP_ROUNDTRIP_MS })
     .toBe('false')
@@ -1275,7 +1275,7 @@ describe('chat composer browser flow', () => {
     if (!detailInspectorBox || !scrollBox || !composerBox) {
       throw new Error('Could not measure selected-cell inspector layout')
     }
-    expect(await page.getByLabel('Collapse chat').isVisible()).toBe(true)
+    expect(await page.locator('.inspector').getByRole('button', { name: /^Close/ }).isVisible()).toBe(true)
     expect(detailInspectorBox.y).toBeGreaterThan(scrollBox.y)
     expect(detailInspectorBox.x).toBeGreaterThanOrEqual(composerBox.x - 2)
     expect(scrollBox.width).toBeGreaterThan(900)
@@ -2319,7 +2319,7 @@ describe('chat composer browser flow', () => {
     // editable identity field of its own.
     expect(await inspector.locator('header input, header textarea').count()).toBe(0)
 
-    const inputsHeading = inspector.locator('.inspector-input-sources h3')
+    const inputsHeading = inspector.locator('.generation-review-input-section > .confirm-section-label')
     const promptHeading = inspector.locator('.inspector-prompt-header h3')
     const headingStyles = async (selector: typeof inputsHeading) => await selector.evaluate(
       (element) => {
@@ -2335,7 +2335,7 @@ describe('chat composer browser flow', () => {
     )
     expect(await headingStyles(promptHeading)).toEqual(await headingStyles(inputsHeading))
 
-    const promptInput = inspector.getByLabel('Prompt', { exact: true })
+    const promptInput = inspector.getByRole('textbox', { name: 'Prompt', exact: true })
     await promptInput.fill('use @a')
     const mentionMenu = page.locator('.bg-background').filter({
       has: page.getByRole('button', { name: /@a1/ }),
@@ -2343,7 +2343,7 @@ describe('chat composer browser flow', () => {
     await mentionMenu.waitFor({ state: 'visible' })
     expect(await mentionMenu.getByRole('button').count()).toBeGreaterThan(0)
     await promptInput.fill('use @bl8')
-    const mentionWarning = inspector.locator('.inspector-prompt-mentions')
+    const mentionWarning = inspector.locator('.generation-review-reference-errors')
     await mentionWarning.waitFor({ state: 'visible' })
     // The warning settles once the payload preview round trip returns.
     await expect.poll(
@@ -3159,7 +3159,7 @@ describe('chat composer browser flow', () => {
       expect(await composer.locator('.composer-notebook-dock').count()).toBe(0)
       expect(await turn.getAttribute('data-status')).toBe('sending')
       expect(await turn.locator('.chat-working-dots').isVisible()).toBe(true)
-      expect(await composer.getByLabel('Hide Captain’s Log').textContent()).toBe('Captain’s Log')
+      expect(await composer.getByLabel('Message log').count()).toBe(1)
       expect(await turn.locator('.chat-working-dots').count()).toBe(1)
       expect(await composer.getByLabel('Voice activity').count()).toBe(0)
       expect(await composer.getByText('Comms off.', { exact: true }).count()).toBe(0)
@@ -3637,7 +3637,7 @@ describe('chat composer browser flow', () => {
       expect(await idleCell.getAttribute('aria-label'))
         .toBe(talking ? 'Stop voice conversation' : 'Start voice conversation')
       const captions = page.locator('[data-testid="composer-history"]')
-      expect(await page.getByLabel('Hide Captain’s Log').isVisible()).toBe(true)
+      expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
       expect(await captions.isVisible()).toBe(true)
       await captions.locator('.chat-turn-details > summary').last().click()
       const action = captions.locator('.mcp-call-head').last()
@@ -3658,14 +3658,35 @@ describe('chat composer browser flow', () => {
       const status = page.locator('.composer-mode-switch [role="status"]')
       expect(await status.innerText()).not.toBe('Waiting for reply')
       expect(await status.innerText()).toMatch(/Connecting voice|Allow microphone|Listening|Connection error|Voice paused|Offline/)
-      await page.getByLabel('Hide Captain’s Log').click()
-      expect(await captions.isVisible()).toBe(false)
-      expect(await page.getByLabel('Voice activity').isVisible()).toBe(false)
-      expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
-      await page.getByLabel('Show Captain’s Log').click()
+      expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
       expect(await captions.isVisible()).toBe(true)
+      expect(await page.getByLabel('Voice activity').isVisible()).toBe(true)
+      expect(await review.getByRole('button', { name: 'Apply' }).count()).toBe(1)
+      const composer = page.locator('.command-composer')
+      const paneHandle = page.getByRole('separator', { name: 'Resize review pane', exact: true })
+      const logHandle = page.getByRole('separator', { name: 'Resize review and log', exact: true })
+      const originalPaneHeight = await composer.evaluate((element) => element.getBoundingClientRect().height)
+      await paneHandle.press('ArrowUp')
+      await expect.poll(() => composer.evaluate((element) => element.getBoundingClientRect().height))
+        .toBeCloseTo(originalPaneHeight + 24, 0)
+      const handleBounds = await paneHandle.boundingBox()
+      if (!handleBounds) throw new Error('Review resize handle is missing')
+      await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + handleBounds.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + handleBounds.height / 2 + 72, { steps: 6 })
+      await page.mouse.up()
+      await expect.poll(() => composer.evaluate((element) => element.getBoundingClientRect().height))
+        .toBeCloseTo(originalPaneHeight - 48, 0)
+      const originalReviewHeight = await review.evaluate((element) => element.getBoundingClientRect().height)
+      await logHandle.press('ArrowUp')
+      await expect.poll(() => review.evaluate((element) => element.getBoundingClientRect().height))
+        .toBeCloseTo(originalReviewHeight - 24, 0)
+      expect(await composer.evaluate((element) => element.getBoundingClientRect().height))
+        .toBeCloseTo(originalPaneHeight - 48, 0)
       for (const viewport of [
         { width: 1440, height: 1000 },
+        { width: 1280, height: 800 },
+        { width: 1024, height: 768 },
         { width: 390, height: 844 },
         { width: 320, height: 640 },
         { width: 640, height: 320 },
@@ -3705,10 +3726,13 @@ describe('chat composer browser flow', () => {
     await notebookCellNode(page, reviewGenerationCellId).click()
     const inspector = page.locator('.generation-cell-inspector')
     const editor = inspector.locator('.confirm-generation')
-    const source = editor.getByLabel('Generation source JSON', { exact: true })
+    const source = editor.locator('.generation-review-json pre')
+    expect(await inspector.locator('.generation-cell-footer').count()).toBe(0)
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('A moonlit garden ready for review')
+    expect(await source.isVisible()).toBe(true)
+    expect(await source.textContent()).not.toContain('"provider_path"')
     expect(observedCalls.some((call) => call.name === 'preview_notebook_generation'
       && call.arguments.cell_id === reviewGenerationCellId)).toBe(true)
     expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
@@ -3726,7 +3750,7 @@ describe('chat composer browser flow', () => {
     )
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
-    }).toContain('generate_kie_nano_banana_pro_text_to_image')
+    }).toContain('"model": "nano-banana-pro"')
     await editor.getByLabel('Aspect ratio', { exact: true }).selectOption('string:9:16')
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
@@ -3738,6 +3762,9 @@ describe('chat composer browser flow', () => {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(1)
     expect(await editor.getByLabel('Available input cells').count()).toBe(0)
+    await page.getByRole('button', { name: 'View source', exact: true }).click()
+    expect(await source.textContent()).toContain('"provider_path"')
+    expect(await editor.getByLabel('Generation model').isVisible()).toBe(false)
     const inlineImage = source.locator('.json-media-preview img').first()
     await inlineImage.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
     await inlineImage.scrollIntoViewIfNeeded()
@@ -3745,19 +3772,55 @@ describe('chat composer browser flow', () => {
       (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
     expect(await inlineImage.getAttribute('src')).toContain(fullscreenImageArtifactId)
 
+    await page.getByRole('button', { name: 'View cell', exact: true }).click()
     const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
     await prompt.fill('Use @c3 in a moonlit garden')
+    await page.getByRole('button', { name: 'View source', exact: true }).click()
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('Use reference image 1 in a moonlit garden')
+    await page.getByRole('button', { name: 'View cell', exact: true }).click()
     expect(await prompt.inputValue()).toBe('Use @c3 in a moonlit garden')
     await prompt.fill('A revised moonlit garden')
-    expect(await editor.getByText('Needs refresh', { exact: true }).count()).toBe(1)
-    await editor.getByRole('button', { name: 'Refresh estimate', exact: true }).click()
+    expect(await editor.getByRole('button', { name: 'Refresh estimate', exact: true }).count()).toBe(0)
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('A revised moonlit garden')
     expect(await editor.getByText('Needs refresh', { exact: true }).count()).toBe(0)
+    observedCalls.length = 0
+    await prompt.fill('A revised moonlit garden with passing clouds')
+    await prompt.fill('A revised moonlit garden after the storm')
+    await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+      .toContain('A revised moonlit garden after the storm')
+    expect(observedCalls.filter((call) => call.name === 'preview_notebook_generation'
+      && String(record(call.arguments.draft)?.prompt).startsWith('A revised moonlit garden'))).toHaveLength(1)
+    let releasePreview: () => void = () => undefined
+    const heldPreview = new Promise<void>((resolve) => { releasePreview = resolve })
+    let previewHeld = false
+    const delayPreview = async (route: Route) => {
+      const calls = toolCalls(await requestBody(route))
+      if (calls.some((call) => call.name === 'preview_notebook_generation'
+        && record(call.arguments.draft)?.prompt === 'An older delayed garden')) {
+        const response = await route.fetch()
+        previewHeld = true
+        await heldPreview
+        await route.fulfill({ response })
+      } else await route.fallback()
+    }
+    await page.route('**/mcp', delayPreview)
+    try {
+      await prompt.fill('An older delayed garden')
+      await expect.poll(() => previewHeld, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await prompt.fill('A revised moonlit garden')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('A revised moonlit garden')
+      releasePreview()
+      await expect.poll(() => editor.getByText('Updating…', { exact: true }).count()).toBe(0)
+      expect(await source.textContent()).not.toContain('An older delayed garden')
+    } finally {
+      releasePreview()
+      await page.unroute('**/mcp', delayPreview)
+    }
 
     const layout = await editor.evaluate((element) => {
       const bounds = (selector: string) => {
@@ -3770,28 +3833,26 @@ describe('chat composer browser flow', () => {
         model: bounds('.generation-review-model-section'),
         prompt: bounds('.generation-review-prompt-section'),
         settings: bounds('.generation-review-settings-section'),
-        source: bounds('.generation-review-source-section'),
-        json: bounds('.generation-review-json'),
+        estimate: bounds('.generation-review-estimate-section'),
       }
     })
     expect(layout.model.bottom).toBeLessThanOrEqual(layout.prompt.top)
     expect(layout.prompt.bottom).toBeLessThanOrEqual(layout.settings.top)
-    expect(layout.prompt.right).toBeLessThan(layout.source.left)
-    expect(layout.source.width).toBeGreaterThan(200)
-    expect(layout.json.height).toBeGreaterThan(150)
+    expect(layout.prompt.right).toBeLessThan(layout.estimate.left)
+    await page.getByRole('button', { name: 'View source', exact: true }).click()
+    expect(await source.isVisible()).toBe(true)
+    expect(await prompt.isVisible()).toBe(false)
     await inspector.evaluate((element) => { element.scrollTop = 0 })
     await page.screenshot({ path: '/tmp/videobook-2jtd-desktop.png' })
 
     await page.setViewportSize({ width: 760, height: 1000 })
     expect(await inspector.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
-    const sourceBelowEditor = await editor.evaluate((element) => {
-      const fields = element.querySelector('.generation-review-editor')!.getBoundingClientRect()
-      const source = element.querySelector('.generation-review-source-section')!.getBoundingClientRect()
-      return source.top >= fields.bottom
-    })
-    expect(sourceBelowEditor).toBe(true)
+    expect(await source.isVisible()).toBe(true)
+    expect(await prompt.isVisible()).toBe(false)
     await page.screenshot({ path: '/tmp/videobook-2jtd-narrow.png' })
     await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.getByRole('button', { name: 'View cell', exact: true }).click()
+    expect(await prompt.inputValue()).toBe('A revised moonlit garden')
 
     await editor.getByLabel('Remove @c3 input').click()
     await expect.poll(async () => await editor.getByLabel('Remove @c3 input').count(), {
@@ -3807,6 +3868,21 @@ describe('chat composer browser flow', () => {
     }).toContain('A moonlit garden moving in a light breeze')
     expect(await editor.getByLabel('Duration', { exact: true }).inputValue()).toBe('string:5')
     expect(await source.textContent()).not.toContain('A revised moonlit garden')
+    const audioToggle = editor.getByRole('switch', { name: 'Generate audio', exact: true })
+    const audioEnabled = await audioToggle.isChecked()
+    await audioToggle.press('Space')
+    expect(await audioToggle.isChecked()).toBe(!audioEnabled)
+    await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+      .toContain(`"generate_audio": ${!audioEnabled}`)
+    expect(await editor.locator('.generation-review-toggle').evaluateAll((labels) => labels.every((label) => {
+      const text = label.querySelector('span')!
+      const input = label.querySelector('input')!
+      const bounds = label.getBoundingClientRect()
+      const inputBounds = input.getBoundingClientRect()
+      return text.scrollWidth <= text.clientWidth + 1 && inputBounds.width >= 28
+        && inputBounds.right <= bounds.right + 1
+    }))).toBe(true)
+    await page.screenshot({ path: 'test-results/generation-pane-desktop.png' })
     notebookDirty = true
   }, 90_000)
 

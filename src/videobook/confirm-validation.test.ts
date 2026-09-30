@@ -84,7 +84,7 @@ describe('generation validation', () => {
     }).blocking).toBe('@e2 does not have media output yet (+1 more). Add it with Add input, or remove the mention.')
   })
 
-  it('lets a stale preview through with a notice instead of blocking on old leaks', () => {
+  it('allows server revalidation while automatically refreshing an edited draft', () => {
     const validation = generationValidation({
       ...base,
       previewStale: true,
@@ -92,7 +92,7 @@ describe('generation validation', () => {
       promptLeaks: [{ token: '@e2', message: 'stale' }],
     })
     expect(validation.blocking).toBeNull()
-    expect(validation.notice).toContain('prompt changed')
+    expect(validation.notice).toBeNull()
   })
 
   it('mentions an unknown estimate without blocking', () => {

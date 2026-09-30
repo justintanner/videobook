@@ -309,9 +309,10 @@ describe('GenerationBody input editing', () => {
       type,
       asset: { artifactId, type, mediaUrl, thumbnailUrl: null, duration: null },
     }], [], preview)
-    const source = html.slice(html.indexOf('aria-label="Source"'))
+    const source = html.slice(html.indexOf('aria-label="Payload"'))
 
-    expect(source).toContain('aria-label="Generation source JSON"')
+    expect(source).toContain('aria-label="Generation payload JSON"')
+    expect(source).not.toContain('&quot;url_placeholders&quot;')
     expect(source).toContain('class="json-key"')
     expect(source).toContain(translated.placeholders[0]!.url)
     expect(source).toContain(`<${tag} src="${mediaUrl}"`)

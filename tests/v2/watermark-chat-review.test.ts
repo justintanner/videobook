@@ -115,20 +115,18 @@ describe('watermark chat review', () => {
     expect(html).not.toContain('confirm-sheet-foot')
     expect(html).toContain('aria-describedby="_R_0_-status"')
     expect(html).toContain('<span id="_R_0_-status" class="confirm-sheet-head-hints">')
-    expect(html).toContain('<span class="confirm-sheet-effect confirm-sheet-effect-default">Rebuilds playable proxy</span><span class="confirm-sheet-head-divider"')
+    expect(html).toContain('<div class="confirm-sheet-decisions"><span class="confirm-sheet-effect confirm-sheet-effect-default">Rebuilds playable proxy</span>')
     expect(html).toContain('class="confirm-sheet-apply">Apply <kbd>↵</kbd>')
   })
 
   it('gives the footer back the moment the sheet cannot apply', () => {
-    // Nothing to watermark: the header hands the hints and the effect chip back
-    // to a full-width footer, which is the sheet's only message channel.
     const html = renderWatermark({ includeQr: false, includeHandle: false })
     expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
     expect(html).toContain('<strong>Can’t apply — </strong>')
     expect(html).not.toContain('confirm-sheet-head-hints')
     expect(html).not.toContain('confirm-sheet-head-divider')
-    // The chip travels with them.
-    expect(html).toContain('<div class="confirm-sheet-aside"><span class="confirm-sheet-effect')
+    expect(html.indexOf('Rebuilds playable proxy')).toBeLessThan(html.indexOf('</header>'))
+    expect(html).not.toContain('confirm-sheet-aside')
     expect(html).toContain('disabled=""')
   })
 

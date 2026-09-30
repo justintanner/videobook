@@ -4155,19 +4155,32 @@ textarea:focus-visible {
   gap: 2px;
 }
 
-.inspector-header-actions .composer-panel-controls,
-.notebook-subject-panel-controls .composer-panel-controls {
-  min-height: 0;
-  padding: 0;
-  gap: 0;
+.inspector-header-action-host:empty {
+  display: none;
 }
 
-.inspector-header-actions .voice-captions-toggle,
-.notebook-subject-panel-controls .voice-captions-toggle {
+.inspector > header .composer-dock-close-labeled,
+.inspector > header .inspector-generation-header-actions > button {
+  display: inline-flex;
+  gap: 8px;
   width: auto;
-  height: 30px;
-  padding: 0 6px;
-  line-height: 1.6;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: rgba(25, 79, 49, 0.32);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.inspector-generation-header-actions {
+  margin-right: 6px;
+}
+
+.inspector > header .inspector-generation-header-actions > .confirm-sheet-apply {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(50, 147, 91, 0.16);
 }
 
 .inspector-cell-title svg,
@@ -7128,26 +7141,43 @@ textarea:focus-visible {
   grid-area: editor;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+}
+
+.generation-review-editor > section {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.generation-review-model-section {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
 }
 
 .generation-cell-inspector {
   min-height: 0;
   overflow: auto;
-  padding: 12px 19px 12px 17px;
+  padding: 8px 14px;
   scrollbar-width: thin;
 }
 
 .generation-cell-form {
   display: grid;
   min-width: 0;
-  gap: 10px;
+  gap: 8px;
 }
 
 .generation-review-prompt-section .inspector-prompt-field {
   min-height: 0;
   margin: 0;
+  gap: 4px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.generation-review-prompt-section .inspector-prompt-textarea {
+  display: block;
+  height: 100%;
 }
 
 .generation-review-prompt-section .inspector-prompt-header {
@@ -7180,28 +7210,20 @@ textarea:focus-visible {
 }
 
 .generation-cell-inspector > .inspector-cell-actions {
-  margin: 10px 0;
-  padding: 8px;
-}
-
-.generation-cell-inspector > .inspector-generation-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  background: #05150d;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
 }
 
 .confirm-generation .generation-review-source-section {
   grid-area: source;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 260px;
+  min-height: 240px;
   align-content: stretch;
 }
 
-/* Label above, scrolling field grid below: the label stays put while a long
-   settings list scrolls under it. */
 .generation-review-settings-section {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-content: stretch;
 }
 
@@ -7250,7 +7272,6 @@ textarea:focus-visible {
 .confirm-sheet-head > .confirm-sheet-address,
 .confirm-sheet-head > .confirm-sheet-effect,
 .confirm-sheet-head > .confirm-sheet-head-divider,
-.confirm-sheet-head > .confirm-sheet-head-hints,
 .confirm-sheet-head > .confirm-sheet-actions {
   flex: 0 0 auto;
 }
@@ -7265,11 +7286,18 @@ textarea:focus-visible {
 
 .confirm-sheet-head-hints {
   display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   color: #8fbba1;
   font-size: 10px;
   letter-spacing: 0.04em;
   white-space: nowrap;
+}
+
+.confirm-sheet-head-hints > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .confirm-sheet-head h2 {
@@ -7470,6 +7498,13 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.confirm-sheet-decisions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
 .confirm-sheet-actions > button,
 .confirm-sheet-aside > button {
   display: inline-flex;
@@ -7512,7 +7547,9 @@ textarea:focus-visible {
   cursor: not-allowed;
 }
 
-.confirm-sheet kbd {
+.confirm-sheet kbd,
+.generation-cell-inspector kbd,
+.inspector-header-actions kbd {
   display: inline-flex;
   min-width: 18px;
   height: 16px;
@@ -8477,23 +8514,38 @@ textarea:focus-visible {
 /* ---- generation ---- */
 
 .confirm-generation {
-  --generation-review-source-preview-size: 72px;
+  --generation-review-source-preview-size: 56px;
   display: grid;
   min-height: 0;
   grid-template-columns:
-    176px
+    152px
     minmax(0, 1.4fr)
     minmax(0, 1fr)
-    176px;
+    144px;
   grid-template-areas: 'inputs editor source estimate';
   grid-template-rows: auto;
-  gap: 12px;
+  gap: 10px;
   align-items: stretch;
 }
 
 .generation-review-prompt-section {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.confirm-generation[data-view='source'] {
+  grid-template-columns: 152px minmax(0, 1fr) 144px;
+  grid-template-areas: 'inputs content estimate';
+  grid-template-rows: auto;
+}
+
+.confirm-generation[data-view='source'] > .generation-review-editor,
+.confirm-generation[data-view='source'] > .generation-review-source-section {
+  grid-area: content;
+}
+
+.confirm-generation > [hidden] {
+  display: none;
 }
 
 .generation-review-prompt-section > label {
@@ -8504,7 +8556,7 @@ textarea:focus-visible {
 }
 
 .confirm-sheet .generation-review-prompt-section textarea {
-  min-height: 112px;
+  min-height: 84px;
   height: 100%;
 }
 
@@ -8653,6 +8705,12 @@ textarea:focus-visible {
     grid-template-rows: auto;
   }
 
+  .confirm-generation[data-view='source'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'inputs' 'content' 'estimate';
+    grid-template-rows: auto;
+  }
+
   .confirm-watermark-timing-row {
     grid-template-columns: 44px minmax(0, 1fr) 54px 12px 62px;
   }
@@ -8666,8 +8724,46 @@ textarea:focus-visible {
    goes -- the sheet's body already says what it is -- and the shortcuts drop
    off the buttons, where the footer still spells them out. */
 @media (max-width: 600px) {
+  .inspector:has(.generation-cell-inspector) > header {
+    height: auto;
+    min-height: var(--dock-header-h, 40px);
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .inspector:has(.generation-cell-inspector) .inspector-header-actions {
+    margin-left: auto;
+  }
+
+  .inspector > header .composer-dock-close-labeled,
+  .inspector > header .inspector-generation-header-actions > button {
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
   .confirm-sheet-head > .section-label {
     display: none;
+  }
+
+  .confirm-sheet-head {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .confirm-sheet-decisions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .confirm-sheet-decisions .confirm-sheet-effect {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    font-size: 8px;
   }
 
   .confirm-sheet-head .confirm-sheet-actions {
@@ -8685,7 +8781,7 @@ textarea:focus-visible {
 
 .generation-review-sources {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr));
   gap: 8px;
   min-width: 0;
 }
@@ -8778,7 +8874,7 @@ textarea:focus-visible {
 
 .generation-review-source-copy small,
 .generation-review-text-input small,
-.generation-review-model-section > small {
+.generation-review-voice-section small {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.45;
@@ -8842,7 +8938,7 @@ textarea:focus-visible {
 
 .generation-review-source-add {
   display: grid;
-  min-height: calc(var(--generation-review-source-preview-size) + 33px);
+  min-height: 40px;
   place-content: center;
   justify-items: center;
   gap: 5px;
@@ -8889,9 +8985,9 @@ textarea:focus-visible {
 }
 
 .generation-review-prompt-section textarea {
-  min-height: 112px;
+  min-height: 84px;
   padding: 9px 10px;
-  resize: vertical;
+  resize: none;
   font: inherit;
   line-height: 1.55;
 }
@@ -8944,7 +9040,7 @@ textarea:focus-visible {
    sections scroll or grow, they never clip. */
 .generation-review-settings {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
   gap: 8px;
   min-height: 0;
   overflow: auto;
@@ -8960,22 +9056,78 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.generation-review-toggle {
-  grid-template-columns: minmax(0, 1fr) auto;
+.generation-review-toggles {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px 18px;
+}
+
+.generation-review-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 32px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
+  color: #8fbba1;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.generation-review-toggle > span {
+  white-space: normal;
+}
+
+.generation-review-toggle:has(input:disabled) {
+  opacity: .5;
+  cursor: default;
 }
 
 .generation-review-toggle input {
-  width: auto;
+  appearance: none;
+  position: relative;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 16px;
   min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #527b63;
+  border-radius: 10px;
+  background: #162b20;
+  cursor: inherit;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.generation-review-toggle input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a3b9ac;
+  transition: transform 120ms ease;
+}
+
+.generation-review-toggle input:checked {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.generation-review-toggle input:checked::after {
+  transform: translateX(12px);
+  background: #092416;
+}
+
+.generation-review-toggle input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
 }
 
 .generation-review-defaults {
   display: grid;
-  min-height: 72px;
+  min-height: 32px;
   place-items: center;
   border: 1px dashed var(--line);
   color: var(--muted);
@@ -9009,21 +9161,56 @@ textarea:focus-visible {
 }
 
 .json-media-preview {
-  display: block;
-  width: min(100%, 280px);
-  margin: 8px 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: #020a06;
+  display: inline-block;
+  margin: 2px 6px;
+  vertical-align: middle;
 }
 
-.json-media-preview img,
-.json-media-preview video,
-.json-media-preview audio {
+.json-media-trigger {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: #020a06;
+  cursor: zoom-in;
+}
+
+.json-media-trigger .inspector-source-thumb {
+  display: grid;
+  width: 48px;
+  height: 36px;
+  margin: 0;
+  border: 0;
+}
+
+.json-media-trigger:hover,
+.json-media-trigger:focus-visible {
+  border-color: var(--green);
+  outline: 1px solid var(--green);
+}
+
+.json-media-popover {
+  position: fixed;
+  inset: auto;
+  width: min(360px, calc(100vw - 24px));
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--green);
+  background: #020a06;
+  box-shadow: 0 12px 36px #0009;
+}
+
+.json-media-popover img,
+.json-media-popover video,
+.json-media-popover audio {
   display: block;
   width: 100%;
-  max-height: 160px;
+  max-height: min(320px, calc(100dvh - 40px));
   object-fit: contain;
+}
+
+.json-media-popover img,
+.json-media-popover video {
+  height: min(320px, calc(100dvh - 40px));
 }
 
 .generation-review-json-status {
@@ -9045,7 +9232,7 @@ textarea:focus-visible {
 
 .generation-review-estimate-section > strong {
   color: #bdf2d4;
-  font-size: clamp(34px, 3.5vw, 58px);
+  font-size: clamp(28px, 2.6vw, 40px);
   font-weight: 400;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -10053,16 +10240,6 @@ textarea:focus-visible {
 
 .command-composer-dock-bar .composer-dock-close-divider {
   margin-left: auto;
-}
-
-.command-composer-dock-bar .composer-panel-controls {
-  min-height: 0;
-  padding: 0;
-  gap: 0;
-}
-
-.command-composer-dock-bar .voice-captions-toggle {
-  padding-left: 0;
 }
 
 .command-composer-dock-body {

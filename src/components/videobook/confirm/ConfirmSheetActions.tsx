@@ -20,9 +20,6 @@ export function ConfirmSheetActions({
 }) {
   return (
     <div className="confirm-sheet-actions">
-      <button type="button" disabled={busy} onClick={onCancel}>
-        Cancel <kbd>Esc</kbd>
-      </button>
       <button
         type="submit"
         form={applyFormId}
@@ -36,6 +33,9 @@ export function ConfirmSheetActions({
                 {failed ? 'Retry' : applyLabel} <kbd>↵</kbd>
               </>
             )}
+      </button>
+      <button type="button" disabled={busy} onClick={onCancel}>
+        Cancel <kbd>Esc</kbd>
       </button>
     </div>
   )

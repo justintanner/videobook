@@ -133,7 +133,7 @@ function replaceMentionTokens(
     const bare = normalizeNotebookReference(token)
     if (!bare) continue
     output = output.replace(
-      new RegExp(`@${escapeMentionToken(bare)}(?![\\w-])`, 'giu'),
+      new RegExp(`(?<![\\w./-])@?${escapeMentionToken(bare)}(?![\\w-])`, 'giu'),
       replacement,
     )
   }

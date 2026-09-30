@@ -51,6 +51,7 @@ type GenerationBodyProps = {
   promptEditor?: ReactNode
   inputFooter?: ReactNode
   compatibleModeIds?: ReadonlySet<string>
+  sourceVisible?: boolean
   onActionChange: (actionId: string) => void
   onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
@@ -152,6 +153,7 @@ export function GenerationBody({
   promptEditor,
   inputFooter,
   compatibleModeIds,
+  sourceVisible = false,
   onActionChange,
   onAddSource,
   onModeChange,
@@ -183,6 +185,8 @@ export function GenerationBody({
   const generalControls = showVoicePicker
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
     : draft.action.controls
+  const fieldControls = generalControls.filter((control) => control.kind !== 'boolean')
+  const toggleControls = generalControls.filter((control) => control.kind === 'boolean')
   const previewValue = recordValue(preview)
   const artifactAssets = previewAssets(sources, preview)
   const estimate = generationEstimate(preview)
@@ -200,7 +204,7 @@ export function GenerationBody({
     },
   }
   return (
-    <div className="confirm-generation">
+    <div className="confirm-generation" data-view={sourceVisible ? 'source' : 'form'}>
       <section className="confirm-section generation-review-input-section" aria-label="Inputs">
         <span className="confirm-section-label">Inputs</span>
         <div className="generation-review-sources">
@@ -268,8 +272,8 @@ export function GenerationBody({
         {inputFooter}
       </section>
 
-      <div className="generation-review-editor">
-        <section className="confirm-section generation-review-model-section" aria-label="Model">
+      <div className="confirm-section generation-review-editor" hidden={sourceVisible === true}>
+        <section className="generation-review-model-section" aria-label="Model">
           <label>
             <span className="confirm-section-label">Model</span>
             <select
@@ -303,14 +307,13 @@ export function GenerationBody({
               </select>
             </label>
           )}
-          <small>{draft.action.providerLabel} · {draft.action.model}</small>
         </section>
 
-        <section className="confirm-section generation-review-prompt-section" aria-label="Prompt">
+        <section className="generation-review-prompt-section" aria-label="Prompt">
           {promptEditor ?? <label>
             <span className="confirm-section-label">Prompt</span>
             <textarea
-              rows={5}
+              rows={3}
               value={draft.cell.prompt ?? ''}
               aria-invalid={promptLeaks.length > 0}
               disabled={busy}
@@ -330,10 +333,9 @@ export function GenerationBody({
           )}
         </section>
 
-        <section className="confirm-section generation-review-settings-section" aria-label="Settings">
-          <span className="confirm-section-label">Settings</span>
+        <section className="generation-review-settings-section" aria-label="Settings">
           <div className="generation-review-settings">
-            {generalControls.length > 0 ? generalControls.map((control) => (
+            {fieldControls.map((control) => (
               <GenerationControlField
                 key={control.name}
                 control={control}
@@ -345,14 +347,29 @@ export function GenerationBody({
                   : undefined}
                 onChange={(value) => onSettingChange(control.name, value)}
               />
-            )) : (
+            ))}
+            {generalControls.length === 0 && (
               <span className="generation-review-defaults">Provider defaults</span>
             )}
           </div>
+          {toggleControls.length > 0 && (
+            <div className="generation-review-toggles">
+              {toggleControls.map((control) => (
+                <GenerationControlField
+                  key={control.name}
+                  control={control}
+                  settings={settings}
+                  busy={busy}
+                  toggleClassName="generation-review-toggle"
+                  onChange={(value) => onSettingChange(control.name, value)}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         {voiceControl && voiceCatalog && (
-          <section className="confirm-section generation-review-voice-section" aria-label="Voice">
+          <section className="generation-review-voice-section" aria-label="Voice">
             <span className="confirm-section-label">Voice</span>
             {showVoicePicker && (
               <div
@@ -396,12 +413,12 @@ export function GenerationBody({
         )}
       </div>
 
-      <section className="confirm-section generation-review-source-section" aria-label="Source">
+      <section className="confirm-section generation-review-source-section" aria-label={sourceVisible ? 'Source' : 'Payload'}>
         <div className="confirm-section-heading">
-          <span>Source</span>
-          {previewStale && <small className="generation-review-json-stale">Needs refresh</small>}
+          <span>{sourceVisible ? 'Source' : 'Payload'}</span>
+          {(previewStale || previewLoading) && <small className="generation-review-json-stale" role="status">Updating…</small>}
         </div>
-        <div className="generation-review-json" tabIndex={0} aria-label="Generation source preview" aria-busy={previewLoading}>
+        <div className="generation-review-json" tabIndex={0} aria-label={sourceVisible ? 'Generation source preview' : 'Generation payload preview'} aria-busy={previewLoading}>
           {previewLoading ? (
             <span className="generation-review-json-status" role="status">Loading preview…</span>
           ) : previewError ? (
@@ -410,8 +427,8 @@ export function GenerationBody({
             </span>
           ) : (
             <RichJson
-              value={previewJson}
-              ariaLabel="Generation source JSON"
+              value={sourceVisible ? previewJson : previewValue?.payload ?? null}
+              ariaLabel={sourceVisible ? 'Generation source JSON' : 'Generation payload JSON'}
               artifactAssets={artifactAssets}
               mediaDisplay="preview"
             />
@@ -422,30 +439,28 @@ export function GenerationBody({
       <section className="confirm-section generation-review-estimate-section" aria-label="Estimate">
         <span className="confirm-section-label">Estimate</span>
         <strong>
-          {previewLoading
+          {previewLoading || previewStale
             ? '…'
-            : estimate.usd !== null && !estimate.unknown
+            : !previewError && estimate.usd !== null && !estimate.unknown
               ? `$${estimate.usd.toFixed(estimate.usd < 0.01 ? 4 : 2)}`
               : '—'}
         </strong>
         <span>{estimate.currency}</span>
         <small>
-          {previewLoading
-            ? 'Estimated provider cost'
+          {previewLoading || previewStale
+            ? 'Updating estimate…'
             : previewError || estimate.unknown || estimate.usd === null
               ? 'Cost estimate unavailable'
-              : previewStale
-                ? 'Prompt changed · refresh estimate'
-                : 'Estimated provider cost'}
+              : 'Estimated provider cost'}
         </small>
-        <button
+        {previewError && <button
           type="button"
           disabled={busy || previewLoading}
           onClick={onRefreshPreview}
         >
           <RefreshCw size={10} aria-hidden="true" />
-          {previewStale ? 'Refresh estimate' : 'Refresh'}
-        </button>
+          Retry preview
+        </button>}
       </section>
     </div>
   )

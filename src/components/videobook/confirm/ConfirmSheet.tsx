@@ -1,4 +1,5 @@
-import { Suspense, useContext, useId, useState, type ReactNode } from 'react'
+import { Suspense, useContext, useId, useState, type CSSProperties, type ReactNode } from 'react'
+import { PaneResizeHandle } from '../PaneResizeHandle'
 import { ComposerOutcomeContext } from '@/components/videobook/composer-outcome-context'
 import {
   confirmSheetStatus,
@@ -60,6 +61,7 @@ export function ConfirmSheet({
   const titleId = `${id}-title`
   const statusId = `${id}-status`
   const composer = useContext(ComposerOutcomeContext)
+  const [reviewHeight, setReviewHeight] = useState<number | null>(null)
   // Messages that predate this sheet belong to whatever came before it.
   const [staleOutcome] = useState(() => composer?.outcome ?? null)
   const [staleNotice] = useState(() => composer?.notice ?? null)
@@ -89,6 +91,7 @@ export function ConfirmSheet({
     <aside
       ref={sheetRef}
       className={`confirm-sheet confirm-sheet-${kind}`}
+      style={reviewHeight === null ? undefined : { '--confirm-review-height': `${reviewHeight}px` } as CSSProperties}
       role="dialog"
       aria-label={ariaLabel}
       aria-describedby={statusId}
@@ -108,7 +111,7 @@ export function ConfirmSheet({
           />
         )}
         address={address}
-        effect={hintsInHeader ? effect : null}
+        effect={effect}
         hints={hintsInHeader ? hints ?? <ConfirmSheetReadyHints /> : null}
         hintsId={hintsInHeader ? statusId : undefined}
         tag={tag}
@@ -123,7 +126,6 @@ export function ConfirmSheet({
       </div>
       {!hintsInHeader && (
         <ConfirmSheetFooter
-          effect={effect}
           hints={hints}
           onDismissStatus={dismissStatus}
           secondaryActions={secondaryActions}
@@ -131,6 +133,14 @@ export function ConfirmSheet({
           statusId={statusId}
         />
       )}
+      <PaneResizeHandle
+        label="Resize review and log"
+        targetSelector=".confirm-sheet"
+        edge="bottom"
+        minimum={180}
+        reserve={36}
+        onResize={setReviewHeight}
+      />
     </aside>
   )
 }

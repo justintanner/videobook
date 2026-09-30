@@ -4,10 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ComposerHistory,
-  ComposerHistoryControls,
 } from '../../src/components/videobook/ComposerHistory'
 import { ComposerHistoryChromeContext } from '../../src/components/videobook/composer-history-chrome'
-import { composerHistoryChromeHosted } from '../../src/videobook/composer-dock'
 import {
   COMPOSER_HISTORY_CAP,
   HISTORY_AUTO_CLOSE_MS,
@@ -143,7 +141,6 @@ describe('composerHistory', () => {
       phase: 'off',
       voicePresent: false,
       open: true,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(withCalls).toContain('>Routing chat<')
@@ -154,7 +151,6 @@ describe('composerHistory', () => {
       phase: 'connecting',
       voicePresent: true,
       open: true,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(empty).toContain('Opening your voice channel')
@@ -169,22 +165,19 @@ describe('composerHistory', () => {
       phase: 'review',
       voicePresent: true,
       open: true,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
-    expect(html).toContain('aria-label="Hide Captain’s Log"')
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-label="Hide Captain’s Log"/)
+    expect(html).toContain('aria-label="Message log"')
+    expect(html).not.toContain('voice-captions-toggle')
     expect(html).toContain('mcp-call-running')
     const closed = renderToStaticMarkup(createElement(ComposerHistory, {
       rows: composerHistory([caption({ id: 'u1', text: 'hello', sequence: 1 })], log),
       phase: 'speaking',
       voicePresent: true,
       open: false,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(closed).toContain(' hidden=""')
-    expect(closed).toContain('aria-label="Show Captain’s Log"')
     expect(closed).toContain('>hello</span>')
     expect(closed).toContain('mcp-call-running')
   })
@@ -228,7 +221,7 @@ describe('history auto-close', () => {
     heldTimer()
   })
 
-  it('uses a text history toggle without adding another close control', () => {
+  it('renders no toggle chrome and keeps one close control in the composer', () => {
     const log = settleMcpCall(started(emptyMcpCallLog, 1, 'chat'), 1, {
       phase: 'done',
       elapsedMs: 30,
@@ -242,60 +235,34 @@ describe('history auto-close', () => {
       phase: 'listening',
       voicePresent: true,
       open: true,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
-    expect(html).toContain('composer-panel-controls')
-    expect(html).toContain('aria-label="Hide Captain’s Log"')
+    expect(html).not.toContain('composer-panel-controls')
+    expect(html).not.toContain('voice-captions-toggle')
+    expect(html).not.toContain('Captain’s Log')
+    expect(html).toContain('aria-label="Message log"')
     expect(html).not.toContain('aria-label="Close chat"')
     expect(html).not.toContain('lucide-chevron-down')
-    expect(html.indexOf('composer-panel-controls')).toBeLessThan(html.indexOf('composer-history voice-captions'))
 
-    const hosted = {
-      idle: false,
-      hosted: true,
-      open: true,
-      captionId: 'hist',
-      onToggle: () => undefined,
-    }
     const hostedHtml = renderToStaticMarkup(createElement(
       ComposerHistoryChromeContext.Provider,
-      { value: hosted },
-      createElement('div', { className: 'inspector' },
-        createElement('header', null,
-          createElement('span', { className: 'inspector-cell-title' }, 'Image'),
-          createElement('div', { className: 'inspector-header-actions' },
-            createElement(ComposerHistoryControls),
-          ),
-        ),
-      ),
+      { value: { captionId: 'hist' } },
       createElement(ComposerHistory, {
         rows,
         phase: 'listening',
         voicePresent: true,
         open: true,
-        onToggle: () => undefined,
         onToggleCall: () => undefined,
       }),
     ))
-    const headerEnd = hostedHtml.indexOf('</header>')
-    expect(headerEnd).toBeGreaterThan(0)
-    expect(hostedHtml.slice(0, headerEnd)).toContain('composer-panel-controls')
-    expect(hostedHtml.slice(hostedHtml.indexOf('composer-history-panel')))
-      .not.toContain('composer-panel-controls')
+    expect(hostedHtml).toContain('id="hist"')
+    expect(hostedHtml).not.toContain('composer-panel-controls')
 
-    // An open dock always draws one header row -- a panel's own, or the dock
-    // bar -- so the strip is flattened into it rather than stacked beneath.
-    expect(composerHistoryChromeHosted({
-      dockOpen: true,
-      panelHasHeader: false,
-      reviewPriority: true,
-    })).toBe(true)
     const appCss = readFileSync(
       new URL('../../src/index.css', import.meta.url),
       'utf8',
     )
-    expect(appCss).toContain('.command-composer-dock-bar .composer-panel-controls {')
+    expect(appCss).not.toContain('.voice-captions-toggle')
     const composerTsx = readFileSync(
       new URL('../../src/components/videobook/CommandComposer.tsx', import.meta.url),
       'utf8',
@@ -312,7 +279,6 @@ describe('history auto-close', () => {
       phase: 'listening',
       voicePresent: true,
       open: true,
-      onToggle: () => undefined,
       onToggleCall: () => undefined,
     }))
     expect(html).toContain('data-role="user"')

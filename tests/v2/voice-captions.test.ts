@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { VoicePhase } from '../../server/src/voice-contract'
 import {
-  captionToggleLabel,
   captionsEmptyCopy,
 } from '../../src/videobook/voice-captions'
 
 describe('voice caption visibility helpers', () => {
-  it('names the control Hide Captain’s Log or Show Captain’s Log from visibility', () => {
-    expect(captionToggleLabel(true)).toBe('Hide Captain’s Log')
-    expect(captionToggleLabel(false)).toBe('Show Captain’s Log')
-  })
-
   it('covers empty-state copy for idle, live, waiting, review and error', () => {
     const phases: VoicePhase[] = ['off', 'connecting', 'listening', 'thinking', 'speaking', 'review', 'error']
     for (const phase of phases) {

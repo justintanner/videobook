@@ -15,7 +15,6 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
-import { ComposerHistoryControls } from '@/components/videobook/ComposerHistory'
 import type { ImageSubject, ImageSubjectMap } from '@/videobook/image-subject-map'
 import { capturePointerComposerFocus, restoreFocusElement } from '@/videobook/command-composer-focus'
 import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
@@ -985,7 +984,6 @@ export function NotebookMediaFullscreen({
                 /* Collapsed, this row is the whole workspace, so it carries the
                    controls the composer's own strip used to stack above it. */
                 <div className="notebook-subject-panel-controls">
-                  <ComposerHistoryControls />
                   <button
                     type="button"
                     className="notebook-subject-collapse"

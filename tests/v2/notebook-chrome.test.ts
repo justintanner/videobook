@@ -169,7 +169,7 @@ describe('notebook chrome tokens', () => {
     const review = rule(css, '.confirm-generation')
     expect(pixelCount(
       declaration(review, '--generation-review-source-preview-size'),
-    )).toBe(72)
+    )).toBe(56)
     const preview = rule(css, '.generation-review-source-preview')
     expect(declaration(preview, 'min-height'))
       .toBe('var(--generation-review-source-preview-size)')
@@ -184,7 +184,7 @@ describe('notebook chrome tokens', () => {
     expect(declaration(rule(css, '.generation-review-text-input'), 'min-height'))
       .toBe(cardCap)
     expect(declaration(rule(css, '.generation-review-source-add'), 'min-height'))
-      .toBe(cardCap)
+      .toBe('40px')
   })
 
   it('lets the generation settings box grow or scroll instead of clipping', () => {
@@ -194,11 +194,11 @@ describe('notebook chrome tokens', () => {
     // 132px fits a whole provider default, so 'Default · adaptive' and
     // 'Output format' stop truncating in a 328px column.
     expect(declaration(settings, 'grid-template-columns'))
-      .toBe('repeat(auto-fit, minmax(132px, 1fr))')
+      .toBe('repeat(auto-fit, minmax(min(100%, 132px), 1fr))')
     expect(declaration(settings, 'min-height')).toBe('0')
     expect(declaration(settings, 'overflow')).toBe('auto')
     const section = rule(css, '.generation-review-settings-section')
-    expect(declaration(section, 'grid-template-rows')).toBe('auto minmax(0, 1fr)')
+    expect(declaration(section, 'grid-template-rows')).toBe('minmax(0, 1fr)')
     const primary = rule(css, '.inspector-generation-primary')
     expect(declaration(primary, 'grid-template-columns'))
       .toBe('repeat(auto-fit, minmax(112px, 1fr))')
@@ -260,8 +260,8 @@ describe('notebook chrome tokens', () => {
       '--media-row-h: calc(var(--dock-h, 560px) - var(--dock-header-h, 40px) - 24px)',
     )
     expect(declaration(rule(css, '.inspector-media-body'), 'padding-bottom')).toBe('0')
-    expect(app).toContain('<ComposerHistoryControls />')
-    expect(fullscreen).toContain('<ComposerHistoryControls />')
+    expect(app).not.toContain('<ComposerHistoryControls />')
+    expect(fullscreen).not.toContain('<ComposerHistoryControls />')
   })
 
   it('gives the dock close one class both panels wear', () => {
@@ -269,7 +269,7 @@ describe('notebook chrome tokens', () => {
     expect(pixelCount(declaration(close, 'width'))).toBe(30)
     expect(pixelCount(declaration(close, 'height'))).toBe(30)
     expect(css).not.toContain('.inspector-dock-close')
-    expect(app).toContain('<ComposerDockClose />')
+    expect(app).toMatch(/<ComposerDockClose\s/)
   })
 
   it('overrides only the gutter token at the 720px breakpoint', () => {

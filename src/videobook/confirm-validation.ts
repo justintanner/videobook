@@ -97,7 +97,7 @@ export function generationValidation(input: GenerationValidationInput): ConfirmV
     return blocking('Write a prompt before applying.')
   }
   if (input.previewStale) {
-    return notice('The prompt changed since the last preview. Refresh the estimate, or apply and let the server revalidate.')
+    return VALID_CONFIRMATION
   }
   if (input.previewLoading) {
     return blocking('Waiting for the server preview.')
