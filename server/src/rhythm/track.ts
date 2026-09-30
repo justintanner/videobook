@@ -11,6 +11,7 @@ import {
   type RhythmOnset,
   type RhythmTempoAmbiguity,
 } from "./contract.js";
+import { energyCurve } from "./energy.js";
 import { beatPositions } from "./timing.js";
 
 const MIN_BPM = 55;
@@ -65,6 +66,7 @@ export function trackBeats(envelope: OnsetEnvelope): RhythmAnalysis {
     barSource: noBeats ? null : detectedMeter ? "detected" : "estimated",
     noBeats,
     lowConfidence,
+    energy: energyCurve(envelope),
   };
 }
 

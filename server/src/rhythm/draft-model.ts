@@ -13,8 +13,36 @@ export const musicDraftOptionsSchema = z.object({
   preserve_clip_ids: z.array(z.string().uuid()).default([]),
   reuse_sources: z.boolean().default(false),
   allow_retiming: z.boolean().default(false),
+  strategy: z.enum(["beat_interval", "follow_song_energy"]).default("beat_interval"),
+  analysis: z.object({
+    music_analysis_id: z.string().min(1),
+    moments: z.array(z.object({ artifact_id: z.string().uuid(), moments_id: z.string().min(1) })).max(24).optional(),
+  }).optional(),
 });
 export type MusicDraftOptions = z.infer<typeof musicDraftOptionsSchema>;
+export type MusicDraftOptionsInput = z.input<typeof musicDraftOptionsSchema>;
+
+export interface EnergyPlanSegment {
+  startFrame: number;
+  endFrame: number;
+  tier: "low" | "mid" | "high";
+  interval: number;
+}
+
+export interface DraftEnergyPlan {
+  strategy: "follow_song_energy";
+  musicAnalysisId: string;
+  segments: EnergyPlanSegment[];
+}
+
+export interface RankedSourceMoment {
+  artifactId: string;
+  shotId: string;
+  startSeconds: number;
+  endSeconds: number;
+  score: number;
+  quality: number;
+}
 export interface MusicVideoDraft {
   plan: {
     planVersion: 1;
@@ -34,4 +62,6 @@ export interface MusicVideoDraft {
   shots: Array<{ clipId: string; artifactId: string; startFrame: number; endFrame: number; sourceStartSeconds: number; sourceEndSeconds: number; speed: number }>;
   uncovered: Array<{ startFrame: number; endFrame: number }>;
   warnings: string[];
+  energyPlan?: DraftEnergyPlan;
+  sourceMoments?: RankedSourceMoment[];
 }

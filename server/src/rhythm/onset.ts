@@ -28,9 +28,13 @@ export function createOnsetAccumulator(sampleRate = RHYTHM_SAMPLE_RATE): {
   const real = new Float64Array(RHYTHM_WINDOW_SAMPLES);
   const imag = new Float64Array(RHYTHM_WINDOW_SAMPLES);
   const strength: number[] = [];
+  const rms: number[] = [];
   let incoming: Float32Array = new Float32Array(0);
 
   const emitFrame = (): void => {
+    let squares = 0;
+    for (let index = 0; index < RHYTHM_WINDOW_SAMPLES; index += 1) squares += window[index]! * window[index]!;
+    rms.push(Math.sqrt(squares / RHYTHM_WINDOW_SAMPLES));
     for (let index = 0; index < RHYTHM_WINDOW_SAMPLES; index += 1) {
       real[index] = window[index]! * HANN[index]!;
       imag[index] = 0;
@@ -81,6 +85,7 @@ export function createOnsetAccumulator(sampleRate = RHYTHM_SAMPLE_RATE): {
         hopSamples: RHYTHM_HOP_SAMPLES,
         windowSamples: RHYTHM_WINDOW_SAMPLES,
         strength: raw,
+        rms: Float32Array.from(rms),
         frameCount: raw.length,
       };
     },

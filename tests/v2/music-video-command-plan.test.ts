@@ -604,7 +604,8 @@ describe('music-video canonical sequence plans', () => {
     })
     const options: MusicDraftOptions = { track_id: videoTrack.trackId, start_frame: 0, end_frame: 300,
       sources: [{ artifact_id: video.artifactId }, { artifact_id: video2.artifactId }], interval: 4, unit: 'beats',
-      minimum_shot_frames: 8, preserve_existing: true, preserve_clip_ids: [], reuse_sources: false, allow_retiming: false }
+      minimum_shot_frames: 8, preserve_existing: true, preserve_clip_ids: [], reuse_sources: false, allow_retiming: false,
+      strategy: 'beat_interval' }
     const make = (overrides: Partial<MusicDraftOptions> = {}) => planMusicVideo(engine, { ...options, ...overrides }, engine.sequences.getPrimary().revision, rhythm.revision, 'draft-test', 'ui')
     return { engine, video, video2, master, videoTrack, rhythm, options, make }
   }

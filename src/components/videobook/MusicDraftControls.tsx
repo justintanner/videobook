@@ -38,7 +38,7 @@ export function MusicDraftControls({ sources, trackId, startFrame, endFrame, fps
       onPlan({ track_id: trackId, start_frame: Math.round(Number(start || startFrame / fps) * fps), end_frame: Math.round(Number(end || endFrame / fps) * fps),
         sources: sources.map((source) => ({ artifact_id: source.artifactId })), interval, unit,
         minimum_shot_frames: Math.max(1, Math.round(Number(minimum) * fps)), preserve_existing: preserve,
-        preserve_clip_ids: [], reuse_sources: reuse, allow_retiming: retime })
+        preserve_clip_ids: [], reuse_sources: reuse, allow_retiming: retime, strategy: 'beat_interval' })
     }}>
       <div className="music-rhythm-row">
         <label>From (s)<input aria-label="Draft start seconds" type="number" min="0" step="any" placeholder={(startFrame / fps).toFixed(2)} value={start} onChange={(event) => setStart(event.target.value)} /></label>

@@ -31,7 +31,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
     "extract_first_frame", "extract_last_frame", "extract_frame",
     "extract_notebook_frame", "splice_video", "smooth_scene_concat",
-    "analyze_video", "render_video", "get_render_settings", "create_watermark_card",
+    "analyze_video", "analyze_editing_moments", "get_editing_moments", "render_video", "get_render_settings", "create_watermark_card",
     "apply_watermark", "get_watermark_config",
   ],
   Audio: [

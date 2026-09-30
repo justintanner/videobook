@@ -1,5 +1,5 @@
 export const RHYTHM_ANALYZER_ID = "videobook-spectral-flux-dp";
-export const RHYTHM_ANALYZER_VERSION = "3";
+export const RHYTHM_ANALYZER_VERSION = "4";
 export const RHYTHM_SCHEMA_VERSION = 1;
 export const RHYTHM_SAMPLE_RATE = 22_050;
 export const RHYTHM_WINDOW_SAMPLES = 1_024;
@@ -37,6 +37,13 @@ export interface RhythmResources {
   durationSeconds: number;
 }
 
+export interface RhythmEnergy {
+  algorithmId: string;
+  algorithmVersion: string;
+  hopSeconds: number;
+  values: number[];
+}
+
 export interface RhythmAnalysis {
   schemaVersion: typeof RHYTHM_SCHEMA_VERSION;
   analyzerId: typeof RHYTHM_ANALYZER_ID;
@@ -55,6 +62,7 @@ export interface RhythmAnalysis {
   barSource: "detected" | "estimated" | null;
   noBeats: boolean;
   lowConfidence: boolean;
+  energy: RhythmEnergy | null;
   resources?: RhythmResources;
 }
 
@@ -63,5 +71,13 @@ export interface OnsetEnvelope {
   hopSamples: number;
   windowSamples: number;
   strength: Float32Array;
+  rms: Float32Array;
   frameCount: number;
 }
+
+export const ENERGY_ALGORITHM_ID = "videobook-rms-energy";
+export const ENERGY_ALGORITHM_VERSION = "1";
+export const SECTION_DETECTOR_ID = "videobook-energy-sections";
+export const SECTION_DETECTOR_VERSION = "1";
+export const SECTION_LABELER_ID = "videobook-section-labeler";
+export const SECTION_LABELER_VERSION = "1";

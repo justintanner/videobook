@@ -188,6 +188,7 @@ describe('music analysis and rhythm persistence', () => {
       analyzerVersion: `videobook-spectral-flux-dp@${version}`, durationSeconds: source.durationSeconds,
       beats: version === '1' ? [] : [{ timeSeconds: 0.5, confidence: 0.2 }], bpm: null, confidence: 0.75,
       bars: null, beatsPerBar: null, barSource: null, waveform: [], lowConfidence: true,
+      energy: null, sections: null,
     }
     expect(await engine.metadata.artifacts.write(id, `music.analysis.${legacyId}`, legacy)).toMatchObject({ ok: true })
     expect(await readMusicAnalysis(engine, id)).toMatchObject({ status: 'missing', analysis: null })

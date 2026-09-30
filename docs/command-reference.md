@@ -8,15 +8,16 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (311)
+## MCP endpoints (313)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `alive_captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.
+- `analyze_editing_moments` — Analyze selected footage in a background job for editing: timestamped shot boundaries, per-shot motion, subject-change candidates, usable source ranges and ranked source moments. Reuses analyze_video summaries and the temporal search index as context; vision data stays approximate and never supplies beat timings. Reusing results for unchanged sources
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
-- `analyze_music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio
+- `analyze_music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio. Pass sections to also request an energy curve, candidate section boundaries and suggested section labels (intro, verse, chorus, drop); labels are suggestions with provenance and may use a paid model. Results stay optional: beat editing works without them
 - `analyze_video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
@@ -168,11 +169,12 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_book` — Read the current book identity
 - `get_character_entity` — Read a reusable character
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
+- `get_editing_moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
 - `get_legacy_migration` — Read durable migration progress, job state, and the completed source archive link
-- `get_music_analysis` — Read cached music beats, waveform and analysis job status for the current source audio
+- `get_music_analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
 - `get_primary_sequence` — Read the canonical primary sequence
@@ -322,7 +324,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (383; 145 dedicated command routes)
+## Slash actions (385; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -331,9 +333,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/alive` — Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals; UI: `open_alive_captions`
 - `/alive-captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.; MCP: `alive_captions`
+- `/analyze-editing-moments` — Analyze selected footage in a background job for editing: timestamped shot boundaries, per-shot motion, subject-change candidates, usable source ranges and ranked source moments. Reuses analyze_video summaries and the temporal search index as context; vision data stays approximate and never supplies beat timings. Reusing results for unchanged sources; MCP: `analyze_editing_moments`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
-- `/analyze-music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio; MCP: `analyze_music`
+- `/analyze-music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio. Pass sections to also request an energy curve, candidate section boundaries and suggested section labels (intro, verse, chorus, drop); labels are suggestions with provenance and may use a paid model. Results stay optional: beat editing works without them; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.; MCP: `analyze_video`
 - `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
@@ -508,11 +511,12 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-book` — Read the current book identity; MCP: `get_book`
 - `/get-character-entity` — Read a reusable character; MCP: `get_character_entity`
 - `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`
+- `/get-editing-moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source; MCP: `get_editing_moments`
 - `/get-google-flow-character` — Retrieve normalized details for a single Google Flow character by ref.; MCP: `get_google_flow_character`
 - `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
 - `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
 - `/get-legacy-migration` — Read durable migration progress, job state, and the completed source archive link; MCP: `get_legacy_migration`
-- `/get-music-analysis` — Read cached music beats, waveform and analysis job status for the current source audio; MCP: `get_music_analysis`
+- `/get-music-analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio; MCP: `get_music_analysis`
 - `/get-notebook` — Read a notebook graph; MCP: `get_notebook`
 - `/get-notebook-cell-details` — Return selected-cell details including raw Dolt row, edges, and action validation; MCP: `get_notebook_cell_details`
 - `/get-primary-sequence` — Read the canonical primary sequence; MCP: `get_primary_sequence`

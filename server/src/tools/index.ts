@@ -10,6 +10,7 @@ import { semanticSearchDefs } from "./semantic-search.js";
 import { commandPlanDefs } from "./command-plan.js";
 import { musicDraftDefs } from "./music-draft.js";
 import { musicAnalysisDefs } from "./music-analysis.js";
+import { editingMomentsDefs } from "./editing-moments.js";
 import { sequenceRhythmDefs } from "./sequence-rhythm.js";
 import { exportSequenceDefs } from "./export-sequence.js";
 import { apiStatusDef } from "./api-status.js";
@@ -511,6 +512,7 @@ export function getAllToolDefs(
     ...musicAnalysisDefs(engine),
     ...musicDraftDefs(engine),
     ...sequenceRhythmDefs(engine),
+    ...editingMomentsDefs(engine),
     ...semanticSearchDefs(engine, books),
     ...mediaLibraryDefs(books),
     ...videobookDomainDefs(engine, books),

@@ -2,16 +2,18 @@ import { withNotebookMutation } from "../notebook-mutations.js";
 import { v5 as uuidv5 } from "uuid";
 import { findPrimaryMediaFile, MVP_CONTRACT_VERSION, type Engine, type EditOperation, type SequenceClip, type SourceSurface, type TimedSequenceClip } from "videobook-engine";
 import { sequenceContinuationRevision } from "../tools/command-plan.js";
+import { MOMENTS_MAX_RANKED, readEditingMoments, type EditingMoments } from "../editing-moments.js";
 import { cachedMusicAnalysis, musicSource } from "./music-analysis.js";
 import { readSequenceRhythm } from "./sequence-rhythm.js";
-import { effectiveMarkers, soundtrackClip, timelineMarkers } from "./timing.js";
-import { musicDraftOptionsSchema, type MusicDraftOptions, type MusicVideoDraft } from "./draft-model.js";
+import { effectiveMarkers, frameAtSourceTime, soundtrackClip, timelineMarkers } from "./timing.js";
+import { musicDraftOptionsSchema, type MusicDraftOptionsInput, type MusicVideoDraft, type DraftEnergyPlan, type EnergyPlanSegment, type RankedSourceMoment } from "./draft-model.js";
+import { energySegments, type EnergySegment, type EnergyTier } from "./energy.js";
 import { fittedTransform } from "./visual-fit.js";
 
 const namespace = "5cc43cf4-f4bf-4dce-aa1e-a8105ae53087";
 const endOf = (clip: SequenceClip) => clip.timelineStartFrame + clip.durationFrames;
 
-export async function planMusicVideo(engine: Engine, input: MusicDraftOptions, expectedSequence: string, expectedRhythm: string, actor: string, sourceSurface: SourceSurface): Promise<MusicVideoDraft> {
+export async function planMusicVideo(engine: Engine, input: MusicDraftOptionsInput, expectedSequence: string, expectedRhythm: string, actor: string, sourceSurface: SourceSurface): Promise<MusicVideoDraft> {
   const options = musicDraftOptionsSchema.parse(input);
   const sequence = engine.sequences.getPrimary();
   const contentRevision = sequenceContinuationRevision(sequence);
@@ -24,6 +26,10 @@ export async function planMusicVideo(engine: Engine, input: MusicDraftOptions, e
   if (source.objectHash !== master.source.range.objectHash) throw new Error("The soundtrack source changed. Replace the timeline clip first.");
   const analysis = await cachedMusicAnalysis(engine, source);
   if (!rhythm.settings.correction && (!analysis || analysis.lowConfidence)) throw new Error("Analyze the song and confirm uncertain beats with a manual grid before making a draft.");
+  if (options.analysis && (!analysis || analysis.analysisId !== options.analysis.music_analysis_id)) {
+    throw new Error("The referenced music analysis is stale; analyze the current soundtrack before planning with it.");
+  }
+  const moments = await resolveMoments(engine, options);
   const markers = timelineMarkers(master, effectiveMarkers(master, rhythm.settings, analysis), sequence);
   const musical = markers.filter((marker) => options.unit === "beats" || marker.bar);
   if (musical.length < 2) throw new Error(options.unit === "bars" ? "Confirm bar starts in Soundtrack before using bars." : "Add at least two beat markers before making a draft.");
@@ -69,7 +75,18 @@ export async function planMusicVideo(engine: Engine, input: MusicDraftOptions, e
   const uncovered: MusicVideoDraft["uncovered"] = [];
   const warnings = new Set<string>();
   let sourceIndex = 0;
-  const intervalFrames = musical.filter((_, index) => index % options.interval === 0).map((marker) => marker.frame);
+  const energy = options.strategy === "follow_song_energy"
+    ? analysis?.energy?.values.length
+      ? { segments: energySegments(analysis.energy, analysis.sections, analysis.durationSeconds) }
+      : null
+    : null;
+  if (options.strategy === "follow_song_energy" && !energy) {
+    throw new Error("Follow-song-energy planning needs an analysis reference with an energy curve; run analyze_music on the current soundtrack first.");
+  }
+  if (energy && !analysis?.sections?.candidates.length) warnings.add("The analysis has no section boundaries; the whole range keeps your base interval.");
+  const intervalFrames = energy
+    ? energyCutFrames(musical, energy.segments, options.interval)
+    : musical.filter((_, index) => index % options.interval === 0).map((marker) => marker.frame);
   for (const gap of gaps) {
     const boundaries = [gap.start];
     for (const frame of intervalFrames) {
@@ -115,6 +132,17 @@ export async function planMusicVideo(engine: Engine, input: MusicDraftOptions, e
   if (!shots.length) throw new Error("No source is long enough for this interval. Choose shorter cuts, more footage, or explicitly allow retiming.");
   if (uncovered.length) warnings.add(`${uncovered.length} spans have no footage. Add footage, shorten the interval, or enable reuse before applying.`);
   if (!markers.some((marker) => marker.frame === options.end_frame)) warnings.add("The range ends between beats; the last shot ends exactly at your selected out point.");
+  let energyPlan: DraftEnergyPlan | undefined;
+  if (energy && analysis) {
+    const segments: EnergyPlanSegment[] = [];
+    for (const segment of energy.segments) {
+      const start = Math.max(options.start_frame, frameAtSourceTime(master, segment.startSeconds, fps));
+      const end = Math.min(options.end_frame, frameAtSourceTime(master, segment.endSeconds, fps));
+      if (end <= start) continue;
+      segments.push({ startFrame: start, endFrame: end, tier: segment.tier, interval: segmentInterval(segment.tier, options.interval, energy.segments.length) });
+    }
+    energyPlan = { strategy: "follow_song_energy", musicAnalysisId: analysis.analysisId, segments };
+  }
   const intent = { intentVersion: MVP_CONTRACT_VERSION, commandId, sequenceId: sequence.sequenceId, baseRevision: snapshot, actor, sourceSurface, confirmationPolicy: "always" as const, operations };
   const preview = engine.edits.preview(intent);
   if (!preview.ok) throw new Error(preview.error.message);
@@ -126,7 +154,41 @@ export async function planMusicVideo(engine: Engine, input: MusicDraftOptions, e
       stages: [{ stageId: `${commandId}:edit:0`, kind: "edit", summary, intent }], confirmation: { required: true, policy: "always", reason: "Review the music-video draft before replacing footage" } },
     preview: preview.value, sequence: { ...sequence, clips: [...sequence.clips.filter((clip) => !removed.includes(clip)), ...inserted] },
     rhythmRevision: rhythm.revision, sequenceContentRevision: contentRevision, shots, uncovered, warnings: [...warnings, ...preview.value.warnings.map((warning) => warning.message)],
+    ...(energyPlan ? { energyPlan } : {}),
+    ...(moments.length ? { sourceMoments: moments } : {}),
   };
+}
+
+function segmentInterval(tier: EnergyTier, base: number, segmentCount: number): number {
+  if (segmentCount <= 1) return base;
+  const multiplier = tier === "high" ? 1 : tier === "mid" ? 2 : 4;
+  return Math.min(8, base * multiplier);
+}
+
+function energyCutFrames(markers: Array<{ frame: number; timeSeconds: number }>, segments: EnergySegment[], base: number): number[] {
+  const selected: number[] = [];
+  for (const segment of segments) {
+    const inside = markers.filter((marker) => marker.timeSeconds >= segment.startSeconds && marker.timeSeconds < segment.endSeconds);
+    const interval = segmentInterval(segment.tier, base, segments.length);
+    inside.forEach((marker, index) => {
+      if (index % interval === 0) selected.push(marker.frame);
+    });
+  }
+  return [...new Set(selected)].sort((left, right) => left - right);
+}
+
+async function resolveMoments(engine: Engine, options: MusicDraftOptionsInput): Promise<RankedSourceMoment[]> {
+  const ranked: RankedSourceMoment[] = [];
+  for (const ref of options.analysis?.moments ?? []) {
+    const doc: EditingMoments | null = await readEditingMoments(engine, ref.artifact_id, ref.moments_id);
+    if (!doc) throw new Error("A referenced moments analysis is stale or missing; analyze that footage again before planning with it.");
+    for (const moment of doc.moments) {
+      ranked.push({ artifactId: doc.artifactId, shotId: moment.shotId, startSeconds: moment.startSeconds, endSeconds: moment.endSeconds, score: moment.score, quality: moment.quality });
+    }
+  }
+  return ranked
+    .sort((left, right) => right.score - left.score || left.artifactId.localeCompare(right.artifactId) || left.startSeconds - right.startSeconds)
+    .slice(0, MOMENTS_MAX_RANKED);
 }
 
 export async function commitMusicVideo(engine: Engine, intent: import("videobook-engine").EditIntent, previewHash: string, rhythmRevision: string, sequenceContentRevision: string) {
