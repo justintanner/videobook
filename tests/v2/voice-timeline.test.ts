@@ -64,6 +64,37 @@ describe('voice performance timeline', () => {
     expect(marks.find((mark) => mark.stage === 'fallback')).toBeUndefined()
   })
 
+  it('records pre-turn decoded output as activation audio outside reply latencies', () => {
+    const timeline = new VoiceTimeline()
+    timeline.connectStart()
+    timeline.mediaReady()
+    timeline.firstDecodedAudio()
+    const marks = voiceMarksFromPerformance()
+    const stages = marks.map((mark) => mark.stage)
+    expect(stages).toContain('activation-audio')
+    expect(stages).not.toContain('first-audio')
+    expect(stages).not.toContain('utterance-end-to-decoded-audio')
+    const summary = summarizeVoiceMarks(marks)
+    expect(summary.utteranceEndToDecodedAudioMs).toEqual([])
+    expect(summary.utteranceEndToDecodedAudio).toEqual({ sampleCount: 0 })
+    expect(summary.stages['activation-audio']).toEqual(expect.any(Number))
+  })
+
+  it('measures decoded audio only after a detected turn', () => {
+    const timeline = new VoiceTimeline()
+    timeline.connectStart()
+    timeline.mediaReady()
+    timeline.firstDecodedAudio()
+    const utteranceEnd = performance.now() - 40
+    timeline.turnDetection(utteranceEnd)
+    timeline.firstDecodedAudio(utteranceEnd)
+    const marks = voiceMarksFromPerformance()
+    expect(marks.filter((mark) => mark.stage === 'first-audio')).toHaveLength(1)
+    const summary = summarizeVoiceMarks(marks)
+    expect(summary.utteranceEndToDecodedAudioMs).toHaveLength(1)
+    expect(summary.utteranceEndToDecodedAudioMs[0]).toBeGreaterThan(0)
+  })
+
   it('itemizes fallback separately and omits reply percentiles when there are no samples', () => {
     const timeline = new VoiceTimeline()
     timeline.connectStart()

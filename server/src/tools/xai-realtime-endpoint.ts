@@ -1,4 +1,3 @@
-import { once } from "node:events";
 import { WebSocket, WebSocketServer } from "ws";
 
 export interface XaiEndpointEvent {
@@ -44,15 +43,23 @@ export function sendActivationResponse(send: (event: unknown) => void, options: 
 }
 
 export class XaiRealtimeEndpoint {
-  private readonly wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  private readonly wss: WebSocketServer;
+  private readonly listening: Promise<string>;
   private readonly connections: WebSocket[] = [];
+  private sessions = 0;
   readonly sent: XaiEndpointEvent[] = [];
   onActivation: ((send: (event: unknown) => void, item: Record<string, unknown>) => void) | null = null;
 
-  async listen(): Promise<string> {
-    await once(this.wss, "listening");
-    const address = this.wss.address();
-    if (!address || typeof address === "string") throw new Error("No endpoint address");
+  constructor() {
+    this.wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const { promise, resolve, reject } = Promise.withResolvers<string>();
+    this.listening = promise;
+    this.wss.once("error", reject);
+    this.wss.once("listening", () => {
+      const address = this.wss.address();
+      if (!address || typeof address === "string") { reject(new Error("No endpoint address")); return; }
+      resolve(`ws://127.0.0.1:${address.port}`);
+    });
     this.wss.on("connection", socket => {
       this.connections.push(socket);
       socket.on("message", data => {
@@ -61,11 +68,15 @@ export class XaiRealtimeEndpoint {
         const send = (outgoing: unknown) => socket.send(JSON.stringify(outgoing));
         if (event.type === "session.update") send({ type: "session.updated", event_id: "configured" });
         if (event.type === "conversation.item.create" && event.item?.type === "force_message") {
-          (this.onActivation ?? ((activationSend: (event: unknown) => void) => sendActivationResponse(activationSend)))(send, event.item);
+          const index = this.sessions += 1;
+          (this.onActivation ?? ((activationSend: (event: unknown) => void) => sendActivationResponse(activationSend, { responseId: `activation-response-${index}`, itemId: `activation-item-${index}` })))(send, event.item);
         }
       });
     });
-    return `ws://127.0.0.1:${address.port}`;
+  }
+
+  listen(): Promise<string> {
+    return this.listening;
   }
 
   get socket(): WebSocket {

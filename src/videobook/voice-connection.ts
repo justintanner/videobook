@@ -202,12 +202,15 @@ export class VoiceConnection {
     })
     void this.readEvents(result)
     await this.pcm.start(result, this.abort.signal)
-    if (!this.stopped) {
-      window.clearTimeout(this.deadline)
-      this.mark('connected')
-      this.timeline.mediaReady()
-      this.updatePhase('listening')
-    }
+    if (!this.stopped) this.connected()
+  }
+
+  private connected() {
+    window.clearTimeout(this.deadline)
+    this.mark('connected')
+    this.timeline.mediaReady()
+    this.updatePhase('listening')
+    void this.post('ready', {})
   }
 
   private async startWebRtc(microphone: MediaStream) {
@@ -239,10 +242,7 @@ export class VoiceConnection {
     })
     this.listen(this.channel, 'open', () => {
       if (this.stopped) return
-      window.clearTimeout(this.deadline)
-      this.mark('connected')
-      this.timeline.mediaReady()
-      this.updatePhase('listening')
+      this.connected()
     })
     this.listen(this.channel, 'close', () => { if (!this.stopped) this.stop('Voice channel closed. Start voice again.', true) })
     await peer.setLocalDescription(await peer.createOffer())

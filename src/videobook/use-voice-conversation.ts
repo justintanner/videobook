@@ -64,7 +64,6 @@ export function useVoiceConversation(options: VoiceConversationOptions) {
     if (connectionRef.current?.active) { stop(); return }
     const current = latest.current
     if (!current.available || current.disabled) return
-    setCaptions([])
     setProvider(null)
     setFallbackReason(undefined)
     setRetrying(false)

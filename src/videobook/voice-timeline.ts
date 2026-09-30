@@ -92,6 +92,10 @@ export class VoiceTimeline {
   }
 
   firstDecodedAudio(microphoneSignalEndedAt?: number): void {
+    if (this.turnAt === 0) {
+      this.mark('activation-audio')
+      return
+    }
     if (this.utteranceEndAt === 0 && microphoneSignalEndedAt && microphoneSignalEndedAt > 0) {
       this.utteranceEndAt = microphoneSignalEndedAt
     }
