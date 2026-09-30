@@ -197,9 +197,11 @@ describe("voice session boundaries", () => {
     // the speaker to recite a revision hash the cell details never display.
     expect(session.instructions).toMatch(/Never ask the user for a parameter the discovered schema marks optional/u);
     expect(session.instructions).toMatch(/expected_revision in particular is an optional staleness guard, never a precondition/u);
-    // Padding and apology are what made the copilot unbearable to talk to.
     expect(session.instructions).toMatch(/Never apologize/u);
-    expect(session.instructions).toMatch(/The outcome comes first and is never traded for the joke/u);
+    expect(session.instructions).toMatch(/Never joke or add an aside/u);
+    expect(session.instructions).toMatch(/'Affirmative\.' 'Negative\.' 'Complete\.' 'Standing by\.'/u);
+    expect(session.instructions).toMatch(/'Unable to comply\. <reason>\.' 'Specify <detail>\.'/u);
+    expect(session.instructions).toMatch(/When the user asks for longer output \(a count, a list, a read-back\), give all of it/u);
     // Both providers have to be the same character, not two personalities.
     expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).instructions).toBe(session.instructions);
   });
@@ -704,10 +706,10 @@ describe("voice session boundaries", () => {
         const { events, reading } = await openEventStream(id, token);
         await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
         await expect.poll(() => events.some(event => event.type === "caption" && event.caption.role === "assistant" && event.caption.final)).toBe(true);
-        const interrupt = await fetch(`${origin}/api/voice/${id}/interrupt`, { method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: JSON.stringify({ responseId: "activation-response", itemId: "activation-item", audioEndMs: 200 }) });
+        const interrupt = await fetch(`${origin}/api/voice/${id}/interrupt`, { method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: JSON.stringify({ responseId: "activation-response-1", itemId: "activation-item-1", audioEndMs: 200 }) });
         expect(interrupt.status).toBe(204);
         await expect.poll(() => endpoint.sent.some(event => event.type === "conversation.item.truncate")).toBe(true);
-        endpoint.send({ type: "conversation.item.truncated", event_id: "truncated", item_id: "activation-item", response_id: "activation-response" });
+        endpoint.send({ type: "conversation.item.truncated", event_id: "truncated", item_id: "activation-item-1", response_id: "activation-response-1" });
         await expect.poll(() => events.some(event => event.type === "caption" && event.caption.interrupted)).toBe(true);
         expect(events.some(event => event.type === "error" || event.type === "closed")).toBe(false);
         await expect.poll(() => engine.logs.read("voice-chat").filter(entry => entry.sessionId === id).length).toBe(0);
