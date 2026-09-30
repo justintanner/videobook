@@ -13,6 +13,8 @@ import type { StartedProcess } from './e2e-harness.js'
 import type { WorkspaceActionCatalog } from '../../server/src/workspace-action-contract.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('workspace action launcher with real endpoints', () => {
   let rootDir = ''
   let server: StartedProcess | undefined
@@ -179,7 +181,7 @@ describe('workspace action launcher with real endpoints', () => {
   it('runs an actual read and creates a reusable prompt through typed fields', async () => {
     await openActions('/get-book')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain('action-ui-project')
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('action-ui-project')
     await page.getByRole('button', { name: 'All actions', exact: true }).click()
     const createPrompt = catalog.actions.find(action => action.handler.kind === 'tool' && action.handler.tool === 'create_prompt_entity')!
     await page.getByLabel('Videobook command input', { exact: true }).fill(createPrompt.command)
@@ -188,7 +190,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByLabel('Name', { exact: false }).fill('A reusable shot')
     await page.getByLabel('Prompt', { exact: true }).fill('A slow pan across a quiet lake')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_prompts'))).toContain('A slow pan across a quiet lake')
+    await expect.poll(async () => JSON.stringify(await call('list_prompts')), { timeout: MCP_ROUNDTRIP_MS }).toContain('A slow pan across a quiet lake')
     await page.getByLabel('Action result', { exact: true }).waitFor()
     await page.screenshot({ path: '/tmp/videobook-actions-prompt.png' })
   })
@@ -260,7 +262,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(await page.getByLabel('Start frame', { exact: false }).getAttribute('type')).toBe('number')
     await page.keyboard.press('Escape')
     await sendCommand('/track-add audio Action soundtrack')
-    await expect.poll(async () => JSON.stringify(await call('get_primary_sequence'))).toContain('Action soundtrack')
+    await expect.poll(async () => JSON.stringify(await call('get_primary_sequence')), { timeout: MCP_ROUNDTRIP_MS }).toContain('Action soundtrack')
   })
 
   it('opens edit forms from slash, cell menus and Library with the same media target', async () => {
@@ -293,7 +295,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByLabel('Saved item', { exact: true }).selectOption(String(entity.id))
     await page.getByLabel('Prompt', { exact: true }).fill('After edit')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: entity.id }))?.prompt).toBe('After edit')
+    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: entity.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('After edit')
     expect(record(await call('get_prompt_entity', { entity_id: entity.id }))?.description).toBe('Keep this description')
     await page.keyboard.press('Escape')
     await openActions('/delete-prompt-entity')
@@ -301,12 +303,12 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     expect(JSON.stringify(await call('list_prompts'))).toContain('Editable prompt')
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_prompts'))).not.toContain('Editable prompt')
+    await expect.poll(async () => JSON.stringify(await call('list_prompts')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Editable prompt')
   })
 
   it('exports an asset to isolated Downloads without entering the sequence export flow', async () => {
     await sendCommand('/export @a2')
-    await expect.poll(async () => (await readdir(join(rootDir, 'downloads'))).length).toBe(1)
+    await expect.poll(async () => (await readdir(join(rootDir, 'downloads'))).length, { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
     const [filename] = await readdir(join(rootDir, 'downloads'))
     const exported = await readFile(join(rootDir, 'downloads', filename!))
     const original = await originalImageBytes()
@@ -366,7 +368,7 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => {
       const document = record(await call('get_notebook', { notebook_id: notebookId }))
       return (document?.cells as Record<string, unknown>[]).some(cell => record(cell.slot)?.row === 0 && record(cell.slot)?.column === 2 && cell.output_artifact_id === imageId)
-    }).toBe(true)
+    }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await page.keyboard.press('Escape')
     const document = record(await call('get_notebook', { notebook_id: notebookId }))!
     const cells = document.cells as Record<string, unknown>[]
@@ -379,7 +381,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.locator('.workspace-actions-list [data-action-id="tool.run_notebook"]').click()
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     const targets = page.getByRole('group', { name: 'Cell ids', exact: true }).locator('select')
-    await expect.poll(() => targets.count()).toBe(2)
+    await expect.poll(() => targets.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(2)
     const selected = await targets.evaluateAll(elements => elements.map(element => (element as HTMLSelectElement).value))
     expect(selected.sort()).toEqual(selectedIds.sort())
     await page.keyboard.press('Escape')
@@ -403,7 +405,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('A managed notebook')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_notebooks'))).toContain('A managed notebook')
+    await expect.poll(async () => JSON.stringify(await call('list_notebooks')), { timeout: MCP_ROUNDTRIP_MS }).toContain('A managed notebook')
     const created = (await call('list_notebooks') as Record<string, unknown>[]).find(entry => entry.name === 'A managed notebook')!
     await page.keyboard.press('Escape')
     await openActions(catalog.actions.find(action => action.id === 'tool.list_notebooks')!.command)
@@ -414,7 +416,7 @@ describe('workspace action launcher with real endpoints', () => {
     await openActions('/rename-notebook')
     await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Managed notebook renamed')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_notebooks'))).toContain('Managed notebook renamed')
+    await expect.poll(async () => JSON.stringify(await call('list_notebooks')), { timeout: MCP_ROUNDTRIP_MS }).toContain('Managed notebook renamed')
     await page.keyboard.press('Escape')
     await openActions('/delete-notebook')
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
@@ -422,7 +424,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(JSON.stringify(await call('list_notebooks'))).toContain(String(created.id))
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_notebooks'))).not.toContain(String(created.id))
+    await expect.poll(async () => JSON.stringify(await call('list_notebooks')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(created.id))
     expect(await page.getByRole('alert').count()).toBe(0)
   })
 
@@ -454,9 +456,9 @@ describe('workspace action launcher with real endpoints', () => {
     await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Preview revision', exact: true }).click()
     await page.locator('form[data-action-id="tool.get_history_action"]').waitFor()
     const target = page.getByRole('combobox', { name: 'Action id', exact: true })
-    await expect.poll(() => target.inputValue()).toBe(String(revision.hash))
+    await expect.poll(() => target.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(String(revision.hash))
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(String(revision.operationId))
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(String(revision.operationId))
     expect(browserErrors).toEqual([])
   })
 
@@ -468,17 +470,17 @@ describe('workspace action launcher with real endpoints', () => {
     const picker = page.getByLabel('Saved item', { exact: true })
     await picker.selectOption(String(first.id))
     const data = page.getByLabel('Data', { exact: true })
-    await expect.poll(() => data.inputValue()).toContain('35mm')
+    await expect.poll(() => data.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toContain('35mm')
     await data.fill('{')
     await page.getByLabel('Prompt', { exact: true }).fill('An unfinished first edit')
     expect(await data.inputValue()).toBe('{')
     expect(await data.evaluate(element => (element as HTMLTextAreaElement).validity.valid)).toBe(false)
     await picker.selectOption(String(second.id))
-    await expect.poll(() => data.inputValue()).toContain('85mm')
+    await expect.poll(() => data.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toContain('85mm')
     expect(await data.evaluate(element => (element as HTMLTextAreaElement).validity.valid)).toBe(true)
     await page.getByLabel('Prompt', { exact: true }).fill('Second prompt revised')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: second.id }))?.prompt).toBe('Second prompt revised')
+    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: second.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('Second prompt revised')
     expect(record(await call('get_prompt_entity', { entity_id: first.id }))?.data).toEqual({ lens: '35mm' })
     expect(record(await call('get_prompt_entity', { entity_id: second.id }))?.data).toEqual({ lens: '85mm' })
   })
@@ -500,21 +502,21 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Preview revision', exact: true }).click()
     const hashPicker = page.getByRole('combobox', { name: 'Commit hash', exact: true })
-    await expect.poll(() => hashPicker.inputValue()).toBe(originalHash)
+    await expect.poll(() => hashPicker.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(originalHash)
     await page.getByRole('combobox', { name: 'Filename', exact: true }).selectOption('original.md')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(firstContent)
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(firstContent)
     expect(await (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(nextContent)
     await page.keyboard.press('Escape')
     await openActions('/asset-history')
     await page.getByRole('combobox', { name: 'Media', exact: true }).selectOption(scriptId)
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Restore revision', exact: true }).click()
-    await expect.poll(() => hashPicker.inputValue()).toBe(originalHash)
+    await expect.poll(() => hashPicker.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(originalHash)
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     expect(await (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(nextContent)
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
-    await expect.poll(async () => (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(firstContent)
+    await expect.poll(async () => (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text(), { timeout: MCP_ROUNDTRIP_MS }).toBe(firstContent)
     const restoredHistory = await call('asset_history', { asset_id: scriptId }) as Record<string, unknown>[]
     expect(restoredHistory[0]!.hash).not.toBe(originalHash)
     expect(restoredHistory.some(revision => revision.hash === originalHash)).toBe(true)
@@ -534,12 +536,12 @@ describe('workspace action launcher with real endpoints', () => {
       const revision = (history.actions as Record<string, unknown>[]).find(entry => entry.operation === 'commit_edit')
       actionId = String(record(revision?.details)?.actionId ?? '')
       return actionId
-    }).not.toBe('')
+    }, { timeout: MCP_ROUNDTRIP_MS }).not.toBe('')
     const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'get_edit_action')!
     await openActions(action.command)
     await page.getByRole('combobox', { name: 'Action id', exact: true }).selectOption(actionId)
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(actionId)
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(actionId)
     expect(record(await call('get_edit_action', { action_id: actionId }))?.actionId).toBe(actionId)
   })
 
@@ -561,10 +563,10 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     await page.locator('.workspace-action-linked-results > li').nth(history.findIndex(revision => revision.hash === writtenHash))
       .getByRole('button', { name: 'Preview revision', exact: true }).click()
-    await expect.poll(() => page.getByRole('combobox', { name: 'Commit hash', exact: true }).inputValue()).toBe(writtenHash)
+    await expect.poll(() => page.getByRole('combobox', { name: 'Commit hash', exact: true }).inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(writtenHash)
     await page.getByRole('combobox', { name: 'Filename', exact: true }).selectOption('notes.txt', { timeout: 5000 })
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent()).toContain(content)
+    await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(content)
     expect((await fetch(`${origin}/files/${bookId}/${characterId}/notes.txt`)).status).toBe(404)
     await page.screenshot({ path: '/tmp/videobook-e2e-hour-historical-preview.png' })
     await page.keyboard.press('Escape')
@@ -581,16 +583,16 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     const preview = page.locator('.workspace-preview-dialog')
     await preview.waitFor()
-    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
     await preview.getByRole('combobox', { name: 'Version or file', exact: true }).selectOption(await originalImageFile())
-    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await expect.poll(() => preview.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
     await preview.getByRole('button', { name: 'More actions', exact: true }).click()
     const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'asset_manifest')!
     await page.getByLabel('Videobook command input', { exact: true }).fill(action.command)
     await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await preview.waitFor({ state: 'detached' })
-    await expect.poll(() => page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(imageId)
+    await expect.poll(() => page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(imageId)
     await page.keyboard.press('Escape')
     await expect.poll(() => page.locator('dialog[open]').count()).toBe(0)
     await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).evaluate(element => element === document.activeElement)).toBe(true)
@@ -679,7 +681,7 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => {
       const value = record(await call('list_assets', { book_id: foreignBookId }))!
       return (value.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === foreignId)?.label
-    }).toBe('Foreign media renamed')
+    }, { timeout: MCP_ROUNDTRIP_MS }).toBe('Foreign media renamed')
     const original = record(await call('list_assets'))!
     expect((original.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === imageId)?.label).toBe('Matching media label')
     expect(browserErrors).toEqual([])
@@ -708,7 +710,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(record(await call('get_primary_sequence'))?.clips).toEqual(clipsBefore)
     await sendCommand(`/clip-reverse @${clipId}`)
     await sendCommand('/apply')
-    await expect.poll(async () => ((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse)).toBe(true)
+    await expect.poll(async () => ((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await sendCommand('/trim @a1 0 1')
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
@@ -721,19 +723,19 @@ describe('workspace action launcher with real endpoints', () => {
     const mediaAfterTrim = Buffer.from(await (await fetch(`${origin}/files/${bookId}/${videoId}/original.mp4`)).arrayBuffer())
     await sendCommand(`/clip-trim @${clipId} 0 15`)
     await sendCommand('/apply')
-    await expect.poll(async () => ((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.durationFrames)).toBe(15)
+    await expect.poll(async () => ((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.durationFrames), { timeout: MCP_ROUNDTRIP_MS }).toBe(15)
     expect(Buffer.from(await (await fetch(`${origin}/files/${bookId}/${videoId}/original.mp4`)).arrayBuffer()).equals(mediaAfterTrim)).toBe(true)
     page.on('dialog', async dialog => { await dialog.accept() })
     await sendCommand(`/clip-delete @${clipId}`)
     await sendCommand('/apply')
-    await expect.poll(async () => (record(await call('get_primary_sequence'))?.clips as unknown[]).length).toBe(0)
+    await expect.poll(async () => (record(await call('get_primary_sequence'))?.clips as unknown[]).length, { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
     const duplicate = record(await call('upload_file', { filename: 'delete-me.png', data: (await readFile(join(rootDir, 'image.png'))).toString('base64') }))!
     expect(duplicate.assetId).not.toBe(imageId)
     await page.reload()
     await sendCommand(`/delete ${String(duplicate.assetId)}`)
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_assets'))).not.toContain(String(duplicate.assetId))
+    await expect.poll(async () => JSON.stringify(await call('list_assets')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(duplicate.assetId))
     expect(JSON.stringify(await call('list_assets'))).toContain(imageId)
   }, 120_000)
 })

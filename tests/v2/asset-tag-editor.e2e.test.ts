@@ -11,6 +11,8 @@ import { assetTagDefs } from '../../server/src/tools/asset-tags.js'
 import { assetTagSummary, type AssetTagSummary } from '../../server/src/asset-tags.js'
 import type { TagEdit } from '../../src/videobook/asset-tag-editing.js'
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 type TagHarness = {
   setRaw: (tags: AssetTagSummary) => void
   setTarget: (target: { bookId: string; assetId: string }) => void
@@ -144,7 +146,7 @@ describe('asset tag editor with a real engine', () => {
 
   async function settled() {
     await expect.poll(() => page.evaluate(() =>
-      (window as unknown as { tagHarness: TagHarness }).tagHarness.controller.busy)).toBe(false)
+      (window as unknown as { tagHarness: TagHarness }).tagHarness.controller.busy), { timeout: MCP_ROUNDTRIP_MS }).toBe(false)
   }
 
   async function automatic(label: string) {

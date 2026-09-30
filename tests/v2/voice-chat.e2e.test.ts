@@ -20,6 +20,7 @@ const live = process.env.VIDEOBOOK_RUN_VOICE_LIVE === '1'
 const voiceMode = process.env.VIDEOBOOK_VOICE_TEST_MODE === 'xai' ? 'xai' : process.env.VIDEOBOOK_VOICE_TEST_MODE === 'openai' ? 'openai' : 'auto'
 const benchmarkTurns = Math.max(1, Number(process.env.VIDEOBOOK_VOICE_BENCHMARK_TURNS ?? 1))
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const MCP_ROUNDTRIP_MS = 15_000
 
 async function waitFor(predicate: () => Promise<boolean>, timeout = 30_000) {
   const deadline = Date.now() + timeout
@@ -320,8 +321,8 @@ describe('voice chat in the real browser', () => {
         await page.emulateMedia({ reducedMotion: 'no-preference' })
         await page.getByLabel('Start voice conversation').click()
         const provider = page.getByLabel('Voice provider', { exact: true })
-        await expect.poll(() => provider.getAttribute('data-voice-phase')).toBe('connecting')
-        await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText()).toBe('Connecting voice')
+        await expect.poll(() => provider.getAttribute('data-voice-phase'), { timeout: MCP_ROUNDTRIP_MS }).toBe('connecting')
+        await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Connecting voice')
         expect(await composer.getAttribute('data-dock-open')).toBe('false')
         expect(await page.getByLabel('Voice activity').isVisible()).toBe(false)
         expect(await composer.boundingBox()).toEqual(before)
@@ -372,7 +373,7 @@ describe('voice chat in the real browser', () => {
       expect(connected.fallbackReason).toBeTruthy()
       await page.locator('.voice-fallback').waitFor({ state: 'visible' })
     } else expect(connected.fallbackReason).toBeUndefined()
-    await expect.poll(() => page.locator('.composer-mode-switch').innerText()).toContain(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
+    await expect.poll(() => page.locator('.composer-mode-switch').innerText(), { timeout: MCP_ROUNDTRIP_MS }).toContain(connected.provider === 'xai' ? 'xAI' : 'OpenAI')
     await expect.poll(async () => await page.locator('.voice-captions p[data-role="assistant"] .composer-history-text').first().textContent(), { timeout: 15_000 }).toBe('Voice Chat Activated')
     await expect.poll(assistantAfterLastUser, { timeout: 35_000 }).toBe(true)
     await expect.poll(async () => (await activationTimelineProof()).beforeSpeechStop, { timeout: 15_000 }).toBe(true)

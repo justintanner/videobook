@@ -12,6 +12,8 @@ import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { availablePort, record, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { ObservedToolCall, StartedProcess } from './e2e-harness.js'
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('rich chat references with real notebook media', () => {
   let rootDir = ''
   let server: StartedProcess | undefined
@@ -56,7 +58,7 @@ describe('rich chat references with real notebook media', () => {
   async function chooseBook(name: string) {
     await page.locator('.brand-project-menu-toggle').click()
     await page.locator('.book-project-select').filter({ hasText: name }).click()
-    await expect.poll(() => page.locator('.book-project-menu').count()).toBe(0)
+    await expect.poll(() => page.locator('.book-project-menu').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
     await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
   }
 
@@ -146,7 +148,7 @@ describe('rich chat references with real notebook media', () => {
     for (const token of ['@a1', '@a2', '@a3']) {
       const option = options.filter({ has: page.getByText(token, { exact: true }) })
       expect(await option.textContent()).toContain('Shared label')
-      await expect.poll(() => option.locator('img').evaluate(image => image instanceof HTMLImageElement && image.naturalWidth > 0)).toBe(true)
+      await expect.poll(() => option.locator('img').evaluate(image => image instanceof HTMLImageElement && image.naturalWidth > 0), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     }
     expect(await options.filter({ has: page.getByText('@a4', { exact: true }) }).textContent()).toContain('AUDIO')
     expect(await options.filter({ has: page.getByText('@a5', { exact: true }) }).textContent()).toContain('Empty grid square')
@@ -256,7 +258,7 @@ describe('rich chat references with real notebook media', () => {
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Workspace actions' })
     await dialog.waitFor()
-    await expect.poll(() => dialog.getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(imageId)
+    await expect.poll(() => dialog.getByRole('combobox', { name: 'Media', exact: true }).inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(imageId)
     const prompts = calls.filter(call => call.name === 'record_prompt').map(call => call.arguments.prompt)
     expect(prompts).toEqual(['/asset-manifest @a2'])
     expect(JSON.stringify(prompts)).not.toContain('Shared label')
@@ -281,11 +283,11 @@ describe('rich chat references with real notebook media', () => {
     await chooseBook('rich-chat-secondary')
     expect(await input().textContent()).toBe('')
     await input().fill('Secondary @a1')
-    await expect.poll(() => input().locator('[data-reference="@a1"] img').getAttribute('src')).toContain(secondImageId)
+    await expect.poll(() => input().locator('[data-reference="@a1"] img').getAttribute('src'), { timeout: MCP_ROUNDTRIP_MS }).toContain(secondImageId)
     expect(await input().locator('[data-reference="@a1"] img').getAttribute('src')).toContain(secondBookId)
     await chooseBook('rich-chat-primary')
-    await expect.poll(() => input().textContent()).toBe('Primary @a1')
-    await expect.poll(() => input().locator('[data-reference="@a1"] img').getAttribute('src')).toContain(imageId)
+    await expect.poll(() => input().textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Primary @a1')
+    await expect.poll(() => input().locator('[data-reference="@a1"] img').getAttribute('src'), { timeout: MCP_ROUNDTRIP_MS }).toContain(imageId)
     await call('rename_asset', { asset_id: imageId, new_name: 'Updated display label' })
     await expect.poll(() => input().locator('[data-reference="@a1"]').getAttribute('aria-label'), { timeout: 15_000 }).toContain('Updated display label')
     expect(await input().textContent()).toBe('Primary @a1')

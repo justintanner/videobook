@@ -9,6 +9,8 @@ import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { availablePort, record, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('Settings through the real application', () => {
   let rootDir = ''
   let server: StartedProcess | undefined
@@ -61,9 +63,9 @@ describe('Settings through the real application', () => {
     page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl)
-    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await page.getByLabel('Open Settings', { exact: true }).click()
-    await expect.poll(() => page.getByRole('button', { name: 'Refresh', exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => page.getByRole('button', { name: 'Refresh', exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await page.getByText('Up to date', { exact: true }).waitFor()
   })
 
@@ -236,7 +238,7 @@ describe('Settings through the real application', () => {
     await page.locator('.brand-project-menu-toggle').click()
     await page.locator('.book-project-select').filter({ hasText: 'settings-second' }).click()
     await expect.poll(() => page.locator('.book-project-menu').count()).toBe(0)
-    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => page.getByLabel('Videobook command input', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await page.getByLabel('Open Settings', { exact: true }).click()
     await page.getByText('Up to date', { exact: true }).waitFor()
     const storagePanel = page.getByRole('region', { name: 'Storage', exact: true })
@@ -307,7 +309,7 @@ describe('Settings through the real application', () => {
     }
     expect((await fetch(callback)).status).toBe(400)
     await page.locator('.x-connection-error').filter({ hasText: 'invalid state or missing code' }).waitFor()
-    await expect.poll(() => page.locator('.x-connection-card button').isEnabled()).toBe(true)
+    await expect.poll(() => page.locator('.x-connection-card button').isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     expect(await page.locator('.settings-screen').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
   })
 

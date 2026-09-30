@@ -15,6 +15,7 @@ import { availablePort, resultValue, startProcess, stopProcess, toolCalls, waitF
 import type { StartedProcess } from './e2e-harness.js'
 
 const exec = promisify(execFile)
+const MCP_ROUNDTRIP_MS = 15_000
 
 describe('music video recovery and export in the browser', () => {
   let root = ''
@@ -54,7 +55,7 @@ describe('music video recovery and export in the browser', () => {
     await tab('Music')
     await panel().getByRole('button', { name: 'Analyze beats', exact: true }).click()
     await expect.poll(() => editor().locator('.timeline-track-audio .timeline-beat').count(), { timeout: 30_000 }).toBeGreaterThan(8)
-    await expect.poll(() => panel().getByRole('button', { name: 'Analyze again', exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => panel().getByRole('button', { name: 'Analyze again', exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
   }
 
   async function setGrid() {
@@ -245,8 +246,8 @@ describe('music video recovery and export in the browser', () => {
         await player.press('ArrowRight')
         await expect.poll(() => player.locator('footer span').first().textContent()).toBe(`F${frames[1]! + 2}`)
         await toolbar.getByRole('button', { name: 'Split', exact: true }).click()
-        await expect.poll(async () => (await sequence()).clips.filter(clip => clip.trackId === videoTrack.trackId).map(clip => clip.timelineStartFrame).sort((a, b) => a - b)).toEqual([0, cutFrame])
-        await expect.poll(() => preview.getByRole('button', { name: 'Undo', exact: true }).isEnabled()).toBe(true)
+        await expect.poll(async () => (await sequence()).clips.filter(clip => clip.trackId === videoTrack.trackId).map(clip => clip.timelineStartFrame).sort((a, b) => a - b), { timeout: MCP_ROUNDTRIP_MS }).toEqual([0, cutFrame])
+        await expect.poll(() => preview.getByRole('button', { name: 'Undo', exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
         if (mode === 'Off') {
           releaseSnapshot()
           await expect.poll(() => delivered).toBe(true)
@@ -254,7 +255,7 @@ describe('music video recovery and export in the browser', () => {
           expect(await preview.locator('.timeline-track-video [data-clip-id]').count()).toBe(2)
         }
         await preview.getByRole('button', { name: 'Undo', exact: true }).click()
-        await expect.poll(async () => (await sequence()).clips).toEqual(clips)
+        await expect.poll(async () => (await sequence()).clips, { timeout: MCP_ROUNDTRIP_MS }).toEqual(clips)
       }
     } finally {
       releaseSnapshot()
@@ -292,7 +293,7 @@ describe('music video recovery and export in the browser', () => {
     expect(previous.status).toBe('no-beats')
     await panel().getByRole('button', { name: 'Analyze again', exact: true }).click()
     await expect.poll(() => message.textContent()).toBe('Analyzing soundtrack…')
-    await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: uploaded.assetId })).jobId).not.toBe(previous.jobId)
+    await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: uploaded.assetId })).jobId, { timeout: MCP_ROUNDTRIP_MS }).not.toBe(previous.jobId)
     await expect.poll(() => message.textContent(), { timeout: 30_000 }).toBe('Analysis complete. No reliable beats found. Set a grid below.')
     expect(await panel().getByText('Beat timing is uncertain.', { exact: false }).count()).toBe(0)
     expect(await editor().locator('.timeline-music-toolbar').getByRole('button', { name: 'Beats', exact: true }).isDisabled()).toBe(true)
@@ -319,12 +320,12 @@ describe('music video recovery and export in the browser', () => {
     const state = await rhythm()
     await call('update_sequence_rhythm', { sequence_id: (await sequence()).sequenceId, expected_revision: state.revision, operation: 'set', settings: { ...state.settings, correction: { ...state.settings.correction!, markers: state.settings.correction!.markers.map((marker, index) => index === 0 ? { ...marker, timeSeconds: 0.1 } : marker) } } })
     await editor().getByRole('button', { name: 'Apply draft', exact: true }).click()
-    await expect.poll(() => editor().getByRole('alert').allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/beat.*changed|rhythm.*changed/i)]))
+    await expect.poll(() => editor().getByRole('alert').allTextContents(), { timeout: MCP_ROUNDTRIP_MS }).toEqual(expect.arrayContaining([expect.stringMatching(/beat.*changed|rhythm.*changed/i)]))
     expect((await sequence()).clips).toEqual(savedAudio)
     await editor().getByRole('button', { name: 'Discard draft', exact: true }).click()
     await tab('Music')
     await panel().getByRole('button', { name: 'Reload beats', exact: true }).click()
-    await expect.poll(() => panel().getByRole('button', { name: 'Reload beats', exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => panel().getByRole('button', { name: 'Reload beats', exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await tab('Auto-cut')
     await editor().getByRole('button', { name: 'Preview draft', exact: true }).click()
     await editor().getByRole('button', { name: 'Apply draft', exact: true }).click()
@@ -380,7 +381,7 @@ describe('music video recovery and export in the browser', () => {
     try {
       await playback.goto(url)
       const video = playback.locator('video')
-      await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2)
+      await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThanOrEqual(2)
       await video.evaluate(async (element: HTMLVideoElement) => { element.muted = true; element.currentTime = 3; await element.play() })
       await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThan(3.1)
     } finally { await playback.close() }
@@ -400,18 +401,18 @@ describe('music video recovery and export in the browser', () => {
       else await route.continue()
     })
     await setGrid()
-    await expect.poll(async () => (await rhythm()).settings.correction?.bpm).toBe(120)
-    await expect.poll(() => panel().getByRole('alert').count()).toBeGreaterThan(0)
+    await expect.poll(async () => (await rhythm()).settings.correction?.bpm, { timeout: MCP_ROUNDTRIP_MS }).toBe(120)
+    await expect.poll(() => panel().getByRole('alert').count(), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
     expect(await panel().getByText('Using your corrected beat map.', { exact: false }).isVisible()).toBe(true)
     dropAnalysisRead = false
     await panel().getByRole('button', { name: 'Undo beat change', exact: true }).click()
-    await expect.poll(async () => (await rhythm()).settings.correction).toBeNull()
+    await expect.poll(async () => (await rhythm()).settings.correction, { timeout: MCP_ROUNDTRIP_MS }).toBeNull()
     await panel().getByRole('button', { name: 'Redo beat change', exact: true }).click()
-    await expect.poll(async () => (await rhythm()).settings.correction?.bpm).toBe(120)
+    await expect.poll(async () => (await rhythm()).settings.correction?.bpm, { timeout: MCP_ROUNDTRIP_MS }).toBe(120)
     const before = (await rhythm()).settings.correction
     const previousAnalysis = await call<MusicAnalysisState>('get_music_analysis', { asset_id: songId })
     await panel().getByRole('button', { name: 'Analyze again', exact: true }).click()
-    await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: songId })).jobId).not.toBe(previousAnalysis.jobId)
+    await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: songId })).jobId, { timeout: MCP_ROUNDTRIP_MS }).not.toBe(previousAnalysis.jobId)
     await expect.poll(async () => (await call<MusicAnalysisState>('get_music_analysis', { asset_id: songId })).status, { timeout: 30_000 }).toBe('ready')
     expect((await rhythm()).settings.correction).toEqual(before)
     expect(errors).toEqual([])

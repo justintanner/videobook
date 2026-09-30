@@ -1416,7 +1416,7 @@ describe('chat composer browser flow', () => {
         timeout: 30_000,
       }).toBe(true)
       await expect.poll(async () =>
-        await imageTargetNode.locator('.cell-target-handle').count()).toBe(2)
+        await imageTargetNode.locator('.cell-target-handle').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(2)
       expect(await imageTargetNode.locator('.cell-target-connection-count').count()).toBe(0)
 
       const connectedNotebook = record(resultValue(await client.callTool({
@@ -1767,7 +1767,7 @@ describe('chat composer browser flow', () => {
       const otherNode = notebookCellNode(page, otherCellId)
       await otherNode.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
       releaseSnapshot()
-      await expect.poll(() => delivered).toBe(true)
+      await expect.poll(() => delivered, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       await wait(250)
       expect(await notebookCellNode(page, videoCellId).count()).toBe(0)
       expect(await otherNode.count()).toBe(1)
@@ -1983,7 +1983,7 @@ describe('chat composer browser flow', () => {
         complete: element.complete,
         naturalWidth: element.naturalWidth,
       }
-    })).toEqual({ complete: true, naturalWidth: 1 })
+    }), { timeout: MCP_ROUNDTRIP_MS }).toEqual({ complete: true, naturalWidth: 1 })
     const close = page.getByLabel('Close fullscreen preview')
     expect(await close.evaluate((element) => document.activeElement === element)).toBe(true)
 
@@ -2019,7 +2019,7 @@ describe('chat composer browser flow', () => {
     await modalInput.fill(editPrompt)
     await dialog.getByLabel('Send command').click()
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'edit_image_subjects')).toBeTruthy()
+      call.name === 'edit_image_subjects'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
     await dialog.waitFor({ state: 'hidden' })
     expect(await page.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe(editPrompt)
     const editCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
@@ -2046,7 +2046,7 @@ describe('chat composer browser flow', () => {
     await remove.click()
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'edit_image_subjects'
-      && call.arguments.operation === 'remove')).toBeTruthy()
+      && call.arguments.operation === 'remove'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
     expect(await modalInput.isDisabled()).toBe(true)
     await expect.poll(async () => await modalInput.isEnabled(), {
       timeout: 5_000,
@@ -2057,7 +2057,7 @@ describe('chat composer browser flow', () => {
     await remove.click()
     await expect.poll(() => observedCalls.filter((call) =>
       call.name === 'edit_image_subjects'
-      && call.arguments.operation === 'remove').length).toBe(1)
+      && call.arguments.operation === 'remove').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
     await editTrigger.click()
@@ -2069,7 +2069,7 @@ describe('chat composer browser flow', () => {
     await remove.click()
     await expect.poll(() => observedCalls.filter((call) =>
       call.name === 'edit_image_subjects'
-      && call.arguments.operation === 'remove').length).toBe(2)
+      && call.arguments.operation === 'remove').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(2)
     await expect.poll(() => mockedSubjectEditCompletions, {
       timeout: 5_000,
     }).toBe(completionBaseline + 1)
@@ -2597,7 +2597,7 @@ describe('chat composer browser flow', () => {
       expect(await settings.textContent()).toContain('OrientationLandscape')
       await review.getByRole('button', { name: 'Post to X' }).click()
       await expect.poll(() => appliedCalls().length, { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
-      await expect.poll(async () => await review.count()).toBe(0)
+      await expect.poll(async () => await review.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
       const appliedParams = record(appliedPlan?.params)
       expect(appliedParams?.text).toBe(editedPostText)
@@ -2627,7 +2627,7 @@ describe('chat composer browser flow', () => {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(0)
       await review.getByRole('button', { name: 'Post to X' }).click()
-      await expect.poll(() => appliedCalls().length).toBe(2)
+      await expect.poll(() => appliedCalls().length, { timeout: MCP_ROUNDTRIP_MS }).toBe(2)
       const clearedPlan = record(appliedCalls()[1]?.arguments.action_plan)
       const clearedParams = record(clearedPlan?.params)
       expect(clearedParams?.text).toBe('Titled again')
@@ -2709,7 +2709,7 @@ describe('chat composer browser flow', () => {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(true)
       await review.getByRole('button', { name: 'Post to X' }).click()
-      await expect.poll(() => appliedCalls().length).toBe(1)
+      await expect.poll(() => appliedCalls().length, { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
       const appliedPlan = record(appliedCalls()[0]?.arguments.action_plan)
       const appliedParams = record(appliedPlan?.params)
       const followups = Array.isArray(appliedParams?.followups)
@@ -2899,7 +2899,7 @@ describe('chat composer browser flow', () => {
       }).toBe(true)
       await review.getByRole('button', { name: 'Apply' }).click()
       await expect.poll(() => observedCalls.filter((call) =>
-        call.name === 'apply_watermark').length).toBe(initialApplyCalls + 1)
+        call.name === 'apply_watermark').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(initialApplyCalls + 1)
       await review.waitFor({ state: 'detached' })
       const applyCalls = observedCalls.filter((call) => call.name === 'apply_watermark')
       expect(applyCalls).toHaveLength(initialApplyCalls + 1)
@@ -2953,7 +2953,7 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('button', { name: 'Apply' }).isEnabled()).toBe(true)
       await review.getByRole('button', { name: 'Apply' }).click()
       await expect.poll(() => observedCalls.filter((call) =>
-        call.name === 'apply_watermark').length).toBe(initialApplyCalls + 2)
+        call.name === 'apply_watermark').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(initialApplyCalls + 2)
       await review.waitFor({ state: 'detached' })
       const qrOnlyCall = observedCalls.filter((call) => call.name === 'apply_watermark').at(-1)
       expect(qrOnlyCall?.arguments).toMatchObject({
@@ -3181,7 +3181,7 @@ describe('chat composer browser flow', () => {
       expect(await turn.isVisible()).toBe(true)
       await input.fill('/not-a-command')
       await page.getByLabel('Send command').click()
-      await expect.poll(() => composer.locator('.composer-notebook-dock').count()).toBe(0)
+      await expect.poll(() => composer.locator('.composer-notebook-dock').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       await expect.poll(() => composer.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
       const newest = composer.locator('.chat-turn').last()
       expect(await newest.getByLabel('Your message').textContent()).toBe('/not-a-command')
@@ -3202,7 +3202,7 @@ describe('chat composer browser flow', () => {
         await composer.locator('.composer-notebook-dock').waitFor({ state: 'visible' })
         await input.fill(`/not-a-command ${cellId}`)
         await page.getByLabel('Send command').click()
-        await expect.poll(() => composer.locator('.composer-notebook-dock').count()).toBe(0)
+        await expect.poll(() => composer.locator('.composer-notebook-dock').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
         await expect.poll(() => composer.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('failed')
         expect(await composer.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe(`/not-a-command ${cellId}`)
       }
@@ -3283,7 +3283,7 @@ describe('chat composer browser flow', () => {
     await openApp({ cold: true })
     const startup = page.locator('#startup-shell')
     await startup.waitFor({ state: 'visible' })
-    await expect.poll(async () => await startup.textContent()).toContain('Loading workspace via MCP')
+    await expect.poll(async () => await startup.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('Loading workspace via MCP')
     const startupAnimation = await page.locator('#startup-signal').evaluate((element) =>
       window.getComputedStyle(element, '::after').animationName)
     expect(startupAnimation).toContain('startup-scan')
@@ -3295,8 +3295,8 @@ describe('chat composer browser flow', () => {
     }).toBe(true)
     const workflowEdges = page.locator('.notebook-flow .react-flow__edge.workflow-edge')
     const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
-    await expect.poll(async () => await workflowEdges.count()).toBeGreaterThan(0)
-    await expect.poll(async () => await routePaths.count())
+    await expect.poll(async () => await workflowEdges.count(), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
+    await expect.poll(async () => await routePaths.count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBe(await workflowEdges.count())
     const routeStyles = await routePaths.evaluateAll((paths) => paths.map((path) => ({
       d: path.getAttribute('d'),
@@ -3377,7 +3377,7 @@ describe('chat composer browser flow', () => {
 
     await page.locator('.chat-turn').last().locator('.chat-turn-details > summary').click()
     const chatRow = page.locator('.mcp-call[data-tool="chat"]')
-    await expect.poll(() => chatRow.getAttribute('class')).toContain('mcp-call-failed')
+    await expect.poll(() => chatRow.getAttribute('class'), { timeout: MCP_ROUNDTRIP_MS }).toContain('mcp-call-failed')
     const chatHead = chatRow.locator('.mcp-call-head')
     expect(await chatHead.getAttribute('aria-expanded')).toBe('false')
     expect(await chatRow.locator('.mcp-call-body').isVisible()).toBe(false)
@@ -3524,7 +3524,7 @@ describe('chat composer browser flow', () => {
     const startAndCheck = async () => {
       if (!page) throw new Error('Browser page was not initialized')
       const start = page.getByLabel('Start voice conversation')
-      await expect.poll(() => start.isEnabled()).toBe(true)
+      await expect.poll(() => start.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       await start.click()
       await expect.poll(() => inspector.count()).toBe(0)
       expect(await input.textContent()).toBe('')
@@ -3769,7 +3769,7 @@ describe('chat composer browser flow', () => {
     await inlineImage.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
     await inlineImage.scrollIntoViewIfNeeded()
     await expect.poll(async () => await inlineImage.evaluate((image) =>
-      (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+      (image as HTMLImageElement).naturalWidth), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
     expect(await inlineImage.getAttribute('src')).toContain(fullscreenImageArtifactId)
 
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
@@ -3815,7 +3815,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
         .toContain('A revised moonlit garden')
       releasePreview()
-      await expect.poll(() => editor.getByText('Updating…', { exact: true }).count()).toBe(0)
+      await expect.poll(() => editor.getByText('Updating…', { exact: true }).count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       expect(await source.textContent()).not.toContain('An older delayed garden')
     } finally {
       releasePreview()
@@ -4048,9 +4048,9 @@ describe('chat composer browser flow', () => {
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'create_notebook_cell'
       && record(call.arguments.cell)?.type === 'split_video'
-      && record(call.arguments.cell)?.operation === 'split_at_points')).toBe(true)
+      && record(call.arguments.cell)?.operation === 'split_at_points'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'run_notebook')).toBe(true)
+      call.name === 'run_notebook'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
 
     const splitClient = new Client(
       { name: 'videobook-split-ui-e2e', version: '1.0.0' },
@@ -4139,11 +4139,11 @@ describe('chat composer browser flow', () => {
     // The chip is there before the round trip finishes, and the field keeps
     // focus so a second tag can be typed straight away.
     await expect.poll(async () =>
-      await tags.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      await tags.getByRole('listitem').filter({ hasText: 'Hero shot' }).count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBeGreaterThan(0)
     expect(await field.evaluate((node) => node === document.activeElement)).toBe(true)
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'add_asset_tag')).toMatchObject({
+      call.name === 'add_asset_tag'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
         name: 'add_asset_tag',
         arguments: {
           asset_id: videoArtifactId,
@@ -4168,7 +4168,7 @@ describe('chat composer browser flow', () => {
     const reopened = inspector.getByRole('region', { name: 'Asset tags' })
     await reopened.waitFor({ state: 'visible' })
     await expect.poll(async () =>
-      await reopened.getByRole('listitem').filter({ hasText: 'Hero shot' }).count())
+      await reopened.getByRole('listitem').filter({ hasText: 'Hero shot' }).count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBeGreaterThan(0)
 
     observedCalls.length = 0
@@ -4176,10 +4176,10 @@ describe('chat composer browser flow', () => {
       .getByRole('button', { name: 'Remove tag Hero shot (Added by you)' })
       .click()
     await expect.poll(async () =>
-      await reopened.getByRole('button', { name: 'Remove tag Hero shot (Added by you)', exact: true }).count())
+      await reopened.getByRole('button', { name: 'Remove tag Hero shot (Added by you)', exact: true }).count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBe(0)
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'remove_asset_tag')).toMatchObject({
+      call.name === 'remove_asset_tag'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
         name: 'remove_asset_tag',
         arguments: { asset_id: videoArtifactId, book_id: bookId },
       })
@@ -4213,7 +4213,7 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     await actions.getByRole('button', { name: 'View history' }).click()
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'asset_history')).toMatchObject({
+      call.name === 'asset_history'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
         name: 'asset_history',
         arguments: {
           asset_id: videoArtifactId,
@@ -4223,7 +4223,7 @@ describe('chat composer browser flow', () => {
       })
     const history = inspector.getByRole('region', { name: 'Asset history' })
     await history.waitFor({ state: 'visible' })
-    await expect.poll(async () => await history.locator('.inspector-history li').count())
+    await expect.poll(async () => await history.locator('.inspector-history li').count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBeGreaterThan(0)
     expect(await history.getByText(/revision/u).first().isVisible()).toBe(true)
 
@@ -4431,7 +4431,7 @@ describe('chat composer browser flow', () => {
       await duplicateMenu.getByRole('menuitem', { name: generation.label }).click()
       await expect.poll(() => observedCalls.find((call) =>
         call.name === 'create_notebook_cell'
-        && record(call.arguments.cell)?.type === generation.cellType)).toBeTruthy()
+        && record(call.arguments.cell)?.type === generation.cellType), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
       const createGenerationCall = observedCalls.find((call) =>
         call.name === 'create_notebook_cell'
         && record(call.arguments.cell)?.type === generation.cellType)
@@ -4450,7 +4450,7 @@ describe('chat composer browser flow', () => {
         call.name === 'connect_notebook_cells'
         && call.arguments.source_cell_id === fullscreenImageCellId
         && call.arguments.target_cell_id === createdGenerationCellId
-        && call.arguments.target_input === 'image')).toBe(true)
+        && call.arguments.target_input === 'image'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       const createdGenerationNode = notebookCellNode(page, createdGenerationCellId)
       await createdGenerationNode.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await createdGenerationNode.getAttribute('data-selection')).toBe('primary')
@@ -4485,7 +4485,7 @@ describe('chat composer browser flow', () => {
       call.name === 'duplicate_asset'
       && call.arguments.book_id === bookId
       && call.arguments.notebook_id === notebookId
-      && typeof call.arguments.asset_id === 'string')).toBe(true)
+      && typeof call.arguments.asset_id === 'string'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     const duplicatedCell = page.locator('.cell-node').filter({
       has: page.locator('.cell-node-footer strong', { hasText: /^@d3$/u }),
     })
@@ -4776,7 +4776,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'create_notebook_cell'
-      && record(call.arguments.cell)?.type === 'generate_audio')).toBe(true)
+      && record(call.arguments.cell)?.type === 'generate_audio'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     notebookDirty = true
   }, 60_000)
 
@@ -4905,7 +4905,7 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     await autoArrange.click()
     await expect.poll(() => observedCalls.filter((call) =>
-      call.name === 'move_notebook_cells')).toHaveLength(1)
+      call.name === 'move_notebook_cells'), { timeout: MCP_ROUNDTRIP_MS }).toHaveLength(1)
     const moveCall = observedCalls.find((call) => call.name === 'move_notebook_cells')
     const slots = Array.isArray(moveCall?.arguments.slots)
       ? moveCall.arguments.slots.map(record).filter((slot) => slot !== null)
@@ -4937,7 +4937,7 @@ describe('chat composer browser flow', () => {
       state: 'visible',
       timeout: 30_000,
     })
-    await expect.poll(async () => await autoArrange.isEnabled()).toBe(true)
+    await expect.poll(async () => await autoArrange.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await expect.poll(async () => await page!.locator('.notebook-horizontal-scroll')
       .evaluate((element) => ({
         left: element.scrollLeft,

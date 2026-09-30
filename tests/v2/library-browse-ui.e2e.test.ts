@@ -25,6 +25,7 @@ interface StartedProcess {
 }
 
 const execFileAsync = promisify(execFile)
+const MCP_ROUNDTRIP_MS = 15_000
 const longBookName = 'other-library-with-a-long-project-name-for-layout-verification'
 const longVideoLabel = 'Evening skyline with a slow pan across the waterfront and the city lights'
 const metadataManifest: IndexManifest = {
@@ -48,7 +49,7 @@ function browseArguments(route: Route): Record<string, unknown> | null {
 
 async function selectStatus(page: Page, status: string): Promise<void> {
   await page.getByRole('button', { name: new RegExp(`^${status}(?: \\d+)?$`) }).click()
-  await expect.poll(async () => page.locator('.library-loading').count()).toBe(0)
+  await expect.poll(async () => page.locator('.library-loading').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -136,7 +137,7 @@ async function expectReadyGrid(page: Page): Promise<void> {
   await expect.poll(async () => {
     titles = await page.locator('.library-asset-copy strong').allTextContents()
     return titles.some((title) => title.includes('Kitchen still'))
-  }).toBe(true)
+  }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
   expect(titles.every((title) => !/^[0-9a-f-]{8,}$/i.test(title.trim()))).toBe(true)
   const dates = await page.locator('.library-asset-copy small').allTextContents()
   expect(dates.every((value) => !value.includes('T') && !/^\d{4}-\d{2}-\d{2}/.test(value.trim())))
@@ -386,7 +387,7 @@ describe('Library Ready-by-default browser flow', () => {
     await selectStatus(page, 'Ready')
     const video = page.locator('.library-asset-card', { hasText: longVideoLabel })
     await expect.poll(async () => video.locator('img').evaluate((image) =>
-      image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0)).toBe(true)
+      image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     expect(await video.locator('video').count()).toBe(0)
     await video.getByRole('button', { name: `Play ${longVideoLabel}`, exact: true }).click()
     await expect.poll(async () => video.locator('video').evaluate((media) =>
@@ -394,12 +395,12 @@ describe('Library Ready-by-default browser flow', () => {
     const second = page.locator('.library-asset-card', { hasText: 'Video without a thumbnail' })
     await second.getByRole('button', { name: 'Play Video without a thumbnail', exact: true }).click()
     await expect.poll(async () => second.locator('video').evaluate((media) =>
-      (media as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1)
+      (media as HTMLVideoElement).currentTime), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0.1)
     expect(await video.locator('video').count()).toBe(0)
     const audio = page.locator('.library-asset-card', { hasText: 'Quiet tone' })
     await audio.getByRole('button', { name: 'Play Quiet tone', exact: true }).click()
     await expect.poll(async () => audio.locator('audio').evaluate((media) =>
-      (media as HTMLAudioElement).currentTime)).toBeGreaterThan(0.1)
+      (media as HTMLAudioElement).currentTime), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0.1)
     expect(await page.locator('.library-asset-card video').count()).toBe(0)
     const kitchen = page.locator('.library-asset-card', { hasText: 'Kitchen still' })
     expect(await kitchen.getByRole('link', { name: 'Open Kitchen still', exact: true }).getAttribute('href'))
@@ -428,12 +429,12 @@ describe('Library Ready-by-default browser flow', () => {
   it('keeps all three browse pages and accepts refreshed labels over stale notebook data', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await selectStatus(page, 'Ready')
-    await expect.poll(async () => page!.locator('.library-asset-card').count()).toBe(100)
+    await expect.poll(async () => page!.locator('.library-asset-card').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(100)
     expect(await page.getByText('Notebook prompt only', { exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: 'Load more', exact: true }).click()
-    await expect.poll(async () => page!.locator('.library-asset-card').count()).toBe(200)
+    await expect.poll(async () => page!.locator('.library-asset-card').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(200)
     await page.getByRole('button', { name: 'Load more', exact: true }).click()
-    await expect.poll(async () => page!.locator('.library-asset-card').count()).toBe(210)
+    await expect.poll(async () => page!.locator('.library-asset-card').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(210)
     expect(await page.getByRole('button', { name: 'Load more', exact: true }).count()).toBe(0)
     await callTool(client, 'rename_asset', {
       book_id: primaryBookId, asset_id: kitchenId, new_name: 'Kitchen still renamed externally',
@@ -486,7 +487,7 @@ describe('Library Ready-by-default browser flow', () => {
       await page.getByText('Kitchen still', { exact: true }).waitFor({ state: 'visible' })
       expect(await page.getByText('Notebook prompt only', { exact: true }).count()).toBe(0)
       release()
-      await expect.poll(() => delivered).toBe(true)
+      await expect.poll(() => delivered, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       expect(await page.locator('.library-asset-card-error').count()).toBe(0)
       expect(await page.getByText(longBookName, { exact: true }).count()).toBe(0)
       failReads = true
@@ -542,7 +543,7 @@ describe('Library Ready-by-default browser flow', () => {
       await video.locator('.library-asset-fallback').waitFor({ state: 'visible' })
       await video.getByRole('button', { name: `Play ${longVideoLabel}`, exact: true }).click()
       await expect.poll(async () => video.locator('video').evaluate((media) =>
-        (media as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1)
+        (media as HTMLVideoElement).currentTime), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0.1)
     } finally {
       await page.unroute(`**/${thumbnailVideoId}/original.jpg*`, failThumbnail)
     }

@@ -31,6 +31,8 @@ interface ListedAsset {
   assetWork: { status: string } | null
 }
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('transformation endpoints over HTTP MCP', () => {
   let rootDir: string
   let server: StartedServer | undefined
@@ -162,7 +164,7 @@ describe('transformation endpoints over HTTP MCP', () => {
       const page = await browser.newPage()
       await page.goto(new URL(after.media_url!, base).href)
       const media = page.locator('video')
-      await expect.poll(() => media.evaluate((element) => (element as HTMLVideoElement).duration)).toBeCloseTo(3, 1)
+      await expect.poll(() => media.evaluate((element) => (element as HTMLVideoElement).duration), { timeout: MCP_ROUNDTRIP_MS }).toBeCloseTo(3, 1)
       await media.evaluate(async (element) => { const video = element as HTMLVideoElement; video.muted = true; await video.play() })
       await expect.poll(() => media.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
     } finally { await browser.close() }

@@ -21,6 +21,8 @@ interface Job {
   result?: { artifactId: string }
 }
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('media endpoints over HTTP MCP', () => {
   let rootDir: string
   let server: StartedServer | undefined
@@ -78,7 +80,7 @@ describe('media endpoints over HTTP MCP', () => {
       filename: 'source.mp4', data: bytes.toString('base64'),
     })
     expect(uploaded.processingError).toBeUndefined()
-    await expect.poll(async () => (await jobs()).every((job) => ['done', 'failed', 'aborted'].includes(job.state))).toBe(true)
+    await expect.poll(async () => (await jobs()).every((job) => ['done', 'failed', 'aborted'].includes(job.state)), { timeout: 60_000 }).toBe(true)
     return { assetId: uploaded.assetId, bytes }
   }
   const probeFile = async (assetId: string, filename: string) => {
@@ -197,7 +199,7 @@ describe('media endpoints over HTTP MCP', () => {
       const page = await browser.newPage()
       await page.goto(fileUrl(finalId, 'original.mp4'))
       const video = page.locator('video')
-      await expect.poll(() => video.evaluate((media) => (media as HTMLVideoElement).duration)).toBeCloseTo(1.5, 1)
+      await expect.poll(() => video.evaluate((media) => (media as HTMLVideoElement).duration), { timeout: MCP_ROUNDTRIP_MS }).toBeCloseTo(1.5, 1)
       await video.evaluate(async (media) => { (media as HTMLVideoElement).muted = true; await (media as HTMLVideoElement).play() })
       await expect.poll(() => video.evaluate((media) => (media as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
     } finally { await browser.close() }

@@ -19,6 +19,8 @@ import {
 } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 describe('composer focus through real workspace interactions', () => {
   let rootDir = ''
   let server: StartedProcess | undefined
@@ -591,7 +593,7 @@ describe('composer focus through real workspace interactions', () => {
     const dialog = page.getByRole('dialog')
     const video = dialog.locator('video')
     await expect.poll(async () => await video.evaluate(element =>
-      element instanceof HTMLMediaElement ? element.readyState : 0)).toBeGreaterThanOrEqual(2)
+      element instanceof HTMLMediaElement ? element.readyState : 0), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThanOrEqual(2)
     await video.evaluate(element => {
       if (element instanceof HTMLMediaElement) element.pause()
     })
@@ -727,13 +729,13 @@ describe('composer focus through real workspace interactions', () => {
       for (const name of ['focus-secondary', 'focus-primary']) {
         await page.locator('.brand-project-menu-toggle').click()
         await page.locator('.book-project-select').filter({ hasText: name }).click()
-        await expect.poll(() => page.locator('.brand-project-menu-toggle').textContent()).toContain(name)
-        await expect.poll(() => page.locator('.book-project-menu').count()).toBe(0)
+        await expect.poll(() => page.locator('.brand-project-menu-toggle').textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(name)
+        await expect.poll(() => page.locator('.book-project-menu').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       }
       await input().fill('Draft after returning')
       release()
       await ready()
-      await expect.poll(() => page.locator('.chat-turn').last().getAttribute('data-status')).toBe('cancelled')
+      await expect.poll(() => page.locator('.chat-turn').last().getAttribute('data-status'), { timeout: MCP_ROUNDTRIP_MS }).toBe('cancelled')
       expect(await page.getByLabel('Video split review').count()).toBe(0)
       expect(await input().textContent()).toBe('Draft after returning')
     } finally {

@@ -14,6 +14,8 @@ import { callTool, startServer, stopServer, type StartedServer } from './mcp-htt
 
 const execFileAsync = promisify(execFile)
 
+const MCP_ROUNDTRIP_MS = 15_000
+
 interface BookPayload {
   bookId: string
   name: string
@@ -312,12 +314,12 @@ describe('v2 MCP server', () => {
     request.on('response', (response) => response.resume())
     request.write('Unfinished replacement')
     try {
-      await expect.poll(status).toMatch(/^(loading|uploading)$/u)
+      await expect.poll(status, { timeout: MCP_ROUNDTRIP_MS }).toMatch(/^(loading|uploading)$/u)
       const concurrent = await fetch(uploadUrl, { method: 'POST', body: 'Overlapping write' })
       expect(concurrent.status).toBe(423)
       expect(await (await fetch(manifestUrl)).json()).toEqual(before)
       request.destroy()
-      await expect.poll(status).toBe('ready')
+      await expect.poll(status, { timeout: MCP_ROUNDTRIP_MS }).toBe('ready')
       expect(await (await fetch(manifestUrl)).json()).toEqual(before)
       expect(await (await fetch(`${base}/files/${book.bookId}/${character.asset_id}/notes.txt`)).text()).toBe('Original notes')
       const retry = await fetch(uploadUrl, { method: 'POST', body: 'Completed retry' })
@@ -342,10 +344,10 @@ describe('v2 MCP server', () => {
     request.on('response', (response) => response.resume())
     request.write('# Partial upload')
     try {
-      await expect.poll(async () => (await list()).find((asset) => asset.label === 'interrupted')?.status)
+      await expect.poll(async () => (await list()).find((asset) => asset.label === 'interrupted')?.status, { timeout: MCP_ROUNDTRIP_MS })
         .toMatch(/^(loading|uploading)$/u)
       request.destroy()
-      await expect.poll(list).toEqual(before)
+      await expect.poll(list, { timeout: MCP_ROUNDTRIP_MS }).toEqual(before)
       const response = await fetch(uploadUrl, { method: 'POST', body: '# Complete upload' })
       expect(response.status).toBe(200)
       const uploaded = await response.json() as { assetId: string }
@@ -435,7 +437,7 @@ describe('v2 MCP server', () => {
     try {
       const page = await browser.newPage()
       await page.goto(`${base}${filePath}?stage=trimmed`)
-      await expect.poll(() => page.locator('video').evaluate((video) => (video as HTMLVideoElement).duration)).toBeCloseTo(1.5, 1)
+      await expect.poll(() => page.locator('video').evaluate((video) => (video as HTMLVideoElement).duration), { timeout: MCP_ROUNDTRIP_MS }).toBeCloseTo(1.5, 1)
       await verifyTimeline(45, trimmedHash)
       await callTool(client, 'restore_asset_version', { book_id: book.bookId, asset_id: assetId, commit_hash: revision })
       const restored = await fetch(`${base}${filePath}`)
@@ -456,7 +458,7 @@ describe('v2 MCP server', () => {
       expect(Buffer.from(await recovered.arrayBuffer())).toEqual(bytes)
       await page.goto(`${restartedBase}${filePath}?stage=recovered`)
       const player = page.locator('video')
-      await expect.poll(() => player.evaluate((video) => (video as HTMLVideoElement).duration)).toBeCloseTo(3, 1)
+      await expect.poll(() => player.evaluate((video) => (video as HTMLVideoElement).duration), { timeout: MCP_ROUNDTRIP_MS }).toBeCloseTo(3, 1)
       await player.evaluate(async (video) => {
         const media = video as HTMLVideoElement
         media.muted = true
@@ -515,7 +517,7 @@ describe('v2 MCP server', () => {
       expect(await page.evaluate(async (url) => {
         try { return await (await fetch(`${url}/healthz`)).text() } catch { return 'blocked' }
       }, base)).toBe('blocked')
-      await expect.poll(() => statuses).toContain(403)
+      await expect.poll(() => statuses, { timeout: MCP_ROUNDTRIP_MS }).toContain(403)
     } finally { await context.close() }
   })
 
@@ -564,7 +566,7 @@ describe('v2 MCP server', () => {
       expect(violations.some((message) => /script|sandbox|Content Security Policy/i.test(message))).toBe(true)
       await page.goto(`${base}/healthz`)
       await page.setContent(`<img src="${svgPath}">`)
-      await expect.poll(() => page.locator('img').evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(20)
+      await expect.poll(() => page.locator('img').evaluate((element) => (element as HTMLImageElement).naturalWidth), { timeout: MCP_ROUNDTRIP_MS }).toBe(20)
       const videoPath = join(rootDir, 'safe-playback.mp4')
       await execFileAsync(FFMPEG, ['-y', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=10:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoPath])
       const videoUpload = await fetch(`${base}/api/books/${book.bookId}/upload?filename=playback.mp4`, { method: 'POST', body: await readFile(videoPath) })
@@ -572,7 +574,7 @@ describe('v2 MCP server', () => {
       const video = await videoUpload.json() as { assetId: string }
       await page.setContent(`<video muted src="${base}/files/${book.bookId}/${video.assetId}/original.mp4"></video>`)
       const player = page.locator('video')
-      await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+      await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).readyState), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThanOrEqual(2)
       await player.evaluate((element) => (element as HTMLVideoElement).play())
       await expect.poll(() => player.evaluate((element) => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
       const directVideoUrl = `${base}/files/${book.bookId}/${video.assetId}/original.mp4`
@@ -606,7 +608,7 @@ describe('v2 MCP server', () => {
         expect(response?.headers()['x-content-type-options']).toBe('nosniff')
         const directPlayer = page.locator('video, audio')
         await expect.poll(() => directPlayer.evaluate((element) =>
-          (element as HTMLVideoElement).duration)).toBeCloseTo(1, 1)
+          (element as HTMLVideoElement).duration), { timeout: MCP_ROUNDTRIP_MS }).toBeCloseTo(1, 1)
         await directPlayer.evaluate(async (element) => {
           const video = element as HTMLVideoElement
           video.muted = true

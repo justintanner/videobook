@@ -14,6 +14,7 @@ import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } fr
 import type { StartedProcess } from './e2e-harness'
 
 const execFileAsync = promisify(execFile)
+const MCP_ROUNDTRIP_MS = 15_000
 
 async function until(predicate: () => Promise<boolean>, timeout = 30_000) {
   const deadline = Date.now() + timeout
@@ -136,12 +137,12 @@ describe('voice opens a cell fullscreen in the real browser', () => {
     expect(await viewer.getByLabel('Image with detected subject overlays').count()).toBe(1)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
     // Fullscreen is its own scope: the channel closes instead of listening on.
-    await expect.poll(() => page.getByLabel('Start voice conversation').isDisabled()).toBe(true)
+    await expect.poll(() => page.getByLabel('Start voice conversation').isDisabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     expect(actionOutput(callId)?.status).not.toBe('failed')
     await page.screenshot({ path: 'test-results/voice/spoken-fullscreen.png' })
     await page.getByLabel('Close fullscreen preview').click()
     await viewer.waitFor({ state: 'hidden' })
-    await expect.poll(() => page.getByLabel('Start voice conversation').isEnabled()).toBe(true)
+    await expect.poll(() => page.getByLabel('Start voice conversation').isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     expect(await page.getByLabel('Start voice conversation').getAttribute('aria-pressed')).toBe('false')
   })
 

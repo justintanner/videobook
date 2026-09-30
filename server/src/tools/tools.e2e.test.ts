@@ -748,11 +748,10 @@ describe("MCP tools e2e", () => {
   it("generate_gpt_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_image_to_image",
+      name: "generate_kie_gpt_image_2_5_flare_image",
       arguments: {
         prompt: "a sunset",
         book_id: PROJECT,
-        image_refs: [imgAssetId],
       },
     });
     expect(result.isError).toBe(true);

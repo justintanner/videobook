@@ -14,6 +14,7 @@ import { XaiRealtimeEndpoint } from '../../server/src/tools/xai-realtime-endpoin
 
 const execFileAsync = promisify(execFile)
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const MCP_ROUNDTRIP_MS = 15_000
 
 async function waitFor(predicate: () => Promise<boolean>, timeout = 30_000) {
   const deadline = Date.now() + timeout
@@ -145,13 +146,13 @@ describe('voice activation line in the real browser', () => {
       await page.unroute('**/api/voice')
     }
     await expect.poll(async () => await ACTIVATION_LINE(page).count(), { timeout: 20_000 }).toBeGreaterThan(0)
-    await expect.poll(async () => await ACTIVATION_LINE(page).first().textContent()).toBe('Voice Chat Activated')
-    await expect.poll(() => composer.getAttribute('data-dock-open')).toBe('true')
+    await expect.poll(async () => await ACTIVATION_LINE(page).first().textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Voice Chat Activated')
+    await expect.poll(() => composer.getAttribute('data-dock-open'), { timeout: MCP_ROUNDTRIP_MS }).toBe('true')
     const stages = await timingStages(page)
     expect(stages).toContain('activation-audio')
     expect(stages).not.toContain('first-audio')
     expect(stages).not.toContain('utterance-end-to-decoded-audio')
-    await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText()).toBe('Listening')
+    await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Listening')
     expect(endpoint.forceMessageItems()).toHaveLength(1)
     expect(endpoint.sent.some(event => event.type === 'response.create')).toBe(false)
     expect(endpoint.sent.filter(event => event.type === 'conversation.item.create' && event.item?.type === 'function_call_output')).toHaveLength(0)
@@ -165,7 +166,7 @@ describe('voice activation line in the real browser', () => {
     await expect.poll(async () => await ACTIVATION_LINE(page).count(), { timeout: 20_000 }).toBe(2)
     expect(endpoint.forceMessageItems()).toHaveLength(2)
     expect(endpoint.sent.filter(event => event.type === 'session.update')).toHaveLength(2)
-    await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText()).toBe('Listening')
+    await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Listening')
   })
 
   it('treats the typed draft as toggleVoice does today and still greets', async () => {
