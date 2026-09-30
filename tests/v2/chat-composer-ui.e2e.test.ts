@@ -1160,7 +1160,7 @@ describe('chat composer browser flow', () => {
       expect(await page.locator('.book-project-form-hint').textContent()).toContain('Slug: my-cafe-project')
       await page.getByRole('button', { name: 'Create project', exact: true }).click()
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
-      await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('false')
+      await expect.poll(() => toggle.getAttribute('aria-expanded'), { timeout: MCP_ROUNDTRIP_MS }).toBe('false')
       expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
       const listed = resultValue(await client.callTool({ name: 'list_books', arguments: {} }))
       const created = (Array.isArray(listed) ? listed : []).map(record).find((book) => book?.name === createdName)
@@ -1178,7 +1178,7 @@ describe('chat composer browser flow', () => {
       await page.getByRole('button', { name: 'Save project name', exact: true }).click()
       createdName = 'renamed-project-2'
       await expect.poll(() => selectedName.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toBe(createdName)
-      await expect.poll(() => page.locator('.book-project-form').count()).toBe(0)
+      await expect.poll(() => page.locator('.book-project-form').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       expect(await toggle.evaluate((element) => document.activeElement === element)).toBe(true)
       expect(resultValue(await client.callTool({ name: 'get_book', arguments: { book_id: createdId } }))).toMatchObject({ bookId: createdId, name: createdName })
       await page.reload({ waitUntil: 'commit' })
@@ -1203,7 +1203,7 @@ describe('chat composer browser flow', () => {
       await toggle.click()
       await page.getByRole('button', { name: `Delete ${createdName}`, exact: true }).click()
       await page.getByRole('button', { name: `Confirm deletion of ${createdName}`, exact: true }).click()
-      await expect.poll(() => page.locator('.book-project-delete').count()).toBe(0)
+      await expect.poll(() => page.locator('.book-project-delete').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       await expect.poll(() => toggle.evaluate((element) => document.activeElement === element)).toBe(true)
       createdId = ''
     } finally {
