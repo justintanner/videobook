@@ -96,7 +96,7 @@ export function candidateSections(energy: RhythmEnergy, durationSeconds: number)
   };
 }
 
-export function sampleEnergy(energy: RhythmEnergy, timeSeconds: number): number {
+function sampleEnergy(energy: RhythmEnergy, timeSeconds: number): number {
   if (!energy.values.length) return 0;
   const index = Math.min(energy.values.length - 1, Math.max(0, Math.floor(timeSeconds / energy.hopSeconds)));
   return energy.values[index] ?? 0;

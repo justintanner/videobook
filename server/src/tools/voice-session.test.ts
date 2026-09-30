@@ -18,7 +18,7 @@ import {
 import { voiceRouter } from "../voice-http.js";
 import { attachVoiceAudio } from "../voice-audio.js";
 import { restrictHttpAccess } from "../http-access.js";
-import { VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, openAiVoiceActivationEvent, voiceSessionConfig, xaiVoiceSessionConfig } from "../voice-config.js";
+import { OPENAI_VOICE, VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, XAI_VOICE, openAiVoiceActivationEvent, voiceSessionConfig, xaiVoiceSessionConfig } from "../voice-config.js";
 import { XaiRealtimeEndpoint, sendActivationResponse } from "./xai-realtime-endpoint.js";
 import type { Engine } from "videobook-engine";
 import { appendVoiceHistory } from "./chat-history.js";
@@ -192,9 +192,11 @@ describe("voice session boundaries", () => {
   it("speaks as one terse character and fills optional parameters in itself", () => {
     const context = { book: "voice-session" };
     const session = voiceSessionConfig(context);
-    expect(session.audio?.output?.voice).toBe("alloy");
+    expect(session.audio?.output?.voice).toBe(OPENAI_VOICE);
+    expect(OPENAI_VOICE).toBe("alloy");
     expect(session.audio?.output?.speed).toBe(1);
-    expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).voice).toBe("sal");
+    expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).voice).toBe(XAI_VOICE);
+    expect(XAI_VOICE).toBe("sal");
     // The model read an optional staleness guard as a precondition and asked
     // the speaker to recite a revision hash the cell details never display.
     expect(session.instructions).toMatch(/Never ask the user for a parameter the discovered schema marks optional/u);

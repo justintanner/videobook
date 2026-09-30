@@ -1,25 +1,22 @@
 import { z } from "zod";
 
 const beatSchema = z.object({ timeSeconds: z.number().finite().nonnegative(), confidence: z.number().min(0).max(1).nullable() });
-export const musicEnergySchema = z.object({
+const musicEnergySchema = z.object({
   algorithmId: z.string().min(1),
   algorithmVersion: z.string().min(1),
   hopSeconds: z.number().finite().positive(),
   values: z.array(z.number().finite().min(0).max(1)).max(20000),
 });
-export type MusicEnergy = z.infer<typeof musicEnergySchema>;
-export const sectionCandidateSchema = z.object({
+const sectionCandidateSchema = z.object({
   id: z.string().min(1).max(100),
   timeSeconds: z.number().finite().nonnegative().max(3600),
   quality: z.number().min(0).max(1),
 });
-export type SectionCandidate = z.infer<typeof sectionCandidateSchema>;
-export const sectionDetectionSchema = z.object({
+const sectionDetectionSchema = z.object({
   algorithmId: z.string().min(1),
   algorithmVersion: z.string().min(1),
   candidates: z.array(sectionCandidateSchema).max(200),
 });
-export type SectionDetection = z.infer<typeof sectionDetectionSchema>;
 export const musicAnalysisSchema = z.object({
   analysisId: z.string(),
   artifactId: z.string().uuid(),
@@ -40,7 +37,7 @@ export const musicAnalysisSchema = z.object({
 });
 export type MusicAnalysis = z.infer<typeof musicAnalysisSchema>;
 
-export const SECTION_LABEL_VALUES = ["intro", "verse", "chorus", "drop", "break", "bridge", "outro"] as const;
+const SECTION_LABEL_VALUES = ["intro", "verse", "chorus", "drop", "break", "bridge", "outro"] as const;
 export const sectionLabelsSchema = z.object({
   schemaVersion: z.literal(1),
   analysisId: z.string(),

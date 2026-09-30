@@ -3,14 +3,14 @@ import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import { readVideoAnalysisSummary } from "./video-analysis-projection.js";
 
-export const MOMENTS_SCHEMA_VERSION = 1;
+const MOMENTS_SCHEMA_VERSION = 1;
 export const MOMENTS_EXTRACTOR_ID = "videobook-scene-scan";
 export const MOMENTS_EXTRACTOR_VERSION = "1";
 export const MOMENTS_SHOT_THRESHOLD = 0.3;
 export const MOMENTS_CHANGE_THRESHOLD = 0.12;
 export const MOMENTS_MIN_MOMENT_SECONDS = 0.5;
 export const MOMENTS_MAX_SCAN_SECONDS = 1800;
-export const MOMENTS_MAX_SHOTS = 4000;
+const MOMENTS_MAX_SHOTS = 4000;
 export const MOMENTS_MAX_RANKED = 12;
 
 const rangeSchema = z.object({
@@ -139,7 +139,7 @@ export function shotsFromScan(frames: readonly SceneFrame[], durationSeconds: nu
   }).filter((shot) => shot.endSeconds - shot.startSeconds > 0);
 }
 
-export function shotBoundaries(frames: readonly SceneFrame[]): number[] {
+function shotBoundaries(frames: readonly SceneFrame[]): number[] {
   const peaks: Array<{ timeSeconds: number; score: number }> = [];
   for (let index = 1; index < frames.length - 1; index += 1) {
     const frame = frames[index]!;
