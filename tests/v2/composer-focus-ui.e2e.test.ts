@@ -675,7 +675,7 @@ describe('composer focus through real workspace interactions', () => {
 
   it('does not steal focus from an editor when an earlier real command finishes', async () => {
     await cell(generationCellId).click()
-    const prompt = page.getByLabel('Prompt', { exact: true })
+    const prompt = page.getByRole('textbox', { name: 'Prompt' })
     await prompt.waitFor()
     let release: () => void = () => undefined
     let arrived: () => void = () => undefined
