@@ -585,6 +585,79 @@ describe("voice session boundaries", () => {
     }
   });
 
+  it("hands a spoken fullscreen request to the app as a view and relays what the app did", async () => {
+    const provider = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    const sent: { type?: string; item?: Record<string, unknown>; session?: { instructions?: string } }[] = [];
+    provider.on("connection", socket => {
+      socket.on("message", data => {
+        const event = JSON.parse(String(data)) as (typeof sent)[number];
+        sent.push(event);
+        if (event.type === "session.update") socket.send(JSON.stringify({ type: "session.updated", event_id: "configured" }));
+      });
+    });
+    await once(provider, "listening");
+    const address = provider.address();
+    if (!address || typeof address === "string") throw new Error("No provider address");
+    process.env.VIDEOBOOK_XAI_REALTIME_URL = `ws://127.0.0.1:${address.port}`;
+    const image = await engine.artifacts.create("image", "fullscreen still");
+    if (!image.ok) throw new Error(image.error.message);
+    const cell = engine.notebooks.createCell({ type: "image", slot: { row: 5, column: 6 }, outputArtifactId: image.value.artifactId });
+    const inserted = await engine.notebooks.insertCell(notebookId, cell);
+    if (!inserted.ok) throw new Error(inserted.error.message);
+    const session = new VoiceSession(books, bookId, notebookId, engine, "local-endpoint-key", 120_000, () => undefined, "xai", 48000);
+    const events: VoiceSessionEvent[] = [];
+    const outputs = () => sent.filter(event => event.type === "conversation.item.create" && event.item?.type === "function_call_output")
+      .map(event => ({ callId: event.item?.call_id, output: JSON.parse(String(event.item?.output)) as Record<string, unknown> }));
+    try {
+      session.subscribe(event => events.push(event));
+      await session.start("", new AbortController().signal);
+      expect(sent.find(event => event.type === "session.update")?.session?.instructions)
+        .toMatch(/discover fullscreen and pass show_media_fullscreen/u);
+      session.receive({ type: "input_audio_buffer.speech_started", item_id: "view-turn", event_id: "view-speech" });
+      session.receive({ type: "input_audio_buffer.speech_stopped", event_id: "view-stop" });
+      session.receive({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: "view-turn", transcript: "Show me F7 full screen.", event_id: "view-final",
+      });
+      session.receive({ type: "response.created", response: { id: "view-response" }, event_id: "view-reply" });
+      session.receive({
+        type: "response.function_call_arguments.done", response_id: "view-response", call_id: "find-call",
+        name: "find_workspace_actions", event_id: "find-call-done", arguments: JSON.stringify({ query: "fullscreen" }),
+      });
+      await expect.poll(() => outputs().length).toBe(1);
+      expect(outputs()[0]).toMatchObject({
+        callId: "find-call",
+        output: { actions: [{ name: "show_media_fullscreen", effect: "view", requiresReview: false }] },
+      });
+      session.receive({
+        type: "response.function_call_arguments.done", response_id: "view-response", call_id: "view-call",
+        name: "prepare_workspace_action", event_id: "view-call-done",
+        arguments: JSON.stringify({ tool: "show_media_fullscreen", params: { asset_id: image.value.artifactId } }),
+      });
+      session.receive({ type: "response.done", event_id: "view-response-done", response: { id: "view-response", status: "completed" } });
+      await expect.poll(() => events.some(event => event.type === "action")).toBe(true);
+      const action = events.find(event => event.type === "action");
+      if (!action || action.type !== "action") throw new Error("expected the view to reach the app");
+      expect(action.plan).toMatchObject({
+        kind: "chat-action-plan",
+        tool: "show_media_fullscreen",
+        effect: "view",
+        prompt: "Show me @f7 full screen.",
+        params: { asset_id: image.value.artifactId, cell_id: cell.id },
+        confirmation: { required: false },
+      });
+      // Nothing is answered for the model until the app says what it opened.
+      expect(outputs()).toHaveLength(1);
+      session.acknowledge(action.callId, { status: "completed", message: "Opened @f7 fullscreen" });
+      await expect.poll(() => outputs().length).toBe(2);
+      expect(outputs()[1]).toMatchObject({ callId: "view-call", output: { status: "completed", message: "Opened @f7 fullscreen" } });
+    } finally {
+      await session.close();
+      delete process.env.VIDEOBOOK_XAI_REALTIME_URL;
+      await new Promise<void>(resolve => provider.close(() => resolve()));
+    }
+  });
+
   it("orders user history before a reply when transcription finishes after native speech", async () => {
     const session = new VoiceSession(books, bookId, notebookId, engine, "unused-without-start", 120_000, () => undefined);
     const events: VoiceSessionEvent[] = [];

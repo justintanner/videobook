@@ -186,4 +186,58 @@ describe("voice chat action policy", () => {
     expect(plan.prompt).toBe(tagged);
     expect(plan.summary).toBe(tagged);
   });
+
+  it("finds the fullscreen view from the words a speaker uses for it", () => {
+    for (const query of ["fullscreen", "full screen", "show fullscreen", "open fullscreen", "show media fullscreen", "display image full screen", "view cell fullscreen", "open cell", "view image", "display cell a7"]) {
+      expect(discoverVoiceActions(engine, query).map(action => action.name), query).toContain("show_media_fullscreen");
+    }
+    expect(discoverVoiceActions(engine, "show media fullscreen")).toEqual([expect.objectContaining({
+      name: "show_media_fullscreen",
+      effect: "view",
+      requiresReview: false,
+      parameters: expect.objectContaining({ required: ["asset_id"] }),
+    })]);
+  });
+
+  it("plans a spoken fullscreen request as a view of that cell, with nothing to review or apply", async () => {
+    const image = await engine.artifacts.create("image", "hero still");
+    const audio = await engine.artifacts.create("audio", "soundtrack");
+    if (!image.ok || !audio.ok) throw new Error("Could not create fullscreen fixtures");
+    const imageCell = engine.notebooks.createCell({ type: "image", slot: { row: 0, column: 6 }, outputArtifactId: image.value.artifactId });
+    const audioCell = engine.notebooks.createCell({ type: "audio", slot: { row: 1, column: 6 }, outputArtifactId: audio.value.artifactId });
+    for (const cell of [imageCell, audioCell]) {
+      const inserted = await engine.notebooks.insertCell(notebookId, cell);
+      if (!inserted.ok) throw new Error(inserted.error.message);
+    }
+    const spoken = "Show me A7 full screen.";
+    const show = (prompt: string, assetId: string) => prepare(prompt, { tool: "show_media_fullscreen", params: { asset_id: assetId }, message: prompt });
+
+    const plan = chatActionPlanSchema.parse(value(await show(spoken, image.value.artifactId)));
+    expect(plan).toMatchObject({
+      tool: "show_media_fullscreen",
+      routedTool: "show_media_fullscreen",
+      effect: "view",
+      prompt: "Show me @a7 full screen.",
+      params: { asset_id: image.value.artifactId, cell_id: imageCell.id },
+      confirmation: { required: false },
+    });
+    // The board can lag a spoken address, so the model may pass it through.
+    for (const address of ["@a7", "A7"]) {
+      expect(chatActionPlanSchema.parse(value(await show(spoken, address))).params).toEqual(plan.params);
+    }
+
+    // The app opens the viewer; the server has no handler to run for it.
+    const applied = await withBookContext({ bookId, engine }, () => chatDef(engine).handler({ book_id: bookId, action_plan: plan }));
+    expect(applied).toMatchObject({ isError: true });
+    expect(applied.content[0]?.text).toContain("View actions open in the app");
+
+    const sound = await show("Show me B7 full screen.", audio.value.artifactId);
+    expect(sound).toMatchObject({ isError: true });
+    expect(sound.content[0]?.text).toBe("@b7 holds audio; fullscreen shows images and video");
+    const empty = await show("Show me D7 full screen.", "d7");
+    expect(empty).toMatchObject({ isError: true });
+    expect(empty.content[0]?.text).toContain("@d7 was not found");
+    const unnamed = await prepare(spoken, { tool: "show_media_fullscreen", params: {}, message: spoken });
+    expect(unnamed.content[0]?.text).toContain("Invalid parameters for show_media_fullscreen");
+  });
 });

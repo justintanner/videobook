@@ -87,7 +87,7 @@ export type ChatActionPlan = {
   params: Record<string, unknown>
   message: string
   summary: string
-  effect: 'mutation' | 'generation'
+  effect: 'mutation' | 'generation' | 'view'
   confirmation: {
     required: boolean
     reason: string
@@ -289,7 +289,7 @@ export function asChatActionPlan(value: unknown): ChatActionPlan {
     || !tool
     || !params
     || !summary
-    || (effect !== 'mutation' && effect !== 'generation')
+    || (effect !== 'mutation' && effect !== 'generation' && effect !== 'view')
     || typeof required !== 'boolean'
     || !reason
   ) throw new Error('The server returned an invalid chat action plan')

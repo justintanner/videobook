@@ -58,6 +58,7 @@ export default defineConfig({
       'src/videobook/library-scope.test.ts',
       'src/videobook/library-presentation.test.ts',
       'src/videobook/forget-asset.test.ts',
+      'src/videobook/fullscreen-target.test.ts',
       'src/videobook/notebook-routing.test.ts',
       'src/videobook/notebook-run-watch.test.ts',
       'src/videobook/media-insight-watch.test.ts',

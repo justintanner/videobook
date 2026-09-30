@@ -17,6 +17,7 @@ import {
   effectForTool,
   getRoutableTool,
 } from "./chat-router.js";
+import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import { getAllToolDefs } from "./tools/index.js";
 import type { ToolDef } from "./tools/tool-def.js";
@@ -40,13 +41,15 @@ describe("chat routing catalog", () => {
   it("exposes every registered tool except chat itself", () => {
     const tools = buildRoutableTools(definitions);
     const directNames = tools
-      .filter((tool) => tool.name === tool.actualTool)
+      .filter((tool) => tool.name === tool.actualTool && tool.effect !== "view")
       .map((tool) => tool.name);
     const expectedNames = definitions
       .map((definition) => definition.name)
       .filter((name) => name !== "chat");
     expect(new Set(directNames)).toEqual(new Set(expectedNames));
-    expect(tools).toHaveLength(expectedNames.length + CHAT_TOOL_ALIASES.length);
+    expect(tools).toHaveLength(
+      expectedNames.length + CHAT_TOOL_ALIASES.length + CHAT_VIEW_ACTIONS.length,
+    );
     expect(getRoutableTool(tools, "chat")).toBeUndefined();
     expect(getRoutableTool(tools, "chain")?.actualTool).toBe("chain");
     expect(getRoutableTool(tools, "chain")?.autoApply).toBe(false);
@@ -57,6 +60,23 @@ describe("chat routing catalog", () => {
       "first_asset_id",
       "second_asset_id",
     ]);
+  });
+
+  it("offers app-side views beside the registered tools, with nothing to review", () => {
+    const tools = buildRoutableTools(definitions);
+    expect(definitions.map((definition) => definition.name))
+      .not.toContain("show_media_fullscreen");
+    expect(getRoutableTool(tools, "show_media_fullscreen")).toMatchObject({
+      actualTool: "show_media_fullscreen",
+      category: "action",
+      effect: "view",
+      autoApply: true,
+      params: ["asset_id"],
+      requiredParams: ["asset_id"],
+    });
+    const prompt = buildChatRoutingPrompt("my-book", tools);
+    expect(prompt).toContain("- show_media_fullscreen: Show, open, view or enlarge");
+    expect(prompt).toContain("- For show_media_fullscreen: use when the user asks to show, open, view, or enlarge");
   });
 
   it("includes registered destructive and administrative tools", () => {

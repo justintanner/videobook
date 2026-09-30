@@ -2,12 +2,23 @@ import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import { notebookGridAddress } from "videobook-engine/notebook-grid";
 import { buildRoutableTools } from "./chat-router.js";
+import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import { getAllToolDefs } from "./tools/index.js";
+
+// Spoken verbs that no action is named after, mapped to the one that is.
+const VOICE_OPERATION_ALIASES: Readonly<Record<string, string>> = {
+  relabel: "rename",
+  copy: "duplicate",
+  open: "show",
+  view: "show",
+  display: "show",
+};
 
 export function discoverVoiceActions(engine: Engine, query: string) {
   const definitions = getAllToolDefs(engine);
+  const schemas = [...definitions, ...CHAT_VIEW_ACTIONS];
   const tokens = query.toLowerCase().replaceAll(/[^a-z0-9]+/gu, " ").trim().split(/\s+/u)
-    .filter(Boolean).map((token) => token === "relabel" ? "rename" : token === "copy" ? "duplicate" : token);
+    .filter(Boolean).map((token) => VOICE_OPERATION_ALIASES[token] ?? token);
   const words = tokens.join(" ");
   const actions = buildRoutableTools(definitions);
   const subjects = new Set(["audio", "image", "video", "notebook", "asset", "book", "cell", "text", "script", "project", "media", "voice", "model", "frame"]);
@@ -25,7 +36,7 @@ export function discoverVoiceActions(engine: Engine, query: string) {
     .sort((a, b) => b.score - a.score || a.action.name.localeCompare(b.action.name))
     .slice(0, 8)
     .map(({ action }) => {
-      const definition = definitions.find((candidate) => candidate.name === action.actualTool)!;
+      const definition = schemas.find((candidate) => candidate.name === action.actualTool)!;
       const { book_id: _bookId, ...shape } = definition.schema;
       return {
         name: action.name,

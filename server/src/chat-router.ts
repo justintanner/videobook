@@ -1,6 +1,7 @@
 import { DEFAULT_GPT_IMAGE_MODEL } from "./gpt-image-2-5.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { planStackedChainFromQuery } from "./chain-plan.js";
+import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import {
   zodEnumOptionsOrNull,
   zodIsRequired,
@@ -15,7 +16,7 @@ type RoutableToolInfo = {
   requiredParams: string[];
   constraints: string[];
   category: "action" | "generation";
-  effect: "read" | "mutation" | "generation";
+  effect: "read" | "mutation" | "generation" | "view";
   autoApply: boolean;
 };
 
@@ -125,7 +126,7 @@ function categoryForTool(name: string): RoutableToolInfo["category"] {
 function effectForTool(
   name: string,
   category: RoutableToolInfo["category"],
-): RoutableToolInfo["effect"] {
+): Exclude<RoutableToolInfo["effect"], "view"> {
   if (category === "generation") return "generation";
   if (
     READ_ONLY_TOOL_NAMES.has(name)
@@ -134,11 +135,13 @@ function effectForTool(
   return "mutation";
 }
 
-function paramsForTool(definition: ToolDef): string[] {
+type RoutableDefinition = Pick<ToolDef, "name" | "description" | "schema">;
+
+function paramsForTool(definition: RoutableDefinition): string[] {
   return Object.keys(definition.schema).filter((name) => name !== "book_id");
 }
 
-function requiredParamsForTool(definition: ToolDef): string[] {
+function requiredParamsForTool(definition: RoutableDefinition): string[] {
   return Object.entries(definition.schema)
     .filter(([name, schema]) =>
       name !== "book_id"
@@ -146,7 +149,7 @@ function requiredParamsForTool(definition: ToolDef): string[] {
     .map(([name]) => name);
 }
 
-function constraintsForTool(definition: ToolDef): string[] {
+function constraintsForTool(definition: RoutableDefinition): string[] {
   return Object.entries(definition.schema).flatMap(([name, schema]) => {
     if (name === "book_id") return [];
     const constraintSchema = schema as unknown as ZodConstraintSchema;
@@ -193,7 +196,19 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
         autoApply: AUTO_APPLY_TOOL_NAMES.has(definition.name),
       };
     });
-  return [...aliases, ...tools];
+  // Views run in the app, never on the server, so they need no review.
+  const views = CHAT_VIEW_ACTIONS.map((action) => ({
+    name: action.name,
+    actualTool: action.name,
+    description: action.description,
+    params: paramsForTool(action),
+    requiredParams: requiredParamsForTool(action),
+    constraints: constraintsForTool(action),
+    category: "action" as const,
+    effect: "view" as const,
+    autoApply: true,
+  }));
+  return [...aliases, ...views, ...tools];
 }
 
 const SEEDREAM_IMAGE_I2I_TOOL = "generate_kie_seedream_v5_lite_image_to_image";
@@ -671,6 +686,7 @@ Parameter guidelines:
 - For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - For splice_video: join two or more videos into one new asset. Use this for splice, concat, or stitch requests, not plan_chat_command. Pass first_asset_id and second_asset_id in playback order, additional_asset_ids for any further clips in that same order, and overlap 0 to concatenate complete clips
 - For chain: use when one request stacks two or more supported actions in order, including extract audio then replace another clip's soundtrack. Pass action "run", version 1, and ordered steps. Each step is {"id","tool","params"}. id is required and unique, starts with a letter (extract, replace, step1). Point a later step at an earlier output with {"$ref":{"step_id":"<that id>","output":"<field>"}} and never interpolate a ref inside a string. Do not nest chain or chat. Leave book_id out of step params
+- For show_media_fullscreen: use when the user asks to show, open, view, or enlarge one cell's image or video (full screen, fullscreen, bigger). Pass that cell's resolved asset ID as asset_id
 - plan_chat_command is only for timeline sequence edits such as trim, move, split, insert at a frame, or captions. media_context is an optional single object {notebook_id, cell_id, artifact_id} for one fullscreen clip — never an array of clips
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include book_id in params — it is injected automatically

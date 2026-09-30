@@ -27,6 +27,7 @@ import {
   preflightChainPlan,
 } from "../chain-plan.js";
 import { withoutUnrequestedSettings } from "../chat-generation-settings.js";
+import { resolveChatViewAction } from "../chat-view-actions.js";
 import { rewriteChatGenerationPrompt } from "../chat-prompt-rewrite.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
@@ -81,7 +82,7 @@ type ChatActionPlan = {
   params: Record<string, unknown>;
   message: string;
   summary: string;
-  effect: "mutation" | "generation";
+  effect: "mutation" | "generation" | "view";
   confirmation: {
     required: boolean;
     reason: string;
@@ -98,7 +99,7 @@ const chatActionPlanSchema = z.object({
   params: z.record(z.string(), z.unknown()),
   message: z.string(),
   summary: z.string().min(1),
-  effect: z.enum(["mutation", "generation"]),
+  effect: z.enum(["mutation", "generation", "view"]),
   confirmation: z.object({
     required: z.boolean(),
     reason: z.string().min(1),
@@ -541,6 +542,7 @@ async function applyChatActionPlan(
     return error("The chat action belongs to a different book");
   }
   if (plan.tool === "chat") return error("Chat cannot route to itself");
+  if (plan.effect === "view") return error("View actions open in the app and have nothing to apply");
   const { getAllToolDefs } = await import("./index.js");
   const targetDef = getAllToolDefs(engine).find((definition) =>
     definition.name === plan.tool);
@@ -867,6 +869,41 @@ async function handleChatRequest(
   const routableTool = getRoutableTool(routableTools, decision.tool);
   if (!routableTool) {
     return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
+  }
+
+  // A view opens in the app, so the plan carries the resolved target back
+  // instead of running a handler here.
+  if (routableTool.effect === "view") {
+    const view = resolveChatViewAction(
+      engine,
+      notebookDocument,
+      routableTool.actualTool,
+      decision.params ?? {},
+    );
+    if (!view.ok) return error(view.message);
+    if (!proposedDecision) appendChatHistory(engine, {
+      prompt: taggedPrompt,
+      tool: decision.tool,
+      params: view.params,
+      message: decision.message,
+      failed: false,
+    });
+    return json({
+      kind: "chat-action-plan",
+      planId: uuidv7(),
+      bookId,
+      prompt: taggedPrompt,
+      routedTool: decision.tool,
+      tool: routableTool.actualTool,
+      params: view.params,
+      message: decision.message,
+      summary: decision.message.trim() || "Show media fullscreen",
+      effect: "view",
+      confirmation: {
+        required: false,
+        reason: "Opening a view changes nothing in the book",
+      },
+    } satisfies ChatActionPlan);
   }
 
   // 7. Apply fixups (spread to avoid mutating decision.params for logging)

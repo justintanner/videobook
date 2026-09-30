@@ -144,6 +144,7 @@ import {
   resolveSpeakPreviewAction,
   resolveSpeakVoiceId,
 } from './videobook/speak-preview'
+import { resolveFullscreenTarget } from './videobook/fullscreen-target'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
 import {
   clampHandlePadding,
@@ -7915,6 +7916,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         assetId.startsWith('@') ? assetId : `@${assetId}`,
         commandMentionAssets,
       ))[0] ?? null
+    }
+    if (plan.tool === 'show_media_fullscreen') {
+      const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
+      if (!target.ok) return target
+      if (isCurrent?.() === false || chat?.isCurrent() === false) {
+        return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
+      }
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      openMediaFullscreen(target.cell, target.asset)
+      return { ok: true, message: `Opened ${target.address} fullscreen` }
     }
     if (plan.tool === 'apply_watermark' || plan.routedTool === 'apply_watermark') {
       const rawAssetId = asString(plan.params.asset_id)?.replace(/^@/, '')

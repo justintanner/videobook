@@ -118,6 +118,14 @@ lock until the chain ends. Cancelling one step drops every remaining step —
 later steps consume its output — and leaves finished work in place. A chain step
 cannot be revised, only applied or cancelled.
 
+A request to show, open or enlarge a cell's image or video is a view, not a
+change. `show_media_fullscreen` is discovered like any other action, accepts the
+cell's artifact ID or its spoken address, and opens the fullscreen viewer at once
+without a review; typed chat routes the same request the same way. It is not an
+MCP tool: the server only resolves the cell and the app opens the viewer. An empty
+cell or one holding audio is refused with the reason. Fullscreen still ends voice
+as described below, so the viewer opens without a spoken confirmation.
+
 The workspace reaches the model three ways. It is in the instructions at
 connect; it rides along with every tool result, cells only, so the transcript is
 not resent and cannot crowd out the result; and a `session.update` replaces the
