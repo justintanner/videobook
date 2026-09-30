@@ -60,7 +60,8 @@ export function PaneResizeHandle({
         event.preventDefault()
         event.currentTarget.focus({ preventScroll: true })
         event.currentTarget.setPointerCapture(event.pointerId)
-        dragRef.current = { y: event.clientY, height: size.height }
+        const target = handleRef.current?.closest<HTMLElement>(targetSelector)
+        dragRef.current = { y: event.clientY, height: target ? Math.round(target.getBoundingClientRect().height) : size.height }
       }}
       onPointerMove={(event) => {
         const drag = dragRef.current
