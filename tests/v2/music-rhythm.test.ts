@@ -62,7 +62,7 @@ describe('music analysis and rhythm persistence', () => {
   afterEach(async () => {
     await queue.stop()
     closeEngineForTest(root, engine)
-    await rm(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   async function audio(seconds = 8, bpm = 120, varyingLoudness = false) {
