@@ -513,7 +513,7 @@ const ORIENTATIONS = new Set(['landscape', 'portrait', 'square']);
 const POST_ASSET_PREFIX = /^(?:vid|img|aud|asset|final|script)-[a-z0-9-]+$/i;
 const POST_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function normalizeRewriteScriptCommandArgs(
+function normalizeRewriteScriptCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
   const result: CommandToolArgs = { ...(args as CommandToolArgs) };
@@ -533,7 +533,7 @@ export function normalizeRewriteScriptCommandArgs(
   return result;
 }
 
-export function normalizeQrbtfCommandArgs(
+function normalizeQrbtfCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
   const result: CommandToolArgs = { ...(args as CommandToolArgs) };

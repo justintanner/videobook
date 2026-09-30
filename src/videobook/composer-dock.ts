@@ -64,13 +64,6 @@ export function pauseComposerDockMedia(root: ParentNode | null): void {
   }
 }
 
-export function composerDockHideSkipsBlurCommit(
-  relatedTarget: EventTarget | null,
-): boolean {
-  if (!(relatedTarget instanceof Element)) return false
-  return Boolean(relatedTarget.closest('[data-composer-dock-hide]'))
-}
-
 export type MusicLibraryTab = 'media' | 'music' | 'autocut'
 
 export function initialMusicDockView(
