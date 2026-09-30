@@ -124,7 +124,11 @@ cell's artifact ID or its spoken address, and opens the fullscreen viewer at onc
 without a review; typed chat routes the same request the same way. It is not an
 MCP tool: the server only resolves the cell and the app opens the viewer. An empty
 cell or one holding audio is refused with the reason. Fullscreen still ends voice
-as described below, so the viewer opens without a spoken confirmation.
+as described below, so the viewer opens without a spoken confirmation. This
+holds when voice itself opened the viewer: the image viewer swaps the composer
+to its image-edit session, video playback would feed the microphone, and a
+review raised behind the modal dialog could not reach Apply or Cancel — so the
+channel ends and resumes only with an explicit click after the viewer closes.
 
 The workspace reaches the model three ways. It is in the instructions at
 connect; it rides along with every tool result, cells only, so the transcript is
