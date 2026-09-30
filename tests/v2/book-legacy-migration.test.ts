@@ -356,7 +356,7 @@ describe('legacy book discovery and migration', () => {
       import { BookManager } from './server/src/book-manager.ts';
       const [libraryDir, checkpoint] = process.argv.slice(1);
       setTimeout(() => process.exit(94), 60000);
-      const books = new BookManager({ libraryDir,
+      const books = new BookManager({ libraryDir, migrationLeaseMs: 3000,
         onMigrationCheckpoint: (phase) => { if (phase === checkpoint) process.exit(93); } });
       await books.ready();
       const preview = books.listLegacy()[0];
@@ -370,7 +370,11 @@ describe('legacy book discovery and migration', () => {
     child.stderr.on('data', (chunk: Buffer) => { output += chunk.toString() })
     const exitCode = await new Promise<number | null>((resolve, reject) => { child.on('exit', resolve); child.on('error', reject) })
     expect(exitCode, output).toBe(93)
-    books = new BookManager({ libraryDir: library })
+    // The lease TTL must exceed the engine's 1s minimum heartbeat while a
+    // holder is alive, yet expire quickly once the killed child stops
+    // heartbeating; recovery here is real cross-process lease reaping, so
+    // fake timers cannot drive it.
+    books = new BookManager({ libraryDir: library, migrationLeaseMs: 3_000 })
     await books.ready()
     const { dryRunV4Migration } = await import('videobook-engine')
     const sourceRoot = books.listLegacy().length ? legacy.root

@@ -1,4 +1,5 @@
 import { defineConfig, configDefaults } from 'vitest/config';
+import { availableParallelism } from 'node:os';
 import path from 'node:path';
 
 // Benign prefixes stripped even from failing-test console output.
@@ -36,9 +37,11 @@ export default defineConfig({
     // Media tests launch multithreaded FFmpeg encoders, so four Vitest workers
     // can exhaust the smaller GitHub runner even though each test is isolated.
     // Two workers retain file parallelism without oversubscribing encoders.
+    // GitHub Actions keeps that cap; local runs scale with cores (ffmpeg
+    // time-slices). A local CI=true env var does not imply the runner cap.
     // E2E uses its own worker policy.
     fileParallelism: true,
-    maxWorkers: 2,
+    maxWorkers: process.env.GITHUB_ACTIONS ? 2 : Math.min(8, Math.max(2, availableParallelism() - 2)),
     include: [
       'tests/v2/**/*.test.ts',
       'tests/dolt-native-cutover.test.ts',
