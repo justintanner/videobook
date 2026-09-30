@@ -18,7 +18,8 @@ import {
 import { voiceRouter } from "../voice-http.js";
 import { attachVoiceAudio } from "../voice-audio.js";
 import { restrictHttpAccess } from "../http-access.js";
-import { VOICE_PCM_RATE, voiceSessionConfig, xaiVoiceSessionConfig } from "../voice-config.js";
+import { VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, openAiVoiceActivationEvent, voiceSessionConfig, xaiVoiceSessionConfig } from "../voice-config.js";
+import { XaiRealtimeEndpoint, sendActivationResponse } from "./xai-realtime-endpoint.js";
 import type { Engine } from "videobook-engine";
 import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
@@ -591,5 +592,187 @@ describe("voice session boundaries", () => {
     const history = engine.logs.read("voice-chat").filter(entry => entry.sessionId === session.id).sort((a, b) => Number(a.ts) - Number(b.ts));
     expect(history.map(entry => entry.role)).toEqual(["user", "assistant"]);
     expect(events.filter(event => event.type === "caption")[0]).toMatchObject({ caption: { role: "user", final: false } });
+  });
+
+  describe("voice activation line", () => {
+    const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+    function pause(ms: number): Promise<void> {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, ms);
+      return promise;
+    }
+
+    async function startXaiSession(): Promise<{ id: string; token: string }> {
+      const response = await fetch(`${origin}/api/voice`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookId, notebookId, mode: "xai", sampleRate: 24_000 }) });
+      if (response.status !== 201) throw new Error(`Session start failed: ${response.status} ${await response.text()}`);
+      return await response.json() as { id: string; token: string };
+    }
+
+    async function openEventStream(id: string, token: string) {
+      const response = await fetch(`${origin}/api/voice/${id}/events`, { headers: bearer(token) });
+      if (response.status !== 200 || !response.body) throw new Error(`Event stream failed: ${response.status}`);
+      const events: VoiceSessionEvent[] = [];
+      const reading = (async () => {
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for await (const chunk of response.body!) {
+          buffer += decoder.decode(chunk, { stream: true });
+          let index;
+          while ((index = buffer.indexOf("\n")) >= 0) {
+            events.push(JSON.parse(buffer.slice(0, index)) as VoiceSessionEvent);
+            buffer = buffer.slice(index + 1);
+          }
+        }
+      })();
+      return { events, reading };
+    }
+
+    async function withEndpoint(test: (endpoint: XaiRealtimeEndpoint) => Promise<void>): Promise<void> {
+      const endpoint = new XaiRealtimeEndpoint();
+      const url = await endpoint.listen();
+      process.env.XAI_API_KEY = "local-endpoint-key";
+      process.env.VIDEOBOOK_XAI_REALTIME_URL = url;
+      try {
+        await test(endpoint);
+      } finally {
+        delete process.env.XAI_API_KEY;
+        delete process.env.VIDEOBOOK_XAI_REALTIME_URL;
+        await endpoint.close();
+      }
+    }
+
+    it("pins the OpenAI activation builder", () => {
+      const event = openAiVoiceActivationEvent();
+      expect(event.type).toBe("response.create");
+      expect(event.response).toMatchObject({ input: [], tool_choice: "none", metadata: { purpose: "activation" } });
+      expect(String(event.response?.instructions)).toContain("Say exactly");
+      expect(String(event.response?.instructions)).toContain(VOICE_ACTIVATION_PHRASE);
+    });
+
+    it("greets once through the real router when the browser reports ready", async () => {
+      await withEndpoint(async endpoint => {
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        const ready = await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: "{}" });
+        expect(ready.status).toBe(204);
+        await expect.poll(() => endpoint.forceMessageItems()).toHaveLength(1);
+        expect(endpoint.forceMessageItems()[0]).toMatchObject({ type: "force_message", role: "assistant", content: [{ type: "output_text", text: "Voice Chat Activated" }] });
+        expect(endpoint.sent.filter(event => event.type === "response.create")).toHaveLength(0);
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.role === "assistant" && event.caption.final)).toBe(true);
+        expect(events.filter(event => event.type === "caption" && event.caption.final)).toHaveLength(1);
+        expect(events.find(event => event.type === "caption" && event.caption.final)).toMatchObject({ caption: { role: "assistant", text: "Voice Chat Activated" } });
+        expect(events.some(event => event.type === "audio")).toBe(true);
+        expect(events.some(event => event.type === "error" || event.type === "closed")).toBe(false);
+        await expect.poll(() => engine.logs.read("voice-chat").filter(entry => entry.sessionId === id).length).toBe(0);
+        expect(JSON.stringify(voiceWorkspaceContext(engine, notebookId).recentConversation)).not.toContain("Voice Chat Activated");
+        await pause(300);
+        expect(engine.logs.read("voice-chat").filter(entry => entry.sessionId === id)).toHaveLength(0);
+
+        const again = await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        expect(again.status).toBe(204);
+        await pause(300);
+        expect(endpoint.forceMessageItems()).toHaveLength(1);
+        expect((await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer("nope") })).status).toBe(404);
+        expect((await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: JSON.stringify({ extra: true }) })).status).toBe(400);
+
+        await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+        await reading;
+        expect((await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) })).status).toBe(404);
+      });
+    });
+
+    it("finalizes the activation caption on response.done without transcript events", async () => {
+      await withEndpoint(async endpoint => {
+        endpoint.onActivation = send => sendActivationResponse(send, { transcript: null });
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.role === "assistant" && event.caption.final)).toBe(true);
+        expect(events.filter(event => event.type === "caption" && event.caption.final)).toHaveLength(1);
+        expect(events.find(event => event.type === "caption" && event.caption.final)).toMatchObject({ caption: { role: "assistant", text: "Voice Chat Activated" } });
+        expect(events.some(event => event.type === "audio")).toBe(true);
+        expect(engine.logs.read("voice-chat").filter(entry => entry.sessionId === id)).toHaveLength(0);
+        await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+        await reading;
+      });
+    });
+
+    it("keeps the interrupted line out of the history", async () => {
+      await withEndpoint(async endpoint => {
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.role === "assistant" && event.caption.final)).toBe(true);
+        const interrupt = await fetch(`${origin}/api/voice/${id}/interrupt`, { method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: JSON.stringify({ responseId: "activation-response", itemId: "activation-item", audioEndMs: 200 }) });
+        expect(interrupt.status).toBe(204);
+        await expect.poll(() => endpoint.sent.some(event => event.type === "conversation.item.truncate")).toBe(true);
+        endpoint.send({ type: "conversation.item.truncated", event_id: "truncated", item_id: "activation-item", response_id: "activation-response" });
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.interrupted)).toBe(true);
+        expect(events.some(event => event.type === "error" || event.type === "closed")).toBe(false);
+        await expect.poll(() => engine.logs.read("voice-chat").filter(entry => entry.sessionId === id).length).toBe(0);
+        expect(JSON.stringify(voiceWorkspaceContext(engine, notebookId).recentConversation)).not.toContain("Voice Chat Activated");
+        await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+        await reading;
+      });
+    });
+
+    it("stays silent when the speaker starts before ready arrives", async () => {
+      await withEndpoint(async endpoint => {
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        endpoint.send({ type: "input_audio_buffer.speech_started", event_id: "early-speech", item_id: "early-turn" });
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.role === "user")).toBe(true);
+        const ready = await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        expect(ready.status).toBe(204);
+        await pause(300);
+        expect(endpoint.forceMessageItems()).toHaveLength(0);
+        expect(endpoint.sent.some(event => event.type === "response.create")).toBe(false);
+        await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+        await reading;
+      });
+    });
+
+    it("keeps the session when the provider rejects the line and answers later turns", async () => {
+      await withEndpoint(async endpoint => {
+        endpoint.onActivation = send => { send({ type: "error", event_id: "activation-error", error: { code: "conversation_already_has_active_response" } }); };
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        await expect.poll(() => endpoint.forceMessageItems()).toHaveLength(1);
+        await pause(300);
+        expect(events.some(event => event.type === "error" || event.type === "closed")).toBe(false);
+
+        endpoint.send({ type: "input_audio_buffer.speech_started", event_id: "turn-speech", item_id: "turn-1" });
+        endpoint.send({ type: "input_audio_buffer.speech_stopped", event_id: "turn-stop" });
+        endpoint.send({ type: "conversation.item.input_audio_transcription.completed", event_id: "turn-final", item_id: "turn-1", transcript: "rename this image" });
+        endpoint.send({ type: "response.created", event_id: "turn-created", response_id: "reply-1", response: { id: "reply-1" } });
+        endpoint.send({ type: "response.function_call_arguments.done", event_id: "turn-call", response_id: "reply-1", call_id: "call-1", name: "find_workspace_actions", arguments: JSON.stringify({ query: "rename image" }) });
+        await expect.poll(() => endpoint.sent.some(event => event.type === "conversation.item.create" && event.item?.type === "function_call_output")).toBe(true);
+        const output = endpoint.sent.find(event => event.type === "conversation.item.create" && event.item?.type === "function_call_output");
+        expect(JSON.parse(String(output?.item?.output))).toMatchObject({ actions: expect.anything() });
+        endpoint.send({ type: "response.done", event_id: "reply-done", response_id: "reply-1", response: { id: "reply-1", status: "completed" } });
+        await expect.poll(() => endpoint.sent.filter(event => event.type === "response.create")).toHaveLength(1);
+        endpoint.send({ type: "response.output_audio_transcript.done", event_id: "reply-answer", response_id: "reply-1", item_id: "reply-answer", transcript: "Rename is on screen." });
+        await expect.poll(() => events.some(event => event.type === "caption" && event.caption.final && event.caption.text === "Rename is on screen.")).toBe(true);
+        expect(events.some(event => event.type === "error" || event.type === "closed")).toBe(false);
+        expect(endpoint.forceMessageItems()).toHaveLength(1);
+        await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+        await reading;
+      });
+    });
+
+    it("ends the session with billing guidance when credits run out during the line", async () => {
+      await withEndpoint(async endpoint => {
+        endpoint.onActivation = send => { send({ type: "error", event_id: "credit-error", error: { code: "credit_balance_exhausted", message: "Private provider details" } }); };
+        const { id, token } = await startXaiSession();
+        const { events, reading } = await openEventStream(id, token);
+        await fetch(`${origin}/api/voice/${id}/ready`, { method: "POST", headers: bearer(token) });
+        await expect.poll(() => events.some(event => event.type === "closed")).toBe(true);
+        expect(events.find(event => event.type === "error")).toMatchObject({ message: expect.stringContaining("Add credits in xAI billing") });
+        expect(JSON.stringify(events)).not.toContain("Private provider details");
+        await reading;
+      });
+    });
   });
 });

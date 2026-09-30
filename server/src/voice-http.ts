@@ -54,6 +54,14 @@ export function voiceRouter(sessions: VoiceSessions) {
       res.sendStatus(204);
     } catch (error) { const failure = voiceError(error); res.status(failure.status).json({ error: failure.message }); }
   });
+  router.post("/:id/ready", (req, res) => {
+    const parsed = z.object({}).strict().safeParse(req.body ?? {});
+    if (!parsed.success) { res.status(400).json({ error: "Invalid voice ready request." }); return; }
+    try {
+      sessions.get(req.params.id, req.get("authorization")?.replace(/^Bearer /u, "") ?? "").greet();
+      res.sendStatus(204);
+    } catch (error) { const failure = voiceError(error); res.status(failure.status).json({ error: failure.message }); }
+  });
   router.post("/:id/outcome", (req, res) => {
     const parsed = outcomeSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Invalid voice action outcome." }); return; }

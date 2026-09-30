@@ -4,6 +4,30 @@ import type { XaiRealtimeSession } from "@apicity/xai";
 export const DEFAULT_VOICE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_XAI_VOICE_MODEL = "grok-voice-think-fast-2.0";
 export const VOICE_PCM_RATE = 24_000;
+export const VOICE_ACTIVATION_PHRASE = "Voice Chat Activated";
+
+export function xaiVoiceActivationEvent(): { type: "conversation.item.create"; item: Record<string, unknown> } {
+  return {
+    type: "conversation.item.create",
+    item: {
+      type: "force_message",
+      role: "assistant",
+      content: [{ type: "output_text", text: VOICE_ACTIVATION_PHRASE }],
+    },
+  };
+}
+
+export function openAiVoiceActivationEvent(): { type: "response.create"; response: Record<string, unknown> } {
+  return {
+    type: "response.create",
+    response: {
+      input: [],
+      tool_choice: "none",
+      instructions: `Say exactly the following and nothing else: ${VOICE_ACTIVATION_PHRASE}`,
+      metadata: { purpose: "activation" },
+    },
+  };
+}
 
 export function xaiVoiceSessionConfig(context: unknown, sampleRate: 8000 | 16000 | 22050 | 24000 | 32000 | 44100 | 48000): XaiRealtimeSession {
   const shared = voiceSessionConfig(context);

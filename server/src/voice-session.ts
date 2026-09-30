@@ -11,7 +11,7 @@ import type { BookManager } from "./book-manager.js";
 import { getApiKey } from "./api-key.js";
 import { withBookContext } from "./book-context.js";
 import { discoverVoiceActions, voiceWorkspaceCells, voiceWorkspaceContext, voiceWorkspaceSignature } from "./voice-actions.js";
-import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_PCM_RATE, voiceInstructions, voiceSessionConfig, xaiVoiceSessionConfig } from "./voice-config.js";
+import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, openAiVoiceActivationEvent, voiceInstructions, voiceSessionConfig, xaiVoiceActivationEvent, xaiVoiceSessionConfig } from "./voice-config.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
@@ -116,6 +116,11 @@ export class VoiceSession {
   private interruptedResponses = new Set<string>();
   private pendingAssistantHistory = new Map<string, VoiceCaption[]>();
   private activeResponse = false;
+  private greeted = false;
+  private activationResponseId: string | null = null;
+  private activationItems = new Set<string>();
+  private activationPending = false;
+  private activationCaptionFinal = false;
   private replyProgress = new VoiceReplyProgress();
   private abandonedResponses = new Set<string>();
   private recoveringTurn: string | null = null;
@@ -284,6 +289,32 @@ export class VoiceSession {
     }
   }
 
+  greet(): void {
+    if (this.greeted || this.stopped || !this.control) return;
+    this.greeted = true;
+    if (this.currentTurn || this.speaking || this.activeResponse || this.needsResponse || this.pendingTools > 0 || this.waitingAction || this.reviewCall) return;
+    this.activationPending = true;
+    this.activeResponse = true;
+    this.control.send(this.providerName === "xai" ? xaiVoiceActivationEvent() : openAiVoiceActivationEvent());
+  }
+
+  private isLineResponse(responseId: string | undefined): boolean {
+    return !!responseId && responseId === this.activationResponseId;
+  }
+
+  private dropLine(): void {
+    this.activationPending = false;
+    this.activeResponse = false;
+  }
+
+  private finalizeActivationCaption(responseId: string | undefined): void {
+    if (!responseId || responseId !== this.activationResponseId || this.activationCaptionFinal) return;
+    const id = [...(this.responseItems.get(responseId) ?? [])][0] ?? `activation:${responseId}`;
+    this.activationItems.add(id);
+    this.caption(id, "assistant", VOICE_ACTIVATION_PHRASE, true);
+    this.activationCaptionFinal = true;
+  }
+
   private turn(id: string): VoiceTurn {
     let turn = this.turns.get(id);
     if (!turn) {
@@ -319,7 +350,9 @@ export class VoiceSession {
         const result = await this.engine.prompts.record({ surface: "chat", prompt: value.text, context: { source: "voice", sessionId: this.id, turnId: id, model: this.model, notebookId: this.notebookId } });
         if (!result.ok) { turn.saved.resolve(false); throw new Error(result.error.message); }
       }
-      await appendVoiceHistory(this.engine, { ...value, sessionId: this.id, notebookId: this.notebookId, model: this.model });
+      if (!this.activationItems.has(value.id)) {
+        await appendVoiceHistory(this.engine, { ...value, sessionId: this.id, notebookId: this.notebookId, model: this.model });
+      }
       if (turn) {
         for (const pending of this.pendingAssistantHistory.get(id) ?? []) {
           const latest = this.captions.get(pending.id) ?? pending;
@@ -378,22 +411,33 @@ export class VoiceSession {
     } else if (this.providerName === "xai" && (event.type === "response.output_audio.done" || event.type === "response.audio.done")) {
       if (event.response_id) this.emit({ type: "audio-done", responseId: event.response_id });
     } else if (event.type === "response.output_audio_transcript.delta") {
-      this.caption(id, "assistant", (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
+      const line = this.isLineResponse(responseId);
+      if (line && id) this.activationItems.add(id);
+      this.caption(id, "assistant", line ? VOICE_ACTIVATION_PHRASE : (this.captions.get(id)?.text ?? "") + (event.delta ?? ""), false);
     } else if (event.type === "response.output_audio_transcript.done") {
-      this.caption(id, "assistant", event.transcript ?? this.captions.get(id)?.text ?? "", true, event.response_id ? this.responseTurns.get(event.response_id) : undefined);
+      const line = this.isLineResponse(responseId);
+      if (line && id) this.activationItems.add(id);
+      this.caption(id, "assistant", line ? VOICE_ACTIVATION_PHRASE : event.transcript ?? this.captions.get(id)?.text ?? "", true, event.response_id ? this.responseTurns.get(event.response_id) : undefined);
+      if (line) this.activationCaptionFinal = true;
     } else if (event.type === "conversation.item.truncated") {
       const caption = this.captions.get(id);
       if (caption && !caption.interrupted) {
         const interrupted = { ...caption, final: true, interrupted: true };
         this.captions.set(id, interrupted);
         this.emit({ type: "caption", caption: interrupted });
-        this.save(() => appendVoiceHistory(this.engine, { ...interrupted, text: "", sessionId: this.id, notebookId: this.notebookId, model: this.model }));
+        if (!this.activationItems.has(id)) {
+          this.save(() => appendVoiceHistory(this.engine, { ...interrupted, text: "", sessionId: this.id, notebookId: this.notebookId, model: this.model }));
+        }
       }
     } else if (event.type === "response.created") {
       this.activeResponse = true;
       if (responseId) {
         this.responseTurns.set(responseId, this.currentTurn);
         this.replyProgress.started(responseId, Date.now());
+        if (this.activationPending && (this.providerName === "xai" || (event.response as { metadata?: { purpose?: string } } | undefined)?.metadata?.purpose === "activation")) {
+          this.activationPending = false;
+          this.activationResponseId = responseId;
+        }
       }
     } else if (event.type === "response.done") {
       const completion = this.replyProgress.finished(responseId, Date.now());
@@ -406,9 +450,14 @@ export class VoiceSession {
       if (completion === "retry") this.needsResponse = true;
       if (event.response?.status === "failed") {
         const details = z.object({ error: z.unknown().optional() }).safeParse(event.response.status_details);
-        this.fail(providerErrorMessage(details.success ? details.data.error : undefined, undefined, this.providerName) ?? "The voice reply failed. Start voice to retry.");
+        const guidance = providerErrorMessage(details.success ? details.data.error : undefined, undefined, this.providerName);
+        if (guidance) { this.fail(guidance); return; }
+        if (this.activationPending || this.isLineResponse(responseId)) { this.dropLine(); return; }
+        this.fail(guidance ?? "The voice reply failed. Start voice to retry.");
+        return;
       }
-      else this.continueResponse();
+      this.finalizeActivationCaption(responseId);
+      this.continueResponse();
     } else if (event.type === "response.function_call_arguments.done" && event.call_id) {
       const key = `call:${event.call_id}`;
       if (this.seen.has(key)) return;
@@ -425,7 +474,13 @@ export class VoiceSession {
         }
         return;
       }
-      this.fail(providerErrorMessage(event.error, undefined, this.providerName) ?? "Voice service reported an error. Start voice again; check model access if it repeats.");
+      const guidance = providerErrorMessage(event.error, undefined, this.providerName);
+      if (guidance) { this.fail(guidance); return; }
+      if (this.activationPending || this.isLineResponse(responseId) || event.error?.code === "conversation_already_has_active_response") {
+        this.dropLine();
+        return;
+      }
+      this.fail("Voice service reported an error. Start voice again; check model access if it repeats.");
     }
   }
 
@@ -675,6 +730,7 @@ export class VoiceSession {
     if (this.stopped) return;
     this.interruptedResponses.add(responseId);
     for (const id of this.responseItems.get(responseId) ?? []) {
+      if (this.activationItems.has(id)) continue;
       const caption = this.captions.get(id);
       if (!caption || caption.interrupted) continue;
       const interrupted = { ...caption, final: true, interrupted: true };
