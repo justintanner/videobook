@@ -1,9 +1,7 @@
 import {
-  createKie,
   submitMediaJob,
   type GrokImagineImage2ImageEditRequest,
   type KieProvider,
-  type SeedreamProImageToImageRequest,
   type SeedreamProLayerDecompositionRequest,
 } from "@apicity/kie";
 import {
@@ -12,10 +10,20 @@ import {
   SeedreamProImageToImageRequestSchema,
   SeedreamProLayerDecompositionRequestSchema,
 } from "@apicity/kie/zod";
-import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
+import {
+  KIE_RESULT_TIMEOUT_MS,
+  kieProvider,
+  parseResultUrls,
+  waitForKieResult,
+} from "./_kie-poll.js";
+import {
+  GROK_EXACT_MASK_ADAPTER_ID,
+  SEEDREAM_I2I_ADAPTER,
+  type ImageEditAdapter,
+  type ImageEditProviderRequest,
+} from "./_image-edit-adapter.js";
 import type { Engine, Job } from "videobook-engine";
-import { requireApiKey } from "../api-key.js";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
   applyGrokSegmentsToSubjects,
@@ -26,7 +34,6 @@ import {
   persistSeedreamSubjectLayers,
   readImageSubjectMapRecord,
   resolveImageSubjectSource,
-  subjectAnalysisProviderFailureMessage,
   writeCurrentImageSubjectAnalysisRecord,
   type ImageSubjectMapReadyV1,
   type ImageSubjectNormalizedBox,
@@ -37,7 +44,8 @@ import { enqueueSearchIndex } from "./enqueue-search-index.js";
 import { cropToFill } from "../image.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler } from "../queue.js";
-import { ensurePaygateSecret, mintKieOtp } from "./kie-paygate.js";
+import { mintKieOtp } from "./kie-paygate.js";
+import { uploadAssetToKie } from "./_kie-upload.js";
 
 type AnalyzeImageSubjectsPayload = {
   type: "analyze_image_subjects";
@@ -84,7 +92,8 @@ type KieLayerResult = {
 };
 
 type StoredImageSubjectEditTask = {
-  request: SeedreamProImageToImageRequest | GrokImagineImage2ImageEditRequest;
+  adapterId: string;
+  request: ImageEditProviderRequest | GrokImagineImage2ImageEditRequest;
   taskId: string;
 };
 
@@ -263,50 +272,6 @@ export function seedreamLayerDecompositionRequest(
   });
 }
 
-function parseResultUrls(resultJson: string): string[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(resultJson);
-  } catch {
-    throw new Error("Seedream returned invalid result JSON");
-  }
-  const root = record(parsed);
-  if (!root) throw new Error("Seedream returned an invalid image result");
-  for (const value of [
-    root.resultUrls,
-    root.result_urls,
-    record(root.resultObject)?.resultUrls,
-    record(root.resultObject)?.result_urls,
-    record(root.result)?.resultUrls,
-    record(root.result)?.result_urls,
-  ]) {
-    if (!Array.isArray(value)) continue;
-    const urls = value.flatMap((entry) => stringValue(entry) ?? []);
-    if (urls.length > 0) return urls;
-  }
-  throw new Error("Seedream image edit returned no downloadable images");
-}
-
-function closestAspectRatio(
-  width: number,
-  height: number,
-): SeedreamProImageToImageRequest["input"]["aspect_ratio"] {
-  const target = width / height;
-  const candidates = [
-    ["1:1", 1],
-    ["4:3", 4 / 3],
-    ["3:4", 3 / 4],
-    ["16:9", 16 / 9],
-    ["9:16", 9 / 16],
-    ["2:3", 2 / 3],
-    ["3:2", 3 / 2],
-  ] as const;
-  return candidates.reduce((best, candidate) =>
-    Math.abs(candidate[1] - target) < Math.abs(best[1] - target)
-      ? candidate
-      : best)[0];
-}
-
 function boxPositionWording(box: ImageSubjectNormalizedBox): string {
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
@@ -364,25 +329,6 @@ export function regionReplacementPrompt(
   return user ? `${user}\n${composed}` : composed;
 }
 
-export function seedreamRegionReplacementRequest(input: {
-  imageUrls: readonly string[];
-  prompt: string;
-  width: number;
-  height: number;
-}): SeedreamProImageToImageRequest {
-  return SeedreamProImageToImageRequestSchema.parse({
-    model: "seedream/5-pro-image-to-image",
-    input: {
-      image_urls: [...input.imageUrls],
-      prompt: input.prompt,
-      aspect_ratio: closestAspectRatio(input.width, input.height),
-      quality: "basic",
-      output_format: "png",
-      nsfw_checker: false,
-    },
-  });
-}
-
 export function seedreamProImageUrlCapacityError(replacementCount: number): string {
   const maxReplacements = SEEDREAM_PRO_I2I_MAX_IMAGE_URLS - 1;
   return `Seedream 5 Pro image-to-image accepts at most ${SEEDREAM_PRO_I2I_MAX_IMAGE_URLS} image_urls (1 base + ${maxReplacements} replacements). This request needs 1 base + ${replacementCount} replacements.`;
@@ -403,119 +349,12 @@ function semanticEditPrompt(
   return `${prompt.trim()}\nModify only these selected subjects: ${targets.join("; ")}. Preserve every unselected person, object, background element, composition, and camera framing.`;
 }
 
-function kieProvider(): KieProvider {
-  return createKie({
-    apiKey: requireApiKey("KIE_API_KEY"),
-    timeout: 60_000,
-    paygate: { secret: ensurePaygateSecret() },
-  });
-}
-
-const KIE_RESULT_TIMEOUT_MS = 25 * 60_000;
-
-function abortReason(signal: AbortSignal): Error {
-  if (signal.reason instanceof Error) return signal.reason;
-  const error = new Error(
-    typeof signal.reason === "string" ? signal.reason : "Operation aborted",
-  );
-  error.name = "AbortError";
-  return error;
-}
-
-function waitForOperation<T>(
-  operation: Promise<T>,
-  signal: AbortSignal,
-  deadlineAt: number,
-  timeoutError: Error,
-): Promise<T> {
-  if (signal.aborted) return Promise.reject(abortReason(signal));
-  const remaining = deadlineAt - Date.now();
-  if (remaining <= 0) return Promise.reject(timeoutError);
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-    };
-    const resolveOnce = (value: T) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(value);
-    };
-    const rejectOnce = (cause: unknown) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(cause);
-    };
-    const onAbort = () => rejectOnce(abortReason(signal));
-    const timer = setTimeout(() => rejectOnce(timeoutError), remaining);
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-    void operation.then(resolveOnce, rejectOnce);
-  });
-}
-
 export function imageSubjectAnalysisDeadline(
   startedAt: string,
   fallbackNow = Date.now(),
 ): number {
   const parsed = Date.parse(startedAt);
   return (Number.isFinite(parsed) ? parsed : fallbackNow) + KIE_RESULT_TIMEOUT_MS;
-}
-
-type KieResultContext = "subject-analysis" | "subject-edit";
-
-function kieResultFailureMessage(
-  context: KieResultContext,
-  message: string | null,
-  code: string | null,
-): string {
-  if (context === "subject-analysis") {
-    return subjectAnalysisProviderFailureMessage(message, code);
-  }
-  const detail = message || code || "Unknown provider error";
-  const codeDetail = code && code !== detail ? ` (${code})` : "";
-  return `Image subject edit provider failed: ${detail}${codeDetail}`;
-}
-
-async function waitForKieResult(
-  provider: KieProvider,
-  taskId: string,
-  signal: AbortSignal,
-  deadlineAt: number,
-  context: KieResultContext,
-): Promise<string> {
-  const timeoutError = context === "subject-analysis"
-    ? new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.")
-    : new Error(`Kie task ${taskId} did not finish within 25 minutes`);
-  while (Date.now() < deadlineAt) {
-    const result = await waitForOperation(
-      provider.get.api.v1.jobs.recordInfo(taskId),
-      signal,
-      deadlineAt,
-      timeoutError,
-    );
-    const state = result.data?.state?.toLowerCase();
-    if (state === "success") {
-      if (!result.data?.resultJson) {
-        throw new Error("Kie task succeeded without result JSON");
-      }
-      return result.data.resultJson;
-    }
-    if (state === "fail" || state === "failed") {
-      throw new Error(kieResultFailureMessage(
-        context,
-        stringValue(result.data?.failMsg),
-        stringValue(result.data?.failCode),
-      ));
-    }
-    await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, {
-      signal,
-    });
-  }
-  throw timeoutError;
 }
 
 async function writeAnalysisFailure(
@@ -758,11 +597,16 @@ export async function readStoredImageSubjectEditTask(
     : parsedExact?.success
       ? parsedExact.data
       : null;
+  const adapterId = parsedRequest?.success
+    ? SEEDREAM_I2I_ADAPTER.id
+    : parsedExact?.success
+      ? GROK_EXACT_MASK_ADAPTER_ID
+      : null;
   if (taskId && !request) {
     throw new Error("Stored Kie subject edit task has no valid generation payload");
   }
-  return taskId && request
-    ? { request, taskId }
+  return taskId && request && adapterId
+    ? { adapterId, request, taskId }
     : null;
 }
 
@@ -818,54 +662,32 @@ export function grokImagineImage2EditRequest(
   });
 }
 
-async function generateSemanticSubjectEdit(
+type ImageSubjectEditRoute = "semantic" | "region";
+
+type ImageSubjectEditGeneration = {
+  output: Buffer;
+  extras: Buffer[];
+  taskId: string;
+  request: ImageEditProviderRequest;
+};
+
+async function runAdapterImageSubjectEdit(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
-  map: ImageSubjectMapReadyV1,
-  sourceFilename: string,
+  adapter: ImageEditAdapter,
+  route: ImageSubjectEditRoute,
+  prepared: { imageUrls: string[]; prompt: string; width: number; height: number },
   signal: AbortSignal,
-): Promise<{ output: Buffer; taskId: string; request: SeedreamProImageToImageRequest }> {
+): Promise<ImageSubjectEditGeneration> {
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
-  const storedSemantic = stored?.request.model === "seedream/5-pro-image-to-image"
-    ? stored
-    : null;
-  let request = storedSemantic?.request as SeedreamProImageToImageRequest | null ?? null;
-  let taskId = storedSemantic?.taskId ?? null;
-  const provider = kieProvider();
+  const storedMatch = stored?.adapterId === adapter.id ? stored : null;
+  let request = storedMatch?.request as ImageEditProviderRequest | null ?? null;
+  let taskId = storedMatch?.taskId ?? null;
   if (!request || !taskId) {
-    const { uploadAssetToKie } = await import("./_kie-upload.js");
-    const imageUrl = await uploadAssetToKie(
-      engine,
-      payload.sourceArtifactId,
-      sourceFilename,
-    );
-    const prompt = semanticEditPrompt(map, payload.subjectIds, payload.prompt ?? "");
-    request = SeedreamProImageToImageRequestSchema.parse({
-      model: "seedream/5-pro-image-to-image",
-      input: {
-        image_urls: [imageUrl],
-        prompt,
-        aspect_ratio: closestAspectRatio(map.width, map.height),
-        quality: "basic",
-        output_format: "png",
-        nsfw_checker: false,
-      },
-    });
-    const metadata = await engine.metadata.artifacts.write(
-      payload.imageAssetId,
-      "generation-payload",
-      request,
-    );
-    if (!metadata.ok) throw new Error(metadata.error.message);
-    taskId = await submitMediaJob(provider, request, {
-      otp: mintKieOtp(request),
-    });
-    const taskMetadata = await engine.metadata.artifacts.write(
-      payload.imageAssetId,
-      "kie-task-id",
-      { taskId },
-    );
-    if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
+    request = route === "semantic"
+      ? adapter.buildSemanticRequest(prepared)
+      : adapter.buildRegionRequest(prepared);
+    taskId = await adapter.submit(engine, payload.imageAssetId, request, signal);
   }
   if (payload.generationId) {
     const generation = await engine.generations.update(payload.generationId, {
@@ -875,24 +697,37 @@ async function generateSemanticSubjectEdit(
     if (!generation.ok) throw new Error(generation.error.message);
   }
   await updateNotebookEditProgress(engine, payload, "awaiting_provider");
-  const resultJson = await waitForKieResult(
-    provider,
-    taskId,
-    signal,
-    Date.now() + KIE_RESULT_TIMEOUT_MS,
-    "subject-edit",
+  const images = await adapter.awaitResult(taskId, signal);
+  const [output, ...extras] = images;
+  if (!output) throw new Error(`${adapter.id} image edit returned no image`);
+  return { output, extras, taskId, request };
+}
+
+async function generateSemanticSubjectEdit(
+  engine: Engine,
+  payload: GenerateImageSubjectEditPayload,
+  map: ImageSubjectMapReadyV1,
+  sourceFilename: string,
+  signal: AbortSignal,
+): Promise<ImageSubjectEditGeneration> {
+  const imageUrl = await uploadAssetToKie(
+    engine,
+    payload.sourceArtifactId,
+    sourceFilename,
   );
-  const [resultUrl] = parseResultUrls(resultJson);
-  if (!resultUrl) throw new Error("Seedream image edit returned no image");
-  const response = await fetch(resultUrl, { signal });
-  if (!response.ok) {
-    throw new Error(`Failed to download Seedream edit: ${response.status} ${response.statusText}`);
-  }
-  return {
-    output: await sharp(Buffer.from(await response.arrayBuffer())).png().toBuffer(),
-    taskId,
-    request,
-  };
+  return runAdapterImageSubjectEdit(
+    engine,
+    payload,
+    SEEDREAM_I2I_ADAPTER,
+    "semantic",
+    {
+      imageUrls: [imageUrl],
+      prompt: semanticEditPrompt(map, payload.subjectIds, payload.prompt ?? ""),
+      width: map.width,
+      height: map.height,
+    },
+    signal,
+  );
 }
 
 async function generateRegionReplacementEdit(
@@ -903,86 +738,41 @@ async function generateRegionReplacementEdit(
   width: number,
   height: number,
   signal: AbortSignal,
-): Promise<{ output: Buffer; taskId: string; request: SeedreamProImageToImageRequest }> {
-  const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
-  const storedReplace = stored?.request.model === "seedream/5-pro-image-to-image"
-    ? stored
-    : null;
-  let request = storedReplace?.request as SeedreamProImageToImageRequest | null ?? null;
-  let taskId = storedReplace?.taskId ?? null;
-  const provider = kieProvider();
-  if (!request || !taskId) {
-    const { uploadAssetToKie } = await import("./_kie-upload.js");
-    const baseUrl = await uploadAssetToKie(
-      engine,
-      payload.sourceArtifactId,
-      sourceFilename,
-    );
-    const replacementUrls: string[] = [];
-    for (const ref of payload.replacementRefs ?? []) {
-      replacementUrls.push(await uploadAssetToKie(engine, ref.assetId, ref.filename));
-    }
-    const imageUrls = [baseUrl, ...replacementUrls];
-    const prompt = regionReplacementPrompt(
-      map,
-      payload.regions ?? [],
-      payload.orderedImageRefs ?? [
-        { role: "base", artifactId: payload.sourceArtifactId },
-        ...(payload.replacementRefs ?? []).map((ref) => ({
-          role: "replacement" as const,
-          artifactId: ref.assetId,
-        })),
-      ],
-      payload.prompt ?? "",
-    );
-    request = seedreamRegionReplacementRequest({
-      imageUrls,
+): Promise<ImageSubjectEditGeneration> {
+  const baseUrl = await uploadAssetToKie(
+    engine,
+    payload.sourceArtifactId,
+    sourceFilename,
+  );
+  const replacementUrls: string[] = [];
+  for (const ref of payload.replacementRefs ?? []) {
+    replacementUrls.push(await uploadAssetToKie(engine, ref.assetId, ref.filename));
+  }
+  const prompt = regionReplacementPrompt(
+    map,
+    payload.regions ?? [],
+    payload.orderedImageRefs ?? [
+      { role: "base", artifactId: payload.sourceArtifactId },
+      ...(payload.replacementRefs ?? []).map((ref) => ({
+        role: "replacement" as const,
+        artifactId: ref.assetId,
+      })),
+    ],
+    payload.prompt ?? "",
+  );
+  return runAdapterImageSubjectEdit(
+    engine,
+    payload,
+    SEEDREAM_I2I_ADAPTER,
+    "region",
+    {
+      imageUrls: [baseUrl, ...replacementUrls],
       prompt,
       width,
       height,
-    });
-    const metadata = await engine.metadata.artifacts.write(
-      payload.imageAssetId,
-      "generation-payload",
-      request,
-    );
-    if (!metadata.ok) throw new Error(metadata.error.message);
-    taskId = await submitMediaJob(provider, request, {
-      otp: mintKieOtp(request),
-    });
-    const taskMetadata = await engine.metadata.artifacts.write(
-      payload.imageAssetId,
-      "kie-task-id",
-      { taskId },
-    );
-    if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
-  }
-  if (payload.generationId) {
-    const generation = await engine.generations.update(payload.generationId, {
-      status: "awaiting_provider",
-      error: null,
-    });
-    if (!generation.ok) throw new Error(generation.error.message);
-  }
-  await updateNotebookEditProgress(engine, payload, "awaiting_provider");
-  const resultJson = await waitForKieResult(
-    provider,
-    taskId,
+    },
     signal,
-    Date.now() + KIE_RESULT_TIMEOUT_MS,
-    "subject-edit",
   );
-  const [resultUrl] = parseResultUrls(resultJson);
-  if (!resultUrl) throw new Error("Seedream image edit returned no image");
-  const response = await fetch(resultUrl, { signal });
-  if (!response.ok) {
-    throw new Error(`Failed to download Seedream edit: ${response.status} ${response.statusText}`);
-  }
-  return {
-    output: await sharp(Buffer.from(await response.arrayBuffer())).png().toBuffer(),
-    taskId,
-    request,
-  };
 }
 
 async function downloadResultImages(
@@ -1037,7 +827,7 @@ async function generateExactSubjectEdit(
     throw new Error("Selected subjects are not capability-gated for exact mask edit");
   }
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
-  const storedExact = stored?.request.model === "grok-imagine-image-2-0/image-edit"
+  const storedExact = stored?.adapterId === GROK_EXACT_MASK_ADAPTER_ID
     ? stored
     : null;
   let request = storedExact?.request as GrokImagineImage2ImageEditRequest | null ?? null;
@@ -1307,7 +1097,6 @@ async function submitLayerDecompositionTask(
   deadlineAt: number,
   prompt?: string,
 ): Promise<string> {
-  const { uploadAssetToKie } = await import("./_kie-upload.js");
   const imageUrl = await uploadAssetToKie(engine, source.artifactId, source.file.name);
   if (Date.now() >= deadlineAt) {
     throw new Error("Subject analysis did not finish within 25 minutes. Retry the analysis.");

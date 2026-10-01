@@ -116,6 +116,7 @@ export default defineConfig({
       'server/src/frame-utils.test.ts',
       'server/src/fs.test.ts',
       'server/src/generation-registry.test.ts',
+      'server/src/image-edit-models.test.ts',
       'server/src/retired-kling-seedance.test.ts',
       'server/src/retired-wan-2x.test.ts',
       'server/src/chat-generation-settings.test.ts',

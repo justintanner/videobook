@@ -35,9 +35,9 @@ import {
   SEEDREAM_LAYER_FALLBACK_PROMPT,
   SEEDREAM_TOO_COMPLEX_PATTERN,
   seedreamProImageUrlCapacityError,
-  seedreamRegionReplacementRequest,
   SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
 } from "../jobs/image-subjects.js";
+import { seedreamRegionReplacementRequest } from "../jobs/_image-edit-adapter.js";
 import { createEngineForTest } from "../engine.js";
 import {
   enqueueOptions,
@@ -953,7 +953,11 @@ describe("image subject tools", () => {
     await expect(readStoredImageSubjectEditTask(
       engine,
       output.value.artifactId,
-    )).resolves.toEqual({ request, taskId: "billed-kie-task" });
+    )).resolves.toEqual({
+      adapterId: "seedream/5-pro-image-to-image",
+      request,
+      taskId: "billed-kie-task",
+    });
     expect(enqueueOptions("analysis-replay", {
       type: "analyze_image_subjects",
       bookId,
