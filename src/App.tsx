@@ -1,4 +1,9 @@
 import { presentChat, reviewChat, type ChatExecution } from '@/videobook/chat-turns'
+import {
+  addHighlight,
+  expireHighlight,
+  HIGHLIGHT_MS,
+} from '@/videobook/cell-highlight'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
   lazy,
@@ -1698,6 +1703,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const voiceOutcomeRef = useRef<((outcome: VoiceOutcome) => void) | null>(null)
   const voiceTypedTurnRef = useRef<((input: string, message: string) => void) | null>(null)
+  const voiceActiveRef = useRef(false)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [busy, setBusy] = useState(false)
   const { turns: chatTurns, begin: beginChatTurn, observe: observeChat, cancelReview: cancelChatReview, claimVoice: claimVoiceTurn } = useChatTurns(bookId, notebook?.id ?? null)
@@ -2129,6 +2135,54 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }, 900)
   }, [])
 
+  const [highlightedCellIds, setHighlightedCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const highlightExpireTimerRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (highlightExpireTimerRef.current !== null) {
+      window.clearTimeout(highlightExpireTimerRef.current)
+    }
+  }, [])
+  const highlightCells = useCallback((
+    cellIds: readonly string[],
+    options: { scroll?: 'center' | 'offscreen' } = {},
+  ) => {
+    setHighlightedCellIds((current) => addHighlight(current, cellIds))
+    if (highlightExpireTimerRef.current !== null) {
+      window.clearTimeout(highlightExpireTimerRef.current)
+    }
+    highlightExpireTimerRef.current = window.setTimeout(() => {
+      highlightExpireTimerRef.current = null
+      setHighlightedCellIds((current) => expireHighlight(current, cellIds))
+    }, HIGHLIGHT_MS)
+    if (!options.scroll) return
+    window.requestAnimationFrame(() => {
+      if (
+        options.scroll === 'offscreen'
+        && flowRef.current?.getNodes().some((node) => node.dragging)
+      ) return
+      const reducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches
+      for (const cellId of cellIds) {
+        const target = document.querySelector(`[data-id="${cellId}"]`)
+        if (!target) continue
+        if (options.scroll === 'offscreen') {
+          const rect = target.getBoundingClientRect()
+          const onScreen = rect.top >= 0 && rect.left >= 0
+            && rect.bottom <= window.innerHeight
+            && rect.right <= window.innerWidth
+          if (onScreen) continue
+        }
+        target.scrollIntoView({
+          block: 'center',
+          behavior: reducedMotion ? 'auto' : 'smooth',
+        })
+      }
+    })
+  }, [])
+
   const focusCommandComposer = useCallback(() => {
     restoreCommandComposerFocus(() =>
       document.querySelector<HTMLElement>(
@@ -2511,7 +2565,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         maxPollFailures: 10,
       })
       if (outcome.kind === 'completed') {
-        presentChat(chat, () => setNotice(`@${params.address} generated`))
+        presentChat(chat, () => {
+          setNotice(`@${params.address} generated`)
+          highlightCells([params.cellId], { scroll: 'offscreen' })
+        })
         setCellRunError(params.cellId, null)
         return
       }
@@ -2533,7 +2590,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setCellQueued(params.cellId, false)
     }
-  }, [setCellQueued, setCellRunError, setNotice, watchNotebookRun])
+  }, [highlightCells, setCellQueued, setCellRunError, setNotice, watchNotebookRun])
 
   const watchMediaAsset = useCallback(async (params: {
     bookId: string
@@ -2821,7 +2878,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             presentChat(chat, () => revealCells([outputCellId]))
             setCellQueued(outputCellId, true)
             if (selectedCellIdsRef.current.has(cellId)) {
-              selectCanvasCell(outputCellId, chat)
+              selectCanvasCell(null, chat)
+              presentChat(chat, () =>
+                highlightCells([outputCellId], { scroll: 'center' }))
             }
           }
           presentChat(chat, () => setNotice(`${notebookGridTag(cell.slot)} queued`))
@@ -2900,6 +2959,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     bookId,
     call,
     createGenerationPlan,
+    highlightCells,
     jobs,
     notebook,
     online,
@@ -2923,6 +2983,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? { ...node, data: { ...node.data, revealing: true } }
         : node)
     }
+    if (highlightedCellIds.size > 0) {
+      next = next.map((node) => highlightedCellIds.has(node.id)
+        ? { ...node, data: { ...node.data, highlighted: true } }
+        : node)
+    }
     if (Object.keys(cellRunErrors).length === 0) return next
     return next.map((node) => {
       const liveError = cellRunErrors[node.id]
@@ -2936,7 +3001,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       }
     })
-  }, [cellRunErrors, nodes, queuedCellIds, revealingCellIds])
+  }, [cellRunErrors, highlightedCellIds, nodes, queuedCellIds, revealingCellIds])
   const canvasPresentationNodes = useMemo(() => presentedNodes.map((node) => {
     const selected = selectedCellIds.has(node.id)
     const role = pendingReviewRoles.get(notebookGridAddress(node.data.slot))
@@ -8353,6 +8418,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const jobOperationId = asString(acceptedRecord?.job_id)
       const outputCellId = asString(acceptedRecord?.output_cell_id)
       reviewChat(chat, false, () => setPendingChatAction(null))
+      if (!voiceActiveRef.current) focusCommandComposer()
       setCellQueued(cellId, false)
       if (!runId || !jobOperationId) {
         await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
@@ -8367,11 +8433,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (outputCellId) {
         const refreshed = await refreshNotebook(bookId, currentNotebook.id, chat)
           .catch(() => null)
-        presentChat(chat, () => revealCells([outputCellId]))
+        presentChat(chat, () => {
+          revealCells([outputCellId])
+          highlightCells([outputCellId], { scroll: 'center' })
+        })
         setCellQueued(outputCellId, true)
         const output = refreshed?.cells.find((candidate) =>
           candidate.id === outputCellId)
         if (output) address = notebookGridAddress(output.slot)
+      } else {
+        highlightCells([cellId], { scroll: 'center' })
       }
       void watchGenerationRun({
         bookId,
@@ -10389,7 +10460,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   useLayoutEffect(() => {
     voiceOutcomeRef.current = voice.reportOutcome
     voiceTypedTurnRef.current = voice.shareTypedTurn
-  }, [voice.reportOutcome, voice.shareTypedTurn])
+    voiceActiveRef.current = voice.active
+  }, [voice.active, voice.reportOutcome, voice.shareTypedTurn])
   useCommandComposerFocus(
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
     showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),

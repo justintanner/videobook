@@ -14,6 +14,7 @@ export interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
   deleting?: boolean
   revealing?: boolean
+  highlighted?: boolean
   videoAspectRatio?: string
   videoDurationSeconds?: number
   splitFrames?: {

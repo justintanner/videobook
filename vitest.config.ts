@@ -69,6 +69,7 @@ export default defineConfig({
       'src/videobook/notebook-cell-presentation.test.ts',
       'src/videobook/cell-preview.test.ts',
       'src/videobook/media-dock.test.ts',
+      'src/videobook/cell-highlight.test.ts',
       'src/videobook/waveform-path.test.ts',
       'src/videobook/timecode.test.ts',
       'src/videobook/jobs-presentation.test.ts',

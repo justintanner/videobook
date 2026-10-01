@@ -491,10 +491,12 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         versionedOutput ? 'cell-node-version-stack' : '',
         data.deleting ? 'cell-node-deleting' : '',
         data.revealing ? 'cell-node-created' : '',
+        data.highlighted ? 'cell-node-highlight' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-lane-family={notebookLaneFamily(data.kind)}
       data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
+      data-highlight={data.highlighted ? 'generated' : undefined}
       data-version-count={outputVersions.length}
       data-cell-status={data.status}
       data-context-menu-open={contextMenu.openCellId === id ? 'true' : undefined}

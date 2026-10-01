@@ -550,6 +550,13 @@ describe('voice chat in the real browser', () => {
     await expect.poll(() => page.locator('.voice-captions').innerText(), { timeout: 40_000 }).toMatch(/yes.*apply/i)
     expect((await applied).status()).toBe(204)
     await page.locator('.confirm-sheet').waitFor({ state: 'hidden', timeout: 20_000 })
+    // The review clearing hands the mic back: the phase must leave 'review'
+    // instead of parking there or dropping the session.
+    await expect.poll(
+      () => page.locator('.command-composer').getAttribute('data-voice-phase'),
+      { timeout: 20_000 },
+    ).not.toBe('review')
+    expect(await page.locator('.command-composer').getAttribute('data-voice-phase')).not.toBe('off')
     expect(await input.textContent()).toBe('Retain this @a1 draft')
     await expect.poll(() => page.locator('.voice-captions p[data-role="assistant"]').last().innerText(), { timeout: 20_000 }).toMatch(/renamed|updated|changed|labeled|labelled|applied|done/i)
     await page.getByLabel('Stop voice conversation').click()

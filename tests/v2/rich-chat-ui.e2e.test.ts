@@ -334,6 +334,46 @@ describe('rich chat references with real notebook media', () => {
     expect(await input().evaluate(element => document.activeElement === element)).toBe(true)
   })
 
+  it('closes the inspector and highlights the output instead of selecting it after Generate', async () => {
+    await page.addInitScript(() => localStorage.setItem('videobook.cloud-generation-consent', 'accepted'))
+    const created = record(await call('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_image',
+        label: 'highlight producer',
+        slot: { row: 1, column: 0 },
+        prompt: 'a green lighthouse at dusk',
+        provider: 'kie',
+        model: 'NanoBananaProRequestSchema',
+        operation: 'text_to_image',
+        tool: 'generate_kie_nano_banana_pro_text_to_image',
+      },
+    }))
+    const producerId = String(created?.id)
+    await page.reload()
+    await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
+    const producer = page.locator(`.react-flow__node[data-id="${producerId}"]`)
+    await producer.waitFor({ state: 'visible', timeout: 30_000 })
+    await producer.click()
+    await expect.poll(() => producer.locator('.cell-node').getAttribute('class'), { timeout: 10_000 }).toContain('cell-node-selected')
+    const dock = page.locator('.composer-notebook-dock')
+    await dock.getByRole('button', { name: /Generate/ }).click()
+    // The inspector and its generation preview drop instead of following the
+    // output cell, and the queued output is highlighted unselected.
+    await expect.poll(() => producer.locator('.cell-node').getAttribute('class'), { timeout: 15_000 }).not.toContain('cell-node-selected')
+    await expect.poll(() => page.locator('.generation-cell-inspector').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(
+      () => page.locator('.cell-node.cell-node-highlight').count(),
+      { timeout: 15_000 },
+    ).toBeGreaterThan(0)
+    expect(await page.locator('.cell-node.cell-node-highlight.cell-node-selected').count()).toBe(0)
+    await expect.poll(async () => JSON.stringify(await call('list_jobs')), { timeout: 90_000 }).not.toMatch(/"state":"(queued|running)"/)
+    await expect.poll(
+      () => page.locator('.cell-node.cell-node-error').count(),
+      { timeout: 30_000 },
+    ).toBeGreaterThan(0)
+  })
+
   it('keeps global actions available from an empty Library', async () => {
     await call('delete_book', { book_id: secondBookId, confirm_name: 'rich-chat-secondary' })
     await call('delete_book', { confirm_name: 'rich-chat-primary' })
