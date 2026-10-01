@@ -26,10 +26,8 @@ describe('audio ingest', () => {
       '-i', 'sine=frequency=440:duration=1:sample_rate=48000',
       sourcePath,
     ])
-    const engine = createEngine({
-      rootDir: join(rootDir, 'book'),
-      initialBookName: 'audio-ingest',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'),
+    initialBookName: 'audio-ingest', })
     await engine.ready
     const artifact = await engine.artifacts.create('audio', 'recording')
     expect(artifact.ok).toBe(true)

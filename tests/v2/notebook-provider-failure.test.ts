@@ -19,7 +19,7 @@ describe("notebook provider failures", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-provider-failure-"));
-    engine = createEngine({ rootDir, initialBookName: "provider-failure" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "provider-failure" });
     await engine.ready;
   });
 

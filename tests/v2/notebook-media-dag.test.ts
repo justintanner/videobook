@@ -86,7 +86,7 @@ describe("notebook local media and analysis fan-out", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-media-dag-"));
-    engine = createEngine({ rootDir, initialBookName: "media-dag" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "media-dag" });
     await engine.ready;
   });
 

@@ -51,7 +51,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-dag-e2e-'))
-    engine = createEngine({ rootDir, initialBookName: 'dag-e2e' })
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'dag-e2e' })
     await engine.ready
 
     const sourcePath = join(rootDir, 'source.mp4')

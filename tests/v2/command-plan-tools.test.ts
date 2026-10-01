@@ -35,10 +35,8 @@ describe('CommandPlan edit tools', () => {
 
   it('shares preview, atomic commit, stale review, audit, and forward restore', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-command-plan-'))
-    const engine = createEngine({
-      rootDir,
-      initialBookName: 'command-plan',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'command-plan', })
     const artifact = await engine.artifacts.create('image', 'cover')
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return
@@ -665,10 +663,8 @@ describe('CommandPlan edit tools', () => {
 
   it('uses validated fullscreen media context for implicit chat inserts', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-media-context-'))
-    const engine = createEngine({
-      rootDir,
-      initialBookName: 'media-context',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'media-context', })
     const artifact = await engine.artifacts.create('image', 'boat')
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return

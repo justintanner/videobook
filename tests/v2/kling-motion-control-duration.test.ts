@@ -30,10 +30,8 @@ describe("Kling motion-control duration", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-kling-motion-duration-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "kling-motion-duration",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "kling-motion-duration", });
     await engine.ready;
   });
 

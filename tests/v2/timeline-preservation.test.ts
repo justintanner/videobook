@@ -21,7 +21,7 @@ describe('canonical track settings through compatibility edits', () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'timeline-preservation-'))
-    engine = createEngine({ rootDir: join(rootDir, 'book'), initialBookName: 'Timeline preservation' })
+    engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'), initialBookName: 'Timeline preservation' })
     await engine.ready
     const image = await engine.artifacts.create('image', 'Still')
     const audio = await engine.artifacts.create('audio', 'Tone')

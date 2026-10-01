@@ -16,10 +16,8 @@ describe('download video tool response', () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-download-tool-'))
-    engine = createEngine({
-      rootDir,
-      initialBookName: 'download-tool',
-    })
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'download-tool', })
     await engine.ready
     await setEngineRoot(rootDir, engine)
     registerJobHandler('download_video', async () => ({ ok: true }))

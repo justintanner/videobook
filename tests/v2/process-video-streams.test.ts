@@ -29,10 +29,8 @@ describe('video ingest stream identity', () => {
       '-c:a', 'aac', '-shortest',
       sourcePath,
     ])
-    const engine = createEngine({
-      rootDir: join(rootDir, 'book'),
-      initialBookName: 'video-streams',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'),
+    initialBookName: 'video-streams', })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'source-video')
     expect(artifact.ok).toBe(true)
@@ -113,10 +111,8 @@ describe('video ingest stream identity', () => {
       '-c:a', 'aac', '-shortest',
       sourcePath,
     ])
-    const engine = createEngine({
-      rootDir: join(rootDir, 'book'),
-      initialBookName: 'video-proxy-repair',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'),
+    initialBookName: 'video-proxy-repair', })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'repair-source')
     expect(artifact.ok).toBe(true)

@@ -176,10 +176,8 @@ describe("notebook live analysis", () => {
 
   it("sends timestamped frames and an optional transcript through Responses", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-analysis-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "live-analysis",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "live-analysis", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -297,10 +295,8 @@ describe("notebook live analysis", () => {
 
   it("preserves rapid verified camera cuts and rechecks ambiguous candidates", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-camera-cuts-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "camera-cuts",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "camera-cuts", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -429,10 +425,8 @@ describe("notebook live analysis", () => {
 
   it("runs real scene detection and candidate-frame extraction before validation", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-camera-pipeline-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "camera-pipeline",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "camera-pipeline", });
     await engine.ready;
     const videoPath = join(rootDir, "camera-pipeline.mp4");
     await runFfmpeg([
@@ -525,10 +519,8 @@ describe("notebook live analysis", () => {
 
   it("chooses a waveform transition instead of an arbitrary long-take split", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-audio-cuts-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "audio-cuts",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "audio-cuts", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -620,10 +612,8 @@ describe("notebook live analysis", () => {
 
   it("caches a gpt-transcribe fallback when processed audio has no transcript", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-transcript-fallback-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "transcript-fallback",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "transcript-fallback", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -688,10 +678,8 @@ describe("notebook live analysis", () => {
 
   it("migrates legacy defaults while retaining a custom analysis brief", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-analysis-prompt-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "analysis-prompt",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "analysis-prompt", });
     await engine.ready;
     const notebook = await engine.notebooks.create("Main");
     expect(notebook.ok).toBe(true);
@@ -729,10 +717,8 @@ describe("notebook live analysis", () => {
 
   it("requires a positive duration before calling the provider", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-duration-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "live-duration",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "live-duration", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -750,10 +736,8 @@ describe("notebook live analysis", () => {
 
   it("requires at least one processed timestamped frame", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-frames-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "live-frames",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "live-frames", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",
@@ -774,10 +758,8 @@ describe("notebook live analysis", () => {
 
   it("runs legacy fixture-owned Analyze live and persists normalized metadata and provenance", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-runner-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "live-runner",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "live-runner", });
     await engine.ready;
     const source = await engine.artifacts.create({
       kind: "video",

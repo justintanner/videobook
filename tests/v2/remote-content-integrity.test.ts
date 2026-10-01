@@ -32,7 +32,7 @@ it('verifies remote media from the application B2 adapter before hydration and s
     process.env.B2_ENDPOINT = `http://127.0.0.1:${address.port}`
     const remoteObjects = contentStoreFromEnvironment()
     if (!remoteObjects) throw new Error('No content adapter')
-    engine = createEngine({ rootDir: root, initialBookName: 'integrity', remoteObjects, objectPrefix: 'media' })
+    engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: 'integrity', remoteObjects, objectPrefix: 'media' })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'source')
     if (!artifact.ok) throw new Error(artifact.error.message)
@@ -47,7 +47,7 @@ it('verifies remote media from the application B2 adapter before hydration and s
     expect((await engine.workspaces.evict(id)).ok).toBe(true)
     engine.close()
     await unlink(cas)
-    engine = createEngine({ rootDir: root, remoteObjects, objectPrefix: 'media' })
+    engine = createEngine({ durableWrites: false, rootDir: root, remoteObjects, objectPrefix: 'media' })
     await engine.ready
     expect(await engine.files.read(id, 'original.mp4')).toMatchObject({
       ok: false, error: { code: 'OBJECT_UNAVAILABLE', details: { reason: 'checksum_mismatch', objectHash: hash } },

@@ -42,10 +42,8 @@ describe('canonical sequence export renderer', () => {
       sourcePath,
     ])
     const sourceProbe = await probeVideo(sourcePath)
-    const engine = createEngine({
-      rootDir,
-      initialBookName: 'export-render',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'export-render', })
     const artifact = await engine.artifacts.create('video', 'fixture')
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return

@@ -41,7 +41,7 @@ describe('asset tag editor with a real engine', () => {
   beforeEach(async () => {
     responseGate = null
     root = await mkdtemp(join(tmpdir(), 'tag-editor-browser-'))
-    engine = createEngine({ rootDir: root, initialBookName: 'Tag editor browser' })
+    engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: 'Tag editor browser' })
     await engine.ready
     const asset = await engine.artifacts.create({ kind: 'image' })
     if (!asset.ok) throw new Error(asset.error.message)

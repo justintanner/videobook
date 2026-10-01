@@ -26,7 +26,7 @@ describe('prompt history pagination', () => {
 
   it('pages from newest to oldest without truncating stored history', async () => {
     root = await mkdtemp(join(tmpdir(), 'videobook-prompt-history-'))
-    const engine = createEngine({ rootDir: root, initialBookName: 'history' })
+    const engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: 'history' })
     try {
       for (let index = 0; index < 5; index += 1) {
         const recorded = await engine.prompts.record({

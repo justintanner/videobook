@@ -159,7 +159,7 @@ describe("progressive deep-model batch cadence (VE-NFR-003)", () => {
 
   it("commits bounded batches through the engine and resumes from the durable cursor", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-index-cadence-"));
-    const engine = createEngine({ rootDir, initialBookName: "index-cadence" });
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: "index-cadence" });
     await engine.ready;
     try {
       const artifactId = value(
@@ -325,10 +325,8 @@ describe("progressive deep-model batch cadence (VE-NFR-003)", () => {
         "yuv420p",
         videoPath,
       ]);
-      const engine = createEngine({
-        rootDir: join(rootDir, "book"),
-        initialBookName: "clip-cadence",
-      });
+      const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, "book"),
+      initialBookName: "clip-cadence", });
       await engine.ready;
       try {
         const artifactId = value(

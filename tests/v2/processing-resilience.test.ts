@@ -56,10 +56,8 @@ describe('processing resilience', () => {
 
   it('waits for parent local work before running a downstream job', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-processing-resilience-'))
-    engine = createEngine({
-      rootDir,
-      initialBookName: 'processing-resilience',
-    })
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'processing-resilience', })
     await engine.ready
     await setEngineRoot(rootDir, engine)
     const artifact = await engine.artifacts.create('video', 'lease-order')
@@ -118,10 +116,8 @@ describe('processing resilience', () => {
 
   it('persists every processed image variant', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-processing-image-'))
-    engine = createEngine({
-      rootDir,
-      initialBookName: 'processing-image',
-    })
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'processing-image', })
     await engine.ready
     await setEngineRoot(rootDir, engine)
     const artifact = await engine.artifacts.create('image', 'source-image')

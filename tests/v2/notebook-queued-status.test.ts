@@ -11,7 +11,7 @@ describe('notebook queued execution status', () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-queued-cell-'))
-    engine = createEngine({ rootDir, initialBookName: 'queued-cell' })
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'queued-cell' })
   })
 
   afterEach(async () => {

@@ -45,7 +45,7 @@ describe("unstacked image/video generation results", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-unstack-"));
-    engine = createEngine({ rootDir, initialBookName: "unstack" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "unstack" });
     await engine.ready;
   });
 
@@ -430,7 +430,7 @@ describe("unstacked generation run and await", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-unstack-run-"));
-    engine = createEngine({ rootDir, initialBookName: "unstack-run" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "unstack-run" });
     await engine.ready;
     bookId = engine.book.get().bookId;
     previousKieKey = process.env.KIE_API_KEY;

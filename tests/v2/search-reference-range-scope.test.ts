@@ -170,7 +170,7 @@ describe("application reference range scoping", () => {
 
   it("searches only the requested window of a prepared reference and rejects invalid or unknown inputs before searching", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-range-scope-"));
-    const engine = createEngine({ rootDir, initialBookName: "range-scope" });
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: "range-scope" });
     await engine.ready;
     try {
       const artifactId = await seedThreeMoments(engine);

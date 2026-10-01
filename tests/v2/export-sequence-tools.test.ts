@@ -27,10 +27,8 @@ describe('canonical sequence export tools', () => {
 
   it('validates immutable inputs and creates a revision-pinned queued export plan', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-export-plan-'))
-    const engine = createEngine({
-      rootDir,
-      initialBookName: 'export-plan',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'export-plan', })
     const artifact = await engine.artifacts.create('image', 'frame')
     expect(artifact.ok).toBe(true)
     if (!artifact.ok) return

@@ -11,10 +11,8 @@ describe("generation payload inspection", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-generation-payload-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "generation-payload",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "generation-payload", });
     await engine.ready;
   });
 

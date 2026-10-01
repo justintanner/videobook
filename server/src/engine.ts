@@ -68,6 +68,7 @@ export function createEngineForTest(rootDir: string) {
   const existing = testEngines.get(normalizedRoot);
   if (existing) return existing;
   const engine = createEngine({
+    durableWrites: false,
     rootDir: normalizedRoot,
     initialBookName: "test-book",
   });

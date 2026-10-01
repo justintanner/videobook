@@ -136,7 +136,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('assembles unlimited sequential clips and ripples removal on only the selected track', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-row-timeline-'))
-    const engine = createEngine({ rootDir, initialBookName: 'row-timeline' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'row-timeline' })
     activeEngine = engine
     const video = await createTimedArtifact(engine, 'video', 'short video', 15)
     const audio = await createTimedArtifact(engine, 'audio', 'long audio', 480_000)
@@ -176,13 +176,13 @@ describe('music-video canonical sequence plans', () => {
     expect((await engine.files.write(video.artifactId, 'original.mp4', Buffer.from('replaced source bytes'))).ok).toBe(true)
     await expect(plan(engine, { kind: 'append', track_id: videoTrack.trackId, artifact_id: video.artifactId })).rejects.toThrow('current source media')
     engine.close()
-    activeEngine = createEngine({ rootDir })
+    activeEngine = createEngine({ durableWrites: false, rootDir })
     expect(activeEngine.sequences.getPrimary().clips).toEqual(sequence.clips)
   })
 
   it('keeps batched appends in request order independently on each track', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-append-batch-'))
-    const engine = createEngine({ rootDir, initialBookName: 'append-batch' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'append-batch' })
     activeEngine = engine
     const first = await createTimedArtifact(engine, 'video', 'first', 60)
     const second = await createTimedArtifact(engine, 'video', 'second', 30)
@@ -210,7 +210,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('applies an idempotent master soundtrack and atomic ordered appends', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-setup-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-setup' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-setup' })
     activeEngine = engine
     const soundtrack = await createTimedArtifact(engine, 'audio', 'soundtrack', 480_000)
     const ambient = await createTimedArtifact(engine, 'audio', 'ambient', 96_000)
@@ -324,7 +324,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('preserves gaps, source ranges, and downstream timing across reorder, trim, and speed', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-ripple-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-ripple' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-ripple' })
     activeEngine = engine
     const first = await createTimedArtifact(engine, 'video', 'first', 90)
     const second = await createTimedArtifact(engine, 'video', 'second', 60)
@@ -436,7 +436,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('rejects locked-track soundtrack setup and main-lane appends', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-locked-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-locked' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-locked' })
     activeEngine = engine
     const soundtrack = await createTimedArtifact(engine, 'audio', 'soundtrack', 480_000)
     const ambient = await createTimedArtifact(engine, 'audio', 'ambient', 96_000)
@@ -473,7 +473,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('fills remaining soundtrack time when appending music-video clips', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-fill-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-fill' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-fill' })
     activeEngine = engine
     const first = await createTimedArtifact(engine, 'video', 'first', 90)
     const second = await createTimedArtifact(engine, 'video', 'second', 60)
@@ -505,7 +505,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('rebalances a full music-video lane when more clips are added', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-rebalance-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-rebalance' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-rebalance' })
     activeEngine = engine
     const first = await createTimedArtifact(engine, 'video', 'first', 90)
     const second = await createTimedArtifact(engine, 'video', 'second', 60)
@@ -548,7 +548,7 @@ describe('music-video canonical sequence plans', () => {
 
   it('rebalances an existing short clip when more sources are added', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-video-short-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-video-short' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-video-short' })
     activeEngine = engine
     const first = await createTimedArtifact(engine, 'video', 'first', 90)
     const second = await createTimedArtifact(engine, 'video', 'second', 60)
@@ -588,7 +588,7 @@ describe('music-video canonical sequence plans', () => {
   })
   async function draftFixture() {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-music-draft-'))
-    const engine = createEngine({ rootDir, initialBookName: 'music-draft' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'music-draft' })
     activeEngine = engine
     const audio = await createTimedArtifact(engine, 'audio', 'song', 480_000)
     const video = await createTimedArtifact(engine, 'video', 'portrait', 90)

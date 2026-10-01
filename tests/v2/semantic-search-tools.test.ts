@@ -54,7 +54,7 @@ describe('semantic search MCP tools', () => {
 
   it('returns bounded moments, reasons, coverage, and index status', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-search-tools-'))
-    const engine = createEngine({ rootDir, initialBookName: 'search-tools' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'search-tools' })
     await engine.ready
     const artifact = await engine.artifacts.create('video', 'golden-hour-van')
     expect(artifact.ok).toBe(true)

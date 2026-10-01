@@ -35,7 +35,7 @@ describe("notebook generation rows", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-generations-"));
-    engine = createEngine({ rootDir, initialBookName: "generations" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "generations" });
     await engine.ready;
     bookId = engine.book.get().bookId;
     previousKieKey = process.env.KIE_API_KEY;

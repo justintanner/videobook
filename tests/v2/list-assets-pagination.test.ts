@@ -117,7 +117,7 @@ describe('bounded asset listing', () => {
 
   beforeAll(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-asset-listing-'))
-    engine = createEngine({ rootDir, initialBookName: 'asset-listing' })
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'asset-listing' })
     await engine.ready
     bookId = engine.book.get().bookId
     artifactIds = []

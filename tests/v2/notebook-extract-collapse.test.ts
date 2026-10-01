@@ -20,7 +20,7 @@ describe("legacy extract migration", () => {
 
   async function setup(name: string): Promise<Engine> {
     rootDir = await mkdtemp(join(tmpdir(), "vb-extract-migrate-"));
-    engine = createEngine({ rootDir, initialBookName: name });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: name });
     await engine.ready;
     return engine;
   }

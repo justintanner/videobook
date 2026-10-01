@@ -44,7 +44,7 @@ describe("Multyculty workflow fixture", () => {
 
   it("builds an idempotent compact video-to-concat graph", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-"));
-    engine = createEngine({ rootDir, initialBookName: "multyculty" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "multyculty" });
     await engine.ready;
     const notebook = await engine.notebooks.create("Main");
     expect(notebook.ok).toBe(true);

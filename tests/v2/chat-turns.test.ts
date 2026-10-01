@@ -22,7 +22,7 @@ function turn(id: number, text: string): ChatTurn {
 describe('chat turns', () => {
   it('follows real persistent jobs through running, partial completion and failure without including unrelated jobs', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-turns-'))
-    const engine = createEngine({ rootDir, initialBookName: 'chat-turns' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'chat-turns' })
     try {
       const first = engine.jobs.queue.enqueue({ type: 'first-chat-action', initialState: 'running', payload: {} }).job
       const second = engine.jobs.queue.enqueue({ type: 'second-chat-action', initialState: 'running', payload: {}, maxAttempts: 1 }).job
@@ -49,7 +49,7 @@ describe('chat turns', () => {
 
   it('waits for a notebook run output after the queue parent has completed', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-run-'))
-    const engine = createEngine({ rootDir, initialBookName: 'chat-run' })
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: 'chat-run' })
     try {
       const created = await engine.notebooks.create('Chat')
       if (!created.ok) throw new Error(created.error.message)

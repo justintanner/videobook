@@ -39,7 +39,7 @@ describe("extract_audio action", () => {
 
   it("records source and range provenance on the audio it extracts", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-extract-audio-action-"));
-    engine = createEngine({ rootDir, initialBookName: "extract-audio" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "extract-audio" });
     await engine.ready;
     bookId = engine.book.get().bookId;
     await setEngineRoot(rootDir, engine);

@@ -28,7 +28,7 @@ describe("selected notebook subgraph planning", () => {
 
   async function setup(): Promise<Engine> {
     rootDir = await mkdtemp(join(tmpdir(), "vb-subgraph-plan-"));
-    engine = createEngine({ rootDir, initialBookName: "subgraph" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "subgraph" });
     await engine.ready;
     return engine;
   }

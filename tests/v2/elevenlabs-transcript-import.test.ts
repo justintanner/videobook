@@ -15,10 +15,8 @@ describe('ElevenLabs transcript import', () => {
 
   it('imports exact timed speech, speakers, confidence, and audio events', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-transcript-import-'))
-    const engine = createEngine({
-      rootDir: join(rootDir, 'book'),
-      initialBookName: 'transcript-import',
-    })
+    const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'),
+    initialBookName: 'transcript-import', })
     await engine.ready
     const artifact = await engine.artifacts.create('audio', 'interview')
     expect(artifact.ok).toBe(true)

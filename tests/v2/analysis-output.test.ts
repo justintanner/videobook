@@ -11,10 +11,8 @@ describe("Analysis output assets", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-analysis-output-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "analysis-output",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "analysis-output", });
     await engine.ready;
   });
 

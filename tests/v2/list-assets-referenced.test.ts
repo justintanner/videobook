@@ -24,7 +24,7 @@ describe("list_assets notebook references", () => {
 
   it("hydrates sequence-only media beyond the first 200 assets without changing paging", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-sequence-referenced-"));
-    engine = createEngine({ rootDir, initialBookName: "sequence-referenced" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "sequence-referenced" });
     const source = await engine.artifacts.create("image", "timeline source");
     if (!source.ok) throw new Error(source.error.message);
     const artifactId = source.value.artifactId;
@@ -67,10 +67,8 @@ describe("list_assets notebook references", () => {
 
   it("appends referenced assets outside the bounded page", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-list-referenced-"));
-    engine = createEngine({
-      rootDir,
-      initialBookName: "list-referenced",
-    });
+    engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: "list-referenced", });
     await engine.ready;
 
     const notebook = await engine.notebooks.create("Main");

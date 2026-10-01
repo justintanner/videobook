@@ -430,7 +430,7 @@ describe("notebook runner frames and concat", () => {
 
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
-    engine = createEngine({ rootDir, initialBookName: "runner-frames" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "runner-frames" });
     await engine.ready;
 
     const first = await engine.artifacts.create({ kind: "image", label: "First frame" });
@@ -539,7 +539,7 @@ describe("notebook runner frames and concat", () => {
 
   it("propagates split output through a video asset cell before extraction", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-split-video-"));
-    engine = createEngine({ rootDir, initialBookName: "runner-split-video" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "runner-split-video" });
     await engine.ready;
 
     const clipPath = join(rootDir, "source.mp4");
@@ -728,7 +728,7 @@ describe("notebook runner frames and concat", () => {
 
   it("rejects extract audio actions connected to non-video media", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-audio-input-"));
-    engine = createEngine({ rootDir, initialBookName: "runner-audio-input" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "runner-audio-input" });
     await engine.ready;
 
     const sourceArtifact = await engine.artifacts.create({
@@ -789,7 +789,7 @@ describe("notebook runner frames and concat", () => {
 
   it("concats ordered video cells into a playable H264 and AAC output", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-concat-"));
-    engine = createEngine({ rootDir, initialBookName: "runner-concat" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "runner-concat" });
     await engine.ready;
 
     const clipPath = join(rootDir, "clip.mp4");

@@ -64,7 +64,7 @@ describe("Dancing workflow fixture", () => {
       "-shortest",
       sourcePath,
     ]);
-    engine = createEngine({ rootDir, initialBookName: "dancing" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "dancing" });
     await engine.ready;
     const created = await engine.notebooks.create("Main");
     expect(created.ok).toBe(true);

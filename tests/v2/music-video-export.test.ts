@@ -24,7 +24,7 @@ afterEach(async () => {
 
 it('renders fitted beat cuts at the reviewed frames with trimmed and offset soundtrack timing', async () => {
   root = await mkdtemp(join(tmpdir(), 'videobook-beat-export-'))
-  engine = createEngine({ rootDir: root, initialBookName: 'beat-export' })
+  engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: 'beat-export' })
   await setEngineRoot(root, engine)
   const fixtures = [
     { label: 'portrait', kind: 'video' as const, input: 'color=red:s=90x160:r=30:d=2', filters: 'drawbox=x=0:y=0:w=iw:h=12:c=lime:t=fill,drawbox=x=0:y=148:w=iw:h=12:c=blue:t=fill' },
