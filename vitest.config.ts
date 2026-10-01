@@ -102,6 +102,7 @@ export default defineConfig({
       'server/src/test-media-fixtures.test.ts',
       'server/src/test-clock-inventory.test.ts',
       'server/src/jobs/asset-file-helpers.test.ts',
+      'server/src/jobs/_image-edit-adapter.test.ts',
       'server/src/artifact-label.test.ts',
       'server/src/archive-b2.test.ts',
       'server/src/asset-tag-extraction.test.ts',

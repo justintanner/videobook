@@ -117,7 +117,7 @@ export const IMAGE_EDIT_MODELS: readonly ImageEditModelInfo[] = [
     shadowedAction: "generate_fal_qwen_3_0_edit_image",
   },
   {
-    id: "fal-ai/wan-v2-7/edit",
+    id: "fal-ai/wan/v2.7/edit",
     label: "Wan 2.7 Edit",
     provider: "fal",
     envKey: "FAL_API_KEY",

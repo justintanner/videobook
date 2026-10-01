@@ -7,7 +7,6 @@ import {
 import {
   GrokImagineImage2ImageEditRequestSchema,
   GrokImagineImage2SegmentMapRequestSchema,
-  SeedreamProImageToImageRequestSchema,
   SeedreamProLayerDecompositionRequestSchema,
 } from "@apicity/kie/zod";
 import sharp from "sharp";
@@ -19,6 +18,7 @@ import {
 } from "./_kie-poll.js";
 import {
   GROK_EXACT_MASK_ADAPTER_ID,
+  IMAGE_EDIT_ADAPTERS,
   SEEDREAM_I2I_ADAPTER,
   type ImageEditAdapter,
   type ImageEditProviderRequest,
@@ -580,28 +580,31 @@ export async function readStoredImageSubjectEditTask(
     imageAssetId,
     "generation-payload",
   );
-  const parsedRequest = storedRequest.ok
-    ? SeedreamProImageToImageRequestSchema.safeParse(storedRequest.value)
-    : null;
-  const parsedExact = storedRequest.ok && !parsedRequest?.success
-    ? GrokImagineImage2ImageEditRequestSchema.safeParse(storedRequest.value)
-    : null;
+  let request: ImageEditProviderRequest | GrokImagineImage2ImageEditRequest | null = null;
+  let adapterId: string | null = null;
+  if (storedRequest.ok) {
+    for (const adapter of IMAGE_EDIT_ADAPTERS) {
+      const parsed = adapter.parseStoredPayload(storedRequest.value);
+      if (parsed) {
+        request = parsed;
+        adapterId = adapter.id;
+        break;
+      }
+    }
+    if (!request) {
+      const parsedExact = GrokImagineImage2ImageEditRequestSchema.safeParse(storedRequest.value);
+      if (parsedExact.success) {
+        request = parsedExact.data;
+        adapterId = GROK_EXACT_MASK_ADAPTER_ID;
+      }
+    }
+  }
   const storedTask = await engine.metadata.artifacts.read<unknown>(
     imageAssetId,
     "kie-task-id",
   );
   const taskRecord = storedTask.ok ? record(storedTask.value) : null;
   const taskId = stringValue(taskRecord?.taskId);
-  const request = parsedRequest?.success
-    ? parsedRequest.data
-    : parsedExact?.success
-      ? parsedExact.data
-      : null;
-  const adapterId = parsedRequest?.success
-    ? SEEDREAM_I2I_ADAPTER.id
-    : parsedExact?.success
-      ? GROK_EXACT_MASK_ADAPTER_ID
-      : null;
   if (taskId && !request) {
     throw new Error("Stored Kie subject edit task has no valid generation payload");
   }
@@ -676,7 +679,8 @@ async function runAdapterImageSubjectEdit(
   payload: GenerateImageSubjectEditPayload,
   adapter: ImageEditAdapter,
   route: ImageSubjectEditRoute,
-  prepared: { imageUrls: string[]; prompt: string; width: number; height: number },
+  prepared: { prompt: string; width: number; height: number },
+  sourceFilename: string,
   signal: AbortSignal,
 ): Promise<ImageSubjectEditGeneration> {
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
@@ -684,10 +688,18 @@ async function runAdapterImageSubjectEdit(
   let request = storedMatch?.request as ImageEditProviderRequest | null ?? null;
   let taskId = storedMatch?.taskId ?? null;
   if (!request || !taskId) {
+    const imageUrls = [
+      await adapter.uploadAsset(engine, payload.sourceArtifactId, sourceFilename),
+    ];
+    if (route === "region") {
+      for (const ref of payload.replacementRefs ?? []) {
+        imageUrls.push(await adapter.uploadAsset(engine, ref.assetId, ref.filename));
+      }
+    }
     request = route === "semantic"
-      ? adapter.buildSemanticRequest(prepared)
-      : adapter.buildRegionRequest(prepared);
-    taskId = await adapter.submit(engine, payload.imageAssetId, request, signal);
+      ? adapter.buildSemanticRequest({ ...prepared, imageUrls })
+      : adapter.buildRegionRequest({ ...prepared, imageUrls });
+    taskId = await adapter.submit(engine, payload.imageAssetId, request);
   }
   if (payload.generationId) {
     const generation = await engine.generations.update(payload.generationId, {
@@ -710,22 +722,17 @@ async function generateSemanticSubjectEdit(
   sourceFilename: string,
   signal: AbortSignal,
 ): Promise<ImageSubjectEditGeneration> {
-  const imageUrl = await uploadAssetToKie(
-    engine,
-    payload.sourceArtifactId,
-    sourceFilename,
-  );
   return runAdapterImageSubjectEdit(
     engine,
     payload,
     SEEDREAM_I2I_ADAPTER,
     "semantic",
     {
-      imageUrls: [imageUrl],
       prompt: semanticEditPrompt(map, payload.subjectIds, payload.prompt ?? ""),
       width: map.width,
       height: map.height,
     },
+    sourceFilename,
     signal,
   );
 }
@@ -739,15 +746,6 @@ async function generateRegionReplacementEdit(
   height: number,
   signal: AbortSignal,
 ): Promise<ImageSubjectEditGeneration> {
-  const baseUrl = await uploadAssetToKie(
-    engine,
-    payload.sourceArtifactId,
-    sourceFilename,
-  );
-  const replacementUrls: string[] = [];
-  for (const ref of payload.replacementRefs ?? []) {
-    replacementUrls.push(await uploadAssetToKie(engine, ref.assetId, ref.filename));
-  }
   const prompt = regionReplacementPrompt(
     map,
     payload.regions ?? [],
@@ -765,12 +763,8 @@ async function generateRegionReplacementEdit(
     payload,
     SEEDREAM_I2I_ADAPTER,
     "region",
-    {
-      imageUrls: [baseUrl, ...replacementUrls],
-      prompt,
-      width,
-      height,
-    },
+    { prompt, width, height },
+    sourceFilename,
     signal,
   );
 }

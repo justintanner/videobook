@@ -34,7 +34,7 @@ function imageFieldFor(entryId: string): { safeParse(value: unknown): { success:
       return FalNanoBanana2EditRequestSchema.shape.image_urls;
     case "alibaba/qwen-image-3/edit":
       return FalAlibabaQwenImage3EditRequestSchema.shape.image_urls;
-    case "fal-ai/wan-v2-7/edit":
+    case "fal-ai/wan/v2.7/edit":
       return FalWanV2p7EditRequestSchema.shape.image_urls;
     default:
       return null;
@@ -63,7 +63,7 @@ describe("image edit model catalog", () => {
     }
     expect(shadowingRetired).toEqual([
       "gpt-image-2-image-to-image",
-      "fal-ai/wan-v2-7/edit",
+      "fal-ai/wan/v2.7/edit",
     ]);
   });
 

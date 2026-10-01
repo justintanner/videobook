@@ -42,6 +42,7 @@
     "pretest:e2e": "playwright install chromium",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:voice:live": "VIDEOBOOK_RUN_VOICE_LIVE=1 vitest run --config vitest.voice.config.ts",
+    "test:image-edit:live": "vitest run --config vitest.image-edit-live.config.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
