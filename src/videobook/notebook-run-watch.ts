@@ -1,10 +1,12 @@
 import type { NotebookCellRunObservation } from './notebook-cell-presentation'
 
 export type NotebookRunJobView = {
+  id?: number
   state: string
   errorMessage: string | null
   operationId?: string
   type?: string
+  startedAt?: number | null
   payload?: Record<string, unknown> | null
 }
 
@@ -88,9 +90,11 @@ export function notebookRunWatchStep(input: {
 }
 
 export function notebookRunJobViewFromRecord(job: {
+  id?: number
   state: string
   operationId: string
   type: string
+  startedAt?: number | null
   error: { message: string } | null
   payload?: Record<string, unknown> | null
 }): NotebookRunJobView {
@@ -99,6 +103,8 @@ export function notebookRunJobViewFromRecord(job: {
     errorMessage: job.error?.message ?? null,
     operationId: job.operationId,
     type: job.type,
+    startedAt: job.startedAt ?? null,
     payload: job.payload ?? null,
+    ...(typeof job.id === 'number' ? { id: job.id } : {}),
   }
 }

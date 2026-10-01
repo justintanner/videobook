@@ -64,6 +64,7 @@ export default defineConfig({
       'src/videobook/fullscreen-target.test.ts',
       'src/videobook/notebook-routing.test.ts',
       'src/videobook/notebook-run-watch.test.ts',
+      'src/videobook/media-cell-generation-state.test.ts',
       'src/videobook/media-insight-watch.test.ts',
       'src/videobook/media-insights.test.ts',
       'src/videobook/notebook-cell-presentation.test.ts',

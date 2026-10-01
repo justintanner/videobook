@@ -374,6 +374,90 @@ describe('rich chat references with real notebook media', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('shows the generating layout while a selected output runs and offers Retry after failure', async () => {
+    await page.addInitScript(() => localStorage.setItem('videobook.cloud-generation-consent', 'accepted'))
+    const created = record(await call('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_video',
+        label: 'generating dock producer',
+        slot: { row: 2, column: 1 },
+        prompt: 'a slow dolly through a pine forest',
+        provider: 'kie',
+        model: 'GeminiOmniVideoRequestSchema',
+        operation: 'text_to_video',
+        tool: 'generate_kie_gemini_omni_text_to_video',
+      },
+    }))
+    const producerId = String(created?.id)
+    await page.reload()
+    await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
+    const producer = page.locator(`.react-flow__node[data-id="${producerId}"]`)
+    await producer.waitFor({ state: 'visible', timeout: 30_000 })
+    // Headless chromium occasionally flips navigator.onLine mid-session,
+    // which correctly blocks cloud generation; pin it for this run.
+    const devtools = await page.context().newCDPSession(page)
+    await devtools.send('Network.enable')
+    await devtools.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    })
+    await producer.click()
+    const dock = page.locator('.composer-notebook-dock')
+    await dock.getByRole('button', { name: /Generate/ }).click()
+    // The run is accepted and the output cell appears; the offline job fails
+    // within seconds, so address the output by id rather than by its brief
+    // queued styling.
+    let outputCellId = ''
+    await expect.poll(async () => {
+      const notebooks = await call('list_notebooks')
+      const document = (Array.isArray(notebooks) ? notebooks : [])
+        .find((candidate: { id?: string }) => candidate.id === notebookId)
+      const output = (document?.cells ?? []).find(
+        (candidate: { inputs?: { mediaRole?: string } }) =>
+          candidate.inputs?.mediaRole === 'generate-video-output',
+      )
+      outputCellId = output ? String(output.id) : ''
+      return outputCellId.length
+    }, { timeout: 30_000 }).toBeGreaterThan(0)
+    await page.locator(`.react-flow__node[data-id="${outputCellId}"]`).click()
+    const generating = page.locator('.inspector-media-generating')
+    await expect.poll(() => generating.count(), { timeout: 15_000 }).toBe(1)
+    // Same layout across queued, generating and failed: aspect-true
+    // placeholder, the producer's prompt, and none of the ready chrome.
+    expect(await generating.locator('.inspector-media-placeholder').count()).toBe(1)
+    expect(await generating.innerText()).toMatch(/a slow dolly through a pine forest/i)
+    expect(await generating.innerText()).toContain('@c2 · Generate video →')
+    await expect.poll(() => generating.getAttribute('data-generation'), { timeout: 90_000 }).toBe('failed')
+    expect(await generating.innerText()).toMatch(/provider|key|missing|failed/i)
+    // Retry re-runs the producer: each run allocates its own output cell, so
+    // the fresh one appears and opens the same generating dock.
+    await generating.getByRole('button', { name: 'Retry' }).click()
+    let retryOutputId = ''
+    await expect.poll(async () => {
+      const notebooks = await call('list_notebooks')
+      const document = (Array.isArray(notebooks) ? notebooks : [])
+        .find((candidate: { id?: string }) => candidate.id === notebookId)
+      const retryOutput = (document?.cells ?? []).find(
+        (candidate: { id?: string; inputs?: { mediaRole?: string } }) =>
+          candidate.inputs?.mediaRole === 'generate-video-output'
+          && candidate.id !== outputCellId,
+      )
+      retryOutputId = retryOutput ? String(retryOutput.id) : ''
+      return retryOutputId.length
+    }, { timeout: 60_000 }).toBeGreaterThan(0)
+    await page.locator(`.react-flow__node[data-id="${retryOutputId}"]`).click()
+    const retryDock = page.locator('.inspector-media-generating')
+    await expect.poll(() => retryDock.count(), { timeout: 15_000 }).toBe(1)
+    expect(await retryDock.innerText()).toContain('@c2 · Generate video →')
+    await expect.poll(
+      () => retryDock.getAttribute('data-generation'),
+      { timeout: 90_000 },
+    ).toBe('failed')
+  })
+
   it('keeps global actions available from an empty Library', async () => {
     await call('delete_book', { book_id: secondBookId, confirm_name: 'rich-chat-secondary' })
     await call('delete_book', { confirm_name: 'rich-chat-primary' })

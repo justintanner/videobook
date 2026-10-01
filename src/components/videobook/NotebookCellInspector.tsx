@@ -1,5 +1,7 @@
 import {
+  Ban,
   Braces,
+  Captions,
   Check,
   ChevronDown,
   CircleAlert,
@@ -10,11 +12,20 @@ import {
   Maximize2,
   Pencil,
   Plus,
+  RotateCcw,
   Save,
   Trash2,
   X,
 } from 'lucide-react'
-import { Fragment, useContext, useId, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import type { CSSProperties } from 'react'
@@ -55,6 +66,12 @@ import {
   mediaDockKindLabel,
   type MediaDockKind,
 } from '@/videobook/media-dock'
+import {
+  mediaCellGenerationState,
+  mediaGenerationProducer,
+  type MediaCellGenerationState,
+} from '@/videobook/media-cell-generation-state'
+import type { NotebookRunJobView } from '@/videobook/notebook-run-watch'
 import {
   persistAndRunNotebookCell,
   type NotebookCellUpdate,
@@ -452,6 +469,14 @@ type NotebookCellInspectorProps = {
   error: string | null
   busy: boolean
   deleting: boolean
+  /** Cell ids with an accepted-but-unstarted run; drives generating docks. */
+  queuedCellIds?: ReadonlySet<string>
+  /** Live run error messages by cell id; drives failed generation docks. */
+  runErrors?: Readonly<Record<string, string>>
+  /** Persistent job snapshot, already narrowed for run watching. */
+  jobs?: readonly NotebookRunJobView[]
+  /** Cancel a queued or running job by its numeric id, when available. */
+  onCancelJob?: (jobId: number) => void
   sourceVisible: boolean
   historyVisible?: boolean
   generationsVisible?: boolean
@@ -730,7 +755,7 @@ function NotebookCellMedia({
           <video
             ref={videoRef}
             key={mediaUrl}
-            src={mediaUrl}
+            src={asset.thumbnailUrl ? mediaUrl : `${mediaUrl}#t=0.1`}
             poster={asset.thumbnailUrl ?? undefined}
             controls
             controlsList="nofullscreen nodownload noremoteplayback"
@@ -1554,6 +1579,269 @@ function MediaCellFacts({
 
 type MediaTrackStyle = CSSProperties & { '--media-aspect'?: string }
 
+/** Seconds since the run started, ticking once a second while mounted. */
+function useElapsedSeconds(startedAt: string | null): number | null {
+  const [elapsed, setElapsed] = useState<number | null>(null)
+  useEffect(() => {
+    if (!startedAt) return
+    const start = Date.parse(startedAt)
+    if (!Number.isFinite(start)) return
+    const compute = () =>
+      setElapsed(Math.max(0, Math.round((Date.now() - start) / 1000)))
+    // Async first sample: setState inside the effect body would cascade.
+    const first = window.setTimeout(compute, 0)
+    const timer = window.setInterval(compute, 1000)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(timer)
+    }
+  }, [startedAt])
+  return startedAt ? elapsed : null
+}
+
+function GenerationMediaPlaceholder({
+  kind,
+  failed,
+}: {
+  kind: MediaDockKind
+  failed: boolean
+}) {
+  const placeholderStyle: MediaTrackStyle = {
+    '--media-aspect': String(mediaDockAspect(kind, null)),
+  }
+  return (
+    <div
+      className={failed
+        ? 'inspector-media-placeholder failed'
+        : 'inspector-media-placeholder'}
+      style={placeholderStyle}
+    >
+      <span className="inspector-media-placeholder-label">
+        {failed ? 'Failed' : 'Generating…'}
+      </span>
+    </div>
+  )
+}
+
+function GenerationProducerLink({
+  producer,
+  onSelectSource,
+}: {
+  producer: NotebookCell
+  onSelectSource?: (cellId: string) => void
+}) {
+  return (
+    <div className="inspector-media-from">
+      <span className="inspector-media-field-label">From</span>
+      <button
+        type="button"
+        className="inspector-generation-from-link"
+        onClick={() => onSelectSource?.(producer.id)}
+      >
+        {notebookGridTag(producer.slot)} · Generate{' '}
+        {producer.type === 'generate_image' ? 'image' : 'video'} →
+      </button>
+    </div>
+  )
+}
+
+function GenerationInputChips({
+  producerId,
+  cells,
+  edges,
+  cellAssets,
+  onSelectSource,
+}: {
+  producerId: string
+  cells: NotebookCell[]
+  edges: NotebookEdge[]
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+  onSelectSource?: (cellId: string) => void
+}) {
+  const mentions = generationInputMentions(producerId, cells, edges)
+  if (mentions.length === 0) return null
+  const cellsById = new Map(cells.map((candidate) => [candidate.id, candidate]))
+  return (
+    <div className="inspector-media-generation-inputs">
+      <span className="inspector-media-field-label">Inputs</span>
+      <div className="inspector-generation-input-chips">
+        {mentions.map((mention) => {
+          const inputCell = cellsById.get(mention.sourceCellId)
+          const asset = inputCell?.outputArtifactId
+            ? cellAssets?.get(inputCell.outputArtifactId)
+            : undefined
+          return (
+            <button
+              key={mention.token}
+              type="button"
+              className="inspector-generation-input-chip"
+              onClick={() => inputCell && onSelectSource?.(inputCell.id)}
+            >
+              {asset?.thumbnailUrl && (
+                <img src={asset.thumbnailUrl} alt="" />
+              )}
+              <span>{mention.token}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function GeneratingPrompt({ prompt }: { prompt: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="inspector-media-generating-prompt">
+      <span className="inspector-media-field-label">Prompt</span>
+      <blockquote className={expanded ? 'expanded' : undefined}>
+        {prompt}
+      </blockquote>
+      <button
+        type="button"
+        className="inspector-prompt-copy"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <ChevronDown
+          size={12}
+          aria-hidden="true"
+          style={expanded ? { transform: 'rotate(180deg)' } : undefined}
+        />
+        {expanded ? 'Less' : 'More'}
+      </button>
+    </div>
+  )
+}
+
+function GeneratingMediaLayout({
+  kind,
+  address,
+  state,
+  cells,
+  edges,
+  cellAssets,
+  busy,
+  deleting,
+  cancelJobId,
+  onSelectSource,
+  onRunProducer,
+  onCancelJob,
+  onDelete,
+}: {
+  kind: MediaDockKind
+  address: string
+  state: MediaCellGenerationState
+  cells: NotebookCell[]
+  edges: NotebookEdge[]
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+  busy: boolean
+  deleting: boolean
+  cancelJobId?: number
+  onSelectSource?: (cellId: string) => void
+  onRunProducer: (cellId: string) => Promise<unknown>
+  onCancelJob?: (jobId: number) => void
+  onDelete: () => Promise<void>
+}) {
+  const failed = state.kind === 'failed'
+  const elapsed = useElapsedSeconds(
+    state.kind === 'queued' || state.kind === 'generating'
+      ? state.startedAt
+      : null,
+  )
+  const producerCellId = state.kind === 'ready' ? null : state.producerCellId
+  const producer = producerCellId
+    ? cells.find((candidate) => candidate.id === producerCellId) ?? null
+    : null
+  // The failed variant carries only the error; prompt and model come from
+  // the producer so failed keeps the same layout as queued and generating.
+  const model = producer?.model ?? null
+  const prompt = producer?.prompt ?? null
+
+  return (
+    <div className="inspector-media-generating" data-generation={state.kind}>
+      <div className="inspector-media-generating-preview">
+        <GenerationMediaPlaceholder kind={kind} failed={failed} />
+      </div>
+      <div className="inspector-media-generating-summary">
+        <div className="inspector-media-generating-status">
+          <span className="inspector-media-generating-state">
+            {failed
+              ? 'FAILED'
+              : state.kind === 'queued'
+              ? 'QUEUED'
+              : 'GENERATING'}
+            {model && ` · ${model}`}
+            {elapsed !== null && ` · ${formatMediaTime(elapsed)} elapsed`}
+          </span>
+          {failed
+            ? (
+              <>
+                <button
+                  type="button"
+                  className="inspector-generation-action"
+                  disabled={busy || !producerCellId}
+                  onClick={() => {
+                    if (producerCellId) void onRunProducer(producerCellId)
+                  }}
+                >
+                  <RotateCcw size={13} aria-hidden="true" />
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  className="inspector-generation-action danger"
+                  disabled={deleting}
+                  onClick={() => void onDelete()}
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                  Delete
+                </button>
+              </>
+            )
+            : (typeof onCancelJob === 'function' && typeof cancelJobId === 'number'
+              ? (
+                <button
+                  type="button"
+                  className="inspector-generation-action danger"
+                  onClick={() => onCancelJob(cancelJobId)}
+                >
+                  <Ban size={13} aria-hidden="true" />
+                  Cancel run
+                </button>
+              )
+              : null)}
+        </div>
+        {failed && state.kind === 'failed' && (
+          <p className="inspector-media-generating-error" role="alert">
+            <CircleAlert size={13} aria-hidden="true" />
+            <span>{state.message}</span>
+          </p>
+        )}
+        {prompt && <GeneratingPrompt prompt={prompt} />}
+        {producer
+          ? (
+            <GenerationProducerLink
+              producer={producer}
+              onSelectSource={onSelectSource}
+            />
+          )
+          : null}
+        {producerCellId && (
+          <GenerationInputChips
+            producerId={producerCellId}
+            cells={cells}
+            edges={edges}
+            cellAssets={cellAssets}
+            onSelectSource={onSelectSource}
+          />
+        )}
+        <span className="sr-only">{`@${address} ${state.kind}`}</span>
+      </div>
+    </div>
+  )
+}
+
 function MediaCellInspector({
   kind,
   cell,
@@ -1565,7 +1853,12 @@ function MediaCellInspector({
   busy,
   deleting,
   mediaInsightWork,
+  generationState,
+  cancelJobId,
   onSetInput,
+  onRun,
+  onCancelJob,
+  onSelectSource,
   onDelete,
   onOpenFullscreen,
   onTranscribeAsset,
@@ -1586,6 +1879,8 @@ function MediaCellInspector({
   | 'mediaInsightWork'
   | 'onUpdate'
   | 'onSetInput'
+  | 'onRun'
+  | 'onCancelJob'
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'onTranscribeAsset'
@@ -1596,7 +1891,15 @@ function MediaCellInspector({
 > & {
   /** Which dock this is; the caller has already ruled out every other type. */
   kind: MediaDockKind
+  /** Derived run state; ready falls through to the media grid below. */
+  generationState: MediaCellGenerationState
+  /** Numeric id of the active run's job, for Cancel run. */
+  cancelJobId?: number
+  /** Select a connected cell (the producer, or one of its inputs). */
+  onSelectSource?: (cellId: string) => void
 }) {
+  const address = notebookGridAddress(cell.slot)
+  const producer = mediaGenerationProducer(cell, cells, edges)
   const versionArtifactIds = cell.type === 'audio'
     || (
       (cell.type === 'image' || cell.type === 'video')
@@ -1615,6 +1918,27 @@ function MediaCellInspector({
     currentArtifactId: string
     versionKey: string
   } | null>(null)
+  if (generationState.kind !== 'ready') {
+    return (
+      <div className="inspector-body inspector-media-body">
+        <GeneratingMediaLayout
+          kind={kind}
+          address={address}
+          state={generationState}
+          cells={cells}
+          edges={edges}
+          cellAssets={cellAssets}
+          busy={busy}
+          deleting={deleting}
+          cancelJobId={cancelJobId}
+          onSelectSource={onSelectSource}
+          onRunProducer={onRun}
+          onCancelJob={onCancelJob}
+          onDelete={onDelete}
+        />
+      </div>
+    )
+  }
   const selectedVersionArtifactId = (
     versionSelection?.cellId === cell.id
     && versionSelection.currentArtifactId === currentVersionArtifactId
@@ -1654,7 +1978,6 @@ function MediaCellInspector({
     ? mediaInsightWork?.[previewAsset.artifactId] ?? idleMediaInsightWork
     : idleMediaInsightWork
 
-  const address = notebookGridAddress(cell.slot)
   const canOpenFullscreen = kind === 'image' || kind === 'video'
   const showVersions = versionArtifactIds.length > 1 && Boolean(previewAsset)
   const mediaPreview = previewAsset ? (
@@ -1685,25 +2008,52 @@ function MediaCellInspector({
   const assetTags = previewAsset ? (
     <CellAssetTags bookId={bookId} tagTools={tagTools} asset={previewAsset} />
   ) : null
-  const insights = previewAsset && mediaCellHasSpokenAudio(previewAsset.type) ? (
-    <MediaInsightsPanel
-      artifactId={previewAsset.artifactId}
-      transcript={previewAsset.transcript ?? null}
-      busy={busy}
-      transcribing={insightWork.transcribing}
-      error={insightWork.error}
-      onTranscribe={onTranscribeAsset
-        ? () => onTranscribeAsset(previewAsset.artifactId)
-        : undefined}
-      onLoadTranscriptJson={onLoadTranscriptJson
-        ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
-        : undefined}
-      onDownloadTranscriptSrt={onDownloadTranscriptSrt
-        ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
-        : undefined}
-    />
-  ) : null
-  const inputSources = (
+  const hasTranscriptSidecar = Boolean(
+    previewAsset?.transcript?.plain || previewAsset?.transcript?.elevenlabs,
+  )
+  const insights = previewAsset && mediaCellHasSpokenAudio(previewAsset.type)
+    ? (hasTranscriptSidecar ? (
+      <MediaInsightsPanel
+        artifactId={previewAsset.artifactId}
+        transcript={previewAsset.transcript ?? null}
+        busy={busy}
+        transcribing={insightWork.transcribing}
+        error={insightWork.error}
+        onTranscribe={onTranscribeAsset
+          ? () => onTranscribeAsset(previewAsset.artifactId)
+          : undefined}
+        onLoadTranscriptJson={onLoadTranscriptJson
+          ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
+          : undefined}
+        onDownloadTranscriptSrt={onDownloadTranscriptSrt
+          ? () => onDownloadTranscriptSrt(previewAsset.artifactId)
+          : undefined}
+      />
+    ) : (
+      <div className="inspector-media-insights">
+        {onTranscribeAsset && (
+          <button
+            type="button"
+            className="inspector-generation-action"
+            disabled={busy || insightWork.transcribing}
+            onClick={() => onTranscribeAsset(previewAsset.artifactId)}
+          >
+            <Captions size={13} aria-hidden="true" />
+            {insightWork.transcribing ? 'Transcribing…' : 'Transcribe'}
+          </button>
+        )}
+        {insightWork.error && (
+          <p className="inspector-insight-error" role="alert">
+            <CircleAlert size={12} aria-hidden="true" />
+            <span>{insightWork.error}</span>
+          </p>
+        )}
+      </div>
+    ))
+    : null
+  const inputSources = producer ? (
+    <GenerationProducerLink producer={producer} onSelectSource={onSelectSource} />
+  ) : (
     <InputSources
       cell={cell}
       cells={cells}
@@ -3385,12 +3735,24 @@ export function NotebookCellInspector({
   voiceCatalog,
   bookId,
   tagTools,
+  queuedCellIds,
+  runErrors,
+  jobs,
+  onCancelJob,
 }: NotebookCellInspectorProps) {
   const artifactAssets = inspectorArtifactAssets(
     asset,
     cellAssets,
     versionAssets,
   )
+  const generationState = mediaCellGenerationState({
+    cell,
+    cells,
+    edges,
+    queuedCellIds,
+    runErrors,
+    jobs,
+  })
 
   if (sourceVisible && !isNotebookGenerationCellType(cell.type)) {
     return (
@@ -3466,8 +3828,18 @@ export function NotebookCellInspector({
         busy={busy}
         deleting={deleting}
         mediaInsightWork={mediaInsightWork}
+        generationState={generationState}
+        cancelJobId={generationState.kind === 'queued'
+          || generationState.kind === 'generating'
+          ? (jobs ?? []).find((job) =>
+            job.operationId === generationState.jobId
+            && typeof job.id === 'number')?.id
+          : undefined}
         onUpdate={onUpdate}
         onSetInput={onSetInput}
+        onRun={onRun}
+        onCancelJob={onCancelJob}
+        onSelectSource={onSelectSource}
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
         onTranscribeAsset={onTranscribeAsset}

@@ -914,6 +914,7 @@ describe('NotebookCellInspector', () => {
       onRun: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
+      onTranscribeAsset: () => undefined,
     }))
 
     expect(html).toContain('<video')
@@ -926,8 +927,11 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('1920 \u00d7 1080')
     expect(html).toContain('<dt>Duration</dt>')
     expect(html).toContain('<dd>0:30</dd>')
-    expect(html).toContain('aria-label="GPT-4o Translation"')
-    expect(html).toContain('aria-label="ElevenLabs Transcript"')
+    // No transcript sidecars yet: one compact Transcribe action instead of
+    // the two empty insight cards.
+    expect(html).not.toContain('aria-label="GPT-4o Translation"')
+    expect(html).not.toContain('aria-label="ElevenLabs Transcript"')
+    expect(html).toContain('Transcribe')
     expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('<label>Address</label>')
     expect(html).toContain('inspector-media-row-content')
@@ -952,6 +956,39 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('aria-label="Open @b3 fullscreen"')
     expect(html).not.toContain('aria-label="Edit @b3 image"')
+  })
+
+  it('shows the first frame of a video without a poster', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell],
+      edges: [],
+      asset: {
+        artifactId: cell.outputArtifactId!,
+        id: 'vid-source',
+        type: 'video',
+        mediaUrl: '/files/vid-source/original.mp4',
+        thumbnailUrl: null,
+        width: 1920,
+        height: 1080,
+        duration: 30,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('src="/files/vid-source/original.mp4#t=0.1"')
   })
 
   it('puts edit on the image overlay beside the Full badge, with no action bar', () => {
@@ -2726,15 +2763,14 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('aria-label="Video analysis"')
   })
 
-  it('shows both empty cards when neither sidecar exists', () => {
+  it('shows one compact Transcribe action when neither sidecar exists', () => {
     const html = renderSpokenInspector({ transcript: null })
-    const gpt = insightSection(html, 'GPT-4o Translation')
-    const eleven = insightSection(html, 'ElevenLabs Transcript')
 
-    expect(gpt).toContain('No GPT-4o translation yet.')
-    expect(eleven).toContain('No transcript yet.')
-    expect(eleven).toContain('>Transcribe</span>')
-    expect(gpt).not.toContain('Transcribe')
+    expect(html).not.toContain('aria-label="GPT-4o Translation"')
+    expect(html).not.toContain('aria-label="ElevenLabs Transcript"')
+    expect(html).toContain('Transcribe')
+    expect(html).not.toContain('No GPT-4o translation yet.')
+    expect(html).not.toContain('No transcript yet.')
     expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('Analyze again')
   })
@@ -2925,5 +2961,117 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('2026-09-04 12:00:00 UTC')
     expect(html).toContain('1 reply')
     expect(html).toContain('Follow-up 2 failed: Temporary X error')
+  })
+
+  describe('generation docks', () => {
+    const producerId = '01900000-0000-7000-8000-000000000010'
+    const outputId = '01900000-0000-7000-8000-000000000011'
+    const producer: NotebookCell = {
+      id: producerId,
+      type: 'generate_video',
+      label: 'dolly shot',
+      slot: { row: 0, column: 1 },
+      prompt: 'A slow dolly through a pine forest',
+      provider: 'kie',
+      model: 'Kling21RequestSchema',
+      operation: 'text_to_video',
+    }
+    const generatedOutput: NotebookCell = {
+      id: outputId,
+      type: 'video',
+      label: 'generated video',
+      slot: { row: 0, column: 2 },
+      inputs: { mediaRole: 'generate-video-output' },
+    }
+    const producerEdge: NotebookEdge = {
+      id: 'edge-gen',
+      source: producerId,
+      target: outputId,
+      targetInput: 'media',
+    }
+
+    function renderGeneratedOutput(extra: Record<string, unknown> = {}) {
+      return renderToStaticMarkup(createElement(NotebookCellInspector, {
+        bookId: '01900000-0000-7000-8000-000000000002',
+        notebookId: '01900000-0000-7000-8000-000000000003',
+        cell: generatedOutput,
+        cells: [producer, generatedOutput],
+        edges: [producerEdge],
+        asset: undefined,
+        status: 'queued',
+        error: null,
+        busy: false,
+        deleting: false,
+        sourceVisible: false,
+        onSelectSource: () => undefined,
+        onUpdate: async () => undefined,
+        onSetInput: async () => undefined,
+        onRun: async () => undefined,
+        onCancelJob: () => undefined,
+        onDelete: async () => undefined,
+        onOpenFullscreen: () => undefined,
+        onTranscribeAsset: () => undefined,
+        ...extra,
+      }))
+    }
+
+    it('renders the generating layout with prompt, producer link and no ready chrome', () => {
+      const html = renderGeneratedOutput({
+        queuedCellIds: new Set([outputId]),
+      })
+
+      expect(html).toContain('inspector-media-generating')
+      expect(html).toContain('inspector-media-placeholder')
+      expect(html).toContain('QUEUED')
+      expect(html).toContain('A slow dolly through a pine forest')
+      expect(html).toContain('@a2 · Generate video')
+      // Ready-only chrome stays hidden while the run is in flight.
+      expect(html).not.toContain('aria-label="Cell output media"')
+      expect(html).not.toContain('aria-label="Video versions"')
+      expect(html).not.toContain('Add a tag')
+      expect(html).not.toContain('aria-label="GPT-4o Translation"')
+      expect(html).not.toContain('aria-label="ElevenLabs Transcript"')
+      expect(html).not.toContain('Delete cell')
+    })
+
+    it('shows the error with Retry and Delete when the run failed', () => {
+      const html = renderGeneratedOutput({
+        runErrors: { [outputId]: 'Provider rejected the request' },
+      })
+
+      expect(html).toContain('FAILED')
+      expect(html).toContain('Provider rejected the request')
+      expect(html).toContain('Retry')
+      expect(html).toContain('Delete')
+    })
+
+    it('offers Cancel run for the active job', () => {
+      const html = renderGeneratedOutput({
+        queuedCellIds: new Set([outputId]),
+        jobs: [{
+          id: 7,
+          state: 'running',
+          errorMessage: null,
+          operationId: 'job-7',
+          type: 'await_notebook_output',
+          startedAt: 1_000,
+          payload: { outputCellId: outputId, runId: 'run-1' },
+        }],
+      })
+
+      expect(html).toContain('Cancel run')
+      expect(html).toContain('QUEUED')
+    })
+
+    it('renders the producer as a read-only From link in the ready layout', () => {
+      const html = renderGeneratedOutput({
+        status: 'completed',
+      })
+
+      expect(html).toContain('@a2 · Generate video')
+      expect(html).not.toContain('inspector-input-remove-button')
+      expect(html).not.toContain('inspector-source-picker')
+      expect(html).not.toContain('aria-label="Remove @a1 from media input"')
+    })
   })
 })

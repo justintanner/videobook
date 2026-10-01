@@ -4,6 +4,9 @@ import {
   expireHighlight,
   HIGHLIGHT_MS,
 } from '@/videobook/cell-highlight'
+import {
+  mediaCellGenerationState,
+} from '@/videobook/media-cell-generation-state'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
   lazy,
@@ -2876,6 +2879,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               if (output) address = notebookGridAddress(output.slot)
             }
             presentChat(chat, () => revealCells([outputCellId]))
+            setCellRunError(outputCellId, null)
             setCellQueued(outputCellId, true)
             if (selectedCellIdsRef.current.has(cellId)) {
               selectCanvasCell(null, chat)
@@ -3529,6 +3533,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ?? cellRunErrors[selectedNotebookCell.id]
       ?? null
     )
+    : null
+  const inspectorJobViews = useMemo(
+    () => jobs.map(notebookRunJobViewFromRecord),
+    [jobs],
+  )
+  const selectedGenerationState = selectedNotebookCell
+    ? mediaCellGenerationState({
+      cell: selectedNotebookCell,
+      cells: notebook?.cells ?? [],
+      edges: notebook?.edges ?? [],
+      queuedCellIds,
+      runErrors: cellRunErrors,
+      jobs: inspectorJobViews,
+    })
     : null
   const selectedCellVersionAssets = useMemo(() => {
     if (
@@ -6499,6 +6517,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               if (output) address = notebookGridAddress(output.slot)
             }
             presentChat(chat, () => revealCells([outputCellId]))
+            setCellRunError(outputCellId, null)
             setCellQueued(outputCellId, true)
           }
           void watchGenerationRun({
@@ -8437,6 +8456,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           revealCells([outputCellId])
           highlightCells([outputCellId], { scroll: 'center' })
         })
+        setCellRunError(outputCellId, null)
         setCellQueued(outputCellId, true)
         const output = refreshed?.cells.find((candidate) =>
           candidate.id === outputCellId)
@@ -10910,6 +10930,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <code className="inspector-cell-address">
             {notebookGridTag(selectedNotebookCell.slot)}
           </code>
+          {(selectedGenerationState?.kind === 'queued'
+            || selectedGenerationState?.kind === 'generating') && (
+            <span className="inspector-generating-badge" role="status">
+              {selectedGenerationState.kind === 'queued' ? 'Queued' : 'Generating'}
+            </span>
+          )}
         </span>
         <div className="inspector-header-actions">
           {selectedNotebookCell.outputArtifactId && (
@@ -10986,6 +11012,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         versionAssets={selectedCellVersionAssets}
         status={selectedCell.data.status}
         error={selectedCellError}
+        queuedCellIds={queuedCellIds}
+        runErrors={cellRunErrors}
+        jobs={inspectorJobViews}
+        onCancelJob={cancelJob}
         generationActions={generationActions}
         mentionAssets={commandMentionAssets}
         voiceCatalog={elevenLabsVoices}
