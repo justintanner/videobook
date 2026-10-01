@@ -1596,4 +1596,85 @@ describe("image subject tools", () => {
       }
     });
   }
+
+  it("lists the edit catalog and remembers the last used model for the book", async () => {
+    const originalKieKey = process.env.KIE_API_KEY;
+    const originalFalKey = process.env.FAL_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    delete process.env.FAL_API_KEY;
+    try {
+      const listed = await client.callTool({
+        name: "list_image_edit_models",
+        arguments: { book_id: bookId },
+      });
+      expect(listed.isError).not.toBe(true);
+      const catalog = resultJson(listed) as {
+        models: Array<{
+          id: string;
+          label: string;
+          provider: string;
+          available: boolean;
+          max_input_images: number | null;
+        }>;
+        default_model: string;
+        last_used_model: string | null;
+      };
+      expect(catalog.models).toHaveLength(8);
+      expect(catalog.models[0]).toMatchObject({
+        id: "seedream/5-pro-image-to-image",
+        label: "Seedream 5 Pro",
+        provider: "kie",
+        available: true,
+      });
+      expect(catalog.default_model).toBe("seedream/5-pro-image-to-image");
+      expect(catalog.last_used_model).toBeNull();
+      const falEntry = catalog.models.find((model) => model.id === "fal-ai/nano-banana-2/edit");
+      expect(falEntry?.available).toBe(false);
+      const qwenEntry = catalog.models.find((model) => model.id === "alibaba/qwen-image-3/edit");
+      expect(qwenEntry?.max_input_images).toBe(3);
+
+      const source = await createSource();
+      const edit = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "edit",
+          subject_ids: ["person"],
+          prompt: "Make the person smile",
+          model: "fal-ai/nano-banana-2/edit",
+        },
+      });
+      expect(edit.isError).toBe(true); // no FAL key
+      process.env.FAL_API_KEY = "test-key";
+      const queued = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "edit",
+          subject_ids: ["person"],
+          prompt: "Make the person smile",
+          model: "fal-ai/nano-banana-2/edit",
+        },
+      });
+      expect(queued.isError).not.toBe(true);
+      const after = resultJson(await client.callTool({
+        name: "list_image_edit_models",
+        arguments: { book_id: bookId },
+      })) as { last_used_model: string | null };
+      expect(after.last_used_model).toBe("fal-ai/nano-banana-2/edit");
+    } finally {
+      if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
+      else delete process.env.KIE_API_KEY;
+      if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+      else delete process.env.FAL_API_KEY;
+    }
+  });
 });

@@ -1,4 +1,5 @@
 import { GPT_IMAGE_2_5_MODELS } from "./gpt-image-2-5.js";
+import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "./image-edit-models.js";
 import type { EstimateRequest } from "@apicity/cost";
 import {
   GeminiOmniVideoRequestSchema,
@@ -579,9 +580,43 @@ const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
   generate_alibaba_qwen_2_0_edit_image: alibabaImage("qwen-image-edit"),
 };
 
+// edit_image_subjects prices the model chosen in input.model through the
+// catalog entry's shadowed GENERATION_ACTIONS adapter; the seedream pro i2i
+// default has no registry action and prices via @apicity/cost directly. fal
+// qwen-3/wan-2.7 edit have no published rates and surface "—".
+const imageSubjectEditCostAdapter: CostAdapter = (input) => {
+  const model = findImageEditModel(
+    typeof input.model === "string" && input.model ? input.model : DEFAULT_IMAGE_EDIT_MODEL_ID,
+  );
+  if (!model) return null;
+  if (model.shadowedAction === null) {
+    // The seedream adapter always sends quality "basic" plus one image_url per
+    // input; the cost package selects on quality and derives the per-extra-image
+    // charge from image_urls, so both must be present in the estimate payload.
+    const imageCount = Array.isArray(input.image_refs) && input.image_refs.length > 0
+      ? input.image_refs.length
+      : 1;
+    return {
+      provider: "kie",
+      payload: {
+        model: "seedream/5-pro-image-to-image",
+        input: {
+          quality: "basic",
+          image_urls: Array.from({ length: imageCount }, (_, index) => `https://example.test/edit-${index + 1}.png`),
+        },
+      },
+    };
+  }
+  const shadowed = KIE_ADAPTERS[model.shadowedAction] ?? FAL_ADAPTERS[model.shadowedAction];
+  if (!shadowed) return null;
+  const refs = Array.isArray(input.image_refs) ? input.image_refs : ["edit-source"];
+  return shadowed({ ...input, image_refs: refs });
+};
+
 const ADAPTERS: Record<string, CostAdapter> = {
   rewrite_prompt: openaiText("gpt-5.6-sol", 1000),
   generate_elevenlabs_text_to_audio: elevenLabsTts,
+  edit_image_subjects: imageSubjectEditCostAdapter,
   ...KIE_ADAPTERS,
   ...FAL_ADAPTERS,
   ...ALIBABA_ADAPTERS,

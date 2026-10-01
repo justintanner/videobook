@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (313)
+## MCP endpoints (314)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -201,6 +201,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
+- `list_image_edit_models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model
 - `list_ingest_status` — List independent ingest and search-index phase states
 - `list_jobs` — List persistent jobs for a book
 - `list_legacy_books` — List schema-v4 books awaiting an explicit copy-forward migration
@@ -324,7 +325,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (385; 145 dedicated command routes)
+## Slash actions (386; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -553,6 +554,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-elevenlabs-voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them; MCP: `list_elevenlabs_voices`
 - `/list-google-flow-characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).; MCP: `list_google_flow_characters`
 - `/list-google-flow-voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.; MCP: `list_google_flow_voices`
+- `/list-image-edit-models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model; MCP: `list_image_edit_models`
 - `/list-ingest-status` — List independent ingest and search-index phase states; MCP: `list_ingest_status`
 - `/list-jobs` — List persistent jobs for a book; MCP: `list_jobs`
 - `/list-legacy-books` — List schema-v4 books awaiting an explicit copy-forward migration; MCP: `list_legacy_books`

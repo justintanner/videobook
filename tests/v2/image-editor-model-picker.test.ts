@@ -1,0 +1,134 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+import { ImageEditorWorkspace } from '../../src/components/videobook/ImageEditorWorkspace'
+import type { ImageEditModelOption } from '../../src/videobook/use-image-edit-models'
+import type { ImageSubjectMap } from '../../src/videobook/image-subject-map'
+
+const models: ImageEditModelOption[] = [
+  {
+    id: 'seedream/5-pro-image-to-image',
+    label: 'Seedream 5 Pro',
+    provider: 'kie',
+    capabilities: { semantic: true, regionReplace: true, wholeImage: true, exactMask: false },
+    maxInputImages: 10,
+    available: true,
+  },
+  {
+    id: 'alibaba/qwen-image-3/edit',
+    label: 'Qwen 3.0 Edit',
+    provider: 'fal',
+    capabilities: { semantic: true, regionReplace: true, wholeImage: true, exactMask: false },
+    maxInputImages: 3,
+    available: false,
+  },
+  {
+    id: 'text-only-model',
+    label: 'Text-only Model',
+    provider: 'kie',
+    capabilities: { semantic: true, regionReplace: false, wholeImage: true, exactMask: false },
+    maxInputImages: 1,
+    available: true,
+  },
+]
+
+const subjectMap: ImageSubjectMap = {
+  status: 'ready',
+  artifactId: 'artifact-1',
+  objectHash: 'hash-1',
+  width: 100,
+  height: 100,
+  jobId: 'job-1',
+  provider: 'kie',
+  model: 'seedream/5-pro-layer-decomposition',
+  analysisId: 'analysis-1',
+  analyzedAt: new Date().toISOString(),
+  error: null,
+  subjects: [{
+    id: 'person',
+    label: 'Foreground person',
+    description: 'Person nearest the camera',
+    color: '#ef4444',
+    normalizedBox: { x: 0.1, y: 0.1, width: 0.2, height: 0.3 },
+    layerUrl: 'https://example.test/person.png',
+    thumbnailUrl: 'https://example.test/person.png',
+    zIndex: 1,
+    capabilities: { remove: true, exact_edit: false },
+  }],
+}
+
+function renderEditor(overrides: {
+  imageEditModels?: readonly ImageEditModelOption[]
+  imageEditModelsLoading?: boolean
+  lastUsedImageEditModelId?: string | null
+  initialRegions?: readonly { id: string, box: { x: number, y: number, width: number, height: number } }[]
+}) {
+  return renderToStaticMarkup(createElement(ImageEditorWorkspace, {
+    address: 'c3',
+    mediaUrl: 'https://example.test/source.png',
+    width: 100,
+    height: 100,
+    details: null,
+    subjectMap,
+    subjectMapLoading: false,
+    analysisUnavailableReason: null,
+    replacementCandidates: [],
+    closeRef: { current: null },
+    onBack: () => undefined,
+    onClose: () => undefined,
+    ...overrides,
+  }))
+}
+
+describe('image editor model picker', () => {
+  it('renders the labelled model select with catalog options between the instruction and Apply', () => {
+    const html = renderEditor({ imageEditModels: models })
+    expect(html).toContain('>Model</label>')
+    for (const model of models) {
+      expect(html).toContain(`value="${model.id}"`)
+      expect(html).toContain(model.label)
+    }
+    expect(html).toContain('seedream/5-pro-image-to-image')
+    expect(html.indexOf('image-editor-model')).toBeGreaterThan(html.indexOf('What should change?'))
+    expect(html.indexOf('image-editor-model')).toBeLessThan(html.indexOf('image-editor-submit'))
+  })
+
+  it('prefills the last used model for the book before the catalog default', () => {
+    const html = renderEditor({
+      imageEditModels: models,
+      lastUsedImageEditModelId: 'alibaba/qwen-image-3/edit',
+    })
+    expect(html).toMatch(/value="alibaba\/qwen-image-3\/edit"[^>]*selected/)
+  })
+
+  it('disables models that cannot serve the current target', () => {
+    const html = renderEditor({ imageEditModels: models })
+    // semantic target: every model supports semantic, nothing disabled
+    expect(html).not.toContain('cannot edit this target')
+  })
+
+  it('marks region-replace-incompatible models when a region is drawn', () => {
+    const html = renderEditor({
+      imageEditModels: models,
+      initialRegions: [{
+        id: 'region-1',
+        box: { x: 0.1, y: 0.1, width: 0.3, height: 0.3 },
+      }],
+    })
+    expect(html).toContain('cannot edit this target')
+    expect(html).toContain('value="text-only-model" disabled')
+  })
+
+  it('shows the estimate placeholder until a provider cost resolves', () => {
+    const html = renderEditor({ imageEditModels: models })
+    expect(html).toContain('Cost estimate unavailable')
+  })
+
+  it('shows a loading state and hides the picker without a catalog', () => {
+    const loading = renderEditor({ imageEditModels: [], imageEditModelsLoading: true })
+    expect(loading).not.toContain('>Model</label>')
+    expect(loading).not.toContain('image-editor-model')
+    const empty = renderEditor({})
+    expect(empty).not.toContain('>Model</label>')
+  })
+})

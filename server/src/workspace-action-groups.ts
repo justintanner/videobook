@@ -44,6 +44,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   Images: [
     "crop_image", "invert_image", "concat_images", "describe_image",
     "get_image_subject_map", "analyze_image_subjects", "edit_image_subjects",
+    "list_image_edit_models",
     "create_qr_outro", "create_qart", "create_qrbtf",
   ],
   Generation: [

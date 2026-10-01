@@ -28,6 +28,7 @@ import {
   type ImageReplacementTarget,
 } from '@/videobook/image-edit-regions'
 import { imageEditInstructionPlaceholder, imageEditTargetSummary } from '@/videobook/image-editor-copy'
+import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 
 export type ImageSubjectEditInput = {
   operation: 'remove' | 'edit' | 'replace'
@@ -61,6 +62,13 @@ export type ImageEditorWorkspaceProps = {
   initialRegions?: readonly ImageEditRegion[]
   replacementCandidates: readonly ImageReplacementCandidate[]
   closeRef: RefObject<HTMLButtonElement | null>
+  imageEditModels?: readonly ImageEditModelOption[]
+  imageEditModelsLoading?: boolean
+  lastUsedImageEditModelId?: string | null
+  onEstimateImageEditCost?: (
+    modelId: string,
+    operation: 'edit' | 'replace',
+  ) => Promise<string | null>
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
   onEditingChange?: (editing: boolean) => void
   onEditSubjects?: (input: ImageSubjectEditInput) => Promise<boolean>
@@ -554,6 +562,10 @@ export function ImageEditorWorkspace({
   initialRegions,
   replacementCandidates,
   closeRef,
+  imageEditModels,
+  imageEditModelsLoading,
+  lastUsedImageEditModelId,
+  onEstimateImageEditCost,
   onAnalyzeSubjects,
   onEditingChange,
   onEditSubjects,
@@ -563,6 +575,7 @@ export function ImageEditorWorkspace({
 }: ImageEditorWorkspaceProps) {
   const instructionId = useId()
   const hintId = useId()
+  const modelSelectId = useId()
   const mountedRef = useRef(false)
   const drawStartRef = useRef<{ x: number; y: number } | null>(null)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -579,6 +592,8 @@ export function ImageEditorWorkspace({
   const [instruction, setInstruction] = useState('')
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [status, setStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
+  const [costEstimate, setCostEstimate] = useState<string | null>(null)
 
   const ready = subjectMap?.status === 'ready'
   const subjects = useMemo(() => subjectMap?.subjects ?? [], [subjectMap])
@@ -595,6 +610,23 @@ export function ImageEditorWorkspace({
      replacement; otherwise the instruction rewrites the selected subjects. */
   const replacing = regions.length > 0
     || replacementTargets.some((target) => Boolean(replacements[target.key]))
+  const editOperation: 'edit' | 'replace' = replacing ? 'replace' : 'edit'
+  const effectiveModelId = selectedModelId
+    ?? lastUsedImageEditModelId
+    ?? imageEditModels?.[0]?.id
+    ?? null
+  const modelSupportsTarget = (model: ImageEditModelOption) =>
+    model.capabilities[replacing ? 'regionReplace' : 'semantic']
+  const refreshCostEstimate = (modelId: string) => {
+    if (!onEstimateImageEditCost) return
+    void onEstimateImageEditCost(modelId, editOperation)
+      .then((estimate) => {
+        if (mountedRef.current) setCostEstimate(estimate)
+      })
+      .catch(() => {
+        if (mountedRef.current) setCostEstimate(null)
+      })
+  }
   const replaceTargets = replacing ? replacementTargets : []
   const hoveredRegion = regions.find((region) => region.id === hoveredRegionId) ?? null
   const snapOffer = hoveredRegion ? bestSubjectSnap(hoveredRegion.box, subjects) : null
@@ -671,11 +703,14 @@ export function ImageEditorWorkspace({
 
   const applyInstruction = () => {
     if (!onSubmitInstruction || !canApply) return
-    const selection: ImageEditSelection = imageEditSelectionPayload(
-      selectedSubjects.map((subject) => subject.id),
-      regions,
-      replacements,
-    )
+    const selection: ImageEditSelection = {
+      ...imageEditSelectionPayload(
+        selectedSubjects.map((subject) => subject.id),
+        regions,
+        replacements,
+      ),
+      ...(effectiveModelId ? { model: effectiveModelId } : {}),
+    }
     void runAction('apply', async () => {
       const outcome = await onSubmitInstruction(trimmedInstruction, selection)
       if (!outcome.ok) throw new Error(outcome.message)
@@ -877,6 +912,44 @@ export function ImageEditorWorkspace({
           <p id={hintId} className="image-editor-hint">
             The result lands in a new cell next to @{address}.
           </p>
+          {(imageEditModels?.length ?? 0) > 0 && (
+            <div className="image-editor-model">
+              <label htmlFor={modelSelectId}>Model</label>
+              <select
+                id={modelSelectId}
+                value={effectiveModelId ?? ''}
+                disabled={imageEditModelsLoading}
+                onChange={(event) => {
+                  setSelectedModelId(event.target.value)
+                  setCostEstimate(null)
+                  refreshCostEstimate(event.target.value)
+                }}
+                onFocus={() => {
+                  if (effectiveModelId && costEstimate === null) {
+                    refreshCostEstimate(effectiveModelId)
+                  }
+                }}
+              >
+                {(imageEditModels ?? []).map((model) => (
+                  <option
+                    key={model.id}
+                    value={model.id}
+                    disabled={!modelSupportsTarget(model)}
+                  >
+                    {model.label}
+                    {modelSupportsTarget(model) ? '' : ' — cannot edit this target'}
+                  </option>
+                ))}
+              </select>
+              <p className="image-editor-cost" role="status">
+                {imageEditModelsLoading
+                  ? 'Loading models…'
+                  : costEstimate === null
+                    ? 'Cost estimate unavailable'
+                    : `Estimated provider cost ${costEstimate}`}
+              </p>
+            </div>
+          )}
           {status && (
             <p className={`image-editor-status ${status.tone}`} role="status">{status.text}</p>
           )}

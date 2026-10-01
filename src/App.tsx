@@ -147,6 +147,7 @@ import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
 import type { WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
+import { useImageEditModels } from './videobook/use-image-edit-models'
 import {
   persistSpeakVoiceId,
   readStoredSpeakVoiceId,
@@ -2014,6 +2015,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       else mcpSettleTimersRef.current.set(sequence, window.setTimeout(settle, held))
     }
   }, [mcp])
+
+  const imageEditModels = useImageEditModels({
+    callTool: call,
+    ready: mcp.state === 'ready',
+  })
+
+  const estimateImageEditCost = useCallback(
+    async (modelId: string): Promise<string | null> => {
+      try {
+        const result = recordValue(await call('estimate_cost', {
+          calls: [{ tool_name: 'edit_image_subjects', input: { model: modelId } }],
+        }))
+        const estimate = recordValue(result?.estimate)
+        const warnings = Array.isArray(estimate?.warnings)
+          ? estimate.warnings.filter((value): value is string => typeof value === 'string')
+          : []
+        const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
+        if (usd === null || usd <= 0 || warnings.length > 0) return null
+        return `$${usd.toFixed(usd < 0.01 ? 4 : 2)}`
+      } catch {
+        return null
+      }
+    },
+    [call],
+  )
 
   const [timelinePreview, setTimelinePreview] = useState<TimelinePreviewSession | null>(null)
   const timeline = useTimelineAssembly({
@@ -3993,6 +4019,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(session)
     setComposerDockOpen(true)
+    if (asset.type === 'image') imageEditModels.ensureLoaded(bookId)
     if (asset.type !== 'image' || !asset.objectHash) return
     void call('get_image_subject_map', {
       book_id: bookId,
@@ -4014,7 +4041,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           failedImageSubjectMap(session, error),
         )
       })
-  }, [bookId, call, notebook, updateFullscreenSubjectMap, watchImageSubjectMap])
+  }, [bookId, call, imageEditModels, notebook, updateFullscreenSubjectMap, watchImageSubjectMap])
 
   const closeMediaFullscreen = useCallback(() => {
     actionCatalogRequestRef.current += 1
@@ -11624,6 +11651,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           onEditingChange={setMediaFullscreenSidebarEditing}
           replacementCandidates={imageReplacementCandidates}
+          imageEditModels={imageEditModels.models}
+          imageEditModelsLoading={imageEditModels.loading}
+          lastUsedImageEditModelId={imageEditModels.lastUsedModelId}
+          onEstimateImageEditCost={estimateImageEditCost}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}
           onSubmitEditInstruction={(instruction, selection) =>

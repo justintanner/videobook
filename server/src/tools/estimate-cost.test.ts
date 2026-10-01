@@ -340,6 +340,59 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeCloseTo(0.08, 6);
   });
 
+  it("prices edit_image_subjects through the chosen model's shadowed adapter", async () => {
+    const seedream = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{ tool_name: "edit_image_subjects", input: {} }],
+      },
+    });
+    const seedreamPayload = parse(seedream);
+    expect(seedreamPayload.estimate.warnings).toEqual([]);
+    expect(seedreamPayload.estimate.usd).toBeGreaterThan(0);
+
+    const gptImage2 = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "edit_image_subjects",
+          input: { model: "gpt-image-2-image-to-image" },
+        }],
+      },
+    });
+    const gptPayload = parse(gptImage2);
+    expect(gptPayload.estimate.warnings).toEqual([]);
+    expect(gptPayload.estimate.usd).toBeGreaterThan(0);
+
+    const falEdit = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "edit_image_subjects",
+          input: { model: "fal-ai/nano-banana-pro/edit" },
+        }],
+      },
+    });
+    const falPayload = parse(falEdit);
+    expect(falPayload.estimate.warnings).toEqual([]);
+    expect(falPayload.estimate.usd).toBeGreaterThan(0);
+
+    const unpriced = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "edit_image_subjects",
+          input: { model: "alibaba/qwen-image-3/edit" },
+        }],
+      },
+    });
+    const unpricedPayload = parse(unpriced);
+    expect(unpricedPayload.estimate.warnings).toContainEqual(
+      expect.stringContaining("no cost adapter"),
+    );
+    expect(unpricedPayload.estimate.usd).toBe(0);
+  });
+
   it("uses the motion video's actual duration for kling-3.0/motion-control", async () => {
     // Regression: kling-3.0/motion-control bills per second of the *input
     // motion video* — there is no user-typed duration. The previous estimate

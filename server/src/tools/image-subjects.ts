@@ -22,8 +22,10 @@ import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
   findImageEditModel,
   IMAGE_EDIT_MODEL_IDS,
+  IMAGE_EDIT_MODELS,
   type ImageEditModelInfo,
 } from "../image-edit-models.js";
+import { readLastImageEditModel, writeLastImageEditModel } from "../image-edit-settings.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { isPublishedPostCell } from "../notebook-published-post.js";
 import { slotRight } from "../notebook-placement.js";
@@ -285,6 +287,31 @@ async function rollbackEditPlacement(
 
 export function imageSubjectDefs(engine: Engine): ToolDef[] {
   return [
+    {
+      name: "list_image_edit_models",
+      description: "List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      schema: {
+        book_id: z.string().min(1),
+      },
+      handler: async () => json({
+        models: IMAGE_EDIT_MODELS.map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          provider: entry.provider,
+          capabilities: entry.capabilities,
+          max_input_images: entry.maxInputImages,
+          available: Boolean(process.env[entry.envKey]),
+        })),
+        default_model: DEFAULT_IMAGE_EDIT_MODEL_ID,
+        last_used_model: readLastImageEditModel(engine),
+      }),
+    },
     {
       name: "get_image_subject_map",
       description: "Read cached automatic image subjects without starting provider work",
@@ -743,6 +770,9 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               jobId,
               ...(operation === "remove" ? {} : { modelId: editModel.id }),
             });
+            if (operation !== "remove") {
+              writeLastImageEditModel(engine, editModel.id);
+            }
             return json({
               status: "enqueued",
               operation,

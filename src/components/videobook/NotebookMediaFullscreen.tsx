@@ -13,6 +13,7 @@ import type { ImageSubjectMap } from '@/videobook/image-subject-map'
 import { capturePointerComposerFocus, restoreFocusElement } from '@/videobook/command-composer-focus'
 import { focusableModalDialogElements } from '@/videobook/modal-dialog-interactions'
 import type { ImageEditRegion, ImageEditSelection } from '@/videobook/image-edit-regions'
+import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 import type { NotebookCellInspectorAsset } from './NotebookCellInspector'
 import { mediaDetailParts, type MediaFullscreenMode } from '@/videobook/image-editor-copy'
 
@@ -34,6 +35,13 @@ type NotebookMediaFullscreenProps = {
   returnFocus?: HTMLElement | null
   initialRegions?: readonly ImageEditRegion[]
   replacementCandidates?: readonly ImageReplacementCandidate[]
+  imageEditModels?: readonly ImageEditModelOption[]
+  imageEditModelsLoading?: boolean
+  lastUsedImageEditModelId?: string | null
+  onEstimateImageEditCost?: (
+    modelId: string,
+    operation: 'edit' | 'replace',
+  ) => Promise<string | null>
   onAnalyzeSubjects?: (force?: boolean) => Promise<void>
   onCaptureFrame?: (timestampSeconds: number) => Promise<string>
   onEditingChange?: (editing: boolean) => void
@@ -108,6 +116,10 @@ export function NotebookMediaFullscreen({
   returnFocus = null,
   initialRegions,
   replacementCandidates = [],
+  imageEditModels,
+  imageEditModelsLoading,
+  lastUsedImageEditModelId,
+  onEstimateImageEditCost,
   onAnalyzeSubjects,
   onCaptureFrame,
   onEditingChange,
@@ -316,6 +328,10 @@ export function NotebookMediaFullscreen({
           analysisUnavailableReason={analysisUnavailableReason}
           initialRegions={initialRegions}
           replacementCandidates={replacementCandidates}
+          imageEditModels={imageEditModels}
+          imageEditModelsLoading={imageEditModelsLoading}
+          lastUsedImageEditModelId={lastUsedImageEditModelId}
+          onEstimateImageEditCost={onEstimateImageEditCost}
           closeRef={closeRef}
           onAnalyzeSubjects={onAnalyzeSubjects}
           onEditingChange={onEditingChange}

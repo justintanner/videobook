@@ -11692,6 +11692,38 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.image-editor-model {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.image-editor-model label {
+  color: #8fb3a0;
+  font-size: 10px;
+}
+
+.image-editor-model select {
+  background: #10201a;
+  border: 1px solid #2a4438;
+  border-radius: 6px;
+  color: #d7efe2;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.image-editor-model select:focus-visible {
+  border-color: #72e7aa;
+  outline: 1px solid #72e7aa;
+}
+
+.image-editor-cost {
+  margin: 0;
+  color: #8fb3a0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .image-editor-status.error {
   color: #f0a3a3;
 }

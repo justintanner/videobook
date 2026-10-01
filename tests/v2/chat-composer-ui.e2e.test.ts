@@ -2022,6 +2022,19 @@ describe('chat composer browser flow', () => {
       operation: 'edit',
       prompt: editPrompt,
     })
+    const modelSelect = dialog.getByLabel('Model', { exact: true })
+    await modelSelect.selectOption({ label: 'GPT Image 2' })
+    observedCalls.length = 0
+    await modalInput.fill(editPrompt)
+    await dialog.getByRole('button', { name: /Apply edit/ }).click()
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'edit_image_subjects'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
+    const modeledEditCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
+    expect(modeledEditCall?.arguments).toMatchObject({
+      operation: 'edit',
+      model: 'gpt-image-2-image-to-image',
+    })
+    await dialog.locator('.image-editor-status.success').waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
     expect(observedCalls.some((call) => call.name === 'chat')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'record_prompt')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'list_prompt_history')).toBe(false)
