@@ -4212,7 +4212,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? `Subject removal ${status}`
         : input.operation === 'replace'
           ? `Region replacement ${status}`
-          : `Subject edit ${status}`,
+          : input.operation === 'whole_image'
+            ? `Whole-image edit ${status}`
+            : `Subject edit ${status}`,
     ))
     await refreshBookData(session.bookId, session.notebookId, undefined, chat).catch(() => undefined)
     return true
@@ -9443,6 +9445,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return {
         ok: true,
         message: `Region replacement queued for ${targets.length} ${targets.length === 1 ? 'region' : 'regions'}.`,
+      }
+    }
+    if (selectedSubjects.length === 0) {
+      if (!input.trim()) {
+        return {
+          ok: false,
+          message: 'Describe the whole-image edit first.',
+          nextInput: input,
+          selectInput: false,
+        }
+      }
+      const queued = await editFullscreenSubjects(session, {
+        operation: 'whole_image',
+        subjectIds: [],
+        prompt: input,
+        ...(selection.model ? { model: selection.model } : {}),
+      })
+      if (!queued) {
+        return {
+          ok: false,
+          message: 'The whole-image edit was not queued.',
+          nextInput: input,
+          selectInput: false,
+        }
+      }
+      return {
+        ok: true,
+        message: 'Whole-image edit queued.',
       }
     }
     if (session.subjectMap?.status !== 'ready') {

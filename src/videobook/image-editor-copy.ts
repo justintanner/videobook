@@ -25,7 +25,7 @@ export function imageEditInstructionPlaceholder(
     return 'Optional notes for the replacement. Pick an image below, or mention one like @g7.'
   }
   if (subjects.length === 0) {
-    return 'Select a subject or draw a region, then describe the change.'
+    return 'Describe a whole-image edit, e.g. "make it look like a snowy night", or select a subject to scope the change.'
   }
   return `Describe how to change ${subjects.slice(0, 2).map((subject) => subject.label).join(' and ')}, e.g. "make it smooth porcelain".`
 }

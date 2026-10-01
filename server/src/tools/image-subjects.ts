@@ -51,6 +51,22 @@ function editModelCapacityError(
   return `${entry.label} accepts at most ${max} image inputs (1 base + ${max - 1} replacements). This request needs 1 base + ${replacementCount} replacements.`;
 }
 
+function editCapability(
+  operation: "remove" | "edit" | "replace" | "whole_image",
+): "semantic" | "regionReplace" | "wholeImage" {
+  if (operation === "replace") return "regionReplace";
+  if (operation === "whole_image") return "wholeImage";
+  return "semantic";
+}
+
+function editOperationLabel(
+  operation: "remove" | "edit" | "replace" | "whole_image",
+): string {
+  if (operation === "replace") return "region replacement";
+  if (operation === "whole_image") return "whole-image edits";
+  return "semantic subject edits";
+}
+
 function json(value: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
@@ -454,7 +470,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
         artifact_id: z.string().min(1),
         object_hash: z.string().min(1),
         subject_ids: z.array(z.string().min(1)).optional(),
-        operation: z.enum(["remove", "edit", "replace"]),
+        operation: z.enum(["remove", "edit", "replace", "whole_image"]),
         prompt: z.string().max(2400).optional(),
         regions: z.array(replacementRegionSchema).optional(),
         model: z.enum(IMAGE_EDIT_MODEL_IDS).optional(),
@@ -478,28 +494,23 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           artifact_id: string;
           object_hash: string;
           subject_ids?: string[];
-          operation: "remove" | "edit" | "replace";
+          operation: "remove" | "edit" | "replace" | "whole_image";
           prompt?: string;
           regions?: ReplacementRegionInput[];
           model?: string;
         };
-        if (operation === "edit" && !prompt?.trim()) {
+        if ((operation === "edit" || operation === "whole_image") && !prompt?.trim()) {
           return failure("A prompt is required to edit selected subjects");
         }
         if (operation === "remove" && model !== undefined) {
           return failure("Model selection applies only to edit and replace operations");
         }
         const editModel = findImageEditModel(model ?? DEFAULT_IMAGE_EDIT_MODEL_ID)!;
-        if ((operation === "edit" || operation === "replace") && !process.env[editModel.envKey]) {
+        if (operation !== "remove" && !process.env[editModel.envKey]) {
           return failure(`${editModel.envKey} environment variable is not set`);
         }
-        if (
-          operation !== "remove"
-          && !editModel.capabilities[operation === "replace" ? "regionReplace" : "semantic"]
-        ) {
-          return failure(
-            `${editModel.label} cannot perform ${operation === "replace" ? "region replacement" : "semantic subject edits"}`,
-          );
+        if (operation !== "remove" && !editModel.capabilities[editCapability(operation)]) {
+          return failure(`${editModel.label} cannot perform ${editOperationLabel(operation)}`);
         }
         try {
           const source = await resolveImageSubjectSource(engine, artifact_id);
@@ -529,14 +540,14 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             ) {
               return failure(editModelCapacityError(editModel, uniqueReplacements.length));
             }
-          } else if (!readyMap) {
+          } else if (operation !== "whole_image" && !readyMap) {
             return failure("Analyze image subjects before editing them");
           }
           const selectedIds = uniqueSubjectIds([
             ...(subject_ids ?? []),
             ...replacementRegions.flatMap((region) => region.subjectId ? [region.subjectId] : []),
           ]);
-          if (operation !== "replace" && selectedIds.length === 0) {
+          if (operation !== "replace" && operation !== "whole_image" && selectedIds.length === 0) {
             return failure("Select at least one subject to edit");
           }
           const subjects = new Map((readyMap?.subjects ?? []).map((subject) => [subject.id, subject]));
@@ -580,12 +591,16 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             ? `Remove ${labels.join(", ")}`
             : operation === "replace"
               ? `Replace ${resolvedRegions.length} ${resolvedRegions.length === 1 ? "region" : "regions"}`
-              : `Edit ${labels.join(", ")}`;
+              : operation === "whole_image"
+                ? "Edit whole image"
+                : `Edit ${labels.join(", ")}`;
           const outputLabel = operation === "remove"
             ? `Image without ${labels.join(", ")}`
             : operation === "replace"
               ? `Replaced ${resolvedRegions.length} ${resolvedRegions.length === 1 ? "region" : "regions"}`
-              : `Edited ${labels.join(", ")}`;
+              : operation === "whole_image"
+                ? "Edited image"
+                : `Edited ${labels.join(", ")}`;
           const provider = operation === "remove" ? "local" : editModel.provider;
           const cellModel = operation === "remove"
             ? "sharp/layer-composite"
@@ -594,7 +609,9 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           const output = await engine.artifacts.create({
             kind: "image",
             label: sourceArtifact.ok && sourceArtifact.value.label
-              ? `${sourceArtifact.value.label} ${operation === "remove" ? "without" : "edited"} ${labels.join(", ")}`
+              ? operation === "whole_image"
+                ? `${sourceArtifact.value.label} edited`
+                : `${sourceArtifact.value.label} ${operation === "remove" ? "without" : "edited"} ${labels.join(", ")}`
               : outputLabel,
           });
           if (!output.ok) return failure(output.error.message);
@@ -630,7 +647,9 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                       ? "subject-remove"
                       : operation === "replace"
                         ? "region-replace"
-                        : "subject-edit",
+                        : operation === "whole_image"
+                          ? "whole-image"
+                          : "subject-edit",
                     sourceArtifactId: artifact_id,
                     sourceObjectHash: object_hash,
                     subjectIds: selectedIds,

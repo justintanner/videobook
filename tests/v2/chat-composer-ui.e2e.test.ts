@@ -2003,6 +2003,18 @@ describe('chat composer browser flow', () => {
       'accepted',
     ))
     observedCalls.length = 0
+    const wholeImagePrompt = 'Make it look like a snowy night'
+    await modalInput.fill(wholeImagePrompt)
+    await dialog.getByRole('button', { name: /Apply edit/ }).click()
+    await expect.poll(() => observedCalls.find((call) =>
+      call.name === 'edit_image_subjects'
+      && call.arguments.operation === 'whole_image'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
+    await dialog.locator('.image-editor-status.success').waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+    const wholeImageCall = observedCalls.find((call) =>
+      call.name === 'edit_image_subjects' && call.arguments.operation === 'whole_image')
+    expect(wholeImageCall?.arguments).toMatchObject({ prompt: wholeImagePrompt })
+    expect(wholeImageCall?.arguments.subject_ids).toBeUndefined()
+    observedCalls.length = 0
     const editPrompt = 'Replace the suit with a bright yellow raincoat'
     await modalInput.fill(editPrompt)
     await dialog.getByRole('button', { name: /Apply edit/ }).click()

@@ -1597,6 +1597,82 @@ describe("image subject tools", () => {
     });
   }
 
+  it("enqueues a whole-image edit without a subject map", async () => {
+    const originalKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      await writeImageSubjectMapRecord(engine, {
+        version: IMAGE_SUBJECT_MAP_VERSION,
+        artifactId: source.artifactId,
+        objectHash: source.objectHash,
+        width: source.map.width,
+        height: source.map.height,
+        jobId: "whole-image-test-job",
+        status: "failed",
+        error: "superseded for whole-image test",
+        failedAt: new Date().toISOString(),
+      });
+
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "whole_image",
+          prompt: "Make it look like a snowy night",
+        },
+      });
+      expect(result.isError).not.toBe(true);
+      const parsed = resultJson(result) as { job_id: string; producer_cell_id: string };
+      const job = engine.jobs.queue.list({ type: "generate_image_subject_edit" })
+        .find((candidate) => candidate.payload.jobId === parsed.job_id);
+      expect(job?.payload).toMatchObject({
+        operation: "whole_image",
+        modelId: "seedream/5-pro-image-to-image",
+        subjectIds: [],
+        prompt: "Make it look like a snowy night",
+      });
+      const notebook = engine.notebooks.read(source.notebookId);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
+      expect(producer?.model).toBe("seedream/5-pro-image-to-image");
+      expect(producer?.inputs.generationMode).toBe("whole-image");
+    } finally {
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    }
+  });
+
+  it("rejects a whole-image edit without a prompt", async () => {
+    const originalKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "whole_image",
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0]!.text).toBe(
+        "A prompt is required to edit selected subjects",
+      );
+    } finally {
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    }
+  });
+
   it("lists the edit catalog and remembers the last used model for the book", async () => {
     const originalKieKey = process.env.KIE_API_KEY;
     const originalFalKey = process.env.FAL_API_KEY;

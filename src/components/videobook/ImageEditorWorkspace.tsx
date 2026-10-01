@@ -31,7 +31,7 @@ import { imageEditInstructionPlaceholder, imageEditTargetSummary } from '@/video
 import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 
 export type ImageSubjectEditInput = {
-  operation: 'remove' | 'edit' | 'replace'
+  operation: 'remove' | 'edit' | 'replace' | 'whole_image'
   subjectIds: string[]
   prompt?: string
   regions?: ImageRegionReplacement[]
@@ -644,10 +644,13 @@ export function ImageEditorWorkspace({
   )
   const hasTargets = regions.length > 0 || (ready && subjects.length > 0)
   const targetSummary = imageEditTargetSummary(selectedSubjects, replaceTargets)
+  const wholeImageTarget = !replacing && selectedSubjects.length === 0
   const trimmedInstruction = instruction.trim()
   const canApply = Boolean(onSubmitInstruction)
     && pendingAction === null
-    && (trimmedInstruction.length > 0 ? targetSummary !== null : canReplace)
+    && (trimmedInstruction.length > 0
+      ? targetSummary !== null || wholeImageTarget
+      : canReplace)
   const applyLabel = replaceTargets.length > 0
     ? 'Replace with image'
     : 'Apply edit'
@@ -894,7 +897,7 @@ export function ImageEditorWorkspace({
           <div className="image-editor-target">
             <span>Applies to</span>
             <strong className={targetSummary ? '' : 'empty'}>
-              {targetSummary ?? 'Nothing selected yet'}
+              {targetSummary ?? 'Whole image'}
             </strong>
           </div>
           <label htmlFor={instructionId}>What should change?</label>

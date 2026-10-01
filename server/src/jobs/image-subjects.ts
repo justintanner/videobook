@@ -74,7 +74,7 @@ type GenerateImageSubjectEditPayload = {
   sourceArtifactId: string;
   sourceObjectHash: string;
   subjectIds: string[];
-  operation: "remove" | "edit" | "replace";
+  operation: "remove" | "edit" | "replace" | "whole_image";
   prompt?: string;
   regions?: ImageSubjectReplacementRegion[];
   replacementRefs?: ReplacementRefInput[];
@@ -746,6 +746,30 @@ async function generateSemanticSubjectEdit(
   );
 }
 
+async function generateWholeImageEdit(
+  engine: Engine,
+  payload: GenerateImageSubjectEditPayload,
+  adapter: ImageEditAdapter,
+  sourceFilename: string,
+  width: number,
+  height: number,
+  signal: AbortSignal,
+): Promise<ImageSubjectEditGeneration> {
+  return runAdapterImageSubjectEdit(
+    engine,
+    payload,
+    adapter,
+    "semantic",
+    {
+      prompt: payload.prompt ?? "",
+      width,
+      height,
+    },
+    sourceFilename,
+    signal,
+  );
+}
+
 async function generateRegionReplacementEdit(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
@@ -956,7 +980,8 @@ function generateImageSubjectEditPayload(
     || typeof value.sourceObjectHash !== "string"
     || !Array.isArray(value.subjectIds)
     || !value.subjectIds.every((entry) => typeof entry === "string")
-    || (value.operation !== "remove" && value.operation !== "edit" && value.operation !== "replace")
+    || (value.operation !== "remove" && value.operation !== "edit"
+      && value.operation !== "replace" && value.operation !== "whole_image")
     || typeof value.bookId !== "string"
     || typeof value.notebookId !== "string"
     || typeof value.producerCellId !== "string"
@@ -1255,7 +1280,11 @@ export function registerImageSubjectJobs(engine: Engine): void {
       const readyMap = record?.status === "ready" && record.objectHash === source.objectHash
         ? record
         : null;
-      if (payload.operation !== "replace" && !readyMap) {
+      if (
+        payload.operation !== "replace"
+        && payload.operation !== "whole_image"
+        && !readyMap
+      ) {
         throw new Error("A current subject map is required before editing subjects");
       }
       if (payload.operation === "replace") {
@@ -1266,13 +1295,29 @@ export function registerImageSubjectJobs(engine: Engine): void {
         }
       }
       await updateNotebookEditProgress(engine, payload, "running");
-      if (payload.operation === "edit" && !payload.prompt?.trim()) {
+      if ((payload.operation === "edit" || payload.operation === "whole_image") && !payload.prompt?.trim()) {
         throw new Error("A prompt is required to edit selected subjects");
       }
       const adapter = payload.operation === "remove"
         ? null
         : imageSubjectEditAdapter(payload.modelId);
-      if (payload.operation === "replace") {
+      if (payload.operation === "whole_image") {
+        const generated = await generateWholeImageEdit(
+          engine,
+          payload,
+          adapter!,
+          source.file.name,
+          source.width,
+          source.height,
+          context.signal,
+        );
+        await persistProcessedImage(engine, payload, readyMap, generated.output, {
+          origin: "image_whole_edit",
+          model: generated.request.model,
+          kie_task_id: generated.taskId,
+          targeting: "whole-image",
+        });
+      } else if (payload.operation === "replace") {
         const regions = payload.regions ?? [];
         if (regions.length === 0) {
           throw new Error("Replacement edits require at least one region");
