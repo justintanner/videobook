@@ -4133,11 +4133,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (watchScopeRef.current.notebookId !== session.notebookId) {
       throw new Error('The active notebook changed while the image editor was open')
     }
+    const editModelId = input.model ?? 'seedream/5-pro-image-to-image'
+    const editModelProvider = editModelId.startsWith('fal-ai/')
+      || editModelId.startsWith('alibaba/')
+      ? 'fal'
+      : 'kie'
     if (
       (input.operation === 'edit' || input.operation === 'replace')
       && !acceptCloudGenerationConsent({
-        provider: 'kie',
-        model: 'seedream/5-pro-image-to-image',
+        provider: editModelProvider,
+        model: editModelId,
         tool: 'edit_image_subjects',
       })
     ) return false
@@ -4151,6 +4156,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         object_hash: session.asset.objectHash,
         ...(input.subjectIds.length > 0 ? { subject_ids: input.subjectIds } : {}),
         operation: input.operation,
+        ...(input.model ? { model: input.model } : {}),
         ...(input.prompt ? { prompt: input.prompt } : {}),
         ...(input.regions && input.regions.length > 0
           ? {
@@ -9397,6 +9403,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         subjectIds: selectedSubjects.map((subject) => subject.id),
         ...(prompt ? { prompt } : {}),
         regions: regionReplacementPayload(targets, merged.replacements),
+        ...(selection.model ? { model: selection.model } : {}),
       })
       if (!queued) {
         return {
@@ -9433,6 +9440,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       operation: 'edit',
       subjectIds: selectedSubjects.map((subject) => subject.id),
       prompt: input,
+      ...(selection.model ? { model: selection.model } : {}),
     })
     if (!queued) {
       return {

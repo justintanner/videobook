@@ -18,11 +18,12 @@ import {
 } from "./_kie-poll.js";
 import {
   GROK_EXACT_MASK_ADAPTER_ID,
+  imageEditAdapter,
   IMAGE_EDIT_ADAPTERS,
-  SEEDREAM_I2I_ADAPTER,
   type ImageEditAdapter,
   type ImageEditProviderRequest,
 } from "./_image-edit-adapter.js";
+import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-models.js";
 import type { Engine, Job } from "videobook-engine";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
@@ -78,6 +79,7 @@ type GenerateImageSubjectEditPayload = {
   regions?: ImageSubjectReplacementRegion[];
   replacementRefs?: ReplacementRefInput[];
   orderedImageRefs?: Array<{ role: "base" | "replacement"; artifactId: string }>;
+  modelId?: string;
   bookId: string;
   notebookId: string;
   producerCellId: string;
@@ -674,6 +676,12 @@ type ImageSubjectEditGeneration = {
   request: ImageEditProviderRequest;
 };
 
+function imageSubjectEditAdapter(modelId: string | undefined): ImageEditAdapter {
+  const adapter = imageEditAdapter(modelId ?? DEFAULT_IMAGE_EDIT_MODEL_ID);
+  if (!adapter) throw new Error(`Unknown image edit model: ${modelId}`);
+  return adapter;
+}
+
 async function runAdapterImageSubjectEdit(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
@@ -718,6 +726,7 @@ async function runAdapterImageSubjectEdit(
 async function generateSemanticSubjectEdit(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
+  adapter: ImageEditAdapter,
   map: ImageSubjectMapReadyV1,
   sourceFilename: string,
   signal: AbortSignal,
@@ -725,7 +734,7 @@ async function generateSemanticSubjectEdit(
   return runAdapterImageSubjectEdit(
     engine,
     payload,
-    SEEDREAM_I2I_ADAPTER,
+    adapter,
     "semantic",
     {
       prompt: semanticEditPrompt(map, payload.subjectIds, payload.prompt ?? ""),
@@ -740,6 +749,7 @@ async function generateSemanticSubjectEdit(
 async function generateRegionReplacementEdit(
   engine: Engine,
   payload: GenerateImageSubjectEditPayload,
+  adapter: ImageEditAdapter,
   map: ImageSubjectMapReadyV1 | null,
   sourceFilename: string,
   width: number,
@@ -761,7 +771,7 @@ async function generateRegionReplacementEdit(
   return runAdapterImageSubjectEdit(
     engine,
     payload,
-    SEEDREAM_I2I_ADAPTER,
+    adapter,
     "region",
     { prompt, width, height },
     sourceFilename,
@@ -946,7 +956,7 @@ function generateImageSubjectEditPayload(
     || typeof value.sourceObjectHash !== "string"
     || !Array.isArray(value.subjectIds)
     || !value.subjectIds.every((entry) => typeof entry === "string")
-    || (value.operation !== "remove" && value.operation !== "edit")
+    || (value.operation !== "remove" && value.operation !== "edit" && value.operation !== "replace")
     || typeof value.bookId !== "string"
     || typeof value.notebookId !== "string"
     || typeof value.producerCellId !== "string"
@@ -968,6 +978,7 @@ function generateImageSubjectEditPayload(
     outputCellId: value.outputCellId,
     jobId: value.jobId,
     ...(typeof value.prompt === "string" ? { prompt: value.prompt } : {}),
+    ...(typeof value.modelId === "string" ? { modelId: value.modelId } : {}),
     ...(typeof value.generationId === "string"
       ? { generationId: value.generationId }
       : {}),
@@ -1258,6 +1269,9 @@ export function registerImageSubjectJobs(engine: Engine): void {
       if (payload.operation === "edit" && !payload.prompt?.trim()) {
         throw new Error("A prompt is required to edit selected subjects");
       }
+      const adapter = payload.operation === "remove"
+        ? null
+        : imageSubjectEditAdapter(payload.modelId);
       if (payload.operation === "replace") {
         const regions = payload.regions ?? [];
         if (regions.length === 0) {
@@ -1266,6 +1280,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
         const generated = await generateRegionReplacementEdit(
           engine,
           payload,
+          adapter!,
           readyMap,
           source.file.name,
           source.width,
@@ -1314,6 +1329,7 @@ export function registerImageSubjectJobs(engine: Engine): void {
         const generated = await generateSemanticSubjectEdit(
           engine,
           payload,
+          adapter!,
           readyMap!,
           source.file.name,
           context.signal,

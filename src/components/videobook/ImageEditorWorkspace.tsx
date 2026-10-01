@@ -34,6 +34,7 @@ export type ImageSubjectEditInput = {
   subjectIds: string[]
   prompt?: string
   regions?: ImageRegionReplacement[]
+  model?: string
 }
 
 export type ImageReplacementCandidate = {

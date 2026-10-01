@@ -15,10 +15,15 @@ import {
   type ImageSubjectMapRecordV1,
 } from "../image-subject-map.js";
 import {
-  SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
   seedreamProImageUrlCapacityError,
   type ImageSubjectReplacementRegion,
 } from "../jobs/image-subjects.js";
+import {
+  DEFAULT_IMAGE_EDIT_MODEL_ID,
+  findImageEditModel,
+  IMAGE_EDIT_MODEL_IDS,
+  type ImageEditModelInfo,
+} from "../image-edit-models.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { isPublishedPostCell } from "../notebook-published-post.js";
 import { slotRight } from "../notebook-placement.js";
@@ -31,6 +36,17 @@ function failure(message: string) {
     isError: true as const,
     content: [{ type: "text" as const, text: message }],
   };
+}
+
+function editModelCapacityError(
+  entry: ImageEditModelInfo,
+  replacementCount: number,
+): string {
+  if (entry.id === DEFAULT_IMAGE_EDIT_MODEL_ID) {
+    return seedreamProImageUrlCapacityError(replacementCount);
+  }
+  const max = entry.maxInputImages ?? 1;
+  return `${entry.label} accepts at most ${max} image inputs (1 base + ${max - 1} replacements). This request needs 1 base + ${replacementCount} replacements.`;
 }
 
 function json(value: unknown) {
@@ -414,6 +430,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
         operation: z.enum(["remove", "edit", "replace"]),
         prompt: z.string().max(2400).optional(),
         regions: z.array(replacementRegionSchema).optional(),
+        model: z.enum(IMAGE_EDIT_MODEL_IDS).optional(),
       },
       handler: async (args) => {
         const {
@@ -426,6 +443,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           operation,
           prompt,
           regions,
+          model,
         } = args as {
           book_id: string;
           notebook_id: string;
@@ -436,12 +454,25 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           operation: "remove" | "edit" | "replace";
           prompt?: string;
           regions?: ReplacementRegionInput[];
+          model?: string;
         };
         if (operation === "edit" && !prompt?.trim()) {
           return failure("A prompt is required to edit selected subjects");
         }
-        if ((operation === "edit" || operation === "replace") && !process.env.KIE_API_KEY) {
-          return failure("KIE_API_KEY environment variable is not set");
+        if (operation === "remove" && model !== undefined) {
+          return failure("Model selection applies only to edit and replace operations");
+        }
+        const editModel = findImageEditModel(model ?? DEFAULT_IMAGE_EDIT_MODEL_ID)!;
+        if ((operation === "edit" || operation === "replace") && !process.env[editModel.envKey]) {
+          return failure(`${editModel.envKey} environment variable is not set`);
+        }
+        if (
+          operation !== "remove"
+          && !editModel.capabilities[operation === "replace" ? "regionReplace" : "semantic"]
+        ) {
+          return failure(
+            `${editModel.label} cannot perform ${operation === "replace" ? "region replacement" : "semantic subject edits"}`,
+          );
         }
         try {
           const source = await resolveImageSubjectSource(engine, artifact_id);
@@ -465,8 +496,11 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             const uniqueReplacements = uniqueSubjectIds(
               replacementRegions.map((region) => region.replacementArtifactId),
             );
-            if (1 + uniqueReplacements.length > SEEDREAM_PRO_I2I_MAX_IMAGE_URLS) {
-              return failure(seedreamProImageUrlCapacityError(uniqueReplacements.length));
+            if (
+              editModel.maxInputImages !== null
+              && 1 + uniqueReplacements.length > editModel.maxInputImages
+            ) {
+              return failure(editModelCapacityError(editModel, uniqueReplacements.length));
             }
           } else if (!readyMap) {
             return failure("Analyze image subjects before editing them");
@@ -525,10 +559,10 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             : operation === "replace"
               ? `Replaced ${resolvedRegions.length} ${resolvedRegions.length === 1 ? "region" : "regions"}`
               : `Edited ${labels.join(", ")}`;
-          const provider = operation === "remove" ? "local" : "kie";
-          const model = operation === "remove"
+          const provider = operation === "remove" ? "local" : editModel.provider;
+          const cellModel = operation === "remove"
             ? "sharp/layer-composite"
-            : "seedream/5-pro-image-to-image";
+            : editModel.id;
           const sourceArtifact = engine.artifacts.get(artifact_id);
           const output = await engine.artifacts.create({
             kind: "image",
@@ -561,7 +595,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                   slot: nextHorizontalSlotFrom(slotRight(currentSource.slot), occupied),
                   prompt: generatedPrompt,
                   provider,
-                  model,
+                  model: cellModel,
                   operation: "image_to_image",
                   tool: "edit_image_subjects",
                   inputs: {
@@ -657,7 +691,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               status: "dispatched",
               tool: "edit_image_subjects",
               provider,
-              model,
+              model: cellModel,
               prompt: generatedPrompt,
               providerArtifactId: imageAssetId,
             });
@@ -672,7 +706,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                   source_asset: artifact_id,
                   source_object_hash: object_hash,
                   replacement_artifact_ids: replacementRefs.map((ref) => ref.assetId),
-                  model: "seedream/5-pro-image-to-image",
+                  model: editModel.id,
                   width: source.width,
                   height: source.height,
                   status: "queued",
@@ -707,6 +741,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               outputCellId: outputCell.id,
               generationId,
               jobId,
+              ...(operation === "remove" ? {} : { modelId: editModel.id }),
             });
             return json({
               status: "enqueued",

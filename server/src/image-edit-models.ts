@@ -130,6 +130,8 @@ export const IMAGE_EDIT_MODELS: readonly ImageEditModelInfo[] = [
 
 export const DEFAULT_IMAGE_EDIT_MODEL_ID = "seedream/5-pro-image-to-image";
 
+export const IMAGE_EDIT_MODEL_IDS = IMAGE_EDIT_MODELS.map((model) => model.id) as [string, ...string[]];
+
 export function findImageEditModel(id: string): ImageEditModelInfo | undefined {
   return IMAGE_EDIT_MODELS.find((model) => model.id === id);
 }

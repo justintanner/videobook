@@ -24,6 +24,7 @@ export type ImageEditSelection = {
     matchedSubjectId?: string
   }>
   replacements: Record<string, string>
+  model?: string
 }
 
 export type ImageRegionReplacement = {

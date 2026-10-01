@@ -40,6 +40,10 @@ import {
 import { seedreamRegionReplacementRequest } from "../jobs/_image-edit-adapter.js";
 import { createEngineForTest } from "../engine.js";
 import {
+  DEFAULT_IMAGE_EDIT_MODEL_ID,
+  IMAGE_EDIT_MODELS,
+} from "../image-edit-models.js";
+import {
   enqueueOptions,
   queue,
   recoverInterruptedSubjectEditArtifact,
@@ -1451,4 +1455,145 @@ describe("image subject tools", () => {
       else delete process.env.KIE_API_KEY;
     }
   });
+
+  it("rejects model selection on subject removal", async () => {
+    const source = await createSource();
+    const result = await client.callTool({
+      name: "edit_image_subjects",
+      arguments: {
+        book_id: bookId,
+        notebook_id: source.notebookId,
+        source_cell_id: source.sourceCellId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+        operation: "remove",
+        subject_ids: ["person"],
+        model: "fal-ai/nano-banana-2/edit",
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0]!.text).toBe(
+      "Model selection applies only to edit and replace operations",
+    );
+  });
+
+  it("rejects unknown models as isError content", async () => {
+    const source = await createSource();
+    const result = await client.callTool({
+      name: "edit_image_subjects",
+      arguments: {
+        book_id: bookId,
+        notebook_id: source.notebookId,
+        source_cell_id: source.sourceCellId,
+        artifact_id: source.artifactId,
+        object_hash: source.objectHash,
+        operation: "edit",
+        subject_ids: ["person"],
+        prompt: "Make the person smile",
+        model: "does-not-exist",
+      },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it("rejects a model whose provider key is missing", async () => {
+    const originalFalKey = process.env.FAL_API_KEY;
+    delete process.env.FAL_API_KEY;
+    try {
+      const source = await createSource();
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "edit",
+          subject_ids: ["person"],
+          prompt: "Make the person smile",
+          model: "fal-ai/nano-banana-2/edit",
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0]!.text).toBe(
+        "FAL_API_KEY environment variable is not set",
+      );
+    } finally {
+      if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+      else delete process.env.FAL_API_KEY;
+    }
+  });
+
+  it("rejects region replacements beyond a capped model's image inputs", async () => {
+    const originalFalKey = process.env.FAL_API_KEY;
+    process.env.FAL_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation: "replace",
+          model: "alibaba/qwen-image-3/edit",
+          regions: [0, 1, 2].map((index) => ({
+            box: { x: 0.05 * index + 0.01, y: 0.4, width: 0.1, height: 0.1 },
+            replacement_artifact_id: `replacement-${index + 1}`,
+          })),
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0]!.text).toBe(
+        "Qwen 3.0 Edit accepts at most 3 image inputs (1 base + 2 replacements). This request needs 1 base + 3 replacements.",
+      );
+    } finally {
+      if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+      else delete process.env.FAL_API_KEY;
+    }
+  });
+
+  for (const entry of IMAGE_EDIT_MODELS) {
+    it(`persists ${entry.id} on the job payload and producer cell`, async () => {
+      const originalKieKey = process.env.KIE_API_KEY;
+      const originalFalKey = process.env.FAL_API_KEY;
+      process.env.KIE_API_KEY = "test-key";
+      process.env.FAL_API_KEY = "test-key";
+      try {
+        const source = await createSource();
+        const result = await client.callTool({
+          name: "edit_image_subjects",
+          arguments: {
+            book_id: bookId,
+            notebook_id: source.notebookId,
+            source_cell_id: source.sourceCellId,
+            artifact_id: source.artifactId,
+            object_hash: source.objectHash,
+            operation: "edit",
+            subject_ids: ["person"],
+            prompt: "Make the person smile",
+            ...(entry.id === DEFAULT_IMAGE_EDIT_MODEL_ID ? {} : { model: entry.id }),
+          },
+        });
+        expect(result.isError, `${entry.id}: ${JSON.stringify(result.content)}`).not.toBe(true);
+        const parsed = resultJson(result) as { job_id: string; producer_cell_id: string };
+        const job = engine.jobs.queue.list({ type: "generate_image_subject_edit" })
+          .find((candidate) => candidate.payload.jobId === parsed.job_id);
+        expect(job?.payload).toMatchObject({ modelId: entry.id });
+        const notebook = engine.notebooks.read(source.notebookId);
+        if (!notebook.ok) throw new Error(notebook.error.message);
+        const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
+        expect(producer?.provider).toBe(entry.provider);
+        expect(producer?.model).toBe(entry.id);
+      } finally {
+        if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
+        else delete process.env.KIE_API_KEY;
+        if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+        else delete process.env.FAL_API_KEY;
+      }
+    });
+  }
 });
