@@ -90,77 +90,81 @@ export function AssetTagEditor({
 
   return (
     <section className="asset-tag-editor" aria-label="Asset tags">
-      <div className="asset-tag-chips" role="list">
-        {effective.map((tag: AssetTag) => (
-          <span
-            className={`asset-tag-chip asset-tag-chip-${tag.origin}`}
-            key={`${tag.facet}/${tag.key}`}
-            role="listitem"
-          >
-            <span className="asset-tag-chip-label">{tag.label}</span>
-            {canEdit
-              ? (
-                <button
-                  type="button"
-                  className="asset-tag-chip-remove"
-                  onClick={() => onRemove({ facet: tag.facet, label: tag.label })}
-                  aria-label={`Remove tag ${tag.label} (${tagOriginLabel(tag)})`}
-                  title={tagOriginLabel(tag)}
-                >
-                  <X size={11} />
-                </button>
-              )
-              : null}
-          </span>
-        ))}
-        {effective.length === 0
-          ? (
-            <span className="asset-tag-empty">
-              {status ?? 'No tags yet'}
+      {/* Chips and the field share one wrapping row, so a new tag is typed
+          where it will land instead of in a separate block under the list. */}
+      <div className="asset-tag-row">
+        <div className="asset-tag-chips" role="list">
+          {effective.map((tag: AssetTag) => (
+            <span
+              className={`asset-tag-chip asset-tag-chip-${tag.origin}`}
+              key={`${tag.facet}/${tag.key}`}
+              role="listitem"
+            >
+              <span className="asset-tag-chip-label">{tag.label}</span>
+              {canEdit
+                ? (
+                  <button
+                    type="button"
+                    className="asset-tag-chip-remove"
+                    onClick={() => onRemove({ facet: tag.facet, label: tag.label })}
+                    aria-label={`Remove tag ${tag.label} (${tagOriginLabel(tag)})`}
+                    title={tagOriginLabel(tag)}
+                  >
+                    <X size={11} />
+                  </button>
+                )
+                : null}
             </span>
+          ))}
+          {effective.length === 0
+            ? (
+              <span className="asset-tag-empty">
+                {status ?? 'No tags yet'}
+              </span>
+            )
+            : null}
+        </div>
+
+        {canEdit
+          ? (
+            <div className="asset-tag-input-row">
+              <input
+                ref={inputRef}
+                className="asset-tag-input"
+                value={draft}
+                list={listId}
+                placeholder="Add a tag"
+                aria-label="Add a tag"
+                autoComplete="off"
+                onChange={(event) => {
+                  setDraft(event.target.value)
+                  onQueryChange(event.target.value)
+                }}
+                onKeyDown={handleKeyDown}
+              />
+              <datalist id={listId}>
+                {suggestions.map((suggestion) => (
+                  <option
+                    key={`${suggestion.facet}/${suggestion.key}`}
+                    value={suggestion.label}
+                  >
+                    {`${FACET_LABEL[suggestion.facet]} · ${suggestion.assets} asset${suggestion.assets === 1 ? '' : 's'}`}
+                  </option>
+                ))}
+              </datalist>
+              <button
+                type="button"
+                className="asset-tag-add"
+                onClick={commitDraft}
+                disabled={!draft.trim()}
+                aria-label="Add tag"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
           )
           : null}
       </div>
-
-      {canEdit
-        ? (
-          <div className="asset-tag-input-row">
-            <input
-              ref={inputRef}
-              className="asset-tag-input"
-              value={draft}
-              list={listId}
-              placeholder="Add a tag"
-              aria-label="Add a tag"
-              autoComplete="off"
-              onChange={(event) => {
-                setDraft(event.target.value)
-                onQueryChange(event.target.value)
-              }}
-              onKeyDown={handleKeyDown}
-            />
-            <datalist id={listId}>
-              {suggestions.map((suggestion) => (
-                <option
-                  key={`${suggestion.facet}/${suggestion.key}`}
-                  value={suggestion.label}
-                >
-                  {`${FACET_LABEL[suggestion.facet]} · ${suggestion.assets} asset${suggestion.assets === 1 ? '' : 's'}`}
-                </option>
-              ))}
-            </datalist>
-            <button
-              type="button"
-              className="asset-tag-add"
-              onClick={commitDraft}
-              disabled={!draft.trim()}
-              aria-label="Add tag"
-            >
-              <Plus size={12} />
-            </button>
-          </div>
-        )
-        : null}
 
       {dismissed.length > 0
         ? (

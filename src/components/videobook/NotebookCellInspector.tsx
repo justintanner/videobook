@@ -574,43 +574,72 @@ function compatibleSource(
   return true
 }
 
+/** Video's preview action bar; an image carries its Edit on the picture. */
 function CellMediaActions({
   address,
-  isImage,
   onOpen,
 }: {
   address: string
-  isImage: boolean
   onOpen: () => void
 }) {
   return (
     <div
       className="inspector-media-actions"
       role="group"
-      aria-label={`${isImage ? 'Image' : 'Video'} preview actions`}
+      aria-label="Video preview actions"
     >
       <span className="inspector-media-action-slot">
-        {isImage ? (
-          <button
-            type="button"
-            className="inspector-edit-button"
-            aria-label={`Edit @${address} image`}
-            title={`Edit @${address} image`}
-            onClick={onOpen}
-          >
-            <Pencil size={14} />Edit
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="inspector-fullscreen-button"
-            aria-label={`Open @${address} fullscreen`}
-            title={`Open @${address} fullscreen`}
-            onClick={onOpen}
-          >
-            <Maximize2 size={14} />Fullscreen
-          </button>
-        )}
+        <button
+          type="button"
+          className="inspector-fullscreen-button"
+          aria-label={`Open @${address} fullscreen`}
+          title={`Open @${address} fullscreen`}
+          onClick={onOpen}
+        >
+          <Maximize2 size={14} />Fullscreen
+        </button>
+      </span>
+    </div>
+  )
+}
+
+/**
+ * The picture opens fullscreen; Edit sits on it beside the Full badge so the
+ * image's actions stay on the image instead of across the dock. The badge
+ * lets clicks fall through to the picture, so it stays a single tab stop.
+ */
+function InspectorImageOpen({
+  address,
+  previewUrl,
+  onOpen,
+}: {
+  address: string
+  previewUrl: string
+  onOpen: () => void
+}) {
+  return (
+    <div className="inspector-cell-media-frame">
+      <button
+        type="button"
+        className="inspector-cell-media-open"
+        aria-label={`Open @${address} fullscreen`}
+        onClick={onOpen}
+      >
+        <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
+      </button>
+      <span className="inspector-cell-media-overlay">
+        <button
+          type="button"
+          className="inspector-edit-button"
+          aria-label={`Edit @${address} image`}
+          title={`Edit @${address} image`}
+          onClick={onOpen}
+        >
+          <Pencil size={13} />Edit
+        </button>
+        <span className="inspector-cell-media-zoom" aria-hidden="true">
+          <Maximize2 size={13} />Full
+        </span>
       </span>
     </div>
   )
@@ -714,19 +743,11 @@ function NotebookCellMedia({
             mediaUrl={mediaUrl}
           />
         ) : isImage && canOpenFullscreen ? (
-          <button
-            type="button"
-            className="inspector-cell-media-open"
-            aria-label={`Open @${address} fullscreen`}
-            onClick={openFullscreen}
-          >
-            <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
-            {/* The picture is the only way to fullscreen now, so its badge
-                says so rather than leaving the affordance to be guessed. */}
-            <span className="inspector-cell-media-zoom" aria-hidden="true">
-              <Maximize2 size={13} />Full
-            </span>
-          </button>
+          <InspectorImageOpen
+            address={address}
+            previewUrl={previewUrl}
+            onOpen={openFullscreen}
+          />
         ) : (
           <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
         )}
@@ -740,10 +761,9 @@ function NotebookCellMedia({
           />
         )}
       </div>
-      {inlineActions && canOpenFullscreen && (
+      {inlineActions && canOpenFullscreen && isVideo && (
         <CellMediaActions
           address={address}
-          isImage={isImage}
           onOpen={openFullscreen}
         />
       )}
@@ -1721,10 +1741,9 @@ function MediaCellInspector({
               />
             )}
             <div className="inspector-media-summary-actions">
-              {previewAsset && canOpenFullscreen && (
+              {previewAsset && kind === 'video' && (
                 <CellMediaActions
                   address={address}
-                  isImage={kind === 'image'}
                   onOpen={() => onOpenFullscreen(previewAsset)}
                 />
               )}

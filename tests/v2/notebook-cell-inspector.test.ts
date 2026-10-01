@@ -954,7 +954,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('aria-label="Edit @b3 image"')
   })
 
-  it('offers only edit in an image action bar, leaving fullscreen to the picture', () => {
+  it('puts edit on the image overlay beside the Full badge, with no action bar', () => {
     const imageCell: NotebookCell = {
       ...cell,
       type: 'image',
@@ -993,16 +993,18 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-media-row-content')
     expect(html).toContain('inspector-media-facts')
     expect(html).not.toContain('inspector-cell-metadata')
-    expect(html).toContain('class="inspector-media-actions"')
-    expect(html).toContain('aria-label="Image preview actions"')
-    expect(html).toContain('aria-label="Edit @g5 image"')
-    // The picture is already the fullscreen control, so the bar does not repeat
-    // it — and the badge on the picture says so in a word.
+    // Edit rides on the picture, so no action bar repeats it below.
+    expect(html).not.toContain('class="inspector-media-actions"')
     expect(html).not.toContain('inspector-fullscreen-button')
     expect(html).toContain(
       'class="inspector-cell-media-open" aria-label="Open @g5 fullscreen"',
     )
-    expect(html).toMatch(/class="inspector-cell-media-zoom"[\s\S]*?Full<\/span>/)
+    const overlay = html.slice(html.indexOf('class="inspector-cell-media-overlay"'))
+    expect(overlay).toContain('aria-label="Edit @g5 image"')
+    expect(overlay).toMatch(/class="inspector-cell-media-zoom"[\s\S]*?Full<\/span>/)
+    expect(html.indexOf('class="inspector-cell-media-overlay"')).toBeLessThan(
+      html.indexOf('inspector-media-row-meta'),
+    )
   })
 
   it('lays an image cell out in tracks beside the preview', () => {
@@ -1054,12 +1056,6 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('480 \u00d7 854')
     expect(html).toContain('<dt>Aspect</dt>')
     expect(html).toContain('9:16')
-    expect(html.indexOf('inspector-media-row-preview')).toBeLessThan(
-      html.indexOf('class="inspector-media-actions'),
-    )
-    expect(html.indexOf('class="inspector-media-actions')).toBeGreaterThan(
-      html.indexOf('inspector-media-row-meta'),
-    )
     expect(html.indexOf('aria-label="Cell cleanup actions"')).toBeGreaterThan(
       html.indexOf('inspector-media-row-meta'),
     )

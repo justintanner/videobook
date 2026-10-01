@@ -23,13 +23,19 @@ interface NotebookGridBoardProps {
   reviewRoles: ReadonlyMap<string, NotebookReviewRole>
 }
 
+// How far a lane band reaches past its squares, so a cell never sits flush
+// against the band's edge. Under half the gap, so stacked lanes stay apart.
+const LANE_BAND_INSET = 10
+
 function laneBandStyle(section: NotebookLaneSection) {
   const width = notebookGrid.columnCount * notebookGrid.columnPitch - notebookGrid.gap
   const height = section.rowCount * notebookGrid.rowPitch - notebookGrid.gap
+  const x = notebookGrid.originX - LANE_BAND_INSET
+  const y = notebookGrid.originY + section.startRow * notebookGrid.rowPitch - LANE_BAND_INSET
   return {
-    width,
-    height,
-    transform: `translate(${notebookGrid.originX}px, ${notebookGrid.originY + section.startRow * notebookGrid.rowPitch}px)`,
+    width: width + LANE_BAND_INSET * 2,
+    height: height + LANE_BAND_INSET * 2,
+    transform: `translate(${x}px, ${y}px)`,
   }
 }
 

@@ -12985,42 +12985,69 @@ textarea:focus-visible {
   color: #6f8f7d;
 }
 
-.asset-tag-input-row {
+.asset-tag-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
 
-.asset-tag-input {
-  min-height: 24px;
-  padding: 2px 6px;
-  border: 1px solid var(--line);
-  color: #cfe6d9;
+.asset-tag-row > .asset-tag-chips {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* One bordered field holding the input and its add button, sized like a chip
+   so it reads as the next slot in the tag row rather than a separate form. */
+.asset-tag-input-row {
+  display: flex;
+  flex: 1 1 140px;
+  max-width: 220px;
+  min-width: 120px;
+  align-items: center;
+  border: 1px dashed var(--control-border);
   background: rgba(4, 18, 11, 0.9);
-  font-size: 10px;
+}
+
+.asset-tag-input-row:focus-within {
+  border-style: solid;
+  border-color: var(--control-border-hover);
 }
 
 .asset-tag-input {
-  flex: 1 1 120px;
-  min-width: 96px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  outline: none;
+  color: #cfe6d9;
+  background: transparent;
+  font-size: 10px;
 }
 
 .asset-tag-add {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   min-width: 24px;
   min-height: 24px;
   padding: 0;
-  border: 1px solid var(--line);
-  color: #cfe6d9;
+  border: 0;
+  color: var(--green);
   background: transparent;
   cursor: pointer;
 }
 
+.asset-tag-add:hover:not(:disabled),
+.asset-tag-add:focus-visible {
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
 .asset-tag-add:disabled {
-  opacity: 0.45;
+  color: var(--muted);
   cursor: default;
 }
 
@@ -13122,16 +13149,16 @@ textarea:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .asset-tag-input-row,
   .media-library-tag-filters {
     /* Dense layouts: the field takes the row and chips wrap under it rather
        than shrinking to an untappable width. */
     align-items: stretch;
   }
 
-  .asset-tag-input,
+  .asset-tag-input-row,
   .media-library-tag-input {
     flex: 1 1 100%;
+    max-width: none;
   }
 }
 
@@ -13257,27 +13284,53 @@ textarea:focus-visible {
   cursor: zoom-in;
 }
 
-/* Carrying its own word now that no button repeats it. */
-.inspector-cell-media-zoom {
+.inspector-cell-media-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Edit and the Full badge read as one joined pill on the picture. The pill
+   ignores the pointer except on Edit, so the badge's clicks land on the
+   picture behind it. */
+.inspector-cell-media-overlay {
   position: absolute;
   right: 8px;
   bottom: 8px;
   display: inline-flex;
-  height: 24px;
+  height: 28px;
+  border: 1px solid var(--line-bright);
+  background: rgba(2, 10, 6, 0.9);
+  pointer-events: none;
+}
+
+.inspector-cell-media-overlay .inspector-edit-button,
+.inspector-cell-media-zoom {
+  display: inline-flex;
+  height: 100%;
   align-items: center;
   gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--line-bright);
+  padding: 0 10px;
+  border: 0;
   color: var(--green);
-  background: rgba(2, 10, 6, 0.9);
+  background: transparent;
   font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.inspector-cell-media-open:hover .inspector-cell-media-zoom,
-.inspector-cell-media-open:focus-visible .inspector-cell-media-zoom {
-  border-color: var(--control-border-hover);
+.inspector-cell-media-overlay .inspector-edit-button {
+  border-right: 1px solid var(--line-bright);
+  color: #b9e8cc;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.inspector-cell-media-overlay .inspector-edit-button:hover,
+.inspector-cell-media-overlay .inspector-edit-button:focus-visible,
+.inspector-cell-media-frame:has(.inspector-cell-media-open:hover) .inspector-cell-media-zoom,
+.inspector-cell-media-frame:has(.inspector-cell-media-open:focus-visible) .inspector-cell-media-zoom {
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
 }
@@ -13526,16 +13579,28 @@ textarea:focus-visible {
   background: transparent;
 }
 
-.inspector-media-row-content .asset-tag-input-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
-  width: min(100%, 280px);
+.inspector-media-row-content .asset-tag-row {
+  gap: 6px;
 }
 
-.inspector-media-row-content .asset-tag-input,
+.inspector-media-row-content .asset-tag-chip {
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 0 4px 0 9px;
+  font-size: 11px;
+}
+
+.inspector-media-row-content .asset-tag-input-row {
+  min-height: 28px;
+}
+
+.inspector-media-row-content .asset-tag-input {
+  font-size: 11px;
+}
+
 .inspector-media-row-content .asset-tag-add {
-  min-width: 0;
-  min-height: 32px;
+  min-width: 28px;
+  min-height: 26px;
 }
 
 .inspector-media-row-content .asset-tag-chips:empty {
