@@ -142,10 +142,10 @@ describe('notebook initial generation prompts', () => {
       edges: Array<{ id: string; target: string }>
     }
     expect(connected.cells.find((cell) => cell.id === image.id)?.prompt).toBe(
-      'Reference image @a1: moonlit hero portrait. Preserve subject, composition. Render clean image.',
+      'Reference image @image1: moonlit hero portrait. Preserve subject, composition. Render clean image.',
     )
     expect(connected.cells.find((cell) => cell.id === video.id)?.prompt).toBe(
-      'Subject image @a1: moonlit hero portrait. Animate subject. Preserve identity, composition. Render coherent video.',
+      'Subject image @image1: moonlit hero portrait. Animate subject. Preserve identity, composition. Render coherent video.',
     )
     const connectedDocument = managed.value.engine.notebooks.read(notebookId)
     expect(connectedDocument.ok).toBe(true)
@@ -184,9 +184,9 @@ describe('notebook initial generation prompts', () => {
       notebook_id: notebookId,
     })) as { cells: Array<{ id: string; prompt?: string }> }
     expect(moved.cells.find((cell) => cell.id === image.id)?.prompt)
-      .toContain('@e1')
+      .toBe(connected.cells.find((cell) => cell.id === image.id)?.prompt)
     expect(moved.cells.find((cell) => cell.id === video.id)?.prompt)
-      .toContain('@e1')
+      .toBe(connected.cells.find((cell) => cell.id === video.id)?.prompt)
 
     const explicitPrompt = 'Keep exact silhouette. No extra text.'
     resultJson(await invoke('update_notebook_cell', {

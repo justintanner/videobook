@@ -18,6 +18,10 @@ import {
   replaceNotebookMentions,
   scanNotebookMentions,
 } from "videobook-engine/notebook-mentions";
+import {
+  generationInputMentions,
+  scanGenerationInputTokens,
+} from "./generation-input-mentions.js";
 
 type NotebookReferenceIssueCode =
   | "not_found"
@@ -251,6 +255,87 @@ export function resolveNotebookPromptReferences(input: {
         }))
     : [];
   return { prompt, resolved, unresolved, unconnected };
+}
+
+function inputTokenResolution(
+  engine: Engine | undefined,
+  document: NotebookDocument,
+  token: string,
+  sourceCellId: string | undefined,
+): ResolvedNotebookReference | NotebookReferenceIssue {
+  const mention = `@${token}`;
+  if (!sourceCellId) {
+    return issue(mention, token, "not_found", `${mention} is not a connected input`);
+  }
+  const cell = document.cells.find((candidate) => candidate.id === sourceCellId);
+  const artifactId = cell ? resolveNotebookCellArtifactId(document, cell) : undefined;
+  if (!cell || typeof artifactId !== "string") {
+    return issue(mention, token, "no_output", `${mention} does not have media output yet`);
+  }
+  const artifact = artifactRecord(engine, artifactId);
+  if (!artifact) {
+    return issue(mention, token, "not_found", `Media output for ${mention} was not found`);
+  }
+  return {
+    mention,
+    reference: token,
+    ...artifact,
+    cellId: cell.id,
+    cellAddress: notebookGridTag(cell.slot),
+  };
+}
+
+function gridAddressIssues(prompt: string): NotebookReferenceIssue[] {
+  const seen = new Set<string>();
+  return scanNotebookMentions(prompt).flatMap((mention) => {
+    if (seen.has(mention.reference)) return [];
+    seen.add(mention.reference);
+    return [issue(
+      mention.raw,
+      mention.reference,
+      "not_found",
+      `${mention.raw} is a grid address; name connected inputs as @image1, @video1, @audio1`,
+    )];
+  });
+}
+
+/** Resolve "@image1"-style input tokens in a generation prompt to
+ *  "@<artifact-id>". Grid addresses are not inputs and stay unresolved. */
+export function resolveGenerationInputReferences(input: {
+  engine?: Engine;
+  document: NotebookDocument;
+  cell: NotebookCell;
+  prompt: string;
+}): NotebookPromptResolution {
+  const sources = new Map(
+    generationInputMentions(input.cell.id, input.document.cells, input.document.edges)
+      .map((mention) => [mention.token, mention.sourceCellId]),
+  );
+  const resolved: ResolvedNotebookReference[] = [];
+  const unresolved: NotebookReferenceIssue[] = [];
+  for (const token of new Set(scanGenerationInputTokens(input.prompt))) {
+    const result = inputTokenResolution(
+      input.engine,
+      input.document,
+      token,
+      sources.get(token),
+    );
+    if ("code" in result) unresolved.push(result);
+    else resolved.push(result);
+  }
+  const prompt = replaceNotebookMentions(
+    input.prompt,
+    resolved.map((item) => ({
+      reference: item.reference,
+      replacement: `@${item.artifactId}`,
+    })),
+  );
+  return {
+    prompt,
+    resolved,
+    unresolved: [...unresolved, ...gridAddressIssues(prompt)],
+    unconnected: [],
+  };
 }
 
 // A spoken or typed request names a cell the way the grid labels it: "the image

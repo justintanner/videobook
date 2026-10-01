@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import {
+  generationInputMentionRows,
   mentionMediaKind,
   mentionMenuRows,
   mentionThumbnailUrl,
@@ -184,3 +185,41 @@ describe('mentionMediaKind', () => {
     expect(mentionMediaKind('search')).toBe('other')
   })
 })
+
+describe('generationInputMentionRows', () => {
+  it('offers only connected inputs, named by input slot', () => {
+    const still = { slot: { row: ROW_AD, column: 4 }, type: 'image', label: 'actress key light' }
+    const clip = { slot: { row: ROW_AD, column: 2 }, type: 'generate_video' }
+    const inputs = [
+      { token: 'image1', cell: still },
+      { token: 'video1', cell: clip },
+    ]
+    const assets = [candidate(2), candidate(4, { type: 'image', duration: null })]
+
+    expect(generationInputMentionRows(inputs, assets, 'portrait of @')).toEqual([
+      {
+        value: '@image1',
+        label: '@image1',
+        description: `${tag(4)} · IMAGE · 1440×810`,
+        caption: 'actress key light',
+        thumbnailUrl: 'https://example.invalid/4.jpg',
+        mediaKind: 'image',
+        empty: false,
+      },
+      {
+        value: '@video1',
+        label: '@video1',
+        description: `${tag(2)} · VIDEO · 1440×810 · 0:06`,
+        caption: null,
+        thumbnailUrl: 'https://example.invalid/2.jpg',
+        mediaKind: 'video',
+        empty: false,
+      },
+    ])
+    expect(generationInputMentionRows(inputs, assets, 'portrait of @vi')
+      .map((row) => row.value)).toEqual(['@video1'])
+    expect(generationInputMentionRows(inputs, assets, `portrait of ${tag(4)}`)).toEqual([])
+    expect(generationInputMentionRows(inputs, assets, 'no mention')).toEqual([])
+  })
+})
+

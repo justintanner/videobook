@@ -72,10 +72,11 @@ import {
 import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
 import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
 import {
-  resolveNotebookPromptReferences,
+  resolveGenerationInputReferences,
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
+import { sortByKindSlot } from "../generation-input-mentions.js";
 import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 
 export interface RunNotebookPayload {
@@ -227,31 +228,6 @@ export async function writeGenerationPlanProvenance(
     },
   );
   if (!written.ok) throw new Error(written.error.message);
-}
-
-export function numberedKindSlotIndex(
-  targetInput: string,
-  kind: "image" | "video" | "audio",
-): number | null {
-  if (targetInput === kind) return 1;
-  const prefix = `${kind}_`;
-  if (!targetInput.startsWith(prefix)) return null;
-  const suffix = targetInput.slice(prefix.length);
-  if (!/^\d+$/.test(suffix)) return null;
-  return Number(suffix);
-}
-
-function sortByKindSlot<T extends { targetInput: string }>(
-  entries: T[],
-  kind: "image" | "video" | "audio",
-): T[] {
-  return [...entries].sort((left, right) => {
-    const leftIndex = numberedKindSlotIndex(left.targetInput, kind)
-      ?? Number.MAX_SAFE_INTEGER;
-    const rightIndex = numberedKindSlotIndex(right.targetInput, kind)
-      ?? Number.MAX_SAFE_INTEGER;
-    return leftIndex - rightIndex;
-  });
 }
 
 export function notebookCellMediaType(
@@ -988,18 +964,11 @@ function modelArgsWithMentions(
     : {};
   const upstream = upstreamValues(document, cell);
   const refFor = (artifactId: string): string => `@${artifactId}`;
-  const connectedArtifactIds = new Set(
-    upstream
-      .filter(({ cell: source, output }) =>
-        typeof output === "string"
-        && notebookCellMediaType(source) !== null)
-      .map(({ output }) => output!),
-  );
-  const mentions = resolveNotebookPromptReferences({
+  const mentions = resolveGenerationInputReferences({
     engine,
     document,
+    cell,
     prompt: promptFor(document, cell),
-    connectedArtifactIds,
   });
   const prompt = mentions.prompt;
   const generationMode = typeof cell.inputs?.generationMode === "string"

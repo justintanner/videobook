@@ -2336,12 +2336,15 @@ describe('chat composer browser flow', () => {
     expect(await headingStyles(promptHeading)).toEqual(await headingStyles(inputsHeading))
 
     const promptInput = inspector.getByRole('textbox', { name: 'Prompt', exact: true })
-    await promptInput.fill('use @a')
+    // A generation prompt names its connected inputs by slot, never by grid
+    // square, so the menu offers exactly the two inputs.
+    await promptInput.fill('use @')
     const mentionMenu = page.locator('.bg-background').filter({
-      has: page.getByRole('button', { name: /@a1/ }),
+      has: page.getByRole('button', { name: /@image1/ }),
     })
     await mentionMenu.waitFor({ state: 'visible' })
-    expect(await mentionMenu.getByRole('button').count()).toBeGreaterThan(0)
+    expect(await mentionMenu.getByRole('button', { name: /@video1/ }).count()).toBe(1)
+    expect(await mentionMenu.getByRole('button').count()).toBe(2)
     await promptInput.fill('use @bl8')
     const mentionWarning = inspector.locator('.generation-review-reference-errors')
     await mentionWarning.waitFor({ state: 'visible' })
@@ -2350,7 +2353,7 @@ describe('chat composer browser flow', () => {
       async () => await mentionWarning.textContent(),
       { timeout: 10_000 },
     ).toContain('@bl8')
-    expect(await mentionWarning.textContent()).toContain('was not found')
+    expect(await mentionWarning.textContent()).toContain('is a grid address')
 
     const prompt = 'Inspector prompt clipboard check'
     await promptInput.fill(prompt)
@@ -3774,13 +3777,14 @@ describe('chat composer browser flow', () => {
 
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
     const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
-    await prompt.fill('Use @c3 in a moonlit garden')
+    expect(await editor.locator('.generation-review-source strong').first().textContent()).toBe('@image1')
+    await prompt.fill('Use @image1 in a moonlit garden')
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('Use reference image 1 in a moonlit garden')
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
-    expect(await prompt.inputValue()).toBe('Use @c3 in a moonlit garden')
+    expect(await prompt.inputValue()).toBe('Use @image1 in a moonlit garden')
     await prompt.fill('A revised moonlit garden')
     expect(await editor.getByRole('button', { name: 'Refresh estimate', exact: true }).count()).toBe(0)
     await expect.poll(async () => await source.textContent(), {

@@ -161,7 +161,7 @@ describe("notebook action catalog", () => {
       type: "generate_image",
       label: "qwen-edit",
       slot: { row: 1, column: 0 },
-      prompt: "combine @a1 with the other references",
+      prompt: "combine @image1 with the other references",
       provider: "fal",
       model: "fal-ai/qwen-image-3/edit",
       operation: "edit_image",

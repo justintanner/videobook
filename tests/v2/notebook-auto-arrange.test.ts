@@ -8,11 +8,6 @@ import type {
   NotebookDocument,
   NotebookEdge,
 } from 'videobook-engine'
-import {
-  notebookGridTag,
-  parseNotebookGridAddress,
-} from 'videobook-engine/notebook-grid'
-import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { BookManager } from '../../server/src/book-manager.js'
 import {
   scopedBookEngine,
@@ -96,24 +91,6 @@ function value<T>(
 ): T {
   if (!result.ok) throw new Error(result.error.message)
   return result.value
-}
-
-function mentionTargets(source: NotebookDocument): string[] {
-  const bySlot = new Map(source.cells.map((item) => [
-    `${item.slot.row}:${item.slot.column}`,
-    item.id,
-  ]))
-  const targets: string[] = []
-  for (const item of source.cells) {
-    if (!item.prompt) continue
-    for (const mention of scanNotebookMentions(item.prompt)) {
-      const slot = parseNotebookGridAddress(mention.reference)
-      if (!slot) continue
-      const targetId = bySlot.get(`${slot.row}:${slot.column}`)
-      if (targetId) targets.push(`${item.id}->${targetId}`)
-    }
-  }
-  return targets.sort()
 }
 
 function familyOf(type: NotebookCellType) {
@@ -415,7 +392,7 @@ describe('notebook family-lane auto-arrange', () => {
     }])
   })
 
-  it('persists identities, edges, outputs, and mention targets through the real move mutation', async () => {
+  it('persists identities, edges, outputs, and input-slot prompts through the real move mutation', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'videobook-auto-arrange-'))
     const books = new BookManager({
       libraryDir: join(rootDir, 'books'),
@@ -443,8 +420,9 @@ describe('notebook family-lane auto-arrange', () => {
         slot: { row: 8, column: 1 },
         outputArtifactId: artifact.value.artifactId,
       })
-      const imageAddress = notebookGridTag(image.slot)
-      const seededPrompt = `Reference image ${imageAddress}: moonlit hero. Preserve subject, composition. Render clean image.`
+      // Generation prompts name inputs by slot, so the move must leave this
+      // prompt byte-for-byte unchanged.
+      const seededPrompt = 'Reference image @image1: image prompt. Preserve subject, composition. Render clean image.'
       const generateImage = engine.notebooks.createCell({
         type: 'generate_image',
         label: 'generate-image',
@@ -481,8 +459,8 @@ describe('notebook family-lane auto-arrange', () => {
         [generateImage.id, { row: 1, column: 0 }],
         [video.id, { row: 2, column: 0 }],
       ]))
-      const beforeMentions = mentionTargets(before)
-      expect(beforeMentions).toEqual([`${generateImage.id}->${image.id}`])
+      expect(before.cells.find((item) => item.id === generateImage.id)?.prompt)
+        .toBe(seededPrompt)
 
       resultJson(await withBookContext(
         { bookId: created.bookId, engine },
@@ -509,9 +487,8 @@ describe('notebook family-lane auto-arrange', () => {
       expect(after.edges).toEqual(before.edges)
       expect(after.cells.find((item) => item.id === image.id)?.outputArtifactId)
         .toBe(artifact.value.artifactId)
-      expect(mentionTargets(after)).toEqual(beforeMentions)
       expect(after.cells.find((item) => item.id === generateImage.id)?.prompt)
-        .not.toBe(seededPrompt)
+        .toBe(seededPrompt)
     } finally {
       await books.close()
       await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })

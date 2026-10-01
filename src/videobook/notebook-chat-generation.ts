@@ -4,6 +4,9 @@ import type {
   NotebookGridSlot,
 } from 'videobook-engine'
 import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-artifact'
+import { notebookGridAddress } from 'videobook-engine/notebook-grid'
+import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
+import { generationInputMentions } from '../../server/src/generation-input-mentions'
 import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
@@ -344,6 +347,35 @@ export function validateNotebookChatGenerationPromptSources(
   }
 }
 
+/**
+ * The prompt the generation cell stores. Chat review speaks grid addresses
+ * ("the image at @a1"), but a generation cell names its media by input slot
+ * ("@image1") so moving cells never rewrites the prompt.
+ */
+export function notebookChatGenerationCellPrompt(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): string {
+  const edges = draft.connections.map((connection) => ({
+    source: connection.sourceCellId,
+    target: draft.cell.id,
+    targetInput: connection.targetInput,
+  }))
+  const tokens = new Map(
+    generationInputMentions(draft.cell.id, document.cells, edges)
+      .map((mention) => [mention.sourceCellId, mention.token]),
+  )
+  return replaceNotebookMentions(
+    draft.cell.prompt ?? '',
+    document.cells.flatMap((cell) => {
+      const token = tokens.get(cell.id)
+      return token
+        ? [{ reference: notebookGridAddress(cell.slot), replacement: `@${token}` }]
+        : []
+    }),
+  )
+}
+
 export function notebookChatGenerationConnectedInputs(
   draft: NotebookChatGenerationDraft,
   document: NotebookDocument,
@@ -567,7 +599,7 @@ export async function materializeNotebookChatGeneration(input: {
         id: input.draft.cell.id,
         type: input.draft.cell.type,
         slot: input.draft.cell.slot,
-        prompt: input.draft.cell.prompt,
+        prompt: notebookChatGenerationCellPrompt(input.draft, input.document),
         provider: input.draft.cell.provider,
         model: input.draft.cell.model,
         operation: input.draft.cell.operation,

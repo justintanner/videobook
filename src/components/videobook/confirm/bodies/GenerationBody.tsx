@@ -33,6 +33,9 @@ export type GenerationReviewSource = {
   type: string
   targetInput?: string
   targetLabel?: string
+  /** Prompt token naming this input ("image1"); set when the prompt names
+   *  inputs by slot rather than by grid address. */
+  mention?: string
   asset: (MediaLibraryPreviewAsset & ArtifactThumbAsset) | null
 }
 
@@ -131,8 +134,11 @@ function SourceCard({
         />
       </span>
       <span className="generation-review-source-copy">
-        <strong>@{source.address}</strong>
-        <small>{source.targetLabel ?? source.type.replaceAll('_', ' ')}</small>
+        <strong>@{source.mention ?? source.address}</strong>
+        <small>
+          {source.mention ? `@${source.address} · ` : ''}
+          {source.targetLabel ?? source.type.replaceAll('_', ' ')}
+        </small>
       </span>
     </button>
   )

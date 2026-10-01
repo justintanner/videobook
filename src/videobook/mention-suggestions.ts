@@ -333,3 +333,43 @@ export function mentionMenuRows(
       .slice(0, limits.empties ?? MENTION_MENU_EMPTY_LIMIT),
   ]
 }
+
+interface GenerationInputMentionSource {
+  token: string
+  cell: NotebookAddressCell
+}
+
+/**
+ * The @mention menu of a generation prompt: only the cell's connected inputs,
+ * named by input slot ("@image1") rather than grid square, so the prompt
+ * survives the cells being moved.
+ */
+export function generationInputMentionRows(
+  inputs: readonly GenerationInputMentionSource[],
+  assets: readonly AssetMentionCandidate[],
+  input: string,
+): MentionMenuRow[] {
+  const filter = notebookMentionPrefixAtEnd(input)
+  if (filter === undefined) return []
+  const assetsByAddress = new Map(assets.map((asset) => [asset.cellAddress, asset]))
+  return inputs
+    .filter(({ token }) => token.includes(filter))
+    .map(({ token, cell }) => {
+      const address = notebookGridAddress(cell.slot)
+      const asset = assetsByAddress.get(address)
+      return {
+        value: `@${token}`,
+        label: `@${token}`,
+        description: [
+          `@${address}`,
+          ...(asset
+            ? assetMentionMetadata(asset)
+            : [cell.type.replaceAll('_', ' ').toUpperCase()]),
+        ].join(' · '),
+        caption: cell.label?.trim() || null,
+        thumbnailUrl: asset ? mentionThumbnailUrl(asset) : null,
+        mediaKind: mentionMediaKind(asset?.type ?? cell.type),
+        empty: false,
+      }
+    })
+}

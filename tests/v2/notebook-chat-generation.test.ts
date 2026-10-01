@@ -18,6 +18,7 @@ import {
 } from '../../src/videobook/mention-suggestions'
 import {
   materializeNotebookChatGeneration,
+  notebookChatGenerationCellPrompt,
   notebookChatGenerationConnectedInputs,
   notebookChatGenerationReferences,
   notebookChatGenerationSettings,
@@ -422,6 +423,9 @@ describe('notebook chat generation', () => {
     expect(draft.cell.prompt).toBe(
       'scene @a2, character @a3, fluffy kitten standing',
     )
+    expect(notebookChatGenerationCellPrompt(draft, current.value)).toBe(
+      'scene @image1, character @image2, fluffy kitten standing',
+    )
     expect(draft.sourceCellIds).not.toContain(generatedSource.id)
     expect(draft.connections).toEqual([
       { sourceCellId: firstSource.id, targetInput: 'image' },
@@ -455,7 +459,7 @@ describe('notebook chat generation', () => {
         type: draft.cell.type,
         label: draft.cell.label,
         slot: draft.cell.slot,
-        prompt: draft.cell.prompt,
+        prompt: notebookChatGenerationCellPrompt(draft, current.value),
         provider: draft.cell.provider,
         model: draft.cell.model,
         operation: draft.cell.operation,
@@ -500,7 +504,7 @@ describe('notebook chat generation', () => {
     ]))
     expect(connected.value.cells.find((cell) =>
       cell.id === materialized.cellId)?.prompt).toBe(
-      'scene @a2, character @a3, fluffy kitten standing',
+      'scene @image1, character @image2, fluffy kitten standing',
     )
   })
 

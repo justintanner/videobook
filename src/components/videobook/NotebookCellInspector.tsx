@@ -60,9 +60,11 @@ import {
   type NotebookCellUpdate,
 } from '@/videobook/notebook-cell-actions'
 import {
+  generationInputMentionRows,
   mentionMenuRows,
   type AssetMentionCandidate,
 } from '@/videobook/mention-suggestions'
+import { generationInputMentions } from '../../../server/src/generation-input-mentions'
 import {
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
@@ -1184,6 +1186,18 @@ function AttachSourcePicker({
       </div>
     </details>
   )
+}
+
+function generationInputMentionSources(
+  cellId: string,
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+): Array<{ token: string; cell: NotebookCell }> {
+  const cellsById = new Map(cells.map((candidate) => [candidate.id, candidate]))
+  return generationInputMentions(cellId, cells, edges).flatMap((mention) => {
+    const source = cellsById.get(mention.sourceCellId)
+    return source ? [{ token: mention.token, cell: source }] : []
+  })
 }
 
 function InputSources({
@@ -2352,9 +2366,16 @@ function ExecutableCellInspector({
     () => notebookCyclicInputMentionValues(cells, edges, cell.id),
     [cell.id, cells, edges],
   )
+  const promptInputMentions = useMemo(
+    () => generationInputMentionSources(cell.id, cells, edges),
+    [cell.id, cells, edges],
+  )
   const promptSuggestionItems = useMemo<AutocompleteItem[]>(() => {
     const input = draft.prompt.slice(0, promptCaret)
-    return mentionMenuRows(mentionAssets, cells, input, cyclicInputMentions)
+    const rows = generationCell
+      ? generationInputMentionRows(promptInputMentions, mentionAssets, input)
+      : mentionMenuRows(mentionAssets, cells, input, cyclicInputMentions)
+    return rows
       .map((row) => ({
         type: 'mention' as const,
         value: row.value,
@@ -2367,7 +2388,7 @@ function ExecutableCellInspector({
         // Every slug wears the amber of the token it becomes in the prompt.
         colorScheme: 'amber' as const,
       }))
-  }, [cells, cyclicInputMentions, draft.prompt, mentionAssets, promptCaret])
+  }, [cells, cyclicInputMentions, draft.prompt, generationCell, mentionAssets, promptCaret, promptInputMentions])
   const showPromptSuggestions = promptMentionOpen
     && promptSuggestionItems.length > 0
   const action = notebookCellActionPresentation(
@@ -2619,10 +2640,15 @@ function ExecutableCellInspector({
   }
 
   const incomingEdges = edges.filter((edge) => edge.target === cell.id)
+  const inputMentionTokens = new Map(
+    generationInputMentions(cell.id, cells, edges).map((mention) =>
+      [`${mention.sourceCellId}:${mention.targetInput}`, mention.token]),
+  )
   const sourceFor = (
     sourceCellId: string,
     targetInput: string,
     targetLabel = attachmentTargetLabel(targetInput),
+    mention?: string,
   ): GenerationReviewSource[] => {
     const source = cells.find((candidate) => candidate.id === sourceCellId)
     return source ? [{
@@ -2631,11 +2657,17 @@ function ExecutableCellInspector({
       type: source.type,
       targetInput,
       targetLabel,
+      ...(mention ? { mention } : {}),
       asset: cellAssets?.get(source.id) ?? null,
     }] : []
   }
   const generationSources = incomingEdges.flatMap((edge) =>
-    sourceFor(edge.source, edge.targetInput))
+    sourceFor(
+      edge.source,
+      edge.targetInput,
+      undefined,
+      inputMentionTokens.get(`${edge.source}:${edge.targetInput}`),
+    ))
   const generationSourceOptions = generationAttachments.flatMap((attachment) =>
     sourceFor(
       attachment.sourceCellId,

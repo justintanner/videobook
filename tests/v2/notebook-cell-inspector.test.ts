@@ -673,7 +673,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<strong>@a1</strong><small>video input</small>')
+    expect(html).toContain('<strong>@video1</strong><small>@a1 · video input</small>')
     expect(html).toContain('aria-label="Remove @a1 input"')
     expect(html).toContain('<span>Add input</span>')
   })

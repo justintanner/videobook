@@ -381,6 +381,7 @@ import {
 import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
+  notebookChatGenerationCellPrompt,
   notebookChatGenerationConnectedInputs,
   notebookChatGenerationParameterReferences,
   notebookChatGenerationReferences,
@@ -3182,7 +3183,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         type: draft.cell.type,
         ...(draft.cell.label === undefined ? {} : { label: draft.cell.label }),
         slot: draft.cell.slot,
-        prompt: draft.cell.prompt ?? '',
+        prompt: notebookChatGenerationCellPrompt(draft, document),
         provider: draft.cell.provider ?? draft.action.provider,
         model: draft.cell.model ?? draft.action.model,
         operation: draft.cell.operation ?? draft.action.operation,

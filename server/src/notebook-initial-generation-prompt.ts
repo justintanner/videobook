@@ -1,6 +1,6 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
-import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
+import { generationInputMentions } from "./generation-input-mentions.js";
 
 const INITIAL_PROMPT_KEY = "initialGenerationPrompt";
 const INITIAL_PROMPT_VERSION = 1;
@@ -15,6 +15,7 @@ type InitialPromptRecord = {
 
 type PromptInput = {
   cell: NotebookCell;
+  token: string | null;
   cue: string | null;
   kind: MediaKind;
   targetInput: string;
@@ -60,6 +61,7 @@ function cleanCue(value: string | undefined): string | null {
       / ?@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/giu,
       "",
     )
+    .replace(/ ?@(?:(?:image|video|audio)\d+|firstframe|lastframe)(?![\w-])/giu, "")
     .replace(/\s+/gu, " ")
     .trim()
     .replace(
@@ -92,6 +94,10 @@ function promptInputs(
     ["audio", 4],
     ["replace_audio", 5],
   ]);
+  const tokens = new Map(
+    generationInputMentions(cell.id, document.cells, document.edges)
+      .map((mention) => [`${mention.sourceCellId}:${mention.targetInput}`, mention.token]),
+  );
   return document.edges
     .filter((edge) => edge.target === cell.id && edge.targetInput !== "media")
     .flatMap((edge) => {
@@ -104,6 +110,7 @@ function promptInputs(
       return source && kind
         ? [{
             cell: source,
+            token: tokens.get(`${edge.source}:${edge.targetInput}`) ?? null,
             cue: cleanCue(cellPrompt(producer ?? source) ?? cellPrompt(source)),
             kind,
             targetInput: edge.targetInput,
@@ -142,7 +149,7 @@ function describeInput(
   generation: GenerationKind,
   input: PromptInput,
 ): string {
-  return `${inputRole(generation, input)} ${notebookGridTag(input.cell.slot)}`
+  return `${inputRole(generation, input)}${input.token ? ` @${input.token}` : ""}`
     + `${input.cue ? `: ${input.cue}` : ""}.`;
 }
 

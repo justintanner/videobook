@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine, type NotebookDocument } from "videobook-engine";
 import {
   notebookMediaAddresses,
+  resolveGenerationInputReferences,
   resolveNotebookPromptReferences,
   tagNotebookGridAddresses,
 } from "./notebook-reference-resolver.js";
@@ -136,5 +137,50 @@ describe("notebook reference resolver", () => {
       { mention: "@bl8", code: "not_found" },
       { mention: "@a7", code: "no_output" },
     ]);
+  });
+
+  it("resolves input tokens by input slot, wherever the source sits on the grid", async () => {
+    const fixture = await setup();
+    const [video, hero, pending] = fixture.document.cells;
+    const target = fixture.engine.notebooks.createCell({
+      type: "generate_video",
+      slot: { row: 2, column: 0 },
+    });
+    const document: NotebookDocument = {
+      ...fixture.document,
+      cells: [...fixture.document.cells, target],
+      edges: [
+        fixture.engine.notebooks.createEdge({ source: pending!.id, target: target.id, targetInput: "image_2" }),
+        fixture.engine.notebooks.createEdge({ source: hero!.id, target: target.id, targetInput: "image" }),
+        fixture.engine.notebooks.createEdge({ source: video!.id, target: target.id, targetInput: "video" }),
+      ],
+    };
+    const prompt = "@image1 dances like @video1, then @image2 and @image3; not @a5";
+    const result = resolveGenerationInputReferences({
+      engine: fixture.engine,
+      document,
+      cell: target,
+      prompt,
+    });
+    expect(result.prompt).toBe(
+      `@${fixture.imageId} dances like @${fixture.videoId}, then @image2 and @image3; not @a5`,
+    );
+    expect(result.unresolved).toMatchObject([
+      { mention: "@image2", code: "no_output" },
+      { mention: "@image3", code: "not_found" },
+      { mention: "@a5", code: "not_found" },
+    ]);
+    const moved: NotebookDocument = {
+      ...document,
+      cells: document.cells.map((cell) => cell.id === hero!.id
+        ? { ...cell, slot: { row: 5, column: 7 } }
+        : cell),
+    };
+    expect(resolveGenerationInputReferences({
+      engine: fixture.engine,
+      document: moved,
+      cell: target,
+      prompt,
+    }).prompt).toBe(result.prompt);
   });
 });

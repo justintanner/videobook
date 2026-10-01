@@ -272,7 +272,7 @@ describe("Kling motion-control duration", () => {
 
       const videoOrientation = {
         ...generationCell,
-        prompt: "motion reference @a2, character and appearance @a5",
+        prompt: "motion reference @video1, character and appearance @image1",
         inputs: {
           generationSettings: {
             resolution: "720p",
@@ -399,7 +399,7 @@ describe("Kling motion-control duration", () => {
         unresolvedDocument,
         unresolvedCell,
         engine.book.get().bookId,
-      )).rejects.toThrow("Notebook reference @c1 was not found");
+      )).rejects.toThrow("@c1 is a grid address");
     } finally {
       await books.close();
     }
