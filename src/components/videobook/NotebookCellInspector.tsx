@@ -28,6 +28,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
+import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
 import type { CSSProperties } from 'react'
 import type {
   GenerationStatus,
@@ -495,7 +496,7 @@ type NotebookCellInspectorProps = {
     source: TranscriptSidecarSource,
   ) => Promise<{ text: string; file: string }>
   onDownloadTranscriptSrt?: (artifactId: string) => void
-  onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
+  onOpenFullscreen: (asset: NotebookCellInspectorAsset, mode?: MediaFullscreenMode) => void
   initialGenerationPreview?: GenerationCellPreview
   onSelectSource?: (cellId: string) => void
   onPreviewPayload?: (
@@ -639,10 +640,12 @@ function InspectorImageOpen({
   address,
   previewUrl,
   onOpen,
+  onEdit,
 }: {
   address: string
   previewUrl: string
   onOpen: () => void
+  onEdit: () => void
 }) {
   return (
     <div className="inspector-cell-media-frame">
@@ -660,7 +663,7 @@ function InspectorImageOpen({
           className="inspector-edit-button"
           aria-label={`Edit @${address} image`}
           title={`Edit @${address} image`}
-          onClick={onOpen}
+          onClick={onEdit}
         >
           <Pencil size={13} />Edit
         </button>
@@ -729,7 +732,7 @@ function NotebookCellMedia({
   allowFullscreen: boolean
   inlineActions?: boolean
   overlayMetadata?: boolean
-  onOpenFullscreen: (asset: NotebookCellInspectorAsset) => void
+  onOpenFullscreen: (asset: NotebookCellInspectorAsset, mode?: MediaFullscreenMode) => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const mediaUrl = asset.mediaUrl
@@ -738,9 +741,9 @@ function NotebookCellMedia({
   const isAudio = asset.type === 'audio'
   const isImage = asset.type === 'image'
   const canOpenFullscreen = allowFullscreen && (isImage || isVideo)
-  const openFullscreen = () => {
+  const openFullscreen = (mode: MediaFullscreenMode = 'view') => {
     videoRef.current?.pause()
-    onOpenFullscreen(asset)
+    onOpenFullscreen(asset, mode)
   }
 
   if (!previewUrl) return null
@@ -773,7 +776,8 @@ function NotebookCellMedia({
           <InspectorImageOpen
             address={address}
             previewUrl={previewUrl}
-            onOpen={openFullscreen}
+            onOpen={() => openFullscreen('view')}
+            onEdit={() => openFullscreen('edit')}
           />
         ) : (
           <img key={previewUrl} src={previewUrl} alt={`@${address}`} />
@@ -791,7 +795,7 @@ function NotebookCellMedia({
       {inlineActions && canOpenFullscreen && isVideo && (
         <CellMediaActions
           address={address}
-          onOpen={openFullscreen}
+          onOpen={() => openFullscreen('view')}
         />
       )}
     </section>

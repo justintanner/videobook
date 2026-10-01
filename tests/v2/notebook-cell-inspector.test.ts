@@ -2160,6 +2160,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('controls=""')
     expect(html).toContain('autoPlay=""')
     expect(html).toContain('aria-label="Close fullscreen preview"')
+    expect(html).toContain('<span>1920 × 1080</span><span>30.0s</span><span>VIDEO</span>')
+    expect(html).not.toContain('Edit image')
     expect(html).not.toContain('Media cell inspector')
     expect(html).not.toContain('Dolt source')
     expect(html).not.toContain('Delete')
@@ -2223,6 +2225,38 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Subjects')
   })
 
+  it('opens images in a true fullscreen viewer with details and an edit entry point', () => {
+    const html = renderToStaticMarkup(createElement(NotebookMediaFullscreen, {
+      asset: {
+        artifactId: 'image-artifact',
+        id: 'image-source',
+        objectHash: 'sha256:image',
+        type: 'image',
+        mediaUrl: '/files/book/image-artifact/original.png',
+        thumbnailUrl: null,
+        width: 1024,
+        height: 1024,
+        duration: null,
+        audioInfo: null,
+      },
+      address: 'c7',
+      onAnalyzeSubjects: async () => undefined,
+      onEditSubjects: async () => true,
+      onSubmitEditInstruction: async () => ({ ok: true, message: 'queued' }),
+      onClose: () => undefined,
+    }))
+
+    expect(html).toContain('media-viewer')
+    expect(html).toContain('<strong>@c7</strong><span>1024 × 1024</span><span>IMAGE</span>')
+    expect(html).toContain('Edit image')
+    expect(html).toContain('aria-label="Close fullscreen preview"')
+    expect(html).not.toContain('IMAGE EDITOR')
+    expect(html).not.toContain('More media actions')
+    expect(html).not.toContain('aria-label="Subject editor"')
+    expect(html).not.toContain('Draw region')
+    expect(html).not.toContain('<textarea')
+  })
+
   it('renders an accessible subject workspace with deterministic overlays', () => {
     const subjectMap = asImageSubjectMap({
       status: 'ready',
@@ -2256,6 +2290,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       address: 'c3',
+      initialMode: 'edit',
       subjectMap,
       onAnalyzeSubjects: async () => undefined,
       onEditSubjects: async () => true,
@@ -2275,11 +2310,15 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Person in the foreground')
     expect(html).toContain('Preview removal')
     expect(html).toContain('Remove')
-    expect(html).toContain('Select people or objects, then describe the change in the image edit bar.')
-    expect(html).toContain('aria-label="Image edit bar for @c3"')
     expect(html).toContain('Draw region')
-    expect(html).not.toContain('Edit instruction')
-    expect(html).not.toContain('Edit selected')
+    expect(html).toContain('aria-label="Edit instructions for @c3"')
+    expect(html).toContain('What should change?')
+    expect(html).toContain('Nothing selected yet')
+    expect(html).toContain('aria-label="Back to fullscreen view"')
+    expect(html).toMatch(/class="apply"[^>]*disabled/)
+    expect(html).not.toContain('IMAGE EDITOR')
+    expect(html).not.toContain('Image edit bar')
+    expect(html).not.toContain('More media actions')
     expect(html).not.toContain('autoPlay')
   })
 
@@ -2316,6 +2355,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       address: 'b5',
+      initialMode: 'edit',
       subjectMap,
       initialRegions: [{
         id: 'region-1',
@@ -2338,8 +2378,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Select region 1"')
     expect(html).toContain('Replacement images')
     expect(html).toContain('@a4')
-    expect(html).toContain('Replace')
-    expect(html).toMatch(/class="replace"[^>]*disabled/)
+    expect(html).toContain('Replace with image')
+    expect(html).toContain('Region 1 · replaced with another image')
+    expect(html).toMatch(/class="apply"[^>]*disabled/)
   })
 
   it('renders a failed subject analysis with its error and retry action', () => {
@@ -2357,6 +2398,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       address: 'c3',
+      initialMode: 'edit',
       subjectMap: asImageSubjectMap({
         status: 'failed',
         artifact_id: 'image-artifact',
@@ -2393,6 +2435,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       address: 'h8',
+      initialMode: 'edit',
       subjectMap: asImageSubjectMap({
         status: 'failed',
         artifact_id: 'image-artifact',
@@ -2419,8 +2462,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Region 1')
     expect(html).toContain('Replacement images')
     expect(html).toContain('@g7')
-    expect(html).toContain('or mention one in the image edit bar')
-    expect(html).toMatch(/class="replace"[^>]*disabled/)
+    expect(html).toContain('Region 1 · replaced with another image')
+    expect(html).toMatch(/class="apply"[^>]*disabled/)
     expect(html).not.toContain('You can still draw a region and replace it with another image.')
   })
 
@@ -2439,6 +2482,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       address: 'h8',
+      initialMode: 'edit',
       initialRegions: [{
         id: 'region-1',
         box: { x: 0.2, y: 0.1, width: 0.35, height: 0.8 },
@@ -2450,8 +2494,8 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('Region 1')
     expect(html).toContain('Replacement images')
-    expect(html).toContain('Place another image on the grid, then pick it here or mention it as @address in the image edit bar.')
-    expect(html).toMatch(/class="replace"[^>]*disabled/)
+    expect(html).toContain('Place another image on the grid, then pick it here or mention it as @address in the instructions.')
+    expect(html).toMatch(/class="apply"[^>]*disabled/)
   })
 
   it('projects every persisted cells-table column with raw null and JSON values', () => {

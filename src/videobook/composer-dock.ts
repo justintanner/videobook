@@ -93,7 +93,6 @@ export function composerDockCloseInPanel(owner: ComposerDockCloseOwner): boolean
 
 export interface ComposerPanelHeaders {
   musicSession: boolean
-  imageEditorDocked: boolean
   cellInspector: boolean
 }
 
@@ -102,6 +101,5 @@ export interface ComposerPanelHeaders {
    own chrome and does not, so the composer's strip stays for it. */
 export function composerPanelDrawsClose(panels: ComposerPanelHeaders): boolean {
   if (panels.musicSession) return false
-  if (panels.imageEditorDocked) return true
   return panels.cellInspector
 }

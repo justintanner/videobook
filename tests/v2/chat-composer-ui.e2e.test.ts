@@ -1794,76 +1794,72 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('keeps fullscreen image controls aligned and reachable across viewport sizes', async () => {
+  it('keeps the fullscreen viewer full-bleed and the image editor reachable across viewport sizes', async () => {
     const page = await openApp()
     await collapseComposerDock(page)
     await notebookCellNode(page, fullscreenImageCellId).click()
     await page.getByLabel('Open @c3 fullscreen').click()
     const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @c3' })
     await dialog.waitFor({ state: 'visible' })
-    await dialog.getByRole('button', { name: 'Subjects', exact: true }).waitFor()
     const close = dialog.getByLabel('Close fullscreen preview')
-    const more = dialog.getByLabel('More media actions')
-    const draw = dialog.getByRole('button', { name: 'Draw region', exact: true })
-    const input = dialog.getByLabel('Videobook command input')
+    const edit = dialog.getByRole('button', { name: 'Edit image' })
+    await edit.waitFor({ state: 'visible' })
+    expect(await dialog.getByLabel('More media actions').count()).toBe(0)
+    expect(await dialog.locator('.command-composer').count()).toBe(0)
+    expect(await dialog.getByText('Image editor', { exact: false }).count()).toBe(0)
 
-    for (const viewport of [
+    const reachable = async (control: ReturnType<typeof dialog.locator>, label: string) => {
+      await control.scrollIntoViewIfNeeded()
+      expect(await control.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2,
+        )
+        return hit !== null && element.contains(hit)
+      }), label).toBe(true)
+    }
+    const viewports = [
       { width: 2048, height: 1024 },
       { width: 1024, height: 768 },
       { width: 390, height: 844 },
       { width: 320, height: 568 },
       { width: 667, height: 375 },
-    ]) {
+    ]
+    for (const viewport of viewports) {
       await page.setViewportSize(viewport)
-      for (const expanded of [false, true]) {
-        if (expanded) await draw.click()
-        const layout = await dialog.evaluate((element) => {
-          const bounds = (selector: string) => {
-            const target = element.querySelector(selector)
-            if (!target) throw new Error(`Missing fullscreen control: ${selector}`)
-            const { x, y, width, height, bottom, right } = target.getBoundingClientRect()
-            return { x, y, width, height, bottom, right }
-          }
-          return {
-            close: bounds('.notebook-media-fullscreen-close'),
-            more: bounds('.notebook-media-more-actions'),
-            label: bounds('.notebook-subject-stage-label'),
-            stage: bounds('.notebook-subject-stage'),
-            image: bounds('.notebook-subject-stage image'),
-            composer: bounds('.command-composer'),
-            panel: bounds('.notebook-subject-panel'),
-          }
-        })
-        expect(Math.abs(layout.close.y - layout.more.y)).toBeLessThanOrEqual(1)
-        expect(layout.close.x - layout.more.right).toBeGreaterThanOrEqual(4)
-        expect(layout.close.x - layout.more.right).toBeLessThanOrEqual(12)
-        expect(layout.label.right).toBeLessThan(layout.more.x)
-        expect(Math.abs(layout.label.y + layout.label.height / 2
-          - layout.close.y - layout.close.height / 2)).toBeLessThanOrEqual(1)
-        expect(layout.stage.y).toBeGreaterThanOrEqual(layout.close.bottom)
-        expect(layout.stage.bottom).toBeLessThanOrEqual(layout.composer.y + 1)
-        expect(layout.image.y).toBeGreaterThanOrEqual(layout.stage.y)
-        expect(layout.image.bottom).toBeLessThanOrEqual(layout.stage.bottom + 1)
-        expect(layout.image.height).toBeGreaterThan(60)
-        expect(layout.panel.y).toBeGreaterThanOrEqual(layout.composer.y)
-        expect(layout.composer.bottom).toBeLessThanOrEqual(viewport.height)
-        for (const control of [close, more, draw, input]) {
-          const name = await control.getAttribute('aria-label') ?? await control.textContent()
-          expect(await control.evaluate((element) => {
-            const bounds = element.getBoundingClientRect()
-            const hit = document.elementFromPoint(
-              bounds.x + bounds.width / 2,
-              bounds.y + bounds.height / 2,
-            )
-            return hit !== null && element.contains(hit)
-          }), `${name} at ${viewport.width}×${viewport.height}, expanded=${expanded}`).toBe(true)
-        }
-        if (expanded) {
-          await draw.click()
-          await dialog.getByLabel('Collapse subject workspace').click()
-        }
-      }
+      const stage = await dialog.locator('.media-fullscreen-stage').boundingBox()
+      if (!stage) throw new Error('Could not measure the fullscreen stage')
+      expect(stage.width).toBeGreaterThanOrEqual(viewport.width - 1)
+      expect(stage.height).toBeGreaterThanOrEqual(viewport.height - 1)
+      await reachable(close, `close at ${viewport.width}×${viewport.height}`)
+      await reachable(edit, `edit at ${viewport.width}×${viewport.height}`)
     }
+
+    await edit.click()
+    const back = dialog.getByLabel('Back to fullscreen view')
+    const draw = dialog.getByRole('button', { name: 'Draw region', exact: true })
+    const instructions = dialog.getByLabel('What should change?')
+    const apply = dialog.getByRole('button', { name: /Apply edit/ })
+    await instructions.waitFor({ state: 'visible' })
+    expect(await instructions.evaluate((element) => document.activeElement === element)).toBe(true)
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      for (const [control, label] of [
+        [back, 'back'],
+        [close, 'close'],
+        [draw, 'draw'],
+        [instructions, 'instructions'],
+        [apply, 'apply'],
+      ] as const) {
+        await reachable(control, `${label} at ${viewport.width}×${viewport.height}`)
+      }
+      expect(await dialog.locator('.notebook-subject-panel').evaluate((element) =>
+        element.scrollWidth <= element.clientWidth)).toBe(true)
+    }
+    await page.keyboard.press('Escape')
+    await edit.waitFor({ state: 'visible' })
+    expect(await instructions.count()).toBe(0)
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
   }, 60_000)
@@ -1944,30 +1940,18 @@ describe('chat composer browser flow', () => {
     await page.mouse.click(triggerPoint.x, triggerPoint.y)
     const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @c3' })
     await dialog.waitFor({ state: 'visible' })
-    const modalInput = dialog.getByLabel('Videobook command input')
-    await modalInput.waitFor({ state: 'visible' })
-    expect(await modalInput.textContent()).toBe('')
-    expect(await dialog.getByText('@C3 IMAGE EDIT').isVisible()).toBe(true)
-    expect(await dialog.getByLabel('Chat model').count()).toBe(0)
-    expect(await dialog.locator('.command-suggestions').count()).toBe(0)
-    expect(await dialog.locator('.command-composer').count()).toBe(1)
-    const image = dialog.locator(
-      '.notebook-subject-stage img, .notebook-subject-stage image',
-    ).first()
+    const modalInput = dialog.getByLabel('What should change?')
+    expect(await dialog.locator('.media-fullscreen-details strong').textContent()).toBe('@c3')
+    expect(await modalInput.count()).toBe(0)
+    expect(await dialog.locator('.command-composer').count()).toBe(0)
+    const image = dialog.locator('.media-fullscreen-stage img').first()
     await image.waitFor({ state: 'visible' })
     expect(await image.evaluate((element) =>
       element instanceof HTMLImageElement
         ? element.src
         : element.getAttribute('href') ?? '')).toContain(fullscreenImageMediaUrl)
-    const subjects = dialog.getByRole('button', { name: 'Subjects' })
-    await subjects.waitFor({ state: 'visible' })
-    expect(await subjects.isVisible()).toBe(true)
-    const removeAction = page.locator('.notebook-subject-actions .remove')
-    expect(await removeAction.count()).toBe(1)
-    expect(await removeAction.evaluate((element) =>
-      element instanceof HTMLButtonElement && element.disabled)).toBe(true)
-    expect(await dialog.getByRole('button', { name: 'Edit selected' }).count()).toBe(0)
-    expect(await dialog.getByLabel('Edit instruction').count()).toBe(0)
+    expect(await dialog.getByRole('button', { name: 'Edit image' }).isVisible()).toBe(true)
+    expect(await dialog.getByLabel('Subject editor').count()).toBe(0)
     expect(await page.locator('.app-shell').evaluate((element) => ({
       ariaHidden: element.getAttribute('aria-hidden'),
       inert: element instanceof HTMLElement ? element.inert : false,
@@ -2005,10 +1989,14 @@ describe('chat composer browser flow', () => {
     await dialog.locator('.notebook-subject-row strong', {
       hasText: 'Foreground person',
     }).waitFor({ state: 'visible' })
-    expect(await modalInput.textContent()).toBe('')
+    expect(await modalInput.inputValue()).toBe('')
+    const removeAction = dialog.getByRole('button', { name: 'Remove', exact: true })
+    expect(await removeAction.isDisabled()).toBe(true)
     const subjectCheckbox = dialog.locator('.notebook-subject-row input[type="checkbox"]')
     await subjectCheckbox.check()
-    await expect.poll(async () => await modalInput.getAttribute('data-placeholder'))
+    expect(await dialog.locator('.image-editor-target strong').textContent())
+      .toBe('Foreground person')
+    await expect.poll(async () => await modalInput.getAttribute('placeholder'))
       .toContain('Foreground person')
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
@@ -2017,11 +2005,12 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     const editPrompt = 'Replace the suit with a bright yellow raincoat'
     await modalInput.fill(editPrompt)
-    await dialog.getByLabel('Send command').click()
+    await dialog.getByRole('button', { name: /Apply edit/ }).click()
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'edit_image_subjects'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
-    await dialog.waitFor({ state: 'hidden' })
-    expect(await page.locator('.chat-turn').last().getByLabel('Your message').textContent()).toBe(editPrompt)
+    await dialog.locator('.image-editor-status.success').waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+    expect(await dialog.isVisible()).toBe(true)
+    expect(await modalInput.inputValue()).toBe('')
     const editCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
     expect(editCall?.arguments).toMatchObject({
       book_id: bookId,
@@ -2036,19 +2025,13 @@ describe('chat composer browser flow', () => {
     expect(observedCalls.some((call) => call.name === 'chat')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'record_prompt')).toBe(false)
     expect(observedCalls.some((call) => call.name === 'list_prompt_history')).toBe(false)
-    await page.locator('.chat-turn').last().getByLabel('Copilot reply').waitFor({ state: 'visible' })
-    await notebookCellNode(page, fullscreenImageCellId).click()
-    await editTrigger.click()
-    await dialog.waitFor({ state: 'visible' })
-    await subjectCheckbox.check()
     observedCalls.length = 0
-    const remove = dialog.getByRole('button', { name: 'Remove' })
+    const remove = removeAction
     await remove.click()
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'edit_image_subjects'
       && call.arguments.operation === 'remove'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
-    expect(await modalInput.isDisabled()).toBe(true)
-    await expect.poll(async () => await modalInput.isEnabled(), {
+    await expect.poll(async () => await remove.isEnabled(), {
       timeout: 5_000,
     }).toBe(true)
     const completionBaseline = mockedSubjectEditCompletions
@@ -2073,11 +2056,11 @@ describe('chat composer browser flow', () => {
     await expect.poll(() => mockedSubjectEditCompletions, {
       timeout: 5_000,
     }).toBe(completionBaseline + 1)
-    expect(await modalInput.isDisabled()).toBe(true)
+    expect(await remove.isDisabled()).toBe(true)
     await expect.poll(() => mockedSubjectEditCompletions, {
       timeout: 5_000,
     }).toBe(completionBaseline + 2)
-    await expect.poll(async () => await modalInput.isEnabled(), {
+    await expect.poll(async () => await remove.isEnabled(), {
       timeout: 5_000,
     }).toBe(true)
     for (const viewport of [
@@ -2086,20 +2069,14 @@ describe('chat composer browser flow', () => {
       { width: 667, height: 375 },
     ]) {
       await page.setViewportSize(viewport)
-      const composerBox = await dialog.locator('.command-composer').boundingBox()
+      const stageBox = await dialog.locator('.notebook-subject-stage').boundingBox()
       const subjectPanelBox = await dialog.locator('.notebook-subject-panel').boundingBox()
-      if (!composerBox || !subjectPanelBox) {
+      if (!stageBox || !subjectPanelBox) {
         throw new Error('Could not measure the mobile image editor layout')
       }
-      expect(subjectPanelBox.y).toBeGreaterThanOrEqual(composerBox.y - 2)
-      expect(subjectPanelBox.y + subjectPanelBox.height)
-        .toBeLessThanOrEqual(composerBox.y + composerBox.height + 2)
-      expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height)
-      for (const control of [
-        dialog.getByLabel('Collapse subject workspace'),
-        subjectCheckbox,
-        remove,
-      ]) {
+      expect(subjectPanelBox.y).toBeGreaterThanOrEqual(stageBox.y + stageBox.height - 2)
+      expect(subjectPanelBox.y + subjectPanelBox.height).toBeLessThanOrEqual(viewport.height + 1)
+      for (const control of [modalInput, subjectCheckbox, remove]) {
         await control.scrollIntoViewIfNeeded()
         const name = await control.getAttribute('aria-label')
           ?? await control.getAttribute('type')
@@ -2113,17 +2090,12 @@ describe('chat composer browser flow', () => {
           return hit !== null && element.contains(hit)
         }), `${name} at ${viewport.width}×${viewport.height}`).toBe(true)
       }
-      await dialog.getByLabel('Collapse subject workspace').click()
       expect(await dialog.locator('.notebook-subject-panel').evaluate((element) =>
         element.scrollWidth <= element.clientWidth)).toBe(true)
-      await dialog.getByLabel('Expand subject workspace').click()
     }
     await modalInput.fill('Unsent image edit draft')
-    const send = dialog.getByLabel('Send command')
-    await send.focus()
-    await page.keyboard.press('Tab')
-    expect(await dialog.getByLabel('More media actions')
-      .evaluate((element) => document.activeElement === element)).toBe(true)
+    await page.keyboard.press('Escape')
+    await dialog.getByRole('button', { name: 'Edit image' }).waitFor({ state: 'visible' })
     await page.setViewportSize({ width: 1440, height: 1000 })
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
@@ -2174,9 +2146,7 @@ describe('chat composer browser flow', () => {
     expect(await sidebarPlaybackState()).toEqual(pausedAtOpen)
 
     const fullscreenVideo = dialog.locator('video')
-    await dialog.getByLabel('Extract frame', { exact: true }).press('Tab')
-    expect(await dialog.getByLabel('More media actions').evaluate((element) => document.activeElement === element)).toBe(true)
-    await page.keyboard.press('Tab')
+    await dialog.getByRole('button', { name: 'Extract frame', exact: true }).press('Tab')
     expect(await dialog.getByLabel('Close fullscreen preview')
       .evaluate((element) => document.activeElement === element)).toBe(true)
     await page.keyboard.press('Tab')
@@ -2189,7 +2159,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await fullscreenVideo.evaluate((element) =>
       element instanceof HTMLVideoElement && !element.paused)).toBe(true)
 
-    const capture = dialog.getByLabel('Extract frame', { exact: true })
+    const capture = dialog.getByRole('button', { name: 'Extract frame', exact: true })
     for (let step = 0; step < 12; step += 1) {
       await page.keyboard.press('Tab')
       expect(await dialog.evaluate((element) => element.contains(document.activeElement)))

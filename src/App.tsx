@@ -143,6 +143,7 @@ import {
   type ImageReplacementCandidate,
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
+import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
 import type { WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
@@ -509,7 +510,6 @@ import {
   imageReplacementTargets,
   mergeRegionReplacements,
   regionReplacementPayload,
-  sameImageEditSelection,
   type ImageEditSelection,
 } from '@/videobook/image-edit-regions'
 import { recordValue, asString, asNumber } from '@/videobook/value-decoders'
@@ -633,6 +633,7 @@ type MediaFullscreenSession = {
   returnFocus: HTMLElement | null
   subjectMap: ImageSubjectMap | null
   subjectMapLoading: boolean
+  mode: MediaFullscreenMode
 }
 
 type MediaSearchMode = SearchReferenceMode
@@ -1652,14 +1653,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
-  const [mediaFullscreenEditSelection, setMediaFullscreenEditSelection] =
-    useState<ImageEditSelection>({
-      subjectIds: [],
-      regions: [],
-      replacements: {},
-    })
-  const [mediaFullscreenComposerSending, setMediaFullscreenComposerSending] =
-    useState(false)
   const [mediaFullscreenSidebarEditing, setMediaFullscreenSidebarEditing] =
     useState(false)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
@@ -1679,7 +1672,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     '--notebook-command-row-height': `${commandRowHeight}px`,
   }) as CSSProperties, [commandRowHeight])
   const [composerDockOpen, setComposerDockOpen] = useState(false)
-  const [imageDockHost, setImageDockHost] = useState<HTMLDivElement | null>(null)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [historyViewCellId, setHistoryViewCellId] = useState<string | null>(null)
   const [historyState, setHistoryState] = useState<{
@@ -3976,9 +3968,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     cell: NotebookDocument['cells'][number],
     asset: NotebookCellInspectorAsset,
     returnFocus?: HTMLElement | null,
+    mode: MediaFullscreenMode = 'view',
   ) => {
     if (!bookId || !notebook) return
     const session: MediaFullscreenSession = {
+      mode,
       key: [bookId, notebook.id, cell.id, asset.artifactId, asset.objectHash].join(':'),
       bookId,
       notebookId: notebook.id,
@@ -3996,12 +3990,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
     setMediaFullscreenComposerTarget(null)
-    setMediaFullscreenEditSelection({
-      subjectIds: [],
-      regions: [],
-      replacements: {},
-    })
-    setMediaFullscreenComposerSending(false)
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(session)
     setComposerDockOpen(true)
@@ -4034,22 +4022,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setActionComposer(null)
     imageSubjectMapRequestRef.current += 1
     setMediaFullscreenComposerTarget(null)
-    setMediaFullscreenEditSelection({
-      subjectIds: [],
-      regions: [],
-      replacements: {},
-    })
-    setMediaFullscreenComposerSending(false)
     setMediaFullscreenSidebarEditing(false)
     setMediaFullscreen(null)
-  }, [])
-
-  const updateMediaFullscreenSelection = useCallback((
-    selection: ImageEditSelection,
-  ) => {
-    setMediaFullscreenEditSelection((current) => (
-      sameImageEditSelection(current, selection) ? current : selection
-    ))
   }, [])
 
   const captureFullscreenFrame = async (
@@ -9361,25 +9335,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await openWorkspaceActions(action.id, { ...context.action.values, ...parseCommandArgs(rest, command.params) }, undefined, undefined, chat)
       return { ok: true, message: 'Action options opened' }
     }
-    const session = mediaFullscreen?.asset.type === 'image'
-      ? mediaFullscreen
-      : null
-    if (!session) {
-      const outcome = await executeCommand(input, context, chat)
-      if (parsePendingApplyCommand(input) || input.trim().toLowerCase() === '/cancel') {
-        voiceOutcomeRef.current?.(pendingCommandVoiceOutcome(input, outcome))
-      } else voiceTypedTurnRef.current?.(input, outcome.message)
-      return outcome
-    }
-    if (input.startsWith('/')) {
-      return {
-        ok: false,
-        message: 'Close the image editor to run notebook commands.',
-        nextInput: input,
-        selectInput: false,
-      }
-    }
-    const selection = mediaFullscreenEditSelection
+    const outcome = await executeCommand(input, context, chat)
+    if (parsePendingApplyCommand(input) || input.trim().toLowerCase() === '/cancel') {
+      voiceOutcomeRef.current?.(pendingCommandVoiceOutcome(input, outcome))
+    } else voiceTypedTurnRef.current?.(input, outcome.message)
+    return outcome
+  }
+
+  /* The fullscreen image editor's instruction field. Drawn regions, picked
+     replacement images, or @mentions make it a replacement; otherwise the text
+     rewrites the selected subjects. */
+  const submitFullscreenImageEdit = async (
+    session: MediaFullscreenSession,
+    input: string,
+    selection: ImageEditSelection,
+  ): Promise<ComposerOutcome> => {
     const selectedSubjects = (session.subjectMap?.subjects ?? []).filter((subject) =>
       selection.subjectIds.includes(subject.id))
     const references = notebookReferences(input)
@@ -9405,6 +9375,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     const wantsReplace = selection.regions.length > 0
       || mentionResult.artifactIds.length > 0
+      || Object.keys(selection.replacements).length > 0
     if (wantsReplace) {
       const targets = imageReplacementTargets(selection.regions, selectedSubjects)
       const merged = mergeRegionReplacements(
@@ -9426,7 +9397,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         subjectIds: selectedSubjects.map((subject) => subject.id),
         ...(prompt ? { prompt } : {}),
         regions: regionReplacementPayload(targets, merged.replacements),
-      }, chat)
+      })
       if (!queued) {
         return {
           ok: false,
@@ -9462,7 +9433,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       operation: 'edit',
       subjectIds: selectedSubjects.map((subject) => subject.id),
       prompt: input,
-    }, chat)
+    })
     if (!queued) {
       return {
         ok: false,
@@ -10372,16 +10343,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       thumbnailUrl: asset.thumbnailUrl ?? asset.mediaUrl,
     }))
   ), [imageEditMentionAssets])
-  const fullscreenSelectedSubjects = fullscreenImageEditor?.subjectMap?.subjects.filter(
-    (subject) => mediaFullscreenEditSelection.subjectIds.includes(subject.id),
-  ) ?? []
-  const fullscreenRegionCount = mediaFullscreenEditSelection.regions.length
   const composerSession = fullscreenImageEditor ? `image-edit:${fullscreenImageEditor.key}` : `chat:${bookId}`
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const workspaceChatPreview = workspacePreview?.turnId !== undefined && workspacePreview.turnId === chatTurns.at(-1)?.id
-  const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || (mediaFullscreen && !fullscreenImageEditor)))
-  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession && (screen !== 'library' || Boolean(fullscreenImageEditor) || Boolean(currentActionComposer))
+  const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || mediaFullscreen))
+  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession && (screen !== 'library' || Boolean(currentActionComposer))
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -10486,34 +10453,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     `${screen}:${bookId}:${notebook?.id ?? ''}`,
     showCommandComposer && mcp.state === 'ready' && !busy && (Boolean(bookId) || Boolean(currentActionComposer)),
   )
-  const fullscreenComposerContext = fullscreenImageEditor
-    ? {
-        label: `@${fullscreenImageEditor.address.toUpperCase()} IMAGE EDIT`,
-        description: fullscreenRegionCount > 0
-          ? `${fullscreenRegionCount} ${fullscreenRegionCount === 1 ? 'region' : 'regions'}${
-            fullscreenSelectedSubjects.length > 0
-              ? `, ${fullscreenSelectedSubjects.length} selected`
-              : ''
-          }`
-          : fullscreenSelectedSubjects.length > 0
-          ? `${fullscreenSelectedSubjects.length} selected ${fullscreenSelectedSubjects.length === 1 ? 'subject' : 'subjects'}`
-          : 'Draw a region or select people or objects',
-      }
-    : null
-  const fullscreenComposerPlaceholder = !fullscreenImageEditor
-    ? undefined
-    : fullscreenRegionCount > 0
-      ? 'Mention a replacement image, e.g. @g7, or pick one in the panel…'
-      : fullscreenImageEditor.subjectMap?.status !== 'ready'
-        ? 'Analyze the image, or draw a region to replace part of it…'
-        : fullscreenSelectedSubjects.length === 0
-          ? 'Select people or objects to edit…'
-          : `Describe how to edit ${fullscreenSelectedSubjects
-              .slice(0, 2)
-              .map((subject) => subject.label)
-              .join(' and ')}…`
   const revealSuccessfulComposerResult = () => {
-    if (!fullscreenImageEditor) revealLatestNotebookResult()
+    if (!mediaFullscreen) revealLatestNotebookResult()
   }
 
   // One confirm sheet for every pending action. The body varies; the shell,
@@ -11067,8 +11008,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onSetInput={setSelectedCellInput}
         onRun={runCell}
         onDelete={deleteSelectedCell}
-        onOpenFullscreen={(asset) => {
-          openMediaFullscreen(selectedNotebookCell, asset)
+        onOpenFullscreen={(asset, mode) => {
+          openMediaFullscreen(selectedNotebookCell, asset, undefined, mode)
         }}
         onPreviewPayload={previewGenerationPayload}
         initialGenerationPreview={generationCellPreview?.cellId === selectedNotebookCell.id
@@ -11087,21 +11028,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
      its own header row, so the composer only drops its strip once one has. */
   const composerPanelHasHeader = composerPanelDrawsClose({
     musicSession: Boolean(musicVideoSession),
-    imageEditorDocked: Boolean(fullscreenImageEditor && imageDockHost),
     cellInspector: Boolean(notebookDockContent),
   })
-  const composerContextualContent = notebookDockContent || fullscreenImageEditor || musicVideoSession ? (
-    <>
-      <div
-        hidden={Boolean(fullscreenImageEditor || musicVideoSession)}
-        inert={fullscreenImageEditor || musicVideoSession ? true : undefined}
-      >
-        {notebookDockContent}
-      </div>
-      {fullscreenImageEditor
-        ? <div ref={setImageDockHost} className="composer-image-dock-host" />
-        : null}
-    </>
+  const composerContextualContent = notebookDockContent || musicVideoSession ? (
+    <div
+      hidden={Boolean(musicVideoSession)}
+      inert={musicVideoSession ? true : undefined}
+    >
+      {notebookDockContent}
+    </div>
   ) : null
 
   return (
@@ -11658,7 +11593,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           key={mediaFullscreen.key}
           asset={mediaFullscreen.asset}
           address={mediaFullscreen.address}
-          composerEditing={mediaFullscreenComposerSending}
+          initialMode={mediaFullscreen.mode}
           composerPortalRef={setMediaFullscreenComposerTarget}
           actionsOpen={Boolean(currentActionComposer)}
           subjectMap={mediaFullscreen.subjectMap}
@@ -11683,10 +11618,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           replacementCandidates={imageReplacementCandidates}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}
-          onSelectionChange={updateMediaFullscreenSelection}
+          onSubmitEditInstruction={(instruction, selection) =>
+            submitFullscreenImageEdit(mediaFullscreen, instruction, selection)}
           onClose={closeMediaFullscreen}
-          dockPortal={imageDockHost}
-          onMoreActions={() => void openWorkspaceActions(undefined, { asset_id: mediaFullscreen.asset.artifactId, cell_id: mediaFullscreen.cellId })}
         />
       )}
 
@@ -11754,15 +11688,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         mcpFlash={mcpFlash}
         onToggleMcpCall={handleToggleMcpCall}
         selectedModel={chatModel}
-        context={fullscreenComposerContext}
-        mentionAssets={imageEditMentionAssets}
         inputSession={composerSession}
-        placeholder={fullscreenComposerPlaceholder}
         portalTarget={workspacePreview && (currentActionComposer || workspaceChatPreview) ? previewComposerTarget
-          : fullscreenImageEditor || (mediaFullscreen && currentActionComposer) ? mediaFullscreenComposerTarget : null}
-        pendingInput={fullscreenImageEditor
-          ? undefined
-          : pendingWatermarkReview
+          : mediaFullscreen && currentActionComposer ? mediaFullscreenComposerTarget : null}
+        pendingInput={pendingWatermarkReview
             ? '/apply'
             : pendingChatAction?.kind === 'generation'
             ? '/apply '
@@ -11775,7 +11704,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
-        onDismissPanel={!fullscreenImageEditor && (
+        onDismissPanel={(
           pendingWatermarkReview
           || pendingCommandPlan
           || pendingChatAction
@@ -11794,9 +11723,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           setGenerationsViewCellId(null)
         }}
         onModelChange={changeChatModel}
-        onSendingChange={fullscreenImageEditor
-          ? setMediaFullscreenComposerSending
-          : undefined}
         onSuccessfulExecute={revealSuccessfulComposerResult}
       >
         {confirmSheet}

@@ -131,11 +131,12 @@ describe('notebook chrome tokens', () => {
     expect(app).not.toContain('className="inspector-reopen"')
   })
 
-  it('docks fullscreen image subject tools and gives the music editor side columns it can hide', () => {
-    expect(fullscreen).toContain('dockPortal')
-    expect(fullscreen).toContain("dockPortal ? ' docked'")
-    expect(declaration(rule(css, '.notebook-media-fullscreen.docked'), 'grid-template-columns'))
-      .toBe('minmax(0, 1fr)')
+  it('splits fullscreen into a full-bleed viewer and a three-column image editor, and gives the music editor side columns it can hide', () => {
+    expect(fullscreen).toContain("editing ? 'image-editor' : 'media-viewer'")
+    expect(fullscreen).not.toContain('dockPortal')
+    expect(declaration(rule(css, '.media-fullscreen-stage'), 'inset')).toBe('0')
+    expect(declaration(rule(css, '.notebook-media-fullscreen.image-editor'), 'grid-template-columns'))
+      .toBe('76px minmax(0, 1fr) minmax(320px, 400px)')
     expect(rule(musicCss, '.music-video-editor-main')).toContain("'library preview inspector' 'timeline timeline timeline'")
     expect(rule(musicCss, '.music-video-editor-main.tools-hidden')).toContain("'preview' 'timeline'")
   })
@@ -217,37 +218,14 @@ describe('notebook chrome tokens', () => {
     expect(declaration(controlFocus, 'outline')).toBe('1px solid var(--green)')
   })
 
-  it('sizes the fullscreen more-actions button like the close it sits beside', () => {
-    const more = rule(css, '.notebook-media-more-actions')
-    const close = rule(css, '.notebook-media-fullscreen-close,\n.notebook-media-capture-button')
-    expect(pixelCount(declaration(more, 'width')))
-      .toBe(pixelCount(declaration(close, 'width')))
-    expect(pixelCount(declaration(more, 'height')))
-      .toBe(pixelCount(declaration(close, 'height')))
+  it('sizes the fullscreen close and editor icon buttons alike', () => {
+    const buttons = rule(css, '.media-fullscreen-edit,\n.notebook-media-capture-button,\n.notebook-media-fullscreen-close,\n.image-editor-icon-button')
+    expect(pixelCount(declaration(buttons, 'height'))).toBe(42)
+    expect(pixelCount(declaration(buttons, 'min-width'))).toBe(42)
     expect(declaration(rule(css, '.notebook-media-fullscreen-actions'), 'display'))
       .toBe('flex')
-  })
-
-  it('folds the docked subject workspace into one row at rest', () => {
-    const collapsed = rule(
-      css,
-      '.command-composer-contextual .notebook-subject-panel[data-collapsed="true"]',
-    )
-    expect(declaration(collapsed, 'display')).toBe('flex')
-    expect(declaration(collapsed, 'align-items')).toBe('center')
-    const hidden = rule(
-      css,
-      '.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-panel-body,\n.notebook-subject-panel[data-collapsed="true"] > .notebook-subject-actions',
-    )
-    expect(declaration(hidden, 'display')).toBe('none')
-    const toolbar = rule(
-      css,
-      '.command-composer-contextual .notebook-subject-toolbar',
-    )
-    expect(pixelCount(declaration(toolbar, 'min-height'))).toBe(40)
-    // The row it folds into is what lets it host the dock's close control.
-    expect(fullscreen).toContain('<ComposerDockClose />')
-    expect(fullscreen).toContain('notebook-subject-panel-controls')
+    expect(css).not.toContain('.notebook-media-more-actions')
+    expect(css).not.toContain('notebook-subject-panel[data-collapsed')
   })
 
   it('gives the inspector and history chrome one 40px header row', () => {

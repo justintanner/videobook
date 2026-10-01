@@ -7,5 +7,4 @@ export const WORKSPACE_ACTION_SURFACES: Readonly<Record<ActionSurface, { compone
   "cell-menu": { component: "src/components/videobook/NotebookCellContextMenu.tsx", trigger: "Cell or empty-slot menu → More actions" },
   "library-menu": { component: "src/components/videobook/LibraryAssetCard.tsx", trigger: "Media overflow → All media actions" },
   "selection-menu": { component: "src/components/videobook/NotebookToolbar.tsx", trigger: "Selection actions in the notebook toolbar" },
-  fullscreen: { component: "src/components/videobook/NotebookMediaFullscreen.tsx", trigger: "More media actions" },
 };

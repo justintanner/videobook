@@ -144,7 +144,7 @@ export function sameImageEditSelection(
     && leftKeys.every((key) => left.replacements[key] === right.replacements[key])
 }
 
-type ImageReplacementTarget = {
+export type ImageReplacementTarget = {
   key: string
   box?: ImageEditBox
   subjectId?: string

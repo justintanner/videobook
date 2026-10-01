@@ -48,8 +48,7 @@ export type ActionSurface =
   | "button"
   | "cell-menu"
   | "library-menu"
-  | "selection-menu"
-  | "fullscreen";
+  | "selection-menu";
 
 type ActionFocusPolicy = "composer" | "opener" | "dialog" | "preserve";
 

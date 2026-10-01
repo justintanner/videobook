@@ -134,7 +134,9 @@ describe('voice opens a cell fullscreen in the real browser', () => {
     const callId = speak('Show me A7 full screen.', imageArtifactId)
     const viewer = page.getByRole('dialog', { name: 'Fullscreen preview for @a7' })
     await viewer.waitFor({ state: 'visible', timeout: 20_000 })
-    expect(await viewer.getByLabel('Image with detected subject overlays').count()).toBe(1)
+    // Spoken fullscreen opens the full-bleed viewer; editing is one step away.
+    expect(await viewer.locator('.media-fullscreen-stage img').count()).toBe(1)
+    expect(await viewer.getByRole('button', { name: 'Edit image' }).count()).toBe(1)
     expect(await page.locator('.confirm-sheet').count()).toBe(0)
     // Fullscreen is its own scope: the channel closes instead of listening on.
     await expect.poll(() => page.getByLabel('Start voice conversation').isDisabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
