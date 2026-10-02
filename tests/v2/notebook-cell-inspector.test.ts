@@ -3069,7 +3069,7 @@ describe('NotebookCellInspector', () => {
       expect(html).toContain('inspector-media-placeholder')
       expect(html).toContain('QUEUED')
       expect(html).toContain('A slow dolly through a pine forest')
-      expect(html).toContain('@a2 · Generate video')
+      expect(html).toContain('<span class="inspector-generation-from-tag">@a2</span><span>Generate video</span>')
       // Ready-only chrome stays hidden while the run is in flight.
       expect(html).not.toContain('aria-label="Cell output media"')
       expect(html).not.toContain('aria-label="Video versions"')
@@ -3113,7 +3113,7 @@ describe('NotebookCellInspector', () => {
         status: 'completed',
       })
 
-      expect(html).toContain('@a2 · Generate video')
+      expect(html).toContain('<span class="inspector-generation-from-tag">@a2</span><span>Generate video</span>')
       expect(html).not.toContain('inspector-input-remove-button')
       expect(html).not.toContain('inspector-source-picker')
       expect(html).not.toContain('aria-label="Remove @a1 from media input"')

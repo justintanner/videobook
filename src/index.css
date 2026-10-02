@@ -13308,18 +13308,39 @@ textarea:focus-visible {
   gap: 6px;
 }
 
+/* Sized and edged like a tag chip so the details column reads as one set of
+   controls; the grid address carries the same badge as the dock header. */
 .inspector-generation-from-link {
   display: inline-flex;
   justify-self: start;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 8px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 0 8px 0 4px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink);
+  background: rgba(9, 32, 20, 0.7);
+  color: #cfe6d9;
   cursor: pointer;
   font-size: 11px;
+}
+
+.inspector-generation-from-link > svg {
+  color: var(--green);
+}
+
+.inspector-generation-from-link:hover,
+.inspector-generation-from-link:focus-visible {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
+.inspector-generation-from-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--control-border);
+  color: var(--green);
+  font-size: 10px;
 }
 
 .inspector-media-generation-inputs {
@@ -13488,24 +13509,28 @@ textarea:focus-visible {
   min-width: 0;
   flex-wrap: wrap;
   margin: 0;
-  gap: 8px 20px;
+  gap: 8px 40px;
   font-size: 11px;
 }
 
 .inspector-media-facts > div {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 8px;
 }
 
+/* Fact terms read as field labels, the same as From and Inputs below them. */
 .inspector-media-facts dt {
   color: #668c75;
   font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .inspector-media-facts dd {
   margin: 0;
-  color: #b7ddc8;
+  color: #cfe6d9;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -13667,6 +13692,17 @@ textarea:focus-visible {
   gap: 12px;
 }
 
+.inspector-media-row-details .inspector-compact-actions {
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0;
+}
+
+.inspector-media-row-details .inspector-cell-actions.inspector-compact-actions > button {
+  min-height: 28px;
+  font-size: 11px;
+}
+
 .inspector-media-row-meta:has(> .inspector-media-row-actions:empty) {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -13738,8 +13774,22 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+/* The field is the next chip in the row: same height, edge and fill. */
 .inspector-media-row-content .asset-tag-input-row {
+  flex: 0 1 150px;
+  min-width: 110px;
   min-height: 28px;
+  box-sizing: border-box;
+  border-color: var(--line);
+  background: rgba(9, 32, 20, 0.7);
+}
+
+.inspector-media-row-content .asset-tag-input-row:focus-within {
+  border-color: var(--control-border-hover);
+}
+
+.inspector-media-row-content .asset-tag-input::placeholder {
+  color: #6f8f7d;
 }
 
 .inspector-media-row-content .asset-tag-input {

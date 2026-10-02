@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   Ban,
   Braces,
   Captions,
@@ -1335,12 +1336,10 @@ function InputSources({
 function DeleteCellButton({
   busy,
   deleting,
-  iconOnly = false,
   onDelete,
 }: {
   busy: boolean
   deleting: boolean
-  iconOnly?: boolean
   onDelete: () => Promise<void>
 }) {
   return (
@@ -1352,8 +1351,8 @@ function DeleteCellButton({
       onClick={() => void onDelete()}
       disabled={busy || deleting}
     >
-      {iconOnly ? <Trash2 size={14} /> : <CircleX size={13} />}
-      <span className={iconOnly ? 'sr-only' : undefined}>
+      <CircleX size={13} />
+      <span>
         {deleting ? 'Deleting…' : 'Delete cell'}
       </span>
     </button>
@@ -1363,14 +1362,13 @@ function DeleteCellButton({
 function CellCleanupActions({
   busy,
   deleting,
-  iconOnly,
   onDelete,
 }: Pick<
   NotebookCellInspectorProps,
   | 'busy'
   | 'deleting'
   | 'onDelete'
-> & { iconOnly?: boolean }) {
+>) {
   return (
     <section
       className="inspector-cell-actions inspector-compact-actions"
@@ -1379,7 +1377,6 @@ function CellCleanupActions({
       <DeleteCellButton
         busy={busy}
         deleting={deleting}
-        iconOnly={iconOnly}
         onDelete={onDelete}
       />
     </section>
@@ -1642,8 +1639,13 @@ function GenerationProducerLink({
         className="inspector-generation-from-link"
         onClick={() => onSelectSource?.(producer.id)}
       >
-        {notebookGridTag(producer.slot)} · Generate{' '}
-        {producer.type === 'generate_image' ? 'image' : 'video'} →
+        <span className="inspector-generation-from-tag">
+          {notebookGridTag(producer.slot)}
+        </span>
+        <span>
+          Generate {producer.type === 'generate_image' ? 'image' : 'video'}
+        </span>
+        <ArrowRight size={12} aria-hidden="true" />
       </button>
     </div>
   )
@@ -2108,25 +2110,26 @@ function MediaCellInspector({
                 inputs={cell.inputs}
               />
             )}
-            <div className="inspector-media-summary-actions">
-              {previewAsset && kind === 'video' && (
+            {previewAsset && kind === 'video' && (
+              <div className="inspector-media-summary-actions">
                 <CellMediaActions
                   address={address}
                   onOpen={() => onOpenFullscreen(previewAsset)}
                 />
-              )}
-              <CellCleanupActions
-                busy={busy}
-                deleting={deleting}
-                iconOnly
-                onDelete={onDelete}
-              />
-            </div>
+              </div>
+            )}
           </div>
           <div className="inspector-media-row-track inspector-media-row-details">
             {versionSelector}
             {assetTags}
             {inputSources}
+            {/* Deleting is the last thing in the reading order, under what the
+                cell is and where it came from, not a stray icon in a corner. */}
+            <CellCleanupActions
+              busy={busy}
+              deleting={deleting}
+              onDelete={onDelete}
+            />
           </div>
           <div className="inspector-media-row-track inspector-media-row-actions">
             <PublishedPostInspectorDetails inputs={cell.inputs} />

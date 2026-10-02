@@ -371,12 +371,19 @@ describe('composer focus through real workspace interactions', () => {
           const header = element.querySelector(':scope > header')
           const row = element.querySelector('.inspector-media-row-content')
           const preview = element.querySelector('.inspector-cell-preview')
-          const actions = element.querySelector('.inspector-media-summary-actions')
+          const actions = element.querySelector('.inspector-media-row-details .inspector-compact-actions')
           const metadata = element.querySelector('.inspector-media-row-meta')
           if (!(wrapper instanceof HTMLElement) || !(header instanceof HTMLElement)
             || !(row instanceof HTMLElement) || !(preview instanceof HTMLElement)
             || !(actions instanceof HTMLElement) || !(metadata instanceof HTMLElement)) {
             throw new Error('Missing composer dock')
+          }
+          const isScrolledWithinDock = (target: Element, dockElement: Element): boolean => {
+            for (let node = target.parentElement; node && dockElement.contains(node); node = node.parentElement) {
+              const { overflowY } = getComputedStyle(node)
+              if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) return true
+            }
+            return false
           }
           const box = element.getBoundingClientRect()
           const previewBox = preview.getBoundingClientRect()
@@ -401,7 +408,10 @@ describe('composer focus through real workspace interactions', () => {
               && audioBox.bottom <= previewBox.bottom),
             actionsOutsidePreview: actionBox.left >= previewBox.right
               || Boolean(audio && actionBox.top >= previewBox.bottom),
-            actionsVisible: actionBox.top >= box.top && actionBox.bottom <= box.bottom,
+            // Delete closes the details column, so a short dock may scroll
+            // to it; it only has to be reachable inside the dock.
+            actionsReachable: (actionBox.top >= box.top && actionBox.bottom <= box.bottom)
+              || isScrolledWithinDock(actions, element),
             headerHeight: Math.round(header.getBoundingClientRect().height),
             headerToken: Math.round(parseFloat(getComputedStyle(element).getPropertyValue('--dock-header-h'))),
             horizontalOverflow: metadata.scrollWidth > metadata.clientWidth + 1,
@@ -412,7 +422,7 @@ describe('composer focus through real workspace interactions', () => {
           previewFits: true,
           audioFits: true,
           actionsOutsidePreview: true,
-          actionsVisible: true,
+          actionsReachable: true,
           headerHeight: 40,
           headerToken: 40,
           horizontalOverflow: false,
@@ -421,7 +431,7 @@ describe('composer focus through real workspace interactions', () => {
         const remove = dock.getByRole('button', { name: 'Delete cell', exact: true })
         expect(await remove.isEnabled()).toBe(true)
         const bounds = await remove.boundingBox()
-        expect(bounds?.height).toBeCloseTo(32, 1)
+        expect(bounds?.height).toBeCloseTo(28, 1)
         if (id === imageCellId) {
           const tags = await dock.getByRole('region', { name: 'Asset tags' }).boundingBox()
           const sources = await dock.locator('.inspector-input-sources').boundingBox()
