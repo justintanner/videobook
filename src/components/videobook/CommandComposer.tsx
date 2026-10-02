@@ -171,6 +171,7 @@ interface CommandComposerProps {
   onStartVoice?: () => void
   onSendingChange?: (sending: boolean) => void
   onCommandRowHeightChange?: (height: number) => void
+  onHeightChange?: (height: number) => void
   onSuccessfulExecute: () => void
   voiceCatalog?: ElevenLabsVoicesState
   voice?: VoiceConversation
@@ -241,6 +242,7 @@ export function CommandComposer({
   onStartVoice,
   onSendingChange,
   onCommandRowHeightChange,
+  onHeightChange,
   onSuccessfulExecute,
   voiceCatalog,
   voice,
@@ -273,17 +275,19 @@ export function CommandComposer({
   useLayoutEffect(() => {
     const row = commandRowRef.current
     const root = composerRootRef.current
-    if (hidden || portalTarget || !row || !root || !onCommandRowHeightChange) return
+    if (hidden || portalTarget || !row || !root || (!onCommandRowHeightChange && !onHeightChange)) return
     const sync = () => {
       const style = getComputedStyle(root)
-      onCommandRowHeightChange(row.getBoundingClientRect().height
+      onCommandRowHeightChange?.(row.getBoundingClientRect().height
         + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth))
+      onHeightChange?.(root.getBoundingClientRect().height)
     }
     sync()
     const observer = new ResizeObserver(sync)
     observer.observe(row)
+    observer.observe(root)
     return () => observer.disconnect()
-  }, [hidden, onCommandRowHeightChange, portalTarget])
+  }, [hidden, onCommandRowHeightChange, onHeightChange, portalTarget])
   const [uncontrolledDockOpen, setUncontrolledDockOpen] = useState(false)
   const dockRequestedOpen = dockOpen ?? uncontrolledDockOpen
   const dockWasOpenRef = useRef(dockRequestedOpen)

@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { Viewport } from '@xyflow/react'
+import { revealNotebookCell } from './notebook-result-reveal'
 import {
   fitNotebookGridZoom,
   normalizeNotebookGridZoom,
@@ -12,6 +13,7 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
   const [manualZoom, setManualZoom] = useState<number | null>(null)
   const appliedZoomRef = useRef(1)
   const anchorRef = useRef({ left: 0, top: 0 })
+  const revealCleanupRef = useRef<(() => void) | null>(null)
   const fitting = manualZoom === null
   const zoom = manualZoom ?? fitNotebookGridZoom(surface.width)
 
@@ -44,6 +46,7 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
     const observer = new ResizeObserver(sync)
     observer.observe(container)
     return () => {
+      revealCleanupRef.current?.()
       container.removeEventListener('scroll', rememberPosition)
       observer.disconnect()
     }
@@ -76,5 +79,10 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
     setManualZoom(null)
   }, [rememberPosition])
 
-  return { scrollRef, surface, zoom, fitting, updateViewport, adjustZoom, fitToWidth }
+  const revealCell = useCallback((cellId: string) => {
+    revealCleanupRef.current?.()
+    revealCleanupRef.current = revealNotebookCell(() => scrollRef.current, cellId)
+  }, [])
+
+  return { scrollRef, surface, zoom, fitting, updateViewport, adjustZoom, fitToWidth, revealCell }
 }

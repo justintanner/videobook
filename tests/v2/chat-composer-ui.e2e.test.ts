@@ -1588,7 +1588,9 @@ describe('chat composer browser flow', () => {
     await input.fill('Keep my draft while resizing the notebook')
     const selected = notebookCellNode(page, videoCellId)
     await selected.click()
-    await scroll.evaluate(element => { element.scrollTop = 40 })
+    await scroll.hover({ position: { x: 40, y: 16 } })
+    await page.mouse.wheel(0, 40)
+    await expect.poll(() => scroll.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
     const rowBefore = await scroll.evaluate(element => {
       const viewport = element.querySelector('.react-flow__viewport')!
       return element.scrollTop / new DOMMatrix(getComputedStyle(viewport).transform).a
@@ -1621,6 +1623,111 @@ describe('chat composer browser flow', () => {
     await page.getByRole('button', { name: '/videobook', exact: true }).click()
     await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
     expect(await fit.getAttribute('aria-pressed')).toBe('true')
+  }, 60_000)
+
+  it('centers clicked tiles above the preview dock and clears it at the final row', async () => {
+    const page = await openApp()
+    const client = new Client({ name: 'notebook-tile-reveal-e2e', version: '1.0.0' }, {
+      capabilities: {},
+      supportedProtocolVersions: ['2026-07-28'],
+      versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const tool = async (name: string, args: Record<string, unknown>) =>
+      resultValue(await client.callTool({
+        name, arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+      }))
+    const ids: string[] = []
+    const scroll = page.locator('.notebook-horizontal-scroll')
+    const input = page.getByLabel('Videobook command input')
+    const layout = (id: string) => scroll.evaluate((element, cellId) => {
+      const cell = element.querySelector(`.react-flow__node[data-id="${cellId}"]`)!
+      const tile = cell.getBoundingClientRect()
+      const viewport = element.getBoundingClientRect()
+      const dock = document.querySelector('.command-composer')!.getBoundingClientRect()
+      return {
+        topGap: tile.top - viewport.top,
+        bottomGap: dock.top - tile.bottom,
+        centerError: Math.abs((tile.top + tile.bottom) / 2 - (viewport.top + dock.top) / 2),
+        left: element.scrollLeft,
+        zoom: new DOMMatrix(getComputedStyle(element.querySelector('.react-flow__viewport')!).transform).a,
+      }
+    }, id)
+    const positionForClick = async (id: string) => {
+      await scroll.evaluate((element, cellId) => {
+        const cell = element.querySelector(`.react-flow__node[data-id="${cellId}"]`)!
+        const tile = cell.getBoundingClientRect()
+        const viewport = element.getBoundingClientRect()
+        const dock = document.querySelector('.command-composer')!.getBoundingClientRect()
+        element.scrollTop += tile.top - viewport.top - (dock.top - viewport.top) * 0.7
+        element.scrollLeft += tile.left - viewport.left - 30
+      }, id)
+    }
+    try {
+      for (const cell of [
+        { type: 'image', slot: { row: 5, column: 4 }, output_artifact_id: fullscreenImageArtifactId },
+        { type: 'video', slot: { row: 5, column: 5 }, output_artifact_id: videoArtifactId },
+        { type: 'image', slot: { row: 63, column: 4 }, output_artifact_id: fullscreenImageArtifactId },
+      ]) {
+        const created = record(await tool('create_notebook_cell', { cell }))
+        if (typeof created?.id !== 'string') throw new Error('Could not create tile reveal fixture')
+        ids.push(created.id)
+      }
+      const [imageId, videoId, lastId] = ids as [string, string, string]
+      await notebookCellNode(page, lastId).waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await input.fill('Keep this draft while selecting tiles')
+      for (const viewport of [
+        { width: 1440, height: 1000 },
+        { width: 1280, height: 800 },
+        { width: 390, height: 844 },
+      ]) {
+        await page.setViewportSize(viewport)
+        await page.getByLabel('Fit grid to width', { exact: true }).click()
+        await collapseComposerDock(page)
+        for (const id of [imageId, videoId, lastId]) {
+          await positionForClick(id)
+          const before = await layout(id)
+          await notebookCellNode(page, id).locator('.cell-node-type-label').click()
+          await expect.poll(async () => (await layout(id)).topGap).toBeGreaterThanOrEqual(0)
+          await expect.poll(async () => (await layout(id)).bottomGap).toBeGreaterThanOrEqual(8)
+          if (id !== lastId) {
+            await expect.poll(async () => (await layout(id)).centerError, { message: `Selected ${id} at ${viewport.width}x${viewport.height}` })
+              .toBeLessThanOrEqual(2)
+          }
+          expect(await layout(id)).toMatchObject({ left: before.left, zoom: before.zoom })
+          expect(await input.textContent()).toBe('Keep this draft while selecting tiles')
+          await expect.poll(() => input.evaluate((element) => document.activeElement === element)).toBe(true)
+        }
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await page.getByLabel('Zoom in', { exact: true }).click()
+      await page.getByLabel('Zoom in', { exact: true }).click()
+      await positionForClick(imageId)
+      await notebookCellNode(page, imageId).locator('.cell-node-type-label').click()
+      await expect.poll(async () => (await layout(imageId)).centerError).toBeLessThanOrEqual(2)
+      expect((await layout(imageId)).zoom).toBe(1)
+      const beforeMultiSelect = await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft }))
+      await notebookCellNode(page, videoId).locator('.cell-node-type-label').click({ modifiers: ['Shift'] })
+      await expect.poll(() => page.locator('.react-flow__node.selected').count()).toBe(2)
+      await wait(200)
+      expect(await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft })))
+        .toEqual(beforeMultiSelect)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.getByLabel('Clear selection', { exact: true }).click()
+      await positionForClick(videoId)
+      await notebookCellNode(page, videoId).locator('.cell-node-type-label').click()
+      await expect.poll(async () => (await layout(videoId)).centerError).toBeLessThanOrEqual(2)
+      if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT })
+    } catch (error) {
+      if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT })
+      throw error
+    } finally {
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      for (const cellId of ids) await tool('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      await input.fill('')
+      notebookDirty = true
+    }
   }, 60_000)
 
   it('keeps refreshing after a same-slot drag without losing selection, zoom, scroll, or drafts', async () => {
@@ -4599,6 +4706,8 @@ describe('chat composer browser flow', () => {
     const secondCell = notebookCellNode(page, generationCellId)
     await firstCell.waitFor({ state: 'visible' })
     await secondCell.waitFor({ state: 'visible' })
+    await firstCell.scrollIntoViewIfNeeded()
+    await secondCell.scrollIntoViewIfNeeded()
     const pane = page.locator('.notebook-flow .react-flow__pane')
     const firstCellBox = await firstCell.boundingBox()
     const secondCellBox = await secondCell.boundingBox()

@@ -85,7 +85,7 @@ describe('notebook chrome tokens', () => {
     // Bottom padding on a scroll container is part of its scrollable extent,
     // so the last row still scrolls clear of the dock.
     expect(declaration(scroll, 'padding-bottom'))
-      .toBe('var(--notebook-composer-clearance)')
+      .toBe('max(var(--notebook-composer-clearance), calc(var(--notebook-composer-height, 0px) + var(--app-gutter) + var(--app-gap) + 16px))')
     for (const property of ['mask-image', '-webkit-mask-image']) {
       const mask = declaration(scroll, property).replace(/\s+/gu, ' ')
       expect(mask).toContain('linear-gradient( 180deg, #000 0,')

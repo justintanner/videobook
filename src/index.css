@@ -1852,7 +1852,7 @@ textarea:focus-visible {
      the full height and dissolves into the ground under the composer, rather
      than stopping dead at a flat black band. The last row still scrolls clear
      of the dock because the padding is part of the scrollable extent. */
-  padding-bottom: var(--notebook-composer-clearance);
+  padding-bottom: max(var(--notebook-composer-clearance), calc(var(--notebook-composer-height, 0px) + var(--app-gutter) + var(--app-gap) + 16px));
   -webkit-mask-image: linear-gradient(
     180deg,
     #000 0,

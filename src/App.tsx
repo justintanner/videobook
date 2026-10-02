@@ -1667,11 +1667,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     updateViewport: updateNotebookViewport,
     adjustZoom: adjustNotebookZoom,
     fitToWidth: resetNotebookZoom,
+    revealCell: revealNotebookCanvasCell,
   } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook')
   const [commandRowHeight, setCommandRowHeight] = useState(58)
+  const [composerHeight, setComposerHeight] = useState(58)
   const notebookCanvasStyle = useMemo(() => ({
     '--notebook-command-row-height': `${commandRowHeight}px`,
-  }) as CSSProperties, [commandRowHeight])
+    '--notebook-composer-height': `${composerHeight}px`,
+  }) as CSSProperties, [commandRowHeight, composerHeight])
   const [composerDockOpen, setComposerDockOpen] = useState(false)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [historyViewCellId, setHistoryViewCellId] = useState<string | null>(null)
@@ -11275,7 +11278,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
                         if (removed.length > 0) void removeEdges(removed)
                       }}
-                      onNodeClick={(_event, node) => {
+                      onNodeClick={(event, node) => {
                         const currentSelection = selectedCellIdsRef.current
                         const nextId = currentSelection.has(node.id)
                           ? node.id
@@ -11287,6 +11290,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         }
                         setSourceViewCellId(null)
                         if (node.type !== 'timeline' && composerDockShouldOpen('selection')) setComposerDockOpen(true)
+                        if (node.type !== 'timeline' && currentSelection.size === 1
+                          && nextId === node.id && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+                          revealNotebookCanvasCell(node.id)
+                        }
                       }}
                       onPaneClick={() => {
                         closeCellContextMenu()
@@ -11712,6 +11719,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         connected={mcp.state === 'ready' && online}
         onBeginTurn={beginComposerTurn}
         onCommandRowHeightChange={setCommandRowHeight}
+        onHeightChange={setComposerHeight}
         hidden={!showCommandComposer}
         dockOpen={composerDockOpen}
         onDockOpenChange={setComposerDockOpen}
