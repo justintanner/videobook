@@ -429,7 +429,7 @@ describe('rich chat references with real notebook media', () => {
     // placeholder, the producer's prompt, and none of the ready chrome.
     expect(await generating.locator('.inspector-media-placeholder').count()).toBe(1)
     expect(await generating.innerText()).toMatch(/a slow dolly through a pine forest/i)
-    expect(await generating.innerText()).toContain('@c2 · Generate video →')
+    expect(await generating.getByRole('button', { name: '@c2 Generate video', exact: true }).isVisible()).toBe(true)
     await expect.poll(() => generating.getAttribute('data-generation'), { timeout: 90_000 }).toBe('failed')
     expect(await generating.innerText()).toMatch(/provider|key|missing|failed/i)
     // Retry re-runs the producer: each run allocates its own output cell, so
@@ -451,11 +451,15 @@ describe('rich chat references with real notebook media', () => {
     await page.locator(`.react-flow__node[data-id="${retryOutputId}"]`).click()
     const retryDock = page.locator('.inspector-media-generating')
     await expect.poll(() => retryDock.count(), { timeout: 15_000 }).toBe(1)
-    expect(await retryDock.innerText()).toContain('@c2 · Generate video →')
+    const source = retryDock.getByRole('button', { name: '@c2 Generate video', exact: true })
+    expect(await source.isVisible()).toBe(true)
     await expect.poll(
       () => retryDock.getAttribute('data-generation'),
       { timeout: 90_000 },
     ).toBe('failed')
+    await source.click()
+    await expect.poll(() => producer.locator('.cell-node').getAttribute('class')).toContain('cell-node-selected')
+    expect(await dock.getByRole('textbox', { name: 'Prompt', exact: true }).inputValue()).toBe('a slow dolly through a pine forest')
   })
 
   it('keeps global actions available from an empty Library', async () => {

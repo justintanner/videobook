@@ -159,6 +159,7 @@ function ImageSubjectOverlay({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onCancelDraw,
 }: {
   mediaUrl: string
   width: number
@@ -178,6 +179,7 @@ function ImageSubjectOverlay({
   onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void
   onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void
   onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void
+  onCancelDraw: () => void
 }) {
   const subjects = subjectMap?.subjects ?? []
   if (width <= 0 || height <= 0) {
@@ -193,6 +195,8 @@ function ImageSubjectOverlay({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onCancelDraw}
+      onLostPointerCapture={onCancelDraw}
     >
       <image
         href={mediaUrl}
@@ -743,7 +747,13 @@ export function ImageEditorWorkspace({
     applyInstruction()
   }
 
+  const cancelDraw = () => {
+    drawStartRef.current = null
+    setDraftBox(null)
+  }
+
   const toggleDrawMode = () => {
+    cancelDraw()
     setDrawMode((current) => !current)
     setRemovalPreview(false)
     setOverlaysHidden(false)
@@ -783,8 +793,7 @@ export function ImageEditorWorkspace({
   const endDraw = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!drawMode || !drawStartRef.current) return
     const box = regionBoxFromDrag(drawStartRef.current, viewBoxPoint(event, width, height))
-    drawStartRef.current = null
-    setDraftBox(null)
+    cancelDraw()
     if (!box) return
     const region = { id: nextRegionId(regions), box }
     setRegions((current) => [...current, region])
@@ -891,6 +900,7 @@ export function ImageEditorWorkspace({
             onPointerDown={beginDraw}
             onPointerMove={moveDraw}
             onPointerUp={endDraw}
+            onCancelDraw={cancelDraw}
           />
         )}
         {drawMode && (

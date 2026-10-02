@@ -1706,12 +1706,20 @@ describe('chat composer browser flow', () => {
       await notebookCellNode(page, imageId).locator('.cell-node-type-label').click()
       await expect.poll(async () => (await layout(imageId)).centerError).toBeLessThanOrEqual(2)
       expect((await layout(imageId)).zoom).toBe(1)
-      const beforeMultiSelect = await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft }))
-      await notebookCellNode(page, videoId).locator('.cell-node-type-label').click({ modifiers: ['Shift'] })
-      await expect.poll(() => page.locator('.react-flow__node.selected').count()).toBe(2)
-      await wait(200)
-      expect(await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft })))
-        .toEqual(beforeMultiSelect)
+      await page.keyboard.down('Shift')
+      try {
+        const beforeMultiSelect = await scroll.evaluate(async (element) => {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+          return { top: element.scrollTop, left: element.scrollLeft }
+        })
+        await notebookCellNode(page, videoId).locator('.cell-node-type-label').click()
+        await expect.poll(() => page.locator('.react-flow__node.selected').count()).toBe(2)
+        await wait(200)
+        expect(await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft })))
+          .toEqual(beforeMultiSelect)
+      } finally {
+        await page.keyboard.up('Shift')
+      }
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.getByLabel('Clear selection', { exact: true }).click()
       await positionForClick(videoId)

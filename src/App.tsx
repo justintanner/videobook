@@ -4016,6 +4016,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       subjectMapLoading: asset.type === 'image' && Boolean(asset.objectHash),
     }
     pauseComposerDockMedia(document.querySelector('.command-composer'))
+    actionCatalogRequestRef.current += 1
+    setActionDiscovery(null)
+    setActionComposer(null)
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
     setMediaFullscreenComposerTarget(null)

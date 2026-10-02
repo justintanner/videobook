@@ -155,4 +155,67 @@ describe('drawn region image editor through real MCP', () => {
     })
     await page.screenshot({ path: '/tmp/videobook-region-editor-check.png' })
   }, 60_000)
+
+  it('draws regions with touch and clears interrupted gestures on a phone', async () => {
+    const phone = await browser!.newPage({
+      viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+    })
+    const requests: ObservedToolCall[] = []
+    try {
+      await phone.addInitScript((id) => {
+        localStorage.setItem('videobook.active-book', id)
+        localStorage.setItem('videobook.cloud-generation-consent', 'accepted')
+      }, bookId)
+      phone.on('request', (request) => {
+        if (request.method() === 'POST' && request.postData()?.includes('edit_image_subjects')) {
+          requests.push(...toolCalls(request.postDataJSON()).filter((entry) => entry.name === 'edit_image_subjects'))
+        }
+      })
+      await phone.goto(page.url())
+      await phone.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).tap()
+      await phone.getByRole('button', { name: 'Edit @a1 image', exact: true }).tap()
+      const dialog = phone.getByRole('dialog', { name: 'Fullscreen preview for @a1' })
+      await dialog.getByRole('button', { name: 'Draw region', exact: true }).tap()
+      const touch = await phone.context().newCDPSession(phone)
+      const drag = async (cancel: boolean) => {
+        const image = await dialog.locator('.notebook-subject-stage-svg > image').boundingBox()
+        if (!image) throw new Error('Image stage is missing')
+        await touch.send('Input.dispatchTouchEvent', {
+          type: 'touchStart',
+          touchPoints: [{ x: image.x + image.width * 0.1, y: image.y + image.height * 0.1 }],
+        })
+        for (let step = 1; step <= 5; step += 1) {
+          await touch.send('Input.dispatchTouchEvent', {
+            type: 'touchMove',
+            touchPoints: [{
+              x: image.x + image.width * (0.1 + step * 0.1),
+              y: image.y + image.height * (0.1 + step * 0.12),
+            }],
+          })
+        }
+        await touch.send('Input.dispatchTouchEvent', {
+          type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [],
+        })
+      }
+      await drag(true)
+      expect(await dialog.getByRole('checkbox', { name: 'Select region 1', exact: true }).count()).toBe(0)
+      await expect.poll(() => dialog.locator('.notebook-region-draft').count()).toBe(0)
+      await drag(false)
+      await expect.poll(() => dialog.getByRole('checkbox', { name: 'Select region 1', exact: true }).count()).toBe(1)
+      expect(await dialog.getByRole('checkbox', { name: 'Select region 1', exact: true }).isChecked()).toBe(true)
+      expect(await dialog.locator('.image-editor-target strong').textContent()).toBe('Region 1')
+      await dialog.getByLabel('What should change?').fill('Make this area blue')
+      await dialog.getByRole('button', { name: /Apply edit/ }).tap()
+      await expect.poll(() => requests.length).toBe(1)
+      expect(requests[0]?.arguments).toMatchObject({
+        operation: 'edit', prompt: 'Make this area blue',
+        edit_regions: [{ x: expect.closeTo(0.1, 2), y: expect.closeTo(0.1, 2), width: expect.closeTo(0.5, 2), height: expect.closeTo(0.6, 2) }],
+      })
+      await expect.poll(() => dialog.locator('.image-editor-status.error').textContent())
+        .toContain('KIE_API_KEY environment variable is not set')
+      await touch.detach()
+    } finally {
+      await phone.close()
+    }
+  }, 60_000)
 })
