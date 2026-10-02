@@ -45,6 +45,7 @@ import {
 } from "../image-edit-models.js";
 import {
   enqueueOptions,
+  pauseBookQueueForTests,
   queue,
   recoverInterruptedSubjectEditArtifact,
   waitForJob,
@@ -1336,6 +1337,7 @@ describe("image subject tools", () => {
   });
 
   it("replaces two regions with two reference artifacts via Seedream 5 Pro", async () => {
+    await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";
     try {
@@ -1558,6 +1560,7 @@ describe("image subject tools", () => {
 
   for (const entry of IMAGE_EDIT_MODELS) {
     it(`persists ${entry.id} on the job payload and producer cell`, async () => {
+      await pauseBookQueueForTests(bookId);
       const originalKieKey = process.env.KIE_API_KEY;
       const originalFalKey = process.env.FAL_API_KEY;
       process.env.KIE_API_KEY = "test-key";
@@ -1598,6 +1601,7 @@ describe("image subject tools", () => {
   }
 
   it.each(["edit", "remove"] as const)("enqueues a drawn-region %s without analysis or a replacement image", async (operation) => {
+    await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";
     try {
@@ -1649,6 +1653,8 @@ describe("image subject tools", () => {
       });
       const unchanged = await resolveImageSubjectSource(engine, source.artifactId);
       expect(unchanged.objectHash).toBe(source.objectHash);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(engine.jobs.queue.get(job!.id)?.state).toBe("queued");
     } finally {
       if (originalKey) process.env.KIE_API_KEY = originalKey;
       else delete process.env.KIE_API_KEY;
@@ -1677,6 +1683,7 @@ describe("image subject tools", () => {
   });
 
   it("enqueues a whole-image edit without a subject map", async () => {
+    await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";
     try {
@@ -1753,6 +1760,7 @@ describe("image subject tools", () => {
   });
 
   it("lists the edit catalog and remembers the last used model for the book", async () => {
+    await pauseBookQueueForTests(bookId);
     const originalKieKey = process.env.KIE_API_KEY;
     const originalFalKey = process.env.FAL_API_KEY;
     process.env.KIE_API_KEY = "test-key";

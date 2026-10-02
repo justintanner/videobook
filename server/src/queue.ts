@@ -747,6 +747,18 @@ export async function abortActiveBookJobsForTests(
   );
 }
 
+export async function pauseBookQueueForTests(bookId: string): Promise<void> {
+  if (!testEngines.has(bookId)) throw new Error("Only test book queues may be paused");
+  const info = await ensureRunner(bookId);
+  stopProviderPollDriver(info);
+  info.reaper.stop();
+  await Promise.all([
+    info.runner.stop(),
+    info.searchRunner.stop(),
+    awaitProviderPollIdle(info),
+  ]);
+}
+
 export async function waitForBookQueuesIdleForTests(options: {
   budgetMs?: number;
   fileLabel?: string;
