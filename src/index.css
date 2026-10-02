@@ -13706,7 +13706,7 @@ textarea:focus-visible {
 .inspector-media-row-details .inspector-compact-actions {
   justify-content: flex-start;
   margin: 0;
-  padding: 0;
+  padding: 12px 0 0;
 }
 
 .inspector-media-row-details .inspector-cell-actions.inspector-compact-actions > button {
@@ -13804,6 +13804,10 @@ textarea:focus-visible {
 }
 
 .inspector-media-row-content .asset-tag-input {
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
   font-size: 11px;
 }
 
