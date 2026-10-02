@@ -38,6 +38,7 @@ import {
   hasExactCommandSuggestion,
 } from '@/videobook/command-suggestions'
 import { composerInputAfterOutcome } from '@/videobook/command-composer-outcome'
+import { readComposerDrafts, saveComposerDrafts } from '@/videobook/composer-draft-storage'
 import { captureCommandComposerFocus } from '@/videobook/command-composer-focus'
 import {
   commandHistoryPage,
@@ -247,7 +248,8 @@ export function CommandComposer({
   voiceCatalog,
   voice,
 }: CommandComposerProps) {
-  const [input, setInput] = useState(pendingInput ?? '')
+  const [inputDrafts, setInputDrafts] = useState(readComposerDrafts)
+  const [input, setInput] = useState(() => pendingInput ?? inputDrafts.get(inputSession) ?? '')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [dismissed, setDismissed] = useState(
     () => pendingInput !== undefined && !isSpeakCommandPreview(pendingInput),
@@ -264,9 +266,6 @@ export function CommandComposer({
   const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
   const [voiceReviewDraft, setVoiceReviewDraft] = useState(false)
   const [renderedInputSession, setRenderedInputSession] = useState(inputSession)
-  const [inputDrafts, setInputDrafts] = useState<ReadonlyMap<string | null, string>>(
-    () => new Map(),
-  )
   const inputRef = useRef<ComposerEditorHandle>(null)
   const composerRootRef = useRef<HTMLElement | null>(null)
   const commandRowRef = useRef<HTMLFormElement | null>(null)
@@ -357,6 +356,10 @@ export function CommandComposer({
   }, [inputSession])
 
   useEffect(() => {
+    saveComposerDrafts(inputDrafts, inputSession, input === pendingInput ? '' : input)
+  }, [input, inputDrafts, inputSession, pendingInput])
+
+  useEffect(() => {
     if (historyEpoch > lastHistoryEpochRef.current
       || (feedbackPresent && feedbackKey !== lastFeedbackKeyRef.current)) setHistoryOpen(true)
     lastHistoryEpochRef.current = historyEpoch
@@ -377,7 +380,7 @@ export function CommandComposer({
 
   if (inputSession !== renderedInputSession) {
     const nextDrafts = new Map(inputDrafts)
-    nextDrafts.set(renderedInputSession, input)
+    nextDrafts.set(renderedInputSession, input === renderedPendingInput ? '' : input)
     setInputDrafts(nextDrafts)
     setRenderedInputSession(inputSession)
     setRenderedPendingInput(pendingInput)

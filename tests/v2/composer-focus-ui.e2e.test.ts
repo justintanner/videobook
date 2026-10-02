@@ -215,6 +215,119 @@ describe('composer focus through real workspace interactions', () => {
     expect(await input().textContent()).toBe('secondary draft')
   })
 
+  it('restores unsent project drafts after reload without submitting or reviving cleared text', async () => {
+    const submitted: string[] = []
+    page.on('request', request => {
+      if (request.method() !== 'POST' || !request.url().endsWith('/mcp')) return
+      submitted.push(...toolCalls(request.postDataJSON())
+        .filter(entry => entry.name === 'record_prompt')
+        .map(entry => String(entry.arguments.prompt)))
+    })
+    await input().fill('Primary draft with @a1')
+    await selectProject('focus-secondary')
+    await input().fill('Secondary draft stays separate')
+    await selectProject('focus-primary')
+    await page.reload()
+    await ready()
+    expect(await input().textContent()).toBe('Primary draft with @a1')
+    await selectProject('focus-secondary')
+    expect(await input().textContent()).toBe('Secondary draft stays separate')
+    await input().fill('')
+    await page.reload()
+    await ready()
+    expect(await input().textContent()).toBe('Primary draft with @a1')
+    await selectProject('focus-secondary')
+    expect(await input().textContent()).toBe('')
+    expect(submitted).toEqual([])
+    await selectProject('focus-primary')
+    await input().fill('/notebooks')
+    await page.getByLabel('Send command', { exact: true }).click()
+    await expect.poll(() => submitted).toEqual(['/notebooks'])
+    await ready()
+    await page.reload()
+    await ready()
+    expect(await input().textContent()).toBe('')
+    expect(submitted).toEqual(['/notebooks'])
+  })
+
+  it('does not restore an automatic review command after reload', async () => {
+    const notebook = record(await call('get_notebook'))
+    const video = (Array.isArray(notebook?.cells) ? notebook.cells : [])
+      .map(record).find(entry => entry?.id === videoCellId)
+    await call('set_timeline', {
+      render: 'landscape', slots: [{ artifact_id: video?.output_artifact_id }],
+    })
+    try {
+      await page.reload()
+      await ready()
+      const sequence = record(await call('get_primary_sequence'))
+      const clip = record(Array.isArray(sequence?.clips) ? sequence.clips[0] : null)
+      expect(clip?.clipId).toBeTypeOf('string')
+      await input().fill(`/clip-reverse @${String(clip?.clipId)}`)
+      await page.getByLabel('Send command', { exact: true }).click()
+      await page.getByLabel('Command plan review', { exact: true }).waitFor()
+      await expect.poll(() => input().textContent()).toBe('/apply')
+      await page.reload()
+      await ready()
+      expect(await input().textContent()).toBe('')
+      expect(await page.getByLabel('Command plan review', { exact: true }).count()).toBe(0)
+      const current = record(await call('get_primary_sequence'))
+      const currentClip = record(Array.isArray(current?.clips) ? current.clips[0] : null)
+      expect(currentClip?.reverse).toBe(false)
+    } finally {
+      await call('set_timeline', { render: 'landscape', slots: [] })
+    }
+  })
+
+  it('keeps drafts editable when browser session storage is full', async () => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    const filled = await page.evaluate(() => {
+      let count = 0
+      let quotaReached = false
+      for (let size = 1_048_576; size >= 64; size = Math.floor(size / 2)) {
+        for (let attempt = 0; attempt < 100; attempt++) {
+          try {
+            sessionStorage.setItem(`videobook-e2e-quota:${count}`, 'x'.repeat(size))
+            count += 1
+          } catch (error) {
+            if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') throw error
+            quotaReached = true
+            break
+          }
+        }
+      }
+      return { count, quotaReached }
+    })
+    expect(filled.quotaReached).toBe(true)
+    expect(filled.count).toBeGreaterThan(0)
+    const draft = 'Keep this text while storage is full. '.repeat(40)
+    try {
+      await input().fill(draft)
+      await selectProject('focus-secondary')
+      await input().fill('Secondary draft without storage')
+      await selectProject('focus-primary')
+      expect(await input().textContent()).toBe(draft)
+      await focused(input())
+      await page.keyboard.type('Still editable')
+      expect(await input().textContent()).toBe(`${draft}Still editable`)
+      expect(errors).toEqual([])
+      await input().fill('')
+      await selectProject('focus-secondary')
+      await input().fill('')
+    } finally {
+      await page.evaluate(() => {
+        for (const key of Object.keys(sessionStorage)) {
+          if (key.startsWith('videobook-e2e-quota:')) sessionStorage.removeItem(key)
+        }
+      })
+    }
+    await page.reload()
+    await ready()
+    expect(await input().textContent()).toBe('')
+    expect(errors).toEqual([])
+  })
+
   it('returns pointer canvas and toolbar actions to chat without losing selection or flooding catalogs', async () => {
     await focused(input())
     const initialCatalogRequests = catalogRequests
