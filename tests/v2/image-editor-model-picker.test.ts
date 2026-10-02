@@ -107,7 +107,7 @@ describe('image editor model picker', () => {
     expect(html).not.toContain('cannot edit this target')
   })
 
-  it('marks region-replace-incompatible models when a region is drawn', () => {
+  it('allows semantic models to edit a drawn region without a replacement reference', () => {
     const html = renderEditor({
       imageEditModels: models,
       initialRegions: [{
@@ -115,8 +115,9 @@ describe('image editor model picker', () => {
         box: { x: 0.1, y: 0.1, width: 0.3, height: 0.3 },
       }],
     })
-    expect(html).toContain('cannot edit this target')
-    expect(html).toContain('value="text-only-model" disabled')
+    expect(html).not.toContain('cannot edit this target')
+    expect(html).not.toContain('value="text-only-model" disabled')
+    expect(html).toContain('Apply edit')
   })
 
   it('shows the estimate placeholder until a provider cost resolves', () => {

@@ -91,6 +91,12 @@ const replacementBoxSchema = z.object({
   height: z.number().positive().max(1),
 }).strict();
 
+const editBoxSchema = replacementBoxSchema.refine(
+  (box) => box.x < 1 && box.y < 1
+    && box.x + box.width <= 1.000001 && box.y + box.height <= 1.000001,
+  { message: "Edit regions must fit inside the image" },
+);
+
 const replacementRegionSchema = z.object({
   box: replacementBoxSchema.optional(),
   subject_id: z.string().min(1).optional(),
@@ -473,6 +479,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
         operation: z.enum(["remove", "edit", "replace", "whole_image"]),
         prompt: z.string().max(2400).optional(),
         regions: z.array(replacementRegionSchema).optional(),
+        edit_regions: z.array(editBoxSchema).optional().describe("Normalized boxes for prompt edits or removal without replacement images; coordinates start at the top-left corner"),
         model: z.enum(IMAGE_EDIT_MODEL_IDS).optional(),
       },
       handler: async (args) => {
@@ -486,6 +493,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           operation,
           prompt,
           regions,
+          edit_regions,
           model,
         } = args as {
           book_id: string;
@@ -497,19 +505,25 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           operation: "remove" | "edit" | "replace" | "whole_image";
           prompt?: string;
           regions?: ReplacementRegionInput[];
+          edit_regions?: Array<z.infer<typeof editBoxSchema>>;
           model?: string;
         };
         if ((operation === "edit" || operation === "whole_image") && !prompt?.trim()) {
           return failure("A prompt is required to edit selected subjects");
         }
-        if (operation === "remove" && model !== undefined) {
+        const regional = (edit_regions?.length ?? 0) > 0;
+        if (regional && operation !== "edit" && operation !== "remove") {
+          return failure("edit_regions applies only to edit and remove operations");
+        }
+        const localRemoval = operation === "remove" && !regional;
+        if (localRemoval && model !== undefined) {
           return failure("Model selection applies only to edit and replace operations");
         }
         const editModel = findImageEditModel(model ?? DEFAULT_IMAGE_EDIT_MODEL_ID)!;
-        if (operation !== "remove" && !process.env[editModel.envKey]) {
+        if (!localRemoval && !process.env[editModel.envKey]) {
           return failure(`${editModel.envKey} environment variable is not set`);
         }
-        if (operation !== "remove" && !editModel.capabilities[editCapability(operation)]) {
+        if (!localRemoval && !editModel.capabilities[editCapability(operation)]) {
           return failure(`${editModel.label} cannot perform ${editOperationLabel(operation)}`);
         }
         try {
@@ -540,14 +554,15 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             ) {
               return failure(editModelCapacityError(editModel, uniqueReplacements.length));
             }
-          } else if (operation !== "whole_image" && !readyMap) {
+          } else if (operation !== "whole_image" && !readyMap
+            && (!regional || (subject_ids?.length ?? 0) > 0)) {
             return failure("Analyze image subjects before editing them");
           }
           const selectedIds = uniqueSubjectIds([
             ...(subject_ids ?? []),
             ...replacementRegions.flatMap((region) => region.subjectId ? [region.subjectId] : []),
           ]);
-          if (operation !== "replace" && operation !== "whole_image" && selectedIds.length === 0) {
+          if (operation !== "replace" && operation !== "whole_image" && !regional && selectedIds.length === 0) {
             return failure("Select at least one subject to edit");
           }
           const subjects = new Map((readyMap?.subjects ?? []).map((subject) => [subject.id, subject]));
@@ -555,6 +570,9 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
           if (unknown.length > 0) {
             return failure(`Unknown subject ids: ${unknown.join(", ")}`);
           }
+          const editRegions = regional
+            ? [...edit_regions!, ...selectedIds.map((id) => subjects.get(id)!.normalizedBox)]
+            : [];
           const resolvedRegions = replacementRegions.map((region) => {
             const subject = region.subjectId ? subjects.get(region.subjectId) : undefined;
             return {
@@ -583,6 +601,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
             }
           }
           const labels = selectedIds.map((id) => subjects.get(id)!.label);
+          if (regional) labels.push(`${edit_regions!.length} ${edit_regions!.length === 1 ? "region" : "regions"}`);
           const generatedPrompt = prompt?.trim()
             || (operation === "replace"
               ? `Replace ${resolvedRegions.length} selected ${resolvedRegions.length === 1 ? "region" : "regions"}`
@@ -601,8 +620,8 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               : operation === "whole_image"
                 ? "Edited image"
                 : `Edited ${labels.join(", ")}`;
-          const provider = operation === "remove" ? "local" : editModel.provider;
-          const cellModel = operation === "remove"
+          const provider = localRemoval ? "local" : editModel.provider;
+          const cellModel = localRemoval
             ? "sharp/layer-composite"
             : editModel.id;
           const sourceArtifact = engine.artifacts.get(artifact_id);
@@ -643,7 +662,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                   operation: "image_to_image",
                   tool: "edit_image_subjects",
                   inputs: {
-                    generationMode: operation === "remove"
+                    generationMode: regional ? `region-${operation}` : operation === "remove"
                       ? "subject-remove"
                       : operation === "replace"
                         ? "region-replace"
@@ -654,6 +673,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
                     sourceObjectHash: object_hash,
                     subjectIds: selectedIds,
                     subjectMapVersion: IMAGE_SUBJECT_MAP_VERSION,
+                    ...(regional ? { editRegions } : {}),
                     ...(operation === "replace"
                       ? {
                           regions: resolvedRegions,
@@ -768,6 +788,7 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               subjectIds: selectedIds,
               operation,
               prompt: generatedPrompt,
+              ...(regional ? { editRegions } : {}),
               ...(operation === "replace"
                 ? {
                     regions: resolvedRegions,
@@ -787,9 +808,9 @@ export function imageSubjectDefs(engine: Engine): ToolDef[] {
               outputCellId: outputCell.id,
               generationId,
               jobId,
-              ...(operation === "remove" ? {} : { modelId: editModel.id }),
+              ...(localRemoval ? {} : { modelId: editModel.id }),
             });
-            if (operation !== "remove") {
+            if (!localRemoval) {
               writeLastImageEditModel(engine, editModel.id);
             }
             return json({

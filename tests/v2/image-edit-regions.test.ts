@@ -17,6 +17,14 @@ import {
 } from '../../src/videobook/image-edit-regions'
 
 describe('image edit regions', () => {
+  it('keeps region labels stable when only a later region is selected', () => {
+    const regions = [
+      { id: 'first', box: { x: 0, y: 0, width: 0.2, height: 0.2 } },
+      { id: 'second', box: { x: 0.5, y: 0.5, width: 0.2, height: 0.2 } },
+    ]
+    expect(imageReplacementTargets([regions[1]!], [], regions))
+      .toEqual([{ key: 'second', box: regions[1]!.box, label: 'Region 2' }])
+  })
   it('computes IoU and snaps a drawn region onto a detected subject', () => {
     const drawn = { x: 0.18, y: 0.08, width: 0.38, height: 0.82 }
     const person = { x: 0.2, y: 0.1, width: 0.35, height: 0.8 }

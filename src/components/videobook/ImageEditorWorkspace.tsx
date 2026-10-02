@@ -28,6 +28,7 @@ import {
   type ImageReplacementTarget,
 } from '@/videobook/image-edit-regions'
 import { imageEditInstructionPlaceholder, imageEditTargetSummary } from '@/videobook/image-editor-copy'
+import { notebookReferences } from '@/videobook/notebook-addressing'
 import type { ImageEditModelOption } from '@/videobook/use-image-edit-models'
 
 export type ImageSubjectEditInput = {
@@ -35,6 +36,7 @@ export type ImageSubjectEditInput = {
   subjectIds: string[]
   prompt?: string
   regions?: ImageRegionReplacement[]
+  editRegions?: ImageEditRegion['box'][]
   model?: string
 }
 
@@ -471,7 +473,7 @@ function SubjectAnalysisState({
         <strong>Analysis did not finish</strong>
         <p>{error ?? 'The image could not be decomposed.'}</p>
         {!hasTargets && (
-          <p>You can still draw a region and replace it with another image.</p>
+          <p>You can still draw a region to edit, replace, or remove.</p>
         )}
         <button type="button" onClick={() => onAnalyze()}>
           <RotateCw size={13} />Retry
@@ -525,6 +527,11 @@ function ReplacementPicker({
         targets.map((target) => (
           <div key={target.key} className="notebook-replacement-row">
             <strong>{target.label}</strong>
+            {replacements[target.key] && (
+              <button type="button" onClick={() => onPick(target.key, '')}>
+                Clear replacement for {target.label}
+              </button>
+            )}
             <div className="notebook-replacement-picker" role="listbox" aria-label={`Replacement for ${target.label}`}>
               {candidates.map((candidate) => {
                 const selected = replacements[target.key] === candidate.artifactId
@@ -581,7 +588,9 @@ export function ImageEditorWorkspace({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => new Set())
   const [regions, setRegions] = useState<ImageEditRegion[]>(() => [...(initialRegions ?? [])])
-  const [selectedRegionIds, setSelectedRegionIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [selectedRegionIds, setSelectedRegionIds] = useState<ReadonlySet<string>>(
+    () => new Set(initialRegions?.map((region) => region.id)),
+  )
   const [drawMode, setDrawMode] = useState(false)
   const [draftBox, setDraftBox] = useState<ImageEditRegion['box'] | null>(null)
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
@@ -601,14 +610,16 @@ export function ImageEditorWorkspace({
     () => subjects.filter((subject) => selectedIds.has(subject.id)),
     [selectedIds, subjects],
   )
+  const selectedRegions = useMemo(
+    () => regions.filter((region) => selectedRegionIds.has(region.id)),
+    [regions, selectedRegionIds],
+  )
   const replacementTargets = useMemo(
-    () => imageReplacementTargets(regions, selectedSubjects),
-    [regions, selectedSubjects],
+    () => imageReplacementTargets(selectedRegions, selectedSubjects, regions),
+    [regions, selectedRegions, selectedSubjects],
   )
   const canReplace = canSubmitRegionReplacements(replacementTargets, replacements)
-  /* Drawn regions, or an image picked for a subject, turn the edit into a
-     replacement; otherwise the instruction rewrites the selected subjects. */
-  const replacing = regions.length > 0
+  const replacing = notebookReferences(instruction).length > 0
     || replacementTargets.some((target) => Boolean(replacements[target.key]))
   const editOperation: 'edit' | 'replace' = replacing ? 'replace' : 'edit'
   const effectiveModelId = selectedModelId
@@ -627,7 +638,6 @@ export function ImageEditorWorkspace({
         if (mountedRef.current) setCostEstimate(null)
       })
   }
-  const replaceTargets = replacing ? replacementTargets : []
   const hoveredRegion = regions.find((region) => region.id === hoveredRegionId) ?? null
   const snapOffer = hoveredRegion ? bestSubjectSnap(hoveredRegion.box, subjects) : null
   const checkingCache = subjectMapLoading
@@ -643,15 +653,15 @@ export function ImageEditorWorkspace({
     || analyzing,
   )
   const hasTargets = regions.length > 0 || (ready && subjects.length > 0)
-  const targetSummary = imageEditTargetSummary(selectedSubjects, replaceTargets)
-  const wholeImageTarget = !replacing && selectedSubjects.length === 0
+  const targetSummary = imageEditTargetSummary(selectedSubjects, replacementTargets, replacing)
+  const wholeImageTarget = !replacing && replacementTargets.length === 0
   const trimmedInstruction = instruction.trim()
   const canApply = Boolean(onSubmitInstruction)
     && pendingAction === null
     && (trimmedInstruction.length > 0
       ? targetSummary !== null || wholeImageTarget
       : canReplace)
-  const applyLabel = replaceTargets.length > 0
+  const applyLabel = replacing
     ? 'Replace with image'
     : 'Apply edit'
 
@@ -694,11 +704,15 @@ export function ImageEditorWorkspace({
   }
 
   const removeSubjects = () => {
-    if (!onEditSubjects || selectedSubjects.length === 0) return
+    if (!onEditSubjects || replacementTargets.length === 0) return
     void runAction('remove', async () => {
       const queued = await onEditSubjects({
         operation: 'remove',
         subjectIds: selectedSubjects.map((subject) => subject.id),
+        ...(selectedRegions.length > 0 ? {
+          editRegions: selectedRegions.map((region) => region.box),
+          ...(effectiveModelId ? { model: effectiveModelId } : {}),
+        } : {}),
       })
       return queued ? 'Removal queued as a new image.' : null
     })
@@ -709,8 +723,9 @@ export function ImageEditorWorkspace({
     const selection: ImageEditSelection = {
       ...imageEditSelectionPayload(
         selectedSubjects.map((subject) => subject.id),
-        regions,
-        replacements,
+        selectedRegions,
+        Object.fromEntries(replacementTargets.flatMap((target) =>
+          replacements[target.key] ? [[target.key, replacements[target.key]!]] : [])),
       ),
       ...(effectiveModelId ? { model: effectiveModelId } : {}),
     }
@@ -771,7 +786,9 @@ export function ImageEditorWorkspace({
     drawStartRef.current = null
     setDraftBox(null)
     if (!box) return
-    setRegions((current) => [...current, { id: nextRegionId(current), box }])
+    const region = { id: nextRegionId(regions), box }
+    setRegions((current) => [...current, region])
+    setSelectedRegionIds((current) => new Set([...current, region.id]))
     setOverlaysHidden(false)
     setRemovalPreview(false)
   }
@@ -838,7 +855,7 @@ export function ImageEditorWorkspace({
             type="button"
             className={removalPreview ? 'active' : ''}
             aria-pressed={removalPreview}
-            disabled={selectedSubjects.length === 0 || pendingAction !== null}
+            disabled={selectedSubjects.length === 0 || selectedRegions.length > 0 || pendingAction !== null}
             title="Preview removal"
             onClick={() => {
               setRemovalPreview((current) => !current)
@@ -906,7 +923,7 @@ export function ImageEditorWorkspace({
             value={instruction}
             rows={5}
             aria-describedby={hintId}
-            placeholder={imageEditInstructionPlaceholder(selectedSubjects, replaceTargets)}
+            placeholder={imageEditInstructionPlaceholder(selectedSubjects, replacementTargets, replacing)}
             disabled={!onSubmitInstruction}
             autoFocus
             onChange={(event) => setInstruction(event.target.value)}
@@ -965,7 +982,7 @@ export function ImageEditorWorkspace({
             <button
               type="button"
               className="remove"
-              disabled={selectedSubjects.length === 0 || pendingAction !== null || !onEditSubjects}
+              disabled={replacementTargets.length === 0 || pendingAction !== null || !onEditSubjects}
               onClick={removeSubjects}
             >
               {pendingAction === 'remove' ? <BusyIndicator size={14} /> : <Eraser size={14} />}

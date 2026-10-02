@@ -2323,7 +2323,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('autoPlay')
   })
 
-  it('renders drawn regions beside detected subjects and disables replace until each has a still', () => {
+  it('selects drawn regions for prompt editing and removal without a replacement still', () => {
     const subjectMap = asImageSubjectMap({
       status: 'ready',
       artifact_id: 'image-artifact',
@@ -2379,8 +2379,10 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Select region 1"')
     expect(html).toContain('Replacement images')
     expect(html).toContain('@a4')
-    expect(html).toContain('Replace with image')
-    expect(html).toContain('Region 1 · replaced with another image')
+    expect(html).toContain('Apply edit')
+    expect(html).toContain('Region 1')
+    expect(html).not.toContain('replaced with another image')
+    expect(html).not.toMatch(/class="remove"[^>]*disabled/)
     expect(html).toMatch(/class="apply"[^>]*disabled/)
   })
 
@@ -2413,7 +2415,7 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('Analysis did not finish')
     expect(html).toContain('Seedream decomposition timed out before returning layers.')
-    expect(html).toContain('You can still draw a region and replace it with another image.')
+    expect(html).toContain('You can still draw a region to edit, replace, or remove.')
     expect(html).toContain('>Retry</button>')
     expect(html).not.toContain('Finding people and objects')
     expect(html).not.toContain('Analyzing…')
@@ -2463,9 +2465,11 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Region 1')
     expect(html).toContain('Replacement images')
     expect(html).toContain('@g7')
-    expect(html).toContain('Region 1 · replaced with another image')
+    expect(html).toContain('Region 1')
+    expect(html).not.toContain('replaced with another image')
+    expect(html).not.toMatch(/class="remove"[^>]*disabled/)
     expect(html).toMatch(/class="apply"[^>]*disabled/)
-    expect(html).not.toContain('You can still draw a region and replace it with another image.')
+    expect(html).not.toContain('You can still draw a region to edit, replace, or remove.')
   })
 
   it('explains how to assign a replacement when the notebook has no other images', () => {

@@ -1998,6 +1998,9 @@ describe('chat composer browser flow', () => {
       .toBe('Foreground person')
     await expect.poll(async () => await modalInput.getAttribute('placeholder'))
       .toContain('Foreground person')
+    await subjectCheckbox.uncheck()
+    expect(await dialog.locator('.image-editor-target strong').textContent())
+      .toBe('Whole image')
     await page.evaluate(() => window.localStorage.setItem(
       'videobook.cloud-generation-consent',
       'accepted',
@@ -2014,6 +2017,7 @@ describe('chat composer browser flow', () => {
       call.name === 'edit_image_subjects' && call.arguments.operation === 'whole_image')
     expect(wholeImageCall?.arguments).toMatchObject({ prompt: wholeImagePrompt })
     expect(wholeImageCall?.arguments.subject_ids).toBeUndefined()
+    await subjectCheckbox.check()
     observedCalls.length = 0
     const editPrompt = 'Replace the suit with a bright yellow raincoat'
     await modalInput.fill(editPrompt)

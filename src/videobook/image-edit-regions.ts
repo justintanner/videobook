@@ -178,18 +178,19 @@ function uniqueTrimmed(values: readonly string[]): string[] {
 export function imageReplacementTargets(
   regions: readonly ImageEditRegion[],
   selectedSubjects: readonly { id: string; label: string; box: ImageEditBox | null }[],
+  allRegions: readonly ImageEditRegion[] = regions,
 ): ImageReplacementTarget[] {
   const matchedSubjectIds = new Set(
     regions.flatMap((region) => region.matchedSubjectId ? [region.matchedSubjectId] : []),
   )
-  const regionTargets = regions.map((region, index) => ({
+  const regionTargets = regions.map((region) => ({
     key: region.id,
     box: region.box,
     ...(region.matchedSubjectId ? { subjectId: region.matchedSubjectId } : {}),
     label: region.matchedSubjectId
       ? selectedSubjects.find((subject) => subject.id === region.matchedSubjectId)?.label
-        ?? `Region ${index + 1}`
-      : `Region ${index + 1}`,
+        ?? `Region ${allRegions.findIndex((entry) => entry.id === region.id) + 1}`
+      : `Region ${allRegions.findIndex((entry) => entry.id === region.id) + 1}`,
   }))
   const subjectTargets = selectedSubjects.flatMap((subject) => {
     if (matchedSubjectIds.has(subject.id)) return []

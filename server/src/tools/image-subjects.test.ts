@@ -1597,6 +1597,85 @@ describe("image subject tools", () => {
     });
   }
 
+  it.each(["edit", "remove"] as const)("enqueues a drawn-region %s without analysis or a replacement image", async (operation) => {
+    const originalKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    try {
+      const source = await createSource();
+      await writeImageSubjectMapRecord(engine, {
+        version: IMAGE_SUBJECT_MAP_VERSION,
+        artifactId: source.artifactId,
+        objectHash: source.objectHash,
+        width: source.map.width,
+        height: source.map.height,
+        jobId: "failed-analysis",
+        status: "failed",
+        error: "No analysis available",
+        failedAt: new Date().toISOString(),
+      });
+      const regions = [{ x: 0.5, y: 0.1, width: 0.4, height: 0.3 }];
+      const result = await client.callTool({
+        name: "edit_image_subjects",
+        arguments: {
+          book_id: bookId,
+          notebook_id: source.notebookId,
+          source_cell_id: source.sourceCellId,
+          artifact_id: source.artifactId,
+          object_hash: source.objectHash,
+          operation,
+          ...(operation === "edit" ? { prompt: "Remove the glass door" } : {}),
+          edit_regions: regions,
+          model: DEFAULT_IMAGE_EDIT_MODEL_ID,
+        },
+      });
+      expect(result.isError).not.toBe(true);
+      const parsed = resultJson(result);
+      const job = engine.jobs.queue.list({ type: "generate_image_subject_edit" })
+        .find((candidate) => candidate.payload.jobId === parsed.job_id);
+      expect(job?.payload).toMatchObject({
+        operation,
+        editRegions: regions,
+        subjectIds: [],
+        modelId: DEFAULT_IMAGE_EDIT_MODEL_ID,
+      });
+      expect(job?.payload).not.toHaveProperty("replacementRefs");
+      const notebook = engine.notebooks.read(source.notebookId);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
+      expect(producer).toMatchObject({
+        provider: "kie",
+        model: DEFAULT_IMAGE_EDIT_MODEL_ID,
+        inputs: { editRegions: regions, generationMode: `region-${operation}` },
+      });
+      const unchanged = await resolveImageSubjectSource(engine, source.artifactId);
+      expect(unchanged.objectHash).toBe(source.objectHash);
+    } finally {
+      if (originalKey) process.env.KIE_API_KEY = originalKey;
+      else delete process.env.KIE_API_KEY;
+    }
+  });
+
+  it("rejects region boxes outside the image and incompatible operations before enqueueing", async () => {
+    const source = await createSource();
+    const args = {
+      book_id: bookId,
+      notebook_id: source.notebookId,
+      source_cell_id: source.sourceCellId,
+      artifact_id: source.artifactId,
+      object_hash: source.objectHash,
+      prompt: "Change the selected region",
+    };
+    for (const invalid of [
+      { operation: "edit", edit_regions: [{ x: 0.9, y: 0, width: 0.2, height: 0.2 }] },
+      { operation: "whole_image", edit_regions: [{ x: 0, y: 0, width: 0.2, height: 0.2 }] },
+      { operation: "replace", edit_regions: [{ x: 0, y: 0, width: 0.2, height: 0.2 }] },
+    ]) {
+      const result = await client.callTool({ name: "edit_image_subjects", arguments: { ...args, ...invalid } });
+      expect(result.isError).toBe(true);
+    }
+    expect(engine.jobs.queue.list({ type: "generate_image_subject_edit" })).toEqual([]);
+  });
+
   it("enqueues a whole-image edit without a subject map", async () => {
     const originalKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";
@@ -1640,7 +1719,7 @@ describe("image subject tools", () => {
       if (!notebook.ok) throw new Error(notebook.error.message);
       const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
       expect(producer?.model).toBe("seedream/5-pro-image-to-image");
-      expect(producer?.inputs.generationMode).toBe("whole-image");
+      expect(producer?.inputs?.generationMode).toBe("whole-image");
     } finally {
       if (originalKey) process.env.KIE_API_KEY = originalKey;
       else delete process.env.KIE_API_KEY;

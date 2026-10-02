@@ -24,6 +24,7 @@ import {
   type ImageEditProviderRequest,
 } from "./_image-edit-adapter.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-models.js";
+import { compositeImageRegionEdit, imageRegionEditPrompt } from "../image-region-edit.js";
 import type { Engine, Job } from "videobook-engine";
 import {
   IMAGE_SUBJECT_MAP_VERSION,
@@ -77,6 +78,7 @@ type GenerateImageSubjectEditPayload = {
   operation: "remove" | "edit" | "replace" | "whole_image";
   prompt?: string;
   regions?: ImageSubjectReplacementRegion[];
+  editRegions?: ImageSubjectNormalizedBox[];
   replacementRefs?: ReplacementRefInput[];
   orderedImageRefs?: Array<{ role: "base" | "replacement"; artifactId: string }>;
   modelId?: string;
@@ -1280,9 +1282,15 @@ export function registerImageSubjectJobs(engine: Engine): void {
       const readyMap = record?.status === "ready" && record.objectHash === source.objectHash
         ? record
         : null;
+      const editRegions = payload.editRegions ?? [];
+      const regional = editRegions.length > 0;
+      if (regional && payload.operation !== "edit" && payload.operation !== "remove") {
+        throw new Error("Drawn-region edits require an edit or remove operation");
+      }
       if (
         payload.operation !== "replace"
         && payload.operation !== "whole_image"
+        && !regional
         && !readyMap
       ) {
         throw new Error("A current subject map is required before editing subjects");
@@ -1298,10 +1306,38 @@ export function registerImageSubjectJobs(engine: Engine): void {
       if ((payload.operation === "edit" || payload.operation === "whole_image") && !payload.prompt?.trim()) {
         throw new Error("A prompt is required to edit selected subjects");
       }
-      const adapter = payload.operation === "remove"
+      const adapter = payload.operation === "remove" && !regional
         ? null
         : imageSubjectEditAdapter(payload.modelId);
-      if (payload.operation === "whole_image") {
+      if (regional) {
+        const generated = await runAdapterImageSubjectEdit(
+          engine,
+          payload,
+          adapter!,
+          "semantic",
+          {
+            prompt: imageRegionEditPrompt(editRegions, payload.operation === "remove" ? "remove" : "edit", payload.prompt ?? ""),
+            width: source.width,
+            height: source.height,
+          },
+          source.file.name,
+          context.signal,
+        );
+        const original = await engine.files.read(payload.sourceArtifactId, source.file.name);
+        if (!original.ok) throw new Error(original.error.message);
+        const current = await resolveImageSubjectSource(engine, payload.sourceArtifactId);
+        if (current.objectHash !== payload.sourceObjectHash) {
+          throw new Error("The source image changed during region editing");
+        }
+        const output = await compositeImageRegionEdit(original.value, generated.output, editRegions);
+        await persistProcessedImage(engine, payload, readyMap, output, {
+          origin: payload.operation === "remove" ? "image_region_remove" : "image_region_edit",
+          model: generated.request.model,
+          kie_task_id: generated.taskId,
+          targeting: "drawn-regions",
+          edit_regions: editRegions,
+        });
+      } else if (payload.operation === "whole_image") {
         const generated = await generateWholeImageEdit(
           engine,
           payload,

@@ -8,9 +8,10 @@ export type MediaFullscreenMode = 'view' | 'edit'
 export function imageEditTargetSummary(
   subjects: readonly ImageSubject[],
   replacementTargets: readonly ImageReplacementTarget[],
+  replacing = false,
 ): string | null {
   if (replacementTargets.length > 0) {
-    return `${replacementTargets.map((target) => target.label).join(', ')} · replaced with another image`
+    return `${replacementTargets.map((target) => target.label).join(', ')}${replacing ? ' · replaced with another image' : ''}`
   }
   if (subjects.length === 0) return null
   const names = subjects.slice(0, 3).map((subject) => subject.label).join(', ')
@@ -20,9 +21,13 @@ export function imageEditTargetSummary(
 export function imageEditInstructionPlaceholder(
   subjects: readonly ImageSubject[],
   replacementTargets: readonly ImageReplacementTarget[],
+  replacing = false,
 ): string {
-  if (replacementTargets.length > 0) {
+  if (replacing) {
     return 'Optional notes for the replacement. Pick an image below, or mention one like @g7.'
+  }
+  if (replacementTargets.length > 0) {
+    return `Describe how to change ${replacementTargets.map((target) => target.label).join(' and ')}, e.g. "remove the glass door". To replace with an image, pick one below or mention @g7.`
   }
   if (subjects.length === 0) {
     return 'Describe a whole-image edit, e.g. "make it look like a snowy night", or select a subject to scope the change.'
@@ -50,4 +55,3 @@ export function mediaDetailParts(asset: {
   parts.push(asset.type === 'final' ? 'VIDEO' : asset.type.toUpperCase())
   return parts
 }
-

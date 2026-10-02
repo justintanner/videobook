@@ -4166,7 +4166,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? 'fal'
       : 'kie'
     if (
-      (input.operation === 'edit' || input.operation === 'replace')
+      (input.operation !== 'remove' || (input.editRegions?.length ?? 0) > 0)
       && !acceptCloudGenerationConsent({
         provider: editModelProvider,
         model: editModelId,
@@ -4185,6 +4185,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         operation: input.operation,
         ...(input.model ? { model: input.model } : {}),
         ...(input.prompt ? { prompt: input.prompt } : {}),
+        ...(input.editRegions?.length ? { edit_regions: input.editRegions } : {}),
         ...(input.regions && input.regions.length > 0
           ? {
               regions: input.regions.map((region) => ({
@@ -4209,12 +4210,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const status = asString(recordValue(result)?.status) ?? 'queued'
     presentChat(chat, () => setNotice(
       input.operation === 'remove'
-        ? `Subject removal ${status}`
+        ? `${input.editRegions?.length ? 'Region' : 'Subject'} removal ${status}`
         : input.operation === 'replace'
           ? `Region replacement ${status}`
           : input.operation === 'whole_image'
             ? `Whole-image edit ${status}`
-            : `Subject edit ${status}`,
+            : `${input.editRegions?.length ? 'Region' : 'Subject'} edit ${status}`,
     ))
     await refreshBookData(session.bookId, session.notebookId, undefined, chat).catch(() => undefined)
     return true
@@ -9377,9 +9378,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return outcome
   }
 
-  /* The fullscreen image editor's instruction field. Drawn regions, picked
-     replacement images, or @mentions make it a replacement; otherwise the text
-     rewrites the selected subjects. */
   const submitFullscreenImageEdit = async (
     session: MediaFullscreenSession,
     input: string,
@@ -9408,8 +9406,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    const wantsReplace = selection.regions.length > 0
-      || mentionResult.artifactIds.length > 0
+    const wantsReplace = mentionResult.artifactIds.length > 0
       || Object.keys(selection.replacements).length > 0
     if (wantsReplace) {
       const targets = imageReplacementTargets(selection.regions, selectedSubjects)
@@ -9447,7 +9444,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         message: `Region replacement queued for ${targets.length} ${targets.length === 1 ? 'region' : 'regions'}.`,
       }
     }
-    if (selectedSubjects.length === 0) {
+    if (selection.subjectIds.length === 0 && selection.regions.length === 0) {
       if (!input.trim()) {
         return {
           ok: false,
@@ -9475,20 +9472,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         message: 'Whole-image edit queued.',
       }
     }
-    if (session.subjectMap?.status !== 'ready') {
+    if (selection.subjectIds.length > 0 && session.subjectMap?.status !== 'ready') {
       return {
         ok: false,
         message: session.subjectMap?.status === 'analyzing'
           ? 'Wait for people and object analysis to finish before editing.'
-          : 'Analyze the image before describing an edit, or draw a region and mention a replacement image.',
-        nextInput: input,
-        selectInput: false,
-      }
-    }
-    if (selectedSubjects.length === 0) {
-      return {
-        ok: false,
-        message: 'Select at least one person or object to edit.',
+          : 'Analyze the image before editing subjects, or draw a region to edit.',
         nextInput: input,
         selectInput: false,
       }
@@ -9497,6 +9486,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       operation: 'edit',
       subjectIds: selectedSubjects.map((subject) => subject.id),
       prompt: input,
+      ...(selection.regions.length > 0
+        ? { editRegions: selection.regions.map((region) => region.box) }
+        : {}),
       ...(selection.model ? { model: selection.model } : {}),
     })
     if (!queued) {
@@ -9509,7 +9501,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     return {
       ok: true,
-      message: `Image edit queued for ${selectedSubjects.length} ${selectedSubjects.length === 1 ? 'subject' : 'subjects'}.`,
+      message: `Image edit queued for ${selection.regions.length + selectedSubjects.length} selected areas.`,
     }
   }
 
