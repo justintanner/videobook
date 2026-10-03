@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { srtContent } from "./srt.js";
+import { extractVideoPoster } from "./video-poster.js";
 import {
   AUDIO_OPTS,
   H264_MEDIUM,
@@ -179,6 +180,7 @@ async function splitMaterializedRange(
         `Cannot split artifact ${sourceArtifactId}: FFmpeg output has no video stream`,
       );
     }
+    const poster = await extractVideoPoster(outPath, probe.videoDuration || probe.duration);
     const artifactId = await ingestOutput(
       engine,
       "video",
@@ -186,6 +188,8 @@ async function splitMaterializedRange(
       "original.mp4",
       outPath,
     );
+    const posterWrite = await engine.files.write(artifactId, "original.jpg", poster);
+    if (!posterWrite.ok) throw new Error(posterWrite.error.message);
     await registerMediaProbe(engine, artifactId, "original.mp4", probe);
     return {
       artifactId,

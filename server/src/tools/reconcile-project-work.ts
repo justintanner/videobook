@@ -847,6 +847,23 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
             : null,
       });
 
+      if (a.kind === "video" && status === "ready" && !hasThumbnail && mediaFile) {
+        const recovery = await engine.metadata.artifacts.read<{ sourceHash: string; failed: boolean }>(
+          a.artifactId, "poster-recovery",
+        );
+        if (!recovery.ok || !recovery.value.failed || recovery.value.sourceHash !== mediaFile.objectHash) {
+          void queue.enqueue(`extract-video-poster-${book_id}-${a.artifactId}-${mediaFile.objectHash}`, {
+            type: "extract_video_poster",
+            bookId: book_id,
+            posterArtifactId: a.artifactId,
+            sourceFilename: mediaFile.name,
+            sourceHash: mediaFile.objectHash,
+          }).catch((error) => {
+            logger.error("poster-enqueue-failed", { assetId: a.artifactId, error });
+          });
+        }
+      }
+
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
       const analysisInfo = analysisInfoFromMetadata(meta);
       if (analysisInfo && fileNames.has("analysis.json")) {

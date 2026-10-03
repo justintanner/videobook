@@ -97,6 +97,7 @@ const JOB_TITLES: Record<string, string> = {
   run_notebook: 'Run notebook',
   semantic_index: 'Semantic index',
   extract_waveform: 'Extract waveform',
+  extract_video_poster: 'Create video poster',
   extract_audio: 'Extract audio',
   transcribe: 'Transcribe',
 }

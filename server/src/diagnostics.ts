@@ -13,6 +13,7 @@ const EVENTS = [
   "process-video-enqueue-failed", "waveform-write-failed", "timeline-reencode",
   "pad-video-started", "video-analysis-failed", "description-truncated",
   "description-cache-failed", "watermark-placement-fallback", "waveform-enqueue-failed",
+  "poster-enqueue-failed",
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
   "tag-asset-failed", "voice-session-closed", "alive-captions-regions-failed",

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Engine } from "videobook-engine";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
@@ -98,6 +99,12 @@ describe("source-preserving video clip tools", () => {
       const outputManifest = await engine.files.manifest(String(extracted.output_asset_id));
       expect(outputManifest.ok).toBe(true);
       if (!outputManifest.ok) return;
+      const poster = await engine.files.read(String(extracted.output_asset_id), "original.jpg");
+      expect(poster.ok).toBe(true);
+      if (!poster.ok) throw new Error(poster.error.message);
+      expect(await sharp(poster.value).metadata()).toMatchObject({
+        format: "jpeg", width: 320, height: 180,
+      });
       const output = await probeVideo(join(outputManifest.value.path, "original.mp4"));
       expect(output.duration).toBeGreaterThan(1.8);
       expect(output.duration).toBeLessThanOrEqual(2.1);
@@ -127,6 +134,16 @@ describe("source-preserving video clip tools", () => {
     expect(split.chunk_b_asset_id).not.toBe(sourceAssetId);
     expect(split.chunk_a_artifact_id).toEqual(expect.any(String));
     expect(split.chunk_b_artifact_id).toEqual(expect.any(String));
+    for (const artifactId of [split.chunk_a_artifact_id, split.chunk_b_artifact_id]) {
+      await expect.poll(async () => (await engine.files.read(String(artifactId), "original.jpg")).ok,
+        { timeout: 30_000 }).toBe(true);
+      const poster = await engine.files.read(String(artifactId), "original.jpg");
+      expect(poster.ok).toBe(true);
+      if (!poster.ok) throw new Error(poster.error.message);
+      expect(await sharp(poster.value).metadata()).toMatchObject({
+        format: "jpeg", width: 320, height: 180,
+      });
+    }
     const sourceManifest = await engine.files.manifest(sourceAssetId);
     expect(sourceManifest.ok).toBe(true);
   }, 120_000);
