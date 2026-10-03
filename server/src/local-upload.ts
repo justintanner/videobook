@@ -18,6 +18,8 @@ const extensionToKind: Record<string, string> = {
   ".jpeg": "image",
   ".png": "image",
   ".gif": "image",
+  ".heic": "image",
+  ".heif": "image",
   ".webp": "image",
   ".svg": "image",
   ".mp3": "audio",

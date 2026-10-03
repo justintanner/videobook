@@ -5,6 +5,14 @@ interface ImageProbeResult {
   height: number;
 }
 
+export async function decodeHeicToPng(buffer: Buffer): Promise<Buffer> {
+  const { default: decode } = await import("heic-decode");
+  const { width, height, data } = await decode({ buffer });
+  return sharp(Buffer.from(data), { raw: { width, height, channels: 4 } })
+    .png()
+    .toBuffer();
+}
+
 export async function probeImage(buffer: Buffer): Promise<ImageProbeResult> {
   const metadata = await sharp(buffer).metadata();
   const width = metadata.width ?? 0;

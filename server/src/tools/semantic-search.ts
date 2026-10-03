@@ -323,7 +323,8 @@ export function semanticSearchDefs(
           : artifact.value.kind === "audio"
             ? findAudioFile(manifest.value.files, artifact.value.kind)
             : manifest.value.files.find((file) =>
-                /^original\.(?:jpe?g|png|webp|gif|svg)$/i.test(file.name));
+                /^original\.(?:jpe?g|png|webp|gif|svg)$/i.test(file.name))
+              ?? manifest.value.files.find((file) => /^original\.(?:heic|heif)$/i.test(file.name));
         if (!source) return failure("No source file is available for retry");
         const activeTask = await engine.jobs.pending.read(artifact.value.artifactId);
         if (!activeTask.ok) return failure(activeTask.error.message);

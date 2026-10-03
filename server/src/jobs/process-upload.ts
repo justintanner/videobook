@@ -12,7 +12,7 @@ const AUDIO_EXTENSIONS = new Set([
   ".m4a",
   ".weba",
 ]);
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]);
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".heic", ".heif"]);
 const SCRIPT_EXTENSIONS = new Set([".md"]);
 
 // process_image writes these alongside an original image. Their presence is
@@ -103,10 +103,11 @@ export async function findUnprocessedUploads(
       // process_image variant exists. Without that variant guard, missing
       // processing metadata would cause the sweep to pick the alphabetically
       // first variant (landscape.jpg) and rename it to original.jpg.
-      let mediaFile = manifest.value.files.find((f) => {
+      const originalFiles = manifest.value.files.filter((f) => {
         const ext = path.extname(f.name).toLowerCase();
         return shape.extensions.has(ext) && f.name === `original${ext}`;
       });
+      let mediaFile = originalFiles.find((f) => !/\.(?:heic|heif)$/i.test(f.name)) ?? originalFiles.at(0);
       if (!mediaFile) {
         const hasImageVariant = shape.mediaType === "image"
           && manifest.value.files.some((f) => IMAGE_VARIANT_FILENAMES.has(f.name));

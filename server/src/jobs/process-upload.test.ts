@@ -123,6 +123,21 @@ describe("findUnprocessedUploads", () => {
     expect(result[0].mediaType).toBe("video");
   });
 
+  it.each([["heic", "png"], ["heif", "jpg"]])("recovers a %s upload and prefers its working %s image once available", async (extension, workingExtension) => {
+    const asset = await fs.artifacts.create("image", "photo");
+    if (!asset.ok) throw new Error(asset.error.message);
+    const sourceName = `original.${extension}`;
+    expect((await fs.files.write(asset.value.artifactId, sourceName, Buffer.from("source"))).ok).toBe(true);
+    expect(await findUnprocessedUploads(fs, fs.artifacts.list())).toMatchObject([
+      { assetId: asset.value.artifactId, mediaFilename: sourceName, extension: `.${extension}`, mediaType: "image" },
+    ]);
+    const workingName = `original.${workingExtension}`;
+    expect((await fs.files.write(asset.value.artifactId, workingName, Buffer.from("converted"))).ok).toBe(true);
+    expect(await findUnprocessedUploads(fs, fs.artifacts.list())).toMatchObject([
+      { assetId: asset.value.artifactId, mediaFilename: workingName, extension: `.${workingExtension}`, mediaType: "image" },
+    ]);
+  });
+
   it("skips an image asset that already has process_image variants but lost its origin metadata", async () => {
     // Regression: when process_image's writeMetadata commit lags behind the
     // variant writes, a sync-sweep race used to pick `landscape.jpg` (the

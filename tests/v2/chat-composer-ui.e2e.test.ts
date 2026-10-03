@@ -2322,7 +2322,10 @@ describe('chat composer browser flow', () => {
       .evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
-  it('turns every open notebook square into a media file dropzone', async () => {
+  it.each([
+    { filename: 'grid-drop.svg', type: 'image/svg+xml' },
+    { filename: 'grid-drop.HEIC', type: '' },
+  ])('turns every open notebook square into a media file dropzone for $filename', async ({ filename, type }) => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -2331,18 +2334,26 @@ describe('chat composer browser flow', () => {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
 
-    const dataTransfer = await page.evaluateHandle(() => {
+    const bytes = filename.endsWith('.svg')
+      ? Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#48b26f"/></svg>')
+      : await readFile(new URL('../fixtures/images/portrait.heic', import.meta.url))
+    const dataTransfer = await page.evaluateHandle(({ bytes, filename, type }) => {
       const transfer = new DataTransfer()
-      transfer.items.add(new File([
-        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#48b26f"/></svg>',
-      ], 'grid-drop.svg', { type: 'image/svg+xml' }))
+      transfer.items.add(new File([new Uint8Array(bytes)], filename, { type }))
       return transfer
-    })
+    }, { bytes: [...bytes], filename, type })
     const squares = page.locator('.notebook-grid-square')
     const cells = page.locator('.cell-node')
     // The first open square in row-major order once dragging starts; its
     // label is read back so the dropped cell can be matched by that address.
     const targetSquare = page.locator('.notebook-grid-square-dropzone').first()
+    const client = new Client({ name: 'videobook-media-drop-e2e', version: '1' }, {
+      capabilities: {},
+      supportedProtocolVersions: ['2026-07-28'],
+      versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let droppedCellId: string | null = null
 
     try {
       await page.dispatchEvent('.app-shell', 'dragenter', { dataTransfer })
@@ -2380,6 +2391,8 @@ describe('chat composer browser flow', () => {
         }),
       })
       await droppedCell.waitFor({ state: 'visible', timeout: 30_000 })
+      droppedCellId = await droppedCell.evaluate((element) =>
+        element.closest('.react-flow__node')?.getAttribute('data-id') ?? null)
       expect(await page.locator('.notebook-grid-square-dropzone').count()).toBe(0)
       expect(observedCalls.some((call) =>
         call.name === 'create_notebook_cell'
@@ -2389,8 +2402,60 @@ describe('chat composer browser flow', () => {
         .toBe(true)
       expect(observedCalls.some((call) => call.name === 'set_notebook_media_slot'))
         .toBe(true)
+      if (filename.endsWith('.HEIC')) {
+        const preview = droppedCell.locator('img').first()
+        await preview.waitFor({ state: 'visible', timeout: 30_000 })
+        await expect.poll(async () => await preview.evaluate((element) => ({
+          loaded: element instanceof HTMLImageElement && element.complete,
+          width: element instanceof HTMLImageElement ? element.naturalWidth : 0,
+          height: element instanceof HTMLImageElement ? element.naturalHeight : 0,
+        })), { timeout: 30_000 }).toEqual({ loaded: true, width: 64, height: 96 })
+        expect(await preview.getAttribute('src')).toContain('/original.png')
+
+        const emptySlot = notebookCellNode(page, imageCellId).getByRole('region', { name: 'Empty image media slot' })
+        const picker = emptySlot.locator('input[type="file"]')
+        expect(await picker.getAttribute('accept')).toContain('.heic,.heif')
+        await emptySlot.dispatchEvent('drop', { dataTransfer })
+        const attachedPreview = notebookCellNode(page, imageCellId).locator('img').first()
+        const imagePath = new URL((await preview.getAttribute('src'))!, appUrl).pathname
+        await expect.poll(async () => {
+          const source = await attachedPreview.getAttribute('src')
+          return source ? new URL(source, appUrl).pathname : null
+        }, {
+          timeout: 30_000,
+        }).toBe(imagePath)
+
+        const cleared = await client.callTool({
+          name: 'set_notebook_media_slot',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell_id: imageCellId, artifact_ref: null },
+        })
+        resultValue(cleared)
+        notebookDirty = true
+        await openApp()
+        const fileInput = notebookCellNode(page, imageCellId).locator('input[type="file"]')
+        await fileInput.setInputFiles({ name: 'picker.heif', mimeType: 'application/octet-stream', buffer: bytes })
+        const pickedPreview = notebookCellNode(page, imageCellId).locator('img').first()
+        await expect.poll(async () => await pickedPreview.evaluate((element) =>
+          element instanceof HTMLImageElement && element.complete && element.naturalHeight === 96), {
+          timeout: 30_000,
+        }).toBe(true)
+      }
     } finally {
       await dataTransfer.dispose()
+      if (filename.endsWith('.HEIC')) {
+        resultValue(await client.callTool({
+          name: 'set_notebook_media_slot',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell_id: imageCellId, artifact_ref: null },
+        }))
+      }
+      if (droppedCellId) {
+        resultValue(await client.callTool({
+          name: 'delete_notebook_cell',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell_id: droppedCellId },
+        }))
+      }
+      await client.close()
+      notebookDirty = true
     }
   }, 60_000)
 

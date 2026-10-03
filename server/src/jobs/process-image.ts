@@ -2,7 +2,7 @@ import type { Engine } from "videobook-engine";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
-import { probeImage, cropToFill } from "../image.js";
+import { probeImage, cropToFill, decodeHeicToPng } from "../image.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
 
 export const SKIP_CROP_EXTENSIONS = new Set([".svg", ".gif"]);
@@ -26,7 +26,12 @@ export function registerProcessImageJob(engine: Engine): void {
         const readResult = await engine.files.read(assetId, `original${extension}`);
         if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
 
-        const buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
+        let buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
+        if (extension === ".heic" || extension === ".heif") {
+          buffer = await decodeHeicToPng(buffer);
+          const converted = await engine.files.write(assetId, "original.png", buffer);
+          if (!converted.ok) throw new Error(converted.error.message);
+        }
         const { width, height } = await probeImage(buffer);
 
         const metadata = await engine.metadata.artifacts.write(

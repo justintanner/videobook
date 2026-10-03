@@ -10,6 +10,8 @@ describe('notebook media drop', () => {
 
   it('falls back to supported filename extensions', () => {
     expect(mediaKindForFile({ name: 'STILL.WEBP', type: '' })).toBe('image')
+    expect(mediaKindForFile({ name: 'PHOTO.HEIC', type: '' })).toBe('image')
+    expect(mediaKindForFile({ name: 'photo.heif', type: 'application/octet-stream' })).toBe('image')
     expect(mediaKindForFile({ name: 'clip.MOV', type: '' })).toBe('video')
     expect(mediaKindForFile({ name: 'voice.M4A', type: '' })).toBe('audio')
     expect(mediaKindForFile({ name: 'notes.md', type: 'text/markdown' })).toBeNull()
