@@ -625,7 +625,7 @@ function CellMediaActions({
           title={`Open @${address} fullscreen`}
           onClick={onOpen}
         >
-          <Maximize2 size={14} />Fullscreen
+          <Maximize2 size={14} /><span>Fullscreen</span>
         </button>
       </span>
     </div>
@@ -724,14 +724,12 @@ function NotebookCellMedia({
   asset,
   address,
   allowFullscreen,
-  inlineActions = true,
   overlayMetadata = true,
   onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
   address: string
   allowFullscreen: boolean
-  inlineActions?: boolean
   overlayMetadata?: boolean
   onOpenFullscreen: (asset: NotebookCellInspectorAsset, mode?: MediaFullscreenMode) => void
 }) {
@@ -793,7 +791,7 @@ function NotebookCellMedia({
           />
         )}
       </div>
-      {inlineActions && canOpenFullscreen && isVideo && (
+      {canOpenFullscreen && isVideo && (
         <CellMediaActions
           address={address}
           onOpen={() => openFullscreen('view')}
@@ -1992,7 +1990,6 @@ function MediaCellInspector({
       asset={previewAsset}
       address={address}
       allowFullscreen={canOpenFullscreen}
-      inlineActions={false}
       overlayMetadata={false}
       onOpenFullscreen={onOpenFullscreen}
     />
@@ -2111,31 +2108,21 @@ function MediaCellInspector({
                 inputs={cell.inputs}
               />
             )}
-            {previewAsset && kind === 'video' && (
-              <div className="inspector-media-summary-actions">
-                <CellMediaActions
-                  address={address}
-                  onOpen={() => onOpenFullscreen(previewAsset)}
-                />
-              </div>
-            )}
           </div>
           <div className="inspector-media-row-track inspector-media-row-details">
             {versionSelector}
             {assetTags}
             {inputSources}
-            {/* Deleting is the last thing in the reading order, under what the
-                cell is and where it came from, not a stray icon in a corner. */}
-            <CellCleanupActions
-              busy={busy}
-              deleting={deleting}
-              onDelete={onDelete}
-            />
           </div>
           <div className="inspector-media-row-track inspector-media-row-actions">
             <PublishedPostInspectorDetails inputs={cell.inputs} />
             {insights}
           </div>
+          <CellCleanupActions
+            busy={busy}
+            deleting={deleting}
+            onDelete={onDelete}
+          />
         </div>
       </div>
     </div>

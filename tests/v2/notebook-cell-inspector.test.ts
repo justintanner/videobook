@@ -1253,7 +1253,7 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('inspector-media-row-preview')).toBeLessThan(
       html.indexOf('class="inspector-media-actions'),
     )
-    expect(html.indexOf('class="inspector-media-actions')).toBeGreaterThan(
+    expect(html.indexOf('class="inspector-media-actions')).toBeLessThan(
       html.indexOf('inspector-media-row-meta'),
     )
   })
@@ -1368,7 +1368,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('inspector-media-facts')
     expect(html).toContain('<span>3840×2160</span>')
     expect(html).toContain('<svg')
-    expect(html).toContain('Fullscreen</button>')
+    expect(html).toContain('<span>Fullscreen</span>')
   })
 
   it('marks audio output for a compact media preview', () => {

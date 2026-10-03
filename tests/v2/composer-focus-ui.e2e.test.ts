@@ -484,7 +484,7 @@ describe('composer focus through real workspace interactions', () => {
           const header = element.querySelector(':scope > header')
           const row = element.querySelector('.inspector-media-row-content')
           const preview = element.querySelector('.inspector-cell-preview')
-          const actions = element.querySelector('.inspector-media-row-details .inspector-compact-actions')
+          const actions = element.querySelector('.inspector-media-row-meta > .inspector-compact-actions')
           const metadata = element.querySelector('.inspector-media-row-meta')
           if (!(wrapper instanceof HTMLElement) || !(header instanceof HTMLElement)
             || !(row instanceof HTMLElement) || !(preview instanceof HTMLElement)
@@ -521,8 +521,6 @@ describe('composer focus through real workspace interactions', () => {
               && audioBox.bottom <= previewBox.bottom),
             actionsOutsidePreview: actionBox.left >= previewBox.right
               || Boolean(audio && actionBox.top >= previewBox.bottom),
-            // Delete closes the details column, so a short dock may scroll
-            // to it; it only has to be reachable inside the dock.
             actionsReachable: (actionBox.top >= box.top && actionBox.bottom <= box.bottom)
               || isScrolledWithinDock(actions, element),
             headerHeight: Math.round(header.getBoundingClientRect().height),
