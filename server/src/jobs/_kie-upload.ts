@@ -1,4 +1,5 @@
-import { createKie, uploadFile } from "@apicity/kie";
+import { createKie } from "../usage-providers.js";
+import { uploadFile } from "@apicity/kie";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,

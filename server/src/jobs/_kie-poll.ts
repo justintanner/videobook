@@ -1,5 +1,6 @@
+import { createKie } from "../usage-providers.js";
 import { setTimeout as delay } from "node:timers/promises";
-import { createKie } from "@apicity/kie";
+
 import type { KieProvider } from "@apicity/kie";
 import { requireApiKey } from "../api-key.js";
 import { subjectAnalysisProviderFailureMessage } from "../image-subject-map.js";

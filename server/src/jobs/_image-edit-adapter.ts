@@ -1,8 +1,9 @@
+import { createFal } from "../usage-providers.js";
 import { submitMediaJob } from "@apicity/kie";
 import type { MediaGenerationRequest } from "@apicity/kie";
 import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
 import type { FalQueueSubmitRequest } from "@apicity/fal/zod";
-import { createFal, FalError } from "@apicity/fal";
+import { FalError } from "@apicity/fal";
 import {
   FalAlibabaQwenImage3EditRequestSchema,
   FalNanoBanana2EditRequestSchema,

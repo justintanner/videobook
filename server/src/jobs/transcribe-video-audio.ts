@@ -1,9 +1,10 @@
+import { createOpenAi } from "../usage-providers.js";
 import { appendDiagnostic } from "../diagnostics.js";
 import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import { createOpenAi } from "@apicity/openai";
+
 import { logger } from "../logger.js";
 import { queue, registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { getApiKey } from "../api-key.js";

@@ -1,4 +1,5 @@
-import { createOpenAi, withRetry } from "@apicity/openai";
+import { createOpenAi } from "./usage-providers.js";
+import { withRetry } from "@apicity/openai";
 import type {
   OpenAiResponseRequest,
   OpenAiResponseResponse,

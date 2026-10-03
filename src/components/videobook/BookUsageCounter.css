@@ -1,0 +1,91 @@
+.topbar-tools {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-right: var(--app-gutter);
+}
+
+.topbar-tools .header-navigation { margin-right: 0; }
+.book-usage { min-width: 0; font-variant-numeric: tabular-nums; }
+.book-usage-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0b1710;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.book-usage-trigger:hover { background: #13261a; border-color: var(--control-border-hover); }
+.book-usage-trigger:disabled { opacity: .5; cursor: default; }
+.book-usage-trigger small, .book-usage-divider { color: #8eaa98; font-size: 11px; }
+.book-usage-indicator { width: 5px; height: 5px; border-radius: 50%; background: #d8b875; flex: 0 0 auto; }
+.book-usage-popover {
+  position: fixed;
+  inset: auto 12px auto auto;
+  width: min(390px, calc(100vw - 24px));
+  margin: 0;
+  padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #385044;
+  border-radius: 10px;
+  background: #08120d;
+  color: #dbe9df;
+  box-shadow: 0 16px 60px #0009;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.book-usage-popover > header { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 18px; }
+.book-usage-popover h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.book-usage-popover header p { margin: 3px 0 0; color: #8eaa98; font-size: 11px; overflow-wrap: anywhere; }
+.book-usage-popover button { color: inherit; background: transparent; border: 0; cursor: pointer; }
+.book-usage-popover header button { width: 32px; height: 32px; font-size: 23px; }
+.book-usage-popover button:focus-visible, .book-usage-popover summary:focus-visible { outline: 2px solid #7fc69b; outline-offset: 3px; }
+.book-usage-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+.book-usage-totals small { display: block; font-size: 10px; color: #8eaa98; text-transform: uppercase; letter-spacing: .06em; }
+.book-usage-totals strong { font-size: 24px; font-weight: 500; }
+.book-usage-facts { margin: 0 0 14px; font-size: 11px; }
+.book-usage-facts > div { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; }
+.book-usage-facts dt { color: #8eaa98; }
+.book-usage-facts dd { margin: 0; text-align: right; }
+.book-usage-notice, .book-usage-pending { padding: 10px; border-radius: 5px; background: #292316; color: #dbc18e; font-size: 11px; }
+.book-usage-notice button { text-decoration: underline; }
+.book-usage-pending { background: #112419; color: #a4cdb2; }
+.book-usage-breakdown details { border-top: 1px solid #21372a; }
+.book-usage-breakdown summary { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; cursor: pointer; font-size: 12px; }
+.book-usage-breakdown summary > span:first-child::before { content: '›'; display: inline-block; width: 14px; color: #8eaa98; }
+.book-usage-breakdown details[open] summary > span:first-child::before { content: '⌄'; }
+.book-usage-model, .book-usage-recent > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 11px; }
+.book-usage-model > div, .book-usage-recent > div > div { min-width: 0; }
+.book-usage-model strong, .book-usage-recent strong { display: block; overflow-wrap: anywhere; font-size: 11px; font-weight: 500; }
+.book-usage-model small, .book-usage-recent small { display: block; color: #8eaa98; font-size: 10px; }
+.book-usage-model > span, .book-usage-recent > div > span { flex-shrink: 0; }
+.book-usage-recent { margin-top: 12px; border-top: 1px solid #21372a; }
+.book-usage-recent h3 { margin: 14px 0 4px; color: #8eaa98; font-size: 11px; font-weight: 500; }
+.book-usage-empty { color: #8eaa98; font-size: 12px; }
+.book-usage-popover footer { margin-top: 16px; border-top: 1px solid #21372a; padding-top: 12px; color: #8eaa98; font-size: 10px; }
+
+@media (max-width: 1280px) {
+  .topbar-tools { grid-column: 2; }
+}
+@media (max-width: 560px) {
+  .topbar-tools { grid-row: 2; grid-column: 1; justify-content: space-between; gap: 4px; height: 48px; margin: 0; padding: 0 8px; border-top: 1px solid var(--line); }
+  .topbar-tools .header-navigation { border: 0; width: auto; flex: 0 0 auto; gap: 0; }
+  .topbar-tools .header-navigation button { width: 44px; flex: 0 0 44px; }
+  .book-usage-trigger { gap: 5px; padding: 0 7px; font-size: 11px; }
+  .book-usage-trigger small { font-size: 10px; }
+  .book-usage-totals strong { font-size: 21px; }
+}

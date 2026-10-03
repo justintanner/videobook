@@ -1,4 +1,5 @@
-import { createElevenLabs, type ElevenLabsListVoicesResponse, type ElevenLabsVoice } from "@apicity/elevenlabs";
+import { createElevenLabs } from "../usage-providers.js";
+import { type ElevenLabsListVoicesResponse, type ElevenLabsVoice } from "@apicity/elevenlabs";
 import type { ToolDef } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 

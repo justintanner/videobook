@@ -1,5 +1,6 @@
+import { createKie } from "../usage-providers.js";
 import type { MediaGenerationRequest, VeoGenerateRequest } from "@apicity/kie";
-import { createKie, submitMediaJob, KieError } from "@apicity/kie";
+import { submitMediaJob, KieError } from "@apicity/kie";
 import { mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";

@@ -1,5 +1,6 @@
+import { createAlibaba } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
-import { createAlibaba } from "@apicity/alibaba";
+
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { queue, registerJobHandler } from "../queue.js";

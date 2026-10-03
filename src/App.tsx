@@ -191,6 +191,8 @@ import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePrev
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
 import type { WorkspaceAction } from '../server/src/workspace-action-contract'
 import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
+import { BookUsageCounter } from '@/components/videobook/BookUsageCounter'
+import { useBookUsage } from '@/videobook/useBookUsage'
 import { isNotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { SplitBody } from '@/components/videobook/confirm/bodies/SplitBody'
 import { PostToXBody } from '@/components/videobook/confirm/bodies/PostToXBody'
@@ -2023,6 +2025,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     callTool: call,
     ready: mcp.state === 'ready',
   })
+
+  const bookUsage = useBookUsage({ bookId, ready: mcp.state === 'ready', call })
 
   const estimateImageEditCost = useCallback(
     async (modelId: string): Promise<string | null> => {
@@ -11176,16 +11180,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             }}
           />
         )}
-        <nav className="header-navigation" aria-label="Workspace navigation">
-          {screenNavigation.map((item) => {
-            const Icon = item.icon
-            return (
-              <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
-                <Icon size={17} />
-              </button>
-            )
-          })}
-        </nav>
+        <div className="topbar-tools">
+          <nav className="header-navigation" aria-label="Workspace navigation">
+            {screenNavigation.map((item) => {
+              const Icon = item.icon
+              return (
+                <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
+                  <Icon size={17} />
+                </button>
+              )
+            })}
+          </nav>
+          <BookUsageCounter
+            key={bookId}
+            bookName={activeBook?.name ?? ''}
+            enabled={!!bookId}
+            snapshot={bookUsage.snapshot}
+            stale={bookUsage.stale}
+            onRetry={bookUsage.retry}
+          />
+        </div>
       </header>
       {!online && (
         <div className="offline-banner" role="status">

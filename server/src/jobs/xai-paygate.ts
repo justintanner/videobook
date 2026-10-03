@@ -1,4 +1,5 @@
-import { createXai } from "@apicity/xai";
+import { createXai } from "../usage-providers.js";
+
 import type { XaiProvider } from "@apicity/xai";
 import { mintOtp } from "@apicity/cost";
 import type { PayGateApproval } from "@apicity/cost";

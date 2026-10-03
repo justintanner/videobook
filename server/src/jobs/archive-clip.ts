@@ -1,3 +1,4 @@
+import { createElevenLabs } from "../usage-providers.js";
 import type { Engine, ArtifactKind, ArtifactManifestFile } from "videobook-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
@@ -7,7 +8,7 @@ import type {
   ElevenLabsTranscriptCharacter,
 } from "@apicity/elevenlabs";
 import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "videobook-engine";
-import { createElevenLabs } from "@apicity/elevenlabs";
+
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

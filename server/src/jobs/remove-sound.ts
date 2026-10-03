@@ -1,12 +1,8 @@
+import { createElevenLabs } from "../usage-providers.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import {
-  createElevenLabs,
-  type ElevenLabsProvider,
-  type ElevenLabsSpeechToTextResponse,
-  type ElevenLabsTranscriptWord,
-} from "@apicity/elevenlabs";
+import { type ElevenLabsProvider, type ElevenLabsSpeechToTextResponse, type ElevenLabsTranscriptWord } from "@apicity/elevenlabs";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { ELEVENLABS_SCRIBE_MODEL } from "../elevenlabs-audio-extension.js";

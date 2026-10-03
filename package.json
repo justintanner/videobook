@@ -46,18 +46,18 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@apicity/alibaba": "^0.13.1",
-    "@apicity/b2": "^0.13.1",
-    "@apicity/cost": "^0.13.1",
-    "@apicity/elevenlabs": "^0.13.1",
-    "@apicity/fal": "^0.13.1",
-    "@apicity/free-media-upload": "^0.13.1",
-    "@apicity/googleflow": "^0.13.1",
-    "@apicity/kie": "^0.13.1",
-    "@apicity/kimicoding": "^0.13.1",
-    "@apicity/openai": "file:vendor/apicity-openai-0.13.1-cb0095e.tgz",
-    "@apicity/x": "^0.13.1",
-    "@apicity/xai": "file:vendor/apicity-xai-0.13.1-11f0e73.tgz",
+    "@apicity/alibaba": "^0.13.2",
+    "@apicity/b2": "^0.13.2",
+    "@apicity/cost": "^0.13.2",
+    "@apicity/elevenlabs": "^0.13.2",
+    "@apicity/fal": "^0.13.2",
+    "@apicity/free-media-upload": "^0.13.2",
+    "@apicity/googleflow": "^0.13.2",
+    "@apicity/kie": "^0.13.2",
+    "@apicity/kimicoding": "^0.13.2",
+    "@apicity/openai": "file:vendor/apicity-openai-0.13.2-ee3f20b.tgz",
+    "@apicity/x": "^0.13.2",
+    "@apicity/xai": "file:vendor/apicity-xai-0.13.2-14d1263.tgz",
     "@modelcontextprotocol/client": "^2.0.0",
     "@remotion/bundler": "^4.0.494",
     "@remotion/google-fonts": "^4.0.467",
@@ -79,7 +79,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.5.1-954b12a.tgz",
+    "videobook-engine": "file:vendor/videobook-engine-5.5.2-92aa21b.tgz",
     "ws": "^8.21.0"
   },
   "overrides": {
@@ -130,6 +130,6 @@
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
     "ytdlp-nodejs@3.4.5": true,
-    "file:vendor/videobook-engine-5.5.1-954b12a.tgz": false
+    "file:vendor/videobook-engine-5.5.2-92aa21b.tgz": false
   }
 }

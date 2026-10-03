@@ -1,5 +1,6 @@
+import { createElevenLabs } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
-import { createElevenLabs } from "@apicity/elevenlabs";
+
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

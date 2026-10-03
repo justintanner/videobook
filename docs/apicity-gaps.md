@@ -7,15 +7,15 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.13.0 (2026-09-27). GPT Image 2.5 Sunburst is
+Videobook now uses Apicity 0.13.2 (2026-10-03). GPT Image 2.5 Sunburst is
 the default image renderer, with Flare available; both choose text-to-image or
 image-to-image according to reference inputs. GPT Image 2 definitions remain
 only for historical records and already queued work. Saved cells explicitly
 configured for a retired GPT model can select either 2.5 renderer before running
 again; their prompts and existing results remain intact.
 
-Published `@apicity/openai` and `@apicity/xai` 0.13.0 still omit Videobook's
-existing server realtime transports. Their vendored 0.13.0 archives carry the
+Published `@apicity/openai` and `@apicity/xai` 0.13.2 still omit Videobook's
+existing server realtime transports. Their vendored 0.13.2 archives carry the
 same transport additions, with reproducible package patches and base URLs in
 `vendor/OPENAI_REVISION.txt` and `vendor/XAI_REVISION.txt`.
 
@@ -25,6 +25,15 @@ video, and HappyHorse edits. Estimates resolve local reference durations; job
 submission persists the same duration hints outside the provider payload.
 Unknown reference durations produce an unavailable estimate instead of an
 output-only quote.
+
+Book usage records reported token counts and charges at the provider boundary,
+including xAI's `usage.cost_in_usd_ticks` ([cost tracking](https://docs.x.ai/developers/cost-tracking)).
+Supported rates are saved as estimates with their pricing version. Requests
+without a reported charge or supported rate stay unpriced. The bundled tables do not yet price the current chat
+and realtime defaults (`gpt-5.6-sol`, `gpt-realtime-2.1`, and
+`grok-voice-think-fast-2.0`). Google Flow retains the Gemini API list-rate
+convention described in §15. Accounting starts at rollout and does not
+reconstruct older usage.
 
 Legend: **bug** = the published contract is wrong or internally inconsistent;
 **gap** = the published contract omits required information; **quirk** = correct
@@ -435,30 +444,21 @@ native pricing.
 
 ---
 
-## 38. (gap) KIE Qwen 2.1 ships schemas without cost slugs or pricing — OPEN in 0.13.1
+## 38. (gap) KIE Qwen 2.1 cost slugs and pricing — RESOLVED in 0.13.2
 
-`@apicity/kie` 0.13.1 adds `qwen2-1/text-to-image` and
-`qwen2-1/image-to-image` (createTask schemas plus `modelInputSchemas`
-metadata) but `@apicity/cost` 0.13.1 registers neither a `MODEL_SLUGS.kie`
-entry nor a rate for either model, so `modelSlug("kie", "qwen2-1/…")`
-throws and `computeEstimate` reports "not found in pricing table".
-Videobook ships `generate_kie_qwen_2_1_text_to_image` and
-`generate_kie_qwen_2_1_edit_image` (Kie-only routes, labels use the literal
-`qwen2-1` slug) with deliberately NO cost adapter: `estimate_cost` returns
-$0 plus the "no cost adapter registered" warning, and the kie paygate logs
-the unavailable estimate without blocking submission. Add
-`kieQwen21*` adapters only when upstream publishes rates; do not invent
-per-image goldens. Also note the i2i schema accepts 1-10 reference images
-(up from qwen2/qwen3's 1-3) and an optional `mask_url` inpainting field
-that the picker deliberately does not surface (`skipKieFields`), matching
-the qwen2/qwen3 tools which expose no mask input.
+`@apicity/cost` 0.13.2 registers `qwen2-1/text-to-image` and
+`qwen2-1/image-to-image`, including their slugs and resolution rates.
+Videobook derives the default resolution from the provider schemas and uses
+these rates in previews and recorded usage. The i2i schema still accepts
+1–10 reference images and an optional `mask_url` field that the picker does
+not expose, matching the other Qwen tools.
 
 ---
 
-## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.13.1
+## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.13.2
 
 `XaiRealtimeSession` and the vendored realtime event types (`@apicity/xai`
-0.13.1, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
+0.13.2, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
 speech-to-speech features Videobook uses. `conversation.item.create` with
 `item.type = "force_message"` (an assistant item forced into the transcript
 without a response.create round-trip) drives the voice activation line; the
@@ -478,7 +478,7 @@ and xAI pace is not configurable.
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
 | **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
-| **OPEN**     | §38 KIE Qwen 2.1 cost slugs/pricing                                 | no adapter; $0 estimate + warning                      |
+| **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | provider-derived resolution adapters                  |
 | **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |

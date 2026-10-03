@@ -1,3 +1,4 @@
+import { createElevenLabs } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
 import type {
@@ -6,7 +7,7 @@ import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
 } from "@apicity/elevenlabs";
-import { createElevenLabs } from "@apicity/elevenlabs";
+
 import type {
   ArtifactStream,
   ImportTranscriptSegment,

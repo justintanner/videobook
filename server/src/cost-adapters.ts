@@ -12,6 +12,8 @@ import {
   KlingOmniTextToVideoInputSchema,
   KlingV3TurboTextToVideoRequestSchema,
   NanoBananaProRequestSchema,
+  Qwen21ImageToImageRequestSchema,
+  Qwen21TextToImageRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
@@ -421,6 +423,8 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),
   generate_kie_qwen_3_0_edit_image: kieQwen3ImageEdit,
+  generate_kie_qwen_2_1_text_to_image: kieTieredImage(Qwen21TextToImageRequestSchema.shape.model.value, Qwen21TextToImageRequestSchema.shape.input.shape.resolution.parse(undefined)),
+  generate_kie_qwen_2_1_edit_image: kieTieredImage(Qwen21ImageToImageRequestSchema.shape.model.value, Qwen21ImageToImageRequestSchema.shape.input.shape.resolution.parse(undefined)),
   generate_kie_seedream_v5_lite_text_to_image: kieFlatImage("seedream/5-lite-text-to-image"),
   generate_kie_seedream_v5_lite_image_to_image: kieFlatImage("seedream/5-lite-image-to-image"),
 

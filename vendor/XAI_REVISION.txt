@@ -1,7 +1,7 @@
-version: 0.13.1
-base: https://registry.npmjs.org/@apicity/xai/-/xai-0.13.1.tgz
+version: 0.13.2
+base: https://registry.npmjs.org/@apicity/xai/-/xai-0.13.2.tgz
 git: https://github.com/justintanner/apicity.git
 realtime-patch-revision: 7c5e2e56e386e5f7c9afda36d086d6103ab8f057
 patch: vendor/apicity-xai-realtime.patch
-tarball: vendor/apicity-xai-0.13.1-11f0e73.tgz
-sha256: 11f0e73427488c09a22f06182ac2778f45574088f724a9850aafc51a6b80f9b1
+tarball: vendor/apicity-xai-0.13.2-14d1263.tgz
+sha256: 14d1263cca5a2e132744a7677d27f9bb96b41e957f405222592efbddddcc2490

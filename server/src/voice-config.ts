@@ -3,6 +3,7 @@ import type { XaiRealtimeSession } from "@apicity/xai";
 
 export const DEFAULT_VOICE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_XAI_VOICE_MODEL = "grok-voice-think-fast-2.0";
+export const VOICE_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
 export const VOICE_PCM_RATE = 24_000;
 export const VOICE_ACTIVATION_PHRASE = "Voice Chat Activated";
 // Neutral pair for the mainframe character; alternates: echo + leo (deep male), cedar + leo (quality first).
@@ -64,7 +65,7 @@ export function voiceSessionConfig(context: unknown, model = DEFAULT_VOICE_MODEL
     audio: {
       input: {
         noise_reduction: { type: "near_field" },
-        transcription: { model: "gpt-4o-mini-transcribe" },
+        transcription: { model: VOICE_TRANSCRIPTION_MODEL },
         turn_detection: { type: "server_vad", threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 350, create_response: true, interrupt_response: true },
       },
       output: { voice: OPENAI_VOICE, speed: 1 },

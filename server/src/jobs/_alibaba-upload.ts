@@ -1,4 +1,5 @@
-import { createAlibaba, uploadFile } from "@apicity/alibaba";
+import { createAlibaba } from "../usage-providers.js";
+import { uploadFile } from "@apicity/alibaba";
 import type { Engine } from "videobook-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 import { getApiKey } from "../api-key.js";

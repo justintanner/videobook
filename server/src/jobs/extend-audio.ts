@@ -1,10 +1,8 @@
+import { createElevenLabs } from "../usage-providers.js";
 import { extname, join } from "node:path";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import {
-  createElevenLabs,
-  type ElevenLabsProvider,
-} from "@apicity/elevenlabs";
+import { type ElevenLabsProvider } from "@apicity/elevenlabs";
 import type { Engine } from "videobook-engine";
 import {
   audioCrossfadeMs,

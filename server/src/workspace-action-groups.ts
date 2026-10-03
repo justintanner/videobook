@@ -2,7 +2,7 @@ import type { ActionGroup } from "./workspace-action-contract.js";
 
 export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string[]>> = {
   Workspace: [
-    "list_books", "create_book", "rename_book", "delete_book", "get_book",
+    "list_books", "create_book", "rename_book", "delete_book", "get_book", "get_book_usage",
     "slash_commands", "list_workspace_actions", "chat", "chain",
   ],
   Notebook: [

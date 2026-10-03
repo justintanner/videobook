@@ -346,7 +346,7 @@ function makeWrappedResolver(
     const handler = handlers.get(type);
     if (!handler) return null;
     return async (job: Job, queueSignal?: AbortSignal) => withBookContext(
-      { bookId, engine },
+      { bookId, engine, operation: type, ...(job.artifactId ? { artifactId: job.artifactId } : {}) },
       () => runWithJobDeadline(type, async (signal) => {
         const jobSignal = queueSignal
           ? AbortSignal.any([signal, queueSignal])

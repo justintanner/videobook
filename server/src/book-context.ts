@@ -4,9 +4,15 @@ import type { Engine } from "videobook-engine";
 interface BookContext {
   bookId: string;
   engine: Engine;
+  operation?: string;
+  artifactId?: string;
 }
 
 const contexts = new AsyncLocalStorage<BookContext>();
+
+export function currentBookContext(): BookContext | undefined {
+  return contexts.getStore();
+}
 
 function activeBookContext(): BookContext {
   const context = contexts.getStore();

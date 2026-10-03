@@ -8,7 +8,7 @@
  */
 import { GPT_IMAGE_2_5_MODELS, GPT_IMAGE_2_5_REFERENCE_SCHEMA } from "./gpt-image-2-5.js";
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
-import { createKie } from "@apicity/kie";
+import { createKie } from "./usage-providers.js";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";
 import {

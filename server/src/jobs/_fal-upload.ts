@@ -1,4 +1,5 @@
-import { createFal, uploadFile } from "@apicity/fal";
+import { createFal } from "../usage-providers.js";
+import { uploadFile } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,

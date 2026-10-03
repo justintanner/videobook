@@ -1,4 +1,5 @@
-import { createFal, FalError } from "@apicity/fal";
+import { createFal } from "../usage-providers.js";
+import { FalError } from "@apicity/fal";
 import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";

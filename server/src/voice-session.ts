@@ -1,5 +1,6 @@
+import { createOpenAi } from "./usage-providers.js";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { createOpenAi, OpenAiError } from "@apicity/openai";
+import { OpenAiError } from "@apicity/openai";
 import type { OpenAiRealtimeCallResponse } from "@apicity/openai";
 import { connectOpenAiRealtime } from "@apicity/openai/realtime";
 import type { OpenAiRealtimeClientEvent, OpenAiRealtimeServerEvent } from "@apicity/openai/realtime";
@@ -11,7 +12,8 @@ import type { BookManager } from "./book-manager.js";
 import { getApiKey } from "./api-key.js";
 import { withBookContext } from "./book-context.js";
 import { discoverVoiceActions, voiceWorkspaceCells, voiceWorkspaceContext, voiceWorkspaceSignature } from "./voice-actions.js";
-import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, openAiVoiceActivationEvent, voiceInstructions, voiceSessionConfig, xaiVoiceActivationEvent, xaiVoiceSessionConfig } from "./voice-config.js";
+import { DEFAULT_VOICE_MODEL, DEFAULT_XAI_VOICE_MODEL, VOICE_TRANSCRIPTION_MODEL, VOICE_ACTIVATION_PHRASE, VOICE_PCM_RATE, openAiVoiceActivationEvent, voiceInstructions, voiceSessionConfig, xaiVoiceActivationEvent, xaiVoiceSessionConfig } from "./voice-config.js";
+import { recordVoiceUsage, recordTranscriptionUsage } from "./provider-usage.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./tools/chat.js";
 import { appendVoiceHistory } from "./tools/chat-history.js";
 import { appendDiagnostic } from "./diagnostics.js";
@@ -137,6 +139,7 @@ export class VoiceSession {
   private lastActivity = Date.now();
   private startedAt = Date.now();
   private usage = { responses: 0, inputTokens: 0, outputTokens: 0 };
+  private pendingUsage = new Set<string>();
   private timer: ReturnType<typeof setInterval>;
 
   constructor(
@@ -401,8 +404,10 @@ export class VoiceSession {
     } else if (event.type === "conversation.item.input_audio_transcription.updated") {
       this.caption(id, "user", event.transcript ?? "", false);
     } else if (event.type === "conversation.item.input_audio_transcription.completed") {
+      if (id && this.providerName === "openai") recordTranscriptionUsage(this.engine, VOICE_TRANSCRIPTION_MODEL, this.id, id, event);
       this.caption(id, "user", event.transcript ?? "", true);
     } else if (event.type === "conversation.item.input_audio_transcription.failed") {
+      if (id && this.providerName === "openai") recordTranscriptionUsage(this.engine, VOICE_TRANSCRIPTION_MODEL, this.id, id, event);
       this.fail(providerErrorMessage(event.error, undefined, this.providerName) ?? "Could not transcribe this turn. Start voice and try again.");
     } else if (this.providerName === "xai" && (event.type === "response.output_audio.delta" || event.type === "response.audio.delta")) {
       if (event.response_id && event.item_id && event.delta && !this.interruptedResponses.has(event.response_id)) {
@@ -432,6 +437,8 @@ export class VoiceSession {
     } else if (event.type === "response.created") {
       this.activeResponse = true;
       if (responseId) {
+        this.pendingUsage.add(responseId);
+        recordVoiceUsage(this.engine, this.providerName, this.model, this.id, responseId, { ...event.response, status: "in_progress" });
         this.responseTurns.set(responseId, this.currentTurn);
         this.replyProgress.started(responseId, Date.now());
         if (this.activationPending && (this.providerName === "xai" || (event.response as { metadata?: { purpose?: string } } | undefined)?.metadata?.purpose === "activation")) {
@@ -440,6 +447,10 @@ export class VoiceSession {
         }
       }
     } else if (event.type === "response.done") {
+      if (responseId) {
+        this.pendingUsage.delete(responseId);
+        recordVoiceUsage(this.engine, this.providerName, this.model, this.id, responseId, event.response);
+      }
       const completion = this.replyProgress.finished(responseId, Date.now());
       const usage = event.response?.usage as Record<string, unknown> | undefined;
       this.usage.responses += 1;
@@ -758,6 +769,8 @@ export class VoiceSession {
   close(reason = "Comms off."): Promise<void> {
     if (this.closing) return this.closing;
     this.stopped = true;
+    for (const responseId of this.pendingUsage) recordVoiceUsage(this.engine, this.providerName, this.model, this.id, responseId, { status: "uncertain" });
+    this.pendingUsage.clear();
     clearInterval(this.timer);
     this.abort.abort();
     this.control?.close();

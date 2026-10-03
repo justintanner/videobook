@@ -1,6 +1,7 @@
+import { createElevenLabs } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
-import { createElevenLabs } from "@apicity/elevenlabs";
+
 import { registerJobHandler, queue } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { probeVideo, runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";

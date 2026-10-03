@@ -351,6 +351,28 @@ describe("voice session boundaries", () => {
     expect(engine.logs.read("voice-session-closed")).toEqual(expect.arrayContaining([expect.objectContaining({ operationId: session.id, inputTokens: 0, outputTokens: 0 })]));
   });
 
+  it("records realtime response usage once and retains unfinished replies as uncertain", async () => {
+    const created = await books.create("usage-ledger");
+    if (!created.ok) throw new Error(created.error.message);
+    const managed = books.get(created.value.bookId);
+    if (!managed.ok) throw new Error(managed.error.message);
+    const usageEngine = managed.value.engine;
+    const session = new VoiceSession(books, created.value.bookId, usageEngine.notebooks.list()[0]!.id, usageEngine, "unused-without-start", 120_000, () => undefined);
+    const responseId = `usage-${session.id}`;
+    const key = `voice:${session.id}:${responseId}`;
+    session.receive({ type: "response.created", response: { id: responseId }, event_id: "usage-created" });
+    expect(usageEngine.usage.read(key)?.status).toBe("pending");
+    const response = { id: responseId, status: "completed", usage: { input_tokens: 100, output_tokens: 20 } };
+    session.receive({ type: "response.done", response, event_id: "usage-done" });
+    session.receive({ type: "response.done", response, event_id: "usage-repeated" });
+    expect(usageEngine.usage.read(key)).toMatchObject({ status: "completed", inputTokens: 100, outputTokens: 20 });
+    session.receive({ type: "response.created", response: { id: "unfinished" }, event_id: "usage-unfinished" });
+    session.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "usage-input", usage: { input_tokens: 12, output_tokens: 3 }, transcript: "test" });
+    await session.close();
+    expect(usageEngine.usage.read(`voice:${session.id}:unfinished`)?.status).toBe("uncertain");
+    expect(usageEngine.usage.read(`transcription:${session.id}:usage-input`)).toMatchObject({ inputTokens: 12, outputTokens: 3, activity: "analysis" });
+  });
+
   it("omits unheard interrupted speech from the next conversation context", async () => {
     const entry = { id: "assistant-item", role: "assistant" as const, final: true, sessionId: "past-session", notebookId, model: "gpt-realtime-2.1-mini" };
     await appendVoiceHistory(engine, { ...entry, text: "A reply that was interrupted before it finished." });
