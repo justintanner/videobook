@@ -15,10 +15,13 @@ describe('temporary search reference store', () => {
     const store = new SearchReferenceStore(100, 2, () => now)
     const first = store.put({
       kind: 'image',
-      name: 'first.png',
+      name: 'first.heic',
       reference: imageReference(1),
+      preview: Buffer.from('first preview'),
     })
     expect(store.get(first.reference_id).reference).toEqual(imageReference(1))
+    expect(first.preview_url).toBe(`/api/search-references/${first.reference_id}/preview`)
+    expect(store.get(first.reference_id).preview).toEqual(Buffer.from('first preview'))
     expect(store.release(first.reference_id)).toBe(true)
     expect(() => store.get(first.reference_id)).toThrow('expired or was released')
 
@@ -26,6 +29,7 @@ describe('temporary search reference store', () => {
       kind: 'image',
       name: 'second.png',
       reference: imageReference(2),
+      preview: Buffer.from('evicted preview'),
     })
     store.put({
       kind: 'image',
@@ -43,6 +47,7 @@ describe('temporary search reference store', () => {
       kind: 'image',
       name: 'expiring.png',
       reference: imageReference(5),
+      preview: Buffer.from('expiring preview'),
     })
     now = expiring.expires_at
     expect(() => store.get(expiring.reference_id)).toThrow('expired or was released')

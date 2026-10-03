@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import sharp from "sharp";
 import {
   findPrimaryMediaFile,
   findVideoFile,
@@ -11,6 +12,7 @@ import {
   type PreparedSearchReference,
 } from "videobook-engine";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { decodeHeicToPng } from "../image.js";
 import { registerLocalClipSearchProvider } from "../local-search-models.js";
 import {
   searchReferenceStore,
@@ -37,8 +39,9 @@ async function runPrepareSearchReference(
   context: JobHandlerContext,
 ): Promise<SearchReferenceDescriptor> {
   try {
-    const source = payload.uploadPath
-      ? { path: payload.uploadPath, objectHash: undefined }
+    const uploadPath = payload.uploadPath;
+    const source = uploadPath
+      ? { path: uploadPath, objectHash: undefined, readBytes: () => readFile(uploadPath) }
       : await existingAssetSource(engine, payload.assetId, payload.mediaKind);
     const prepared = await prepareSearchReferenceFile(
       engine,
@@ -46,6 +49,7 @@ async function runPrepareSearchReference(
       payload.mediaKind,
       {
         name: payload.name,
+        readBytes: source.readBytes,
         ...(source.objectHash
           ? { sourceObjectHash: source.objectHash }
           : {}),
@@ -67,17 +71,19 @@ async function prepareSearchReferenceFile(
   sourcePath: string,
   mediaKind: SearchReferenceKind,
   options: {
+    readBytes: () => Promise<Buffer>;
     name?: string;
     sourceStartMs?: number;
     sourceDurationMs?: number;
     sourceObjectHash?: string;
     signal?: AbortSignal;
-  } = {},
+  },
 ): Promise<{
   kind: SearchReferenceKind;
   name: string;
   durationMs?: number;
   reference: PreparedSearchReference;
+  preview?: Buffer;
 }> {
   const provider = registerLocalClipSearchProvider(engine);
   const registered = engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST);
@@ -86,21 +92,37 @@ async function prepareSearchReferenceFile(
   options.signal?.throwIfAborted();
   const name = options.name?.trim() || basename(sourcePath);
   if (mediaKind === "image") {
-    const vector = await provider.embedImage(sourcePath, { signal: options.signal });
-    options.signal?.throwIfAborted();
-    return {
-      kind: "image",
-      name,
-      reference: {
+    let normalizedRoot: string | undefined;
+    try {
+      let imagePath = sourcePath;
+      let preview: Buffer | undefined;
+      if (/\.hei[cf]$/iu.test(sourcePath)) {
+        const decoded = await decodeHeicToPng(await options.readBytes());
+        options.signal?.throwIfAborted();
+        normalizedRoot = await mkdtemp(join(tmpdir(), "videobook-search-image-"));
+        imagePath = join(normalizedRoot, "reference.png");
+        await writeFile(imagePath, decoded);
+        preview = await sharp(decoded).resize(512, 512, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
+      }
+      const vector = await provider.embedImage(imagePath, { signal: options.signal });
+      options.signal?.throwIfAborted();
+      return {
         kind: "image",
-        embeddingSpace: provider.embeddingSpace,
-        vector: [...vector],
-        fingerprints: [{
-          kind: "sha256",
-          value: options.sourceObjectHash ?? await fileHash(sourcePath),
-        }],
-      },
-    };
+        name,
+        ...(preview ? { preview } : {}),
+        reference: {
+          kind: "image",
+          embeddingSpace: provider.embeddingSpace,
+          vector: [...vector],
+          fingerprints: [{
+            kind: "sha256",
+            value: options.sourceObjectHash ?? await fileHash(sourcePath),
+          }],
+        },
+      };
+    } finally {
+      if (normalizedRoot) await rm(normalizedRoot, { recursive: true, force: true });
+    }
   }
   const probe = await probeVideo(sourcePath, { signal: options.signal });
   if (!probe.videoStream || probe.videoDuration <= 0) {
@@ -161,7 +183,7 @@ async function existingAssetSource(
   engine: Engine,
   assetId: string | undefined,
   mediaKind: SearchReferenceKind,
-): Promise<{ path: string; objectHash: string }> {
+): Promise<{ path: string; objectHash: string; readBytes: () => Promise<Buffer> }> {
   if (!assetId) throw new Error("Search reference asset ID is required");
   const artifact = engine.artifacts.get(assetId);
   if (!artifact.ok) throw new Error(artifact.error.message);
@@ -177,11 +199,17 @@ async function existingAssetSource(
   const file = mediaKind === "video"
     ? findVideoFile(manifest.value.files)
       ?? findPrimaryMediaFile(manifest.value.files, artifact.value.kind)
-    : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+    : findPrimaryMediaFile(manifest.value.files, artifact.value.kind)
+      ?? manifest.value.files.find((candidate) => /\.hei[cf]$/iu.test(candidate.name));
   if (!file) throw new Error(`No ${mediaKind} file is available for this asset`);
   return {
     path: join(manifest.value.path, file.name),
     objectHash: file.objectHash,
+    readBytes: async () => {
+      const read = await engine.files.read(artifact.value.artifactId, file.name);
+      if (!read.ok) throw Object.assign(new Error(read.error.message), { name: read.error.code, error: read.error });
+      return read.value;
+    },
   };
 }
 

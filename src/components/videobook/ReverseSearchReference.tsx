@@ -38,7 +38,7 @@ export function ReverseSearchReference({
   const kind = referenceKind(mode)
   const noun = kind === 'image' ? 'an image' : 'a video'
   const Icon = kind === 'image' ? Image : Film
-  const accept = kind === 'image' ? 'image/*' : 'video/*'
+  const accept = kind === 'image' ? 'image/*,.heic,.heif' : 'video/*'
   const receiveFiles = (files: File[]) => {
     if (disabled || preparing) return
     const file = files.find((candidate) =>

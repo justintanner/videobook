@@ -59,7 +59,7 @@ export function compatibleReferenceFile(
   if (file.type.startsWith(`${kind}/`)) return true
   const extension = file.name.split('.').at(-1)?.toLowerCase() ?? ''
   return kind === 'image'
-    ? ['jpg', 'jpeg', 'png', 'webp'].includes(extension)
+    ? ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(extension)
     : ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(extension)
 }
 
@@ -117,6 +117,7 @@ export async function uploadSearchReference(
     throw new Error(readString(value, 'error') ?? 'Could not prepare search reference')
   }
   const descriptor = asSearchReferenceDescriptor(value)
+  if (descriptor.previewUrl) return descriptor
   return {
     ...descriptor,
     previewUrl: URL.createObjectURL(file),
@@ -154,13 +155,14 @@ export function asSearchReferenceDescriptor(
     throw new Error('The server returned an invalid search reference')
   }
   const durationMs = readNumber(value, 'duration_ms')
+  const preview = readString(value, 'preview_url') ?? previewUrl
   return {
     referenceId,
     kind,
     name,
     expiresAt,
     ...(durationMs === null ? {} : { durationMs }),
-    ...(previewUrl ? { previewUrl } : {}),
+    ...(preview ? { previewUrl: preview } : {}),
   }
 }
 

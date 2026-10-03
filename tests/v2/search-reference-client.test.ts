@@ -6,6 +6,25 @@ import {
 } from '../../src/videobook/search-reference.js'
 
 describe('reverse search reference client helpers', () => {
+  it.each(['reference.HEIC', 'reference.heif'])('accepts %s without MIME metadata', (name) => {
+    const file = new File(['image'], name, { type: '' })
+    expect(compatibleReferenceFile(file, 'image')).toBe(true)
+    expect(compatibleReferenceFile(file, 'video')).toBe(false)
+  })
+
+  it('prefers the decoded server preview over the original media URL', () => {
+    const referenceId = '019bf918-1e85-7dda-a5c2-c760b8b11367'
+    expect(asSearchReferenceDescriptor({
+      reference_id: referenceId,
+      kind: 'image',
+      name: 'reference.heic',
+      expires_at: 20_000,
+      preview_url: `/api/search-references/${referenceId}/preview`,
+    }, '/original.heic')).toMatchObject({
+      previewUrl: `/api/search-references/${referenceId}/preview`,
+    })
+  })
+
   it('recognizes compatible clipboard files and validates video trims', () => {
     expect(compatibleReferenceFile(
       new File(['image'], 'reference.PNG', { type: '' }),

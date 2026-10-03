@@ -192,6 +192,19 @@ app.post("/api/search-references", async (req, res) => {
   }
 });
 
+app.get("/api/search-references/:referenceId/preview", (req, res) => {
+  try {
+    const preview = searchReferenceStore.get(req.params.referenceId).preview;
+    if (!preview) {
+      res.status(404).json({ error: "Search reference preview is unavailable" });
+      return;
+    }
+    res.set("Cache-Control", "no-store").type("png").send(preview);
+  } catch (cause) {
+    res.status(404).json({ error: cause instanceof Error ? cause.message : String(cause) });
+  }
+});
+
 app.delete("/api/search-references/:referenceId", (req, res) => {
   res.json({
     released: searchReferenceStore.release(req.params.referenceId),

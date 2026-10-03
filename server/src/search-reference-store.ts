@@ -9,11 +9,13 @@ export interface SearchReferenceDescriptor {
   name: string;
   duration_ms?: number;
   expires_at: number;
+  preview_url?: string;
 }
 
 interface StoredSearchReference {
   descriptor: SearchReferenceDescriptor;
   reference: PreparedSearchReference;
+  preview?: Buffer;
 }
 
 export class SearchReferenceStore {
@@ -37,6 +39,7 @@ export class SearchReferenceStore {
     name: string;
     durationMs?: number;
     reference: PreparedSearchReference;
+    preview?: Buffer;
   }): SearchReferenceDescriptor {
     this.purge();
     while (this.entries.size >= this.maxEntries) {
@@ -53,10 +56,12 @@ export class SearchReferenceStore {
         ? {}
         : { duration_ms: input.durationMs }),
       expires_at: this.now() + this.ttlMs,
+      ...(input.preview ? { preview_url: `/api/search-references/${referenceId}/preview` } : {}),
     };
     this.entries.set(referenceId, {
       descriptor,
       reference: input.reference,
+      ...(input.preview ? { preview: input.preview } : {}),
     });
     return descriptor;
   }
