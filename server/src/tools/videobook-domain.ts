@@ -74,7 +74,7 @@ import {
   refreshInitialGenerationPrompts,
   seedInitialGenerationPrompt,
 } from "../notebook-initial-generation-prompt.js";
-import { notebookConnectionWouldCreateCycle } from "../notebook-graph.js";
+import { notebookConnectionEdges, notebookConnectionWouldCreateCycle } from "../notebook-graph.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
@@ -179,6 +179,29 @@ function notebookConnectionError(
     return "Image frame outputs require a video-producing source";
   }
   return null;
+}
+
+function prepareNotebookConnection(
+  engine: Engine,
+  notebook: NotebookDocument,
+  sourceId: string,
+  targetId: string,
+  targetInput: string,
+): NotebookDocument {
+  const edges = notebookConnectionEdges(notebook.cells, notebook.edges, sourceId, targetId);
+  const prepared = edges && edges !== notebook.edges
+    ? { ...notebook, edges: [...edges] }
+    : notebook;
+  const error = notebookConnectionError(prepared, sourceId, targetId, targetInput);
+  if (error) throw new Error(error);
+  if (prepared !== notebook) {
+    const source = notebook.cells.find((cell) => cell.id === sourceId)!;
+    const artifact = engine.artifacts.get(source.outputArtifactId!);
+    if (!artifact.ok || artifact.value.kind !== "image") {
+      throw new Error(`${notebookGridTag(source.slot)} needs an available image before it can be reused`);
+    }
+  }
+  return prepared;
 }
 
 function markCellStale(
@@ -1796,16 +1819,16 @@ export function videobookDomainDefs(
                   `Stale notebook revision: expected ${args.expected_revision}`,
                 );
               }
-              const error = notebookConnectionError(
+              const prepared = prepareNotebookConnection(
+                engine,
                 notebook,
                 edge.source,
                 edge.target,
                 edge.targetInput,
               );
-              if (error) throw new Error(error);
               return seedInitialGenerationPrompt({
-                ...notebook,
-                edges: [...notebook.edges, edge],
+                ...prepared,
+                edges: [...prepared.edges, edge],
               }, edge.target);
             },
             { sourceCellId: edge.source, targetCellId: edge.target, edgeId: edge.id },
@@ -1892,13 +1915,13 @@ export function videobookDomainDefs(
                 || edge.targetInput !== targetInput);
               let edges = retained;
               if (sourceCellId) {
-                const error = notebookConnectionError(
+                const prepared = prepareNotebookConnection(
+                  engine,
                   { ...notebook, edges: retained },
                   sourceCellId,
                   targetCellId,
                   targetInput,
                 );
-                if (error) throw new Error(error);
                 const matching = existing.find((edge) =>
                   edge.source === sourceCellId);
                 const edge = matching ?? engine.notebooks.createEdge({
@@ -1907,7 +1930,7 @@ export function videobookDomainDefs(
                   targetInput,
                 });
                 edgeId = edge.id;
-                edges = [...retained, edge];
+                edges = [...prepared.edges, edge];
               }
               const updated = { ...notebook, edges };
               const marked = markCellAndDescendantsStale(updated, targetCellId);
@@ -2000,21 +2023,29 @@ export function videobookDomainDefs(
               previewCell,
             ],
           };
-          const previewNotebook: NotebookDocument = connections
+          let previewNotebook: NotebookDocument = connections
             ? {
                 ...previewWithCell,
-                edges: [
-                  ...notebook.value.edges.filter((edge) =>
-                    edge.target !== cellId),
-                  ...connections.map((connection) =>
-                    engine.notebooks.createEdge({
-                      source: connection.source_cell_id,
-                      target: cellId,
-                      targetInput: connection.target_input,
-                    })),
-                ],
+                edges: notebook.value.edges.filter((edge) => edge.target !== cellId),
               }
             : previewWithCell;
+          for (const connection of connections ?? []) {
+            previewNotebook = prepareNotebookConnection(
+              engine,
+              previewNotebook,
+              connection.source_cell_id,
+              cellId,
+              connection.target_input,
+            );
+            previewNotebook = {
+              ...previewNotebook,
+              edges: [...previewNotebook.edges, engine.notebooks.createEdge({
+                source: connection.source_cell_id,
+                target: cellId,
+                targetInput: connection.target_input,
+              })],
+            };
+          }
           const validation = validateCellConfiguration(
             previewCell,
             previewNotebook,

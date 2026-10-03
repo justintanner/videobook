@@ -4976,7 +4976,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const connectCells = async (connection: Connection) => {
     if (!bookId || !notebook || !connection.source || !connection.target) return
-    if (!isValidNotebookFlowConnection(notebook.edges, connection)) {
+    if (!isValidNotebookFlowConnection(notebook.edges, connection, notebook.cells)) {
       const source = notebook.cells.find((cell) => cell.id === connection.source)
       const target = notebook.cells.find((cell) => cell.id === connection.target)
       setNotice(
@@ -11346,7 +11346,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         }
                       }}
                       isValidConnection={(connection) => notebook
-                        ? isValidNotebookFlowConnection(notebook.edges, connection)
+                        ? isValidNotebookFlowConnection(notebook.edges, connection, notebook.cells)
                         : false}
                       onConnect={(connection) => void connectCells(connection)}
                       onDrop={handleNotebookFlowDrop}

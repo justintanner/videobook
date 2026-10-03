@@ -731,15 +731,15 @@ describe('notebook chat generation cycle guards', () => {
     }],
   }
 
-  it('omits descendant media from Add input options', () => {
+  it('offers completed descendant images in Add input options', () => {
     expect(notebookChatGenerationSourceOptions(
       document,
       [],
       generateImageId,
-    ).map((option) => option.cell.id)).toEqual([availableImageId])
+    ).map((option) => option.cell.id)).toEqual([outputImageId, availableImageId])
   })
 
-  it('rejects adding a descendant source that would loop', () => {
+  it('allows adding a completed descendant image to the generation review', () => {
     const action = {
       id: 'generation.generate_kie_nano_banana_pro_text_to_image',
       cellTypes: ['generate_image' as const],
@@ -766,7 +766,7 @@ describe('notebook chat generation cycle guards', () => {
       },
       controls: [],
     }
-    expect(() => reviseNotebookChatGenerationSources({
+    expect(reviseNotebookChatGenerationSources({
       actions: [action],
       draft: {
         action,
@@ -781,6 +781,9 @@ describe('notebook chat generation cycle guards', () => {
       },
       document,
       sourceCellIds: [outputImageId],
-    })).toThrow('would create a cycle')
+    })).toMatchObject({
+      sourceCellIds: [outputImageId],
+      connections: [{ sourceCellId: outputImageId, targetInput: 'image' }],
+    })
   })
 })

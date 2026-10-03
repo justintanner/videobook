@@ -1,4 +1,4 @@
-import type { NotebookEdge } from "videobook-engine";
+import type { NotebookCell, NotebookEdge } from "videobook-engine";
 
 export function notebookConnectionWouldCreateCycle(
   edges: readonly NotebookEdge[],
@@ -22,4 +22,27 @@ export function notebookConnectionWouldCreateCycle(
     stack.push(...(children.get(cellId) ?? []));
   }
   return false;
+}
+
+export function notebookConnectionEdges(
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+  sourceCellId: string,
+  targetCellId: string,
+): readonly NotebookEdge[] | null {
+  if (!notebookConnectionWouldCreateCycle(edges, sourceCellId, targetCellId)) {
+    return edges;
+  }
+  const source = cells.find((cell) => cell.id === sourceCellId);
+  if (
+    sourceCellId === targetCellId
+    || source?.type !== "image"
+    || !source.outputArtifactId
+  ) return null;
+  const retained = edges.filter((edge) =>
+    edge.target !== sourceCellId
+    || !notebookConnectionWouldCreateCycle(edges, edge.source, targetCellId));
+  return notebookConnectionWouldCreateCycle(retained, sourceCellId, targetCellId)
+    ? null
+    : retained;
 }

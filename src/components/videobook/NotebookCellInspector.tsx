@@ -129,7 +129,7 @@ import {
   type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
 import {
-  notebookConnectionWouldCreateCycle,
+  notebookConnectionEdges,
   notebookCyclicInputMentionValues,
 } from '@/videobook/notebook-graph'
 import { RichJson } from './RichJson'
@@ -1259,11 +1259,12 @@ function InputSources({
     const candidates = cells
       .filter((candidate) =>
         (compatibleSource(cell, input, candidate)
-          && !notebookConnectionWouldCreateCycle(
+          && notebookConnectionEdges(
+            cells,
             retainedEdges,
             candidate.id,
             cell.id,
-          ))
+          ) !== null)
         || candidate.id === edge?.source)
       .sort((left, right) =>
         left.slot.row - right.slot.row

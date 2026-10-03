@@ -834,6 +834,96 @@ describe('chat composer browser flow', () => {
     return page
   }
 
+  it('adds descendant images to generation prompts and detaches their looping links', async () => {
+    const page = await openApp()
+    const client = new Client({ name: 'descendant-images-browser-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client.callTool({
+      name, arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+    })) as T
+    type Notebook = {
+      cells: Array<{ id: string; output_artifact_id?: string }>
+      edges: NotebookDocument['edges']
+    }
+    const created: string[] = []
+    const createCell = async (cell: Record<string, unknown>): Promise<string> => {
+      const result = await call<{ id: string }>('create_notebook_cell', { cell })
+      created.push(result.id)
+      return result.id
+    }
+    try {
+      const generatorId = await createCell({
+        type: 'generate_video',
+        slot: { row: 2, column: 7 },
+        prompt: 'Animate the two reference frames',
+        provider: 'kie',
+        model: 'bytedance/seedance-2-5',
+        operation: 'generate_video',
+        tool: 'generate_kie_seedance_2_5_video',
+        inputs: { generationMode: 'r2v', generationSettings: { duration: '20', aspect_ratio: '9:16' } },
+      })
+      const outputId = await createCell({
+        type: 'video',
+        slot: { row: 3, column: 7 },
+        output_artifact_id: videoArtifactId,
+        inputs: { mediaRole: 'generate-video-output', producerCellId: generatorId, state: 'completed' },
+      })
+      await call('connect_notebook_cells', {
+        source_cell_id: generatorId, target_cell_id: outputId, target_input: 'media',
+      })
+      const frameIds: string[] = []
+      for (const [seconds, column] of [3, 4].entries()) {
+        const result = await call<{ cell_id: string }>('extract_notebook_frame', {
+          source_cell_id: outputId,
+          frame_mode: 'time',
+          timestamp_seconds: seconds,
+        })
+        created.push(result.cell_id)
+        frameIds.push(result.cell_id)
+        await call('update_notebook_cell', {
+          cell_id: result.cell_id,
+          cell: { slot: { row: 0, column } },
+        })
+      }
+      await expect.poll(async () => {
+        const notebook = await call<Notebook>('get_notebook')
+        return frameIds.every((id) => notebook.cells.some((cell) => cell.id === id && cell.output_artifact_id))
+      }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      const extracted = await call<Notebook>('get_notebook')
+      const frameArtifactIds = frameIds.map((id) => extracted.cells.find((cell) => cell.id === id)!.output_artifact_id!)
+      expect(new Set(frameArtifactIds).size).toBe(2)
+      await notebookCellNode(page, generatorId).click()
+      const editor = page.locator('.generation-cell-inspector .confirm-generation')
+      for (const tag of ['@a4', '@a5']) {
+        await editor.getByRole('button', { name: 'Add input', exact: true }).click()
+        await editor.getByTitle(`Add ${tag} as image input`, { exact: true }).click()
+        await expect.poll(() => editor.getByLabel(`Remove ${tag} input`).count(), {
+          timeout: MCP_ROUNDTRIP_MS,
+        }).toBe(1)
+      }
+      expect(await editor.locator('.generation-review-source strong').allTextContents()).toEqual(['@image1', '@image2'])
+      await editor.getByRole('textbox', { name: 'Prompt', exact: true }).fill('Animate @image1 and @image2')
+      const source = editor.locator('.generation-review-json pre')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('Animate @Image1 and @Image2')
+      for (const artifactId of frameArtifactIds) expect(await source.textContent()).toContain(artifactId)
+      const notebook = await call<Notebook>('get_notebook')
+      expect(notebook.edges.filter((edge) => edge.target === generatorId).map((edge) => edge.source))
+        .toEqual(frameIds)
+      expect(notebook.edges.some((edge) => edge.source === generatorId && edge.target === outputId)).toBe(true)
+      expect(notebook.edges.some((edge) => edge.source === outputId && frameIds.includes(edge.target))).toBe(false)
+      expect(notebook.cells.filter((cell) => frameIds.includes(cell.id)).map((cell) => cell.output_artifact_id))
+        .toEqual(frameArtifactIds)
+    } finally {
+      await collapseComposerDock(page)
+      for (const cellId of created.reverse()) await call('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 60_000)
+
   it('assembles and persists a full-row Timeline with bounded rendering for long sequences', async () => {
     const page = await openApp()
     const client = new Client({ name: 'timeline-browser-e2e', version: '1' }, {

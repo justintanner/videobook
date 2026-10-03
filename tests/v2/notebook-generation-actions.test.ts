@@ -401,7 +401,7 @@ describe('notebook generation actions', () => {
     }])
   })
 
-  it('omits descendant media that would create a cycle', () => {
+  it('omits unresolved descendant media that would create a cycle', () => {
     const target: NotebookCell = {
       ...emptyImageCell,
       type: 'generate_video',
@@ -433,6 +433,35 @@ describe('notebook generation actions', () => {
       [outputEdge],
     )).toEqual([{
       sourceCellId: available.id,
+      targetInput: 'image',
+      target: 'image',
+      kind: 'image',
+    }])
+  })
+
+  it('offers saved descendant images as additional inputs', () => {
+    const target = { ...emptyImageCell, type: 'generate_video' as const }
+    const image = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000016',
+      type: 'image' as const,
+      slot: { row: 0, column: 1 },
+      outputArtifactId: '01900000-0000-7000-8000-000000000017',
+    }
+    const edge = {
+      id: '01900000-0000-7000-8000-000000000018',
+      source: target.id,
+      target: image.id,
+      targetInput: 'media',
+    }
+    expect(generationInputAttachments(
+      seedanceAction,
+      'r2v',
+      target.id,
+      [target, image],
+      [edge],
+    )).toEqual([{
+      sourceCellId: image.id,
       targetInput: 'image',
       target: 'image',
       kind: 'image',

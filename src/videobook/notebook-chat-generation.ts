@@ -29,7 +29,7 @@ import {
   resolveNotebookCellReference,
 } from './notebook-addressing'
 import { nonBlankStringValue, recordValue } from './value-decoders'
-import { notebookConnectionWouldCreateCycle } from './notebook-graph'
+import { notebookConnectionEdges } from './notebook-graph'
 
 export type NotebookChatGenerationCommand = {
   cellType: NotebookGenerationCellType
@@ -238,7 +238,7 @@ export function notebookChatGenerationSourceOptions(
     if (excluded.has(cell.id)) return []
     if (
       targetCellId
-      && notebookConnectionWouldCreateCycle(document.edges, cell.id, targetCellId)
+      && notebookConnectionEdges(document.cells, document.edges, cell.id, targetCellId) === null
     ) return []
     const kind = mediaInputKind(cell)
     if (!kind || !resolveNotebookCellArtifactId(document, cell)) return []
@@ -261,11 +261,12 @@ export function planNotebookChatGeneration(input: {
     input.command.sourceReferences,
   )
   const cyclicSource = sources.find((source) =>
-    notebookConnectionWouldCreateCycle(
+    notebookConnectionEdges(
+      input.document.cells,
       input.document.edges,
       source.cell.id,
       input.cellId,
-    ))
+    ) === null)
   if (cyclicSource) {
     throw new Error(
       `Connecting ${notebookCellTag(cyclicSource.cell)} would create a cycle`,
@@ -505,11 +506,12 @@ export function reviseNotebookChatGenerationSources(input: {
   const sources = [...new Set(input.sourceCellIds)].map((cellId) => {
     const cell = input.document.cells.find((candidate) => candidate.id === cellId)
     if (!cell) throw new Error('The selected source cell is no longer available')
-    if (notebookConnectionWouldCreateCycle(
+    if (notebookConnectionEdges(
+      input.document.cells,
       input.document.edges,
       cell.id,
       input.draft.cell.id,
-    )) {
+    ) === null) {
       throw new Error(
         `Connecting ${notebookCellTag(cell)} to ${notebookCellTag(input.draft.cell)} would create a cycle`,
       )

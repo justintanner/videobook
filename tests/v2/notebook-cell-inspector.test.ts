@@ -740,7 +740,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('<strong>@a4</strong>')
   })
 
-  it('does not offer an input picker when the only media would create a cycle', () => {
+  it('offers the input picker for a completed descendant image', () => {
     const generationCell: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000040',
@@ -785,7 +785,7 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('Prompt only')
-    expect(html).not.toContain('<span>Add input</span>')
+    expect(html).toContain('<span>Add input</span>')
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {
