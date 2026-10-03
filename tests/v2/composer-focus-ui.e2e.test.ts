@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -34,6 +34,7 @@ describe('composer focus through real workspace interactions', () => {
   let videoCellId = ''
   let generationCellId = ''
   let imagePath = ''
+  let downloadsDir = ''
   let catalogRequests = 0
 
   async function call(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
@@ -84,6 +85,8 @@ describe('composer focus through real workspace interactions', () => {
 
   beforeAll(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-focus-e2e-'))
+    downloadsDir = join(rootDir, 'Downloads')
+    await mkdir(downloadsDir)
     const mcpPort = await availablePort()
     const vitePort = await availablePort()
     const origin = `http://127.0.0.1:${mcpPort}`
@@ -93,6 +96,7 @@ describe('composer focus through real workspace interactions', () => {
       PORT: String(mcpPort),
       VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'),
       VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime/app-state.json'),
+      VIDEOBOOK_DOWNLOADS_DIR: downloadsDir,
     }
     server = startProcess(['--import', 'tsx', 'server/src/index.ts'], env)
     await waitForHttp(`${origin}/healthz`, server, 200)
@@ -470,6 +474,15 @@ describe('composer focus through real workspace interactions', () => {
       await cell(id).click({ position: { x: 20, y: 20 } })
       const dock = page.locator('.composer-notebook-dock.inspector')
       await dock.waitFor({ timeout: 15_000 })
+      const mediaKind = id === imageCellId ? 'image' : id === audioCellId ? 'audio' : 'video'
+      const fileActions = dock.getByRole('region', { name: 'Media file actions' })
+      expect(await fileActions.getByRole('button', { name: `Copy ${mediaKind}`, exact: true }).isEnabled()).toBe(true)
+      await fileActions.getByRole('button', { name: `Download ${mediaKind}`, exact: true }).click()
+      await expect.poll(() => fileActions.getByRole('status').textContent()).toContain(`Saved ${downloadsDir}/`)
+      const savedPath = (await fileActions.getByRole('status').textContent())!.replace(/^Saved /u, '')
+      const sourcePath = id === imageCellId ? portraitPath : id === audioCellId ? audioPath : join(rootDir, 'video.mp4')
+      expect(await readFile(savedPath)).toEqual(await readFile(sourcePath))
+      expect(await dock.locator('.inspector-media-row-meta > :last-child').getAttribute('aria-label')).toBe('Cell cleanup actions')
       for (const viewport of [
         { width: 1920, height: 1080 },
         { width: 1440, height: 1000 },
@@ -578,6 +591,7 @@ describe('composer focus through real workspace interactions', () => {
             { loaded: true, fit: 'contain', insideFrame: true },
           ])
         }
+        await fileActions.getByRole('button', { name: `Download ${mediaKind}`, exact: true }).click({ trial: true })
         if (process.env.VIDEOBOOK_CAPTURE_MEDIA_DOCK === '1') {
           const kind = id === imageCellId ? 'image' : id === audioCellId ? 'audio' : 'video'
           await page.screenshot({ path: `/tmp/videobook-media-${kind}-${viewport.width}.png` })
@@ -615,7 +629,7 @@ describe('composer focus through real workspace interactions', () => {
         await audio.focus()
         await page.keyboard.press('Space')
         await expect.poll(() => audio.evaluate(element => element instanceof HTMLAudioElement
-          && element.currentTime > 0 && !element.paused)).toBe(true)
+          && element.currentTime > 0 && !element.paused), { timeout: 15_000 }).toBe(true)
         await page.keyboard.press('Space')
         expect(await audio.evaluate(element => element instanceof HTMLAudioElement && element.paused)).toBe(true)
         await audio.evaluate(element => {
@@ -624,6 +638,56 @@ describe('composer focus through real workspace interactions', () => {
         await expect.poll(() => dock.locator('.inspector-audio-waveform .cell-waveform-playhead').count()).toBe(1)
       }
     }
+  })
+
+  it('downloads the selected image version and recovers from a real export failure', async () => {
+    const secondPath = join(rootDir, 'second-version.png')
+    await promisify(execFile)(FFMPEG, [
+      '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=128x96', '-frames:v', '1', secondPath,
+    ])
+    const versions: string[] = []
+    for (const [index, path] of [imagePath, secondPath].entries()) {
+      const uploaded = record(await call('upload_file', {
+        filename: `version-${index + 1}.png`, data: (await readFile(path)).toString('base64'),
+      }))
+      versions.push(String(uploaded?.assetId ?? ''))
+    }
+    const image = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'image', slot: { row: 0, column: 2 },
+        output_artifact_id: versions[1],
+        inputs: { outputVersionArtifactIds: versions },
+      },
+    }))
+    const imageCellId = String(image?.id ?? '')
+    await cell(imageCellId).waitFor({ timeout: 15_000 })
+    await cell(imageCellId).click({ position: { x: 20, y: 20 } })
+    const dock = page.locator('.composer-notebook-dock.inspector')
+    const actions = dock.getByRole('region', { name: 'Media file actions' })
+    await actions.waitFor()
+    await rm(downloadsDir, { recursive: true })
+    try {
+      await actions.getByRole('button', { name: 'Download image', exact: true }).click()
+      await expect.poll(() => actions.getByRole('alert').textContent()).toContain('Failed to copy file:')
+      expect(await actions.getByRole('status').count()).toBe(0)
+      expect(await actions.getByRole('button', { name: 'Download image', exact: true }).isEnabled()).toBe(true)
+    } finally {
+      await mkdir(downloadsDir)
+    }
+    for (const [index, path] of [secondPath, imagePath].entries()) {
+      if (index === 1) {
+        await dock.getByRole('button', { name: 'Version 1 of 2', exact: true }).click()
+        expect(await actions.getByRole('status').count()).toBe(0)
+      }
+      await actions.getByRole('button', { name: 'Download image', exact: true }).click()
+      await expect.poll(() => actions.getByRole('status').textContent()).toContain(`Saved ${downloadsDir}/`)
+      expect(await actions.getByRole('alert').count()).toBe(0)
+      const savedPath = (await actions.getByRole('status').textContent())!.replace(/^Saved /u, '')
+      expect(await readFile(savedPath)).toEqual(await readFile(path))
+    }
+    await cell(videoCellId).click({ position: { x: 20, y: 20 } })
+    expect(await actions.getByRole('status').count()).toBe(0)
+    expect(await actions.getByRole('button', { name: 'Copy video', exact: true }).isEnabled()).toBe(true)
   })
 
   it('hides history for manual media previews and closes those previews on a new message', async () => {

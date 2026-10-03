@@ -11007,7 +11007,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         headerActionHost={inspectorActionHost}
         notebookId={notebook?.id ?? ''}
         bookId={bookId}
-        tagTools={mcp.state === 'ready' ? call : undefined}
+        assetTools={mcp.state === 'ready' ? call : undefined}
         cell={selectedNotebookCell}
         cells={notebook?.cells ?? []}
         edges={notebook?.edges ?? []}

@@ -116,6 +116,7 @@ import type { GenerationCellPreview } from '@/videobook/use-generation-cell-prev
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
+import { MediaFileActions } from './MediaFileActions'
 import { AssetTagEditor } from './AssetTagEditor'
 import { useAssetTags } from '@/videobook/use-asset-tags'
 import type { AssetTags } from '@/videobook/asset-tags'
@@ -449,14 +450,8 @@ export type CellAssetRevision = {
 type NotebookCellInspectorProps = {
   headerActionHost?: HTMLElement | null
   notebookId: string
-  /** Book that owns the inspected asset; tag edits are scoped to it. */
   bookId: string
-  /**
-   * Tag tools, or undefined while the MCP connection is not ready. The
-   * inspector talks to them through useAssetTags rather than receiving one
-   * callback per operation.
-   */
-  tagTools?: (
+  assetTools?: (
     tool: string,
     args: Record<string, unknown>,
     options?: { background?: boolean },
@@ -1445,15 +1440,15 @@ function OutputVersionSelector({
  */
 function CellAssetTags({
   bookId,
-  tagTools,
+  assetTools,
   asset,
 }: {
   bookId: string
-  tagTools: NotebookCellInspectorProps['tagTools']
+  assetTools: NotebookCellInspectorProps['assetTools']
   asset: NotebookCellInspectorAsset
 }) {
   const controller = useAssetTags({
-    call: tagTools ?? null,
+    call: assetTools ?? null,
     target: { bookId, assetId: asset.artifactId },
     tags: asset.tags ?? null,
   })
@@ -1870,7 +1865,7 @@ function MediaCellInspector({
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   bookId,
-  tagTools,
+  assetTools,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1892,7 +1887,7 @@ function MediaCellInspector({
   | 'onLoadTranscriptJson'
   | 'onDownloadTranscriptSrt'
   | 'bookId'
-  | 'tagTools'
+  | 'assetTools'
 > & {
   /** Which dock this is; the caller has already ruled out every other type. */
   kind: MediaDockKind
@@ -2010,7 +2005,7 @@ function MediaCellInspector({
     />
   ) : null
   const assetTags = previewAsset ? (
-    <CellAssetTags bookId={bookId} tagTools={tagTools} asset={previewAsset} />
+    <CellAssetTags bookId={bookId} assetTools={assetTools} asset={previewAsset} />
   ) : null
   const hasTranscriptSidecar = Boolean(
     previewAsset?.transcript?.plain || previewAsset?.transcript?.elevenlabs,
@@ -2118,6 +2113,16 @@ function MediaCellInspector({
             <PublishedPostInspectorDetails inputs={cell.inputs} />
             {insights}
           </div>
+          {previewAsset && (
+            <MediaFileActions
+              key={`${bookId}:${previewAsset.artifactId}`}
+              bookId={bookId}
+              artifactId={previewAsset.artifactId}
+              kind={kind}
+              busy={busy || deleting}
+              call={assetTools}
+            />
+          )}
           <CellCleanupActions
             busy={busy}
             deleting={deleting}
@@ -3738,7 +3743,7 @@ export function NotebookCellInspector({
   mentionAssets,
   voiceCatalog,
   bookId,
-  tagTools,
+  assetTools,
   queuedCellIds,
   runErrors,
   jobs,
@@ -3850,7 +3855,7 @@ export function NotebookCellInspector({
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
         bookId={bookId}
-        tagTools={tagTools}
+        assetTools={assetTools}
       />
     )
   }

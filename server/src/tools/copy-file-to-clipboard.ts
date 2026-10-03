@@ -2,7 +2,7 @@ import { exec } from "node:child_process";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { findPrimaryMediaFile } from "videobook-engine";
+import { findOriginalMediaFile } from "../original-media-file.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function copyFileToClipboardDef(engine: Engine): ToolDef {
@@ -31,7 +31,7 @@ export function copyFileToClipboardDef(engine: Engine): ToolDef {
         };
       }
       const manifest = manifestResult.value;
-      const file = findPrimaryMediaFile(manifest.files, artifactResult.value.kind);
+      const file = findOriginalMediaFile(manifest.files, artifactResult.value.kind);
       if (!file) {
         return {
           isError: true as const,
