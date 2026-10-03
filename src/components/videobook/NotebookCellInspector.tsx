@@ -2814,11 +2814,20 @@ function ExecutableCellInspector({
       }, allGenerationControls),
     }
   }
-  const previewKey = (value: CellFormDraft, inputEdges = edges) => JSON.stringify([
-    generationPreviewDraft(value, inputEdges),
-    inputEdges.filter((edge) => edge.target === cell.id)
-      .map((edge) => [edge.source, edge.targetInput]).sort(),
-  ])
+  const previewKey = (value: CellFormDraft, inputEdges = edges) => {
+    const preview = generationPreviewDraft(value, inputEdges)
+    return JSON.stringify([
+      {
+        ...preview,
+        inputs: {
+          generationMode: preview.inputs.generationMode,
+          generationSettings: preview.inputs.generationSettings,
+        },
+      },
+      inputEdges.filter((edge) => edge.target === cell.id)
+        .map((edge) => [edge.source, edge.targetInput]).sort(),
+    ])
+  }
   const currentPreviewKey = previewKey(draft)
   const [initialPreviewKey] = useState(currentPreviewKey)
   const generationPreview = promptMentionPreview.key !== undefined

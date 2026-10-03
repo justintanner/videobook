@@ -2275,11 +2275,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSelectedCellIds(next)
   }, [])
 
-  const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution) => {
+  const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
     setSelectedCellId(cellId)
-    selectGenerationCellPreview(cellId)
+    selectGenerationCellPreview(cellId, initialPreview)
     updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
     if (!cellId) return
     const fromNotebook = notebook?.cells.find((cell) => cell.id === cellId)
@@ -8426,7 +8426,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
     rememberLastWorkSlot(preparedAction.draft.cell.slot)
-    selectCanvasCell(cellId, chat)
+    selectCanvasCell(cellId, chat, validatedPreview)
     showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
       await materializeNotebookChatGeneration({

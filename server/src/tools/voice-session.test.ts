@@ -24,7 +24,7 @@ import type { Engine } from "videobook-engine";
 import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
 import { VoiceReplyProgress } from "../voice-reply-progress.js";
-import type { VoiceSessionEvent } from "../voice-contract.js";
+import type { VoiceOutcome, VoiceSessionEvent } from "../voice-contract.js";
 
 describe("voice turn continuation", () => {
   it("joins later clauses onto the original request", () => {
@@ -673,7 +673,7 @@ describe("voice session boundaries", () => {
     expect(events.filter(event => event.type === "caption")[0]).toMatchObject({ caption: { role: "user", final: false } });
   });
 
-  describe("voice activation line", () => {
+  describe("voice HTTP activation and review", () => {
     const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
     function pause(ms: number): Promise<void> {
@@ -721,6 +721,80 @@ describe("voice session boundaries", () => {
         await endpoint.close();
       }
     }
+
+    it.each([1, 3].flatMap(revisions => ["apply", "cancel"].flatMap(decision =>
+      ["spoken", "button"].map(surface => ({ revisions, decision, surface })))))(
+      "retains the original review through $revisions revisions and $surface $decision",
+      async ({ revisions, decision, surface }) => {
+        await withEndpoint(async endpoint => {
+          const { id, token } = await startXaiSession();
+          const { events, reading } = await openEventStream(id, token);
+          let turn = 0;
+          const speak = (name: string, args: Record<string, unknown>, transcript: string) => {
+            const callId = `review-call-${++turn}`;
+            const send = (type: string, fields: Record<string, unknown>) => endpoint.send({ type, event_id: `${callId}-${type}`, ...fields });
+            send("input_audio_buffer.speech_started", { item_id: callId });
+            send("input_audio_buffer.speech_stopped", {});
+            send("conversation.item.input_audio_transcription.completed", { item_id: callId, transcript });
+            send("response.created", { response: { id: callId } });
+            send("response.function_call_arguments.done", { response_id: callId, call_id: callId, name, arguments: JSON.stringify(args) });
+            send("response.done", { response: { id: callId, status: "completed" } });
+            return callId;
+          };
+          const outputs = (callId: string) => endpoint.sent.filter(event =>
+            event.type === "conversation.item.create" && event.item?.type === "function_call_output" && event.item.call_id === callId);
+          const acknowledge = async (callId: string, outcome: VoiceOutcome) => fetch(`${origin}/api/voice/${id}/outcome`, {
+            method: "POST", headers: { ...bearer(token), "Content-Type": "application/json" }, body: JSON.stringify({ callId, outcome }),
+          });
+          const review: VoiceOutcome = { status: "review", message: "Review the image generation." };
+          const outcome: VoiceOutcome = decision === "apply"
+            ? { status: "queued", message: "Image generation queued." }
+            : { status: "cancelled", message: "Image generation cancelled." };
+          try {
+            const original = speak("prepare_workspace_action", { tool: "generate_image", params: { prompt: "a moonlit garden" } }, "Generate an image of a moonlit garden");
+            await expect.poll(() => events.some(event => event.type === "action" && event.callId === original)).toBe(true);
+            expect((await acknowledge(original, review)).status).toBe(204);
+            await expect.poll(() => outputs(original)).toHaveLength(1);
+            const revisionIds: string[] = [];
+            for (let index = 0; index < revisions; index += 1) {
+              const prompt = `A moonlit garden with ${index + 1} cats`;
+              const revision = speak("resolve_pending_review", { decision: "revise", prompt }, `Change it to ${prompt}`);
+              revisionIds.push(revision);
+              await expect.poll(() => events.some(event => event.type === "review" && event.callId === revision)).toBe(true);
+              expect((await acknowledge(revision, review)).status).toBe(204);
+              await expect.poll(() => outputs(revision)).toHaveLength(1);
+            }
+            for (const foreign of ["foreign-call", ...revisionIds]) {
+              expect((await acknowledge(foreign, outcome)).status).toBe(409);
+            }
+            const decisionCall = surface === "spoken"
+              ? speak("resolve_pending_review", { decision }, `${decision} it`)
+              : null;
+            if (decisionCall) {
+              await expect.poll(() => events.some(event => event.type === "review" && event.callId === decisionCall)).toBe(true);
+            }
+            expect((await acknowledge(original, outcome)).status).toBe(204);
+            if (decisionCall) {
+              expect((await acknowledge(decisionCall, outcome)).status).toBe(204);
+              await expect.poll(() => outputs(decisionCall)).toHaveLength(1);
+              expect(JSON.parse(String(outputs(decisionCall)[0]?.item?.output))).toMatchObject(outcome);
+            } else {
+              await expect.poll(() => endpoint.sent.filter(event => (JSON.stringify(event.item) ?? "").includes("applicationOutcome"))).toHaveLength(1);
+            }
+            expect((await acknowledge(original, outcome)).status).toBe(409);
+            expect(events.filter(event => event.type === "action")).toHaveLength(1);
+            expect(events.some(event => event.type === "closed" || event.type === "error")).toBe(false);
+            const next = speak("prepare_workspace_action", { tool: "generate_image", params: { prompt: "a sunny garden" } }, "Generate a new image of a sunny garden");
+            await expect.poll(() => events.some(event => event.type === "action" && event.callId === next)).toBe(true);
+            expect((await acknowledge(next, { status: "cancelled", message: "Cancelled." })).status).toBe(204);
+            await expect.poll(() => outputs(next)).toHaveLength(1);
+          } finally {
+            await fetch(`${origin}/api/voice/${id}`, { method: "DELETE", headers: bearer(token) });
+            await reading;
+          }
+        });
+      },
+    );
 
     it("pins the OpenAI activation builder", () => {
       const event = openAiVoiceActivationEvent();

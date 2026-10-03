@@ -127,7 +127,7 @@ export class VoiceSession {
   private lastAction: { turnId: string; callId: string; outcome: VoiceOutcome } | null = null;
   private needsResponse = false;
   private speaking = false;
-  private waitingAction: { callId: string; done: ReturnType<typeof deferred<VoiceOutcome>> } | null = null;
+  private waitingAction: { callId: string; kind: "action" | "review"; done: ReturnType<typeof deferred<VoiceOutcome>> } | null = null;
   private reviewCall: string | null = null;
   private toolChain: Promise<void> = Promise.resolve();
   private pendingTools = 0;
@@ -677,7 +677,7 @@ export class VoiceSession {
       const plan = chatActionPlanSchema.safeParse(value);
       if (!plan.success) { this.output(callId, { status: "completed", result: value }, outputTurnId); return; }
       const done = deferred<VoiceOutcome>();
-      this.waitingAction = { callId, done };
+      this.waitingAction = { callId, kind: "action", done };
       this.emit({ type: "action", callId, prompt, plan: plan.data });
       const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not acknowledge this action. Check its current status before retrying." }), 60_000);
       const outcome = await done.promise.finally(() => clearTimeout(deadline));
@@ -700,7 +700,7 @@ export class VoiceSession {
     if (this.waitingAction) throw new Error("The command UI is still working on the last spoken decision.");
     if (command.decision === "revise" && !command.prompt?.trim()) throw new Error("Revise needs the whole replacement prompt.");
     const done = deferred<VoiceOutcome>();
-    this.waitingAction = { callId, done };
+    this.waitingAction = { callId, kind: "review", done };
     this.emit({ type: "review", callId, command });
     const deadline = setTimeout(() => done.resolve({ status: "failed", message: "The command UI did not act on that. Check the review on screen." }), 60_000);
     const outcome = await done.promise.finally(() => clearTimeout(deadline));
@@ -713,7 +713,7 @@ export class VoiceSession {
     if (this.stopped) throw new VoiceError("Voice session is closed.", 410);
     this.lastActivity = Date.now();
     if (this.waitingAction?.callId === callId) {
-      if (outcome.status === "review") this.reviewCall = callId;
+      if (outcome.status === "review" && this.waitingAction.kind === "action") this.reviewCall = callId;
       this.waitingAction.done.resolve(outcome);
       return;
     }

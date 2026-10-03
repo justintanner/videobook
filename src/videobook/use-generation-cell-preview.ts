@@ -27,19 +27,25 @@ export function useGenerationCellPreview({
   const [preview, setPreview] = useState<SelectedPreview | null>(null)
   const requestRef = useRef<{ key: string } | null>(null)
   const scope = `${bookId}:${notebook?.id}`
-  const select = useCallback((cellId: string | null) => {
+  const select = useCallback((cellId: string | null, initialValue?: unknown) => {
     const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
-    if (!bookId || !notebook || !cell || !isNotebookGenerationCellType(cell.type)) {
+    if (!bookId || !notebook || !cellId || (initialValue === undefined && (!cell || !isNotebookGenerationCellType(cell.type)))) {
       requestRef.current = null
       setPreview(null)
       return
     }
+    const identity = { scope, cellId }
+    if (initialValue !== undefined) {
+      requestRef.current = null
+      setPreview({ ...identity, value: initialValue, loading: false, error: null })
+      return
+    }
+    if (!cell) return
     if (!ready) return
     const key = JSON.stringify([scope, cell, notebook.edges.filter((edge) => edge.target === cellId)])
     if (requestRef.current?.key === key) return
     const request = { key }
     requestRef.current = request
-    const identity = { scope, cellId: cell.id }
     setPreview({ ...identity, value: null, loading: true, error: null })
     void call('preview_notebook_generation', {
       book_id: bookId,
