@@ -3,6 +3,7 @@ import {
   Camera,
   Columns3,
   Copy,
+  Download,
   Ellipsis,
   History,
   Image,
@@ -29,6 +30,7 @@ type NotebookCellContextActionIcon =
   | 'arrange-column'
   | 'arrange-row'
   | 'duplicate'
+  | 'download'
   | 'extract-frame'
   | 'generate-image'
   | 'generate-video'
@@ -70,6 +72,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   'arrange-column': Columns3,
   'arrange-row': Rows3,
   duplicate: Copy,
+  download: Download,
   'extract-frame': Camera,
   'generate-image': Image,
   'generate-video': Video,

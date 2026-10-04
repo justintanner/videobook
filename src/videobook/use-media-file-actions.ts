@@ -15,6 +15,24 @@ type ActionState =
   | { phase: 'done'; message: string }
   | { phase: 'failed'; message: string }
 
+export async function performMediaFileAction(
+  call: MediaFileToolCall,
+  action: MediaFileAction,
+  bookId: string,
+  artifactId: string,
+): Promise<string> {
+  const result = recordValue(await call(
+    action === 'copy' ? 'copy_file_to_clipboard' : 'export_to_downloads',
+    { book_id: bookId, asset_id: artifactId },
+    { background: true },
+  ))
+  const expectedStatus = action === 'copy' ? 'copied' : 'exported'
+  if (result?.status !== expectedStatus || typeof result.path !== 'string') {
+    throw new Error('The server did not confirm the file action. Try again.')
+  }
+  return action === 'copy' ? 'File copied to clipboard' : `Saved ${result.path}`
+}
+
 export function useMediaFileActions({
   call,
   bookId,
@@ -33,18 +51,10 @@ export function useMediaFileActions({
     inFlight.current = true
     setState({ phase: 'running', action })
     try {
-      const result = recordValue(await call(
-        action === 'copy' ? 'copy_file_to_clipboard' : 'export_to_downloads',
-        { book_id: bookId, asset_id: artifactId },
-        { background: true },
-      ))
-      const expectedStatus = action === 'copy' ? 'copied' : 'exported'
-      if (result?.status !== expectedStatus || typeof result.path !== 'string') {
-        throw new Error('The server did not confirm the file action. Try again.')
-      }
+      const message = await performMediaFileAction(call, action, bookId, artifactId)
       setState({
         phase: 'done',
-        message: action === 'copy' ? 'File copied to clipboard' : `Saved ${result.path}`,
+        message,
       })
     } catch (error) {
       setState({ phase: 'failed', message: error instanceof Error ? error.message : String(error) })

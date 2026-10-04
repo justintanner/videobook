@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { execFile } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -262,6 +262,7 @@ describe('chat composer browser flow', () => {
 
   beforeAll(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-ui-e2e-'))
+    await mkdir(join(rootDir, 'downloads'))
     const mcpPort = await availablePort()
     const vitePort = await availablePort()
     mcpOrigin = `http://127.0.0.1:${mcpPort}`
@@ -273,6 +274,7 @@ describe('chat composer browser flow', () => {
         PORT: String(mcpPort),
         VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime', 'app-state.json'),
         VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'),
+        VIDEOBOOK_DOWNLOADS_DIR: join(rootDir, 'downloads'),
       },
     )
     await waitForHttp(`${mcpOrigin}/healthz`, mcpProcess, 200)
@@ -4585,6 +4587,7 @@ describe('chat composer browser flow', () => {
     expect(itemLabels.filter((label) => !requiredLabels.includes(label)).every((label) =>
       [
         'Open media',
+        'Download video',
         'Extract frame',
         'Generate video',
         'Generate image',
@@ -4649,6 +4652,7 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Open media',
+      'Download video',
       'Extract frame',
       'Generate video',
       'Duplicate',
@@ -4663,6 +4667,29 @@ describe('chat composer browser flow', () => {
     ])
     expect(await videoMenu.getByRole('menuitem', { name: 'Duplicate' }).isDisabled())
       .toBe(true)
+    if (process.env.VIDEOBOOK_E2E_SCREENSHOT) {
+      await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
+    }
+    const downloadsDir = join(rootDir, 'downloads')
+    const existingDownloads = new Set(await readdir(downloadsDir).catch(() => []))
+    observedCalls.length = 0
+    await videoMenu.getByRole('menuitem', { name: 'Download video', exact: true }).click()
+    await videoMenu.waitFor({ state: 'hidden' })
+    await expect.poll(async () => (await readdir(downloadsDir).catch(() => []))
+      .filter((file) => !existingDownloads.has(file)), { timeout: MCP_ROUNDTRIP_MS }).toHaveLength(1)
+    const downloaded = (await readdir(downloadsDir)).find((file) => !existingDownloads.has(file))!
+    expect(await readFile(join(downloadsDir, downloaded)))
+      .toEqual(await readFile(join(rootDir, 'split-source.mp4')))
+    expect(observedCalls.filter((call) => call.name === 'export_to_downloads')).toEqual([{
+      name: 'export_to_downloads',
+      arguments: { book_id: bookId, asset_id: videoArtifactId },
+    }])
+    await page.getByText(`Saved ${join(downloadsDir, downloaded)}`, { exact: true })
+      .waitFor({ state: 'visible' })
+    await page.getByRole('button', { name: 'Dismiss notice', exact: true }).click()
+    await collapseComposerDock(page)
+    await videoTarget.click({ button: 'right' })
+    await videoMenu.waitFor({ state: 'visible' })
     await videoMenu.getByRole('menuitem', { name: 'Open media' }).click()
     const fullscreen = page.getByRole('dialog', {
       name: `Fullscreen preview for ${videoAddress}`,

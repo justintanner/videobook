@@ -363,6 +363,7 @@ import {
   mediaAssetWatchStep,
   downloadVideoCellInput,
 } from '@/videobook/notebook-download'
+import { performMediaFileAction } from '@/videobook/use-media-file-actions'
 import { routedMediaCellInputs } from '@/videobook/notebook-routed-action'
 import {
   enqueueNotebookAudioCommand,
@@ -10175,6 +10176,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         || contextMenuVisualAsset.type === 'final')
     ) {
       contextMenuActions.push({
+        id: 'download',
+        label: 'Download video',
+        icon: 'download',
+        disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl,
+      })
+      contextMenuActions.push({
         id: 'extract_frame',
         label: 'Extract frame',
         icon: 'extract-frame',
@@ -10328,6 +10335,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setBusy(false)
     }
   }
+  const downloadContextMenuVideo = async () => {
+    if (!bookId || busy || mcp.state !== 'ready' || !contextMenuVisualAsset?.mediaUrl) return
+    const artifactId = contextMenuVisualAsset.artifactId
+    setBusy(true)
+    try {
+      const message = await performMediaFileAction(call, 'download', bookId, artifactId)
+      if (watchScopeRef.current.bookId === bookId) setNotice(message)
+    } catch (error) {
+      if (watchScopeRef.current.bookId === bookId) {
+        setNotice(error instanceof Error ? error.message : String(error), 'error')
+      }
+    } finally {
+      if (watchScopeRef.current.bookId === bookId) setComposerDockOpen(true)
+      setBusy(false)
+    }
+  }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
     if (actionId === 'more') {
@@ -10344,6 +10367,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'library') {
       openMediaLibrary(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'download') {
+      void downloadContextMenuVideo()
       return
     }
     if (actionId === 'media' || actionId === 'extract_frame') {
