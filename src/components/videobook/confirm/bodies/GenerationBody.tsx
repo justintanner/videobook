@@ -11,6 +11,11 @@ import { GenerationControlField } from '@/components/videobook/GenerationControl
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
 import { RichJson } from '@/components/videobook/RichJson'
 import {
+  DoltCellSource,
+  type DoltArtifactAssets,
+} from '@/components/videobook/DoltCellSource'
+import { doltCellRows } from '@/videobook/dolt-cell-source'
+import {
   notebookChatGenerationSettings,
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
@@ -23,6 +28,8 @@ import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import { persistSpeakVoiceId } from '@/videobook/speak-preview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import { recordValue } from '@/videobook/value-decoders'
+
+const emptyDoltArtifactAssets: DoltArtifactAssets = new Map()
 import {
   generationEstimate,
   providerPayloadPreviewMentions,
@@ -56,6 +63,8 @@ type GenerationBodyProps = {
   inputFooter?: ReactNode
   compatibleModeIds?: ReadonlySet<string>
   sourceVisible?: boolean
+  notebookId?: string
+  doltArtifactAssets?: DoltArtifactAssets
   onActionChange: (actionId: string) => void
   onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
@@ -161,6 +170,8 @@ export function GenerationBody({
   inputFooter,
   compatibleModeIds,
   sourceVisible = false,
+  notebookId = '',
+  doltArtifactAssets,
   onActionChange,
   onAddSource,
   onModeChange,
@@ -211,6 +222,9 @@ export function GenerationBody({
       inputs: draft.cell.inputs ?? {},
     },
   }
+  const doltColumnCount = sourceVisible
+    ? doltCellRows(notebookId, draft.cell).length
+    : 0
   return (
     <div className="confirm-generation" data-view={sourceVisible ? 'source' : 'form'}>
       <section className="confirm-section generation-review-input-section" aria-label="Inputs">
@@ -422,12 +436,29 @@ export function GenerationBody({
         )}
       </div>
 
-      <section className="confirm-section generation-review-source-section" aria-label={sourceVisible ? 'Source' : 'Payload'}>
+      {sourceVisible && (
+        <section className="confirm-section generation-review-dolt-section" aria-label="Dolt source">
+          <div className="confirm-section-heading">
+            <span>Dolt source</span>
+            <strong>cells · {doltColumnCount} columns</strong>
+          </div>
+          <div className="generation-review-dolt" tabIndex={0} aria-label="Dolt source preview">
+            <DoltCellSource
+              notebookId={notebookId}
+              cell={draft.cell}
+              artifactAssets={doltArtifactAssets ?? emptyDoltArtifactAssets}
+              heading={false}
+            />
+          </div>
+        </section>
+      )}
+
+      <section className="confirm-section generation-review-source-section" aria-label={sourceVisible ? 'MCP payload' : 'Payload'}>
         <div className="confirm-section-heading">
-          <span>{sourceVisible ? 'Source' : 'Payload'}</span>
+          <span>{sourceVisible ? 'MCP payload' : 'Payload'}</span>
           {(previewStale || previewLoading) && <small className="generation-review-json-stale" role="status">Updating…</small>}
         </div>
-        <div className="generation-review-json" tabIndex={0} aria-label={sourceVisible ? 'Generation source preview' : 'Generation payload preview'} aria-busy={previewLoading}>
+        <div className="generation-review-json" tabIndex={0} aria-label={sourceVisible ? 'MCP payload preview' : 'Generation payload preview'} aria-busy={previewLoading}>
           {previewLoading ? (
             <span className="generation-review-json-status" role="status">Loading preview…</span>
           ) : previewError ? (
@@ -437,7 +468,7 @@ export function GenerationBody({
           ) : (
             <RichJson
               value={sourceVisible ? previewJson : previewValue?.payload ?? null}
-              ariaLabel={sourceVisible ? 'Generation source JSON' : 'Generation payload JSON'}
+              ariaLabel={sourceVisible ? 'MCP payload JSON' : 'Generation payload JSON'}
               artifactAssets={artifactAssets}
               mediaDisplay="preview"
             />

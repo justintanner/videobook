@@ -82,7 +82,8 @@
     overflow: visible;
   }
 
-  .command-composer[data-resizable-review='true'] .confirm-generation > .generation-review-source-section {
+  .command-composer[data-resizable-review='true'] .confirm-generation > .generation-review-source-section,
+  .command-composer[data-resizable-review='true'] .confirm-generation > .generation-review-dolt-section {
     min-height: 240px;
   }
 }

@@ -4126,6 +4126,30 @@ describe('chat composer browser flow', () => {
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     expect(await source.isVisible()).toBe(true)
     expect(await prompt.isVisible()).toBe(false)
+    const generationReviewSourcePanels = () => editor.evaluate((element) => {
+      const bounds = (selector: string) => {
+        const region = element.querySelector(selector)
+        if (!(region instanceof HTMLElement)) {
+          throw new Error(`Missing generation source panel: ${selector}`)
+        }
+        const rect = region.getBoundingClientRect()
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        }
+      }
+      return {
+        dolt: bounds('.generation-review-dolt-section'),
+        mcp: bounds('.generation-review-source-section'),
+      }
+    })
+    expect(await editor.getByRole('region', { name: 'Dolt source' }).isVisible()).toBe(true)
+    expect(await editor.getByRole('region', { name: 'MCP payload' }).isVisible()).toBe(true)
+    const imageSourcePanels = await generationReviewSourcePanels()
+    expect(imageSourcePanels.dolt.right).toBeLessThanOrEqual(imageSourcePanels.mcp.left + 1)
+    expect(Math.abs(imageSourcePanels.dolt.top - imageSourcePanels.mcp.top)).toBeLessThan(2)
     await inspector.evaluate((element) => { element.scrollTop = 0 })
     await page.screenshot({ path: '/tmp/videobook-2jtd-desktop.png' })
 
@@ -4133,6 +4157,8 @@ describe('chat composer browser flow', () => {
     expect(await inspector.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
     expect(await source.isVisible()).toBe(true)
     expect(await prompt.isVisible()).toBe(false)
+    const stackedSourcePanels = await generationReviewSourcePanels()
+    expect(stackedSourcePanels.dolt.bottom).toBeLessThanOrEqual(stackedSourcePanels.mcp.top + 1)
     await page.screenshot({ path: '/tmp/videobook-2jtd-narrow.png' })
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
@@ -4152,6 +4178,16 @@ describe('chat composer browser flow', () => {
     }).toContain('A moonlit garden moving in a light breeze')
     expect(await editor.getByLabel('Duration', { exact: true }).inputValue()).toBe('string:5')
     expect(await source.textContent()).not.toContain('A revised moonlit garden')
+    await page.getByRole('button', { name: 'View source', exact: true }).click()
+    expect(await editor.getByRole('region', { name: 'Dolt source' }).isVisible()).toBe(true)
+    expect(await editor.getByRole('region', { name: 'MCP payload' }).isVisible()).toBe(true)
+    await expect.poll(async () => await source.textContent(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toContain('"provider_path"')
+    const videoSourcePanels = await generationReviewSourcePanels()
+    expect(videoSourcePanels.dolt.right).toBeLessThanOrEqual(videoSourcePanels.mcp.left + 1)
+    expect(Math.abs(videoSourcePanels.dolt.top - videoSourcePanels.mcp.top)).toBeLessThan(2)
+    await page.getByRole('button', { name: 'View cell', exact: true }).click()
     const audioToggle = editor.getByRole('switch', { name: 'Generate audio', exact: true })
     const audioEnabled = await audioToggle.isChecked()
     await audioToggle.press('Space')

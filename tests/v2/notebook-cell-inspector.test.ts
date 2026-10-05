@@ -442,7 +442,19 @@ describe('NotebookCellInspector', () => {
       ? 'class="confirm-section generation-review-editor" hidden=""'
       : 'aria-label="Payload"')
     expect(html).not.toContain('aria-label="Payload" hidden=""')
-    expect(html).not.toContain('aria-label="Raw Dolt cells row"')
+    expect(html).toContain(sourceVisible
+      ? 'aria-label="Raw Dolt cells row"'
+      : 'aria-label="Payload"')
+    expect(html).not.toContain(sourceVisible
+      ? 'aria-label="Payload"'
+      : 'aria-label="Raw Dolt cells row"')
+    if (sourceVisible) {
+      expect(html).toContain('aria-label="Dolt source"')
+      expect(html).toContain('aria-label="MCP payload"')
+      expect(html.indexOf('generation-review-dolt-section')).toBeLessThan(
+        html.indexOf('generation-review-source-section'),
+      )
+    }
     expect(html).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
     expect(html).toContain(
       'aria-label="Primary cell action"',
@@ -454,6 +466,80 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
   })
+
+  it.each(['generate_image', 'generate_video'] as const)(
+    'shows the Dolt row beside the full MCP payload for %s',
+    (type) => {
+      const generationCell: NotebookCell = {
+        ...cell,
+        type,
+        label: `${type}-01`,
+        prompt: 'A moonlit garden',
+        provider: 'kie',
+        model: type === 'generate_image'
+          ? 'NanoBananaProRequestSchema'
+          : 'GeminiOmniVideoRequestSchema',
+        operation: type === 'generate_image' ? 'text_to_image' : 'image_to_video',
+        tool: type === 'generate_image'
+          ? 'generate_kie_nano_banana_pro_text_to_image'
+          : 'generate_kie_gemini_omni_video',
+        outputArtifactId: undefined,
+      }
+      const preview = {
+        tool: generationCell.tool,
+        provider: 'kie',
+        model: 'preview-model',
+        provider_path: 'kie.post.api.v1.jobs.createTask(request, { otp })',
+        payload: {
+          model: 'preview-model',
+          input: { prompt: 'A moonlit garden' },
+        },
+      }
+      const htmlFor = (sourceVisible: boolean) => renderToStaticMarkup(createElement(NotebookCellInspector, {
+        bookId: '01900000-0000-7000-8000-000000000002',
+        notebookId: '01900000-0000-7000-8000-000000000003',
+        cell: generationCell,
+        cells: [generationCell],
+        edges: [],
+        asset: undefined,
+        status: 'ready',
+        error: null,
+        busy: false,
+        deleting: false,
+        sourceVisible,
+        generationActions,
+        initialGenerationPreview: {
+          value: preview,
+          loading: false,
+          error: null,
+        },
+        onUpdate: async () => undefined,
+        onSetInput: async () => undefined,
+        onRun: async () => undefined,
+        onDelete: async () => undefined,
+        onOpenFullscreen: () => undefined,
+      }))
+
+      const source = htmlFor(true)
+      expect(source).toContain('aria-label="Dolt source"')
+      expect(source).toContain('aria-label="MCP payload"')
+      expect(source).toContain('aria-label="Raw Dolt cells row"')
+      expect(source).toContain('aria-label="MCP payload JSON"')
+      expect(source).toContain('A moonlit garden')
+      expect(source).toContain('kie.post.api.v1.jobs.createTask(request, { otp })')
+      expect(source.indexOf('generation-review-dolt-section')).toBeLessThan(
+        source.indexOf('generation-review-source-section'),
+      )
+      expect(source).toContain('class="confirm-section generation-review-editor" hidden=""')
+
+      const form = htmlFor(false)
+      expect(form).toContain('aria-label="Payload"')
+      expect(form).not.toContain('aria-label="Dolt source"')
+      expect(form).not.toContain('aria-label="Raw Dolt cells row"')
+      expect(form).not.toContain('provider_path')
+      expect(form).toContain('preview-model')
+    },
+  )
 
   it('shows generation type and schema-backed video controls', () => {
     const generationCell: NotebookCell = {

@@ -148,6 +148,8 @@ textarea:focus-visible {
 .video-split-boundaries > ol:focus-visible,
 .generation-review-json:focus,
 .generation-review-json:focus-visible,
+.generation-review-dolt:focus,
+.generation-review-dolt:focus-visible,
 .record-card pre:focus,
 .record-card pre:focus-visible {
   outline: none;
@@ -7246,11 +7248,19 @@ textarea:focus-visible {
   border: 0;
 }
 
-.confirm-generation .generation-review-source-section {
-  grid-area: source;
+.confirm-generation .generation-review-source-section,
+.confirm-generation .generation-review-dolt-section {
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 240px;
   align-content: stretch;
+}
+
+.confirm-generation .generation-review-source-section {
+  grid-area: source;
+}
+
+.confirm-generation .generation-review-dolt-section {
+  grid-area: dolt;
 }
 
 .generation-review-settings-section {
@@ -8565,14 +8575,13 @@ textarea:focus-visible {
 }
 
 .confirm-generation[data-view='source'] {
-  grid-template-columns: 152px minmax(0, 1fr) 144px;
-  grid-template-areas: 'inputs content estimate';
+  grid-template-columns: 152px minmax(0, 1fr) minmax(0, 1fr) 144px;
+  grid-template-areas: 'inputs dolt mcp estimate';
   grid-template-rows: auto;
 }
 
-.confirm-generation[data-view='source'] > .generation-review-editor,
 .confirm-generation[data-view='source'] > .generation-review-source-section {
-  grid-area: content;
+  grid-area: mcp;
 }
 
 .confirm-generation > [hidden] {
@@ -8707,6 +8716,14 @@ textarea:focus-visible {
       'estimate editor source';
     grid-template-rows: minmax(0, 1fr) auto;
   }
+
+  .confirm-generation[data-view='source'] {
+    grid-template-columns: 152px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'inputs dolt mcp'
+      'estimate dolt mcp';
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
 }
 
 @media (max-width: 900px) {
@@ -8738,7 +8755,7 @@ textarea:focus-visible {
 
   .confirm-generation[data-view='source'] {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'inputs' 'content' 'estimate';
+    grid-template-areas: 'inputs' 'dolt' 'mcp' 'estimate';
     grid-template-rows: auto;
   }
 
@@ -9165,7 +9182,8 @@ textarea:focus-visible {
   font-size: 10px;
 }
 
-.generation-review-json {
+.generation-review-json,
+.generation-review-dolt {
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -9176,7 +9194,14 @@ textarea:focus-visible {
   background: rgba(0, 7, 4, 0.72);
 }
 
-.generation-review-json:focus-visible {
+.generation-review-dolt .inspector-dolt-table thead th {
+  position: sticky;
+  top: 0;
+  background: #04130c;
+}
+
+.generation-review-json:focus-visible,
+.generation-review-dolt:focus-visible {
   border-color: var(--green);
 }
 
