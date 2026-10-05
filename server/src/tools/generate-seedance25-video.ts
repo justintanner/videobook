@@ -17,6 +17,7 @@ import {
   type RefInput,
 } from "./_seedance2-shared.js";
 import { generationLabel } from "../artifact-label.js";
+import { seedance25FrameAspectRatio } from "../seedance25.js";
 
 const SLUG = "sd2p5";
 const seedance25Input = Seedance25InputSchema.shape;
@@ -33,7 +34,7 @@ export function buildSeedance25Schema() {
     return_last_frame: apicityField(seedance25Input.return_last_frame, "Return the final generated frame as an image (default false)"),
     generate_audio: apicityField(seedance25Input.generate_audio, "Generate accompanying audio (default true)"),
     resolution: apicityField(seedance25Input.resolution, "Output resolution: 480p / 720p / 1080p (default 720p)"),
-    aspect_ratio: apicityField(seedance25Input.aspect_ratio, "Output aspect ratio (default adaptive)"),
+    aspect_ratio: apicityField(seedance25Input.aspect_ratio, "Output aspect ratio (default adaptive; first/last-frame inputs always use adaptive)"),
     duration: apicityStringNumberField(seedance25Input.duration, "Video duration: -1 for automatic or 4-30 seconds (default 5)"),
     output_format: apicityField(seedance25Input.output_format, "Output video format: mp4 / mov (default mp4)"),
     web_search: apicityField(seedance25Input.web_search, "Enable web search for generation"),
@@ -69,11 +70,12 @@ export function generateSeedance25VideoDef(engine: Engine): ToolDef {
         book_id, prompt,
         image_refs, video_refs, audio_refs,
         return_last_frame, generate_audio,
-        resolution, aspect_ratio, duration, output_format,
+        resolution, duration, output_format,
         web_search, nsfw_checker,
       } = raw;
       const first_frame_ref = isBlank(raw.first_frame_ref) ? undefined : raw.first_frame_ref;
       const last_frame_ref = isBlank(raw.last_frame_ref) ? undefined : raw.last_frame_ref;
+      const aspect_ratio = seedance25FrameAspectRatio("generate_kie_seedance_2_5_video", raw) ?? raw.aspect_ratio;
       const replace_audio_with = isBlank(raw.replace_audio_with) ? undefined : raw.replace_audio_with;
 
       if (!process.env.KIE_API_KEY) {

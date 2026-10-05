@@ -467,7 +467,7 @@ describe("notebook runner frames and concat", () => {
       model: "bytedance/seedance-2",
       operation: "image_to_video",
       tool: DEFAULT_ANIMATION_TOOL,
-      inputs: { requiresConfirmation: true },
+      inputs: { requiresConfirmation: true, generationSettings: { aspect_ratio: "9:16" } },
     });
     const document: NotebookDocument = {
       ...notebook.value,
@@ -506,6 +506,7 @@ describe("notebook runner frames and concat", () => {
     );
     expect(args.first_frame_ref).toBe(`@${first.value.artifactId}`);
     expect(args.last_frame_ref).toBe(`@${last.value.artifactId}`);
+    expect(args.aspect_ratio).toBe("adaptive");
 
     const prepared = await prepareNotebookGeneration(
       engine,
@@ -516,6 +517,7 @@ describe("notebook runner frames and concat", () => {
     expect(prepared.tool).toBe(DEFAULT_ANIMATION_TOOL);
     expect(prepared.input.first_frame_ref).toBe(`@${first.value.artifactId}`);
     expect(prepared.input.last_frame_ref).toBe(`@${last.value.artifactId}`);
+    expect(prepared.input.aspect_ratio).toBe("adaptive");
     await expect(
       prepareNotebookGeneration(
         engine,

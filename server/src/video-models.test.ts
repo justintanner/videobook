@@ -760,6 +760,19 @@ describe("VIDEO_TOOL_MODES contract", () => {
     ]);
     expect(option.schema?.properties).toHaveProperty("return_last_frame");
     expect(option.schema?.properties).toHaveProperty("output_format");
+    expect(option.modes!.modes.find((mode) => mode.key === "frames")?.hidden_shared_params).toContain("aspect_ratio");
+  });
+
+  it("normalizes saved Seedance 2.5 frame settings without changing reference or text ratios", () => {
+    for (const params of [
+      { first_frame_ref: "@first" },
+      { first_frame_ref: "@first", last_frame_ref: "@last" },
+      { image_refs: ["@reference"] },
+      {},
+    ]) {
+      const option = buildModelOption("seedance25", VIDEO_MODELS.seedance25, { ...params, aspect_ratio: "9:16" }, []);
+      expect(option.prefilled_values.aspect_ratio).toBe("first_frame_ref" in params ? "adaptive" : "9:16");
+    }
   });
 
   it("keeps integer duration for kling omni", () => {

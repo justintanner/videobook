@@ -474,12 +474,26 @@ and xAI pace is not configurable.
 
 
 
+## 40. (gap) Seedance 2.5 frame aspect restriction — OPEN in 0.13.2
+
+KIE rejects first-frame and first/last-frame requests with a fixed aspect ratio:
+`Seedance 2.5 first-frame and first-last-frame tasks only support adaptive aspect ratio`.
+The installed `Seedance25RequestSchema` accepts these requests. Videobook normalizes
+frame requests to `adaptive` in notebook preparation, tool dispatch, payload previews,
+and submission of persisted retries. Frame controls explain that output follows the
+first image and prevent fixed-ratio selection. Text and reference modes retain their
+supported fixed ratios. Remove this workaround only when the upstream contract and
+all preview/submission paths enforce the same restriction.
+
+---
+
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
 | **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | provider-derived resolution adapters                  |
 | **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
+| **OPEN**     | §40 Seedance 2.5 frame aspect ratio                                 | adaptive normalization and mode-aware controls        |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |

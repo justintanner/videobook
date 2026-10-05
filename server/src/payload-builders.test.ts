@@ -899,6 +899,27 @@ describe("translateToolPayload", () => {
     expect(Seedance25RequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
+  it.each([
+    ["generate_kie_seedance_2_5_video", undefined],
+    ["generate_seedance25_video", "https://example.test/last.png"],
+  ])("uses adaptive for %s frame previews while preserving frame URLs", (tool, lastFrame) => {
+    const result = translateToolPayload(tool, {
+      prompt: "a continuous tracking shot",
+      first_frame_ref: "https://example.test/first.png",
+      ...(lastFrame ? { last_frame_ref: lastFrame } : {}),
+      aspect_ratio: "9:16",
+    });
+    expect(result?.payload).toMatchObject({
+      model: "bytedance/seedance-2-5",
+      input: {
+        first_frame_url: "https://example.test/first.png",
+        ...(lastFrame ? { last_frame_url: lastFrame } : {}),
+        aspect_ratio: "adaptive",
+      },
+    });
+    expect(Seedance25RequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("applies every Seedance 2.5 default to translated payloads", () => {
     const result = translateToolPayload("generate_seedance25_video", {
       prompt: "a quiet landscape",

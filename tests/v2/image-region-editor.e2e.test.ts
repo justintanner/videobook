@@ -328,6 +328,54 @@ describe('drawn region image editor through real MCP', () => {
     }
   }, 60_000)
 
+  it('keeps Seedance frame controls and previews adaptive while preserving text and reference ratios', async () => {
+    for (const [index, mode] of ['first', 'pair', 'text', 'reference'].entries()) {
+      const frames = mode === 'first' || mode === 'pair'
+      const created = record(await call('create_notebook_cell', {
+        cell: {
+          type: 'generate_video', slot: { row: 22, column: index }, prompt: 'Pan across the garden',
+          provider: 'kie', model: 'bytedance/seedance-2-5', tool: 'generate_kie_seedance_2_5_video',
+          inputs: {
+            generationMode: frames ? 'i2v' : mode === 'reference' ? 'r2v' : 't2v',
+            generationSettings: { aspect_ratio: '9:16', duration: '10' },
+          },
+        },
+      }))
+      const cellId = String(created?.id ?? '')
+      if (mode !== 'text') {
+        await call('connect_notebook_cells', {
+          source_cell_id: sourceCellId, target_cell_id: cellId, target_input: frames ? 'first_frame' : 'image',
+        })
+      }
+      if (mode === 'pair') {
+        await call('connect_notebook_cells', {
+          source_cell_id: sourceCellId, target_cell_id: cellId, target_input: 'last_frame',
+        })
+      }
+      await page.reload()
+      const node = page.locator(`.react-flow__node[data-id="${cellId}"] .cell-node`)
+      await node.click()
+      const editor = page.locator('.generation-cell-inspector .confirm-generation')
+      const aspect = editor.getByLabel('Aspect ratio', { exact: true })
+      await aspect.waitFor({ state: 'visible' })
+      expect(await aspect.inputValue()).toBe(frames ? 'string:adaptive' : 'string:9:16')
+      expect(await aspect.isDisabled()).toBe(frames)
+      expect(await node.textContent()).toContain(frames ? 'adaptive' : '9:16')
+      const source = editor.locator('.generation-review-json pre')
+      await expect.poll(() => source.textContent(), { timeout: 15_000 })
+        .toContain(`"aspect_ratio": "${frames ? 'adaptive' : '9:16'}"`)
+      if (frames) {
+        expect(await editor.getByText('Frame mode follows the first image’s aspect ratio (adaptive).', { exact: true }).isVisible()).toBe(true)
+        expect(await source.textContent()).toContain('"first_frame_url"')
+        if (mode === 'pair') expect(await source.textContent()).toContain('"last_frame_url"')
+      } else {
+        await aspect.selectOption('string:16:9')
+        await expect.poll(() => source.textContent(), { timeout: 15_000 }).toContain('"aspect_ratio": "16:9"')
+      }
+    }
+    await page.screenshot({ path: '/tmp/videobook-seedance-aspect-controls.png' })
+  }, 60_000)
+
   it('collapses previews and history when image generation is queued, then allows manual reopening', async () => {
     const created = record(await call('create_notebook_cell', {
       cell: { type: 'generate_image', slot: { row: 20, column: 0 }, prompt: 'A green garden in daylight' },

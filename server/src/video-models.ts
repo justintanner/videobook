@@ -2,6 +2,7 @@
  * Video model registry, schemas, validation, and routing prompt.
  */
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
+import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from "./seedance25.js";
 import {
   GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,
@@ -526,8 +527,9 @@ const SEEDANCE25_MODES: ModelModes = {
     {
       key: "frames",
       label: "frames",
-      description: "Animate from a first frame and optional last frame",
+      description: `Animate from a first frame and optional last frame. ${SEEDANCE25_FRAME_ASPECT_DESCRIPTION}`,
       params: ["first_frame_ref", "last_frame_ref"],
+      hidden_shared_params: ["aspect_ratio"],
       asset_slots: [
         { param: "first_frame_ref", kind: "image", label: "First Frame" },
         { param: "last_frame_ref", kind: "image", label: "Last Frame" },
@@ -1647,6 +1649,8 @@ function applyVideoToolConstraints(
     if (params.mode === "spicy") params.mode = "normal";
     if (params.aspect_ratio === "auto") params.aspect_ratio = "16:9";
   }
+  const aspectRatio = seedance25FrameAspectRatio(toolName, params);
+  if (aspectRatio) params.aspect_ratio = aspectRatio;
 }
 
 // ---------------------------------------------------------------------------

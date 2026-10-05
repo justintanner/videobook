@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { seedance25FrameAspectRatio } from "../seedance25.js";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type {
@@ -1099,6 +1100,8 @@ function modelArgsWithMentions(
   if ("driving_audio_ref" in definition.schema && audioReferences[0]) {
     args.driving_audio_ref = audioReferences[0];
   }
+  const aspectRatio = seedance25FrameAspectRatio(definition.name, args);
+  if (aspectRatio) args.aspect_ratio = aspectRatio;
   return { input: args, mentions };
 }
 

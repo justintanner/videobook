@@ -3,13 +3,15 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { canonicalHash, computeEstimate, parseOtp, verifyOtp } from "@apicity/cost";
-import { createEngine } from "videobook-engine";
+import { createEngine, QUEUED_TASK_ID } from "videobook-engine";
+import { Seedance25RequestSchema } from "@apicity/kie/zod";
 import { configureLoggerForTests, resetLoggerForTests } from "../logger.js";
 import {
   authorizeKiePaygate,
   ensurePaygateSecret,
   KIE_PAYGATE_DOT_PATH,
   mintKieOtp,
+  submitQueuedKieTask,
 } from "./kie-paygate.js";
 import { assessKieRequestEstimate } from "./cost-estimate-assessment.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
@@ -34,6 +36,47 @@ describe("kie paygate", () => {
     if (previousSecretPath === undefined) delete process.env.APICITY_PAYGATE_SECRET_PATH;
     else process.env.APICITY_PAYGATE_SECRET_PATH = previousSecretPath;
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("repairs a persisted Seedance frame payload before authorizing a queued retry", async () => {
+    const engine = createEngine({ rootDir: join(tempDir, "book"), initialBookName: "queued-frames", durableWrites: false });
+    const previousKey = process.env.KIE_API_KEY;
+    delete process.env.KIE_API_KEY;
+    try {
+      await engine.ready;
+      const artifact = await engine.artifacts.create("video", "Failed frame generation");
+      if (!artifact.ok) throw new Error(artifact.error.message);
+      const artifactId = artifact.value.artifactId;
+      const lease = await engine.jobs.artifactWork.begin(artifactId, {
+        kind: "generate", ownerKind: "job", durationMs: 60_000,
+      });
+      if (!lease) throw new Error("Missing generation lease");
+      const pending = await engine.jobs.pending.write({
+        artifactId, taskId: QUEUED_TASK_ID, taskType: "seedance2_video", meta: {},
+      }, lease.ownerId);
+      if (!pending.ok || !pending.value) throw new Error("Missing queued task");
+      const saved = Seedance25RequestSchema.parse({
+        model: "bytedance/seedance-2-5",
+        input: {
+          prompt: "Animate the two frames",
+          first_frame_url: "https://example.test/first.png",
+          last_frame_url: "https://example.test/last.png",
+          aspect_ratio: "9:16",
+        },
+      });
+      await engine.metadata.artifacts.write(artifactId, "generation-payload", saved);
+      await expect(submitQueuedKieTask(engine, pending.value.task)).rejects.toThrow(/KIE_API_KEY/);
+      const result = await engine.metadata.artifacts.read(artifactId, "generation-payload");
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.value).toEqual({ ...saved, input: { ...saved.input, aspect_ratio: "adaptive" } });
+      expect(Seedance25RequestSchema.safeParse(result.value).success).toBe(true);
+      expect(saved.input.aspect_ratio).toBe("9:16");
+      expect(await engine.jobs.pending.getOwner(artifactId, QUEUED_TASK_ID)).toBe(lease.ownerId);
+    } finally {
+      if (previousKey === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = previousKey;
+      await engine.close();
+    }
   });
 
   it("creates a configured secret and mints a request-bound OTP", async () => {

@@ -1,4 +1,5 @@
 import { buildGptImage25Payload } from "./gpt-image-2-5.js";
+import { seedance25FrameAspectRatio } from "./seedance25.js";
 import type { GptImage25Input } from "./gpt-image-2-5.js";
 /**
  * Shared payload builders: MCP tool args → @apicity request bodies.
@@ -674,7 +675,10 @@ function buildSeedance25VideoPayload(
   const returnLastFrame = valueOrZodDefault(args.return_last_frame, inputSchema.return_last_frame);
   const generateAudio = valueOrZodDefault(args.generate_audio, inputSchema.generate_audio);
   const resolution = valueOrZodDefault(args.resolution, inputSchema.resolution);
-  const aspectRatio = valueOrZodDefault(args.aspect_ratio, inputSchema.aspect_ratio);
+  const aspectRatio = seedance25FrameAspectRatio("bytedance/seedance-2-5", {
+    first_frame_url: opts.firstFrameUrl,
+    last_frame_url: opts.lastFrameUrl,
+  }) ?? valueOrZodDefault(args.aspect_ratio, inputSchema.aspect_ratio);
   const duration = args.duration !== undefined
     ? parseInt(args.duration, 10)
     : valueOrZodDefault<number>(undefined, inputSchema.duration);

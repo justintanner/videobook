@@ -7,6 +7,7 @@ import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-a
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
+import { seedance25FrameAspectRatio } from '../../server/src/seedance25'
 import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
@@ -395,13 +396,14 @@ export function notebookChatGenerationSettings(
 ): Record<string, GenerationControlValue> {
   const inputs = recordValue(draft.cell.inputs)
   const settings = recordValue(inputs?.generationSettings)
-  if (!settings) return {}
-  return Object.fromEntries(Object.entries(settings).flatMap(([name, value]) =>
+  const values = Object.fromEntries(Object.entries(settings ?? {}).flatMap(([name, value]) =>
     typeof value === 'string'
       || typeof value === 'number'
       || typeof value === 'boolean'
       ? [[name, value]]
       : []))
+  const aspectRatio = seedance25FrameAspectRatio(draft.action.tool, inputs ?? {})
+  return aspectRatio ? { ...values, aspect_ratio: aspectRatio } : values
 }
 
 export function reviseNotebookChatGenerationPrompt(

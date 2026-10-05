@@ -1,4 +1,5 @@
 import { createKie } from "../usage-providers.js";
+import { normalizeSeedance25Request } from "../seedance25.js";
 import type { MediaGenerationRequest, VeoGenerateRequest } from "@apicity/kie";
 import { submitMediaJob, KieError } from "@apicity/kie";
 import { mintOtp } from "@apicity/cost";
@@ -136,14 +137,15 @@ export async function submitKieTask(
   ctx: JobHandlerContext,
   args: SubmitKieTaskArgs,
 ): Promise<string> {
-  assertProviderPayload(args.request, {
+  const request = normalizeSeedance25Request(args.request);
+  assertProviderPayload(request, {
     toolName: args.taskType,
     wire: true,
   });
   const apiKey = requireApiKey("KIE_API_KEY");
-  await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
+  await engine.metadata.artifacts.write(args.assetId, "generation-payload", request);
   const costHints = { ...args.costHints };
-  const requestInput = args.request.input as Record<string, unknown>;
+  const requestInput = request.input as Record<string, unknown>;
   const videoUrls = requestInput.reference_video_urls;
   const sourceVideoIds = args.meta.sourceVideoIds;
   if (costHints.inputDuration === undefined && Array.isArray(videoUrls) && videoUrls.length > 0
@@ -156,7 +158,7 @@ export async function submitKieTask(
     await engine.metadata.artifacts.write(args.assetId, "generation-cost-hints", costHints);
   }
   const provider = createKieProvider(apiKey);
-  const { otp } = await authorizeKiePaygate(args.request, {
+  const { otp } = await authorizeKiePaygate(request, {
     costHints,
     engine,
     correlation: {
@@ -166,7 +168,7 @@ export async function submitKieTask(
       stage: "submit-kie",
     },
   });
-  const taskId = await submitMediaJob(provider, args.request, { otp });
+  const taskId = await submitMediaJob(provider, request, { otp });
 
   const pendingResult = await engine.jobs.pending.write({
     taskId,
@@ -192,10 +194,15 @@ export async function submitQueuedKieTask(
 
   const payloadResult = await engine.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactId}`);
-  assertProviderPayload(payloadResult.value, {
+  const request = normalizeSeedance25Request(payloadResult.value);
+  assertProviderPayload(request, {
     toolName: task.taskType,
     wire: true,
   });
+  if (request !== payloadResult.value) {
+    const saved = await engine.metadata.artifacts.write(task.artifactId, "generation-payload", request);
+    if (!saved.ok) throw new Error(`Failed to update prepared KIE payload: ${saved.error.message}`);
+  }
 
   // Reload persisted cost hints (if any) so the OTP minted on resubmission
   // sees the same duration the original handler resolved, without leaking it
@@ -205,7 +212,7 @@ export async function submitQueuedKieTask(
 
   const apiKey = requireApiKey("KIE_API_KEY");
   const provider = createKieProvider(apiKey);
-  const { otp } = await authorizeKiePaygate(payloadResult.value, {
+  const { otp } = await authorizeKiePaygate(request, {
     costHints,
     engine,
     correlation: {
@@ -214,7 +221,7 @@ export async function submitQueuedKieTask(
       stage: "submit-queued-kie",
     },
   });
-  const taskId = await submitMediaJob(provider, payloadResult.value, { otp });
+  const taskId = await submitMediaJob(provider, request, { otp });
   const meta = { ...task.meta };
   delete meta.kiePaygate;
   const writeResult = await engine.jobs.pending.write({

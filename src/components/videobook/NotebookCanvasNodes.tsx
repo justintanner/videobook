@@ -1,4 +1,5 @@
 import type { NotebookCellType } from 'videobook-engine'
+import { seedance25FrameAspectRatio } from '../../../server/src/seedance25'
 import {
   Video,
   Image,
@@ -381,9 +382,9 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const generationSettings = generationCell
     ? recordValue(data.inputs?.generationSettings)
     : null
-  const aspectRatio = generationSettings
+  const aspectRatio = seedance25FrameAspectRatio(data.tool ?? '', data.inputs ?? {}) ?? (generationSettings
     ? asString(generationSettings.aspect_ratio)
-    : null
+    : null)
   const generationDuration = generationSettings
     ? asString(generationSettings.duration)
       ?? asString(generationSettings.duration_seconds)

@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, Play, X } from 'lucide-react'
 import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
+import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from '../../../server/src/seedance25'
 import {
   actionFieldLabel,
   actionUnavailableReason,
@@ -62,7 +63,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
   onBack: () => void
   onOpenAction: WorkspaceActionsDialogProps['onOpenAction']
 }) {
-  const [values, setValues] = useState(() => {
+  const [draftValues, setValues] = useState(() => {
     const seeded = initialActionValues(action, {
       ...context,
       assetId: typeof initialValues?.asset_id === 'string' ? initialValues.asset_id : context.assetId,
@@ -72,6 +73,10 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
     })
     return { ...seeded, ...Object.fromEntries(Object.entries(initialValues ?? {}).filter(([name]) => name in (action.inputSchema.properties ?? {}) && (name !== '_provider' || !action.generation))) }
   })
+  const frameAspectRatio = action.handler.kind === 'tool'
+    ? seedance25FrameAspectRatio(action.handler.tool, draftValues)
+    : undefined
+  const values = frameAspectRatio ? { ...draftValues, aspect_ratio: frameAspectRatio } : draftValues
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [review, setReview] = useState<WorkspaceActionReview | null>(null)
@@ -128,7 +133,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
           data: { type: 'object', description: 'Optional advanced saved-item data', additionalProperties: true },
         },
       } : schema} value={values[name]}
-        choices={choices} required={required.has(name)} disabled={busy}
+        choices={choices} required={required.has(name)} disabled={busy || (name === 'aspect_ratio' && Boolean(frameAspectRatio))}
         onChange={(value) => {
           setValues((current) => ({ ...current, [name]: value,
             ...(cropMedia && name === 'ratio' && typeof value === 'string' ? workspaceCropPreset(value, cropMedia.width, cropMedia.height) : {}),
@@ -138,6 +143,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
           setResult(null)
         }} />)}
     </div>
+    {frameAspectRatio && <p role="status">{SEEDANCE25_FRAME_ASPECT_DESCRIPTION}</p>}
     {hasDependentChoices && <button type="button" disabled={busy} onClick={() => onOpenAction(action.id, values)}>Refresh available choices</button>}
     {unavailable && <p role="status">{unavailable}</p>}
     {error && <p role="alert" className="workspace-action-error">{error}</p>}

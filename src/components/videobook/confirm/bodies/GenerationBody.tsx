@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/seedance25'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
 import {
   generationModeLabel,
@@ -171,6 +172,7 @@ export function GenerationBody({
 }: GenerationBodyProps) {
   const [showSourcePicker, setShowSourcePicker] = useState(false)
   const settings = notebookChatGenerationSettings(draft)
+  const frameAspectRatio = seedance25FrameAspectRatio(draft.action.tool, draft.cell.inputs ?? {})
   const previewPlayer = useVoicePreviewPlayer()
   const ensureVoiceCatalog = () => {
     if (!voiceCatalog) return
@@ -340,13 +342,14 @@ export function GenerationBody({
         </section>
 
         <section className="generation-review-settings-section" aria-label="Settings">
+          {frameAspectRatio && <p className="muted">{SEEDANCE25_FRAME_ASPECT_DESCRIPTION}</p>}
           <div className="generation-review-settings">
             {fieldControls.map((control) => (
               <GenerationControlField
                 key={control.name}
                 control={control}
                 settings={settings}
-                busy={busy}
+                busy={busy || (control.name === 'aspect_ratio' && Boolean(frameAspectRatio))}
                 toggleClassName="generation-review-toggle"
                 onFocus={control.name === 'voice_id'
                   ? ensureVoiceCatalog
