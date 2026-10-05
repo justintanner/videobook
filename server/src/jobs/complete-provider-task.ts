@@ -7,6 +7,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
+import { APICITY_014_IMAGE_TASK_TYPES, APICITY_014_VIDEO_TASK_TYPES } from "../apicity-014-media.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -24,7 +25,7 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
   ],
   qwenImage: ["qwen2_image_edit", "qwen3_image_edit", "qwen21_text_image", "qwen21_image_edit", "fal_qwen_image", "fal_qwen_image_edit", "fal_qwen3_image_edit"],
   seedreamImage: ["seedream_text_image", "seedream_image"],
-  seedreamV5Image: ["fal_seedream_v5_lite", "fal_seedream_v5_lite_edit"],
+  seedreamV5Image: ["fal_seedream_v5_lite", "fal_seedream_v5_lite_edit", ...APICITY_014_IMAGE_TASK_TYPES],
   klingVideo: ["kling30_video", "kling30_motion_control_video"],
   providerVideo: [
     "seedance2_video",
@@ -55,6 +56,7 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
     "fal_grok_imagine_video_r2v",
     "fal_grok_imagine_video_extend",
     "fal_grok_imagine_video_edit",
+    ...APICITY_014_VIDEO_TASK_TYPES,
   ],
   grokVideo: [
     "grok_imagine_video",
@@ -312,6 +314,7 @@ const FAL_VIDEO_TASK_PREFIXES = [
   "fal_wan27_videoedit",
   "fal_wan30_",
   "fal_grok_imagine_video_",
+  "fal_minimax_h3_",
 ];
 
 function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>): string[] {
@@ -378,7 +381,11 @@ async function completeSeedreamV5LiteImage(
 
   const origin = {
     source_assets: meta.sourceImageIds,
-    model: taskType === "fal_seedream_v5_lite_edit" ? "bytedance/seedream-v5-lite-edit" : "bytedance/seedream-v5-lite",
+    model: typeof meta.model === "string"
+      ? meta.model
+      : taskType === "fal_seedream_v5_lite_edit"
+        ? "bytedance/seedream-v5-lite-edit"
+        : "bytedance/seedream-v5-lite",
     prompt: meta.prompt,
     download_url: imageUrl,
     download_url_content_hash: contentHash(buffer),

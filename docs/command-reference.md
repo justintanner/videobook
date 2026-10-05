@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (315)
+## MCP endpoints (333)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -89,6 +89,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
 - `extend_audio_asset` (historical names, not exposed: `extend_audio`) — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
 - `extend_fal_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_video_extend_fal`, `generate_grok_imagine_extend_fal_video`) — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.
+- `extend_fal_minimax_h3_max_turbo_video` — Extend a source video with MiniMax H3 Max Turbo on fal
 - `extend_kie_grok_imagine_video` (historical names, not exposed: `extend_grok_imagine_video`) — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.
 - `extract_audio` — Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).
 - `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
@@ -101,11 +102,21 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
 - `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
 - `generate_elevenlabs_text_to_audio` (historical names, not exposed: `generate_elevenlabs_t2a`) — Generate an aud-* text-to-audio asset using an ElevenLabs voice.
+- `generate_fal_bria_fibo_edit_1_5_product_holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal
+- `generate_fal_bria_fibo_edit_1_5_virtual_try_on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal
+- `generate_fal_flux_3_edit_image` — Edit 1-10 images with FLUX 3 on fal
+- `generate_fal_flux_3_text_to_image` — Text-to-image with FLUX 3 on fal
 - `generate_fal_grok_imagine_edit_image` (historical names, not exposed: `generate_grok_imagine_image_edit_fal`) — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_image_fal`) — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_grok_imagine_video_edit_video` (historical names, not exposed: `generate_grok_imagine_video_edit_fal`) — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.
 - `generate_fal_grok_imagine_video_image_to_video` (historical names, not exposed: `generate_grok_imagine_video_i2v_fal`) — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.
 - `generate_fal_grok_imagine_video_reference_to_video` (historical names, not exposed: `generate_grok_imagine_video_r2v_fal`, `generate_grok_imagine_r2v_fal_video`) — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new video artifact and enqueues a background job.
+- `generate_fal_grok_imagine_video_v1_5_lite_image_to_video` — Animate one image with Grok Imagine Video 1.5 Lite on fal
+- `generate_fal_grok_imagine_video_v1_5_lite_text_to_video` — Text-to-video with Grok Imagine Video 1.5 Lite on fal
+- `generate_fal_ideogram_v4_5_edit_image` — Edit one image with Ideogram 4.5 on fal
+- `generate_fal_ideogram_v4_5_text_to_image` — Text-to-image with Ideogram 4.5 on fal
+- `generate_fal_minimax_h3_max_insert_video` — Insert a generated span into a source video with MiniMax H3 Max on fal
+- `generate_fal_minimax_h3_max_recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal
 - `generate_fal_nano_banana_2_edit_image` (historical names, not exposed: `generate_nano_banana_2_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_nano_banana_2_lite_edit_image` (historical names, not exposed: `generate_nano_banana_2_lite_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_nano_banana_2_lite_text_to_image` (historical names, not exposed: `generate_nano_banana_2_lite_fal`) — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
@@ -117,6 +128,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_fal_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen_image_edit_fal`) — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_3_0_edit_image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
+- `generate_fal_recraft_v4_1_flash_text_to_image` — Text-to-image with Recraft 4.1 Flash on fal
+- `generate_fal_seedream_v5_flash_edit_image` — Edit images with ByteDance Seedream 5 Flash on fal
+- `generate_fal_seedream_v5_flash_layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal
+- `generate_fal_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on fal
 - `generate_fal_seedream_v5_lite_edit_image` (historical names, not exposed: `generate_seedream_v5_lite_edit_fal`) — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_v5_lite_fal`) — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_wan_3_0_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.
@@ -158,6 +173,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_kie_qwen_2_1_text_to_image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.
 - `generate_kie_qwen_3_0_edit_image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedance_2_5_video` (historical names, not exposed: `generate_seedance25_video`) — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.
+- `generate_kie_seedream_v5_flash_image_to_image` — Edit 1-10 images with ByteDance Seedream 5 Flash on kie
+- `generate_kie_seedream_v5_flash_layer_decomposition` — Decompose one image into layers with ByteDance Seedream 5 Flash on kie
+- `generate_kie_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on kie
 - `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.
 - `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.
@@ -326,7 +344,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (387; 145 dedicated command routes)
+## Slash actions (405; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -428,6 +446,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
 - `/extend-audio` — Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset; MCP: `extend_audio_asset`
 - `/extend-fal-grok-imagine-video` — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.; MCP: `extend_fal_grok_imagine_video`
+- `/extend-fal-minimax-h3-max-turbo-video` — Extend a source video with MiniMax H3 Max Turbo on fal; MCP: `extend_fal_minimax_h3_max_turbo_video`
 - `/extend-kie-grok-imagine-video` — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.; MCP: `extend_kie_grok_imagine_video`
 - `/extract-audio` — Extract audio track from video as audio asset (MP3); MCP: `extract_audio`
 - `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_first_frame`
@@ -445,11 +464,21 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
 - `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
+- `/generate-fal-bria-fibo-edit-1-5-product-holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_product_holding`
+- `/generate-fal-bria-fibo-edit-1-5-virtual-try-on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_virtual_try_on`
+- `/generate-fal-flux-3-edit-image` — Edit 1-10 images with FLUX 3 on fal; MCP: `generate_fal_flux_3_edit_image`
+- `/generate-fal-flux-3-text-to-image` — Text-to-image with FLUX 3 on fal; MCP: `generate_fal_flux_3_text_to_image`
 - `/generate-fal-grok-imagine-edit-image` — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_edit_image`
 - `/generate-fal-grok-imagine-text-to-image` — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_text_to_image`
 - `/generate-fal-grok-imagine-video-edit-video` — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_edit_video`
 - `/generate-fal-grok-imagine-video-image-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_image_to_video`
 - `/generate-fal-grok-imagine-video-reference-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_reference_to_video`
+- `/generate-fal-grok-imagine-video-v1-5-lite-image-to-video` — Animate one image with Grok Imagine Video 1.5 Lite on fal; MCP: `generate_fal_grok_imagine_video_v1_5_lite_image_to_video`
+- `/generate-fal-grok-imagine-video-v1-5-lite-text-to-video` — Text-to-video with Grok Imagine Video 1.5 Lite on fal; MCP: `generate_fal_grok_imagine_video_v1_5_lite_text_to_video`
+- `/generate-fal-ideogram-v4-5-edit-image` — Edit one image with Ideogram 4.5 on fal; MCP: `generate_fal_ideogram_v4_5_edit_image`
+- `/generate-fal-ideogram-v4-5-text-to-image` — Text-to-image with Ideogram 4.5 on fal; MCP: `generate_fal_ideogram_v4_5_text_to_image`
+- `/generate-fal-minimax-h3-max-insert-video` — Insert a generated span into a source video with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_insert_video`
+- `/generate-fal-minimax-h3-max-recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_recast`
 - `/generate-fal-nano-banana-2-edit-image` — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_edit_image`
 - `/generate-fal-nano-banana-2-lite-edit-image` — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_edit_image`
 - `/generate-fal-nano-banana-2-lite-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_text_to_image`
@@ -461,6 +490,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-fal-qwen-2-0-edit-image` — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_edit_image`
 - `/generate-fal-qwen-2-0-text-to-image` — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_text_to_image`
 - `/generate-fal-qwen-3-0-edit-image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_3_0_edit_image`
+- `/generate-fal-recraft-v4-1-flash-text-to-image` — Text-to-image with Recraft 4.1 Flash on fal; MCP: `generate_fal_recraft_v4_1_flash_text_to_image`
+- `/generate-fal-seedream-v5-flash-edit-image` — Edit images with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_edit_image`
+- `/generate-fal-seedream-v5-flash-layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_layerize`
+- `/generate-fal-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_text_to_image`
 - `/generate-fal-seedream-v5-lite-edit-image` — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_edit_image`
 - `/generate-fal-seedream-v5-lite-text-to-image` — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_text_to_image`
 - `/generate-fal-wan-3-0-image-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_image_to_video`
@@ -502,6 +535,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-kie-qwen-2-1-text-to-image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_1_text_to_image`
 - `/generate-kie-qwen-3-0-edit-image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_3_0_edit_image`
 - `/generate-kie-seedance-2-5-video` — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_seedance_2_5_video`
+- `/generate-kie-seedream-v5-flash-image-to-image` — Edit 1-10 images with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_image_to_image`
+- `/generate-kie-seedream-v5-flash-layer-decomposition` — Decompose one image into layers with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_layer_decomposition`
+- `/generate-kie-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_text_to_image`
 - `/generate-kie-seedream-v5-lite-image-to-image` — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_image_to_image`
 - `/generate-kie-seedream-v5-lite-text-to-image` — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_text_to_image`
 - `/generate-kie-veo-3-0-fast-video` — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_fast_video`

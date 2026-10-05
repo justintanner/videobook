@@ -129,6 +129,9 @@ describe("estimate_cost tool", () => {
       ["generate_kie_qwen_3_0_edit_image", { image_refs: ["@a", "@b", "@c"] }],
       ["generate_seedream_text_image", {}],
       ["generate_seedream_image", {}],
+      ["generate_kie_seedream_v5_flash_text_to_image", { size: "1K" }],
+      ["generate_kie_seedream_v5_flash_image_to_image", { size: "1K" }],
+      ["generate_kie_seedream_v5_flash_layer_decomposition", { size: "1K", output_images: 2 }],
       ["generate_grok_imagine_text_image", { enable_pro: true }],
       ["generate_grok_imagine_image", {}],
     ];
@@ -684,6 +687,18 @@ describe("estimate_cost tool", () => {
       ["generate_fal_wan_3_0_prime_text_to_video", { duration: 5 }],
       ["generate_fal_wan_3_0_prime_image_to_video", { duration: 8, resolution: "720p" }],
       ["generate_fal_wan_3_0_prime_reference_to_video", { duration: 10 }],
+      ["generate_fal_bria_fibo_edit_1_5_product_holding", {}],
+      ["generate_fal_bria_fibo_edit_1_5_virtual_try_on", {}],
+      ["generate_fal_recraft_v4_1_flash_text_to_image", {}],
+      ["generate_fal_seedream_v5_flash_text_to_image", {}],
+      ["generate_fal_seedream_v5_flash_edit_image", {}],
+      ["generate_fal_seedream_v5_flash_layerize", { output_images: 2 }],
+      ["generate_fal_ideogram_v4_5_text_to_image", {}],
+      ["generate_fal_ideogram_v4_5_edit_image", {}],
+      ["generate_fal_grok_imagine_video_v1_5_lite_image_to_video", { duration: 6, resolution: "720p" }],
+      ["generate_fal_grok_imagine_video_v1_5_lite_text_to_video", { duration: 6, resolution: "720p" }],
+      ["generate_fal_minimax_h3_max_recast", { duration: 5, resolution: "1080P" }],
+      ["extend_fal_minimax_h3_max_turbo_video", { duration: 5, resolution: "768P" }],
     ];
     for (const [tool_name, input] of cases) {
       const result = await client.callTool({
@@ -718,11 +733,14 @@ describe("estimate_cost tool", () => {
         calls: [
           { tool_name: "generate_fal_wan_3_0_text_to_video", input: { duration: 5 } },
           { tool_name: "generate_fal_qwen_3_0_edit_image", input: {} },
+          { tool_name: "generate_fal_flux_3_text_to_image", input: { prompt: "a paper crane at dusk" } },
+          { tool_name: "generate_fal_flux_3_edit_image", input: { prompt: "a paper crane at dusk" } },
+          { tool_name: "generate_fal_minimax_h3_max_insert_video", input: { duration: 5 } },
         ],
       },
     });
     const payload = parse(result);
-    expect(payload.per_call).toHaveLength(2);
+    expect(payload.per_call).toHaveLength(5);
     for (const call of payload.per_call) {
       expect(call.estimate.usd, call.tool_name).toBe(0);
       expect(call.estimate.warnings.join(" "), call.tool_name).toContain("no cost adapter registered");

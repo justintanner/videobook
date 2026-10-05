@@ -4,13 +4,13 @@ import { GENERATION_ACTIONS, getCanonicalName, getActionSpec } from "../generati
 import { getAllToolDefs } from "./index.js";
 
 describe("fal generation actions contract", () => {
-  it("verifies all 25 Fal generation actions have canonical names and exact endpoint IDs", () => {
+  it("verifies all 40 Fal generation actions have canonical names and exact endpoint IDs", () => {
     const falActions = GENERATION_ACTIONS.filter((a) => a.provider === "fal");
-    expect(falActions.length).toBe(25);
+    expect(falActions.length).toBe(40);
 
     for (const action of falActions) {
       expect(action.canonical_name).toMatch(/^generate_fal_|^extend_fal_/);
-      expect(action.apicity_identifier).toMatch(/^(fal-ai|alibaba)\//);
+      expect(action.apicity_identifier).toMatch(/^(fal-ai\/|alibaba\/|bria\/|recraft\/|bytedance\/|ideogram\/|blackforestlabs\/|minimax\/|xai\/)/);
       expect(action.canonical_name).not.toMatch(/_t2i_/);
       expect(action.canonical_name).not.toMatch(/_i2v_/);
       expect(action.canonical_name).not.toMatch(/_r2v_/);

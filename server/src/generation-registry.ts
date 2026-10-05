@@ -1,3 +1,5 @@
+import { APICITY_014_GENERATION_ACTIONS } from "./apicity-014-media.js";
+
 /**
  * Canonical Generation Action Registry & Compatibility Layer
  * Single source of truth for generation action names, legacy names, and metadata.
@@ -992,6 +994,7 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     job_task_discriminator: "clear_failed_tasks",
     persisted_history_consumers: ["project_activity"],
   },
+  ...APICITY_014_GENERATION_ACTIONS,
 ];
 
 // Retired Kling / Seedance names remain readable for persisted history and

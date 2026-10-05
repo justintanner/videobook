@@ -12,6 +12,7 @@ import {
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
 import { GENERATION_ACTIONS, RETIRED_GENERATION_ACTIONS } from "./generation-registry.js";
+import { getImageModels, getImageToolSchema, validateImageParams } from "./image-models.js";
 import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
   findImageEditModel,
@@ -86,6 +87,29 @@ describe("image edit model catalog", () => {
     expect(DEFAULT_IMAGE_EDIT_MODEL_ID).toBe("seedream/5-pro-image-to-image");
     expect(findImageEditModel(DEFAULT_IMAGE_EDIT_MODEL_ID)?.provider).toBe("kie");
     expect(new Set(IMAGE_EDIT_MODELS.map((entry) => entry.id)).size).toBe(IMAGE_EDIT_MODELS.length);
+  });
+
+  it("lists apicity 0.14.0 edit actions on the image generation list with required media", () => {
+    const models = getImageModels();
+    const requiredMedia = [
+      "fibo_product_holding",
+      "fibo_virtual_try_on",
+      "seedream_v5_flash_edit",
+      "seedream_v5_flash_layerize",
+      "ideogram_v4_5_edit",
+      "flux_3_edit",
+      "seedream_v5_flash_kie_edit",
+      "seedream_v5_flash_kie_layers",
+    ];
+    for (const key of requiredMedia) {
+      const model = models[key];
+      expect(model, key).toBeDefined();
+      const schema = getImageToolSchema(model.tool_name);
+      expect(schema?.required, key).toContain("image_refs");
+      const textOnly = validateImageParams(model.tool_name, { prompt: "a paper crane at dusk" });
+      expect(textOnly.image_slots?.min ?? 0, key).toBeGreaterThan(0);
+      expect(textOnly.missing_required, key).toContain("image_refs");
+    }
   });
 
   it("matches env keys and provider families", () => {

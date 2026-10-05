@@ -1025,3 +1025,68 @@ describe("google flow video models", () => {
     expect(option.validation.warnings.some((w) => w.includes("PROMINENT_PEOPLE safety filter"))).toBe(true);
   });
 });
+
+describe("apicity 0.14.0 video models", () => {
+  const releaseModels: Array<[string, string, string]> = [
+    ["h3_max_insert", "fal MiniMax H3 Max insert-video", "generate_fal_minimax_h3_max_insert_video"],
+    ["grok_1_5_lite_i2v", "fal Grok 1.5 Lite image-to-video", "generate_fal_grok_imagine_video_v1_5_lite_image_to_video"],
+    ["h3_max_recast", "fal MiniMax H3 Max Recast", "generate_fal_minimax_h3_max_recast"],
+    ["grok_1_5_lite_t2v", "fal Grok 1.5 Lite text-to-video", "generate_fal_grok_imagine_video_v1_5_lite_text_to_video"],
+    ["h3_max_turbo_extend", "fal H3 Max Turbo video extension", "extend_fal_minimax_h3_max_turbo_video"],
+  ];
+
+  it("lists each new fal video action under its release name", () => {
+    for (const [key, label, toolName] of releaseModels) {
+      const model = VIDEO_MODELS[key];
+      expect(model, key).toMatchObject({ label, tool_name: toolName });
+      const option = buildModelOption(key, model, {}, []);
+      expect(option.providers.map((provider) => provider.key), key).toEqual(["fal"]);
+      expect(buildVideoRoutingPrompt()).toContain(toolName);
+    }
+  });
+
+  it("requires source media for insert, recast, extend, and image-to-video", () => {
+    const insert = getVideoToolSchema("generate_fal_minimax_h3_max_insert_video");
+    expect(insert?.required).toEqual(expect.arrayContaining(["video_ref", "start_time", "resume_time"]));
+    expect(insert?.properties.start_time.type).toBe("number");
+    expect(insert?.properties.resume_time.type).toBe("number");
+
+    const recast = getVideoToolSchema("generate_fal_minimax_h3_max_recast");
+    expect(recast?.required).toEqual(expect.arrayContaining(["video_ref", "image_refs"]));
+    expect(recast?.properties.image_refs.minItems).toBe(1);
+
+    const extend = getVideoToolSchema("extend_fal_minimax_h3_max_turbo_video");
+    expect(extend?.required).toEqual(expect.arrayContaining(["prompt", "video_ref"]));
+
+    const imageToVideo = getVideoToolSchema("generate_fal_grok_imagine_video_v1_5_lite_image_to_video");
+    expect(imageToVideo?.required).toEqual(expect.arrayContaining(["prompt", "image_refs"]));
+    expect(imageToVideo?.properties.image_refs.minItems).toBe(1);
+    expect(imageToVideo?.properties.image_refs.maxItems).toBe(1);
+
+    for (const toolName of [
+      "generate_fal_minimax_h3_max_insert_video",
+      "generate_fal_minimax_h3_max_recast",
+      "extend_fal_minimax_h3_max_turbo_video",
+      "generate_fal_grok_imagine_video_v1_5_lite_image_to_video",
+    ]) {
+      const textOnly = validateVideoParams(toolName, { prompt: "a paper crane at dusk" });
+      expect(textOnly.valid, toolName).toBe(false);
+      expect(
+        textOnly.missing_required.some((field) => field === "video_ref" || field === "image_refs"),
+        toolName,
+      ).toBe(true);
+    }
+  });
+
+  it("offers Grok 1.5 Lite text-to-video without required media", () => {
+    const schema = getVideoToolSchema("generate_fal_grok_imagine_video_v1_5_lite_text_to_video");
+    expect(schema?.required).toContain("prompt");
+    expect(schema?.properties.video_ref).toBeUndefined();
+    expect(schema?.properties.image_refs).toBeUndefined();
+    const textOnly = validateVideoParams("generate_fal_grok_imagine_video_v1_5_lite_text_to_video", {
+      prompt: "a paper crane at dusk",
+    });
+    expect(textOnly.missing_required).not.toContain("video_ref");
+    expect(textOnly.missing_required).not.toContain("image_refs");
+  });
+});

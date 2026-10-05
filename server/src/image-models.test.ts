@@ -378,9 +378,9 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 13 image models", () => {
+  it("returns all 26 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(13);
+    expect(Object.keys(models)).toHaveLength(26);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");
@@ -592,5 +592,68 @@ describe("google flow image provider", () => {
       character_refs: ["character-a", "character-a"],
     });
     expect(result.warnings.some((warning) => warning.includes("Duplicate character"))).toBe(true);
+  });
+});
+
+describe("apicity 0.14.0 image models", () => {
+  const releaseModels: Array<[string, string, string, "fal" | "kie"]> = [
+    ["fibo_product_holding", "fal Bria FIBO Edit 1.5 product holding", "generate_fal_bria_fibo_edit_1_5_product_holding", "fal"],
+    ["fibo_virtual_try_on", "fal Bria FIBO Edit 1.5 virtual try-on", "generate_fal_bria_fibo_edit_1_5_virtual_try_on", "fal"],
+    ["recraft_v4_1_flash", "fal Recraft 4.1 Flash text-to-image", "generate_fal_recraft_v4_1_flash_text_to_image", "fal"],
+    ["seedream_v5_flash_text", "fal Seedream 5 Flash text-to-image", "generate_fal_seedream_v5_flash_text_to_image", "fal"],
+    ["seedream_v5_flash_edit", "fal Seedream 5 Flash edit", "generate_fal_seedream_v5_flash_edit_image", "fal"],
+    ["seedream_v5_flash_layerize", "fal Seedream 5 Flash layerize", "generate_fal_seedream_v5_flash_layerize", "fal"],
+    ["ideogram_v4_5", "fal Ideogram 4.5 text-to-image", "generate_fal_ideogram_v4_5_text_to_image", "fal"],
+    ["ideogram_v4_5_edit", "fal Ideogram 4.5 image editing", "generate_fal_ideogram_v4_5_edit_image", "fal"],
+    ["flux_3", "fal FLUX 3 text-to-image", "generate_fal_flux_3_text_to_image", "fal"],
+    ["flux_3_edit", "fal FLUX 3 image editing", "generate_fal_flux_3_edit_image", "fal"],
+    ["seedream_v5_flash_kie_text", "kie Seedream 5 Flash text-to-image", "generate_kie_seedream_v5_flash_text_to_image", "kie"],
+    ["seedream_v5_flash_kie_edit", "kie Seedream 5 Flash image-to-image", "generate_kie_seedream_v5_flash_image_to_image", "kie"],
+    ["seedream_v5_flash_kie_layers", "kie Seedream 5 Flash layer decomposition", "generate_kie_seedream_v5_flash_layer_decomposition", "kie"],
+  ];
+
+  it("lists each new fal and kie image action under its release name", () => {
+    const models = getImageModels();
+    for (const [key, label, toolName, provider] of releaseModels) {
+      expect(models[key], key).toMatchObject({ label, tool_name: toolName });
+      expect(models[key].providers.map((item) => item.key), key).toEqual([provider]);
+    }
+  });
+
+  it("keeps edit, layer, try-on, and product-holding actions from being text-only", () => {
+    const requiredMedia: Array<[string, number]> = [
+      ["generate_fal_bria_fibo_edit_1_5_product_holding", 2],
+      ["generate_fal_bria_fibo_edit_1_5_virtual_try_on", 2],
+      ["generate_fal_seedream_v5_flash_edit_image", 1],
+      ["generate_fal_seedream_v5_flash_layerize", 1],
+      ["generate_fal_ideogram_v4_5_edit_image", 1],
+      ["generate_fal_flux_3_edit_image", 1],
+      ["generate_kie_seedream_v5_flash_image_to_image", 1],
+      ["generate_kie_seedream_v5_flash_layer_decomposition", 1],
+    ];
+    for (const [toolName, min] of requiredMedia) {
+      const schema = getImageToolSchema(toolName);
+      expect(schema?.required, toolName).toContain("image_refs");
+      expect(schema?.properties.image_refs.minItems, toolName).toBeGreaterThanOrEqual(min);
+      const textOnly = validateImageParams(toolName, { prompt: "a paper crane at dusk" });
+      expect(textOnly.image_slots?.min, toolName).toBeGreaterThanOrEqual(min);
+      expect(textOnly.missing_required, toolName).toContain("image_refs");
+    }
+  });
+
+  it("offers the new text-to-image actions without a required image", () => {
+    for (const toolName of [
+      "generate_fal_recraft_v4_1_flash_text_to_image",
+      "generate_fal_seedream_v5_flash_text_to_image",
+      "generate_fal_ideogram_v4_5_text_to_image",
+      "generate_fal_flux_3_text_to_image",
+      "generate_kie_seedream_v5_flash_text_to_image",
+    ]) {
+      const schema = getImageToolSchema(toolName);
+      expect(schema?.required, toolName).toContain("prompt");
+      expect(schema?.required, toolName).not.toContain("image_refs");
+      const textOnly = validateImageParams(toolName, { prompt: "a paper crane at dusk" });
+      expect(textOnly.missing_required, toolName).not.toContain("image_refs");
+    }
   });
 });

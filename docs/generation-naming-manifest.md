@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 79
-- Provider actions: 70
+- Total actions: 97
+- Provider actions: 88
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -93,3 +93,21 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `reconcile_project_work` | workflow | `internal/sync` | workflow | reconcile_work | workflow_tool | `sync` |
 | `retry_generation` | workflow | `internal/retry-generation` | workflow | retry_generation | workflow_tool | `retry_generation` |
 | `clean_failed_assets` | workflow | `internal/clear-failed-tasks` | workflow | clean_assets | workflow_tool | `clear_failed_tasks` |
+| `generate_fal_bria_fibo_edit_1_5_product_holding` | fal | `bria/fibo-edit-1.5/product-holding` | image | product_holding | visible |  |
+| `generate_fal_bria_fibo_edit_1_5_virtual_try_on` | fal | `bria/fibo-edit-1.5/virtual-try-on` | image | virtual_try_on | visible |  |
+| `generate_fal_recraft_v4_1_flash_text_to_image` | fal | `recraft/v4.1/flash/text-to-image` | image | text_to_image | visible |  |
+| `generate_fal_seedream_v5_flash_text_to_image` | fal | `bytedance/seedream/v5/flash/text-to-image` | image | text_to_image | visible |  |
+| `generate_fal_seedream_v5_flash_edit_image` | fal | `bytedance/seedream/v5/flash/edit` | image | edit_image | visible |  |
+| `generate_fal_seedream_v5_flash_layerize` | fal | `bytedance/seedream/v5/flash/layerize` | image | layerize | visible |  |
+| `generate_fal_ideogram_v4_5_text_to_image` | fal | `ideogram/v4.5` | image | text_to_image | visible |  |
+| `generate_fal_ideogram_v4_5_edit_image` | fal | `ideogram/v4.5/edit` | image | edit_image | visible |  |
+| `generate_fal_flux_3_text_to_image` | fal | `blackforestlabs/flux-3/text-to-image` | image | text_to_image | visible |  |
+| `generate_fal_flux_3_edit_image` | fal | `blackforestlabs/flux-3/edit-image` | image | edit_image | visible |  |
+| `generate_kie_seedream_v5_flash_text_to_image` | kie | `SeedreamFlashTextToImageRequestSchema` | image | text_to_image | visible |  |
+| `generate_kie_seedream_v5_flash_image_to_image` | kie | `SeedreamFlashImageToImageRequestSchema` | image | image_to_image | visible |  |
+| `generate_kie_seedream_v5_flash_layer_decomposition` | kie | `SeedreamFlashLayerDecompositionRequestSchema` | image | layer_decomposition | visible |  |
+| `generate_fal_minimax_h3_max_insert_video` | fal | `minimax/h3-max/insert-video` | video | insert_video | visible |  |
+| `generate_fal_grok_imagine_video_v1_5_lite_image_to_video` | fal | `xai/grok-imagine-video/v1.5/lite/image-to-video` | video | image_to_video | visible |  |
+| `generate_fal_minimax_h3_max_recast` | fal | `minimax/h3-max/recast` | video | recast_video | visible |  |
+| `generate_fal_grok_imagine_video_v1_5_lite_text_to_video` | fal | `xai/grok-imagine-video/v1.5/lite/text-to-video` | video | text_to_video | visible |  |
+| `extend_fal_minimax_h3_max_turbo_video` | fal | `minimax/h3-max-turbo/extend-video` | video | extend_video | visible |  |

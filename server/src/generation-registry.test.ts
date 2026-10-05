@@ -10,8 +10,8 @@ import {
 import { getAllToolDefs } from "./tools/index.js";
 
 describe("generation-registry", () => {
-  it("has 79 audited generation action specifications", () => {
-    expect(GENERATION_ACTIONS).toHaveLength(79);
+  it("has 97 audited generation action specifications", () => {
+    expect(GENERATION_ACTIONS).toHaveLength(97);
   });
 
   it("resolves historical names to canonical names", () => {
@@ -62,7 +62,7 @@ describe("generation-registry", () => {
     const registered = new Set(names);
     const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
 
-    expect(names).toHaveLength(315);
+    expect(names).toHaveLength(333);
     expect(registered.size).toBe(names.length);
     for (const action of GENERATION_ACTIONS) {
       expect(registered.has(action.canonical_name), action.canonical_name).toBe(true);

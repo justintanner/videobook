@@ -55,15 +55,16 @@ describe("kie paygate", () => {
         artifactId, taskId: QUEUED_TASK_ID, taskType: "seedance2_video", meta: {},
       }, lease.ownerId);
       if (!pending.ok || !pending.value) throw new Error("Missing queued task");
-      const saved = Seedance25RequestSchema.parse({
-        model: "bytedance/seedance-2-5",
+      const saved = {
+        model: "bytedance/seedance-2-5" as const,
         input: {
           prompt: "Animate the two frames",
           first_frame_url: "https://example.test/first.png",
           last_frame_url: "https://example.test/last.png",
-          aspect_ratio: "9:16",
+          aspect_ratio: "9:16" as const,
         },
-      });
+      };
+      expect(Seedance25RequestSchema.safeParse(saved).success).toBe(false);
       await engine.metadata.artifacts.write(artifactId, "generation-payload", saved);
       await expect(submitQueuedKieTask(engine, pending.value.task)).rejects.toThrow(/KIE_API_KEY/);
       const result = await engine.metadata.artifacts.read(artifactId, "generation-payload");

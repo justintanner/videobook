@@ -105,6 +105,7 @@ type ImageModelConfig = {
 };
 
 import { getCanonicalName, getActionSpec, isGenerationAction } from "./generation-registry.js";
+import { APICITY_014_IMAGE_CONFIGS, apicity014FalImagePickerSchema } from "./apicity-014-media.js";
 
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   {
@@ -269,6 +270,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     description: "Alibaba Cloud Qwen image editing (qwen-image-edit family) with 1-3 required reference images, via the synchronous multimodal endpoint",
     imageFieldSchema: AlibabaQwenImageEditImageSlotsSchema,
   },
+  ...APICITY_014_IMAGE_CONFIGS,
 ];
 
 function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | null {
@@ -551,7 +553,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     return { type: "object", properties, required, defaults };
   }
 
-  return null;
+  return apicity014FalImagePickerSchema(toolName);
 }
 
 // ---------------------------------------------------------------------------

@@ -203,6 +203,26 @@ const kieFlatImage = (model: string): CostAdapter => () => ({
   payload: { model, input: {} },
 });
 
+const kieFlashImage = (model: string): CostAdapter => (input) => ({
+  provider: "kie",
+  payload: {
+    model,
+    input: { size: str(input.size) || "1K" },
+  },
+});
+
+const kieFlashLayer: CostAdapter = (input) => {
+  const outputImages = num(input.output_images);
+  return {
+    provider: "kie",
+    payload: {
+      model: "seedream/5-flash-layer-decomposition",
+      input: { size: str(input.size) || "1K" },
+    },
+    ...(outputImages !== undefined && outputImages > 0 ? { costHints: { outputImages } } : {}),
+  };
+};
+
 const kieQwen3ImageEdit: CostAdapter = (input) => {
   const imageRefs = Array.isArray(input.image_refs)
     ? input.image_refs.filter((ref): ref is string => typeof ref === "string")
@@ -427,6 +447,9 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   generate_kie_qwen_2_1_edit_image: kieTieredImage(Qwen21ImageToImageRequestSchema.shape.model.value, Qwen21ImageToImageRequestSchema.shape.input.shape.resolution.parse(undefined)),
   generate_kie_seedream_v5_lite_text_to_image: kieFlatImage("seedream/5-lite-text-to-image"),
   generate_kie_seedream_v5_lite_image_to_image: kieFlatImage("seedream/5-lite-image-to-image"),
+  generate_kie_seedream_v5_flash_text_to_image: kieFlashImage("seedream/5-flash-text-to-image"),
+  generate_kie_seedream_v5_flash_image_to_image: kieFlashImage("seedream/5-flash-image-to-image"),
+  generate_kie_seedream_v5_flash_layer_decomposition: kieFlashLayer,
 
   // --- KIE Grok Imagine images (flat per-call) ---
   generate_kie_grok_imagine_text_to_image: kieGrokImagineTextImage,
@@ -504,6 +527,31 @@ const falVideo = (endpoint: string): CostAdapter => (input) => ({
   },
 });
 
+const falSeedreamFlashLayerize: CostAdapter = (input) => {
+  const outputImages = num(input.output_images);
+  return {
+    provider: "fal",
+    endpoint: "bytedance/seedream/v5/flash/layerize",
+    payload: {
+      ...(str(input.image_size) ? { image_size: str(input.image_size) } : {}),
+    },
+    ...(outputImages !== undefined && outputImages > 0 ? { costHints: { outputImages } } : {}),
+  };
+};
+
+const falH3MaxRecast: CostAdapter = (input) => {
+  const duration = num(input.duration) ?? num(input.input_video_duration);
+  const resolution = str(input.resolution);
+  return {
+    provider: "fal",
+    endpoint: "minimax/h3-max/recast",
+    payload: {
+      ...(resolution ? { resolution } : {}),
+    },
+    ...(duration !== undefined ? { costHints: { durationSeconds: duration } } : {}),
+  };
+};
+
 // Fal Seedance 2.0 video: token-metered per second. duration may be the
 // string "auto" on reference-to-video (no billed default — the estimate warns
 // honestly); video_urls presence selects the reference rate tier.
@@ -570,6 +618,18 @@ const FAL_ADAPTERS: Record<string, CostAdapter> = {
   generate_fal_wan_3_0_prime_text_to_video: falVideo("alibaba/wan-3.0-prime/text-to-video"),
   generate_fal_wan_3_0_prime_image_to_video: falVideo("alibaba/wan-3.0-prime/image-to-video"),
   generate_fal_wan_3_0_prime_reference_to_video: falVideo("alibaba/wan-3.0-prime/reference-to-video"),
+  generate_fal_bria_fibo_edit_1_5_product_holding: falImage("bria/fibo-edit-1.5/product-holding"),
+  generate_fal_bria_fibo_edit_1_5_virtual_try_on: falImage("bria/fibo-edit-1.5/virtual-try-on"),
+  generate_fal_recraft_v4_1_flash_text_to_image: falImage("recraft/v4.1/flash/text-to-image"),
+  generate_fal_seedream_v5_flash_text_to_image: falImage("bytedance/seedream/v5/flash/text-to-image"),
+  generate_fal_seedream_v5_flash_edit_image: falImage("bytedance/seedream/v5/flash/edit"),
+  generate_fal_seedream_v5_flash_layerize: falSeedreamFlashLayerize,
+  generate_fal_ideogram_v4_5_text_to_image: falImage("ideogram/v4.5"),
+  generate_fal_ideogram_v4_5_edit_image: falImage("ideogram/v4.5/edit"),
+  generate_fal_grok_imagine_video_v1_5_lite_image_to_video: falVideo("xai/grok-imagine-video/v1.5/lite/image-to-video"),
+  generate_fal_grok_imagine_video_v1_5_lite_text_to_video: falVideo("xai/grok-imagine-video/v1.5/lite/text-to-video"),
+  generate_fal_minimax_h3_max_recast: falH3MaxRecast,
+  extend_fal_minimax_h3_max_turbo_video: falVideo("minimax/h3-max-turbo/extend-video"),
   // xai/grok-imagine-video/edit-video has no published rate — stays "—".
 };
 

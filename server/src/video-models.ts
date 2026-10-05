@@ -55,6 +55,11 @@ import { totalOmniReferenceSlots } from "./google-flow-refs.js";
 import { grokImagine1080pImageCountError } from "./grok-imagine-video-contract.js";
 import { getCanonicalName, isGenerationAction } from "./generation-registry.js";
 import {
+  APICITY_014_VIDEO_IMAGE_FIELDS,
+  APICITY_014_VIDEO_MODELS,
+  APICITY_014_VIDEO_PARAM_ZOD,
+} from "./apicity-014-media.js";
+import {
   isKlingOmniTool,
   KLING_OMNI_IMAGE_TO_VIDEO_TOOL,
   KLING_OMNI_REFERENCE_TO_VIDEO_TOOL,
@@ -411,6 +416,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     falToolNames: { noRefs: "generate_fal_wan_3_0_prime_text_to_video", withRefs: "generate_fal_wan_3_0_prime_image_to_video" },
   },
+  ...APICITY_014_VIDEO_MODELS,
 };
 
 const DEFAULT_VIDEO_MODEL_KEY = "seedance25";
@@ -658,6 +664,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_xai_grok_imagine_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_kie_happyhorse_1_1_reference_to_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
   generate_kie_minimax_h3_reference_to_video: MiniMaxH3ReferenceToVideoRequestSchema.shape.input.shape.reference_image_urls,
+  ...APICITY_014_VIDEO_IMAGE_FIELDS,
 };
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
@@ -892,6 +899,7 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     seed: Wan30VideoPrimeRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan30VideoPrimeRequestSchema.shape.input.shape.nsfw_checker,
   },
+  ...APICITY_014_VIDEO_PARAM_ZOD,
 };
 
 // ---------------------------------------------------------------------------
@@ -934,6 +942,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   watermark: { type: "boolean", description: "Add provider watermark to output" },
   video_ref: { type: "string", description: "Video asset to extend (e.g., @vid-sunset-drone)" },
   duration: { type: "string", description: "Video duration in seconds" },
+  start_time: { type: "number", description: "Insert start time in seconds" },
+  resume_time: { type: "number", description: "Resume time in seconds" },
   mode: { type: "string", description: "Generation mode" },
   resolution: { type: "string", description: "Output resolution" },
   output_format: { type: "string", description: "Output video format" },

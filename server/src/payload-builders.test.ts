@@ -38,11 +38,31 @@ import {
   Seedance2MiniRequestSchema,
   Seedance2RequestSchema,
   Seedance25RequestSchema,
+  SeedreamFlashImageToImageRequestSchema,
+  SeedreamFlashLayerDecompositionRequestSchema,
+  SeedreamFlashTextToImageRequestSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
 } from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
+import {
+  FalBriaFiboEdit1p5ProductHoldingRequestSchema,
+  FalBriaFiboEdit1p5VirtualTryOnRequestSchema,
+  FalBytedanceSeedreamV5FlashEditRequestSchema,
+  FalBytedanceSeedreamV5FlashLayerizeRequestSchema,
+  FalBytedanceSeedreamV5FlashTextToImageRequestSchema,
+  FalFlux3EditImageRequestSchema,
+  FalFlux3TextToImageRequestSchema,
+  FalIdeogramV4p5EditRequestSchema,
+  FalIdeogramV4p5RequestSchema,
+  FalMinimaxH3MaxInsertVideoRequestSchema,
+  FalMinimaxH3MaxRecastRequestSchema,
+  FalMinimaxH3MaxTurboExtendVideoRequestSchema,
+  FalRecraftV4p1FlashTextToImageRequestSchema,
+  FalXaiGrokImagineVideoV1p5LiteImageToVideoRequestSchema,
+  FalXaiGrokImagineVideoV1p5LiteTextToVideoRequestSchema,
+} from "@apicity/fal/zod";
 import {
   buildMiniMaxH3I2vPayload,
   buildMiniMaxH3R2vPayload,
@@ -1472,5 +1492,113 @@ describe("MiniMax H3 payload builders", () => {
       { referenceVideoUrls: ["ftp://example.test/clip.mp4"] },
     );
     expect(MiniMaxH3ReferenceToVideoRequestSchema.safeParse(r2v).success).toBe(false);
+  });
+});
+
+describe("apicity 0.14.0 fal and kie payloads", () => {
+  const prompt = "a paper crane at dusk";
+  const person = "https://example.test/person.png";
+  const product = "https://example.test/product.png";
+  const source = "https://example.test/source.png";
+  const clip = "https://example.test/clip.mp4";
+  const cases: Array<{ tool: string; args: Record<string, unknown>; schema: { safeParse: (value: unknown) => { success: boolean } } }> = [
+    {
+      tool: "generate_fal_bria_fibo_edit_1_5_product_holding",
+      args: { prompt, image_refs: [person, product] },
+      schema: FalBriaFiboEdit1p5ProductHoldingRequestSchema,
+    },
+    {
+      tool: "generate_fal_bria_fibo_edit_1_5_virtual_try_on",
+      args: { prompt, image_refs: [person, product] },
+      schema: FalBriaFiboEdit1p5VirtualTryOnRequestSchema,
+    },
+    {
+      tool: "generate_fal_recraft_v4_1_flash_text_to_image",
+      args: { prompt },
+      schema: FalRecraftV4p1FlashTextToImageRequestSchema,
+    },
+    {
+      tool: "generate_fal_seedream_v5_flash_text_to_image",
+      args: { prompt },
+      schema: FalBytedanceSeedreamV5FlashTextToImageRequestSchema,
+    },
+    {
+      tool: "generate_fal_seedream_v5_flash_edit_image",
+      args: { prompt, image_refs: [source] },
+      schema: FalBytedanceSeedreamV5FlashEditRequestSchema,
+    },
+    {
+      tool: "generate_fal_seedream_v5_flash_layerize",
+      args: { prompt, image_refs: [source] },
+      schema: FalBytedanceSeedreamV5FlashLayerizeRequestSchema,
+    },
+    {
+      tool: "generate_fal_ideogram_v4_5_text_to_image",
+      args: { prompt, image_size: "square_hd" },
+      schema: FalIdeogramV4p5RequestSchema,
+    },
+    {
+      tool: "generate_fal_ideogram_v4_5_edit_image",
+      args: { prompt, image_refs: [source] },
+      schema: FalIdeogramV4p5EditRequestSchema,
+    },
+    {
+      tool: "generate_fal_flux_3_text_to_image",
+      args: { prompt },
+      schema: FalFlux3TextToImageRequestSchema,
+    },
+    {
+      tool: "generate_fal_flux_3_edit_image",
+      args: { prompt, image_refs: [source] },
+      schema: FalFlux3EditImageRequestSchema,
+    },
+    {
+      tool: "generate_fal_minimax_h3_max_insert_video",
+      args: { prompt, video_ref: clip, start_time: 2, resume_time: 4 },
+      schema: FalMinimaxH3MaxInsertVideoRequestSchema,
+    },
+    {
+      tool: "generate_fal_grok_imagine_video_v1_5_lite_image_to_video",
+      args: { prompt, image_refs: [source] },
+      schema: FalXaiGrokImagineVideoV1p5LiteImageToVideoRequestSchema,
+    },
+    {
+      tool: "generate_fal_minimax_h3_max_recast",
+      args: { prompt, video_ref: clip, image_refs: [source] },
+      schema: FalMinimaxH3MaxRecastRequestSchema,
+    },
+    {
+      tool: "generate_fal_grok_imagine_video_v1_5_lite_text_to_video",
+      args: { prompt },
+      schema: FalXaiGrokImagineVideoV1p5LiteTextToVideoRequestSchema,
+    },
+    {
+      tool: "extend_fal_minimax_h3_max_turbo_video",
+      args: { prompt, video_ref: clip },
+      schema: FalMinimaxH3MaxTurboExtendVideoRequestSchema,
+    },
+    {
+      tool: "generate_kie_seedream_v5_flash_text_to_image",
+      args: { prompt },
+      schema: SeedreamFlashTextToImageRequestSchema,
+    },
+    {
+      tool: "generate_kie_seedream_v5_flash_image_to_image",
+      args: { prompt, image_refs: [source] },
+      schema: SeedreamFlashImageToImageRequestSchema,
+    },
+    {
+      tool: "generate_kie_seedream_v5_flash_layer_decomposition",
+      args: { prompt, image_refs: [source] },
+      schema: SeedreamFlashLayerDecompositionRequestSchema,
+    },
+  ];
+
+  it("builds a schema-valid request for every new fal and kie image and video action", () => {
+    for (const entry of cases) {
+      const result = translateToolPayload(entry.tool, entry.args);
+      expect(result, entry.tool).not.toBeNull();
+      expect(entry.schema.safeParse(result?.payload).success, entry.tool).toBe(true);
+    }
   });
 });
