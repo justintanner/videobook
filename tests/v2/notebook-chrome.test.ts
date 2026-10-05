@@ -80,6 +80,40 @@ describe('notebook chrome tokens', () => {
     expect(canvas).not.toContain('padding-bottom')
   })
 
+  it('pads every cell band from one detail-scaled gutter', () => {
+    // Anchored on a line start: the review rules' `> .cell-node {` come first.
+    const cell = rule(css, '\n.cell-node')
+    expect(declaration(cell, '--cell-gutter'))
+      .toBe('calc(22px * var(--notebook-detail-scale, 1))')
+    expect(declaration(cell, '--cell-gutter-tight'))
+      .toBe('calc(14px * var(--notebook-detail-scale, 1))')
+    const header = rule(css, '.cell-node-header')
+    expect(declaration(header, 'min-height'))
+      .toBe('max(36px, calc(24px * var(--notebook-detail-scale, 1)))')
+    expect(declaration(header, 'padding')).toBe('3px var(--cell-gutter)')
+    expect(declaration(rule(css, '.cell-copy-text'), 'padding'))
+      .toBe('var(--cell-gutter-tight) var(--cell-gutter)')
+    expect(declaration(rule(css, '.cell-copy-analysis'), 'padding'))
+      .toBe('12px var(--cell-gutter)')
+    expect(declaration(rule(css, '.cell-media-rail'), 'padding'))
+      .toBe('0 var(--cell-gutter)')
+    // The meter is padded by the gutter too, so the corner the rail leaves
+    // it has to grow with the gutter.
+    expect(declaration(rule(css, '.cell-media:has(.cell-media-meter) .cell-media-rail'), 'padding-right'))
+      .toBe('calc(3.35em + var(--cell-gutter))')
+  })
+
+  it('prints generation settings as plain text so a dense header keeps one line', () => {
+    // Outlined chips are what wrapped GEN VID · 10s · adaptive onto a second
+    // line once the gutter grew.
+    const setting = rule(css, '.cell-aspect-ratio')
+    expect(setting).not.toContain('border')
+    expect(setting).not.toContain('padding')
+    expect(declaration(setting, 'white-space')).toBe('nowrap')
+    expect(declaration(rule(css, '.cell-aspect-ratio + .cell-aspect-ratio::before'), 'content'))
+      .toBe("'·'")
+  })
+
   it('dissolves the grid under the composer instead of clipping it', () => {
     const scroll = rule(css, '.notebook-horizontal-scroll')
     // Bottom padding on a scroll container is part of its scrollable extent,

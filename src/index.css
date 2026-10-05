@@ -2274,9 +2274,11 @@ textarea:focus-visible {
   /* The gutter every band inside a cell reads. Scaled like the font sizes,
      because a fixed padding shrinks with the zoom while the text it is meant
      to hold off the edge does not — which is why the inside looked tight at
-     Fit however large the number was. */
-  --cell-gutter: calc(16px * var(--notebook-detail-scale, 1));
-  --cell-gutter-tight: calc(12px * var(--notebook-detail-scale, 1));
+     Fit however large the number was. 22px still seats a dense generation
+     header (GEN VID · 10s · adaptive) on one line in a Fit cell on a 1900px
+     window; much wider and it wraps. */
+  --cell-gutter: calc(22px * var(--notebook-detail-scale, 1));
+  --cell-gutter-tight: calc(14px * var(--notebook-detail-scale, 1));
   --cell-state-color: #72e7aa;
   --cell-state-soft: rgba(114, 231, 170, 0.22);
   --cell-state-glow: rgba(114, 231, 170, 0.38);
@@ -2773,9 +2775,10 @@ textarea:focus-visible {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 4px 6px;
-  min-height: max(28px, calc(20px * var(--notebook-detail-scale, 1)));
-  /* Vertical padding only matters when the chips wrap to a second line; the
-     min-height carries the common case. */
+  min-height: max(36px, calc(24px * var(--notebook-detail-scale, 1)));
+  /* Vertical padding only matters when the settings wrap to a second line;
+     the min-height carries the common case. At 36px the type label centres
+     just below the corner mark's 17px arm instead of beside it. */
   padding: 3px var(--cell-gutter);
   font-size: var(--cell-label-font-size);
   letter-spacing: 0.04em;
@@ -3030,33 +3033,27 @@ textarea:focus-visible {
   margin-left: auto;
 }
 
-.cell-generation-chips .cell-aspect-ratio {
-  margin-left: 0;
-}
-
+/* Generation settings read as plain text joined by a middot, the way the
+   badge rail reads, rather than as outlined chips: the chips' padding and
+   borders were what pushed a dense header onto a second line once the cell
+   gutter grew. Only generation cells carry settings, so they keep the gen
+   family's green. */
 .cell-aspect-ratio {
   display: inline-flex;
-  height: 1.65em;
   flex: none;
   align-items: center;
-  margin-left: auto;
-  padding: 0 0.4em;
-  border: 1px solid rgba(114, 231, 170, 0.3);
-  border-radius: 4px;
   color: #9de1b8;
   font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: var(--cell-label-font-size);
   letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.cell-family-image .cell-aspect-ratio {
-  border-color: rgba(99, 199, 216, 0.32);
-  color: #9cd3de;
-}
-
-.cell-family-audio .cell-aspect-ratio {
-  border-color: rgba(201, 137, 162, 0.34);
-  color: #d3a8ba;
+.cell-aspect-ratio + .cell-aspect-ratio::before {
+  margin-right: 4px;
+  color: rgba(157, 225, 184, 0.45);
+  content: '·';
 }
 
 /* The badge rail: what the media is, on one line under the picture rather
@@ -3085,9 +3082,10 @@ textarea:focus-visible {
 }
 
 /* Leave the meter its corner: the last badge ellipsises rather than running
-   under it. */
+   under it. The meter's right padding is the gutter, so its corner grows
+   with it. */
 .cell-media:has(.cell-media-meter) .cell-media-rail {
-  padding-right: 4.8em;
+  padding-right: calc(3.35em + var(--cell-gutter));
 }
 
 /* No pill: the rail's scrim carries the contrast, so the badges are plain
@@ -3877,7 +3875,7 @@ textarea:focus-visible {
   justify-content: center;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 12px var(--cell-gutter);
   color: #b9dfcb;
   text-align: left;
 }
