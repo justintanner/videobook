@@ -29,6 +29,8 @@ describe("provider completion routing", () => {
     ["fal_qwen_image", "qwenImage"],
     ["seedream_image", "seedreamImage"],
     ["fal_seedream_v5_lite_edit", "seedreamV5Image"],
+    ["fal_bria_fibo_edit_1_5_product_holding", "seedreamV5Image"],
+    ["fal_bria_fibo_edit_1_5_virtual_try_on", "seedreamV5Image"],
     ["kling30_motion_control_video", "klingVideo"],
     ["kling30_omni_video", "providerVideo"],
     ["seedance2_video", "providerVideo"],
@@ -220,6 +222,44 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(true);
+  });
+
+  it.each([
+    "fal_bria_fibo_edit_1_5_product_holding",
+    "fal_bria_fibo_edit_1_5_virtual_try_on",
+  ])("downloads %s when the result publishes image.url and omits images", async (taskType) => {
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask(taskType);
+    registerCompleteProviderTaskJob(cfs);
+    registerJobHandler("process_image", async () => ({ ok: true }));
+
+    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
+      `complete-fibo-${assetId}`,
+      {
+        type: "complete_kie_task",
+        taskId,
+        taskType,
+        assetId,
+        assetDir,
+        bookId,
+        meta: { prompt: "hold the product", sourceImageIds: [], model: "bria/fibo-edit-1.5" },
+        resultUrls: [],
+        resultObject: { image: { url: imageUrl } },
+      },
+      10_000,
+    );
+
+    expect(result.success).toBe(true);
+    const original = await cfs.files.read(assetId, "original.png");
+    expect(original.ok).toBe(true);
+    if (original.ok) {
+      const buf = typeof original.value === "string"
+        ? Buffer.from(original.value)
+        : Buffer.from(original.value);
+      expect(buf.equals(TINY_PNG)).toBe(true);
+    }
+    const pending = await cfs.jobs.pending.read(assetId);
+    expect(pending.ok).toBe(true);
+    expect(pending.ok ? pending.value : "fail").toBeNull();
   });
 
   it("fails when fal_qwen result has no image URLs (no silent ready)", async () => {

@@ -324,10 +324,16 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
     return typeof v === "string" ? [v] : [];
   }
   const images = (resultObject as { images?: { url?: string }[] }).images;
-  if (!Array.isArray(images)) return [];
-  return images
-    .map((i) => i?.url)
-    .filter((u): u is string => typeof u === "string");
+  const imageUrls = Array.isArray(images)
+    ? images.map((i) => i?.url).filter((u): u is string => typeof u === "string")
+    : [];
+  if (imageUrls.length > 0) return imageUrls;
+  if (
+    taskType !== "fal_bria_fibo_edit_1_5_product_holding"
+    && taskType !== "fal_bria_fibo_edit_1_5_virtual_try_on"
+  ) return imageUrls;
+  const imageUrl = (resultObject as { image?: { url?: string } }).image?.url;
+  return typeof imageUrl === "string" ? [imageUrl] : [];
 }
 
 async function completeSeedreamImage(
