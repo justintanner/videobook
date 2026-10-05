@@ -369,6 +369,8 @@ describe('workspace action launcher with real endpoints', () => {
       const document = record(await call('get_notebook', { notebook_id: notebookId }))
       return (document?.cells as Record<string, unknown>[]).some(cell => record(cell.slot)?.row === 0 && record(cell.slot)?.column === 2 && cell.output_artifact_id === imageId)
     }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+    await expect.poll(() => page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+    expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
     await page.keyboard.press('Escape')
     const document = record(await call('get_notebook', { notebook_id: notebookId }))!
     const cells = document.cells as Record<string, unknown>[]

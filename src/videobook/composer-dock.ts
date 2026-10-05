@@ -32,6 +32,15 @@ export function composerDockShouldOpen(reason: ComposerDockOpenReason): boolean 
     || reason === 'reopen'
 }
 
+export function notebookActionCreatedCells(
+  before: { id: string; cells: readonly { id: string }[] } | null,
+  after: { id: string; cells: readonly { id: string }[] } | null | undefined,
+): boolean {
+  if (!before || !after || before.id !== after.id) return false
+  const existingIds = new Set(before.cells.map((cell) => cell.id))
+  return after.cells.some((cell) => !existingIds.has(cell.id))
+}
+
 export function composerDockDraftKey(
   bookId: string,
   target: string | null | undefined,

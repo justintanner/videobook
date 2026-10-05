@@ -309,6 +309,9 @@ describe('drawn region image editor through real MCP', () => {
           && bounds.bottom <= composer.getBoundingClientRect().top + 2
       })).toBe(true)
       expect(await page.locator('.app-shell').evaluate((node) => (node as HTMLElement).inert)).toBe(false)
+      expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+      expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
+      expect(await page.getByLabel('Videobook command input').isVisible()).toBe(true)
       await page.screenshot({ path: '/tmp/videobook-region-generation-focus.png' })
       await page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).click()
       await page.getByRole('button', { name: 'Edit @m1 image', exact: true }).click()
@@ -318,6 +321,44 @@ describe('drawn region image editor through real MCP', () => {
       await page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).click()
       await page.getByRole('button', { name: 'Edit @m1 image', exact: true }).click()
       expect(await movedDialog.getByLabel('What should change?').inputValue()).toBe('')
+    } finally {
+      if (originalKey === undefined) delete process.env.KIE_API_KEY
+      else process.env.KIE_API_KEY = originalKey
+      await abortActiveBookJobsForTests()
+    }
+  }, 60_000)
+
+  it('collapses previews and history when image generation is queued, then allows manual reopening', async () => {
+    const created = record(await call('create_notebook_cell', {
+      cell: { type: 'generate_image', slot: { row: 20, column: 0 }, prompt: 'A green garden in daylight' },
+    }))
+    const cellId = String(created?.id ?? '')
+    await page.reload()
+    const generation = page.locator(`.react-flow__node[data-id="${cellId}"] .cell-node`)
+    await generation.click()
+    const composer = page.locator('.command-composer')
+    const input = page.getByLabel('Videobook command input')
+    expect(await composer.getAttribute('data-dock-open')).toBe('true')
+    await input.fill('Keep my next prompt')
+    const originalKey = process.env.KIE_API_KEY
+    process.env.KIE_API_KEY = 'test-key'
+    try {
+      const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate', exact: true })
+      await expect.poll(() => generate.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await generate.click()
+      await expect.poll(() => composer.getAttribute('data-dock-open'), { timeout: 15_000 }).toBe('false')
+      expect(await composer.locator('.command-composer-dock-body').isVisible()).toBe(false)
+      expect(await input.textContent()).toBe('Keep my next prompt')
+      const notebook = record(await call('get_notebook'))
+      const cells = (Array.isArray(notebook?.cells) ? notebook.cells : []).map(record)
+      expect(cells.some((cell) => cell?.type === 'image' && record(cell.inputs)?.producerCellId === cellId)).toBe(true)
+      await generation.click()
+      expect(await composer.getAttribute('data-dock-open')).toBe('true')
+      const refreshed = page.waitForResponse((response) => response.request().method() === 'POST'
+        && (response.request().postData() ?? '').includes('get_notebook'))
+      await refreshed
+      expect(await composer.getAttribute('data-dock-open')).toBe('true')
+      expect(await input.textContent()).toBe('Keep my next prompt')
     } finally {
       if (originalKey === undefined) delete process.env.KIE_API_KEY
       else process.env.KIE_API_KEY = originalKey

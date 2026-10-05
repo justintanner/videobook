@@ -736,15 +736,27 @@ describe('composer focus through real workspace interactions', () => {
   })
 
   it('returns completed add, duplicate and delete operations to chat', async () => {
+    const composer = page.locator('.command-composer')
+    await cell(videoCellId).click()
+    expect(await composer.getAttribute('data-dock-open')).toBe('true')
+    await input().fill('Keep this draft after creating cells')
     await page.getByLabel('Add cell', { exact: true }).click()
     await page.getByLabel('Search cell types').fill('audio')
     await page.locator('.canvas-add-menu').getByRole('button', { name: 'Audio', exact: true }).click()
     await focused(input())
     expect(await page.locator('.cell-node').count()).toBe(3)
+    expect(await composer.getAttribute('data-dock-open')).toBe('false')
+    expect(await composer.locator('.command-composer-dock-body').isVisible()).toBe(false)
+    expect(await input().textContent()).toBe('Keep this draft after creating cells')
+    await cell(videoCellId).click()
+    expect(await composer.getAttribute('data-dock-open')).toBe('true')
     await cell(videoCellId).click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click()
     await focused(input())
     expect(await page.locator('.cell-node').count()).toBe(4)
+    expect(await composer.getAttribute('data-dock-open')).toBe('false')
+    expect(await composer.locator('.command-composer-dock-body').isVisible()).toBe(false)
+    expect(await input().textContent()).toBe('Keep this draft after creating cells')
     page.once('dialog', dialog => void dialog.accept())
     await page.getByLabel('Delete 1 selected cell', { exact: true }).click()
     await focused(input())
@@ -930,6 +942,8 @@ describe('composer focus through real workspace interactions', () => {
   })
 
   it('preserves chat draft and caret while a real external notebook update arrives', async () => {
+    await cell(videoCellId).click()
+    expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('true')
     await input().fill('Draft remains intact')
     await input().evaluate(element => {
       const range = document.createRange()
@@ -944,6 +958,7 @@ describe('composer focus through real workspace interactions', () => {
     await cell(String(created?.id)).waitFor({ timeout: 15_000 })
     await focused(input())
     expect(await input().textContent()).toBe('Draft remains intact')
+    expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('true')
     expect(await input().evaluate(element =>
       element.contains(window.getSelection()?.anchorNode ?? null) ? window.getSelection()?.anchorOffset : null)).toBe(4)
   })

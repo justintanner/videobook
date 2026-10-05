@@ -483,6 +483,7 @@ import {
   composerDockShouldOpen,
   composerPanelDrawsClose,
   pauseComposerDockMedia,
+  notebookActionCreatedCells,
 } from '@/videobook/composer-dock'
 import {
   parsePendingApplyCommand,
@@ -2819,6 +2820,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     resumeMediaProcessingWatches(bookId, notebook, assets)
   }, [assets, bookId, notebook, resumeMediaProcessingWatches])
 
+  const collapseComposerAfterCellCreation = useCallback((chat?: ChatExecution) => {
+    const scope = watchScopeRef.current
+    if (scope.bookId !== bookId || scope.notebookId !== notebook?.id) return
+    presentChat(chat, () => setComposerDockOpen(false))
+  }, [bookId, notebook?.id])
+
   const runCell = useCallback(async (
     cellId: string,
     providedNotebook?: NotebookSnapshot,
@@ -2892,6 +2899,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             throw new Error('The server did not return a notebook run')
           }
           generationWatchStarted = true
+          if (outputCellId) collapseComposerAfterCellCreation(chat)
           const watchCellId = outputCellId ?? cellId
           let address = notebookGridAddress(cell.slot)
           if (outputCellId) {
@@ -2990,6 +2998,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     assets,
     bookId,
     call,
+    collapseComposerAfterCellCreation,
     createGenerationPlan,
     highlightCells,
     jobs,
@@ -3899,6 +3908,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
     applyNotebook(nextNotebook, nextAssets, nextJobs, targetBookId)
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
+    return nextNotebook
   }, [applyNotebook, call, resumeMediaProcessingWatches])
 
   const loadLibraryPage = useCallback(async (request: LibraryBrowseRequest) => {
@@ -4086,6 +4096,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!cellId || !addressTag || !runId || !jobId) {
       throw new Error('The server did not return the frame extraction cell')
     }
+    collapseComposerAfterCellCreation()
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
     void watchNotebookRun({
@@ -4242,12 +4253,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setSourceViewCellId(null)
         setHistoryViewCellId(null)
         setGenerationsViewCellId(null)
-        setComposerDockOpen(true)
+        collapseComposerAfterCellCreation(chat)
         revealNotebookCanvasCell(producerCellId)
       })
     }
     return true
-  }, [bookId, call, closeMediaFullscreen, refreshBookData, revealNotebookCanvasCell, selectCanvasCell, setNotice])
+  }, [bookId, call, closeMediaFullscreen, collapseComposerAfterCellCreation, refreshBookData, revealNotebookCanvasCell, selectCanvasCell, setNotice])
 
   const refreshBookList = useCallback(async () => {
     const value = await call('list_books', { sort: 'newest' })
@@ -4668,9 +4679,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       rememberLastWorkSlot(slot)
       if (type === 'timeline' && typeof created?.id === 'string') {
         selectCanvasCell(created.id)
-        setComposerDockOpen(true)
         requestAnimationFrame(() => document.querySelector(`[data-id="${created.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
       }
+      collapseComposerAfterCellCreation()
       setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -5175,6 +5186,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         artifact_ref: artifactRef,
       })
       attached = true
+      collapseComposerAfterCellCreation()
       rememberLastWorkSlot(slot)
       await refreshBookData(bookId, notebook.id)
       setNotice(reusedExisting
@@ -5516,6 +5528,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       runAccepted = true
       persistSpeakVoiceId(voiceId)
+      collapseComposerAfterCellCreation(chat)
       presentChat(chat, () => setNotice(`${created.cellAddress} queued`))
       void watchGenerationRun({
         bookId,
@@ -5850,7 +5863,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (!response.ok) throw new Error(payload.error ?? `Upload failed: ${file.name}`)
         imported += 1
       }
-      await refreshBookData(bookId, notebook?.id)
+      const refreshed = await refreshBookData(bookId, notebook?.id)
+      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation()
       refreshLibraryBrowse()
       setNotice([
         imported > 0 ? `Imported ${imported}` : '',
@@ -6443,7 +6457,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           confirm_unpriced: true,
         }, { chat }))
         reviewChat(chat, false, () => setPendingCommandPlan(null))
-        await refreshBookData(bookId, notebookId, undefined, chat).catch(() => undefined)
+        const refreshed = await refreshBookData(bookId, notebookId, undefined, chat).catch(() => undefined)
+        if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
         const message = asString(queued?.status) === 'completed'
           ? 'Workbook is already current'
           : 'Workbook run accepted and queued'
@@ -6537,6 +6552,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             setCellQueued(cellId, false)
             throw new Error('The server did not return a notebook run')
           }
+          if (outputCellId) collapseComposerAfterCellCreation(chat)
           const watchCellId = outputCellId ?? cellId
           const watchedCell = notebook?.cells.find((cell) => cell.id === cellId)
           let address = watchedCell
@@ -7123,6 +7139,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       createdCellId = nextCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Download queued in the previous workspace.' }
       selectCanvasCell(nextCellId, chat)
+      collapseComposerAfterCellCreation(chat)
     } catch (error) {
       await refreshBookData(bookId, notebook.id, isCurrent, chat)
       const message = error instanceof Error ? error.message : String(error)
@@ -7251,6 +7268,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { expectedRevision: currentNotebook.revision }
           : {}),
       })
+      collapseComposerAfterCellCreation(chat)
       await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
       void watchNotebookSplitRun({
         actionAddress,
@@ -7304,6 +7322,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       actionCellId = run.actionCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Frame extraction queued in the previous workspace.' }
+      collapseComposerAfterCellCreation(chat)
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId, chat)
@@ -7379,6 +7398,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       actionCellId = run.actionCellId
       if (isCurrent?.() === false) return { ok: true, message: 'Audio extraction queued in the previous workspace.' }
+      collapseComposerAfterCellCreation(chat)
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
       selectCanvasCell(run.outputCellId ?? actionCellId, chat)
@@ -7901,15 +7921,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
         selectCanvasCell(firstCellId, chat)
         await refreshBookData(bookId, notebook.id, isCurrent, chat)
+        collapseComposerAfterCellCreation(chat)
         const message = `Created ${placements.join(' and ')}`
         if (isCurrent?.() !== false) presentChat(chat, () => setNotice(message))
         return { ok: true, message }
       }
       const resultRecord = recordValue(result)
       const createdCellId = asString(resultRecord?.cell_id)
-      await refreshBookData(bookId, notebook?.id, isCurrent, chat)
+      const refreshed = await refreshBookData(bookId, notebook?.id, isCurrent, chat)
       if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
       if (createdCellId) selectCanvasCell(createdCellId, chat)
+      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
       const message = chainResult
         ? plan.message || 'Chain complete'
         : messageFor(result, plan.message || 'Action applied')
@@ -8471,6 +8493,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }, { chat })
       runAccepted = true
       const acceptedRecord = recordValue(accepted)
+      collapseComposerAfterCellCreation(chat)
       const runId = asString(acceptedRecord?.run_id)
       const jobOperationId = asString(acceptedRecord?.job_id)
       const outputCellId = asString(acceptedRecord?.output_cell_id)
@@ -8735,6 +8758,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         reviewChat(chat, false, () => setPendingChatAction(null))
         await refreshBookData(bookId, currentNotebook.id, undefined, chat)
+        if (action.kind === 'create') collapseComposerAfterCellCreation(chat)
         presentChat(chat, () => setNotice(pendingChatAction.plan.summary))
         return { ok: true, message: pendingChatAction.plan.summary }
       } catch (error) {
@@ -8787,10 +8811,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         await refreshBookData(bookId, notebook.id, undefined, chat)
       }
       const message = `Created ${placements.join(' and ')}`
+      collapseComposerAfterCellCreation(chat)
       presentChat(chat, () => setNotice(message))
       return { ok: true, message }
     }
-    if (watchScopeRef.current.bookId === bookId) await refreshBookData(bookId, notebook?.id, undefined, chat)
+    if (watchScopeRef.current.bookId === bookId) {
+      const refreshed = await refreshBookData(bookId, notebook?.id, undefined, chat)
+      if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
+    }
     if (tool === 'rename_asset') {
       const renamed = recordValue(result)
       const newLabel = asString(renamed?.label)
@@ -10301,6 +10329,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       await refreshBookData(bookId, notebook.id)
       selectCanvasCell(cellId)
+      collapseComposerAfterCellCreation()
       setNotice(`Duplicated as ${address}`)
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : String(cause), 'error')
@@ -10342,7 +10371,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       rememberLastWorkSlot(draft.cell.slot)
       await refreshBookData(bookId, notebookId)
-      openCellInspector(materialized.cellId)
+      selectCanvasCell(materialized.cellId)
+      setSourceViewCellId(null)
+      setHistoryViewCellId(null)
+      setGenerationsViewCellId(null)
+      collapseComposerAfterCellCreation()
+      revealNotebookCanvasCell(materialized.cellId)
       setNotice(
         `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,
       )
@@ -11505,6 +11539,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 onNotice={setNotice}
                 onNotebookChanged={async () => {
                   if (notebook) await refreshNotebook(bookId, notebook.id)
+                  collapseComposerAfterCellCreation()
                 }}
                 onLibraryChanged={async () => {
                   await refreshBookData(bookId, notebook?.id)

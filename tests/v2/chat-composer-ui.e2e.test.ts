@@ -2425,6 +2425,9 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
+    await notebookCellNode(page, videoCellId).click()
+    await input.fill('Keep my draft after dropping media')
+    expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('true')
 
     const bytes = filename.endsWith('.svg')
       ? Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#48b26f"/></svg>')
@@ -2494,6 +2497,9 @@ describe('chat composer browser flow', () => {
         .toBe(true)
       expect(observedCalls.some((call) => call.name === 'set_notebook_media_slot'))
         .toBe(true)
+      expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+      expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
+      expect(await input.textContent()).toBe('Keep my draft after dropping media')
       if (filename.endsWith('.HEIC')) {
         const preview = droppedCell.locator('img').first()
         await preview.waitFor({ state: 'visible', timeout: 30_000 })
@@ -3451,8 +3457,9 @@ describe('chat composer browser flow', () => {
       expect(await turn.getAttribute('data-turn-id')).toBe(turnId)
       expect(await composer.locator('.chat-bubble-user').filter({ hasText: /^\/apply/u }).count()).toBe(0)
       expect(await input.textContent()).toBe('My next message stays here')
-      await composer.locator('.composer-notebook-dock').waitFor({ state: 'visible' })
-      expect(await turn.isVisible()).toBe(true)
+      expect(await composer.getAttribute('data-dock-open')).toBe('false')
+      expect(await composer.locator('.command-composer-dock-body').isVisible()).toBe(false)
+      expect(await turn.isVisible()).toBe(false)
       await input.fill('/not-a-command')
       await page.getByLabel('Send command').click()
       await expect.poll(() => composer.locator('.composer-notebook-dock').count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
@@ -4328,6 +4335,8 @@ describe('chat composer browser flow', () => {
       && record(call.arguments.cell)?.operation === 'split_at_points'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'run_notebook'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+    await expect.poll(() => page!.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+    expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
 
     const splitClient = new Client(
       { name: 'videobook-split-ui-e2e', version: '1.0.0' },
@@ -4756,8 +4765,7 @@ describe('chat composer browser flow', () => {
       const createdGenerationNode = notebookCellNode(page, createdGenerationCellId)
       await createdGenerationNode.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await createdGenerationNode.getAttribute('data-selection')).toBe('primary')
-
-      await collapseComposerDock(page)
+      expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
       await createdGenerationNode.click({ button: 'right' })
       const createdGenerationMenu = page.getByRole('menu', {
         name: /Cell actions for/,
@@ -4793,6 +4801,7 @@ describe('chat composer browser flow', () => {
     })
     await duplicatedCell.waitFor({ state: 'visible', timeout: 30_000 })
     expect(await duplicatedCell.getAttribute('data-selection')).toBe('primary')
+    expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
 
     await duplicatedCell.click({ button: 'right' })
     const duplicatedCellMenu = page.getByRole('menu', {
