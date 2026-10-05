@@ -62,6 +62,8 @@ export type ImageEditorWorkspaceProps = {
   subjectMapLoading: boolean
   analysisUnavailableReason: string | null
   initialRegions?: readonly ImageEditRegion[]
+  instruction: string
+  onInstructionChange: (instruction: string) => void
   replacementCandidates: readonly ImageReplacementCandidate[]
   closeRef: RefObject<HTMLButtonElement | null>
   imageEditModels?: readonly ImageEditModelOption[]
@@ -571,6 +573,8 @@ export function ImageEditorWorkspace({
   subjectMapLoading,
   analysisUnavailableReason,
   initialRegions,
+  instruction,
+  onInstructionChange,
   replacementCandidates,
   closeRef,
   imageEditModels,
@@ -602,7 +606,6 @@ export function ImageEditorWorkspace({
   const [overlaysHidden, setOverlaysHidden] = useState(false)
   const [removalPreview, setRemovalPreview] = useState(false)
   const [overlayOpacity, setOverlayOpacity] = useState(0.42)
-  const [instruction, setInstruction] = useState('')
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const [status, setStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
@@ -736,7 +739,6 @@ export function ImageEditorWorkspace({
     void runAction('apply', async () => {
       const outcome = await onSubmitInstruction(trimmedInstruction, selection)
       if (!outcome.ok) throw new Error(outcome.message)
-      if (mountedRef.current) setInstruction('')
       return outcome.message
     })
   }
@@ -936,7 +938,7 @@ export function ImageEditorWorkspace({
             placeholder={imageEditInstructionPlaceholder(selectedSubjects, replacementTargets, replacing)}
             disabled={!onSubmitInstruction}
             autoFocus
-            onChange={(event) => setInstruction(event.target.value)}
+            onChange={(event) => onInstructionChange(event.target.value)}
             onKeyDown={submitOnShortcut}
           />
           <p id={hintId} className="image-editor-hint">

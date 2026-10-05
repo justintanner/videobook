@@ -2233,7 +2233,7 @@ describe('chat composer browser flow', () => {
       call.name === 'edit_image_subjects'), { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
     await dialog.locator('.image-editor-status.success').waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
     expect(await dialog.isVisible()).toBe(true)
-    expect(await modalInput.inputValue()).toBe('')
+    expect(await modalInput.inputValue()).toBe(editPrompt)
     const editCall = observedCalls.find((call) => call.name === 'edit_image_subjects')
     expect(editCall?.arguments).toMatchObject({
       book_id: bookId,

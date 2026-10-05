@@ -63,6 +63,8 @@ function renderEditor(overrides: {
   initialRegions?: readonly { id: string, box: { x: number, y: number, width: number, height: number } }[]
 }) {
   return renderToStaticMarkup(createElement(ImageEditorWorkspace, {
+    instruction: '',
+    onInstructionChange: () => undefined,
     address: 'c3',
     mediaUrl: 'https://example.test/source.png',
     width: 100,

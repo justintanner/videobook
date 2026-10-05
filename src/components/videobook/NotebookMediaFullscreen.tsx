@@ -34,6 +34,8 @@ type NotebookMediaFullscreenProps = {
   actionsOpen?: boolean
   returnFocus?: HTMLElement | null
   initialRegions?: readonly ImageEditRegion[]
+  initialInstruction?: string
+  onInstructionChange?: (instruction: string) => void
   replacementCandidates?: readonly ImageReplacementCandidate[]
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
@@ -115,6 +117,8 @@ export function NotebookMediaFullscreen({
   actionsOpen = false,
   returnFocus = null,
   initialRegions,
+  initialInstruction = '',
+  onInstructionChange,
   replacementCandidates = [],
   imageEditModels,
   imageEditModelsLoading,
@@ -140,6 +144,7 @@ export function NotebookMediaFullscreen({
   const hasMedia = isVideo || Boolean(mediaUrl)
   const editable = !isVideo && Boolean(onEditSubjects || onSubmitEditInstruction)
   const [mode, setMode] = useState<MediaFullscreenMode>(isVideo ? 'view' : initialMode)
+  const [instruction, setInstruction] = useState(initialInstruction)
   const [capturePending, setCapturePending] = useState(false)
   const [captureStatus, setCaptureStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
   const editing = mode === 'edit' && !isVideo
@@ -327,6 +332,11 @@ export function NotebookMediaFullscreen({
           subjectMapLoading={subjectMapLoading}
           analysisUnavailableReason={analysisUnavailableReason}
           initialRegions={initialRegions}
+          instruction={instruction}
+          onInstructionChange={(next) => {
+            setInstruction(next)
+            onInstructionChange?.(next)
+          }}
           replacementCandidates={replacementCandidates}
           imageEditModels={imageEditModels}
           imageEditModelsLoading={imageEditModelsLoading}

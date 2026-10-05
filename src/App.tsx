@@ -638,6 +638,7 @@ type MediaFullscreenSession = {
   subjectMap: ImageSubjectMap | null
   subjectMapLoading: boolean
   mode: MediaFullscreenMode
+  initialInstruction: string
 }
 
 type MediaSearchMode = SearchReferenceMode
@@ -1653,6 +1654,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     useState<WatermarkReviewState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
+  const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
   const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
@@ -4007,6 +4009,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return
     const session: MediaFullscreenSession = {
       mode,
+      initialInstruction: imageEditInstructionsRef.current.get(bookId)
+        ?? savedValue(`videobook.image-edit-instruction:${bookId}`),
       key: [bookId, notebook.id, cell.id, asset.artifactId, asset.objectHash].join(':'),
       bookId,
       notebookId: notebook.id,
@@ -4185,6 +4189,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
     ) return false
     const requestId = imageSubjectMapRequestRef.current
+    const isCurrent = () => {
+      const scope = watchScopeRef.current
+      return imageSubjectMapRequestRef.current === requestId
+        && scope.bookId === session.bookId
+        && scope.notebookId === session.notebookId
+    }
     const response = await guardedAsyncResult(
       async () => await call('edit_image_subjects', {
         book_id: session.bookId,
@@ -4208,12 +4218,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             }
           : {}),
       }, { chat }),
-      () => {
-        const scope = watchScopeRef.current
-        return imageSubjectMapRequestRef.current === requestId
-          && scope.bookId === session.bookId
-          && scope.notebookId === session.notebookId
-      },
+      isCurrent,
     )
     if (response.kind === 'stale') return false
     if (response.kind === 'error') throw response.error
@@ -4228,9 +4233,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? `Whole-image edit ${status}`
             : `${input.editRegions?.length ? 'Region' : 'Subject'} edit ${status}`,
     ))
-    await refreshBookData(session.bookId, session.notebookId, undefined, chat).catch(() => undefined)
+    await refreshBookData(session.bookId, session.notebookId, isCurrent, chat).catch(() => undefined)
+    const producerCellId = asString(recordValue(result)?.producer_cell_id)
+    if (producerCellId && isCurrent()) {
+      presentChat(chat, () => {
+        closeMediaFullscreen()
+        selectCanvasCell(producerCellId, chat)
+        setSourceViewCellId(null)
+        setHistoryViewCellId(null)
+        setGenerationsViewCellId(null)
+        setComposerDockOpen(true)
+        revealNotebookCanvasCell(producerCellId)
+      })
+    }
     return true
-  }, [bookId, call, refreshBookData, setNotice])
+  }, [bookId, call, closeMediaFullscreen, refreshBookData, revealNotebookCanvasCell, selectCanvasCell, setNotice])
 
   const refreshBookList = useCallback(async () => {
     const value = await call('list_books', { sort: 'newest' })
@@ -11702,6 +11719,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           asset={mediaFullscreen.asset}
           address={mediaFullscreen.address}
           initialMode={mediaFullscreen.mode}
+          initialInstruction={mediaFullscreen.initialInstruction}
+          onInstructionChange={(instruction) => {
+            imageEditInstructionsRef.current.set(mediaFullscreen.bookId, instruction)
+            saveValue(`videobook.image-edit-instruction:${mediaFullscreen.bookId}`, instruction)
+          }}
           composerPortalRef={setMediaFullscreenComposerTarget}
           actionsOpen={Boolean(currentActionComposer)}
           subjectMap={mediaFullscreen.subjectMap}
