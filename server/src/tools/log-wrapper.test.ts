@@ -26,6 +26,7 @@ describe("MCP tool logging", () => {
   it("does not duplicate semantic activity recorded by the tool handler", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-self-recorded-tool-"));
     const engine = createEngine({
+      durableWrites: false,
       rootDir: root,
       initialBookName: "self-recorded-tool",
     });
@@ -56,6 +57,7 @@ describe("MCP tool logging", () => {
   it.each(["returned", "thrown"])("keeps private %s errors available to callers without logging their content", async (mode) => {
     root = await mkdtemp(join(tmpdir(), "videobook-log-error-"));
     const engine = createEngine({
+      durableWrites: false,
       rootDir: root,
       initialBookName: "log-error",
     });

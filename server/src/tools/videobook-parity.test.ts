@@ -16,7 +16,7 @@ describe("Videobook MCP parity", () => {
 
   it("registers unique canonical and notebook-native tools", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-parity-"));
-    const fs = createEngine({ rootDir: root, initialBookName: "parity" });
+    const fs = createEngine({ durableWrites: false, rootDir: root, initialBookName: "parity" });
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 

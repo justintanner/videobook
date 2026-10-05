@@ -102,3 +102,13 @@ describe("fetch-guard probe", () => {
     expect(output).toContain("[test guard]");
   });
 });
+
+describe("queue-cleanup probe", () => {
+  it("keeps pure tests lightweight and drains queues imported during a test", async () => {
+    const { stdout, stderr, code } = await runVitest(
+      repoRoot,
+      join(repoRoot, "server/src/quiet-probes/vitest.queue-cleanup.config.ts"),
+    );
+    expect(code, `${stdout}\n${stderr}`).toBe(0);
+  });
+});

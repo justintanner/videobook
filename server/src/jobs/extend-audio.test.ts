@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { type Engine } from "videobook-engine";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import {
   extendAudioWithElevenLabs,
@@ -53,28 +53,37 @@ describe("extend audio ElevenLabs job", () => {
   let transcribeRequest: CapturedRequest | null;
   let soundRequest: CapturedRequest | null;
 
+  beforeAll(async () => {
+    const fixtureDir = await mkdtemp(join(tmpdir(), "videobook-extend-audio-fixture-"));
+    try {
+      const sourcePath = join(fixtureDir, "source.mp3");
+      const continuationPath = join(fixtureDir, "continuation.mp3");
+      await execFileAsync(FFMPEG, [
+        "-y",
+        "-f", "lavfi",
+        "-i", "sine=frequency=440:duration=6.048:sample_rate=48000",
+        "-c:a", "libmp3lame",
+        "-b:a", "192k",
+        sourcePath,
+      ]);
+      await execFileAsync(FFMPEG, [
+        "-y",
+        "-f", "lavfi",
+        "-i", "sine=frequency=880:duration=9.452:sample_rate=44100",
+        "-c:a", "libmp3lame",
+        "-b:a", "128k",
+        continuationPath,
+      ]);
+      sourceAudio = await readFile(sourcePath);
+      continuationAudio = await readFile(continuationPath);
+    } finally {
+      await rm(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-extend-audio-"));
-    const sourcePath = join(tempDir, "source.mp3");
-    const continuationPath = join(tempDir, "continuation.mp3");
-    await execFileAsync(FFMPEG, [
-      "-y",
-      "-f", "lavfi",
-      "-i", "sine=frequency=440:duration=6.048:sample_rate=48000",
-      "-c:a", "libmp3lame",
-      "-b:a", "192k",
-      sourcePath,
-    ]);
-    await execFileAsync(FFMPEG, [
-      "-y",
-      "-f", "lavfi",
-      "-i", "sine=frequency=880:duration=9.452:sample_rate=44100",
-      "-c:a", "libmp3lame",
-      "-b:a", "128k",
-      continuationPath,
-    ]);
-    sourceAudio = await readFile(sourcePath);
-    continuationAudio = await readFile(continuationPath);
+    await writeFile(join(tempDir, "continuation.mp3"), continuationAudio);
     transcribeRequest = null;
     soundRequest = null;
 

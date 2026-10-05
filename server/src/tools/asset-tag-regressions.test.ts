@@ -14,7 +14,7 @@ describe("canonical tag boundaries", () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "tag-boundaries-"));
-    engine = createEngine({ rootDir: root, initialBookName: "Tag boundaries" });
+    engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: "Tag boundaries" });
     await engine.ready;
     const created = await engine.artifacts.create({ kind: "image" });
     if (!created.ok) throw new Error(created.error.message);

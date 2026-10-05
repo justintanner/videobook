@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -41,9 +41,18 @@ describe("timeline audio tools", () => {
   let client: Client;
   let tempDir: string;
   let audioPath: string;
+  let sourceAudio: Buffer;
 
   beforeAll(async () => {
     await queue.start();
+    const fixtureDir = await mkdtemp(join(tmpdir(), "videobook-timeline-audio-fixture-"));
+    try {
+      const sourcePath = join(fixtureDir, "tone.mp3");
+      await generateTestAudio(sourcePath, 2);
+      sourceAudio = await readFile(sourcePath);
+    } finally {
+      await rm(fixtureDir, { recursive: true, force: true });
+    }
   });
 
   afterAll(async () => {
@@ -53,7 +62,7 @@ describe("timeline audio tools", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-timeline-audio-test-"));
     audioPath = join(tempDir, "tone.mp3");
-    await generateTestAudio(audioPath, 2);
+    await writeFile(audioPath, sourceAudio);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",

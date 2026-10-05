@@ -503,7 +503,7 @@ describe("kie paygate advisory authorization", () => {
   });
 
   it("authorizes an unbounded Kling transformation and logs a sanitized warning", async () => {
-    const engine = createEngine({ rootDir, initialBookName: "paygate" });
+    const engine = createEngine({ durableWrites: false, rootDir, initialBookName: "paygate" });
     await engine.ready;
     const warnings: string[] = [];
     configureLoggerForTests({

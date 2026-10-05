@@ -25,7 +25,7 @@ async function setup(): Promise<{
 }> {
   const root = await mkdtemp(join(tmpdir(), "videobook-ref-resolver-"));
   roots.push(root);
-  const engine = createEngine({ rootDir: root, initialBookName: "mentions" });
+  const engine = createEngine({ durableWrites: false, rootDir: root, initialBookName: "mentions" });
   const video = await engine.artifacts.create({
     kind: "video",
     label: "yt 3h3i_td5kce",

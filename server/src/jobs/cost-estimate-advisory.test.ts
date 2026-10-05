@@ -39,7 +39,7 @@ describe("advisory cost estimation", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-estimate-advisory-"));
-    engine = createEngine({ rootDir, initialBookName: "estimate-advisory" });
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: "estimate-advisory" });
     await engine.ready;
     previousSecret = process.env.APICITY_PAYGATE_SECRET;
     process.env.APICITY_PAYGATE_SECRET = "test-secret";

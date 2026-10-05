@@ -271,6 +271,7 @@ describe("local search provider registration", () => {
 
   function createTestEngine(name: string): Engine {
     const engine = createEngine({
+      durableWrites: false,
       rootDir: join(tempDir, name),
       initialBookName: name,
     });

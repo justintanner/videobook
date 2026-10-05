@@ -13,6 +13,7 @@ import { bookManager } from "./engine.js";
 import { ensureJobHandlersLoaded } from "./jobs/index.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 import { logger } from "./logger.js";
+import { testQueueCleanup } from "./test-queue-cleanup.js";
 
 type JobPayload = Record<string, unknown>;
 
@@ -73,6 +74,11 @@ const jobIdIndex = new Map<string, QueueIndexEntry>();
 const testEngines = new Map<string, Engine>();
 let activeTestRoot: string | null = null;
 let activeTestBookId: string | null = null;
+
+if (process.env.VITEST) {
+  testQueueCleanup.waitForIdle = waitForBookQueuesIdleForTests;
+  testQueueCleanup.drain = drainBookQueuesForTests;
+}
 
 const JOB_INDEX_MAX = 2_000;
 const ASSET_REAPER_INTERVAL_MS = 30_000;

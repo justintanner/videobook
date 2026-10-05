@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { afterAll, afterEach, expect } from "vitest";
+import { testQueueCleanup } from "./server/src/test-queue-cleanup.js";
 import {
   currentTestLabel,
   formatBlockedFetchError,
@@ -114,11 +115,9 @@ afterEach(async () => {
     blockedFetchAttempts = [];
     throw new Error(formatBlockedFetchError(attempts));
   }
-  const { waitForBookQueuesIdleForTests } = await import("./server/src/queue.js");
-  await waitForBookQueuesIdleForTests({ fileLabel: testLabelNow() });
+  await testQueueCleanup.waitForIdle?.({ fileLabel: testLabelNow() });
 });
 
 afterAll(async () => {
-  const { drainBookQueuesForTests } = await import("./server/src/queue.js");
-  await drainBookQueuesForTests({ fileLabel: testLabelNow() });
+  await testQueueCleanup.drain?.({ fileLabel: testLabelNow() });
 });
