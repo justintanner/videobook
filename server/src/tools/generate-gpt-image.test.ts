@@ -72,7 +72,12 @@ describe("GPT Image 2.5 tools", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    expect(JSON.parse((result.content as TextContent)[0].text).status).toBe("enqueued");
+    const accepted = JSON.parse((result.content as TextContent)[0].text);
+    expect(accepted.status).toBe("enqueued");
+    const job = createEngineForTest(tempDir).jobs.queue.list({
+      states: ["queued", "running", "completing", "done", "failed", "aborted"],
+    }).find((candidate) => candidate.payload.imgAssetId === accepted.img_asset_id);
+    expect(job?.payload.input).toMatchObject({ resolution: "2K" });
   });
 
   it("returns error with more than 16 images", async () => {

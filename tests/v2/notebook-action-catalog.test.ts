@@ -550,7 +550,7 @@ describe("notebook action catalog", () => {
       tool: DEFAULT_IMAGE_TOOL,
       payload: {
         model: "gpt-image-2-5-sunburst-text-to-image",
-        input: { prompt: "persisted prompt", resolution: "1K" },
+        input: { prompt: "persisted prompt", resolution: "2K" },
       },
     });
 
@@ -573,7 +573,7 @@ describe("notebook action catalog", () => {
       tool: "generate_kie_gpt_image_2_5_flare_image",
       payload: {
         model: "gpt-image-2-5-flare-text-to-image",
-        input: { prompt: "draft prompt" },
+        input: { prompt: "draft prompt", resolution: "2K" },
       },
       estimate: { currency: "USD", usd: expect.any(Number) },
     });

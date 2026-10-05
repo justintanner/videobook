@@ -156,7 +156,7 @@ describe("estimate_cost tool", () => {
         },
       });
       const payload = parse(result);
-      expect(payload.per_call.map((call) => call.estimate.usd)).toEqual([0.03, 0.03, 0.05, 0.08]);
+      expect(payload.per_call.map((call) => call.estimate.usd)).toEqual([0.05, 0.03, 0.05, 0.08]);
       expect(payload.estimate.warnings).toEqual([]);
     }
   });

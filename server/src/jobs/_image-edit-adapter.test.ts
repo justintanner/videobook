@@ -81,6 +81,10 @@ describe("image edit adapters", () => {
 
       const region = adapter.buildRegionRequest(regionInput());
       expect(imageUrlsOf(region)).toEqual([SOURCE, ...REPLACEMENTS]);
+      if (adapter.id.startsWith("gpt-image-2-5-")) {
+        expect(semantic.input.resolution).toBe("2K");
+        expect(region.input.resolution).toBe("2K");
+      }
     });
 
     it(`${adapter.id}: built requests parse against the catalog schema and round-trip stored payloads`, () => {

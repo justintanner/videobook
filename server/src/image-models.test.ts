@@ -229,7 +229,7 @@ describe("buildImageModelOption history integration", () => {
     ];
     const option = buildImageModelOption("gpt_image", gptImage, {}, [], history);
     expect(option.prefilled_values.prompt).toBeUndefined();
-    expect(option.prefilled_values.resolution).toBe("1K");
+    expect(option.prefilled_values.resolution).toBe("2K");
   });
 
   it("history params filtered by model's allowedParams", () => {
@@ -287,6 +287,7 @@ describe("getImageToolSchema", () => {
     expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
+    expect(schema!.properties.resolution.default).toBe("2K");
     expect(schema!.properties).not.toHaveProperty("quality");
   });
 
@@ -297,6 +298,7 @@ describe("getImageToolSchema", () => {
     expect(schema!.required).not.toContain("image_refs");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "21:9", "27:16", "16:27", "9:8", "8:9"]);
     expect(schema!.properties.resolution.enum).toEqual(["1K", "2K", "4K"]);
+    expect(schema!.properties.resolution.default).toBe("2K");
   });
 });
 

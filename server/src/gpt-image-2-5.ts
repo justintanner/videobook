@@ -8,20 +8,30 @@ import {
   GptImage25SunburstTextToImageRequestSchema,
 } from "@apicity/kie/zod";
 
+const resolution = GptImage25FlareTextToImageRequestSchema.shape.input.shape.resolution.default("2K");
+
 export const GPT_IMAGE_2_5_MODELS = {
   flare: {
     key: "gpt_image",
     tool: "generate_kie_gpt_image_2_5_flare_image",
     label: "GPT Image 2.5 Flare",
-    textSchema: GptImage25FlareTextToImageRequestSchema,
-    editSchema: GptImage25FlareImageToImageRequestSchema,
+    textSchema: GptImage25FlareTextToImageRequestSchema.safeExtend({
+      input: GptImage25FlareTextToImageRequestSchema.shape.input.extend({ resolution }),
+    }),
+    editSchema: GptImage25FlareImageToImageRequestSchema.safeExtend({
+      input: GptImage25FlareImageToImageRequestSchema.shape.input.extend({ resolution }),
+    }),
   },
   sunburst: {
     key: "gpt_image_sunburst",
     tool: "generate_kie_gpt_image_2_5_sunburst_image",
     label: "GPT Image 2.5 Sunburst",
-    textSchema: GptImage25SunburstTextToImageRequestSchema,
-    editSchema: GptImage25SunburstImageToImageRequestSchema,
+    textSchema: GptImage25SunburstTextToImageRequestSchema.safeExtend({
+      input: GptImage25SunburstTextToImageRequestSchema.shape.input.extend({ resolution }),
+    }),
+    editSchema: GptImage25SunburstImageToImageRequestSchema.safeExtend({
+      input: GptImage25SunburstImageToImageRequestSchema.shape.input.extend({ resolution }),
+    }),
   },
 } as const;
 

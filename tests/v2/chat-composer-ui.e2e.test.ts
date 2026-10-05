@@ -4013,6 +4013,8 @@ describe('chat composer browser flow', () => {
 
     const imageModel = editor.getByLabel('Generation model')
     expect(await imageModel.inputValue()).toBe('generation.generate_kie_gpt_image_2_5_sunburst_image')
+    expect(await editor.getByLabel('Resolution', { exact: true }).inputValue()).toBe('string:2K')
+    expect(await source.textContent()).toContain('"resolution": "2K"')
     const gptModels = await imageModel.locator('option').allTextContents()
     expect(gptModels.filter((label) => label.includes('GPT Image')).sort()).toEqual([
       'GPT Image 2.5 Flare · Kie',
