@@ -12,11 +12,11 @@ import { type Engine } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
+import { FFPROBE } from "../ffprobe-binary.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const FFMPEG: string = require("ffmpeg-static");
-const FFPROBE: string = require("ffprobe-static").path;
 
 type TextContent = Array<{ type: string; text: string }>;
 

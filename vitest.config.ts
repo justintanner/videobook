@@ -115,6 +115,7 @@ export default defineConfig({
       'server/src/elevenlabs-audio-extension.test.ts',
       'server/src/env-secrets.test.ts',
       'server/src/ffmpeg.test.ts',
+      'server/src/ffprobe-binary.test.ts',
       'server/src/frame-utils.test.ts',
       'server/src/fs.test.ts',
       'server/src/generation-registry.test.ts',

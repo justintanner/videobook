@@ -11,16 +11,14 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createHttpHandler, MCP_PROTOCOL_VERSION } from "../src/server.js";
 import { scopedEngine as liveFs } from "../src/engine.js";
 import { registerAllJobHandlers } from "../src/jobs/index.js";
 import { queue } from "../src/queue.js";
+import { FFPROBE } from "../src/ffprobe-binary.js";
 
 const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
-const FFPROBE: string = require("ffprobe-static").path;
 
 type TextContent = Array<{ type: string; text: string }>;
 type ParsedChunk = { asset_id: string; duration: number; exact: boolean };
