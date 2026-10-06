@@ -24,11 +24,24 @@ export function activeBookEngine(): Engine {
   return activeBookContext().engine;
 }
 
+/**
+ * Tool and job code often holds `scopedBookEngine` rather than a concrete
+ * engine. Storing that proxy as a context's engine would make every property
+ * read resolve back to itself, so nested contexts inherit the enclosing book's
+ * concrete engine instead.
+ */
+function concreteEngine(engine: Engine): Engine {
+  return engine === scopedBookEngine ? activeBookEngine() : engine;
+}
+
 export async function withBookContext<T>(
   context: BookContext,
   operation: () => Promise<T>,
 ): Promise<T> {
-  return contexts.run(context, operation);
+  return contexts.run(
+    { ...context, engine: concreteEngine(context.engine) },
+    operation,
+  );
 }
 
 export const scopedBookEngine = new Proxy({} as Engine, {
