@@ -16,9 +16,12 @@ export type ArtifactThumbAsset = {
 export function ArtifactThumb({
   asset,
   kindHint,
+  videoFrame = false,
 }: {
   asset?: ArtifactThumbAsset | null
   kindHint?: string
+  /** Show a posterless video's first frame instead of the film icon. */
+  videoFrame?: boolean
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const thumbnailUrl = asset?.thumbnailUrl
@@ -35,11 +38,14 @@ export function ArtifactThumb({
     || kindHint === 'splice'
   const image = kind === 'image'
     || kindHint === 'generate_image'
+  const frameUrl = videoFrame && video && !thumbnailUrl ? asset?.mediaUrl : null
 
   return (
     <span className="inspector-source-thumb" aria-hidden="true">
       {thumbnailUrl && thumbnailUrl !== failedUrl ? (
         <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedUrl(thumbnailUrl)} />
+      ) : frameUrl && frameUrl !== failedUrl ? (
+        <video src={`${frameUrl}#t=0.1`} muted playsInline preload="metadata" onError={() => setFailedUrl(frameUrl)} />
       ) : audio ? (
         <AudioWaveform size={16} />
       ) : video ? (

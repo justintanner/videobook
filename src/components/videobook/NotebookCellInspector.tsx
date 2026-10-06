@@ -1515,9 +1515,7 @@ function GenerationInputCards({
       <ul className="inspector-generation-input-cards">
         {mentions.map((mention) => {
           const inputCell = cellsById.get(mention.sourceCellId)
-          const asset = inputCell?.outputArtifactId
-            ? cellAssets?.get(inputCell.outputArtifactId)
-            : undefined
+          const asset = inputCell ? cellAssets?.get(inputCell.id) : undefined
           const detail = generationInputDetail(asset)
           return (
             <li key={mention.token}>

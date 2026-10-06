@@ -107,7 +107,7 @@ function JsonMediaPreview({ asset }: { asset: ArtifactThumbAsset }) {
         aria-controls={id}
         onClick={showPreview}
       >
-        <ArtifactThumb asset={asset} />
+        <ArtifactThumb asset={asset} videoFrame />
       </button>
       <span
         id={id}
