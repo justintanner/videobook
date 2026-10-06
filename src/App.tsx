@@ -10187,12 +10187,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy,
       })
     }
-    contextMenuActions.push({ id: 'more', label: 'More actions', icon: 'more' })
   }
   /* Board-wide layout actions an empty square can anchor. Kept separate from
      contextMenuActions because none of the cell actions apply without a cell. */
   const slotContextMenuActions: NotebookCellContextAction[] = []
-  slotContextMenuActions.push({ id: 'more', label: 'More actions', icon: 'more' })
   if (notebookImageCellIds.size > 0) {
     slotContextMenuActions.push({
       id: 'group_images',
@@ -10203,7 +10201,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleSlotContextAction = (actionId: string) => {
     if (!contextMenuSlot) return
-    if (actionId === 'more') void openWorkspaceActions(undefined, { slot: contextMenuSlot }, 'Notebook', cellContextMenu?.returnFocus)
     if (actionId === 'group_images') void groupImageCells(contextMenuSlot)
   }
   const duplicateContextMenuAsset = async () => {
@@ -10296,10 +10293,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
-    if (actionId === 'more') {
-      void openWorkspaceActions(undefined, { asset_id: contextMenuCell.outputArtifactId, cell_id: contextMenuCell.id }, undefined, cellContextMenu?.returnFocus)
-      return
-    }
     if (actionId === 'inspect') {
       openCellInspector(contextMenuCell.id)
       return

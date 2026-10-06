@@ -272,12 +272,10 @@ describe('workspace action launcher with real endpoints', () => {
     await page.keyboard.press('Escape')
     await page.getByLabel('Open @a2 cell menu', { exact: true }).click()
     const menu = page.getByRole('menu')
-    expect((await menu.getByRole('menuitem').allTextContents()).at(-1)).toContain('Delete')
-    await menu.getByRole('menuitem', { name: 'More actions', exact: true }).click()
-    await page.getByLabel('Videobook command input', { exact: true }).fill('/crop-image')
-    await page.locator('[data-action-id="tool.crop_image"]').click()
-    await page.getByRole('button', { name: 'Send command', exact: true }).click()
-    expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
+    const labels = (await menu.getByRole('menuitem').allTextContents())
+      .map((label) => label.replace('⌫', '').trim())
+    expect(labels.at(-1)).toContain('Delete')
+    expect(labels).not.toContain('More actions')
     await page.keyboard.press('Escape')
     await page.getByLabel('Open Library', { exact: true }).click()
     const imageCard = page.locator('.library-asset-card').filter({ hasText: 'action-image' }).first()
@@ -352,26 +350,20 @@ describe('workspace action launcher with real endpoints', () => {
     await page.screenshot({ path: '/tmp/videobook-actions-crop-result.png' })
   })
 
-  it('preserves empty-slot, multiple-selection and fullscreen targets through their action controls', async () => {
+  it('preserves multiple-selection and fullscreen targets through their action controls', async () => {
     const square = await page.locator('.notebook-grid-square').filter({ has: page.locator('.notebook-grid-square-label', { hasText: /^@a3$/u }) }).boundingBox()
     if (!square) throw new Error('The empty @a3 slot is missing')
     await page.mouse.click(square.x + square.width / 2, square.y + square.height / 2, { button: 'right' })
-    await page.getByRole('menuitem', { name: 'More actions', exact: true }).click()
-    await page.getByLabel('Videobook command input', { exact: true }).fill('/create-notebook-cell')
-    await page.locator('.workspace-actions-list [data-action-id="tool.create_notebook_cell"]').click()
-    await page.getByRole('button', { name: 'Send command', exact: true }).click()
-    expect(await page.getByRole('spinbutton', { name: 'Row', exact: true }).inputValue()).toBe('0')
-    expect(await page.getByRole('spinbutton', { name: 'Column', exact: true }).inputValue()).toBe('2')
-    await page.getByRole('combobox', { name: 'Type', exact: true }).selectOption({ label: 'image' })
-    await page.getByRole('combobox', { name: 'Output media', exact: true }).selectOption(imageId)
-    await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => {
-      const document = record(await call('get_notebook', { notebook_id: notebookId }))
-      return (document?.cells as Record<string, unknown>[]).some(cell => record(cell.slot)?.row === 0 && record(cell.slot)?.column === 2 && cell.output_artifact_id === imageId)
-    }, { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
-    await expect.poll(() => page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
-    expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
+    const slotMenu = page.getByRole('menu', { name: 'Slot actions for @a3', exact: true })
+    await slotMenu.waitFor()
+    expect(await slotMenu.getByRole('menuitem', { name: 'More actions', exact: true }).count()).toBe(0)
     await page.keyboard.press('Escape')
+    await slotMenu.waitFor({ state: 'hidden' })
+    const composer = page.locator('.command-composer')
+    if (await composer.getAttribute('data-dock-open') === 'true') {
+      await composer.locator('[data-composer-dock-hide]').click()
+      await expect.poll(() => composer.getAttribute('data-dock-open')).toBe('false')
+    }
     const document = record(await call('get_notebook', { notebook_id: notebookId }))!
     const cells = document.cells as Record<string, unknown>[]
     const selectedIds = cells.filter(cell => record(cell.slot)?.row === 0 && Number(record(cell.slot)?.column) < 2).map(cell => String(cell.id))
@@ -399,8 +391,6 @@ describe('workspace action launcher with real endpoints', () => {
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(videoId)
     await page.keyboard.press('Escape')
     await page.keyboard.press('Escape')
-    const created = cells.find(cell => record(cell.slot)?.row === 0 && record(cell.slot)?.column === 2)!
-    await call('delete_notebook_cell', { notebook_id: notebookId, cell_id: created.id })
   })
 
   it('creates, opens, renames and deletes a notebook through the action controls', async () => {

@@ -4622,7 +4622,6 @@ describe('chat composer browser flow', () => {
     const requiredLabels = [
       'Edit cell',
       'Generate',
-      'More actions',
       'Delete cell',
     ]
     expect(itemLabels.filter((label) => requiredLabels.includes(label)))
@@ -4638,7 +4637,6 @@ describe('chat composer browser flow', () => {
         'Generate image',
         'Duplicate',
         'Split video',
-        'More actions',
       ].includes(label))).toBe(true)
     expect(await menu.locator('.cell-context-menu-danger').evaluate((element) =>
       getComputedStyle(element).borderTopStyle)).toBe('solid')
@@ -4699,7 +4697,6 @@ describe('chat composer browser flow', () => {
       'Generate video',
       'Duplicate',
       'Split video',
-      'More actions',
       'Delete cell',
     ])
     expect(await videoMenu.getByRole('menuitem', { name: 'Duplicate' }).isDisabled())
@@ -4752,7 +4749,6 @@ describe('chat composer browser flow', () => {
       'Generate video',
       'Generate image',
       'Duplicate',
-      'More actions',
       'Delete cell',
     ])
     for (const generation of [
@@ -4852,7 +4848,6 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Choose media',
-      'More actions',
       'Delete cell',
     ])
     await emptyMediaMenu.getByRole('menuitem', { name: 'Choose media' }).click()
@@ -4901,7 +4896,7 @@ describe('chat composer browser flow', () => {
     })
     await slotMenu.waitFor({ state: 'visible' })
     expect((await slotMenu.getByRole('menuitem').allTextContents())
-      .map((label) => label.trim())).toEqual(['More actions', 'Group images here'])
+      .map((label) => label.trim())).toEqual(['Group images here'])
     expect(await slotMenu.locator('.cell-context-menu-danger').count()).toBe(0)
     await page.keyboard.press('Escape')
     await slotMenu.waitFor({ state: 'hidden' })
