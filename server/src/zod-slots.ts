@@ -238,20 +238,39 @@ export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
 // layout (`_def.checks[]._zod.def.check`).
 // ---------------------------------------------------------------------------
 
-type NumberRange = { min?: number; max?: number; int: boolean };
+type NumberRange = {
+  min?: number;
+  max?: number;
+  exclusiveMin?: boolean;
+  exclusiveMax?: boolean;
+  int: boolean;
+};
 
 function readNumberChecks(def: ZodDef): NumberRange {
   let min: number | undefined;
   let max: number | undefined;
+  let exclusiveMin = false;
+  let exclusiveMax = false;
   let int = false;
   for (const raw of (def.checks ?? []) as ZodConstraintCheck[]) {
     const cdef = raw._zod?.def;
     if (!cdef) continue;
     if (cdef.check === "number_format" && cdef.format === "safeint") int = true;
-    else if (cdef.check === "greater_than" && typeof cdef.value === "number") min = cdef.value;
-    else if (cdef.check === "less_than" && typeof cdef.value === "number") max = cdef.value;
+    else if (cdef.check === "greater_than" && typeof cdef.value === "number") {
+      min = cdef.value;
+      exclusiveMin = cdef.inclusive === false;
+    } else if (cdef.check === "less_than" && typeof cdef.value === "number") {
+      max = cdef.value;
+      exclusiveMax = cdef.inclusive === false;
+    }
   }
-  return { min, max, int };
+  return {
+    min,
+    max,
+    int,
+    ...(exclusiveMin ? { exclusiveMin } : {}),
+    ...(exclusiveMax ? { exclusiveMax } : {}),
+  };
 }
 
 /**

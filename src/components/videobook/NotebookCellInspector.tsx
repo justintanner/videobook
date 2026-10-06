@@ -87,8 +87,8 @@ import {
   abbreviateGenerationPhrases,
   compatibleGenerationActions,
   compatibleGenerationModes,
-  effectiveGenerationControlValue,
   effectiveGenerationSettings,
+  generationSettingsError,
   generationActionForSelection,
   generationActionIsCompatible,
   generationConnectedInputs,
@@ -305,32 +305,6 @@ function generationInputsForDraft(
       ? { generationSettings: draft.generationSettings }
       : {}),
   }
-}
-
-function generationControlIsValid(
-  control: GenerationControl,
-  settings: Record<string, GenerationControlValue>,
-): boolean {
-  const value = effectiveGenerationControlValue(control, settings)
-  if (value === undefined || value === '') return !control.required
-  if (
-    control.options.length > 0
-    && !control.options.some((option) => option === value)
-  ) return false
-  if (control.valueType === 'number') {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return false
-    if (control.minimum !== undefined && value < control.minimum) return false
-    if (control.maximum !== undefined && value > control.maximum) return false
-  }
-  return typeof value === control.valueType
-}
-
-function generationControlsAreValid(
-  controls: readonly GenerationControl[],
-  settings: Record<string, GenerationControlValue>,
-): boolean {
-  return controls.every((control) =>
-    generationControlIsValid(control, settings))
 }
 
 function cellFormPatch(
@@ -2554,10 +2528,17 @@ function ExecutableCellInspector({
   const generationControls = selectedGenerationAction?.controls ?? []
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
-  const generationSettingsValid = generationControlsAreValid(
+  const generationVideoConnected = connectedGenerationInputs.some((input) =>
+    input.kind === 'video')
+  const generationSettingsMessage = generationSettingsError(
     generationControls,
     draft.generationSettings,
+    {
+      tool: selectedGenerationAction?.tool,
+      videoConnected: generationVideoConnected,
+    },
   )
+  const generationSettingsValid = generationSettingsMessage === null
   const generationCompatible = generationActionCompatible
     && generationModeCompatible
     && generationSettingsValid
@@ -2690,6 +2671,29 @@ function ExecutableCellInspector({
     if (!onPreviewPayload) throw new Error('Payload preview is unavailable')
     const requestId = ++promptPreviewRequestRef.current
     const key = previewKey(value, inputEdges)
+    const selected = generationCellType
+      ? generationActionForSelection(generationActions, generationCellType, value)
+      : null
+    const settingsError = generationSettingsError(
+      selected?.controls ?? [],
+      value.generationSettings,
+      {
+        tool: selected?.tool ?? value.tool,
+        videoConnected: generationConnectedInputs(cell.id, cells, inputEdges)
+          .some((input) => input.kind === 'video'),
+      },
+    )
+    if (settingsError) {
+      if (promptPreviewRequestRef.current === requestId) {
+        setPromptMentionPreview({
+          key,
+          error: settingsError,
+          loading: false,
+          value: undefined,
+        })
+      }
+      throw new Error(settingsError)
+    }
     setPromptMentionPreview({ key, error: null, loading: true, value: undefined })
     try {
       const preview = await onPreviewPayload(
@@ -3248,7 +3252,8 @@ function ExecutableCellInspector({
                 ? 'This model does not accept the current inputs. Choose a compatible model or change the connections.'
                 : !generationModeCompatible
                   ? 'This generation type does not match the current inputs. Choose a compatible type or change the connections.'
-                  : 'Complete the required generation settings before running.'}
+                  : generationSettingsMessage
+                    ?? 'Complete the required generation settings before running.'}
             </span>
           </div>
         )}

@@ -8,7 +8,10 @@ import {
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
-import { FalNanoBananaProTextToImageRequestSchema } from "@apicity/fal/zod";
+import {
+  FalMinimaxH3MaxInsertVideoRequestSchema,
+  FalNanoBananaProTextToImageRequestSchema,
+} from "@apicity/fal/zod";
 import {
   zodDefault,
   zodEnumOptionsOrNull,
@@ -73,6 +76,20 @@ describe("zodNumberRange", () => {
   it("reads a local Zod number, defaulting int false", () => {
     expect(zodNumberRange(z.number().min(0).max(5))).toEqual({ min: 0, max: 5, int: false });
     expect(zodNumberRange(z.number().int().optional())).toEqual({ min: undefined, max: undefined, int: true });
+  });
+
+  it("keeps an exclusive lower bound distinct from an inclusive one", () => {
+    expect(zodNumberRange(FalMinimaxH3MaxInsertVideoRequestSchema.shape.start_time)).toEqual({
+      min: 1.625,
+      max: 60,
+      int: false,
+    });
+    expect(zodNumberRange(FalMinimaxH3MaxInsertVideoRequestSchema.shape.resume_time)).toEqual({
+      min: 1.625,
+      max: 60,
+      exclusiveMin: true,
+      int: false,
+    });
   });
 
   it("returns null for non-number schemas", () => {

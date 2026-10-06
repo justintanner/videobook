@@ -8,6 +8,7 @@ import { zodErrorToToolResult } from "./_shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { resolveImageRef, resolveVideoRef, type RefInput } from "./_seedance2-shared.js";
 import { generationLabel } from "../artifact-label.js";
+import { geminiOmniClipInputError } from "../gemini-omni-clip.js";
 
 const SLUG = modelSlug("kie", "gemini-omni-video");
 
@@ -63,15 +64,13 @@ export function generateGeminiOmniVideoDef(engine: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      // Fast pre-check of the clip timing that kie's validateGeminiOmniVideoRequest
-      // enforces server-side (ends > start AND ends < start + 10s), so users get a
-      // friendly message instead of a provider 400.
-      if (videoRef !== undefined) {
-        const start = video_clip_start ?? 0;
-        const ends = video_clip_ends ?? 0;
-        if (!(ends > start) || ends - start >= 10) {
-          return { isError: true as const, content: [{ type: "text" as const, text: "video_clip_ends must be greater than video_clip_start and less than 10 seconds after it" }] };
-        }
+      const clipError = geminiOmniClipInputError({
+        hasVideo: videoRef !== undefined,
+        start: video_clip_start,
+        ends: video_clip_ends,
+      });
+      if (clipError) {
+        return { isError: true as const, content: [{ type: "text" as const, text: clipError }] };
       }
 
       const imageInputs: RefInput[] = [];

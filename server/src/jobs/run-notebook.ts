@@ -77,6 +77,10 @@ import {
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
+import {
+  GEMINI_OMNI_VIDEO_TOOL,
+  geminiOmniClipInputError,
+} from "../gemini-omni-clip.js";
 import { sortByKindSlot } from "../generation-input-mentions.js";
 import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 
@@ -433,6 +437,29 @@ export async function markNotebookCellQueued(
     { cellId, runId },
   );
   if (!result.ok) throw new Error(result.error.message);
+}
+
+function geminiOmniNotebookClipError(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): string | null {
+  if (resolveNotebookGenerationTool(cell) !== GEMINI_OMNI_VIDEO_TOOL) return null;
+  const hasVideo = upstreamValues(document, cell).some((entry) =>
+    typeof entry.output === "string"
+    && entry.output !== ""
+    && notebookCellMediaType(entry.cell) === "video");
+  const inputs = cell.inputs ?? {};
+  const settings = inputs.generationSettings;
+  const saved = settings
+    && typeof settings === "object"
+    && !Array.isArray(settings)
+    ? settings as Record<string, unknown>
+    : {};
+  return geminiOmniClipInputError({
+    hasVideo,
+    start: saved.video_clip_start ?? inputs.video_clip_start,
+    ends: saved.video_clip_ends ?? inputs.video_clip_ends,
+  });
 }
 
 function upstreamValues(
@@ -1137,6 +1164,24 @@ export function resolveNotebookGenerationTool(cell: NotebookCell): string | null
   return null;
 }
 
+function formatNotebookGenerationSchemaError(error: z.ZodError): string {
+  return error.issues.map((issue) => {
+    const label = issue.path
+      .map(String)
+      .join(".")
+      .replaceAll("_", " ")
+      .replace(/^./u, (character) => character.toUpperCase());
+    const input = "input" in issue ? issue.input : undefined;
+    const missing = issue.code === "invalid_type" && (
+      input === undefined
+      || input === null
+      || (typeof input === "number" && Number.isNaN(input))
+    );
+    const message = missing ? "Required" : issue.message;
+    return label ? `${label}: ${message}` : message;
+  }).join("; ");
+}
+
 export async function prepareNotebookGeneration(
   engine: Engine,
   document: NotebookDocument,
@@ -1219,7 +1264,16 @@ export async function prepareNotebookGeneration(
   }
   const parsed = z.object(definition.schema).safeParse(preparedArgs.input);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
+    throw new Error(formatNotebookGenerationSchemaError(parsed.error));
+  }
+  if (tool === GEMINI_OMNI_VIDEO_TOOL) {
+    const data = parsed.data as Record<string, unknown>;
+    const clipError = geminiOmniClipInputError({
+      hasVideo: typeof data.video_ref === "string" && data.video_ref.trim() !== "",
+      start: data.video_clip_start,
+      ends: data.video_clip_ends,
+    });
+    if (clipError) throw new Error(clipError);
   }
   if (
     spec?.canonical_name === "generate_kie_grok_imagine_image_to_video"
@@ -2334,6 +2388,8 @@ export async function runNotebookCell(
   );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
+  const clipError = geminiOmniNotebookClipError(normalizedDocument, normalizedCell);
+  if (clipError) throw new Error(clipError);
   const generateMediaOutput = normalizedCell.type === "generate_audio"
     ? ensureGenerationMediaOutput(
         engine,
@@ -2949,6 +3005,8 @@ export async function claimNotebookGenerationPlan(
           `Notebook cell ${notebookGridTag(cell.slot)} is already ${execution.status}`,
         );
       }
+      const clipError = geminiOmniNotebookClipError(document, cell);
+      if (clipError) throw new Error(clipError);
       let working = document;
       let outputCellId: string | undefined;
       if (cell.type === "generate_image" || cell.type === "generate_video") {

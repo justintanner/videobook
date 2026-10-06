@@ -10,6 +10,8 @@ export interface NotebookGenerationControl {
   options?: NotebookGenerationControlValue[];
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: boolean;
+  exclusiveMaximum?: boolean;
   description: string;
 }
 
@@ -20,6 +22,8 @@ type JsonSchemaProperty = {
   default?: unknown;
   minimum?: unknown;
   maximum?: unknown;
+  exclusiveMinimum?: unknown;
+  exclusiveMaximum?: unknown;
 };
 
 type JsonSchemaObject = {
@@ -139,6 +143,8 @@ export function notebookGenerationControls(
       ...(typeof property.maximum === "number"
         ? { maximum: property.maximum }
         : {}),
+      ...(property.exclusiveMinimum === true ? { exclusiveMinimum: true } : {}),
+      ...(property.exclusiveMaximum === true ? { exclusiveMaximum: true } : {}),
       description: typeof property.description === "string"
         ? property.description
         : labelFor(name),

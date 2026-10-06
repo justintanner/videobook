@@ -61,6 +61,27 @@ describe("notebook generation controls", () => {
     ]);
   });
 
+  it("keeps an exclusive numeric bound", () => {
+    expect(notebookGenerationControls({
+      properties: {
+        resume_time: {
+          type: "number",
+          minimum: 1.625,
+          exclusiveMinimum: true,
+          maximum: 60,
+          description: "Resume time",
+        },
+      },
+      required: ["resume_time"],
+    })[0]).toMatchObject({
+      name: "resume_time",
+      required: true,
+      minimum: 1.625,
+      exclusiveMinimum: true,
+      maximum: 60,
+    });
+  });
+
   it("applies notebook-specific defaults", () => {
     expect(notebookGenerationControls({
       properties: {

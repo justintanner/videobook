@@ -2,6 +2,7 @@
  * Video model registry, schemas, validation, and routing prompt.
  */
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
+import { geminiOmniClipInputError } from "./gemini-omni-clip.js";
 import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from "./seedance25.js";
 import {
   GrokImageToVideoRequestSchema,
@@ -916,6 +917,8 @@ type ParamSchema = {
   maxItems?: number;
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: boolean;
+  exclusiveMaximum?: boolean;
   minLength?: number;
   maxLength?: number;
 };
@@ -942,8 +945,14 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   watermark: { type: "boolean", description: "Add provider watermark to output" },
   video_ref: { type: "string", description: "Video asset to extend (e.g., @vid-sunset-drone)" },
   duration: { type: "string", description: "Video duration in seconds" },
-  start_time: { type: "number", description: "Insert start time in seconds" },
-  resume_time: { type: "number", description: "Resume time in seconds" },
+  start_time: {
+    type: "number",
+    description: "Seconds into the source video where the generated insert starts (1.625–60)",
+  },
+  resume_time: {
+    type: "number",
+    description: "Seconds into the source video where the original footage resumes (greater than 1.625, at most 60)",
+  },
   mode: { type: "string", description: "Generation mode" },
   resolution: { type: "string", description: "Output resolution" },
   output_format: { type: "string", description: "Output video format" },
@@ -1093,6 +1102,10 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
         prop.type = range.int ? "integer" : "number";
         if (range.min !== undefined) prop.minimum = range.min;
         if (range.max !== undefined) prop.maximum = range.max;
+        if (range.exclusiveMin) prop.exclusiveMinimum = true;
+        else delete prop.exclusiveMinimum;
+        if (range.exclusiveMax) prop.exclusiveMaximum = true;
+        else delete prop.exclusiveMaximum;
         prop.enum = undefined;
       } else if (range.int && range.min !== undefined && range.max !== undefined) {
         prop.enum = rangeToStringEnum(range.min, range.max);
@@ -1531,11 +1544,12 @@ function validateVideoParams(rawToolName: string, params: Record<string, unknown
       warnings.push("video_clip_start/video_clip_ends require a video_ref");
     }
     if (videoRef) {
-      const start = clipStart ?? 0;
-      const ends = clipEnds ?? 0;
-      if (!(ends > start) || ends - start >= 10) {
-        warnings.push("Gemini Omni reference clip must satisfy video_clip_ends > video_clip_start and < start+10s");
-      }
+      const clipError = geminiOmniClipInputError({
+        hasVideo: true,
+        start: clipStart,
+        ends: clipEnds,
+      });
+      if (clipError) warnings.push(clipError);
     }
   }
 

@@ -97,11 +97,19 @@ function numberEdit(
   if (typeof value === 'boolean' || !Number.isFinite(numeric)) {
     return { error: `${control.label} takes a number, not "${String(value)}".` }
   }
-  if (control.minimum !== undefined && numeric < control.minimum) {
-    return { error: `${control.label} does not go below ${control.minimum}.` }
+  if (control.minimum !== undefined && (control.exclusiveMinimum ? numeric <= control.minimum : numeric < control.minimum)) {
+    return {
+      error: control.exclusiveMinimum
+        ? `${control.label} must be greater than ${control.minimum}.`
+        : `${control.label} does not go below ${control.minimum}.`,
+    }
   }
-  if (control.maximum !== undefined && numeric > control.maximum) {
-    return { error: `${control.label} does not go above ${control.maximum}.` }
+  if (control.maximum !== undefined && (control.exclusiveMaximum ? numeric >= control.maximum : numeric > control.maximum)) {
+    return {
+      error: control.exclusiveMaximum
+        ? `${control.label} must be less than ${control.maximum}.`
+        : `${control.label} does not go above ${control.maximum}.`,
+    }
   }
   if (control.options.length > 0 && !control.options.includes(numeric)) {
     return { error: `${control.label} does not take ${numeric}. It takes ${options(control)}.` }

@@ -8,6 +8,10 @@ import {
 } from './notebook-cell-types'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
+import {
+  GEMINI_OMNI_VIDEO_TOOL,
+  geminiOmniClipInputError,
+} from '../../server/src/gemini-omni-clip'
 
 export type GenerationSelection = {
   provider: string
@@ -65,6 +69,8 @@ export type GenerationControl = {
   options: GenerationControlValue[]
   minimum?: number
   maximum?: number
+  exclusiveMinimum?: boolean
+  exclusiveMaximum?: boolean
   description: string
 }
 
@@ -98,6 +104,92 @@ export function effectiveGenerationSettings(
     const value = effectiveGenerationControlValue(control, settings)
     return value === undefined ? [] : [[control.name, value]]
   }))
+}
+
+function numberBelowMinimum(control: GenerationControl, value: number): boolean {
+  if (control.minimum === undefined) return false
+  return control.exclusiveMinimum
+    ? value <= control.minimum
+    : value < control.minimum
+}
+
+function numberAboveMaximum(control: GenerationControl, value: number): boolean {
+  if (control.maximum === undefined) return false
+  return control.exclusiveMaximum
+    ? value >= control.maximum
+    : value > control.maximum
+}
+
+export function generationControlError(
+  control: GenerationControl,
+  settings: Record<string, GenerationControlValue>,
+): string | null {
+  const value = effectiveGenerationControlValue(control, settings)
+  if (value === undefined || value === '') {
+    return control.required ? `${control.label}: Required` : null
+  }
+  if (
+    control.options.length > 0
+    && !control.options.some((option) => option === value)
+  ) {
+    return `${control.label}: Choose one of the listed values`
+  }
+  if (control.valueType === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return `${control.label}: Enter a number`
+    }
+    if (numberBelowMinimum(control, value)) {
+      return control.exclusiveMinimum
+        ? `${control.label}: Must be greater than ${control.minimum}`
+        : `${control.label}: Must be at least ${control.minimum}`
+    }
+    if (numberAboveMaximum(control, value)) {
+      return control.exclusiveMaximum
+        ? `${control.label}: Must be less than ${control.maximum}`
+        : `${control.label}: Must be at most ${control.maximum}`
+    }
+    return null
+  }
+  return typeof value === control.valueType
+    ? null
+    : `${control.label}: Required`
+}
+
+export type GenerationSettingsContext = {
+  tool?: string
+  videoConnected?: boolean
+}
+
+function generationClipValue(
+  controls: readonly GenerationControl[],
+  settings: Record<string, GenerationControlValue>,
+  name: string,
+): GenerationControlValue | undefined {
+  const control = controls.find((candidate) => candidate.name === name)
+  if (!control) return settings[name]
+  return effectiveGenerationControlValue(control, settings)
+}
+
+export function generationSettingsError(
+  controls: readonly GenerationControl[],
+  settings: Record<string, GenerationControlValue>,
+  context: GenerationSettingsContext = {},
+): string | null {
+  const problems = controls.flatMap((control) => {
+    const message = generationControlError(control, settings)
+    return message ? [message] : []
+  })
+  if (context.tool === GEMINI_OMNI_VIDEO_TOOL) {
+    const clipError = geminiOmniClipInputError({
+      hasVideo: context.videoConnected === true,
+      start: generationClipValue(controls, settings, 'video_clip_start'),
+      ends: generationClipValue(controls, settings, 'video_clip_ends'),
+      startLabel: controls.find((control) => control.name === 'video_clip_start')?.label,
+      endsLabel: controls.find((control) => control.name === 'video_clip_ends')?.label,
+    })
+    if (clipError) problems.push(clipError)
+  }
+  return problems.length > 0 ? problems.join('; ') : null
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -162,6 +254,8 @@ function generationControl(value: unknown): GenerationControl | null {
     options,
     ...(minimum === null ? {} : { minimum }),
     ...(maximum === null ? {} : { maximum }),
+    ...(control?.exclusiveMinimum === true ? { exclusiveMinimum: true } : {}),
+    ...(control?.exclusiveMaximum === true ? { exclusiveMaximum: true } : {}),
     description,
   }
 }

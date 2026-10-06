@@ -535,7 +535,16 @@ describe("validateVideoParams", () => {
     const result = validateVideoParams("generate_kie_gemini_omni_video", {
       prompt: "a sunset", duration: "6", video_ref: "@vid-motion", video_clip_start: 2, video_clip_ends: 2,
     });
-    expect(result.warnings.some((w) => w.includes("video_clip_ends"))).toBe(true);
+    expect(result.warnings).toContain(
+      "video_clip_ends must be greater than video_clip_start and less than 10 seconds after it",
+    );
+  });
+
+  it("gemini_omni: a reference clip without timecodes is required, not defaulted to zero", () => {
+    const result = validateVideoParams("generate_kie_gemini_omni_video", {
+      prompt: "a sunset", duration: "6", video_ref: "@vid-motion",
+    });
+    expect(result.warnings).toContain("Video clip start: Required; Video clip ends: Required");
   });
 
   it("gemini_omni: warns when clip timecodes are set without a video_ref", () => {
@@ -1048,8 +1057,18 @@ describe("apicity 0.14.0 video models", () => {
   it("requires source media for insert, recast, extend, and image-to-video", () => {
     const insert = getVideoToolSchema("generate_fal_minimax_h3_max_insert_video");
     expect(insert?.required).toEqual(expect.arrayContaining(["video_ref", "start_time", "resume_time"]));
-    expect(insert?.properties.start_time.type).toBe("number");
-    expect(insert?.properties.resume_time.type).toBe("number");
+    expect(insert?.properties.start_time).toMatchObject({
+      type: "number",
+      minimum: 1.625,
+      maximum: 60,
+    });
+    expect(insert?.properties.start_time.exclusiveMinimum).toBeUndefined();
+    expect(insert?.properties.resume_time).toMatchObject({
+      type: "number",
+      minimum: 1.625,
+      maximum: 60,
+      exclusiveMinimum: true,
+    });
 
     const recast = getVideoToolSchema("generate_fal_minimax_h3_max_recast");
     expect(recast?.required).toEqual(expect.arrayContaining(["video_ref", "image_refs"]));

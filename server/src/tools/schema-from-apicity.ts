@@ -39,8 +39,8 @@ function buildCore(schema: ZodLike): ApicityFieldCore {
   if (range) {
     let n: ApicityNumberField = z.coerce.number();
     if (range.int) n = n.int();
-    if (range.min !== undefined) n = n.min(range.min);
-    if (range.max !== undefined) n = n.max(range.max);
+    if (range.min !== undefined) n = range.exclusiveMin ? n.gt(range.min) : n.min(range.min);
+    if (range.max !== undefined) n = range.exclusiveMax ? n.lt(range.max) : n.max(range.max);
     return n;
   }
 

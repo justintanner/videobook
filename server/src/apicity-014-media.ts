@@ -766,8 +766,12 @@ const ACTIONS: Apicity014Action[] = [
       video_ref: z.string().min(1).describe("Source video"),
       image_refs: z.array(z.string()).optional().describe("Optional reference images"),
       video_refs: z.array(z.string()).optional().describe("Optional reference videos"),
-      start_time: z.coerce.number().describe("Insert start time in seconds"),
-      resume_time: z.coerce.number().describe("Resume time in seconds"),
+      start_time: h3Insert.shape.start_time.describe(
+        "Seconds into the source video where the generated insert starts (1.625–60)",
+      ),
+      resume_time: h3Insert.shape.resume_time.describe(
+        "Seconds into the source video where the original footage resumes (greater than 1.625, at most 60)",
+      ),
       duration: optionalNumber("Generated span duration in seconds"),
       resolution: optionalString("Output resolution"),
     },
