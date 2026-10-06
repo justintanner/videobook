@@ -3041,6 +3041,8 @@ describe('chat composer browser flow', () => {
       },
     }
     try {
+      // The fixture video is shared; a real burn would change it for later tests.
+      mockedWatermarkApply = true
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })

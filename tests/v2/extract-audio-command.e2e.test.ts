@@ -194,9 +194,10 @@ describe('extract audio composer flow', () => {
     ).toBe('completed')
   }
 
+  /** Creating a cell collapses the composer, so the result is logged but hidden. */
   async function waitForComposerResult(target: Page, text: string): Promise<void> {
     await target.locator('.chat-bubble-assistant, .command-result-ok', { hasText: text }).last()
-      .waitFor({ state: 'visible', timeout: 10_000 })
+      .waitFor({ state: 'attached', timeout: 10_000 })
   }
 
   async function waitForComposerToClear(target: Page): Promise<void> {
