@@ -11,10 +11,14 @@ export type MediaCellGenerationState =
   | {
     kind: 'queued' | 'generating'
     startedAt: string | null
+    provider: string | null
     model: string | null
     prompt: string | null
     producerCellId: string | null
     jobId: string | null
+    /** Artifact the provider request and pending task are recorded on. */
+    providerArtifactId: string | null
+    runId: string | null
   }
   | { kind: 'failed'; message: string; producerCellId: string | null }
 
@@ -72,6 +76,14 @@ function activeOutputJob(
     (candidate.operationId ?? '') > (best.operationId ?? '') ? candidate : best)
 }
 
+function payloadString(
+  job: NotebookRunJobView | null,
+  key: string,
+): string | null {
+  const value = job?.payload?.[key]
+  return typeof value === 'string' && value ? value : null
+}
+
 function producingState(
   cell: NotebookCell,
   producer: NotebookCell | null,
@@ -82,10 +94,13 @@ function producingState(
     startedAt: typeof job?.startedAt === 'number'
       ? new Date(job.startedAt).toISOString()
       : null,
+    provider: producer?.provider ?? null,
     model: producer?.model ?? null,
     prompt: producer?.prompt ?? cell.prompt ?? null,
     producerCellId: producer?.id ?? null,
     jobId: job?.operationId ?? null,
+    providerArtifactId: payloadString(job, 'providerArtifactId'),
+    runId: payloadString(job, 'runId'),
   }
   return {
     ...shared,

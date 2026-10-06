@@ -58,6 +58,7 @@ describe("generation payload inspection", () => {
         prompt: string;
       };
       taskType: unknown;
+      task: unknown;
     };
     expect(value).toEqual({
       payload,
@@ -69,6 +70,7 @@ describe("generation payload inspection", () => {
         prompt: persisted.value.prompt,
       },
       taskType: null,
+      task: null,
     });
   });
 });

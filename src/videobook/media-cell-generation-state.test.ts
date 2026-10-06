@@ -40,7 +40,11 @@ function awaitJob(overrides: Partial<NotebookRunJobView> = {}): NotebookRunJobVi
     operationId: 'job-1',
     type: 'await_notebook_output',
     startedAt: 1_000,
-    payload: { outputCellId: outputId, runId: 'run-1' },
+    payload: {
+      outputCellId: outputId,
+      runId: 'run-1',
+      providerArtifactId: 'provider-artifact-1',
+    },
     ...overrides,
   }
 }
@@ -75,10 +79,13 @@ describe('mediaCellGenerationState', () => {
     })).toEqual({
       kind: 'queued',
       startedAt: null,
+      provider: 'kie',
       model: 'Kling21RequestSchema',
       prompt: 'A slow dolly through a pine forest',
       producerCellId: producerId,
       jobId: null,
+      providerArtifactId: null,
+      runId: null,
     })
   })
 
@@ -90,10 +97,13 @@ describe('mediaCellGenerationState', () => {
     })).toEqual({
       kind: 'generating',
       startedAt: new Date(1_000).toISOString(),
+      provider: 'kie',
       model: 'Kling21RequestSchema',
       prompt: 'A slow dolly through a pine forest',
       producerCellId: producerId,
       jobId: 'job-1',
+      providerArtifactId: 'provider-artifact-1',
+      runId: 'run-1',
     })
   })
 

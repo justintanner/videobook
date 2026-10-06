@@ -9,17 +9,24 @@ type GenerationErrorOut = {
   prompt?: string;
 };
 
+type GenerationTaskOut = {
+  taskId: string;
+  submittedAt: string;
+  completing: boolean;
+};
+
 type GenerationPayloadResponse = {
   payload: unknown | null;
   meta: Record<string, unknown> | null;
   error: GenerationErrorOut | null;
   taskType: string | null;
+  task: GenerationTaskOut | null;
 };
 
 export function generationPayloadDef(engine: Engine): ToolDef {
   return {
     name: "inspect_generation_request",
-    description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
+    description: "Read the persisted Kie request payload, pending provider task (id, submit time), task meta, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Artifact id"),
@@ -49,6 +56,13 @@ export function generationPayloadDef(engine: Engine): ToolDef {
         meta: task ? task.meta : null,
         error,
         taskType: task ? task.taskType : null,
+        task: task
+          ? {
+              taskId: task.taskId,
+              submittedAt: new Date(task.createdAt).toISOString(),
+              completing: task.completing,
+            }
+          : null,
       };
 
       return {

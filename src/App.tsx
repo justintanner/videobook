@@ -7,6 +7,7 @@ import {
 import {
   mediaCellGenerationState,
 } from '@/videobook/media-cell-generation-state'
+import { parseGenerationRequestInspection } from '@/videobook/generation-request-inspection'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
   lazy,
@@ -3663,6 +3664,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       throw new Error('No generation payload recorded for this attempt')
     }
     return data.payload
+  }, [bookId, call])
+
+  const inspectGenerationRequest = useCallback(async (assetId: string) => {
+    if (!bookId) throw new Error('Book is not ready')
+    const value = await call('inspect_generation_request', {
+      book_id: bookId,
+      asset_id: assetId,
+    }, { background: true })
+    return parseGenerationRequestInspection(value)
   }, [bookId, call])
 
   const updateMediaInsightWork = useCallback((
@@ -11009,6 +11019,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : undefined}
         onSelectSource={selectCanvasCell}
         onLoadGenerationPayload={loadGenerationPayload}
+        onInspectGenerationRequest={inspectGenerationRequest}
         mediaInsightWork={mediaInsightWork}
         onTranscribeAsset={transcribeAsset}
         onLoadTranscriptJson={loadTranscriptJson}
