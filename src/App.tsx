@@ -10250,30 +10250,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy || !contextMenuDuplicateDestinationAvailable,
       })
     }
-    if (notebookVideoCellIds.size > 0) {
-      contextMenuActions.push(
-        {
-          id: 'arrange_videos_column',
-          label: 'Arrange videos in column',
-          icon: 'arrange-column',
-          disabled: busy,
-        },
-        {
-          id: 'arrange_videos_row',
-          label: 'Arrange videos in row',
-          icon: 'arrange-row',
-          disabled: busy,
-        },
-      )
-    }
-    if (notebookImageCellIds.size > 0) {
-      contextMenuActions.push({
-        id: 'group_images',
-        label: 'Group images',
-        icon: 'group-images',
-        disabled: busy,
-      })
-    }
     if (contextMenuSplitSource) {
       contextMenuActions.push({
         id: 'split',
@@ -10436,17 +10412,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'duplicate') {
       void duplicateContextMenuAsset()
-      return
-    }
-    if (actionId === 'arrange_videos_column' || actionId === 'arrange_videos_row') {
-      void arrangeVideoCellsOnAxis(
-        actionId === 'arrange_videos_column' ? 'column' : 'row',
-        contextMenuCell.slot,
-      )
-      return
-    }
-    if (actionId === 'group_images') {
-      void groupImageCells(contextMenuCell.slot)
       return
     }
     if (actionId === 'generate_video' || actionId === 'generate_image') {
