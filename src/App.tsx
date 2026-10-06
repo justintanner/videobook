@@ -2816,6 +2816,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const collapseComposerAfterCellCreation = useCallback((chat?: ChatExecution) => {
     const scope = watchScopeRef.current
     if (scope.bookId !== bookId || scope.notebookId !== notebook?.id) return
+    // Closing the dock ends a voice conversation, so a live one keeps it open.
+    if (voiceActiveRef.current) return
     presentChat(chat, () => setComposerDockOpen(false))
   }, [bookId, notebook?.id])
 
