@@ -38,6 +38,19 @@ export function usageIncomplete(engine: Engine): boolean {
   return incomplete.has(scoped) || scoped.settings.get<boolean>("usage-incomplete") === true;
 }
 
+export async function settleFinishedUsage(engine: Engine): Promise<void> {
+  const pending = engine.usage.recent(200).filter((entry): entry is UsageEntry & { externalId: string; artifactId: string } =>
+    entry.status === "pending" && entry.externalId !== null && entry.artifactId !== null);
+  for (const entry of pending) {
+    const task = engine.jobs.pending.findByExternalId(entry.externalId);
+    if (!task.ok || task.value) continue;
+    const status = await engine.status.get(entry.artifactId);
+    if (!status.ok) continue;
+    if (status.value === "ready") safeRecord(engine, { ...entry, status: "completed" });
+    else if (status.value === "error") safeRecord(engine, { ...entry, status: "failed" });
+  }
+}
+
 function reportedTokens(value: unknown): Pick<UsageEntry, "inputTokens" | "outputTokens" | "cachedTokens"> {
   const usage = object(value);
   const inputTokens = number(usage.input_tokens) ?? number(usage.prompt_tokens) ?? number(usage.inputTokens);

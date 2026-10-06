@@ -175,6 +175,43 @@ describe("provider usage through real HTTP and engine storage", () => {
     } finally { other.close(); }
   });
 
+  it("counts a finished Seedance generation once the video is ready", async () => {
+    const created = await engine.artifacts.create("video", "seedance clip");
+    if (!created.ok) throw new Error(created.error.message);
+    const artifactId = created.value.artifactId;
+    await engine.files.write(artifactId, "original.mp4", "video-data");
+    const metadata = await engine.metadata.artifacts.write(artifactId, "original", { duration: 10, width: 1080, height: 1920 });
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    engine.usage.record({
+      id: "seedance-done", provider: "kie", model: "bytedance/seedance-2-5", activity: "video",
+      status: "pending", basis: "estimated", costUsd: 5.7, units: 10, unit: "seconds",
+      externalId: "seedance-task", artifactId, tokenBased: false,
+    });
+    const summary = await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId });
+    const body = JSON.parse(summary.content[0]!.text) as { totals: { pendingCount: number; estimatedUsd: number }; recent: Array<{ status: string; model: string }> };
+    expect(body.recent[0]).toMatchObject({ model: "bytedance/seedance-2-5", status: "completed" });
+    expect(body.totals.pendingCount).toBe(0);
+    expect(body.totals.estimatedUsd).toBeCloseTo(5.7);
+  });
+
+  it("keeps Seedance usage pending while its provider task is still open", async () => {
+    const created = await engine.artifacts.create("video", "seedance running");
+    if (!created.ok) throw new Error(created.error.message);
+    const artifactId = created.value.artifactId;
+    const lease = await engine.jobs.artifactWork.begin(artifactId, { kind: "generate", ownerKind: "job", durationMs: 60_000 });
+    if (!lease) throw new Error("asset lease failed");
+    const written = await engine.jobs.pending.write({ artifactId, taskId: "seedance-open", taskType: "seedance2_video", meta: {} }, lease.ownerId);
+    if (!written.ok || !written.value) throw new Error("pending task write failed");
+    engine.usage.record({
+      id: "seedance-open", provider: "kie", model: "bytedance/seedance-2-5", activity: "video",
+      status: "pending", basis: "estimated", costUsd: 5.7, units: 10, unit: "seconds",
+      externalId: "seedance-open", artifactId, tokenBased: false,
+    });
+    await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId });
+    expect(engine.usage.find("kie", "seedance-open")?.status).toBe("pending");
+    expect(engine.usage.summary().totals.pendingCount).toBe(1);
+  });
+
   it("persists each realtime response once and labels missing model rates", () => {
     const response = { status: "cancelled", usage: { input_tokens: 30, output_tokens: 10, input_token_details: { cached_tokens: 5, audio_tokens: 20 } } };
     recordVoiceUsage(engine, "openai", "gpt-realtime-2.1", "session", "response", response);

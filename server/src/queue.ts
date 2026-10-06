@@ -9,6 +9,7 @@ import {
   createEngine,
 } from "videobook-engine";
 import { activeBookEngine, withBookContext } from "./book-context.js";
+import { settleFinishedUsage } from "./provider-usage.js";
 import { bookManager } from "./engine.js";
 import { ensureJobHandlersLoaded } from "./jobs/index.js";
 import { runWithJobDeadline } from "./job-deadline.js";
@@ -139,6 +140,7 @@ async function tickProviderPoll(info: RunnerInfo): Promise<void> {
       "./jobs/image-subjects.js"
     );
     await reconcileImageSubjectJobFailures(info.engine, info.bookId);
+    await settleFinishedUsage(info.engine);
     const pending = info.engine.jobs.pending.findAll();
     if (!pending.ok || pending.value.length === 0) return;
     providerPollTickHook?.(info.bookId);

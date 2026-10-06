@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { Server } from "node:http";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -140,5 +142,44 @@ describe("pollPendingProviderTasks", () => {
 
     await sleep(200);
     expect(ticks).toBe(ticksAtStop);
+  });
+
+  it("settles a Seedance task when recordInfo reports success outside a job", async () => {
+    const { assetSlug } = await seedPendingTask(fs, "seedance2_video", "seedance-task");
+    fs.usage.record({
+      id: "seedance-poll", provider: "kie", model: "bytedance/seedance-2-5", activity: "video",
+      status: "pending", basis: "estimated", costUsd: 5.7, units: 10, unit: "seconds",
+      externalId: "seedance-task", artifactId: assetSlug, tokenBased: false,
+    });
+    const server: Server = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          code: 200,
+          data: {
+            taskId: "seedance-task",
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: ["https://example.test/clip.mp4"] }),
+          },
+        }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+    const previousKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "local-poll-key";
+    try {
+      const result = await pollPendingProviderTasks(fs, bookId, { kieBaseURL: `http://127.0.0.1:${address.port}` });
+      expect(result.completed.map((entry) => entry.assetId)).toEqual([assetSlug]);
+      expect(fs.usage.find("kie", "seedance-task")?.status).toBe("completed");
+      expect(fs.usage.summary().totals).toMatchObject({ pendingCount: 0, estimatedUsd: 5.7 });
+    } finally {
+      if (previousKey === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = previousKey;
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

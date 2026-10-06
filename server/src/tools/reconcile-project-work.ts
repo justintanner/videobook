@@ -1,4 +1,6 @@
 import { createKie, createXai, createAlibaba, createFal, createGoogleFlow } from "../usage-providers.js";
+import { currentBookContext, withBookContext } from "../book-context.js";
+import { settleFinishedUsage } from "../provider-usage.js";
 import type { Engine, Artifact, ArtifactKind, ArtifactManifestFile } from "videobook-engine";
 import { computeArtifactStatus, QUEUED_TASK_ID } from "videobook-engine";
 import { z } from "zod";
@@ -1032,6 +1034,8 @@ type PollPendingProviderTasksOptions = {
   nowMs?: number;
   /** Abort in-flight provider polls without mutating remaining durable tasks. */
   signal?: AbortSignal;
+  /** Point KIE recordInfo at a local server. Production polls use the provider default. */
+  kieBaseURL?: string;
 };
 
 /**
@@ -1045,6 +1049,13 @@ export async function pollPendingProviderTasks(
   book_id: string,
   options: PollPendingProviderTasksOptions = {},
 ): Promise<ProviderPollResult> {
+  if (currentBookContext()?.operation !== "poll_pending_provider_tasks") {
+    return withBookContext(
+      { bookId: book_id, engine, operation: "poll_pending_provider_tasks" },
+      () => pollPendingProviderTasks(engine, book_id, options),
+    );
+  }
+  await settleFinishedUsage(engine);
   const result: ProviderPollResult = {
     pending: [],
     completed: [],
@@ -1068,7 +1079,10 @@ export async function pollPendingProviderTasks(
     let t = originalTask;
     if (isQueuedKiePendingTask(t)) {
       try {
-        t = await submitQueuedKieTask(engine, t);
+        t = await withBookContext(
+          { bookId: book_id, engine, operation: "submit_queued_kie_task", artifactId: t.artifactId },
+          () => submitQueuedKieTask(engine, t),
+        );
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Queued KIE submit failed";
         const prompt = metaPrompt(t.meta);
@@ -1114,7 +1128,11 @@ export async function pollPendingProviderTasks(
   const kieTasks = pollableTasks.filter(isKiePendingTask);
   const kieApiKey = getApiKey("KIE_API_KEY");
   if (kieApiKey && kieTasks.length > 0) {
-    const provider = createKie({ apiKey: kieApiKey, timeout: 30_000 });
+    const provider = createKie({
+      apiKey: kieApiKey,
+      timeout: 30_000,
+      ...(options.kieBaseURL ? { baseURL: options.kieBaseURL } : {}),
+    });
 
     await Promise.all(kieTasks.map(async (task) => {
       try {
@@ -1138,7 +1156,11 @@ export async function pollPendingProviderTasks(
   // Poll KIE Veo tasks (separate namespace: kie.veo.get.api.v1.veo.recordInfo)
   const veoTasks = pollableTasks.filter(isVeoPendingTask);
   if (kieApiKey && veoTasks.length > 0) {
-    const provider = createKie({ apiKey: kieApiKey, timeout: 30_000 });
+    const provider = createKie({
+      apiKey: kieApiKey,
+      timeout: 30_000,
+      ...(options.kieBaseURL ? { baseURL: options.kieBaseURL } : {}),
+    });
 
     await Promise.all(veoTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
