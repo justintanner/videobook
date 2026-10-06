@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Copy, RotateCcw } from 'lucide-react'
+import { Check, Copy, RotateCcw } from 'lucide-react'
 import { Suspense, startTransition, use, useState, type ReactNode } from 'react'
 import type { ArtifactThumbAsset } from './ArtifactThumb'
 import { RichJson } from './RichJson'
@@ -243,7 +243,6 @@ function GeneratingPrompt({
   sent: string | null
 }) {
   const [showSent, setShowSent] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const canCompare = Boolean(written && sent && written !== sent)
   const text = (showSent && canCompare ? sent : written ?? sent) ?? ''
   if (!text) return null
@@ -262,20 +261,7 @@ function GeneratingPrompt({
           </div>
         )}
       </div>
-      <blockquote className={expanded ? 'expanded' : undefined}>{text}</blockquote>
-      <button
-        type="button"
-        className="inspector-prompt-copy"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <ChevronDown
-          size={12}
-          aria-hidden="true"
-          style={expanded ? { transform: 'rotate(180deg)' } : undefined}
-        />
-        {expanded ? 'Less' : 'More'}
-      </button>
+      <blockquote>{text}</blockquote>
     </div>
   )
 }
@@ -340,6 +326,8 @@ function GeneratingPayloadPanel({
               value={payload}
               ariaLabel="Provider request payload"
               artifactAssets={artifactAssets}
+              mediaDisplay="preview"
+              remoteMedia
             />
           </div>
         )

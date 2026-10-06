@@ -131,16 +131,37 @@ function JsonMediaPreview({ asset }: { asset: ArtifactThumbAsset }) {
   )
 }
 
+const remoteImagePattern = /\.(?:png|jpe?g|webp|gif|avif)$/i
+const remoteVideoPattern = /\.(?:mp4|mov|webm|m4v)$/i
+
+/** A media asset for a bare http(s) URL whose path names an image or video. */
+function remoteMediaAsset(value: string): ArtifactThumbAsset | undefined {
+  if (!/^https?:\/\//i.test(value)) return undefined
+  let pathname: string
+  try {
+    pathname = new URL(value).pathname
+  } catch {
+    return undefined
+  }
+  const type = remoteImagePattern.test(pathname)
+    ? 'image'
+    : remoteVideoPattern.test(pathname) ? 'video' : null
+  return type ? { artifactId: value, type, mediaUrl: value } : undefined
+}
+
 export function RichJson({
   value,
   ariaLabel = 'Formatted action source',
   artifactAssets,
   mediaDisplay = 'thumbnail',
+  remoteMedia = false,
 }: {
   value: unknown
   ariaLabel?: string
   artifactAssets?: ReadonlyMap<string, ArtifactThumbAsset>
   mediaDisplay?: 'thumbnail' | 'preview'
+  /** Also preview http(s) strings that point at image or video files. */
+  remoteMedia?: boolean
 }) {
   const tokens = tokenizeJson(value)
 
@@ -150,8 +171,9 @@ export function RichJson({
         const unquoted = token.kind === 'string'
           ? unquotedStringToken(token.value)
           : null
-        const asset = unquoted && artifactAssets
-          ? artifactAssets.get(unquoted)
+        const asset = unquoted
+          ? artifactAssets?.get(unquoted)
+            ?? (remoteMedia ? remoteMediaAsset(unquoted) : undefined)
           : undefined
         return (
           <span className={`json-${token.kind}`} key={`${index}-${token.value}`}>

@@ -1467,6 +1467,31 @@ function generationInputDetail(
   return [asset.type, size, length].filter(Boolean).join(' · ') || null
 }
 
+/** Poster, image, or first video frame; falls back to the kind icon. */
+function GenerationInputThumb({
+  asset,
+  kindHint,
+}: {
+  asset: NotebookCellInspectorAsset | undefined
+  kindHint?: string
+}) {
+  const imageUrl = asset?.thumbnailUrl
+    ?? (asset?.type === 'image' ? asset.mediaUrl : null)
+  const videoUrl = !imageUrl && asset?.mediaUrl
+    && (asset.type === 'video' || asset.type === 'final')
+    ? asset.mediaUrl
+    : null
+  return (
+    <span className="inspector-generation-input-thumb">
+      {imageUrl
+        ? <img src={imageUrl} alt="" loading="lazy" decoding="async" />
+        : videoUrl
+          ? <video src={`${videoUrl}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" />
+          : <ArtifactThumb asset={asset} kindHint={kindHint} />}
+    </span>
+  )
+}
+
 /** Each connected input as its prompt slot, the cell it reads, and the media. */
 function GenerationInputCards({
   producerId,
@@ -1501,9 +1526,7 @@ function GenerationInputCards({
                 className="inspector-generation-input-card"
                 onClick={() => inputCell && onSelectSource?.(inputCell.id)}
               >
-                <span className="inspector-generation-input-thumb">
-                  {asset?.thumbnailUrl && <img src={asset.thumbnailUrl} alt="" />}
-                </span>
+                <GenerationInputThumb asset={asset} kindHint={inputCell?.type} />
                 <span className="inspector-generation-input-text">
                   <span>
                     <code>@{mention.token}</code>
