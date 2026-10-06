@@ -39,14 +39,9 @@ const actions: NotebookCellContextAction[] = [
     icon: 'duplicate',
   },
   {
-    id: 'generations',
-    label: 'View generations',
-    icon: 'generations',
-  },
-  {
-    id: 'source',
-    label: 'View source',
-    icon: 'source',
+    id: 'more',
+    label: 'More actions',
+    icon: 'more',
   },
 ]
 
@@ -72,13 +67,14 @@ describe('NotebookCellContextMenu', () => {
     expect(html).toContain('data-cell-action="generate_video"')
     expect(html).toContain('data-cell-action="generate_image"')
     expect(html).toContain('data-cell-action="duplicate"')
-    expect(html).toContain('data-cell-action="generations"')
-    expect(html).toContain('data-cell-action="source"')
+    expect(html).toContain('data-cell-action="more"')
+    expect(html).not.toContain('View generations')
+    expect(html).not.toContain('View source')
     expect(html).toContain('class="cell-context-menu-danger"')
     expect(html).toContain('aria-keyshortcuts="Delete Backspace"')
-    expect(html.indexOf('View source')).toBeLessThan(html.indexOf('Delete cell'))
+    expect(html.indexOf('More actions')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html.indexOf('data-cell-action="delete"')).toBeGreaterThan(
-      html.indexOf('data-cell-action="source"'),
+      html.indexOf('data-cell-action="more"'),
     )
   })
 

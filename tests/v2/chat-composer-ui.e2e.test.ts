@@ -4622,8 +4622,6 @@ describe('chat composer browser flow', () => {
     const requiredLabels = [
       'Edit cell',
       'Generate',
-      'View generations',
-      'View source',
       'More actions',
       'Delete cell',
     ]
@@ -4701,8 +4699,6 @@ describe('chat composer browser flow', () => {
       'Generate video',
       'Duplicate',
       'Split video',
-      'View generations',
-      'View source',
       'More actions',
       'Delete cell',
     ])
@@ -4756,8 +4752,6 @@ describe('chat composer browser flow', () => {
       'Generate video',
       'Generate image',
       'Duplicate',
-      'View generations',
-      'View source',
       'More actions',
       'Delete cell',
     ])
@@ -4858,8 +4852,6 @@ describe('chat composer browser flow', () => {
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
       'Choose media',
-      'View generations',
-      'View source',
       'More actions',
       'Delete cell',
     ])

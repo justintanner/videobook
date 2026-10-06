@@ -54,7 +54,6 @@ import { v7 as uuidv7 } from 'uuid'
 import type {
   EditPreview,
   NotebookCell,
-  NotebookCellExecution,
   NotebookCellType,
   NotebookDocument,
   Sequence,
@@ -1690,14 +1689,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     loading: boolean
     error: string | null
     revisions: CellAssetRevision[]
-  } | null>(null)
-  const [generationsViewCellId, setGenerationsViewCellId] = useState<string | null>(null)
-  const [generationsState, setGenerationsState] = useState<{
-    cellId: string
-    loading: boolean
-    error: string | null
-    attempts: CellGenerationAttempt[]
-    currentExecution: NotebookCellExecution | null
   } | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [bookMenuLoading, setBookMenuLoading] = useState(false)
@@ -4252,7 +4243,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectCanvasCell(producerCellId, chat)
         setSourceViewCellId(null)
         setHistoryViewCellId(null)
-        setGenerationsViewCellId(null)
         collapseComposerAfterCellCreation(chat)
         revealNotebookCanvasCell(producerCellId)
       })
@@ -9569,7 +9559,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       selectCanvasCell(null)
       setSourceViewCellId(null)
       setHistoryViewCellId(null)
-      setGenerationsViewCellId(null)
       setWorkspacePreview(null)
       setActionDialog(null)
       if (mediaFullscreen) closeMediaFullscreen()
@@ -9988,14 +9977,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
     setHistoryViewCellId(null)
-    setGenerationsViewCellId(null)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }
 
   const openCellSource = (cellId: string) => {
     selectCanvasCell(cellId)
     setHistoryViewCellId(null)
-    setGenerationsViewCellId(null)
     setSourceViewCellId(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }
@@ -10003,7 +9990,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const openCellHistory = (cellId: string, assetId: string) => {
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
-    setGenerationsViewCellId(null)
     setHistoryViewCellId(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
     if (!bookId) {
@@ -10052,63 +10038,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 revisions: [],
               }
             : current)
-      })
-  }
-
-  const openCellGenerations = (cellId: string) => {
-    selectCanvasCell(cellId)
-    setSourceViewCellId(null)
-    setHistoryViewCellId(null)
-    setGenerationsViewCellId(cellId)
-    if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
-    if (!notebook || !bookId) {
-      setGenerationsState({
-        cellId,
-        loading: false,
-        error: 'Notebook is unavailable',
-        attempts: [],
-        currentExecution: null,
-      })
-      return
-    }
-    setGenerationsState({
-      cellId,
-      loading: true,
-      error: null,
-      attempts: [],
-      currentExecution: null,
-    })
-    void call('list_cell_generations', {
-      book_id: bookId,
-      notebook_id: notebook.id,
-      cell_id: cellId,
-      limit: 20,
-    }, { background: true })
-      .then((payload) => {
-        const data = payload as {
-          attempts?: CellGenerationAttempt[]
-          currentExecution?: NotebookCellExecution | null
-        }
-        setGenerationsState((current) => current?.cellId === cellId
-          ? {
-              cellId,
-              loading: false,
-              error: null,
-              attempts: Array.isArray(data.attempts) ? data.attempts : [],
-              currentExecution: data.currentExecution ?? null,
-            }
-          : current)
-      })
-      .catch((cause: unknown) => {
-        setGenerationsState((current) => current?.cellId === cellId
-          ? {
-              cellId,
-              loading: false,
-              error: cause instanceof Error ? cause.message : String(cause),
-              attempts: [],
-              currentExecution: null,
-            }
-          : current)
       })
   }
 
@@ -10258,19 +10187,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy,
       })
     }
-    contextMenuActions.push(
-      {
-        id: 'generations',
-        label: 'View generations',
-        icon: 'generations',
-      },
-      {
-        id: 'source',
-        label: 'View source',
-        icon: 'source',
-      },
-      { id: 'more', label: 'More actions', icon: 'more' },
-    )
+    contextMenuActions.push({ id: 'more', label: 'More actions', icon: 'more' })
   }
   /* Board-wide layout actions an empty square can anchor. Kept separate from
      contextMenuActions because none of the cell actions apply without a cell. */
@@ -10350,7 +10267,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       selectCanvasCell(materialized.cellId)
       setSourceViewCellId(null)
       setHistoryViewCellId(null)
-      setGenerationsViewCellId(null)
       collapseComposerAfterCellCreation()
       revealNotebookCanvasCell(materialized.cellId)
       setNotice(
@@ -10427,11 +10343,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       return
     }
-    if (actionId === 'generations') {
-      openCellGenerations(contextMenuCell.id)
-      return
-    }
-    if (actionId === 'source') openCellSource(contextMenuCell.id)
   }
   const deleteContextMenuCell = () => {
     if (contextMenuCell) void deleteNotebookCells([contextMenuCell])
@@ -10535,7 +10446,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       selectCanvasCell(null)
       setSourceViewCellId(null)
       setHistoryViewCellId(null)
-      setGenerationsViewCellId(null)
     },
     onAction: async (event, isCurrent) => {
       const chat = voiceChatRef.current ?? claimVoiceTurn()
@@ -11088,27 +10998,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             : historyViewCellId === selectedNotebookCell.id
               ? {
                   revisions: [],
-                  loading: true,
-                  error: null,
-                }
-              : undefined
-        }
-        generationsVisible={
-          generationsViewCellId === selectedNotebookCell.id
-        }
-        generations={
-          generationsState
-          && generationsState.cellId === selectedNotebookCell.id
-            ? {
-                attempts: generationsState.attempts,
-                currentExecution: generationsState.currentExecution,
-                loading: generationsState.loading,
-                error: generationsState.error,
-              }
-            : generationsViewCellId === selectedNotebookCell.id
-              ? {
-                  attempts: [],
-                  currentExecution: null,
                   loading: true,
                   error: null,
                 }
@@ -11855,7 +11744,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           setActionComposer(null)
           setSourceViewCellId(null)
           setHistoryViewCellId(null)
-          setGenerationsViewCellId(null)
         }}
         onModelChange={changeChatModel}
         onSuccessfulExecute={revealSuccessfulComposerResult}
