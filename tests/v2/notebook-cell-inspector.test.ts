@@ -290,6 +290,49 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Asset revision')
   })
 
+  it('pairs asset history with the raw Dolt row in the media source view', () => {
+    const render = (sourceCell: NotebookCell) => renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: sourceCell,
+      cells: [sourceCell],
+      edges: [],
+      asset: undefined,
+      status: 'completed',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: true,
+      history: {
+        revisions: [{
+          hash: 'abcdef1234567890',
+          message: 'Created source asset',
+          date: '2026-08-23T08:00:00.000Z',
+        }],
+        loading: false,
+        error: null,
+      },
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    const html = render(cell)
+    expect(html).toContain('inspector-source-split')
+    expect(html.indexOf('aria-label="Asset history"')).toBeGreaterThan(-1)
+    expect(html.indexOf('aria-label="Asset history"')).toBeLessThan(
+      html.indexOf('aria-label="Raw Dolt cells row"'),
+    )
+    expect(html).toContain('Created source asset')
+
+    const empty = render({ ...cell, outputArtifactId: undefined })
+    expect(empty).not.toContain('inspector-source-split')
+    expect(empty).not.toContain('aria-label="Asset history"')
+    expect(empty).toContain('aria-label="Raw Dolt cells row"')
+  })
+
   it.each([
     {
       name: 'loading',
@@ -1181,6 +1224,13 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('9:16')
     expect(html.indexOf('aria-label="Cell cleanup actions"')).toBeGreaterThan(
       html.indexOf('inspector-media-row-meta'),
+    )
+    // Copy and Download share the facts row; only Delete stays at the bottom.
+    expect(html.indexOf('aria-label="Media file actions"')).toBeGreaterThan(
+      html.indexOf('inspector-media-summary'),
+    )
+    expect(html.indexOf('aria-label="Media file actions"')).toBeLessThan(
+      html.indexOf('inspector-media-row-details'),
     )
   })
 

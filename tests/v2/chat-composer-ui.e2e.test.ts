@@ -4532,8 +4532,9 @@ describe('chat composer browser flow', () => {
     expect(await actions.getByRole('button', { name: 'Split video' }).count()).toBe(0)
     expect(await actions.getByRole('button', { name: 'View generations' }).count()).toBe(0)
 
+    expect(await actions.getByRole('button', { name: 'View history' }).count()).toBe(0)
     observedCalls.length = 0
-    await actions.getByRole('button', { name: 'View history' }).click()
+    await actions.getByRole('button', { name: 'View source', exact: true }).click()
     await expect.poll(() => observedCalls.find((call) =>
       call.name === 'asset_history'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
         name: 'asset_history',
@@ -4548,6 +4549,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await history.locator('.inspector-history li').count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBeGreaterThan(0)
     expect(await history.getByText(/revision/u).first().isVisible()).toBe(true)
+    expect(await inspector.getByRole('table', { name: 'Raw Dolt cells row' }).isVisible()).toBe(true)
 
     await actions.getByRole('button', { name: 'View cell' }).click()
     await history.waitFor({ state: 'hidden' })

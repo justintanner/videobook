@@ -1995,6 +1995,16 @@ function MediaCellInspector({
                 inputs={cell.inputs}
               />
             )}
+            {previewAsset && (
+              <MediaFileActions
+                key={`${bookId}:${previewAsset.artifactId}`}
+                bookId={bookId}
+                artifactId={previewAsset.artifactId}
+                kind={kind}
+                busy={busy || deleting}
+                call={assetTools}
+              />
+            )}
           </div>
           <div className="inspector-media-row-track inspector-media-row-details">
             {versionSelector}
@@ -2005,16 +2015,6 @@ function MediaCellInspector({
             <PublishedPostInspectorDetails inputs={cell.inputs} />
             {insights}
           </div>
-          {previewAsset && (
-            <MediaFileActions
-              key={`${bookId}:${previewAsset.artifactId}`}
-              bookId={bookId}
-              artifactId={previewAsset.artifactId}
-              kind={kind}
-              busy={busy || deleting}
-              call={assetTools}
-            />
-          )}
           <CellCleanupActions
             busy={busy}
             deleting={deleting}
@@ -3638,6 +3638,44 @@ function CellGenerationsPanel({
   )
 }
 
+/** History beside the raw Dolt row; a cell without output shows the row alone. */
+function CellSourceView({
+  notebookId,
+  cell,
+  artifactAssets,
+  history,
+}: Pick<NotebookCellInspectorProps, 'notebookId' | 'cell' | 'history'> & {
+  artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
+}) {
+  const showHistory = Boolean(cell.outputArtifactId)
+  return (
+    <div
+      className={showHistory
+        ? 'inspector-body inspector-source-body inspector-source-split'
+        : 'inspector-body inspector-source-body'}
+    >
+      {showHistory && (
+        <div className="inspector-source-pane inspector-source-history-pane">
+          <CellAssetHistoryPanel
+            key={cell.id}
+            revisions={history?.revisions ?? []}
+            loading={history?.loading ?? false}
+            error={history?.error ?? null}
+          />
+        </div>
+      )}
+      <div className="inspector-source-pane inspector-source-dolt-pane">
+        <DoltCellSource
+          key={cell.id}
+          notebookId={notebookId}
+          cell={cell}
+          artifactAssets={artifactAssets}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function NotebookCellInspector({
   headerActionHost,
   notebookId,
@@ -3696,14 +3734,12 @@ export function NotebookCellInspector({
 
   if (sourceVisible && !isNotebookGenerationCellType(cell.type)) {
     return (
-      <div className="inspector-body inspector-source-body">
-        <DoltCellSource
-          key={cell.id}
-          notebookId={notebookId}
-          cell={cell}
-          artifactAssets={artifactAssets}
-        />
-      </div>
+      <CellSourceView
+        notebookId={notebookId}
+        cell={cell}
+        artifactAssets={artifactAssets}
+        history={history}
+      />
     )
   }
 

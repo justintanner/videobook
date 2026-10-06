@@ -37,6 +37,7 @@ import {
   Activity,
   BookOpen,
   Braces,
+  Code,
   Film,
   History,
   Image,
@@ -9995,13 +9996,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setHistoryViewCellId(null)
     setSourceViewCellId(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
+    const cell = notebook?.cells.find((entry) => entry.id === cellId)
+    if (cell?.outputArtifactId && !isNotebookGenerationCellType(cell.type)) {
+      loadCellHistory(cellId, cell.outputArtifactId)
+    }
   }
 
+  /** Non-generation cells show history beside their Dolt row in Source. */
   const openCellHistory = (cellId: string, assetId: string) => {
+    const cell = notebook?.cells.find((entry) => entry.id === cellId)
+    if (cell && !isNotebookGenerationCellType(cell.type)) {
+      openCellSource(cellId)
+      return
+    }
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
     setHistoryViewCellId(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
+    loadCellHistory(cellId, assetId)
+  }
+
+  const loadCellHistory = (cellId: string, assetId: string) => {
     if (!bookId) {
       setHistoryState({
         cellId,
@@ -10902,7 +10917,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
         </span>
         <div className="inspector-header-actions">
-          {selectedNotebookCell.outputArtifactId && (
+          {selectedNotebookCell.outputArtifactId
+            && isNotebookGenerationCellType(selectedNotebookCell.type) && (
             <button
               type="button"
               className={historyViewCellId === selectedCell.id
@@ -10931,9 +10947,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
           <button
             type="button"
-            className={sourceViewCellId === selectedCell.id
-              ? 'inspector-source-toggle active'
-              : 'inspector-source-toggle'}
+            className={[
+              'inspector-source-toggle',
+              isNotebookGenerationCellType(selectedNotebookCell.type)
+                ? ''
+                : 'inspector-source-toggle-labeled',
+              sourceViewCellId === selectedCell.id ? 'active' : '',
+            ].filter(Boolean).join(' ')}
             title={sourceViewCellId === selectedCell.id
               ? 'View cell'
               : 'View source'}
@@ -10949,7 +10969,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               openCellSource(selectedCell.id)
             }}
           >
-            <Braces size={15} />
+            {isNotebookGenerationCellType(selectedNotebookCell.type)
+              ? <Braces size={15} />
+              : (
+                  <>
+                    <Code size={13} aria-hidden="true" />
+                    <span>Source</span>
+                  </>
+                )}
           </button>
           {selectedNotebookCell.type.startsWith('generate_') && (
             <span className="composer-dock-close-divider" aria-hidden="true" />
@@ -10999,6 +11026,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 error: historyState.error,
               }
             : historyViewCellId === selectedNotebookCell.id
+              || (sourceViewCellId === selectedNotebookCell.id
+                && selectedNotebookCell.outputArtifactId)
               ? {
                   revisions: [],
                   loading: true,
