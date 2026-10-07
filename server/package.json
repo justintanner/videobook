@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@devmehq/open-graph-extractor": "^1.1.1",
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "cors": "^2.8.6",
@@ -20,7 +20,7 @@
     "heic-decode": "^2.1.0",
     "hono": "^4.12.31",
     "qrcode": "^1.5.4",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "ytdlp-nodejs": "^3.4.4",
     "zod": "^4.3.6"
   },

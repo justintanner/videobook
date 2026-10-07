@@ -58,7 +58,7 @@
     "@apicity/openai": "file:vendor/apicity-openai-0.14.0-b7808b0.tgz",
     "@apicity/x": "^0.14.0",
     "@apicity/xai": "file:vendor/apicity-xai-0.14.0-edda76f.tgz",
-    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.2.0",
     "@remotion/bundler": "^4.0.494",
     "@remotion/google-fonts": "^4.0.467",
     "@remotion/player": "4.0.467",
@@ -84,7 +84,10 @@
   },
   "overrides": {
     "adm-zip": "^0.6.0",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
+    "concurrently": {
+      "shell-quote": "^1.11.0"
+    },
     "@hono/node-server": "^2.0.11",
     "hono": "^4.12.31",
     "yauzl": ">=3.2.1",
@@ -115,7 +118,7 @@
     "express": "^5.2.1",
     "globals": "^16.5.0",
     "knip": "^6.11.0",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",

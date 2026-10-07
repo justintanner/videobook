@@ -14,6 +14,7 @@ import {
   historyAutoCloseHeld,
   historyIdle,
   scheduleHistoryAutoClose,
+  type ComposerHistoryRow,
 } from '../../src/videobook/composer-history'
 import {
   beginMcpCall,
@@ -42,6 +43,11 @@ const caption = (
 
 function started(log: McpCallLog, id: number, tool: string, args: Record<string, unknown> = {}) {
   return beginMcpCall(log, { id, tool, args: mcpCallArgs(args) })
+}
+
+function historyCall(row: ComposerHistoryRow) {
+  if (row.kind !== 'call') throw new Error(`Expected a call row, received ${row.kind}`)
+  return row.call
 }
 
 describe('history sequence', () => {
@@ -73,7 +79,7 @@ describe('composerHistory', () => {
       caption({ id: 'partial', text: 'hi', final: false, sequence: 2 }),
       caption({ id: 'cut', text: '', interrupted: true, final: true, sequence: 3 }),
     ], emptyMcpCallLog)
-    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : row.call.id))
+    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : historyCall(row).id))
       .toEqual(['partial', 'cut'])
   })
 
@@ -92,7 +98,7 @@ describe('composerHistory', () => {
       caption({ id: 'a3', role: 'assistant', text: 'newest reply', sequence: 8 }),
     ]
     const rows = composerHistory(captions, log)
-    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.tool}`))
+    expect(rows.map((row) => row.kind === 'caption' ? row.caption.id : `call:${historyCall(row).tool}`))
       .toEqual(['u2', 'a2', 'call:chain', 'u3', 'a3'])
     expect(rows.some((row) => row.kind === 'caption' && row.caption.id === 'u1')).toBe(false)
     expect(rows.some((row) => row.kind === 'call' && row.call.tool === 'plan_chat_command')).toBe(false)
@@ -111,13 +117,13 @@ describe('composerHistory', () => {
       caption({ id: 'u1', text: 'make a clip', sequence: 1 }),
       { ...streaming, text: 'Ready to apply the cut.' },
     ], withCall)
-    expect(growing.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.id}`))
+    expect(growing.map((row) => row.kind === 'caption' ? row.caption.id : `call:${historyCall(row).id}`))
       .toEqual(['u1', 'a1', 'call:3'])
     const final = composerHistory([
       caption({ id: 'u1', text: 'make a clip', sequence: 1 }),
       { ...streaming, text: 'Ready to apply the cut.', final: true },
     ], withCall)
-    expect(final.map((row) => row.kind === 'caption' ? row.caption.id : `call:${row.call.id}`))
+    expect(final.map((row) => row.kind === 'caption' ? row.caption.id : `call:${historyCall(row).id}`))
       .toEqual(['u1', 'a1', 'call:3'])
     expect(final[1]).toMatchObject({ kind: 'caption', caption: { final: true } })
   })
@@ -125,13 +131,13 @@ describe('composerHistory', () => {
   it('keeps a short conversation whole, including anything said before the first turn', () => {
     const greeting = caption({ id: 'a0', role: 'assistant', text: 'Voice ready.', sequence: 1 })
     expect(composerHistory([greeting], emptyMcpCallLog).map((row) =>
-      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['a0'])
+      row.kind === 'caption' ? row.caption.id : historyCall(row).id)).toEqual(['a0'])
     expect(composerHistory([
       greeting,
       caption({ id: 'u1', text: 'hello', sequence: 2 }),
       caption({ id: 'a1', role: 'assistant', text: 'hi', sequence: 3 }),
     ], emptyMcpCallLog).map((row) =>
-      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['a0', 'u1', 'a1'])
+      row.kind === 'caption' ? row.caption.id : historyCall(row).id)).toEqual(['a0', 'u1', 'a1'])
   })
 
   it('counts an exchange from the speaker, not from every row', () => {
@@ -140,13 +146,13 @@ describe('composerHistory', () => {
       caption({ id: 'u2', text: 'two', sequence: 2 }),
       caption({ id: 'u3', text: 'three', sequence: 3 }),
     ], emptyMcpCallLog).map((row) =>
-      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u2', 'u3'])
+      row.kind === 'caption' ? row.caption.id : historyCall(row).id)).toEqual(['u2', 'u3'])
     expect(composerHistory([
       caption({ id: 'u1', text: 'one', sequence: 1 }),
       caption({ id: 'blank', text: '   ', final: false, sequence: 2 }),
       caption({ id: 'a1', role: 'assistant', text: 'reply', sequence: 3 }),
     ], emptyMcpCallLog).map((row) =>
-      row.kind === 'caption' ? row.caption.id : row.call.id)).toEqual(['u1', 'a1'])
+      row.kind === 'caption' ? row.caption.id : historyCall(row).id)).toEqual(['u1', 'a1'])
   })
 
   it('renders calls with voice off and with no captions, and empty copy only when merged list is empty', () => {
