@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type { Engine } from "videobook-engine";
+import { notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import type { ToolDef, ToolResult } from "./tools/tool-def.js";
 import { queue, waitForJob } from "./queue.js";
 import { placeChainGeneration } from "./chain-generation.js";
@@ -485,6 +486,13 @@ async function prepareStep(
   priorOutputs: Map<string, Record<string, unknown>>,
   lookup: ToolLookup,
 ): Promise<PreparedStep> {
+  if (step.spec.placement && notebookId) {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    if (NOTEBOOK_GRID_CAPACITY - notebookOccupiedSlots(notebook.value.cells).length < 2) {
+      throw new Error("The notebook needs two empty cells before generating another clip");
+    }
+  }
   const stale = await revalidatePinnedTargets(engine, notebookId, step.pins);
   if (stale) throw new Error(stale);
   const substituted = substituteChainRefs(step.params, priorOutputs);
@@ -523,7 +531,9 @@ async function dispatchStep(
   step: ChainPreflightStep,
   prepared: PreparedStep,
   signal: AbortSignal,
+  onDispatched: (outputs: Record<string, unknown>, jobIds: string[]) => void,
 ): Promise<{ outputs: Record<string, unknown>; childJobIds: string[] }> {
+  if (signal.aborted) throw new Error("Cancelled");
   const result = await prepared.def.handler(prepared.params);
   if (result.isError) {
     const text = result.content.find((entry) => entry.type === "text")?.text;
@@ -531,6 +541,8 @@ async function dispatchStep(
   }
   let outputs = parseJsonResult(result);
   const childJobIds = childJobIdFromOutputs(outputs);
+  onDispatched(outputs, childJobIds);
+  if (signal.aborted) throw new Error("Cancelled");
   if (step.spec.completion === "extract_audio") {
     outputs = await completeExtractAudio(engine, outputs, signal);
   } else if (step.spec.completion === "replace_video_audio") {
@@ -573,6 +585,7 @@ async function dispatchStep(
 function recordFromPlan(
   plan: ChainPreflightPlan,
   chainId: string,
+  approvedPlan?: { actor: ChainApprovalActor },
 ): ChainRunRecord {
   const timestamp = nowIso();
   return {
@@ -601,7 +614,12 @@ function recordFromPlan(
       autoApply: step.autoApply,
       effect: step.effect,
       requiresApproval: step.requiresApproval,
-      approval: null,
+      approval: approvedPlan && step.requiresApproval ? {
+        approvedAt: timestamp,
+        actor: approvedPlan.actor,
+        estimateUsd: null,
+        estimateUnavailable: true,
+      } : null,
       review: null,
     })),
   };
@@ -647,6 +665,7 @@ async function runChain(
           prior,
           lookup,
         );
+        if (signal.aborted) throw new Error("Cancelled");
         if (record.requiresApproval && !record.approval) {
           record.review = await buildChainStepReview({
             engine,
@@ -676,6 +695,12 @@ async function runChain(
           step,
           prepared,
           signal,
+          (outputs, jobIds) => {
+            record.outputs = outputs;
+            record.childJobIds = jobIds;
+            if (signal.aborted) run.status = "cancelled";
+            saveRun(engine, run);
+          },
         );
         record.status = "completed";
         record.outputs = executed.outputs;
@@ -717,6 +742,7 @@ function acceptChainRun(
   engine: Engine,
   plan: ChainPreflightPlan,
   lookup: ToolLookup,
+  approvedPlan?: { actor: ChainApprovalActor },
 ): ChainRunRecord {
   if (plan.requestId) {
     const existing = findChainRunByRequestId(engine, plan.bookId, plan.requestId);
@@ -732,7 +758,7 @@ function acceptChainRun(
       return existing;
     }
   }
-  const run = recordFromPlan(plan, uuidv7());
+  const run = recordFromPlan(plan, uuidv7(), approvedPlan);
   saveRun(engine, run);
   resumeRun(engine, run, plan, lookup);
   return run;
@@ -918,10 +944,11 @@ export async function preflightAndAccept(
   input: unknown,
   context: ChainPreflightContext,
   lookup: ToolLookup,
+  approvedPlan?: { actor: ChainApprovalActor },
 ): Promise<ChainRunRecord> {
   const preflight = await preflightChainPlan(input, context);
   if (!preflight.ok) {
     throw new Error(preflight.error);
   }
-  return acceptChainRun(context.engine, preflight.plan, lookup);
+  return acceptChainRun(context.engine, preflight.plan, lookup, approvedPlan);
 }

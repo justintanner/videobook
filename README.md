@@ -42,6 +42,33 @@ Assets carry editable tags across three automatic facets — people, places and
 editing — plus free-form custom tags, with exact filtering in the Library and
 over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
+## Video goals
+
+Enter `/goal make a funny video of a dog on a skateboard, multiple 10s clips`
+to create an editable shot plan. Unspecified clip counts default to three, and
+unspecified durations default to 10 seconds. A goal supports 1–8 clips, each
+4–30 whole seconds, in landscape, portrait, or square format.
+
+Review the shared characters and visual style, edit each shot, and save changes
+to refresh the cost estimate. **Run goal** approves the entire saved plan:
+Seedance 2.5 generates the clips at 720p with sound, puts them in the notebook,
+then appends them in order after existing sequence content. Actual media
+durations determine the final sequence length. The timeline's canvas is retained
+and clips use Fit. Preview and export from the timeline when complete.
+
+Open **Goals** in the notebook toolbar or enter `/goal` without a brief to see
+saved plans and progress after reloading. **Stop goal** prevents remaining shots;
+provider requests already submitted may still finish and incur their cost.
+Failed generation stops later steps. If all shots finished but assembly failed,
+**Assemble sequence** retries only the local edit. A server restart marks an
+in-flight chain interrupted instead of resubmitting paid generation.
+
+Planning requires `OPENAI_API_KEY`; generation requires `KIE_API_KEY`.
+Planning is billed separately from the displayed video estimate. All goal state
+uses the scoped engine's runtime settings. MCP clients can use `video_goal`
+to create, list, inspect, update, run, cancel, or assemble a goal; `run` requires
+the reviewed plan revision. A supplied structured plan skips AI planning.
+
 ## Storage
 
 Each book owns an isolated `videobook-engine` v5.4.5 schema-v25 root under

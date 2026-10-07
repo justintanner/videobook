@@ -5,7 +5,7 @@ export const UI_ACTION_IDS = [
   "viewer_focus_file", "viewer_show_settings", "settings_landscape",
   "settings_portrait", "settings_square", "settings_subs", "settings_audio",
   "settings_bg", "settings_osg", "open_watermark", "open_post_composer",
-  "open_notebook", "open_music_video", "open_alive_captions", "open_rename_all", "open_projects",
+  "open_notebook", "open_music_video", "open_goal", "open_alive_captions", "open_rename_all", "open_projects",
   "close_viewer", "sidebar_collapse", "sidebar_expand", "sidebar_sort",
   "open_provider_keys", "open_archive", "timeline_audio_add", "timeline_audio_move",
   "timeline_audio_remove", "timeline_audio_update", "extract_skeleton",

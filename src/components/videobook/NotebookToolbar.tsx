@@ -1,4 +1,4 @@
-import { Ellipsis, LayoutGrid, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Ellipsis, Flag, LayoutGrid, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 import { notebookGrid } from '@/videobook/notebook-grid'
@@ -18,6 +18,8 @@ type NotebookToolbarProps = {
   onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
   onSelectionActions?: () => void
+  onGoals?: () => void
+  goalsDisabled?: boolean
 }
 
 export function NotebookToolbar({
@@ -35,6 +37,8 @@ export function NotebookToolbar({
   onDeleteSelection,
   onClearSelection,
   onSelectionActions,
+  onGoals,
+  goalsDisabled = false,
 }: NotebookToolbarProps) {
   const deleteLabel = `Delete ${selectedCount} selected ${selectedCount === 1 ? 'cell' : 'cells'}`
 
@@ -53,6 +57,7 @@ export function NotebookToolbar({
           <LayoutGrid size={15} />
           <span>Arrange</span>
         </button>
+        {onGoals && <button type="button" className="canvas-auto-arrange" title="Plan a video or view saved goals" aria-label="Open goals" disabled={busy || goalsDisabled} onClick={onGoals}><Flag size={15} /><span>Goals</span></button>}
       </div>
       <div className="canvas-zoom-panel" role="group" aria-label="Notebook zoom controls">
         <button

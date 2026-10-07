@@ -12,6 +12,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   switch_book: { kind: 'existing' },
   open_projects: { kind: 'existing' },
   open_music_video: { kind: 'existing' },
+  open_goal: { kind: 'existing' },
   open_alive_captions: { kind: 'existing' },
   open_watermark: { kind: 'existing' },
   speak_preview: { kind: 'existing' },

@@ -304,6 +304,8 @@ import type {
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
+import { asGoal, asGoals } from '@/videobook/goals'
+import type { GoalSnapshot } from '../server/src/tools/goal'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { parseTrackAddCommand } from '@/videobook/track-add-command'
@@ -598,6 +600,11 @@ const WatermarkBody = lazy(async () => {
 const MusicVideoEditor = lazy(async () => {
   const module = await import('@/components/videobook/MusicVideoEditor')
   return { default: module.MusicVideoEditor }
+})
+
+const GoalWorkspace = lazy(async () => {
+  const module = await import('@/components/videobook/GoalWorkspace')
+  return { default: module.GoalWorkspace }
 })
 
 const AliveCaptionsStudio = lazy(async () => {
@@ -1658,6 +1665,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
+  const [goalSession, setGoalSession] = useState<{
+    bookId: string
+    notebookId: string
+    goals: GoalSnapshot[]
+    returnFocus: HTMLElement | null
+  } | null>(null)
   const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
@@ -3914,6 +3927,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
     return nextNotebook
   }, [applyNotebook, call, resumeMediaProcessingWatches])
+
+  const openGoals = async (brief = '', chat?: ChatExecution): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
+    const targetBookId = bookId
+    const targetNotebookId = notebook.id
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const result = await call('video_goal', {
+      book_id: targetBookId, notebook_id: targetNotebookId,
+      action: brief ? 'create' : 'list',
+      ...(brief ? { brief, request_id: uuidv7() } : {}),
+    }, { chat })
+    if (watchScopeRef.current.bookId !== targetBookId || watchScopeRef.current.notebookId !== targetNotebookId || chat?.isCurrent() === false) {
+      return { ok: true, message: 'Goal saved in its notebook.' }
+    }
+    setGoalSession({ bookId: targetBookId, notebookId: targetNotebookId, goals: brief ? [asGoal(result)] : asGoals(result), returnFocus })
+    return { ok: true, message: brief ? 'Planning your video goal' : 'Goals opened' }
+  }
 
   const loadLibraryPage = useCallback(async (request: LibraryBrowseRequest) => {
     const { scope, status, owningBookId, offset, limit } = request
@@ -9033,6 +9063,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const [rawCommandToken, ...restParts] = input.trim().split(/\s+/)
       const commandToken = rawCommandToken.toLowerCase()
       const rest = restParts.join(' ')
+      if (commandToken === '/goal') return await openGoals(rest, chat)
       if (commandToken.toLowerCase() === '/actions') {
         await openWorkspaceActions(undefined, undefined, rest, undefined, chat)
         return { ok: true, message: 'Actions opened' }
@@ -11132,6 +11163,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
+            onGoals={() => { void openGoals().catch(error => setNotice(error instanceof Error ? error.message : String(error), 'error')) }}
+            goalsDisabled={mcp.state !== 'ready'}
             onAdjustZoom={adjustNotebookZoom}
             onResetZoom={resetNotebookZoom}
             onDeleteSelection={deleteSelectedCells}
@@ -11560,6 +11593,30 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onClearTagFilters={clearMediaLibraryTagFilters}
           onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
         />
+      )}
+
+      {goalSession && goalSession.bookId === bookId && goalSession.notebookId === notebook?.id && (
+        <Suspense fallback={<div role="status">Opening goal mode…</div>}>
+          <GoalWorkspace
+            key={`${goalSession.bookId}:${goalSession.notebookId}`}
+            bookId={goalSession.bookId}
+            notebookId={goalSession.notebookId}
+            initialGoals={goalSession.goals}
+            connected={mcp.state === 'ready'}
+            returnFocus={goalSession.returnFocus}
+            callGoal={args => call('video_goal', { ...args, book_id: goalSession.bookId, notebook_id: goalSession.notebookId }, { background: true })}
+            onClose={() => setGoalSession(null)}
+            onStarted={() => collapseComposerAfterCellCreation()}
+            onPreview={async frame => {
+              const scope = goalSession
+              const refreshed = await refreshBookData(scope.bookId, scope.notebookId, () => watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId)
+              const cell = refreshed?.cells.find(candidate => candidate.type === 'timeline')
+              if (!cell) throw new Error('Add a timeline cell to preview the assembled sequence.')
+              setGoalSession(null)
+              openTimelinePreview(cell.id, frame)
+            }}
+          />
+        </Suspense>
       )}
 
       {musicVideoSession && sequence && (

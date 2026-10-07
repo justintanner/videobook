@@ -146,6 +146,7 @@ import { generateAlibabaQwenImageEditDef } from "./generate-alibaba-qwen-image-e
 import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { chainDef } from "./chain.js";
+import { goalDefs } from "./goal.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { setTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
@@ -455,6 +456,7 @@ export function getAllToolDefs(
     concatImagesDef(engine),
     chatDef(engine),
     chainDef(engine),
+    ...goalDefs(engine),
     showFolderDef(engine),
     copyFileToClipboardDef(engine),
     exportToDownloadsDef(engine),

@@ -47,6 +47,12 @@ export type ChainToolSpec = {
 };
 
 export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
+  assemble_goal: {
+    outputs: { sequence_id: "string", status: "string" },
+    completion: "sync",
+    gridFields: ["artifact_ids"],
+    inputTypes: { goal_id: "string", artifact_ids: "artifact" },
+  },
   extract_audio: {
     outputs: {
       audio_asset_id: "artifact",

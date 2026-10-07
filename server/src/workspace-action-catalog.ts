@@ -23,6 +23,14 @@ const uiActions = new Set<string>(UI_ACTION_IDS);
 const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 
 const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
+  video_goal: {
+    actionId: "command.goal",
+    reason: "Goal mode plans a video, reviews all shots and runs the approved goal.",
+  },
+  assemble_goal: {
+    actionId: "command.goal",
+    reason: "Goal mode appends its completed shots to the sequence in order.",
+  },
   list_workspace_actions: {
     actionId: "command.actions",
     reason: "Loads the Actions launcher and its typed forms.",
