@@ -57,6 +57,7 @@ import {
   historyAutoCloseHeld,
   historyIdle,
   scheduleHistoryAutoClose,
+  type ComposerStatusRow,
 } from '@/videobook/composer-history'
 import { composerActivityStatus, voiceActivityFeedback } from '@/videobook/composer-status'
 import {
@@ -119,6 +120,7 @@ export interface ComposerExecuteContext {
 
 interface CommandComposerProps {
   chatTurns?: readonly ChatTurn[]
+  goalEvents?: readonly ComposerStatusRow[]
   previewTurnId?: number | null
   connected?: boolean
   onBeginTurn?: (input: string) => ChatExecution
@@ -199,6 +201,7 @@ const COMMAND_HISTORY_PAGE_SIZE = 250
 
 export function CommandComposer({
   chatTurns = [],
+  goalEvents = [],
   previewTurnId = null,
   connected = true,
   onBeginTurn,
@@ -321,8 +324,8 @@ export function CommandComposer({
   const [historyOpen, setHistoryOpen] = useState(true)
   const [voiceStartHistoryEpoch, setVoiceStartHistoryEpoch] = useState(0)
   const historyRows = useMemo(
-    () => composerHistory(voice?.captions ?? [], mcpCalls, chatTurns),
-    [chatTurns, mcpCalls, voice?.captions],
+    () => composerHistory(voice?.captions ?? [], mcpCalls, chatTurns, goalEvents),
+    [chatTurns, goalEvents, mcpCalls, voice?.captions],
   )
   const historyEpoch = composerHistoryEpoch(historyRows)
   const historyGeneration = composerHistoryGeneration(historyRows)

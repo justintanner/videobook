@@ -1,10 +1,17 @@
 import { z } from "zod";
 import type { ChainStep } from "./chain-plan.js";
+import type { GptImage25Variant } from "./gpt-image-2-5.js";
 
 export const GOAL_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
+export const GOAL_IMAGE_TOOLS: Record<GptImage25Variant, string> = {
+  sunburst: "generate_kie_gpt_image_2_5_sunburst_image",
+  flare: "generate_kie_gpt_image_2_5_flare_image",
+};
 const GOAL_MAX_SHOTS = 8;
+const goalPrompt = (limit: number) => z.string().trim().min(1).max(limit)
+  .regex(/^(?![\s\S]*@[\w-])[\s\S]*$/u, "Use Character 1, Character 2 and plain text in plan prompts; input references are added automatically");
 
-export const goalPlanSchema = z.object({
+export const legacyGoalPlanSchema = z.object({
   title: z.string().trim().min(1).max(120),
   continuity: z.string().trim().min(1).max(3000),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
@@ -15,7 +22,28 @@ export const goalPlanSchema = z.object({
   })).min(1).max(GOAL_MAX_SHOTS),
 }).strict();
 
+export const goalPlanSchema = legacyGoalPlanSchema.extend({
+  version: z.literal(2),
+  title: goalPrompt(120),
+  continuity: goalPrompt(3000),
+  imageModel: z.enum(["sunburst", "flare"]).default("sunburst"),
+  imageResolution: z.enum(["1K", "2K"]).default("2K"),
+  videoResolution: z.enum(["480p", "720p"]).default("720p"),
+  frame: z.object({ prompt: goalPrompt(6000) }).strict(),
+  shots: z.array(z.object({
+    title: goalPrompt(120),
+    storyboardPrompt: goalPrompt(6000),
+    videoPrompt: goalPrompt(6000),
+    durationSeconds: z.number().int().min(4).max(30),
+  }).strict()).min(1).max(GOAL_MAX_SHOTS),
+}).strict();
+
 export type GoalPlan = z.infer<typeof goalPlanSchema>;
+export type LegacyGoalPlan = z.infer<typeof legacyGoalPlanSchema>;
+export type GoalDisplayPlan = GoalPlan | LegacyGoalPlan;
+export type GoalStage = "frame" | "storyboards" | "videos" | "assembly";
+export type GoalGenerationStage = Exclude<GoalStage, "assembly">;
+export type GoalCharacter = { artifactId: string; cellId: string; address: string; label: string };
 
 export function goalBriefConstraints(brief: string): {
   shotCount: number;
@@ -45,25 +73,63 @@ export function goalBriefConstraints(brief: string): {
   return { shotCount, durationSeconds, aspectRatio };
 }
 
-export function goalShotParams(plan: GoalPlan, index: number): Record<string, unknown> {
+function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | "first" | null = null): string {
+  if (frame === "first") return "References: @firstframe is this shot's approved storyboard; begin with its composition and preserve the characters' identities, clothing and setting.";
+  const references = characters.map((character, index) => `@image${index + (frame === "full" ? 2 : 1)} is Character ${index + 1}: ${character.label.replace(/@[\p{L}\p{N}_-]+/gu, "").slice(0, 160)}`);
+  if (frame === "full") references.unshift("@image1 is the approved full frame; preserve its setting and visual style");
+  return `References: ${references.join("; ")}.`;
+}
+
+function goalFrameParams(plan: GoalPlan, characters: readonly GoalCharacter[]): Record<string, unknown> {
+  return {
+    prompt: `${plan.continuity}\n\n${plan.frame.prompt}\n\n${goalReferenceLegend(characters)}`,
+    image_refs: characters.map(character => character.address),
+    aspect_ratio: plan.aspectRatio,
+    resolution: plan.imageResolution,
+    background: "opaque",
+  };
+}
+
+export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalCharacter[]): ChainStep[] {
+  return [{ id: "frame", tool: GOAL_IMAGE_TOOLS[plan.imageModel], params: goalFrameParams(plan, characters) }];
+}
+
+export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
+  return indexes.map(index => ({
+    id: `storyboard${index + 1}`,
+    tool: GOAL_IMAGE_TOOLS[plan.imageModel],
+    params: {
+      prompt: `${plan.continuity}\n\nShot ${index + 1}: ${plan.shots[index]!.title}\n${plan.shots[index]!.storyboardPrompt}\n\n${goalReferenceLegend(characters, "full")}`,
+      image_refs: [frame, ...characters.map(character => character.address)],
+      aspect_ratio: plan.aspectRatio,
+      resolution: plan.imageResolution,
+      background: "opaque",
+    },
+  }));
+}
+
+function goalShotParams(plan: GoalPlan, index: number, characters: readonly GoalCharacter[], storyboard: string): Record<string, unknown> {
   const shot = plan.shots[index]!;
   return {
-    prompt: `${plan.continuity}\n\nShot ${index + 1} of ${plan.shots.length}: ${shot.title}\n${shot.prompt}`,
+    prompt: `${plan.continuity}\n\nShot ${index + 1} of ${plan.shots.length}: ${shot.title}\n${shot.videoPrompt}\n\n${goalReferenceLegend(characters, "first")}`,
+    first_frame_ref: storyboard,
     duration: String(shot.durationSeconds),
     aspect_ratio: plan.aspectRatio,
-    resolution: "720p",
+    resolution: plan.videoResolution,
     generate_audio: true,
   };
 }
 
-export function compileGoalSteps(goalId: string, plan: GoalPlan): ChainStep[] {
-  return [
+export function compileVideoSteps(goalId: string, plan: GoalPlan, characters: readonly GoalCharacter[], storyboards: readonly string[]): ChainStep[] {
+  if (storyboards.length !== plan.shots.length) throw new Error("Approve a storyboard for every shot before generating videos");
+  const steps: ChainStep[] = [
     ...plan.shots.map((_, index) => ({
       id: `shot${index + 1}`,
       tool: GOAL_VIDEO_TOOL,
-      params: goalShotParams(plan, index),
+      params: goalShotParams(plan, index, characters, storyboards[index]!),
     })),
-    {
+  ];
+  if (plan.shots.length > 1) steps.push({
       id: "assemble",
       tool: "assemble_goal",
       params: {
@@ -72,6 +138,6 @@ export function compileGoalSteps(goalId: string, plan: GoalPlan): ChainStep[] {
           $ref: { step_id: `shot${index + 1}`, output: "asset_id" },
         })),
       },
-    },
-  ];
+    });
+  return steps;
 }

@@ -7,6 +7,7 @@ import { queue, waitForJob } from "./queue.js";
 import { placeChainGeneration } from "./chain-generation.js";
 import { buildChainStepReview, type ChainStepReview } from "./chain-step-review.js";
 import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
+import { failNotebookProviderOutput } from "./jobs/run-notebook.js";
 import {
   preflightChainPlan,
   revalidatePinnedTargets,
@@ -401,17 +402,16 @@ async function completeGeneration(
   context: GenerationCompletionContext,
   outputs: Record<string, unknown>,
   signal: AbortSignal,
+  onPlaced: (outputs: Record<string, unknown>) => void,
 ): Promise<Record<string, unknown>> {
   const artifactId = outputs[context.artifactOutput];
   if (typeof artifactId !== "string") {
     throw new Error(`${context.tool} did not return ${context.artifactOutput}`);
   }
   const submission = outputs.job_id;
-  if (typeof submission === "string") {
-    await waitForNamedJob(submission, signal, STEP_TIMEOUT_MS);
-  }
   const runId = `${context.chainId}:${context.stepId}`;
   if (!context.notebookId) {
+    if (typeof submission === "string") await waitForNamedJob(submission, signal, STEP_TIMEOUT_MS);
     await waitWhile(signal, GENERATION_STEP_TIMEOUT_MS, async () => {
       const status = await engine.status.get(artifactId);
       if (!status.ok) throw new Error(status.error.message);
@@ -431,7 +431,7 @@ async function completeGeneration(
     pins: context.pins,
   });
   const awaitJobId = `chain-await-${context.chainId}-${context.stepId}-${artifactId}`;
-  await queue.enqueue(awaitJobId, {
+  const awaiting: AwaitNotebookOutputPayload = {
     type: "await_notebook_output",
     bookId: context.bookId,
     notebookId: context.notebookId,
@@ -442,7 +442,15 @@ async function completeGeneration(
     // Scope the resume this job triggers, or it would sweep every runnable cell
     // in the notebook and re-dispatch paid work nobody approved.
     cellIds: [placement.producerCellId],
-  } satisfies AwaitNotebookOutputPayload);
+  };
+  onPlaced({ ...outputs, cell_id: placement.outputCellId, address: placement.address });
+  try {
+    if (typeof submission === "string") await waitForNamedJob(submission, signal, STEP_TIMEOUT_MS);
+  } catch (error) {
+    await failNotebookProviderOutput(engine, awaiting);
+    throw error;
+  }
+  await queue.enqueue(awaitJobId, { ...awaiting });
   await waitForNamedJob(awaitJobId, signal, GENERATION_STEP_TIMEOUT_MS);
   return {
     ...outputs,
@@ -578,7 +586,7 @@ async function dispatchStep(
       artifactOutput,
       params: prepared.params,
       pins: step.pins,
-    }, outputs, signal);
+    }, outputs, signal, placed => onDispatched(placed, childJobIds));
   }
   return { outputs, childJobIds };
 }

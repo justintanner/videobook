@@ -9,6 +9,9 @@ const VISIBLE_EXCHANGES = 2
 export type ComposerHistoryRow =
   | { kind: 'caption'; sequence: number; caption: VoiceCaption; turn?: ChatTurn; calls?: readonly McpCall[] }
   | { kind: 'call'; sequence: number; call: McpCall }
+  | { kind: 'status'; sequence: number; text: string; goalId: string }
+
+export type ComposerStatusRow = Extract<ComposerHistoryRow, { kind: 'status' }>
 
 function captionCounts(caption: VoiceCaption): boolean {
   return caption.text.trim().length > 0 || Boolean(caption.interrupted)
@@ -23,6 +26,7 @@ export function composerHistory(
   captions: readonly VoiceCaption[],
   log: McpCallLog,
   turns: readonly ChatTurn[] = [],
+  statuses: readonly ComposerStatusRow[] = [],
 ): ComposerHistoryRow[] {
   const captionRows: ComposerHistoryRow[] = captions.filter(captionCounts).map((caption) => ({
     kind: 'caption',
@@ -39,7 +43,7 @@ export function composerHistory(
     sequence: call.id,
     call,
   }))
-  const merged = [...captionRows, ...turnRows, ...callRows].sort((left, right) => {
+  const merged = [...captionRows, ...turnRows, ...callRows, ...statuses].sort((left, right) => {
     if (left.sequence !== right.sequence) return left.sequence - right.sequence
     if (left.kind === right.kind) return 0
     return left.kind === 'caption' ? -1 : 1
@@ -57,7 +61,7 @@ export function composerHistoryEpoch(rows: readonly ComposerHistoryRow[]): numbe
 
 export function composerHistoryGeneration(rows: readonly ComposerHistoryRow[]): string {
   return rows.map((row) =>
-    row.kind === 'call' ? `${row.sequence}:${row.call.phase}` : row.turn
+    row.kind === 'status' ? `${row.sequence}:${row.text}` : row.kind === 'call' ? `${row.sequence}:${row.call.phase}` : row.turn
       ? `${row.sequence}:${row.turn.status}:${row.turn.reply}:${row.turn.work.map(work => work.state).join(':')}`
       : String(row.sequence)).join(',')
 }

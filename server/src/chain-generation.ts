@@ -95,15 +95,15 @@ export async function placeChainGeneration(
           : {}),
         inputs: {
           ...producerSettings(input.params),
-          state: "running",
           chainRunId: input.runId,
         },
       });
-      const provenance = anchors.map((anchor) => input.engine.notebooks.createEdge({
-        source: anchor.id,
-        target: producer.id,
-        targetInput: input.pins.find((pin) => pin.cellId === anchor.id)?.field ?? "input",
-      }));
+      const provenance = input.pins.flatMap((pin) => {
+        if (!pin.cellId || !anchors.some(anchor => anchor.id === pin.cellId)) return [];
+        const field = pin.field.replace(/_refs?$/u, "").replace(/^replace_audio_with$/u, "replace_audio");
+        const targetInput = pin.index === null || pin.index === 0 ? field : `${field}_${pin.index + 1}`;
+        return [input.engine.notebooks.createEdge({ source: pin.cellId, target: producer.id, targetInput })];
+      });
       const withProducer = {
         ...notebook,
         cells: [...notebook.cells, producer],

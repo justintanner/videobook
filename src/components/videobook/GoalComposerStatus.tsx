@@ -33,7 +33,7 @@ function GoalStatusText({ text, short }: { text: string; short: string }) {
 
 export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalComposerStatusProps) {
   const progress = goalProgress(goal)
-  const generatingSince = progress.phase === 'shot' && progress.active?.state === 'generating'
+  const generatingSince = progress.active?.state === 'generating'
     ? progress.active.startedAt
     : null
   const elapsed = useElapsedSeconds(generatingSince)

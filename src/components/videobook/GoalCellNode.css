@@ -198,3 +198,24 @@
   gap: 3px;
   color: #b9a9f2;
 }
+
+.goal-tile-characters {
+  color: #8fb7a0;
+  font-size: 0.9em;
+}
+
+.goal-tile-thumbnails {
+  display: flex;
+  flex: 0 0 40px;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.goal-tile-thumbnails img {
+  width: 48px;
+  min-width: 0;
+  height: 100%;
+  object-fit: contain;
+  background: #07130c;
+}

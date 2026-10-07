@@ -8,6 +8,7 @@ import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import {
   CellContextMenuContext,
   GoalTileContext,
+  GoalMediaContext,
   PrimaryCellContext,
   cellContextMenuId,
 } from '@/components/videobook/notebook-canvas-context'
@@ -33,9 +34,11 @@ function returnFocusTarget(): HTMLElement | null {
 
 export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const goals = useContext(GoalTileContext)
+  const media = useContext(GoalMediaContext)
   const primaryCellId = useContext(PrimaryCellContext)
   const contextMenu = useContext(CellContextMenuContext)
-  const view = goalTileView(goals.get(id) ?? null, goalPlanFromInputs(data.inputs), data.label)
+  const goal = goals.get(id) ?? null
+  const view = goalTileView(goal, goalPlanFromInputs(data.inputs), data.label)
   const address = notebookGridTag(data.slot)
   const primarySelected = selected && primaryCellId === id
   const openMenuFromPointer = (event: MouseEvent<HTMLElement>) => {
@@ -86,6 +89,14 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         </header>
         <div className="goal-tile-body">
           <strong className="goal-tile-title" title={view.title}>{view.title}</strong>
+          {goal && goal.characters.length > 0 && <span className="goal-tile-characters">{goal.characters.length} character{goal.characters.length === 1 ? '' : 's'}</span>}
+          {view.thumbnails.length > 0 && <span className="goal-tile-thumbnails">
+            {view.thumbnails.map(thumbnail => {
+              const asset = media.get(thumbnail.artifactId)
+              const url = asset?.thumbnailUrl ?? asset?.mediaUrl
+              return url ? <img key={thumbnail.artifactId} src={url} alt={thumbnail.label} /> : null
+            })}
+          </span>}
           {view.planning ? (
             <>
               {view.note && <p className="goal-tile-brief">{view.note}</p>}

@@ -237,6 +237,7 @@ export function assetMentionSuggestions(
       && asset.cellAddress.toLowerCase().includes(filter)
       && !excludeValues.has(`@${asset.cellAddress}`)
     ))
+    .sort((left, right) => /^\s*\/goal\b/u.test(input) ? Number(right.type === 'image') - Number(left.type === 'image') : 0)
     .slice(0, 12)
     .map((asset) => ({
       value: `@${asset.cellAddress}`,
@@ -328,6 +329,7 @@ export function mentionMenuRows(
   }
   return [
     ...matches.filter((row) => !row.empty)
+      .sort((left, right) => /^\s*\/goal\b/u.test(input) ? Number(right.mediaKind === 'image') - Number(left.mediaKind === 'image') : 0)
       .slice(0, limits.rows ?? MENTION_MENU_ROW_LIMIT),
     ...matches.filter((row) => row.empty)
       .slice(0, limits.empties ?? MENTION_MENU_EMPTY_LIMIT),

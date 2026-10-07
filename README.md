@@ -44,45 +44,57 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Video goals
 
-Enter `/goal make a funny video of a dog on a skateboard, multiple 10s clips`
-in the chat input to start a goal. Videobook places a **goal tile** on the first
-empty grid slot and saves the brief, shot plan, revision and cost estimate in
-it. Unspecified clip counts default to three, and unspecified durations default
-to 10 seconds. A goal supports 1–8 clips, each 4–30 whole seconds, in
-landscape, portrait, or square format.
+Enter `/goal @a1 @a2 make two 10s funny skateboard clips` in the chat input,
+mentioning 1–8 character image cells. Adjacent mentions such as `@a1@a2` work.
+Videobook saves the brief, character references, plan, revision, and estimates
+in a **goal tile** and opens its review panel in the chat dock. Unspecified
+counts default to three clips and unspecified durations to 10 seconds. Each
+clip can be 4–30 whole seconds, in landscape, portrait, or square format.
 
-While a goal is active, the chat input shows its status on the same line as the
-message box, such as `GOAL · Shot 2 of 3 · Generating 2:14`, with one tick per
-shot. Each time the goal wakes up and starts its next part, the status rolls to
-the new step, the input's rail pulses and a sweep crosses the row. The status
-truncates instead of wrapping; on a phone it shortens to `2/3`.
+Each paid stage needs a separate approval:
 
-Click the status or the tile to open the goal panel in the chat dock. Review the
-shared characters and visual style, edit each shot, and save changes to refresh
-the cost estimate. **Run goal** approves the entire saved plan: Seedance 2.5
-generates the clips at 720p with sound, puts them in the notebook, then appends
-them in order after existing sequence content. Shot tiles made by a goal carry a
-`2/3` mark. Actual media durations determine the final sequence length. Preview
-and export from the timeline when complete.
+1. **Plan → Full frame:** edit the plan and generate one GPT Image 2.5 frame
+   with every character together. Sunburst and 2K are the defaults; Flare and
+   1K are available.
+2. **Full frame → Storyboards:** inspect the frame, regenerate it if needed,
+   then approve one GPT Image 2.5 storyboard per shot. Each uses the approved
+   frame and the original character images.
+3. **Storyboards → Videos:** inspect the storyboards, edit prompts or regenerate
+   individual images, then approve Seedance 2.5 clips with sound. Each storyboard
+   becomes its clip's first frame. Seedance frame mode cannot also accept
+   separate character references; their appearance comes through the storyboard.
+4. **Combine:** multiple clips append in order after existing sequence content.
+   A single clip finishes without assembly. Actual media durations determine
+   the sequence length.
 
-**Stop goal** prevents remaining shots; provider requests already submitted may
-still finish and incur their cost. Deleting the goal tile also stops it. A
-failed or interrupted goal offers **Retry**, which resumes from its first
-unfinished shot without regenerating finished ones, or plans again when
-planning failed. **Dismiss** hides a finished goal from the chat input; the tile
-keeps the record. A server restart marks an in-flight shot interrupted instead
-of resubmitting paid generation.
+The approval button saves pending edits first; Cmd/Ctrl+Enter does the same.
+Estimates show the next stage and the plan total, with any pricing warnings.
+Regeneration incurs the displayed image cost again. Generation defaults to
+720p; 480p is available. Planning requires `OPENAI_API_KEY` and is billed
+separately; generation requires `KIE_API_KEY`. A structured version-2 plan
+skips AI planning.
 
-Planning requires `OPENAI_API_KEY`; generation requires `KIE_API_KEY`.
-Planning is billed separately from the displayed video estimate. The plan lives
-in the goal tile, a `goal` notebook cell; execution state uses the scoped
-engine's runtime settings. MCP clients can use `video_goal` to create, list,
-inspect, update, run, cancel, retry, dismiss, or assemble a goal; `run` requires
-the reviewed plan revision. A supplied structured plan skips AI planning.
+The chat input keeps a single-line stage status with a clock while generating.
+Each wake-up adds a STATUS row to the current chat history. Click the status
+or goal tile to review progress and previews. All outputs are normal notebook
+tiles with provenance edges and goal marks. Planning placeholders remain steady.
+
+**Stop goal** prevents remaining work; submitted provider requests may still
+finish and incur cost. Deleting the goal tile also stops it. **Retry** resumes
+the failed stage without repeating completed outputs, or plans again after a
+planning failure. **Dismiss** hides a finished goal from the chat input.
+Older version-1 goals remain readable; unfinished ones ask you to start a new
+`/goal` with character images.
+
+MCP clients use `video_goal` actions `create`, `list`, `status`, `update`,
+`approve`, `regenerate`, `cancel`, `retry`, `dismiss`, and `assemble`.
+`approve` and `regenerate` require the current reviewed revision;
+`regenerate` accepts zero-based `shot_indexes` for selected storyboards.
+Execution state uses the scoped engine's runtime settings.
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.6.0 schema-v27 root under
+Each book owns an isolated `videobook-engine` v5.6.1 schema-v27 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable

@@ -101,6 +101,7 @@ export function ComposerHistory({
 }
 
 function rowKey(row: ComposerHistoryRow): string {
+  if (row.kind === 'status') return `status:${row.sequence}`
   return row.kind === 'caption' ? `caption:${row.caption.id}` : `call:${row.call.id}`
 }
 
@@ -120,6 +121,12 @@ function HistoryRow({
   if (row.kind === 'call') {
     return <McpCallRow call={row.call} active={active} onToggle={onToggleCall} />
   }
+  if (row.kind === 'status') return (
+    <p className="composer-history-entry" data-role="status" data-goal-id={row.goalId}>
+      <span className="composer-history-kind">STATUS</span>
+      <span className="composer-history-text">{row.text}</span>
+    </p>
+  )
   const caption = row.caption
   if (row.turn) {
     const turn = row.turn

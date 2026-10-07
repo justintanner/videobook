@@ -93,6 +93,7 @@ import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
   stripNotebookMentions,
+  scanNotebookMentions,
 } from 'videobook-engine/notebook-mentions'
 import {
   notebookCellOccupiedSlots,
@@ -579,6 +580,7 @@ import {
   GenerationTitlesContext,
   GoalMarksContext,
   GoalTileContext,
+  GoalMediaContext,
   MediaSlotContext,
   PrimaryCellContext,
   TimelineContext,
@@ -2031,6 +2033,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const {
     goals: goalSnapshots,
+    events: goalEvents,
     accept: acceptGoals,
     refresh: refreshGoals,
     act: actOnGoal,
@@ -3967,11 +3970,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
     if (!brief) {
       if (!activeComposerGoal) {
-        return { ok: false, message: 'Describe the video after /goal, for example: /goal a dog on a skateboard, three 10s clips' }
+        return { ok: false, message: 'Mention the character images, for example /goal @a1 @a2 as Mr Bean in Thailand, two 10s clips' }
       }
       openGoalTile(activeComposerGoal.cellId)
       return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
     }
+    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the character images, for example /goal @a1 @a2 ...' }
     const scope = { bookId, notebookId: notebook.id }
     const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
     if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {
@@ -3980,16 +3984,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     await refreshBookData(scope.bookId, scope.notebookId, undefined, chat)
     revealNotebookCanvasCell(goal.cellId)
     collapseComposerAfterCellCreation(chat)
+    openGoalTile(goal.cellId)
     return { ok: true, message: `Planning your video goal in ${goal.address ?? 'a new tile'}` }
   }
 
   const runGoalAction = async (args: Record<string, unknown>) => {
-    if (!goalScope) return
+    if (!goalScope) throw new Error('Open the goal notebook first.')
     const scope = goalScope
-    await actOnGoal(scope, args)
-    if (args.action !== 'run' && args.action !== 'retry') return
+    const goal = await actOnGoal(scope, args)
+    if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'retry') return goal
+    if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) collapseComposerAfterCellCreation()
     await refreshBookData(scope.bookId, scope.notebookId)
-    collapseComposerAfterCellCreation()
+    return goal
   }
 
   const previewGoalSequence = async (frame: number) => {
@@ -10989,6 +10995,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onAction={runGoalAction}
         onPreview={previewGoalSequence}
         onSelectCell={openCellInspector}
+        resolveAsset={(artifactId) => assetById.get(artifactId) ?? null}
+        onPreviewCell={(cellId) => {
+          const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
+          const asset = cell?.outputArtifactId ? assetById.get(cell.outputArtifactId) : null
+          if (cell && asset) openMediaFullscreen(cell, asset)
+        }}
       />
     ) : <GoalPanelPlaceholder />
   ) : null
@@ -11302,6 +11314,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             <GenerationTitlesContext.Provider value={generationTitleByTool}>
                               <CellContextMenuContext.Provider value={cellContextMenuContextValue}>
                                 <GoalTileContext.Provider value={goalTiles}>
+                                <GoalMediaContext.Provider value={assetById}>
                                 <GoalMarksContext.Provider value={goalMarks}>
                                 <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
@@ -11465,6 +11478,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             />
                                 </ReactFlow>
                                 </GoalMarksContext.Provider>
+                                </GoalMediaContext.Provider>
                                 </GoalTileContext.Provider>
                               </CellContextMenuContext.Provider>
                             </GenerationTitlesContext.Provider>
@@ -11809,6 +11823,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
       <CommandComposer
         chatTurns={chatTurns}
+        goalEvents={goalEvents}
         previewTurnId={previewTurnId}
         connected={mcp.state === 'ready' && online}
         onBeginTurn={beginComposerTurn}

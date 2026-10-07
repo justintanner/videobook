@@ -52,6 +52,21 @@ describe('history sequence', () => {
 })
 
 describe('composerHistory', () => {
+  it('interleaves goal wake-ups with messages as STATUS rows without replacing replies', () => {
+    const rows = composerHistory([
+      caption({ id: 'u1', text: 'Make two clips', sequence: 1 }),
+      caption({ id: 'a1', role: 'assistant', text: 'Your plan is saved', sequence: 2 }),
+    ], emptyMcpCallLog, [], [
+      { kind: 'status', sequence: 3, goalId: 'goal-one', text: 'Goal woke up · Full frame ready · Review full frame · @a3' },
+      { kind: 'status', sequence: 4, goalId: 'goal-one', text: 'Goal woke up · Frame approved · Storyboard 1 of 2 · Generating · @a3' },
+    ])
+    expect(rows.map(row => row.kind)).toEqual(['caption', 'caption', 'status', 'status'])
+    const markup = renderToStaticMarkup(createElement(ComposerHistory, { rows, phase: 'off', voicePresent: false, open: true, onToggleCall: () => undefined }))
+    expect(markup).toContain('Your plan is saved')
+    expect(markup.match(/>STATUS</gu)).toHaveLength(2)
+    expect(markup).toContain('Full frame ready')
+    expect(composerHistoryEpoch(rows)).toBe(4)
+  })
   it('keeps interrupted or non-empty rows and drops blank YOU/COPILOT rows', () => {
     const rows = composerHistory([
       caption({ id: 'empty', text: '   ', final: false, sequence: 1 }),

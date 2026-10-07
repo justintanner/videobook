@@ -1,15 +1,28 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalPlanSchema, type GoalPlan } from "./goal-plan.js";
+import { goalPlanSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
 export type GoalEstimate = { usd: number | null; warnings: string[] };
+export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate>;
+export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
+export type GoalStageRun = {
+  chainId: string;
+  revision: number;
+  approvedAt: string;
+  shotIndexes: number[];
+  outputs: GoalStageOutput[];
+  previousChainIds: string[];
+};
 
 export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number };
 
 export type GoalRecord = {
+  planVersion: 1 | 2;
+  stage: GoalStage;
+  stages: Partial<Record<GoalGenerationStage, GoalStageRun>>;
   goalId: string;
   bookId: string;
   notebookId: string;
@@ -29,17 +42,23 @@ export type GoalRecord = {
 
 export type GoalContent = {
   brief: string;
+  characters: GoalCharacter[];
   revision: number;
-  plan: GoalPlan | null;
-  estimate: GoalEstimate;
+  plan: GoalDisplayPlan | null;
+  estimate: GoalEstimates;
 };
 
-const KEY = "application.goals.v1";
+const KEY = "application.goals.v2";
+const LEGACY_KEY = "application.goals.v1";
 const GOAL_TILE_LABEL = "Video goal";
 const REMOVED_TILE_ERROR = "This goal's tile was removed from the notebook";
 
 function goalStore(engine: Engine): Record<string, GoalRecord> {
-  return engine.settings.get<Record<string, GoalRecord>>(KEY) ?? {};
+  const legacy = engine.settings.get<Record<string, GoalRecord>>(LEGACY_KEY) ?? {};
+  return {
+    ...Object.fromEntries(Object.entries(legacy).map(([id, goal]) => [id, { ...goal, planVersion: 1 as const, stage: "videos" as const, stages: {} }])),
+    ...(engine.settings.get<Record<string, GoalRecord>>(KEY) ?? {}),
+  };
 }
 
 function hasTile(goal: GoalRecord): boolean {
@@ -60,7 +79,7 @@ export function readGoal(engine: Engine, goalId: string): GoalRecord {
 
 export function saveGoal(engine: Engine, goal: GoalRecord): GoalRecord {
   const next = { ...goal, updatedAt: new Date().toISOString() };
-  const result = engine.settings.set(KEY, { ...goalStore(engine), [goal.goalId]: next });
+  const result = engine.settings.set(KEY, { ...(engine.settings.get<Record<string, GoalRecord>>(KEY) ?? {}), [goal.goalId]: next });
   if (!result.ok) throw new Error(result.error.message);
   return next;
 }
@@ -73,19 +92,36 @@ function estimateFrom(value: unknown): GoalEstimate {
   };
 }
 
+export function emptyGoalEstimates(): GoalEstimates {
+  return { frame: { usd: null, warnings: [] }, storyboards: { usd: null, warnings: [] }, videos: { usd: null, warnings: [] }, total: { usd: null, warnings: [] } };
+}
+
+function estimatesFrom(value: unknown): GoalEstimates {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  if (!("total" in record)) return { ...emptyGoalEstimates(), videos: estimateFrom(value), total: estimateFrom(value) };
+  return { frame: estimateFrom(record.frame), storyboards: estimateFrom(record.storyboards), videos: estimateFrom(record.videos), total: estimateFrom(record.total) };
+}
+
+function charactersFrom(value: unknown): GoalCharacter[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is GoalCharacter => entry && typeof entry === "object"
+    && ["artifactId", "cellId", "address", "label"].every(key => typeof (entry as Record<string, unknown>)[key] === "string"));
+}
+
 export function goalContent(cell: NotebookCell): GoalContent {
   const inputs = cell.inputs ?? {};
-  const plan = goalPlanSchema.safeParse(inputs.plan);
+  const plan = goalPlanSchema.or(legacyGoalPlanSchema).safeParse(inputs.plan);
   return {
     brief: cell.prompt ?? "",
+    characters: charactersFrom(inputs.characters),
     revision: typeof inputs.revision === "number" && Number.isInteger(inputs.revision) ? inputs.revision : 0,
     plan: plan.success ? plan.data : null,
-    estimate: estimateFrom(inputs.estimate),
+    estimate: estimatesFrom(inputs.estimate),
   };
 }
 
 function goalCellInputs(goalId: string, content: GoalContent): Record<string, unknown> {
-  return { goalId, revision: content.revision, plan: content.plan, estimate: content.estimate };
+  return { goalId, revision: content.revision, plan: content.plan, characters: content.characters, estimate: content.estimate };
 }
 
 function goalCellText(content: GoalContent): { label: string; prompt: string } {
@@ -118,7 +154,10 @@ export async function createGoalCell(engine: Engine, notebookId: string, goalId:
       inputs: goalCellInputs(goalId, content),
     });
     created.cell = cell;
-    return { ...document, cells: [...document.cells, cell] };
+    const edges = content.characters.map((character, index) => engine.notebooks.createEdge({
+      source: character.cellId, target: cell.id, targetInput: index === 0 ? "character" : `character_${index + 1}`,
+    }));
+    return { ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] };
   }, { goalId });
   if (!result.ok) throw new Error(result.error.message);
   if (!created.cell) throw new Error("The goal tile could not be placed");

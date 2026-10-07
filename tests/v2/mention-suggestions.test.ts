@@ -232,6 +232,17 @@ describe('asset mention suggestions', () => {
     expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@b4')
   })
 
+  it('prioritizes goal character images before the limit while keeping video mentions reachable', () => {
+    const videos = Array.from({ length: 12 }, (_, index) => mentionCandidate(
+      { row: Math.floor(index / 8), column: index % 8 }, artifactId(index + 1),
+    ))
+    const image = mentionCandidate({ row: 1, column: 4 }, IMAGE_ARTIFACT, { type: 'image' })
+    const suggestions = assetMentionSuggestions([...videos, image], '/goal @')
+    expect(suggestions[0]?.value).toBe('@b5')
+    expect(suggestions).toHaveLength(12)
+    expect(assetMentionSuggestions([...videos, image], '/goal @a1')[0]?.asset.type).toBe('video')
+  })
+
   it('skips excluded mention values so looping cells are not offered', () => {
     const video = mentionCandidate({ row: 0, column: 0 }, VIDEO_ARTIFACT)
     const image = mentionCandidate({ row: 0, column: 1 }, IMAGE_ARTIFACT, {

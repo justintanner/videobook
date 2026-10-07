@@ -47,6 +47,17 @@ export type ChainToolSpec = {
 };
 
 export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
+  ...Object.fromEntries(["sunburst", "flare"].map(variant => [
+    `generate_kie_gpt_image_2_5_${variant}_image`,
+    {
+      outputs: { img_asset_id: "artifact", asset_id: "artifact", cell_id: "string", address: "string", job_id: "string", status: "string" },
+      completion: "generation",
+      gridFields: ["image_refs"],
+      inputTypes: { prompt: "string", image_refs: "artifact", aspect_ratio: "string", resolution: "string", background: "string" },
+      placement: "generate_image",
+      artifactOutput: "img_asset_id",
+    } satisfies ChainToolSpec,
+  ])),
   assemble_goal: {
     outputs: { sequence_id: "string", status: "string" },
     completion: "sync",

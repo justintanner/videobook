@@ -578,7 +578,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {visibleTypeLabel}
             </span>
           </span>
-          {generationCell && (
+          {(generationCell || goalMark) && (
             <span className="cell-generation-chips">
               {generationDuration && (
                 <span className="cell-aspect-ratio" title="Duration">
@@ -592,7 +592,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
                 </span>
               )}
               {goalMark && (
-                <span className="cell-aspect-ratio cell-goal-mark" title={`Goal shot ${goalMark}`}>
+                <span className="cell-aspect-ratio cell-goal-mark" title={`Goal ${goalMark}`}>
                   <Flag size={9} aria-hidden="true" />
                   {goalMark.split(' · ')[0]}
                 </span>
