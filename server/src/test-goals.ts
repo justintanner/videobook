@@ -2,7 +2,7 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "./goal-plan.js";
+import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "./goal-plan.js";
 import { requireGoalContent, readGoal, saveGoal, type GoalStageRun } from "./goal-store.js";
 import { preflightChainPlan } from "./chain-plan.js";
 import type { ChainRunRecord } from "./chain-executor.js";
@@ -63,14 +63,17 @@ export async function goalTestVideo(engine: Engine, root: string, color: string)
   return artifactId;
 }
 
-export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalGenerationStage, options: { failedIndex?: number; indexes?: number[]; videoIds?: string[]; legacy?: boolean } = {}): Promise<string> {
+export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalGenerationStage, options: { failedIndex?: number; indexes?: number[]; videoIds?: string[]; legacy?: boolean; revise?: { index: number; feedback: string } } = {}): Promise<string> {
   const goal = readGoal(engine, goalId);
   const content = requireGoalContent(engine, goal);
   const plan = goalPlanSchema.parse(content.plan);
   const frame = goal.stages.frame?.outputs[0]?.address ?? content.characters[0]!.address;
   const storyboards = plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index)?.address ?? frame);
   const endings = plan.frameContinuity ? plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)?.address ?? frame) : [];
-  const steps = stage === "frame" ? compileFrameSteps(plan, content.characters)
+  const revise = options.revise;
+  const parent = revise ? goal.stages[stage]?.outputs.find(output => output.index === revise.index) : null;
+  const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, content.characters, stage, revise.index, parent!.address!, revise.feedback, stage === "storyboards" ? frame : undefined)]
+    : stage === "frame" ? compileFrameSteps(plan, content.characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, content.characters, frame, options.indexes)
       : compileVideoSteps(goalId, plan, content.characters, storyboards, endings);
   const defs = getAllToolDefs(engine);
@@ -106,9 +109,9 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const previous = goal.stages[stage];
   const run: GoalStageRun = {
     chainId, revision: content.revision, approvedAt: timestamp,
-    shotIndexes: stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index),
+    shotIndexes: revise ? [revise.index] : stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index),
     outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
-    ...(stage !== "videos" && !options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp) } : {}),
+    ...(stage !== "videos" && !options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp, revise?.feedback) } : {}),
   };
   saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(stage === "videos" ? { clipIds: plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
   return chainId;

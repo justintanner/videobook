@@ -5,7 +5,7 @@ import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { firstEmptyNotebookGridRow, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
+import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalStillPrompt, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
 import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileGoal } from "../goal-state.js";
 import { goalStillAttempts, goalStillStaleReason } from "../goal-stills.js";
@@ -23,6 +23,8 @@ const errorMessage = (error: unknown): string => error instanceof Error ? error.
 const failure = (error: unknown): ToolResult => ({ isError: true, content: [{ type: "text", text: errorMessage(error) }] });
 const ACTIVE_STATUSES = new Set(["planning", "review", "running"]);
 type GoalArgs = Record<string, unknown>;
+const stillStageSchema = z.enum(["frame", "storyboards"]);
+const feedbackSchema = z.string().trim().min(1).max(300).regex(/^[^@]*$/u, "Use plain text without @ references in revision feedback");
 export type GoalSnapshot = ReturnType<typeof publicGoal>;
 
 function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
@@ -78,20 +80,32 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   requireModernGoal(goal);
   const content = requireGoalContent(engine, goal);
   if (!regenerate && goal.status === "running" && goal.stages[activeGoalStage(goal)]?.revision === args.revision) return goal;
-  if (goal.status !== "review") throw new Error("Review the goal before approving or regenerating a stage");
+  if (goal.status !== "review") throw new Error("Review the goal before approving, regenerating or revising a stage");
   const plan = requireRevision(engine, goal, args.revision);
+  const feedback = args.action === "revise" ? feedbackSchema.parse(args.feedback) : null;
   if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before generating this stage");
   const stage: GoalGenerationStage = regenerate
-    ? goal.stage === "storyboards" ? "frame" : goal.stage === "videos" ? "storyboards" : (() => { throw new Error("There are no stage outputs to regenerate yet"); })()
+    ? args.stage !== undefined || feedback ? stillStageSchema.parse(args.stage)
+      : goal.stage === "storyboards" ? "frame" : goal.stage === "videos" ? "storyboards" : (() => { throw new Error("There are no stage outputs to regenerate yet"); })()
     : activeGoalStage(goal);
-  const indexes = stage === "frame" ? [0]
+  const index = regenerate && (args.index !== undefined || feedback) ? z.number().int().nonnegative().parse(args.index) : null;
+  if (regenerate) {
+    if (stage === "videos") throw new Error("Only stills can be regenerated or revised");
+    if (index !== null) goalStillPrompt(plan, stage, index);
+    if (!goal.stages[stage]?.outputs.some(output => index === null || output.index === index)) throw new Error("There is no current still to regenerate or revise");
+  }
+  const indexes = index !== null ? [index] : stage === "frame" ? [0]
     : regenerate && Array.isArray(args.shot_indexes) ? [...new Set(z.array(z.number().int().min(0).max(plan.shots.length - 1)).min(1).parse(args.shot_indexes))].sort((a, b) => a - b)
       : plan.shots.map((_, index) => index);
   const document = readNotebook(engine, goal.notebookId);
   const characters = currentGoalCharacters(document, content.characters);
   if (characters.length === 0) throw new Error("This goal has no character images. Start a new /goal.");
-  const steps = stage === "frame" ? compileFrameSteps(plan, characters)
-    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes)
+  const steps = feedback && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, index!,
+    outputReference(document, goal.stages[stage]?.outputs.find(output => output.index === index)), feedback,
+    stage === "storyboards" ? outputReference(document, goal.stages.frame?.outputs[0]) : undefined)]
+    : stage === "frame" ? compileFrameSteps(plan, characters)
+    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes.map(position => position % plan.shots.length))
+      .filter(step => index === null || step.id === `storyboard${index + 1}`)
       : compileVideoSteps(goal.goalId, plan, characters,
         plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
         plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
@@ -114,7 +128,7 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   const { defs, lookup } = await goalToolLookup(engine);
   const chain = await preflightAndAccept({
     action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId,
-    request_id: `goal:${goal.goalId}:${stage}:${content.revision}${regenerate ? `:regenerate:${indexes.join(",")}` : ""}`, steps,
+    request_id: `goal:${goal.goalId}:${stage}:${content.revision}${feedback ? `:revise:${index}:${goal.stages[stage]?.attempts?.length ?? 0}` : regenerate ? `:regenerate:${indexes.join(",")}:${goal.stages[stage]?.attempts?.length ?? 0}` : ""}`, steps,
   }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId,
     toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),
@@ -128,7 +142,7 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
     stages: { ...goal.stages, [stage]: {
       chainId: chain.chainId, revision: content.revision, approvedAt, shotIndexes: indexes,
       outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
-      ...(stage !== "videos" ? { attempts: goalStillAttempts(goal, plan, stage, chain.chainId, steps, approvedAt) } : {}),
+      ...(stage !== "videos" ? { attempts: goalStillAttempts(goal, plan, stage, chain.chainId, steps, approvedAt, feedback) } : {}),
     } },
   });
 }
@@ -196,9 +210,6 @@ function validateReviewEdit(goal: GoalRecord, previous: GoalPlan, plan: GoalPlan
     throw new Error("The characters, visual style, format and shot count are fixed after generating the full frame. Start a new goal to change them.");
   }
   if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending storyboards before generating the full frame. Start a new goal to change this setting.");
-  if (goal.stage === "videos" && previous.frame.prompt !== plan.frame.prompt) {
-    throw new Error("Edit the full-frame prompt while reviewing the full frame.");
-  }
 }
 
 async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
@@ -224,12 +235,14 @@ async function cancelGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord>
 
 async function retryGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   requireModernGoal(goal);
-  if (goal.status !== "failed" && goal.status !== "interrupted") throw new Error("Only a goal that failed or was interrupted can be retried");
+  const stoppedRevision = goal.status === "cancelled" && goal.stages[activeGoalStage(goal)]?.attempts?.some(attempt => attempt.chainId === goal.chainId && attempt.feedback);
+  if (goal.status !== "failed" && goal.status !== "interrupted" && !stoppedRevision) throw new Error("Only a goal that failed, was interrupted or stopped during a revision can be retried");
   requireGoalContent(engine, goal);
   if (!goal.chainId) return queuePlanning(engine, goal, `goal-plan-${goal.goalId}-${uuidv7()}`);
   if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before retrying this stage");
   const { lookup } = await goalToolLookup(engine);
-  retryChainRun(engine, goal.chainId, lookup);
+  const resumed = retryChainRun(engine, goal.chainId, lookup, { allowCancelled: Boolean(stoppedRevision) });
+  if (resumed.status === "cancelled") throw new Error("The stopped revision is still shutting down. Retry in a moment.");
   return saveGoal(engine, { ...goal, status: "running", error: null });
 }
 
@@ -239,7 +252,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   const goal = await reconcileGoal(engine, stored, readNotebook(engine, notebookId));
   if (args.action === "update") return updateGoal(engine, goal, args);
   if (args.action === "select") return selectStill(engine, goal, args);
-  if (args.action === "approve" || args.action === "regenerate") return startStage(engine, goal, args, args.action === "regenerate");
+  if (args.action === "approve" || args.action === "regenerate" || args.action === "revise") return startStage(engine, goal, args, args.action !== "approve");
   if (args.action === "cancel") return cancelGoal(engine, goal);
   if (args.action === "retry") return retryGoal(engine, goal);
   if (args.action === "combine") {
@@ -267,14 +280,14 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a video goal from character image mentions, review its plan, then approve each paid stage: GPT Image 2.5 full frame, GPT Image 2.5 storyboards, and Seedance 2.5 videos. approve requires the current revision; each stage finishes at the next review. regenerate repeats the full frame or selected zero-based storyboard shot_indexes. Optional plan.frameContinuity (default false) adds one ending storyboard per shot; endingPrompt edits its pose, regeneration replaces the pair, and videos use both first and last frames. update edits a review, cancel stops remaining work, retry resumes the failed stage, and dismiss hides a finished goal. Multiple clips append in order to the sequence; one clip finishes without assembly. combine renders an assembled goal into one video locally, retaining clip audio; repeated calls reuse its output. The plan and character references live in the goal tile; deleting it stops the goal.",
+    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, storyboards and videos. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending storyboards; each can be revised independently, and video uses the approved pair. update saves edits; cancel stops the current chain, retry resumes failed work or a stopped revision, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "cancel", "assemble", "retry", "dismiss", "combine"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine"]),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: goalPlanSchema.optional(),
       revision: z.number().int().nonnegative().optional(), shot_indexes: z.array(z.number().int().min(0).max(7)).min(1).max(8).optional(),
-      stage: z.enum(["frame", "storyboards"]).optional(), index: z.number().int().min(0).max(15).optional(), artifact_id: z.string().uuid().optional(),
+      stage: stillStageSchema.optional(), index: z.number().int().min(0).max(15).optional(), artifact_id: z.string().uuid().optional(), feedback: feedbackSchema.optional(),
     },
     handler: async args => {
       try {

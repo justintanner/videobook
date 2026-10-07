@@ -3996,7 +3996,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(scope.bookId, scope.notebookId)
       return goal
     }
-    if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'retry') return goal
+    if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'revise' && args.action !== 'retry') return goal
     if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) collapseComposerAfterCellCreation()
     await refreshBookData(scope.bookId, scope.notebookId)
     return goal

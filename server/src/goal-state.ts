@@ -29,7 +29,7 @@ function goalChainSteps(engine: Engine, document: NotebookDocument, chainId: str
   return chain?.steps.map(step => {
     const producer = producerCell(document, chain!.chainId, step);
     return {
-      id: step.id, status: step.status, error: step.error,
+      id: step.id, chainId: chain!.chainId, status: step.status, error: step.error,
       artifactId: outputString(step.outputs, "asset_id") ?? outputString(step.outputs, "img_asset_id") ?? outputString(step.outputs, "vid_asset_id"),
       cellId: producer?.id ?? null,
       address: producer ? notebookGridTag(producer.slot) : outputString(step.outputs, "address"),
@@ -140,8 +140,13 @@ export function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookD
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),
   }]));
+  const stillCount = content.plan ? content.plan.shots.length * ("frameContinuity" in content.plan && content.plan.frameContinuity ? 2 : 1) : 1;
+  const still = goal.stage === "videos"
+    ? { ...content.estimate.storyboards, usd: content.estimate.storyboards.usd === null ? null : content.estimate.storyboards.usd / stillCount }
+    : content.estimate.frame;
   return {
     kind: "video-goal" as const, ...goal, ...content,
+    estimate: { ...content.estimate, still },
     address: cell ? notebookGridTag(cell.slot) : null,
     stages: stages as Partial<Record<GoalGenerationStage, NonNullable<typeof stages[string]>>>,
     steps: goalChainSteps(engine, document, goal.chainId),

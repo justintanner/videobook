@@ -166,7 +166,8 @@ describe("staged video goals through MCP", () => {
     expect(goal).toMatchObject({ planVersion: 2, stage: "frame", status: "review", revision: 1, address: "@a3", plan });
     expect(goal.characters.map(character => character.artifactId)).toEqual(imageIds);
     expect(notebook().edges.filter(edge => edge.target === goal.cellId).map(edge => edge.targetInput)).toEqual(["character", "character_2"]);
-    expect(notebook().cells.find(cell => cell.id === goal.cellId)?.inputs).toMatchObject({ characters: goal.characters, plan, estimate: goal.estimate });
+    const { still: _still, ...stageEstimates } = goal.estimate;
+    expect(notebook().cells.find(cell => cell.id === goal.cellId)?.inputs).toMatchObject({ characters: goal.characters, plan, estimate: stageEstimates });
     expect(goal.estimate.frame.usd).toBeGreaterThan(0);
     expect(goal.estimate.total.usd).toBeCloseTo(goal.estimate.frame.usd! + goal.estimate.storyboards.usd! + goal.estimate.videos.usd!);
     expect((await create({ request_id: "same-request" })).goalId).toBe(goal.goalId);
@@ -332,6 +333,81 @@ describe("staged video goals through MCP", () => {
     expect(boards.status).toBe("running");
     await invoke({ action: "cancel", goal_id: created.goalId });
     await waitForChainRun(engine, boards.chainId!);
+  });
+
+  it("revises the selected frame with ordered references and resumes only that revision after stopping", async () => {
+    const frame = await advance(await create(), "frame");
+    const original = frame.stages.frame!.outputs[0]!;
+    await pauseBookQueueForTests(bookId);
+    const revised = await invoke({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", index: 0, feedback: "Give Character 1 a red cap" });
+    await expect.poll(() => getChainRun(engine, revised.chainId!)?.steps[0]?.childJobIds.length).toBe(1);
+    const step = getChainRun(engine, revised.chainId!)!.steps[0]!;
+    const job = engine.jobs.queue.list({ type: "generate_gpt_image_2_5" })[0]!;
+    expect(job.payload).toMatchObject({ sourceImageIds: [original.artifactId, ...imageIds], input: { aspect_ratio: "9:16", resolution: "2K", background: "opaque", prompt: expect.stringContaining("Revise @image1: Give Character 1 a red cap") } });
+    expect(step.params.prompt).toContain("@image2 is Character 1");
+    expect(revised.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: "Give Character 1 a red cap", parentArtifactId: original.artifactId, basePrompt: plan.frame.prompt });
+    expect(revised.estimate.still).toEqual(frame.estimate.frame);
+    await invoke({ action: "cancel", goal_id: frame.goalId });
+    await waitForChainRun(engine, revised.chainId!);
+    await expect.poll(async () => {
+      const result = await raw({ action: "retry", goal_id: frame.goalId });
+      return result.isError ? null : JSON.parse((result.content as Array<{ text: string }>)[0]!.text).status;
+    }).toBe("running");
+    expect((await status(frame.goalId)).chainId).toBe(revised.chainId);
+    expect((await status(frame.goalId)).stages.frame!.outputs[0]!.artifactId).toBe(original.artifactId);
+    await invoke({ action: "cancel", goal_id: frame.goalId });
+    await waitForChainRun(engine, revised.chainId!);
+  });
+
+  it("completes revisions as selected versions and revises an ending storyboard independently", async () => {
+    const frame = await advance(await create({ plan: { ...plan, frameContinuity: true } }), "frame");
+    await seedGoalStage(engine, frame.goalId, "frame", { revise: { index: 0, feedback: "Give Character 1 a red cap" } });
+    const revisedFrame = await status(frame.goalId);
+    expect(revisedFrame).toMatchObject({ status: "review", stage: "storyboards" });
+    expect(revisedFrame.stages.frame!.outputs[0]!.versions.map(version => version.current)).toEqual([true, false]);
+    expect(revisedFrame.stages.frame!.outputs[0]!.versions[0]).toMatchObject({ feedback: "Give Character 1 a red cap", parentArtifactId: frame.stages.frame!.outputs[0]!.artifactId });
+    const boards = await advance(revisedFrame, "storyboards");
+    await seedGoalStage(engine, boards.goalId, "storyboards", { revise: { index: 1, feedback: "Move them closer" } });
+    const revised = await status(boards.goalId);
+    expect(revised).toMatchObject({ stage: "videos", status: "review" });
+    expect(revised.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0]);
+    expect(revised.stages.storyboards!.outputs[1]!.versions).toHaveLength(2);
+    expect(revised.estimate.still.usd).toBeCloseTo(revised.estimate.storyboards.usd! / 6);
+    await pauseBookQueueForTests(bookId);
+    const ending = await invoke({ action: "revise", goal_id: revised.goalId, revision: revised.revision, stage: "storyboards", index: 4, feedback: "Both wave" });
+    expect(getChainRun(engine, ending.chainId!)!.steps.map(step => step.id)).toEqual(["storyboard5"]);
+    const step = getChainRun(engine, ending.chainId!)!.steps[0]!;
+    expect(step.pins.map(pin => pin.artifactId)).toEqual([revised.stages.storyboards!.outputs[4]!.artifactId, revised.stages.frame!.outputs[0]!.artifactId, ...imageIds]);
+    expect(step.params.prompt).toContain("@image2 is the full frame; @image3 is Character 1");
+    await invoke({ action: "cancel", goal_id: revised.goalId });
+    await waitForChainRun(engine, ending.chainId!);
+  });
+
+  it.each(["revise", "regenerate"])("can %s the frame from the storyboard review while preserving stale storyboards", async action => {
+    const boards = await advance(await advance(await create(), "frame"), "storyboards");
+    const updated = await invoke({ action: "update", goal_id: boards.goalId, revision: boards.revision, plan: { ...plan, frame: { prompt: "Both characters beside a red bench" } } });
+    await pauseBookQueueForTests(bookId);
+    const started = await invoke({ action, goal_id: updated.goalId, revision: updated.revision, stage: "frame", index: 0, feedback: "Move to the red bench" });
+    expect(started).toMatchObject({ stage: "frame", status: "running" });
+    expect(started.stages.storyboards!.outputs).toEqual(boards.stages.storyboards!.outputs);
+    await invoke({ action: "cancel", goal_id: started.goalId });
+    await waitForChainRun(engine, started.chainId!);
+    await seedGoalStage(engine, started.goalId, "frame", action === "revise" ? { revise: { index: 0, feedback: "Move to the red bench" } } : {});
+    const ready = await status(started.goalId);
+    expect(ready).toMatchObject({ status: "review", stage: "storyboards" });
+    expect(ready.stages.storyboards!.outputs.every(output => output.stale?.includes("older full frame"))).toBe(true);
+  });
+
+  it("rejects invalid revision feedback, stale approvals and nonexistent stills without enqueueing", async () => {
+    const created = await create();
+    expect((await raw({ action: "revise", goal_id: created.goalId, revision: created.revision, stage: "frame", index: 0, feedback: "Closer" })).isError).toBe(true);
+    const frame = await advance(created, "frame");
+    for (const extra of [{ feedback: "Use @a1" }, { feedback: " " }, { feedback: "x".repeat(301) }, { revision: frame.revision - 1 }, { index: 1 }, { stage: "storyboards", index: 1 }]) {
+      expect((await raw({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", index: 0, feedback: "Closer", ...extra })).isError).toBe(true);
+    }
+    expect(engine.jobs.queue.list()).toHaveLength(0);
+    await invoke({ action: "cancel", goal_id: frame.goalId });
+    expect((await raw({ action: "revise", goal_id: frame.goalId, revision: frame.revision, stage: "frame", index: 0, feedback: "Closer" })).isError).toBe(true);
   });
 
   it("prices, reviews and regenerates ending storyboards before submitting paired-frame videos", async () => {

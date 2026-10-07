@@ -5,12 +5,13 @@ import type { ChainStep } from "./chain-plan.js";
 import { compileFrameSteps, compileStoryboardSteps, goalStillPrompt, type GoalCharacter, type GoalPlan, type GoalStillStage } from "./goal-plan.js";
 import type { GoalRecord, GoalStageOutput, GoalStillAttempt } from "./goal-store.js";
 
-export function goalStillAttempts(goal: GoalRecord, plan: GoalPlan, stage: GoalStillStage, chainId: string, steps: readonly ChainStep[], createdAt: string): GoalStillAttempt[] {
+export function goalStillAttempts(goal: GoalRecord, plan: GoalPlan, stage: GoalStillStage, chainId: string, steps: readonly ChainStep[], createdAt: string, feedback: string | null = null): GoalStillAttempt[] {
   return [...(goal.stages[stage]?.attempts ?? []), ...steps.map(step => {
     const index = stage === "frame" ? 0 : Number(step.id.slice("storyboard".length)) - 1;
     return {
       stage, index, chainId, stepId: step.id, artifactId: null, cellId: null,
-      basePrompt: goalStillPrompt(plan, stage, index), feedback: null, parentArtifactId: null,
+      basePrompt: goalStillPrompt(plan, stage, index), feedback,
+      parentArtifactId: feedback ? goal.stages[stage]?.outputs.find(output => output.index === index)?.artifactId ?? null : null,
       frameArtifactId: stage === "storyboards" ? goal.stages.frame?.outputs[0]?.artifactId ?? null : null,
       createdAt,
     };

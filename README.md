@@ -44,70 +44,82 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Video goals
 
-Enter `/goal @a1 @a2 make two 10s funny skateboard clips` in the chat input,
-mentioning 1–8 character image cells. Adjacent mentions such as `@a1@a2` work.
-Videobook saves the brief, character references, plan, revision, and estimates
-in a **goal tile** and opens its review panel in the chat dock. Unspecified
-counts default to three clips and unspecified durations to 10 seconds. Each
-clip can be 4–30 whole seconds. Portrait 9:16 is the default; request landscape
-(16:9) or square (1:1) explicitly.
+Enter `/goal @a1 @a2 as Mr Bean in Thailand`, mentioning 1–8 character
+image cells. Adjacent mentions such as `@a1@a2` work. The goal tile saves the
+brief, character references, plan, revision, and estimates.
+
+The defaults are **portrait 9:16, three 10-second clips, GPT Image 2.5 Sunburst
+at 2K, and Seedance 2.5 at 720p with sound**. Request landscape (16:9) or square
+(1:1) explicitly. Each clip can be 4–30 whole seconds; a goal supports up to
+eight shots. Image model, resolution, continuity and ending-storyboard settings
+sit under **Advanced** in the compact plan review.
 
 Each paid stage needs a separate approval:
 
-1. **Plan → Full frame:** edit the plan and generate one GPT Image 2.5 frame
-   with every character together. Sunburst and 2K are the defaults; Flare and
-   1K are available.
-2. **Full frame → Storyboards:** inspect the frame, regenerate it if needed,
-   then approve one GPT Image 2.5 storyboard per shot. Each uses the approved
-   frame and the original character images.
-3. **Storyboards → Videos:** inspect the storyboards, edit prompts or regenerate
-   individual images, then approve Seedance 2.5 clips with sound. Each storyboard
-   becomes its clip's first frame. Seedance frame mode cannot also accept
-   separate character references; their appearance comes through the storyboard.
-4. **Combine:** multiple clips append in order after existing sequence content.
-   A single clip finishes without assembly. Actual media durations determine
-   the sequence length. **Combine into one video** creates one shareable MP4
-   with the clips and their sound, rendered locally without provider spend.
-   Repeating the action reopens the same output.
+1. **Plan → Frame:** review the title, format and short shot prompts, then
+   choose **Generate frame** to show the characters together.
+2. **Frame → Storyboards:** inspect the frame, type a one-line change and
+   **Revise**, pick a previous version, or **Regenerate** a fresh take. Repeat
+   until it is right, then **Use this frame · Generate storyboards**.
+3. **Storyboards → Videos:** use the same revision and version-selection loop
+   for each storyboard. **Back to frame** lets you revise or regenerate the
+   full frame again. Choose **Use these storyboards · Generate videos** when
+   every selected still is current. Each clip uses its storyboard as its first
+   frame; Seedance's adaptive format follows that image. Character appearance
+   comes through the storyboard, without separate video reference arrays.
+4. **Combine:** multiple clips append in order after existing sequence content,
+   using actual media durations. A single clip finishes without assembly.
+   **Combine into one video** renders a shareable MP4 locally with the clips'
+   sound. Repeating the action reuses its output.
 
-The approval button saves pending edits first; Cmd/Ctrl+Enter does the same.
-**Ending storyboards** is off by default. Enable it in the initial plan review
-to generate and review a starting and ending image for each shot. This adds one
-image per shot to the storyboard estimate. Ending prompts can describe a target
-pose; when blank, the video prompt supplies the final moment. The ending frame
-also considers the next shot's opening composition. Regenerating a shot replaces
-both images, and video generation uses the approved pair as its first and last
-frames. If an edited prompt affects an approved image, regenerate it before
-approving videos.
+Every still attempt is kept as a version. Revisions start from the selected
+image and preserve the earlier one. A selected still made from an older plan
+prompt cannot be approved until it is regenerated, revised, or its prompt is
+restored. Changing the selected full frame preserves the old storyboards but
+marks them stale until they are regenerated or revised against that frame.
+Format, image model and resolution, continuity, and shot count stay fixed after
+the first frame; its prompt remains editable at either still review.
 
-Estimates show the next stage and the plan total, with any pricing warnings.
-Regeneration incurs the displayed image cost again. Generation defaults to
-720p; 480p is available. Planning requires `OPENAI_API_KEY` and is billed
-separately; generation requires `KIE_API_KEY`. A structured version-2 plan
-skips AI planning.
+Planner word budgets are 8 for titles, 80 for continuity, 50 for the frame,
+40 for each storyboard, 30 for ending prompts and 50 for video prompts. New
+plans use bounded responses and one shortening retry. Saved plans retain their
+larger text limits, and word counts guide edits without blocking longer text.
+Only the frame repeats continuity; later requests use compact reference legends.
 
-The chat input keeps a single-line stage status with a clock while generating.
-Each wake-up adds a STATUS row to the current chat history. Click the status
-or goal tile to review progress and previews. All outputs are normal notebook
-tiles with provenance edges and goal marks. Planning placeholders remain steady.
+The primary button saves pending edits first; Cmd/Ctrl+Enter does the same.
+**Ending storyboards** is off by default. Enable it under Advanced before the
+frame to add an ending image per shot. A blank ending prompt uses the final
+moment of the video prompt. Each ending image can be revised or regenerated
+independently, and its clip uses the approved starting and ending images.
 
-**Stop goal** prevents remaining work; submitted provider requests may still
-finish and incur cost. Deleting the goal tile also stops it. **Retry** resumes
-the failed stage without repeating completed outputs, or plans again after a
-planning failure. **Dismiss** hides a finished goal from the chat input.
-Older version-1 goals remain readable; unfinished ones ask you to start a new
-`/goal` with character images.
+Stage and per-image estimates label paid approvals. Every revision or fresh
+generation incurs its image cost again. Planning requires `OPENAI_API_KEY`
+and is billed separately; generation requires `KIE_API_KEY`. A structured
+version-2 plan skips AI planning.
+
+The chat status reports each stage and revision with a generation clock.
+Progress adds STATUS rows, and notebook tiles carry provenance edges and
+version marks. Click the status or goal tile to reopen its review.
+**Stop goal** prevents remaining work; submitted requests may still finish and
+incur cost. Deleting the goal tile also stops it. **Retry** resumes the failed
+stage without repeating completed outputs, resumes a stopped still revision,
+or plans again after a planning failure. **Dismiss** hides a finished goal.
+Version-1 goals remain readable; unfinished ones ask you to start a new `/goal`.
 
 MCP clients use `video_goal` actions `create`, `list`, `status`, `update`,
-`approve`, `regenerate`, `cancel`, `retry`, `dismiss`, `assemble`, and `combine`.
-`approve` and `regenerate` require the current reviewed revision;
-`regenerate` accepts zero-based `shot_indexes` for selected storyboards.
-Execution state uses the scoped engine's runtime settings.
+`approve`, `select`, `revise`, `regenerate`, `cancel`, `retry`, `dismiss`,
+`assemble`, and `combine`. Paid approvals require the current `revision`.
+`select` takes `stage`, zero-based `index` and `artifact_id`, and leaves the
+plan revision unchanged. `revise` takes `stage`, `index` and 1–300 characters
+of plain-text `feedback` without @ references. `regenerate` accepts `stage`
+and `index` for one still, or legacy `shot_indexes` to regenerate selected
+storyboard pairs. Execution state and attempt history use scoped engine settings.
 
 The provider-free browser check runs with `npm run test:e2e -- tests/v2/goal-ui.e2e.test.ts`.
 A separate paid check uses `VIDEOBOOK_RUN_MODEL_E2E=1 op run --env-file=.env.tpl -- npx vitest run --config vitest.goal-live.config.ts`.
-It uses two 4-second 480p clips and 1K images, requires a media estimate below $3,
-and preserves its scratch book. The ordinary test setup keeps its network and
+It uses two portrait 4-second 480p clips, 1K images, and one revision at each
+still stage. It checks version selection, prompts, portrait media and identity,
+requires a media estimate below $3, and preserves its scratch book and spend records. The ordinary test setup keeps its network and
 credential restrictions.
 
 ## Storage

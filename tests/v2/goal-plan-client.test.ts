@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerGoal, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
+import { composerGoal, goalCanRetry, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
 import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 
 type Step = GoalSnapshot['steps'][number]
@@ -9,7 +9,7 @@ const plan: GoalPlan = {
   frame: { prompt: 'Both characters beside a bicycle under an umbrella' },
   shots: [0, 1, 2].map(index => ({ title: `Commute ${index + 1}`, storyboardPrompt: `Still frame ${index + 1}`, endingPrompt: null, videoPrompt: `Action ${index + 1}`, durationSeconds: 10 })),
 }
-const estimate = { frame: { usd: 0.2, warnings: [] }, storyboards: { usd: 0.6, warnings: [] }, videos: { usd: 2.4, warnings: [] }, total: { usd: 3.2, warnings: [] } }
+const estimate = { frame: { usd: 0.2, warnings: [] }, still: { usd: 0.2, warnings: [] }, storyboards: { usd: 0.6, warnings: [] }, videos: { usd: 2.4, warnings: [] }, total: { usd: 3.2, warnings: [] } }
 function goal(extra: Partial<GoalSnapshot> = {}): GoalSnapshot {
   return {
     kind: 'video-goal', planVersion: 2, stage: 'frame', stages: {}, goalId: 'goal-1', bookId: 'book', notebookId: 'notebook', cellId: 'goal-tile', address: '@a3', requestId: 'request',
@@ -19,7 +19,7 @@ function goal(extra: Partial<GoalSnapshot> = {}): GoalSnapshot {
 }
 function run(stage: GoalGenerationStage, statuses: Step['status'][]): Stage {
   const steps = statuses.map((status, index): Step => ({
-    id: stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${index + 1}`, status,
+    id: stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${index + 1}`, chainId: `${stage}-chain`, status,
     error: status === 'failed' ? 'Rejected' : null, artifactId: status === 'completed' ? `${stage}-asset-${index}` : null,
     cellId: ['completed', 'running', 'failed'].includes(status) ? `${stage}-producer-${index}` : null,
     address: ['completed', 'running', 'failed'].includes(status) ? `@c${index + 1}` : null,
@@ -137,5 +137,32 @@ describe('staged goal model', () => {
     const current = goal()
     expect(composerGoal([goal({ status: 'cancelled' }), goal({ status: 'completed', dismissedAt: 'earlier' }), current])).toBe(current)
     expect(composerGoal([goal({ status: 'cancelled' })])).toBeNull()
+  })
+
+  it('reports still versions, stale selections, revision progress and completion wakes', () => {
+    const current = running('storyboards', ['completed', 'running', 'pending'])
+    const stage = current.stages.storyboards!
+    const original = { stage: 'storyboards' as const, index: 1, chainId: 'older-chain', stepId: 'storyboard2', artifactId: 'old-board', cellId: 'old-cell', basePrompt: plan.shots[1]!.storyboardPrompt, feedback: null, parentArtifactId: null, frameArtifactId: 'frame-asset-0', createdAt: '2026-10-07T10:00:00Z' }
+    const revised = { ...original, chainId: stage.chainId, artifactId: null, cellId: null, feedback: 'Move them closer', parentArtifactId: original.artifactId }
+    stage.attempts = [original, revised]
+    stage.outputs.push({ index: 1, artifactId: original.artifactId, cellId: original.cellId, producerCellId: 'old-producer', address: '@d2', stale: 'Storyboard 2 was made from an older full frame.', versions: [
+      { ...revised, current: false, status: 'running', address: null }, { ...original, current: true, status: 'completed', address: '@d2' },
+    ] })
+    expect(goalStillVersions(current, 'storyboards', 1).map(version => version.current)).toEqual([false, true])
+    expect(goalStillVersions(current, 'frame', 9)).toEqual([])
+    expect(goalStillStale(current, 'storyboards', 1)).toContain('older full frame')
+    expect(goalStillStale(current, 'frame', 0)).toBeNull()
+    expect(goalStatusLine(current, 12).text).toBe('Revising storyboard 2 · Generating 0:12')
+    expect(goalWake(goal({ stage: 'videos' }), current)?.from).toBe('Revising storyboard 2')
+    expect(goalWake(current, { ...current, status: 'review', stage: 'videos' })?.from).toBe('Storyboard 2 revised')
+    expect(goalGenerationMarks([current]).get('storyboards-producer-1')).toBe('SB 2 v2 · @a3')
+    const stopped = { ...current, status: 'cancelled' as const }
+    expect(goalCanRetry(stopped)).toBe(true)
+    expect(goalStatusLine(stopped).action).toBe('Retry')
+    expect(goalCanRetry(goal({ status: 'cancelled' }))).toBe(false)
+    const frame = running('frame', ['running'])
+    frame.stages.frame!.attempts = [{ ...revised, stage: 'frame', index: 0, stepId: 'frame', chainId: frame.chainId! }]
+    expect(goalStatusLine(frame, 12).text).toBe('Revising frame · Generating 0:12')
+    expect(goalWake(frame, { ...frame, status: 'review', stage: 'storyboards' })?.from).toBe('Frame revised')
   })
 })

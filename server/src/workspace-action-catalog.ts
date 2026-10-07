@@ -25,7 +25,7 @@ const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
   video_goal: {
     actionId: "command.goal",
-    reason: "Goal mode plans a video in a goal tile, reviews all shots and runs the approved goal from the chat input.",
+    reason: "Goal mode defaults to portrait, reviews a compact plan, keeps selectable still versions and one-line revisions, then separately approves the frame, storyboards and videos.",
   },
   assemble_goal: {
     actionId: "command.goal",

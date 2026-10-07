@@ -39,10 +39,10 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 19px 0 17px;
+  padding: 8px 19px 0 17px;
   color: #bce6cf;
   font-size: 12px;
 }
@@ -164,18 +164,11 @@
 .goal-editor {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.goal-editor-columns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
+  gap: 6px;
 }
 
 .goal-editor-settings {
   display: grid;
-  flex: 1 1 260px;
   align-content: start;
   gap: 12px;
   min-width: 0;
@@ -183,31 +176,22 @@
 
 .goal-editor-shots {
   display: grid;
-  flex: 999 1 420px;
   align-content: start;
   gap: 8px;
   min-width: 0;
 }
 
-.goal-editor label,
-.goal-editor-brief {
+.goal-editor label {
   display: grid;
   gap: 6px;
 }
 
 .goal-editor label > span,
-.goal-editor-brief > span,
 .goal-editor-shots-head > span {
   color: #6e9880;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.goal-editor-brief > p {
-  margin: 0;
-  color: #8fb7a0;
-  line-height: 1.45;
 }
 
 .goal-editor input,
@@ -262,6 +246,8 @@
 
 .goal-editor-shot-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  align-items: start;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -313,11 +299,6 @@
 .goal-editor-remove:disabled {
   opacity: 0.35;
   cursor: default;
-}
-
-.goal-editor-shot > textarea {
-  margin-left: 32px;
-  width: calc(100% - 32px);
 }
 
 .goal-progress-summary {
@@ -409,14 +390,13 @@ span.goal-progress-address {
   .goal-panel-title > strong { display: none; }
   .goal-progress-shot { grid-template-columns: 24px minmax(0, 1fr) 56px auto; }
   .goal-progress-seconds { display: none; }
-  .goal-editor-shot > textarea { margin-left: 0; width: 100%; }
 }
 
 .goal-stepper {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin: 0 0 12px;
+  margin: 0;
   padding: 0;
   list-style: none;
   color: #6e9880;
@@ -475,3 +455,148 @@ span.goal-progress-address {
 .goal-editor-shot > label > span { color: #8fb7a0; font-size: 11px; }
 .goal-panel-bar { flex-wrap: wrap; }
 .goal-panel-primary { white-space: normal; }
+
+.goal-plan-heading {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+
+.goal-plan-heading > label {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.goal-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goal-formats [aria-checked='true'],
+.goal-version[aria-pressed='true'] {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(50, 147, 91, 0.2);
+}
+
+.goal-disclosure > summary {
+  width: fit-content;
+  padding: 4px 0;
+  color: #a4cbb6;
+  cursor: pointer;
+}
+
+.goal-disclosure[open] > :not(summary) {
+  margin-top: 10px;
+}
+
+.goal-advanced-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+}
+
+.goal-brief-line {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.goal-plan-extras {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.goal-plan-extras:has(details[open]) {
+  display: block;
+}
+
+.goal-plan-extras:has(details[open]) > p {
+  margin-top: 10px;
+}
+
+.goal-still-card,
+.goal-still-tools {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.goal-still-card[data-stage='frame'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.goal-still-card[data-stage='frame'] > .goal-media img {
+  height: min(300px, 32dvh);
+}
+
+.goal-still-card > .goal-media img {
+  height: 210px;
+}
+
+.goal-versions {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.goal-version {
+  display: grid;
+  flex: 0 0 62px;
+  gap: 4px;
+  place-items: center;
+  padding: 4px;
+  border: 1px solid var(--line);
+  color: #8fb7a0;
+  background: #030907;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.goal-version img {
+  width: 52px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.goal-version:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.goal-revise-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goal-revise-row > input {
+  flex: 1 1 160px;
+}
+
+.goal-still-tools > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.goal-editor[data-review='videos'] .goal-editor-shot-head {
+  grid-template-columns: 24px minmax(0, 1fr) 68px;
+}
+
+.goal-prompt-input > small {
+  font-size: 10px;
+}
+
+@media (max-width: 600px) {
+  .goal-still-card[data-stage='frame'] { grid-template-columns: minmax(0, 1fr); }
+  .goal-plan-heading { gap: 8px; }
+  .goal-panel-primary { max-width: 100%; }
+}
