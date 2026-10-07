@@ -132,6 +132,26 @@ from external origins. Images and media may use local or embedded data sources;
 inline styles remain supported. This protects the trusted local origin when
 an imported file is opened directly in a browser.
 
+### Coding agents
+
+Shared project rules live in [AGENTS.md](AGENTS.md). Claude Code supports it
+natively from v2.1.277; use v2.1.281 or later for the early provider and telemetry
+support fixes. See [Anthropic's AGENTS.md documentation](https://code.claude.com/docs/en/memory#agentsmd).
+
+With the default Project instructions setting (`claude-md-or-agents-md`),
+Claude reads `AGENTS.md` when no `CLAUDE.md`, `.claude/CLAUDE.md`, or
+`CLAUDE.local.md` exists in the working directory or its ancestors. Personal
+`~/.claude/CLAUDE.md` and managed instructions continue loading alongside it.
+If you keep an ancestor or local instruction file, use `/config` to select
+`claude-md-and-agents-md`. This is a user setting; project settings cannot
+override it.
+
+Check for the `AGENTS.md loaded` startup message. If the built-in AGENTS.md
+plugin is disabled, enable it through `/plugin` and start a new session.
+After upgrading from v2.1.276 or earlier, a second session may be needed.
+Keep project instructions in `AGENTS.md` and persistent project memory in
+Beads (`bd remember`).
+
 ## Environment
 
 The storage-specific variables are:

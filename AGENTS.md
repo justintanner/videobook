@@ -2,6 +2,10 @@
 
 Guidance for AI coding agents working in the Videobook repository.
 
+## Agent Instructions
+
+`AGENTS.md` is the canonical project instruction file for every coding agent, including Claude Code. Keep shared guidance here; do not recreate a separate `CLAUDE.md`. See [README.md](README.md#coding-agents) for Claude Code compatibility and instruction-loading settings.
+
 ## Build Commands
 
 | Command | Description |
@@ -15,7 +19,8 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run test` | Run all vitest integration tests |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:e2e` | E2E tests with vitest.e2e.config.ts |
-| `npm run benchmark:startup` | Replicate server `start()` phase by phase (skips `queue.start()`); JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` |
+| `npm run preview` | Preview the production build locally |
+| `npm run benchmark:startup` | Replicate server `start()` phase by phase (skips `queue.start()`); print a per-phase table and write JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` fail when those budgets are exceeded |
 
 ### Running a Single Test
 - `npx vitest run tests/v2/notebook-domain.test.ts`
@@ -33,9 +38,11 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 
 ## Architecture
 
-- **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned.
+- **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `index.html` → `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned. Vite proxies `/mcp` to the server in dev.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
-- **Domain/storage (`videobook-engine` 5.4.5, schema 25)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Project names are lowercase ASCII slugs with single hyphens, normalized with `videobook-engine/book-slug` before persistence and uniqueness checks. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@bl8` (lettered rows a-z, aa-az, ba-bl; numbered columns 1-8, so the top row reads `@a1` through `@a8`), and `label` is display-only text that is never parsed or looked up.
+- **Domain/storage (`videobook-engine` 5.4.5, schema 25)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Project names are lowercase ASCII slugs with single hyphens, normalized with `videobook-engine/book-slug` before persistence and uniqueness checks. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` (UUIDv7) plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@bl8` (lettered rows a-z, aa-az, ba-bl; numbered columns 1-8, so the top row reads `@a1` through `@a8`), and `label` is display-only text that is never parsed or looked up.
+- Generation-cell prompts name connected inputs by slot (`@image1`, `@video1`, `@audio1`, `@firstframe`, `@lastframe`; see `server/src/generation-input-mentions.ts`), never by grid address, so moving cells never changes a prompt.
+- Book roots live under `VIDEOBOOK_LIBRARY_DIR`. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
 
 ## Code Style
 
@@ -72,7 +79,7 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 ### Error Handling
 - Prefer returning error states from hooks (e.g., `{ error, retry }`)
 - Use early returns for guard clauses
-- MCP tools return structured errors: `{ isError: true, content: [{ type: "text", text: "..." }] }`
+- MCP tools return structured errors rather than throwing: `{ isError: true, content: [{ type: "text", text: "..." }] }`
 
 ### Linting
 - ESLint 9 flat config with typescript-eslint, react-hooks, react-refresh
@@ -85,6 +92,9 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 
 ### Filesystem Operations
 **ALWAYS use `videobook-engine`** — never `node:fs` for books/assets:
+
+Direct `node:fs` is only for explicit scratch paths returned by the engine or unrelated application configuration. Persist completed scratch outputs with `engine.files.writeFromPath()` or `engine.files.ingestWorkspace()`.
+
 ```typescript
 import { createEngine } from "videobook-engine";
 const engine = createEngine({
@@ -97,6 +107,9 @@ const artifact = await engine.artifacts.create("video", "intro clip");
 
 ### External APIs
 **ALWAYS use `@apicity` providers** — never direct `fetch` to AI/LLM APIs:
+
+All external API calls from the server use `@apicity` provider packages. API keys are stored in `.env` and loaded via `dotenv/config`.
+
 ```typescript
 import { kimicoding } from "@apicity/kimicoding";
 const provider = kimicoding({ apiKey: process.env.KIMI_CODING_API_KEY! });
@@ -105,6 +118,9 @@ const response = await provider.chat({ model: "k2p5", messages: [...] });
 
 ### Job Queue
 **ALWAYS enqueue long-running ops** — never run directly in MCP tool handlers:
+
+All long-running or async processes on the server go through the queue singleton from `server/src/queue.ts` for concurrency control, retries, and graceful shutdown. Use `queue.enqueueAndWait()` when the tool needs to return the result, or `queue.enqueue()` for fire-and-forget.
+
 ```typescript
 import { queue } from "../queue.js";
 queue.execute(async (job) => { /* handler */ });
@@ -136,21 +152,32 @@ Export from `server/src/tools/index.ts`.
 ### State Management
 - **Local-first**: Start with `useState`/`useReducer` in consuming component
 - **Derived state elimination**: Never store computable values. Use `useMemo` for expensive ops, compute inline for trivial ones
+- Never duplicate MCP data into separate state
 - Lift state only when concrete cross-component need is demonstrated
+- Prefer explicit props for three levels or fewer before introducing Context or Zustand
 - **Hierarchy**: Props → Context → Zustand (only if Context has perf issues)
 
 ### useEffect Minimization
 Treat each `useEffect` as technical debt. **No MCP tool calls in effects** — use event handlers or custom hooks.
 
+- Derive values from props during render instead of synchronizing them into state
+- Subscriptions and listeners must return cleanup functions
+- Reserve effects for genuine side effects such as analytics or imperative DOM operations via refs
+
 ### MCP Data Layer
 - Single `useMcpConnection()` instance shared via props/Context
+- `useMcpConnection()` owns connection lifecycle and invocation through the official v2 client; treat its state as read-only
+- Wrap tool invocations in domain-specific custom hooks that encapsulate tool names, argument construction, and result parsing
 - **No tool calls in effects** — causes race conditions
 - Guard tool calls: `if (state !== "ready") return`
 
 ### Component Design
 - Custom hooks: data fetching + business logic
+- Keep hooks single-purpose with descriptive names (`useSearchTool`, not `useUtils`)
 - Components: pure functions of props, render JSX only
+- Use `useMemo`/`useCallback` only for expensive computations or functions passed to memoized children
 - Avoid inline object/array creation in JSX props
+- Use stable `key` props based on unique IDs, not indices
 
 ### Testing
 - Write **integration tests with real dependencies** (zero mocks)
