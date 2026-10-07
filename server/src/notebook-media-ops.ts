@@ -75,7 +75,7 @@ async function ingestOutput(
   return artifact.value.artifactId;
 }
 
-async function registerMediaProbe(
+export async function registerMediaProbe(
   engine: Engine,
   artifactId: string,
   sourcePath: string,

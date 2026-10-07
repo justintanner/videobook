@@ -3,6 +3,7 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
 import { emptyGoalEstimates, findGoalCell, goalContent, requireGoalContent, saveGoal, writeGoalContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
 import { GOAL_VIDEO_TOOL, type GoalGenerationStage } from "./goal-plan.js";
+import { mutateNotebook } from "./notebook-mutations.js";
 
 export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
 
@@ -57,12 +58,25 @@ function allGoalChainSteps(engine: Engine, document: NotebookDocument, chainId: 
   });
 }
 
+export async function writeGoalCombinationState(engine: Engine, goal: GoalRecord, error: string | null): Promise<GoalRecord> {
+  if (!goal.combined) return goal;
+  const updated = await mutateNotebook(engine, goal.notebookId, "goal_combine_complete", document => ({
+    ...document, cells: document.cells.map(cell => cell.id === goal.combined?.cellId ? { ...cell, inputs: { ...cell.inputs, state: error ? "error" : "completed" } } : cell),
+  }));
+  if (!updated.ok) throw new Error(updated.error.message);
+  return saveGoal(engine, { ...goal, combined: { ...goal.combined, status: error ? "failed" : "completed", error } });
+}
+
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
   if (goal.planVersion === 1) {
     if (!["planning", "review", "running"].includes(goal.status)) return goal;
     if (goal.chainId) cancelChainRun(engine, goal.chainId);
     if (goal.planningJobId) await engine.jobs.queue.abort(goal.planningJobId, LEGACY_GOAL_MESSAGE);
     return saveGoal(engine, { ...goal, status: "failed", error: LEGACY_GOAL_MESSAGE });
+  }
+  if (goal.combined?.status === "running") {
+    const job = goal.combined.jobId ? engine.jobs.queue.get(goal.combined.jobId) : null;
+    if (!job || ["failed", "aborted"].includes(job.state)) goal = await writeGoalCombinationState(engine, goal, job?.error?.message ?? "Combining was interrupted. Retry the combined video.");
   }
   if (["completed", "cancelled", "review"].includes(goal.status)) return goal;
   if (goal.status === "planning") {
@@ -82,7 +96,8 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
     next = { ...next, status: "completed", error: null };
   } else if (chain.status === "completed") {
     const content = requireGoalContent(engine, goal);
-    const expected = stage === "frame" ? 1 : content.plan?.shots.length ?? 0;
+    const shotCount = content.plan?.shots.length ?? 0;
+    const expected = stage === "frame" ? 1 : stage === "storyboards" && content.plan && "frameContinuity" in content.plan && content.plan.frameContinuity ? 2 * shotCount : shotCount;
     if (outputs.length !== expected) next = { ...next, status: "failed", error: "The stage finished without all of its media outputs. Retry the stage." };
     else if (stage === "videos") next = { ...next, status: goal.assembly || expected === 1 ? "completed" : "failed", error: goal.assembly || expected === 1 ? null : "The finished clips still need to be assembled" };
     else {

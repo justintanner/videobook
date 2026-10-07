@@ -3664,6 +3664,8 @@ async function enqueueNotebookResume(
   input: AwaitNotebookOutputPayload,
   document: NotebookDocument,
 ): Promise<void> {
+  const producer = document.cells.find(cell => cell.id === input.cellId);
+  if (producer?.inputs?.chainRunId === input.runId) return;
   if (runHasAwaitingCells(document, input.runId)) return;
   await queue.enqueue(`resume-notebook-${input.runId}`, {
     type: "run_notebook",

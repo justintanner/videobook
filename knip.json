@@ -11,6 +11,7 @@
     ".": {
       "entry": [
         "index.html",
+        "vitest.goal-live.config.ts",
         "scripts/**/*.{mjs,ts}",
         "extension/src/background.ts",
         "extension/src/x-post-content.ts",

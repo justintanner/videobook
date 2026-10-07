@@ -16,11 +16,14 @@ import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
 import { pauseBookQueueForTests, queue, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
-import { goalTestPlan, seedGoalStage } from '../../server/src/test-goals.js'
+import { goalTestPlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
 import { getChainRun } from '../../server/src/chain-executor.js'
 import type { GoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
+
+const live = process.env.VIDEOBOOK_RUN_MODEL_E2E === '1'
+const scenario = live ? it.skip : it
 
 describe('staged goal mode in the browser', () => {
   let root = ''
@@ -60,8 +63,12 @@ describe('staged goal mode in the browser', () => {
   }
 
   beforeAll(async () => {
-    process.env.OPENAI_API_KEY = 'test-goal-browser'
-    process.env.KIE_API_KEY = 'test-goal-browser'
+    if (live) {
+      if (!process.env.OPENAI_API_KEY || !process.env.KIE_API_KEY) throw new Error('Live goal verification requires OPENAI_API_KEY and KIE_API_KEY')
+    } else {
+      process.env.OPENAI_API_KEY = 'test-goal-browser'
+      process.env.KIE_API_KEY = 'test-goal-browser'
+    }
     root = await mkdtemp(join(tmpdir(), 'videobook-goal-ui-'))
     const port = await availablePort()
     const origin = `http://127.0.0.1:${port}`
@@ -90,7 +97,12 @@ describe('staged goal mode in the browser', () => {
     registerAllJobHandlers(engine)
     await setEngineRoot(book.value.rootDir, engine)
     for (const [column, background] of ['#cf593b', '#2878b4'].entries()) {
-      const bytes = await sharp({ create: { width: 96, height: 128, channels: 3, background } }).png().toBuffer()
+      const character = column === 0
+        ? '<ellipse cx="128" cy="147" rx="57" ry="69" fill="#ed8a32"/><circle cx="128" cy="85" r="48" fill="#ed8a32"/><path d="M172 82 l32 16 -32 14" fill="#e5bf39"/><circle cx="139" cy="77" r="5"/><path d="M85 117 h85 v19 h-85z M133 135 l24 43 h-23 l-12-43" fill="#c84235"/><path d="M98 210 v21 m48-21 v21" stroke="#574228" stroke-width="8"/>'
+        : '<rect x="75" y="105" width="108" height="110" rx="12" fill="#357fbb"/><rect x="69" y="42" width="120" height="87" rx="9" fill="#58a1cb"/><circle cx="103" cy="79" r="9"/><circle cx="155" cy="79" r="9"/><path d="M101 105 h53" stroke="#d8efff" stroke-width="8"/><path d="M71 128 h118 v17 h-118z M145 144 l17 40 h-25 l-8-40" fill="#e6c13c"/><path d="M99 211 v22 m58-22 v22" stroke="#38556e" stroke-width="12"/>'
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#f5ead9"/>${character}</svg>`
+      const bytes = live ? await sharp(Buffer.from(svg)).png().toBuffer()
+        : await sharp({ create: { width: 96, height: 128, channels: 3, background } }).png().toBuffer()
       const asset = await call<{ assetId: string }>('upload_file', { filename: `character-${column + 1}.png`, data: bytes.toString('base64') })
       await call('create_notebook_cell', { cell: { type: 'image', slot: { row: 0, column }, output_artifact_id: asset.assetId } })
     }
@@ -119,7 +131,8 @@ describe('staged goal mode in the browser', () => {
     }
     await queue.stop()
     await books?.close()
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    if (live) console.info(JSON.stringify({ preservedGoalBook: bookId, root, notebookId }))
+    else await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
     for (const [key, value] of Object.entries(previousKeys)) {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
@@ -139,7 +152,7 @@ describe('staged goal mode in the browser', () => {
     await queue.startBook(bookId)
   })
 
-  it('reviews and saves before approving only the frame, shows stable queued progress, and stops', async () => {
+  scenario('reviews and saves before approving only the frame, shows stable queued progress, and stops', async () => {
     const saved = await create()
     await open(saved)
     expect(await panel().getByLabel('Video title', { exact: true }).inputValue()).toBe(saved.plan!.title)
@@ -175,7 +188,7 @@ describe('staged goal mode in the browser', () => {
     expect(errors).toEqual([])
   }, 60_000)
 
-  it('shows placeholder failure and retries only the frame with new tiles and provenance', async () => {
+  scenario('shows placeholder failure and retries only the frame with new tiles and provenance', async () => {
     const saved = await create()
     await open(saved)
     const before = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length
@@ -186,7 +199,7 @@ describe('staged goal mode in the browser', () => {
     expect(failed.error).toContain('placeholder')
     await status().click()
     await panel().getByRole('button', { name: 'Retry frame', exact: true }).click()
-    await expect.poll(() => engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length).toBe(before + 2)
+    await expect.poll(() => engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length, { timeout: 15_000 }).toBe(before + 2)
     await expect.poll(async () => (await current(saved)).status, { timeout: 30_000 }).toBe('failed')
     await status().click()
     await expect.poll(() => panel().getByRole('button', { name: 'Retry frame', exact: true }).isVisible(), { timeout: 15_000 }).toBe(true)
@@ -195,7 +208,7 @@ describe('staged goal mode in the browser', () => {
     expect(errors).toEqual([])
   }, 60_000)
 
-  it('opens frame and storyboard reviews with thumbnails and individual regeneration', async () => {
+  scenario('opens frame and storyboard reviews with thumbnails and individual regeneration', async () => {
     const saved = await create()
     await seedGoalStage(engine, saved.goalId, 'frame')
     const frame = await current(saved)
@@ -219,7 +232,57 @@ describe('staged goal mode in the browser', () => {
     expect(regenerating.stages.storyboards!.outputs).toEqual(boards.stages.storyboards!.outputs)
   }, 60_000)
 
-  it('requires character mentions and reveals a goal created from the chat input', async () => {
+  scenario('combines a finished goal into one local video and opens its preview', async () => {
+    const saved = await create()
+    await seedGoalStage(engine, saved.goalId, 'frame')
+    await current(saved)
+    await seedGoalStage(engine, saved.goalId, 'storyboards')
+    await current(saved)
+    const videoIds = await Promise.all(['red', 'blue'].map(color => goalTestVideo(engine, root, color)))
+    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds })
+    const complete = await call<GoalSnapshot>('video_goal', { action: 'assemble', goal_id: saved.goalId })
+    await open(complete)
+    await panel().getByRole('button', { name: 'Combine into one video', exact: true }).click()
+    await expect.poll(async () => (await current(saved)).combined?.status, { timeout: 30_000 }).toBe('completed')
+    await expect.poll(() => panel().getByRole('button', { name: 'Open combined video', exact: true }).isVisible(), { timeout: 15_000 }).toBe(true)
+    const combined = (await current(saved)).combined!
+    await expect.poll(() => page.locator(`.react-flow__node[data-id="${combined.cellId}"] .cell-goal-mark`).textContent(), { timeout: 15_000 }).toContain('Combined')
+    await panel().getByRole('button', { name: 'Open combined video', exact: true }).click()
+    await page.getByRole('dialog', { name: /Fullscreen preview for/ }).waitFor({ state: 'visible' })
+    await page.keyboard.press('Escape')
+    expect(errors).toEqual([])
+  }, 60_000)
+
+  scenario('opts into ending frames, reviews both images and regenerates one storyboard pair', async () => {
+    const saved = await create()
+    await open(saved)
+    expect(await panel().getByLabel('Ending storyboards', { exact: true }).inputValue()).toBe('off')
+    await panel().getByLabel('Ending storyboards', { exact: true }).selectOption('on')
+    await panel().getByLabel('Shot 2 ending storyboard prompt', { exact: true }).fill('Both characters wave beside the stationary skateboard.')
+    await panel().getByRole('button', { name: 'Save plan', exact: true }).click()
+    await expect.poll(async () => (await current(saved)).revision).toBe(2)
+    const enabled = await current(saved)
+    expect(enabled.plan).toMatchObject({ frameContinuity: true })
+    expect(enabled.estimate.storyboards.usd).toBeCloseTo(saved.estimate.storyboards.usd! * 2)
+    await seedGoalStage(engine, saved.goalId, 'frame')
+    await current(saved)
+    await seedGoalStage(engine, saved.goalId, 'storyboards')
+    const ready = await current(saved)
+    expect(ready.stages.storyboards!.outputs).toHaveLength(4)
+    await open(ready)
+    expect(await panel().getByRole('button', { name: /Open Ending storyboard/ }).count()).toBe(2)
+    expect(await panel().getByLabel('Ending storyboards', { exact: true }).isDisabled()).toBe(true)
+    await panel().getByRole('button', { name: /Open Ending storyboard 1/ }).scrollIntoViewIfNeeded()
+    await screenshot('goal-ending-storyboards')
+    await pauseBookQueueForTests(bookId)
+    await panel().getByRole('button', { name: /Regenerate storyboard pair 2/ }).click()
+    await expect.poll(async () => (await current(saved)).status).toBe('running')
+    const regenerating = await current(saved)
+    expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(['storyboard2', 'storyboard4'])
+    expect(errors).toEqual([])
+  }, 60_000)
+
+  scenario('requires character mentions and reveals a goal created from the chat input', async () => {
     const before = (await goals()).goals.length
     await command('/goal a funny skateboard video')
     await expect.poll(() => page.locator('.chat-bubble-assistant').last().textContent(), { timeout: 15_000 }).toContain('Mention the character images')
@@ -231,4 +294,61 @@ describe('staged goal mode in the browser', () => {
     expect(await page.getByRole('dialog', { name: 'Goal mode', exact: true }).count()).toBe(0)
     expect(errors).toEqual([])
   }, 30_000)
+
+  it.runIf(live)('plans and generates a complete two-shot goal with real providers', async () => {
+    const brief = '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video, landscape.'
+    await command(`/goal ${brief}`)
+    const waitForGoal = async (stage: string, wanted: string, timeout = 600_000): Promise<GoalSnapshot> => {
+      const deadline = Date.now() + timeout
+      while (Date.now() < deadline) {
+        const latest = (await goals()).goals.find(goal => goal.brief === brief)
+        if (latest?.status === 'failed' || latest?.status === 'interrupted') throw new Error(latest.error ?? 'Goal failed')
+        if (latest?.status === wanted && (stage === '*' || latest.stage === stage)) return latest
+        await new Promise(resolve => setTimeout(resolve, 2_000))
+      }
+      throw new Error(`Goal did not reach ${stage}:${wanted}`)
+    }
+    const planned = await waitForGoal('frame', 'review', 120_000)
+    const plan = { ...planned.plan, version: 2, imageResolution: '1K', videoResolution: '480p', shots: planned.plan!.shots.map(shot => ({ ...shot, durationSeconds: 4 })) }
+    const reviewed = await call<GoalSnapshot>('video_goal', { action: 'update', goal_id: planned.goalId, revision: planned.revision, plan })
+    expect(reviewed.plan?.shots).toHaveLength(2)
+    expect(reviewed.estimate.total.usd).not.toBeNull()
+    expect(reviewed.estimate.total.usd!).toBeLessThan(3)
+    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, estimate: reviewed.estimate }))
+    await open(reviewed)
+    await panel().getByRole('button', { name: 'Generate full frame', exact: true }).click()
+    const frame = await waitForGoal('storyboards', 'review')
+    expect(frame.stages.frame!.outputs).toHaveLength(1)
+    await status().click()
+    await panel().getByRole('button', { name: /Approve frame/ }).waitFor({ state: 'visible', timeout: 30_000 })
+    await screenshot('live-full-frame')
+    await panel().getByRole('button', { name: /Approve frame/ }).click()
+    const boards = await waitForGoal('videos', 'review')
+    expect(boards.stages.storyboards!.outputs).toHaveLength(2)
+    await status().click()
+    await panel().getByRole('button', { name: /Approve storyboards/ }).waitFor({ state: 'visible', timeout: 30_000 })
+    await screenshot('live-storyboards')
+    await panel().getByRole('button', { name: /Approve storyboards/ }).click()
+    const completed = await waitForGoal('*', 'completed', 900_000)
+    expect(completed.stages.videos!.outputs).toHaveLength(2)
+    expect(completed.assembly!.durationFrames).toBeGreaterThan(0)
+    const sequence = engine.sequences.getPrimary()
+    expect(sequence.clips.filter(clip => completed.clipIds.includes(clip.clipId))).toHaveLength(2)
+    const document = engine.notebooks.read(notebookId)
+    if (!document.ok) throw new Error(document.error.message)
+    for (const [stage, count] of [['frame', 1], ['storyboards', 2], ['videos', 2]] as const) {
+      const outputs = completed.stages[stage]!.outputs
+      expect(outputs).toHaveLength(count)
+      for (const output of outputs) {
+        expect(document.value.cells.some(cell => cell.id === output.cellId && cell.outputArtifactId === output.artifactId)).toBe(true)
+        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength(stage === 'frame' ? 2 : stage === 'storyboards' ? 3 : 1)
+      }
+    }
+    const usage = await call('get_book_usage')
+    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, usage, completed: completed.assembly }))
+    await status().click()
+    await screenshot('live-complete')
+    expect(errors).toEqual([])
+  }, 1_800_000)
+
 })

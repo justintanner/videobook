@@ -51,9 +51,11 @@ export function goalPlansEqual(left: GoalPlan, right: GoalPlan): boolean {
   return left.title === right.title && left.continuity === right.continuity
     && left.aspectRatio === right.aspectRatio && left.imageModel === right.imageModel
     && left.imageResolution === right.imageResolution && left.videoResolution === right.videoResolution
+    && Boolean(left.frameContinuity) === Boolean(right.frameContinuity)
     && left.frame.prompt === right.frame.prompt && left.shots.length === right.shots.length
     && left.shots.every((shot, index) => shot.title === right.shots[index]?.title
       && shot.storyboardPrompt === right.shots[index]?.storyboardPrompt
+      && (shot.endingPrompt ?? null) === (right.shots[index]?.endingPrompt ?? null)
       && shot.videoPrompt === right.shots[index]?.videoPrompt && shot.durationSeconds === right.shots[index]?.durationSeconds)
 }
 
@@ -100,13 +102,16 @@ function plannedShots(plan: GoalDisplayPlan | null): GoalShotView[] {
 
 function goalShots(goal: GoalSnapshot, stage: GoalGenerationStage): GoalShotView[] {
   const plan = goal.plan
-  const rows = stage === 'frame' && isStagedGoalPlan(plan)
+  const firstRows = stage === 'frame' && isStagedGoalPlan(plan)
     ? [{ index: 0, number: '01', title: 'Full frame', prompt: plan.frame.prompt, seconds: 0 }]
     : (plan?.shots ?? []).map((shot, index) => ({
         index, number: String(index + 1).padStart(2, '0'), title: shot.title,
         prompt: 'videoPrompt' in shot ? stage === 'storyboards' ? shot.storyboardPrompt : shot.videoPrompt : shot.prompt,
         seconds: stage === 'videos' ? shot.durationSeconds : 0,
       }))
+  const rows = stage === 'storyboards' && isStagedGoalPlan(plan) && plan.frameContinuity
+    ? [...firstRows, ...plan.shots.map((shot, index) => ({ index: index + plan.shots.length, number: `${String(index + 1).padStart(2, '0')} end`, title: `${shot.title} · Ending`, prompt: shot.endingPrompt ?? shot.videoPrompt, seconds: 0 }))]
+    : firstRows
   const run = goal.stages[stage]
   const steps = new Map((run?.steps ?? (goal.planVersion === 1 ? goal.steps : [])).map(step => [step.id, step]))
   return rows.map(row => {
@@ -231,12 +236,15 @@ export function composerGoal(goals: readonly GoalSnapshot[]): GoalSnapshot | nul
 export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap<string, string> {
   const marks = new Map<string, string>()
   for (const goal of goals) {
+    if (goal.combined) marks.set(goal.combined.cellId, `Combined${goal.address ? ` · ${goal.address}` : ''}`)
     const total = goal.plan?.shots.length ?? 0
     const steps = goal.planVersion === 1 ? goal.steps : Object.values(goal.stages).flatMap(run => run.allSteps)
     for (const step of steps) {
       const match = /^(frame|storyboard|shot)(\d+)?$/.exec(step.id)
       if (!match) continue
-      const label = match[1] === 'frame' ? 'Frame' : `${match[1] === 'storyboard' ? 'SB ' : ''}${match[2]}/${total}`
+      const number = Number(match[2])
+      const label = match[1] === 'frame' ? 'Frame' : match[1] === 'storyboard' && number > total
+        ? `End ${number - total}/${total}` : `${match[1] === 'storyboard' ? 'SB ' : ''}${match[2]}/${total}`
       for (const id of [step.cellId, step.outputCellId]) if (id) marks.set(id, `${label}${goal.address ? ` · ${goal.address}` : ''}`)
     }
   }
@@ -297,7 +305,7 @@ function tileNote(goal: GoalSnapshot | null, progress: GoalProgress | null): str
 function overallProgress(goal: GoalSnapshot, progress: GoalProgress): number {
   if (goal.status === 'completed') return 100
   if (goal.planVersion === 1) return progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0
-  const total = 1 + 2 * (goal.plan?.shots.length ?? 0)
+  const total = 1 + (isStagedGoalPlan(goal.plan) && goal.plan.frameContinuity ? 3 : 2) * (goal.plan?.shots.length ?? 0)
   const done = Object.values(goal.stages).reduce((sum, run) => sum + run.outputs.length, 0)
   return Math.round(done / total * 100)
 }
@@ -312,7 +320,7 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
   const duration = plan?.shots.every(shot => shot.durationSeconds === firstDuration) ? firstDuration : null
   const thumbnails = goal ? [
     ...(goal.stages.frame?.outputs ?? []).map(output => ({ ...output, label: 'Full frame' })),
-    ...(goal.stages.storyboards?.outputs ?? []).map(output => ({ ...output, label: `Storyboard ${output.index + 1}` })),
+    ...(goal.stages.storyboards?.outputs ?? []).map(output => ({ ...output, label: output.index >= (plan?.shots.length ?? 0) ? `Ending ${output.index + 1 - (plan?.shots.length ?? 0)}` : `Storyboard ${output.index + 1}` })),
   ] : []
   return {
     title: plan?.title ?? (phase === 'planning' ? 'Building your shot plan' : label ?? 'Video goal'), planning: phase === 'planning',

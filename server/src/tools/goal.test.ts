@@ -7,7 +7,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
-import { pauseBookQueueForTests } from "../queue.js";
+import { pauseBookQueueForTests, stopBookQueue } from "../queue.js";
 import { cancelChainRun, getChainRun, waitForChainRun } from "../chain-executor.js";
 import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, GOAL_IMAGE_TOOLS, GOAL_VIDEO_TOOL } from "../goal-plan.js";
 import { readGoal, saveGoal } from "../goal-store.js";
@@ -15,6 +15,7 @@ import { goalPlannerBrief } from "../goal-characters.js";
 import { LEGACY_GOAL_MESSAGE } from "../goal-state.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
 import { goalTestCharacters, goalTestPlan, goalTestVideo, seedGoalStage } from "../test-goals.js";
+import { probeVideo } from "../ffmpeg.js";
 import type { GoalSnapshot } from "./goal.js";
 
 const brief = "@a1@a2 make a funny video of a dog on a skateboard, three 10s clips";
@@ -30,6 +31,7 @@ describe("video goal plans", () => {
     expect(goalPlanSchema.safeParse({ ...plan, frame: { prompt: "Make @a1 the hero" } }).success).toBe(false);
     expect(goalPlanSchema.safeParse({ ...plan, shots: Array(9).fill(plan.shots[0]) }).success).toBe(false);
     expect(goalBriefConstraints(brief)).toEqual({ shotCount: 3, durationSeconds: 10, aspectRatio: "16:9" });
+    expect(goalBriefConstraints("two 4s funny clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "16:9" });
     expect(goalBriefConstraints("four 8-second clips, portrait")).toEqual({ shotCount: 4, durationSeconds: 8, aspectRatio: "9:16" });
     expect(goalBriefConstraints("2 x 12s, square")).toEqual({ shotCount: 2, durationSeconds: 12, aspectRatio: "1:1" });
     expect(() => goalBriefConstraints("12 clips of 10s")).toThrow("1–8");
@@ -60,6 +62,21 @@ describe("video goal plans", () => {
       expect(step.params.prompt).not.toMatch(/@[abc][1-8]/u);
     }
     expect(goalPlannerBrief(brief, characters)).toContain("Character 1 Character 2");
+  });
+
+  it("keeps ending storyboards opt-in and compiles paired frame references and regeneration", () => {
+    expect(plan.frameContinuity).toBe(false);
+    const paired = { ...plan, frameContinuity: true };
+    const steps = compileStoryboardSteps(paired, characters, "@b2");
+    expect(steps.map(step => step.id)).toEqual(["storyboard1", "storyboard2", "storyboard3", "storyboard4", "storyboard5", "storyboard6"]);
+    expect(steps[3]!.params.prompt).toContain("final moment");
+    expect(steps[3]!.params.prompt).toContain(plan.shots[1]!.storyboardPrompt);
+    expect(compileStoryboardSteps(paired, characters, "@b2", [1]).map(step => step.id)).toEqual(["storyboard2", "storyboard5"]);
+    expect(() => compileVideoSteps(uuidv7(), paired, characters, ["@c1", "@c2", "@c3"])).toThrow("ending storyboard");
+    const videos = compileVideoSteps(uuidv7(), paired, characters, ["@c1", "@c2", "@c3"], ["@d1", "@d2", "@d3"]);
+    expect(videos[1]!.params).toMatchObject({ first_frame_ref: "@c2", last_frame_ref: "@d2" });
+    expect(videos[1]!.params.prompt).toContain("@lastframe");
+    expect(videos[1]!.params.image_refs).toBeUndefined();
   });
 });
 
@@ -226,6 +243,39 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, regenerate.chainId!);
   });
 
+  it("prices, reviews and regenerates ending storyboards before submitting paired-frame videos", async () => {
+    const base = await create();
+    const pairedPlan = { ...plan, frameContinuity: true };
+    const paired = await create({ plan: pairedPlan });
+    expect(paired.estimate.frame).toEqual(base.estimate.frame);
+    expect(paired.estimate.storyboards.usd).toBeCloseTo(base.estimate.storyboards.usd! * 2);
+    expect(paired.estimate.videos).toEqual(base.estimate.videos);
+    const ready = await advance(await advance(paired, "frame"), "storyboards");
+    expect(ready.stages.storyboards!.outputs).toHaveLength(6);
+    expect((await raw({ action: "update", goal_id: ready.goalId, revision: ready.revision, plan })).isError).toBe(true);
+    const updatedPlan = { ...pairedPlan, shots: pairedPlan.shots.map((shot, index) => index === 1 ? { ...shot, endingPrompt: "Both characters stop beside a fountain" } : shot) };
+    const edited = await invoke({ action: "update", goal_id: ready.goalId, revision: ready.revision, plan: updatedPlan });
+    expect((await raw({ action: "approve", goal_id: ready.goalId, revision: edited.revision })).content).toEqual([expect.objectContaining({ text: expect.stringContaining("Ending storyboard 2 changed") })]);
+    await pauseBookQueueForTests(bookId);
+    const regenerating = await invoke({ action: "regenerate", goal_id: ready.goalId, revision: edited.revision, shot_indexes: [1] });
+    await expect.poll(() => getChainRun(engine, regenerating.chainId!)?.steps[0]?.childJobIds.length).toBe(1);
+    expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(["storyboard2", "storyboard5"]);
+    cancelChainRun(engine, regenerating.chainId!);
+    await waitForChainRun(engine, regenerating.chainId!);
+    await seedGoalStage(engine, ready.goalId, "storyboards", { indexes: [1] });
+    const regenerated = await status(ready.goalId);
+    expect(regenerated.stages.storyboards!.outputs).toHaveLength(6);
+    for (const index of [0, 2, 3, 5]) expect(regenerated.stages.storyboards!.outputs[index]).toEqual(ready.stages.storyboards!.outputs[index]);
+    const video = await approve(regenerated);
+    await expect.poll(() => getChainRun(engine, video.chainId!)?.steps[0]?.childJobIds.length).toBe(1);
+    const step = getChainRun(engine, video.chainId!)!.steps[0]!;
+    expect(step.pins.map(pin => pin.field)).toEqual(["first_frame_ref", "last_frame_ref"]);
+    const job = engine.jobs.queue.list({ type: "generate_seedance25_video" })[0]!;
+    expect(job.payload).toMatchObject({ firstFrame: { assetId: regenerated.stages.storyboards!.outputs[0]!.artifactId }, lastFrame: { assetId: regenerated.stages.storyboards!.outputs[3]!.artifactId }, imageInputs: [] });
+    await invoke({ action: "cancel", goal_id: ready.goalId });
+    await waitForChainRun(engine, video.chainId!);
+  });
+
   it("persists planning failures, retries planning, and stops a removed goal", async () => {
     const failed = await invoke({ action: "create", brief });
     await expect.poll(async () => (await status(failed.goalId)).status).toBe("failed");
@@ -279,6 +329,35 @@ describe("staged video goals through MCP", () => {
     const trackId = readGoal(engine, multi.goalId).trackId!;
     await engine.sequences.updateTrack(trackId, { locked: true });
     await expect(appendGoalClips(engine, { ...readGoal(engine, multi.goalId), goalId: uuidv7(), assembly: null, clipIds: ids.map(() => uuidv7()) }, ids)).rejects.toThrow("no longer editable");
+  });
+
+  it("combines three completed clips locally with sound, exact duration and one idempotent output", async () => {
+    const goal = await create();
+    await advance(goal, "frame");
+    await advance(goal, "storyboards");
+    const videoIds = await Promise.all(["red", "blue", "green"].map(color => goalTestVideo(engine, root, color)));
+    await seedGoalStage(engine, goal.goalId, "videos", { videoIds });
+    const completed = await invoke({ action: "assemble", goal_id: goal.goalId });
+    expect(completed.status).toBe("completed");
+    await pauseBookQueueForTests(bookId);
+    const interrupted = await invoke({ action: "combine", goal_id: goal.goalId });
+    await engine.jobs.queue.abort(interrupted.combined!.jobId!, "Interrupted before combining");
+    const failed = await status(goal.goalId);
+    expect(failed.combined).toMatchObject({ status: "failed", error: "Interrupted before combining" });
+    expect(notebook().cells.find(cell => cell.id === failed.combined!.cellId)?.inputs?.state).toBe("error");
+    await stopBookQueue(bookId);
+    const combining = await invoke({ action: "combine", goal_id: goal.goalId });
+    expect((await invoke({ action: "combine", goal_id: goal.goalId })).combined?.artifactId).toBe(combining.combined!.artifactId);
+    await expect.poll(async () => (await invoke({ action: "status", goal_id: goal.goalId })).combined?.status, { timeout: 20_000 }).toBe("completed");
+    const combined = (await invoke({ action: "status", goal_id: goal.goalId })).combined!;
+    const manifest = await engine.files.manifest(combined.artifactId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const probe = await probeVideo(join(manifest.value.path, "original.mp4"));
+    expect(probe.hasAudio).toBe(true);
+    expect(Math.abs(probe.videoDuration - 12)).toBeLessThanOrEqual(0.2);
+    expect(notebook().edges.filter(edge => edge.target === combined.cellId).map(edge => edge.targetInput)).toEqual(["video", "video_2", "video_3"]);
+    expect((await invoke({ action: "combine", goal_id: goal.goalId })).combined).toEqual(combined);
+    expect(engine.jobs.queue.list({ type: "combine_goal" })).toHaveLength(2);
   });
 
   it("keeps legacy goals readable, cancels active legacy runs once, and refuses paid continuation", async () => {

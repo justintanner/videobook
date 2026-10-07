@@ -68,9 +68,10 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const plan = goalPlanSchema.parse(content.plan);
   const frame = goal.stages.frame?.outputs[0]?.address ?? content.characters[0]!.address;
   const storyboards = plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index)?.address ?? frame);
+  const endings = plan.frameContinuity ? plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)?.address ?? frame) : [];
   const steps = stage === "frame" ? compileFrameSteps(plan, content.characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, content.characters, frame, options.indexes)
-      : compileVideoSteps(goalId, plan, content.characters, storyboards);
+      : compileVideoSteps(goalId, plan, content.characters, storyboards, endings);
   const defs = getAllToolDefs(engine);
   const checked = await preflightChainPlan({ action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId, steps }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId, toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),

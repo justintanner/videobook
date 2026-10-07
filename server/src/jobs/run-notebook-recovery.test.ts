@@ -1,10 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine, JobState } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { claimNotebookRunPlan } from "../notebook-run-plan.js";
+import { placeChainGeneration } from "../chain-generation.js";
 import { queue as appQueue, setEngineRoot } from "../queue.js";
 import {
   abortLeasedNotebookRunsOnStartup,
@@ -283,6 +285,32 @@ describe("awaiting notebook output startup recovery", () => {
     ]);
   });
 
+  it.each(["ready", "error"])("settles a %s chain output without resuming a notebook run", async providerStatus => {
+    const artifact = await engine.artifacts.create("image", "Chain frame");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const notebook = await engine.notebooks.create("Chain");
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const runId = "019f0000-0000-7000-8000-000000000021:frame";
+    const placed = await placeChainGeneration({
+      engine, notebookId: notebook.value.id, tool: "generate_kie_gpt_image_2_5_sunburst_image", placement: "generate_image",
+      params: { prompt: "A full frame" }, artifactId: artifact.value.artifactId, runId, pins: [],
+    });
+    const bytes = await sharp({ create: { width: 32, height: 32, channels: 3, background: "red" } }).png().toBuffer();
+    expect((await engine.files.write(artifact.value.artifactId, "original.png", bytes)).ok).toBe(true);
+    if (providerStatus === "error") expect((await engine.jobs.failures.write(artifact.value.artifactId, { message: "Provider stopped" })).ok).toBe(true);
+    registerRunNotebookJob(engine);
+    await setEngineRoot(rootDir, engine);
+    await appQueue.enqueueAndWait(`chain-output-${providerStatus}`, {
+      type: "await_notebook_output", bookId: engine.book.get().bookId, notebookId: notebook.value.id,
+      cellId: placed.producerCellId, outputCellId: placed.outputCellId, providerArtifactId: artifact.value.artifactId,
+      runId, cellIds: [placed.producerCellId],
+    });
+    const settled = engine.notebooks.read(notebook.value.id);
+    if (!settled.ok) throw new Error(settled.error.message);
+    expect(settled.value.execution?.[placed.outputCellId]?.status).toBe(providerStatus === "ready" ? "completed" : "error");
+    expect(engine.jobs.queue.list({ type: "run_notebook" })).toHaveLength(0);
+  });
+
   it.each(["failed", "aborted"] satisfies JobState[])(
     "transitions an awaiting cell to failure when its await job is %s",
     async (terminalState) => {
@@ -340,6 +368,7 @@ describe("awaiting notebook output startup recovery", () => {
       actor: "notebook-reconciler",
     });
     await waitForAwaitJobTerminal();
+    expect(engine.jobs.queue.list({ type: "run_notebook" })).toHaveLength(1);
     expect(await reconcileAwaitingNotebookOutputs(engine, fixture.bookId)).toBe(0);
     expect(engine.jobs.queue.list({ type: "await_notebook_output" })).toHaveLength(1);
   });

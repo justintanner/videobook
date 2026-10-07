@@ -13,6 +13,7 @@ import {
   writeGoalContent, type GoalRecord, type GoalStageOutput,
 } from "../goal-store.js";
 import { estimateGoal } from "../jobs/plan-goal.js";
+import { queueGoalCombination } from "../jobs/combine-goal.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -90,7 +91,9 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   if (characters.length === 0) throw new Error("This goal has no character images. Start a new /goal.");
   const steps = stage === "frame" ? compileFrameSteps(plan, characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes)
-      : compileVideoSteps(goal.goalId, plan, characters, plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))));
+      : compileVideoSteps(goal.goalId, plan, characters,
+        plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
+        plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
   if (stage === "storyboards" && !regenerate) {
     const frameRun = goal.stages.frame;
     const frameStep = frameRun ? getChainRun(engine, frameRun.chainId)?.steps.find(step => step.id === "frame") : null;
@@ -106,13 +109,13 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
       const artifactId = storyboardRun?.outputs.find(output => output.index === index)?.artifactId;
       const source = storyboardRun && [...storyboardRun.previousChainIds, storyboardRun.chainId].flatMap(id => getChainRun(engine, id)?.steps ?? [])
         .find(step => step.id === expected.id && (step.outputs?.asset_id ?? step.outputs?.img_asset_id) === artifactId);
-      if (source?.params.prompt !== expected.params.prompt) throw new Error(`Storyboard ${index + 1} changed. Regenerate it before approving videos.`);
+      if (source?.params.prompt !== expected.params.prompt) throw new Error(`${index >= plan.shots.length ? "Ending storyboard" : "Storyboard"} ${index % plan.shots.length + 1} changed. Regenerate it before approving videos.`);
     }
   }
   const track = stage === "videos" && plan.shots.length > 1
     ? engine.sequences.getPrimary().tracks.find(candidate => candidate.kind === "video" && candidate.enabled && !candidate.locked) : null;
   if (stage === "videos" && plan.shots.length > 1 && !track) throw new Error("The sequence needs an enabled, unlocked video track");
-  await ensureStageSpace(engine, goal, stage, indexes.length, plan);
+  await ensureStageSpace(engine, goal, stage, steps.filter(step => step.id !== "assemble").length, plan);
   const { defs, lookup } = await goalToolLookup(engine);
   const chain = await preflightAndAccept({
     action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId,
@@ -176,6 +179,7 @@ function validateReviewEdit(goal: GoalRecord, previous: GoalPlan, plan: GoalPlan
     || previous.continuity !== plan.continuity || previous.shots.length !== plan.shots.length) {
     throw new Error("The characters, visual style, format and shot count are fixed after generating the full frame. Start a new goal to change them.");
   }
+  if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending storyboards before generating the full frame. Start a new goal to change this setting.");
   if (goal.stage === "videos" && previous.frame.prompt !== plan.frame.prompt) {
     throw new Error("Edit the full-frame prompt while reviewing the full frame.");
   }
@@ -221,6 +225,10 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   if (args.action === "approve" || args.action === "regenerate") return startStage(engine, goal, args, args.action === "regenerate");
   if (args.action === "cancel") return cancelGoal(engine, goal);
   if (args.action === "retry") return retryGoal(engine, goal);
+  if (args.action === "combine") {
+    requireModernGoal(goal);
+    return queueGoalCombination(engine, goal);
+  }
   if (args.action === "dismiss") {
     if (ACTIVE_STATUSES.has(goal.status)) throw new Error("Stop the goal before dismissing it");
     return saveGoal(engine, { ...goal, dismissedAt: new Date().toISOString() });
@@ -242,10 +250,10 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a video goal from character image mentions, review its plan, then approve each paid stage: GPT Image 2.5 full frame, GPT Image 2.5 storyboards, and Seedance 2.5 videos. approve requires the current revision; each stage finishes at the next review. regenerate repeats the full frame or selected zero-based storyboard shot_indexes. update edits a review, cancel stops remaining work, retry resumes the failed stage, and dismiss hides a finished goal. Multiple clips append in order to the sequence; one clip finishes without assembly. The plan and character references live in the goal tile; deleting it stops the goal.",
+    description: "Create a video goal from character image mentions, review its plan, then approve each paid stage: GPT Image 2.5 full frame, GPT Image 2.5 storyboards, and Seedance 2.5 videos. approve requires the current revision; each stage finishes at the next review. regenerate repeats the full frame or selected zero-based storyboard shot_indexes. Optional plan.frameContinuity (default false) adds one ending storyboard per shot; endingPrompt edits its pose, regeneration replaces the pair, and videos use both first and last frames. update edits a review, cancel stops remaining work, retry resumes the failed stage, and dismiss hides a finished goal. Multiple clips append in order to the sequence; one clip finishes without assembly. combine renders an assembled goal into one video locally, retaining clip audio; repeated calls reuse its output. The plan and character references live in the goal tile; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "cancel", "assemble", "retry", "dismiss"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "cancel", "assemble", "retry", "dismiss", "combine"]),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: goalPlanSchema.optional(),
       revision: z.number().int().nonnegative().optional(), shot_indexes: z.array(z.number().int().min(0).max(7)).min(1).max(8).optional(),

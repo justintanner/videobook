@@ -5,9 +5,9 @@ import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 type Step = GoalSnapshot['steps'][number]
 type Stage = NonNullable<GoalSnapshot['stages']['frame']>
 const plan: GoalPlan = {
-  version: 2, title: 'Rainy commute', continuity: 'Two characters share a flooded street', aspectRatio: '16:9', imageModel: 'sunburst', imageResolution: '2K', videoResolution: '720p',
+  version: 2, title: 'Rainy commute', continuity: 'Two characters share a flooded street', aspectRatio: '16:9', imageModel: 'sunburst', imageResolution: '2K', videoResolution: '720p', frameContinuity: false,
   frame: { prompt: 'Both characters beside a bicycle under an umbrella' },
-  shots: [0, 1, 2].map(index => ({ title: `Commute ${index + 1}`, storyboardPrompt: `Still frame ${index + 1}`, videoPrompt: `Action ${index + 1}`, durationSeconds: 10 })),
+  shots: [0, 1, 2].map(index => ({ title: `Commute ${index + 1}`, storyboardPrompt: `Still frame ${index + 1}`, endingPrompt: null, videoPrompt: `Action ${index + 1}`, durationSeconds: 10 })),
 }
 const estimate = { frame: { usd: 0.2, warnings: [] }, storyboards: { usd: 0.6, warnings: [] }, videos: { usd: 2.4, warnings: [] }, total: { usd: 3.2, warnings: [] } }
 function goal(extra: Partial<GoalSnapshot> = {}): GoalSnapshot {
@@ -48,6 +48,8 @@ describe('staged goal model', () => {
       { ...plan, frame: { prompt: 'Changed' } }, { ...plan, imageResolution: '1K' as const }, { ...plan, videoResolution: '480p' as const }, { ...plan, imageModel: 'flare' as const },
       { ...plan, shots: plan.shots.map((shot, index) => index ? shot : { ...shot, storyboardPrompt: 'Changed' }) },
       { ...plan, shots: plan.shots.map((shot, index) => index ? shot : { ...shot, videoPrompt: 'Changed' }) },
+      { ...plan, frameContinuity: true },
+      { ...plan, shots: plan.shots.map((shot, index) => index ? shot : { ...shot, endingPrompt: 'Changed ending' }) },
     ]) expect(goalPlansEqual(plan, changed)).toBe(false)
   })
 
@@ -96,6 +98,17 @@ describe('staged goal model', () => {
     expect(marks.get('frame-output-0')).toBe('Frame · @a3')
     expect(marks.get('storyboards-output-1')).toBe('SB 2/3 · @a3')
     expect(marks.get('videos-producer-1')).toBe('2/3 · @a3')
+  })
+
+  it('includes ending frames in progress, thumbnails and goal marks', () => {
+    const paired = running('storyboards', ['completed', 'completed', 'completed', 'completed', 'running', 'pending'], { plan: { ...plan, frameContinuity: true } })
+    const progress = goalProgress(paired)
+    expect(progress).toMatchObject({ done: 4, total: 6 })
+    expect(progress.shots[4]).toMatchObject({ title: 'Commute 2 · Ending', state: 'generating' })
+    const view = goalTileView(paired, null, undefined)
+    expect(view.progressPercent).toBe(50)
+    expect(view.thumbnails[4]?.label).toBe('Ending 1')
+    expect(goalGenerationMarks([paired]).get('storyboards-producer-4')).toBe('End 2/3 · @a3')
   })
 
   it('shows stage rows, thumbnails and whole-goal progress without flickering state', () => {

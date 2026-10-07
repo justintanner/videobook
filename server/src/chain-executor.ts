@@ -439,8 +439,6 @@ async function completeGeneration(
     outputCellId: placement.outputCellId,
     providerArtifactId: artifactId,
     runId,
-    // Scope the resume this job triggers, or it would sweep every runnable cell
-    // in the notebook and re-dispatch paid work nobody approved.
     cellIds: [placement.producerCellId],
   };
   onPlaced({ ...outputs, cell_id: placement.outputCellId, address: placement.address });

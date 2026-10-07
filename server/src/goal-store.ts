@@ -18,6 +18,7 @@ export type GoalStageRun = {
 };
 
 export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number };
+export type GoalCombinedVideo = { artifactId: string; cellId: string; jobId: number | null; status: "running" | "completed" | "failed"; error: string | null };
 
 export type GoalRecord = {
   planVersion: 1 | 2;
@@ -34,6 +35,7 @@ export type GoalRecord = {
   clipIds: string[];
   trackId: string | null;
   assembly: GoalAssembly | null;
+  combined?: GoalCombinedVideo;
   error: string | null;
   dismissedAt: string | null;
   createdAt: string;

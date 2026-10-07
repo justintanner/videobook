@@ -65,9 +65,20 @@ Each paid stage needs a separate approval:
    separate character references; their appearance comes through the storyboard.
 4. **Combine:** multiple clips append in order after existing sequence content.
    A single clip finishes without assembly. Actual media durations determine
-   the sequence length.
+   the sequence length. **Combine into one video** creates one shareable MP4
+   with the clips and their sound, rendered locally without provider spend.
+   Repeating the action reopens the same output.
 
 The approval button saves pending edits first; Cmd/Ctrl+Enter does the same.
+**Ending storyboards** is off by default. Enable it in the initial plan review
+to generate and review a starting and ending image for each shot. This adds one
+image per shot to the storyboard estimate. Ending prompts can describe a target
+pose; when blank, the video prompt supplies the final moment. The ending frame
+also considers the next shot's opening composition. Regenerating a shot replaces
+both images, and video generation uses the approved pair as its first and last
+frames. If an edited prompt affects an approved image, regenerate it before
+approving videos.
+
 Estimates show the next stage and the plan total, with any pricing warnings.
 Regeneration incurs the displayed image cost again. Generation defaults to
 720p; 480p is available. Planning requires `OPENAI_API_KEY` and is billed
@@ -87,10 +98,16 @@ Older version-1 goals remain readable; unfinished ones ask you to start a new
 `/goal` with character images.
 
 MCP clients use `video_goal` actions `create`, `list`, `status`, `update`,
-`approve`, `regenerate`, `cancel`, `retry`, `dismiss`, and `assemble`.
+`approve`, `regenerate`, `cancel`, `retry`, `dismiss`, `assemble`, and `combine`.
 `approve` and `regenerate` require the current reviewed revision;
 `regenerate` accepts zero-based `shot_indexes` for selected storyboards.
 Execution state uses the scoped engine's runtime settings.
+
+The provider-free browser check runs with `npm run test:e2e -- tests/v2/goal-ui.e2e.test.ts`.
+A separate paid check uses `VIDEOBOOK_RUN_MODEL_E2E=1 op run --env-file=.env.tpl -- npx vitest run --config vitest.goal-live.config.ts`.
+It uses two 4-second 480p clips and 1K images, requires a media estimate below $3,
+and preserves its scratch book. The ordinary test setup keeps its network and
+credential restrictions.
 
 ## Storage
 

@@ -3992,6 +3992,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!goalScope) throw new Error('Open the goal notebook first.')
     const scope = goalScope
     const goal = await actOnGoal(scope, args)
+    if (args.action === 'combine') {
+      await refreshBookData(scope.bookId, scope.notebookId)
+      return goal
+    }
     if (args.action !== 'approve' && args.action !== 'regenerate' && args.action !== 'retry') return goal
     if (watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId) collapseComposerAfterCellCreation()
     await refreshBookData(scope.bookId, scope.notebookId)
