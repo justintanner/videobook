@@ -30,7 +30,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(26)
+    expect(SCHEMA_VERSION).toBe(27)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
@@ -47,6 +47,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
       'concat',
       'splice',
       'timeline',
+      'goal',
     ])
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 

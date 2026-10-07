@@ -311,15 +311,15 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/goal",
-    description: "Plan and run a video goal with multiple clips assembled into a sequence",
+    description: "Plan and run a video goal in a goal tile, with multiple clips assembled into a sequence",
     example: "/goal make a funny video of a dog on a skateboard, multiple 10s clips",
     category: "action",
     icon: "Wand2",
     size: "lg",
     variant: "violet",
     chevron: "right",
-    params: [{ name: "brief", type: "string", required: false, description: "Describe the video, clip count and duration. Omit to view saved goals." }],
-    uiAction: "open_goal",
+    params: [{ name: "brief", type: "string", required: false, description: "Describe the video, clip count and duration. Omit to show the current goal." }],
+    uiAction: "start_goal",
     exposure: "ui",
   },
   {

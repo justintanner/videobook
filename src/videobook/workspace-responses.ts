@@ -150,6 +150,7 @@ const notebookCellTypes = new Set<string>([
   'concat',
   'splice',
   'timeline',
+  'goal',
 ] satisfies NotebookCellType[])
 
 export function asCellAssetRevisions(value: unknown): CellAssetRevision[] {

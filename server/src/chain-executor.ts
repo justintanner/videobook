@@ -69,6 +69,7 @@ type ChainStepRecord = {
   requiresApproval: boolean;
   approval: ChainStepApproval | null;
   review: ChainStepReview | null;
+  startedAt?: string | null;
 };
 
 export type ChainRunRecord = {
@@ -685,6 +686,7 @@ async function runChain(
           return;
         }
         record.status = "running";
+        record.startedAt = nowIso();
         run.status = "running";
         run.awaitingStepId = null;
         run.updatedAt = nowIso();
@@ -828,6 +830,35 @@ export function approveChainStep(
   };
   step.status = "approved";
   run.status = "running";
+  run.awaitingStepId = null;
+  run.updatedAt = nowIso();
+  saveRun(engine, run);
+  resumeRun(engine, run, planFromRecord(run), lookup);
+  return run;
+}
+
+export function retryChainRun(
+  engine: Engine,
+  chainId: string,
+  lookup: ToolLookup,
+): ChainRunRecord {
+  const run = getChainRun(engine, chainId);
+  if (!run) throw new Error("Chain run not found");
+  if (inflight.has(chainId)) return run;
+  if (run.status !== "failed" && run.status !== "interrupted") {
+    throw new Error("Only a failed or interrupted chain can be retried");
+  }
+  for (const step of run.steps) {
+    if (step.status !== "failed" && step.status !== "interrupted" && step.status !== "skipped") continue;
+    step.status = step.approval ? "approved" : "pending";
+    step.outputs = null;
+    step.error = null;
+    step.childJobIds = [];
+    step.review = null;
+    step.startedAt = null;
+  }
+  run.status = "accepted";
+  run.error = null;
   run.awaitingStepId = null;
   run.updatedAt = nowIso();
   saveRun(engine, run);

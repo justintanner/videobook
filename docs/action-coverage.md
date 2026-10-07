@@ -52,7 +52,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.gap` | `/gap` |  | sequence | track: track_id | `/gap` | slash, launcher | composer | none |
 | `command.generate-cell` | `/generate-cell` |  | notebook | cell: cell_id | `/generate-cell` | slash, launcher | composer | none |
 | `command.gf-characters` | `/gf-characters` |  | book | none | `open_gf_characters` | slash, launcher | dialog | none |
-| `command.goal` | `/goal` |  | book | none | `open_goal` | slash, launcher | dialog | none |
+| `command.goal` | `/goal` |  | book | none | `start_goal` | slash, launcher | composer | none |
 | `command.group-images` | `/group-images` |  | notebook | none | `/group-images` | slash, launcher | composer | none |
 | `command.history` | `/history` |  | book | asset: asset_id | `show_history` | slash, launcher | dialog | none |
 | `command.inbox` | `/inbox` |  | book | none | `open_inbox` | slash, launcher | dialog | none |
@@ -431,7 +431,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | Endpoint | Visible owner | Reason |
 | --- | --- | --- |
 | `upload_file` | `command.upload` | Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data. |
-| `video_goal` | `command.goal` | Goal mode plans a video, reviews all shots and runs the approved goal. |
+| `video_goal` | `command.goal` | Goal mode plans a video in a goal tile, reviews all shots and runs the approved goal from the chat input. |
 | `assemble_goal` | `command.goal` | Goal mode appends its completed shots to the sequence in order. |
 | `push_chat_history` | `tool.chat` | Compatibility write for composer history; users enter messages through chat. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |

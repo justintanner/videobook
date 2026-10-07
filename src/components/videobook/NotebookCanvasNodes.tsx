@@ -15,6 +15,7 @@ import {
   Layers2,
   Sparkles,
   Ellipsis,
+  Flag,
 } from 'lucide-react'
 import {
   cellTypeLabel,
@@ -45,6 +46,7 @@ import {
   GenerationTitlesContext,
   CellContextMenuContext,
   cellContextMenuId,
+  GoalMarksContext,
   TimelineContext,
 } from '@/components/videobook/notebook-canvas-context'
 import {
@@ -100,6 +102,7 @@ export function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'analyze') return <Activity size={14} />
   if (kind === 'analysis') return <Braces size={14} />
   if (kind === 'character') return <CircleDot size={14} />
+  if (kind === 'goal') return <Flag size={14} />
   return <Film size={14} />
 }
 
@@ -318,6 +321,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const primaryCellId = useContext(PrimaryCellContext)
   const generationTitles = useContext(GenerationTitlesContext)
   const contextMenu = useContext(CellContextMenuContext)
+  const goalMark = useContext(GoalMarksContext).get(id) ?? null
   const updateNodeInternals = useUpdateNodeInternals()
   const primarySelected = selected && primaryCellId === id
   const mediaUrl = data.asset?.mediaUrl
@@ -585,6 +589,12 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {aspectRatio && (
                 <span className="cell-aspect-ratio" title="Aspect ratio">
                   {aspectRatio}
+                </span>
+              )}
+              {goalMark && (
+                <span className="cell-aspect-ratio cell-goal-mark" title={`Goal shot ${goalMark}`}>
+                  <Flag size={9} aria-hidden="true" />
+                  {goalMark.split(' · ')[0]}
                 </span>
               )}
             </span>

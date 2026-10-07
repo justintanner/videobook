@@ -6,7 +6,7 @@ import { withNotebookMutation } from "../notebook-mutations.js";
 import { fittedTransform } from "../rhythm/visual-fit.js";
 
 export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifactIds: string[]) {
-  if (!goal.plan || artifactIds.length !== goal.plan.shots.length || goal.clipIds.length !== artifactIds.length) {
+  if (artifactIds.length === 0 || goal.clipIds.length !== artifactIds.length) {
     throw new Error("The finished clips do not match the reviewed goal");
   }
   const sequence = engine.sequences.getPrimary();

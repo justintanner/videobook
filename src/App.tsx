@@ -304,8 +304,8 @@ import type {
 import { useLastWorkSlot } from '@/videobook/last-work-slot'
 import { useNotebookViewport } from '@/videobook/useNotebookViewport'
 import { resolveMusicVideoCommandAsset } from '@/videobook/music-video-command'
-import { asGoal, asGoals } from '@/videobook/goals'
-import type { GoalSnapshot } from '../server/src/tools/goal'
+import { composerGoal, goalGenerationMarks } from '@/videobook/goals'
+import { useVideoGoals } from '@/videobook/use-video-goals'
 import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { parseTrackAddCommand } from '@/videobook/track-add-command'
@@ -569,11 +569,16 @@ import {
   type NotebookSnapshot,
 } from '@/videobook/workspace-responses'
 import { CellIcon, CellNode, TimelineNode } from '@/components/videobook/NotebookCanvasNodes'
+import { GoalCellNode } from '@/components/videobook/GoalCellNode'
+import { GoalComposerStatus } from '@/components/videobook/GoalComposerStatus'
+import { GoalPanel, GoalPanelPlaceholder } from '@/components/videobook/GoalPanel'
 import {
   CellContextMenuContext,
   cellContextMenuId,
   CellRunContext,
   GenerationTitlesContext,
+  GoalMarksContext,
+  GoalTileContext,
   MediaSlotContext,
   PrimaryCellContext,
   TimelineContext,
@@ -600,11 +605,6 @@ const WatermarkBody = lazy(async () => {
 const MusicVideoEditor = lazy(async () => {
   const module = await import('@/components/videobook/MusicVideoEditor')
   return { default: module.MusicVideoEditor }
-})
-
-const GoalWorkspace = lazy(async () => {
-  const module = await import('@/components/videobook/GoalWorkspace')
-  return { default: module.GoalWorkspace }
 })
 
 const AliveCaptionsStudio = lazy(async () => {
@@ -1542,7 +1542,7 @@ type TimelinePreviewSession = {
   initialFrame: number
   returnFocus: HTMLElement | null
 }
-const nodeTypes = { cell: CellNode, timeline: TimelineNode }
+const nodeTypes = { cell: CellNode, timeline: TimelineNode, goal: GoalCellNode }
 const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
 const notebookDefaultEdgeOptions = { selectable: false }
@@ -1665,12 +1665,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
-  const [goalSession, setGoalSession] = useState<{
-    bookId: string
-    notebookId: string
-    goals: GoalSnapshot[]
-    returnFocus: HTMLElement | null
-  } | null>(null)
   const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
@@ -2031,6 +2025,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [mcp])
 
+  const goalScope = useMemo(
+    () => bookId && notebook ? { bookId, notebookId: notebook.id } : null,
+    [bookId, notebook],
+  )
+  const {
+    goals: goalSnapshots,
+    accept: acceptGoals,
+    refresh: refreshGoals,
+    act: actOnGoal,
+  } = useVideoGoals(call, goalScope)
+  const goalCellIds = useMemo(
+    () => new Set((notebook?.cells ?? []).filter((cell) => cell.type === 'goal').map((cell) => cell.id)),
+    [notebook],
+  )
+  const visibleGoals = useMemo(
+    () => goalSnapshots.filter((goal) => goalCellIds.has(goal.cellId)),
+    [goalCellIds, goalSnapshots],
+  )
+  const goalTiles = useMemo(
+    () => new Map(visibleGoals.map((goal) => [goal.cellId, goal] as const)),
+    [visibleGoals],
+  )
+  const goalMarks = useMemo(() => goalGenerationMarks(visibleGoals), [visibleGoals])
+  const activeComposerGoal = composerGoal(visibleGoals)
+
   const imageEditModels = useImageEditModels({
     callTool: call,
     ready: mcp.state === 'ready',
@@ -2386,7 +2405,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     refresh: async (isCurrent) => {
       if (mcp.state !== 'ready' || !notebook || activeMcpCallsRef.current.size > 0) return
       const fetchedAt = performance.now()
-      const [notebookResult, assetResult, jobResult, sequenceResult] = await Promise.allSettled([
+      const listGoals = goalCellIds.size > 0 || goalSnapshots.length > 0
+      const [notebookResult, assetResult, jobResult, sequenceResult, goalResult] = await Promise.allSettled([
         call('get_notebook', {
           book_id: bookId,
           notebook_id: notebook.id,
@@ -2400,6 +2420,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         call('list_jobs', { book_id: bookId, limit: 200 }, { background: true }),
         notebook.cells.some((cell) => cell.type === 'timeline')
           ? call('get_primary_sequence', { book_id: bookId }, { background: true })
+          : Promise.resolve(null),
+        listGoals
+          ? call('video_goal', { book_id: bookId, notebook_id: notebook.id, action: 'list' }, { background: true })
           : Promise.resolve(null),
       ])
       if (!isCurrent() || activeMcpCallsRef.current.size > 0
@@ -2418,6 +2441,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       applyJobsSnapshot(nextJobs)
       applyNotebook(nextNotebook, nextAssets, nextJobs)
+      if (goalResult.status === 'fulfilled' && goalResult.value) {
+        acceptGoals({ bookId, notebookId: notebook.id }, goalResult.value)
+      }
     },
   })
 
@@ -3925,24 +3951,54 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
     applyNotebook(nextNotebook, nextAssets, nextJobs, targetBookId)
     resumeMediaProcessingWatches(targetBookId, nextNotebook, nextAssets)
+    if (nextNotebook.cells.some((cell) => cell.type === 'goal')) {
+      void refreshGoals({ bookId: targetBookId, notebookId: nextNotebook.id }).catch(() => undefined)
+    }
     return nextNotebook
-  }, [applyNotebook, call, resumeMediaProcessingWatches])
+  }, [applyNotebook, call, refreshGoals, resumeMediaProcessingWatches])
 
-  const openGoals = async (brief = '', chat?: ChatExecution): Promise<ComposerOutcome> => {
+  const openGoalTile = (cellId: string) => {
+    showScreen('notebook')
+    openCellInspector(cellId)
+    revealNotebookCanvasCell(cellId)
+  }
+
+  const startGoal = async (brief = '', chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
-    const targetBookId = bookId
-    const targetNotebookId = notebook.id
-    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const result = await call('video_goal', {
-      book_id: targetBookId, notebook_id: targetNotebookId,
-      action: brief ? 'create' : 'list',
-      ...(brief ? { brief, request_id: uuidv7() } : {}),
-    }, { chat })
-    if (watchScopeRef.current.bookId !== targetBookId || watchScopeRef.current.notebookId !== targetNotebookId || chat?.isCurrent() === false) {
+    if (!brief) {
+      if (!activeComposerGoal) {
+        return { ok: false, message: 'Describe the video after /goal, for example: /goal a dog on a skateboard, three 10s clips' }
+      }
+      openGoalTile(activeComposerGoal.cellId)
+      return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
+    }
+    const scope = { bookId, notebookId: notebook.id }
+    const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
+    if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {
       return { ok: true, message: 'Goal saved in its notebook.' }
     }
-    setGoalSession({ bookId: targetBookId, notebookId: targetNotebookId, goals: brief ? [asGoal(result)] : asGoals(result), returnFocus })
-    return { ok: true, message: brief ? 'Planning your video goal' : 'Goals opened' }
+    await refreshBookData(scope.bookId, scope.notebookId, undefined, chat)
+    revealNotebookCanvasCell(goal.cellId)
+    collapseComposerAfterCellCreation(chat)
+    return { ok: true, message: `Planning your video goal in ${goal.address ?? 'a new tile'}` }
+  }
+
+  const runGoalAction = async (args: Record<string, unknown>) => {
+    if (!goalScope) return
+    const scope = goalScope
+    await actOnGoal(scope, args)
+    if (args.action !== 'run' && args.action !== 'retry') return
+    await refreshBookData(scope.bookId, scope.notebookId)
+    collapseComposerAfterCellCreation()
+  }
+
+  const previewGoalSequence = async (frame: number) => {
+    if (!goalScope) return
+    const scope = goalScope
+    const refreshed = await refreshBookData(scope.bookId, scope.notebookId, () => watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId)
+    const cell = refreshed?.cells.find((candidate) => candidate.type === 'timeline')
+    if (!cell) throw new Error('Add a timeline cell to preview the assembled sequence.')
+    openTimelinePreview(cell.id, frame)
   }
 
   const loadLibraryPage = useCallback(async (request: LibraryBrowseRequest) => {
@@ -9063,7 +9119,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const [rawCommandToken, ...restParts] = input.trim().split(/\s+/)
       const commandToken = rawCommandToken.toLowerCase()
       const rest = restParts.join(' ')
-      if (commandToken === '/goal') return await openGoals(rest, chat)
+      if (commandToken === '/goal') return await startGoal(rest, chat)
       if (commandToken.toLowerCase() === '/actions') {
         await openWorkspaceActions(undefined, undefined, rest, undefined, chat)
         return { ok: true, message: 'Actions opened' }
@@ -10152,7 +10208,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const contextMenuSplitSource = selectedCellId === openContextMenuCellId
     ? selectedSplitSource
     : null
-  const contextMenuGenerationTypes = contextMenuCell && notebook
+  const contextMenuGenerationTypes = contextMenuCell && notebook && contextMenuCell.type !== 'goal'
     ? (['generate_video', 'generate_image'] as const).filter((cellType) => {
         try {
           planContextMenuGeneration({
@@ -10173,7 +10229,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   if (contextMenuCell && contextMenuNode) {
     contextMenuActions.push({
       id: 'inspect',
-      label: 'Edit cell',
+      label: contextMenuCell.type === 'goal' ? 'Open goal' : 'Edit cell',
       icon: 'inspect',
     })
     if (contextMenuRunAction) {
@@ -10923,7 +10979,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cell) void deleteNotebookCells([cell])
     },
   }
-  const notebookDockContent = !timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
+  const selectedGoal = selectedNotebookCell?.type === 'goal' ? goalTiles.get(selectedNotebookCell.id) ?? null : null
+  const goalDockContent = !timelinePreviewOpen && selectedNotebookCell?.type === 'goal' ? (
+    selectedGoal ? (
+      <GoalPanel
+        key={selectedGoal.goalId}
+        goal={selectedGoal}
+        connected={mcp.state === 'ready'}
+        onAction={runGoalAction}
+        onPreview={previewGoalSequence}
+        onSelectCell={openCellInspector}
+      />
+    ) : <GoalPanelPlaceholder />
+  ) : null
+  const notebookDockContent = goalDockContent ?? (!timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
     <div
       className={[
         'composer-notebook-dock',
@@ -11088,7 +11157,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onDownloadTranscriptSrt={exportTranscriptSrt}
       />
     </div>
-  ) : null
+  ) : null)
   /* Whichever contextual panel is on screen draws the dock's close control in
      its own header row, so the composer only drops its strip once one has. */
   const composerPanelHasHeader = composerPanelDrawsClose({
@@ -11163,8 +11232,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
-            onGoals={() => { void openGoals().catch(error => setNotice(error instanceof Error ? error.message : String(error), 'error')) }}
-            goalsDisabled={mcp.state !== 'ready'}
             onAdjustZoom={adjustNotebookZoom}
             onResetZoom={resetNotebookZoom}
             onDeleteSelection={deleteSelectedCells}
@@ -11234,6 +11301,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           <PrimaryCellContext.Provider value={selectedCellId}>
                             <GenerationTitlesContext.Provider value={generationTitleByTool}>
                               <CellContextMenuContext.Provider value={cellContextMenuContextValue}>
+                                <GoalTileContext.Provider value={goalTiles}>
+                                <GoalMarksContext.Provider value={goalMarks}>
                                 <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
                       nodes={canvasPresentationNodes}
@@ -11395,6 +11464,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               reviewRoles={pendingReviewRoles}
                             />
                                 </ReactFlow>
+                                </GoalMarksContext.Provider>
+                                </GoalTileContext.Provider>
                               </CellContextMenuContext.Provider>
                             </GenerationTitlesContext.Provider>
                           </PrimaryCellContext.Provider>
@@ -11595,30 +11666,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         />
       )}
 
-      {goalSession && goalSession.bookId === bookId && goalSession.notebookId === notebook?.id && (
-        <Suspense fallback={<div role="status">Opening goal mode…</div>}>
-          <GoalWorkspace
-            key={`${goalSession.bookId}:${goalSession.notebookId}`}
-            bookId={goalSession.bookId}
-            notebookId={goalSession.notebookId}
-            initialGoals={goalSession.goals}
-            connected={mcp.state === 'ready'}
-            returnFocus={goalSession.returnFocus}
-            callGoal={args => call('video_goal', { ...args, book_id: goalSession.bookId, notebook_id: goalSession.notebookId }, { background: true })}
-            onClose={() => setGoalSession(null)}
-            onStarted={() => collapseComposerAfterCellCreation()}
-            onPreview={async frame => {
-              const scope = goalSession
-              const refreshed = await refreshBookData(scope.bookId, scope.notebookId, () => watchScopeRef.current.bookId === scope.bookId && watchScopeRef.current.notebookId === scope.notebookId)
-              const cell = refreshed?.cells.find(candidate => candidate.type === 'timeline')
-              if (!cell) throw new Error('Add a timeline cell to preview the assembled sequence.')
-              setGoalSession(null)
-              openTimelinePreview(cell.id, frame)
-            }}
-          />
-        </Suspense>
-      )}
-
       {musicVideoSession && sequence && (
         <Suspense fallback={<div role="status">Loading music-video editor…</div>}>
           <MusicVideoEditor
@@ -11772,6 +11819,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onDockOpenChange={setComposerDockOpen}
         contextualContent={composerContextualContent}
         contextualHasHeader={composerPanelHasHeader}
+        goalStatus={activeComposerGoal ? (
+          <GoalComposerStatus
+            goal={activeComposerGoal}
+            disabled={mcp.state !== 'ready'}
+            onOpen={() => openGoalTile(activeComposerGoal.cellId)}
+          />
+        ) : null}
         commands={composerCommands}
         references={composerReferenceMap}
         actions={workspaceActions}

@@ -8,9 +8,9 @@ import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
 import { pauseBookQueueForTests, queue } from "../queue.js";
-import { getChainRun, waitForChainRun, type ChainRunRecord } from "../chain-executor.js";
+import { cancelChainRun, getChainRun, waitForChainRun, type ChainRunRecord } from "../chain-executor.js";
 import { compileGoalSteps, goalBriefConstraints, goalPlanSchema, GOAL_VIDEO_TOOL, type GoalPlan } from "../goal-plan.js";
-import { readGoal, saveGoal } from "../goal-store.js";
+import { readGoal, saveGoal, type GoalRecord } from "../goal-store.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
 import { probeVideo } from "../ffmpeg.js";
@@ -93,6 +93,31 @@ describe("video goal MCP lifecycle", () => {
     return JSON.parse(text) as T;
   }
   const create = (extra: Record<string, unknown> = {}) => invoke({ action: "create", brief, plan, ...extra });
+  const goalCell = (cellId: string) => {
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    return notebook.value.cells.find(cell => cell.id === cellId);
+  };
+  const tile = (cellId: string) => raw({ cell_id: cellId, cell: { prompt: "rewritten" } }, "update_notebook_cell");
+
+  it("saves the brief and plan in a goal tile on the first empty grid slot", async () => {
+    const image = engine.notebooks.createCell({ type: "image", slot: { row: 0, column: 0 } });
+    const inserted = await engine.notebooks.insertCell(notebookId, image);
+    if (!inserted.ok) throw new Error(inserted.error.message);
+    const goal = await create();
+    expect(goal).toMatchObject({ address: "@a2", brief, revision: 1, plan, status: "review" });
+    expect(goalCell(goal.cellId)).toMatchObject({
+      type: "goal", label: plan.title, prompt: brief, slot: { row: 0, column: 1 },
+      inputs: { goalId: goal.goalId, revision: 1, plan, estimate: goal.estimate },
+    });
+    expect(engine.settings.get<Record<string, Record<string, unknown>>>("application.goals.v1")?.[goal.goalId]).not.toHaveProperty("plan");
+    expect((await tile(goal.cellId)).isError).toBe(true);
+    expect((await raw({ cell_id: goal.cellId, cell: { slot: { row: 3, column: 3 } } }, "update_notebook_cell")).isError).toBeFalsy();
+    expect((await invoke({ action: "status", goal_id: goal.goalId })).address).toBe("@d4");
+    const created = await raw({ cell: { type: "goal", slot: { row: 5, column: 0 } } }, "create_notebook_cell");
+    expect(created.isError).toBe(true);
+    expect((created.content as Array<{ text: string }>)[0]!.text).toContain("/goal");
+  });
 
   it("saves and estimates a plan without generation, restores it through list, and fences stale edits", async () => {
     const first = await create({ request_id: "same-goal" });
@@ -109,6 +134,7 @@ describe("video goal MCP lifecycle", () => {
     expect((await raw({ action: "update", goal_id: first.goalId, revision: first.revision, plan })).isError).toBe(true);
     const saved = await invoke<{ goals: GoalSnapshot[] }>({ action: "list" });
     expect(saved.goals[0]).toMatchObject({ goalId: first.goalId, revision: 2, plan: edited });
+    expect(goalCell(first.cellId)?.inputs).toMatchObject({ revision: 2, plan: edited });
     expect(engine.jobs.queue.list()).toHaveLength(0);
   });
 
@@ -143,6 +169,82 @@ describe("video goal MCP lifecycle", () => {
     expect((await invoke({ action: "cancel", goal_id: pending.goalId })).status).toBe("cancelled");
     expect(engine.jobs.queue.get(pending.planningJobId!)?.state).toBe("aborted");
     expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(0);
+    expect((await raw({ action: "retry", goal_id: pending.goalId })).isError).toBe(true);
+    const retried = await invoke({ action: "retry", goal_id: failed.goalId });
+    expect(retried).toMatchObject({ status: "planning", error: null });
+    expect(retried.planningJobId).not.toBe(failed.planningJobId);
+    expect(engine.jobs.queue.get(retried.planningJobId!)?.state).toBe("queued");
+    expect((await raw({ action: "dismiss", goal_id: retried.goalId })).isError).toBe(true);
+    expect((await invoke({ action: "dismiss", goal_id: pending.goalId })).dismissedAt).toBeTruthy();
+  });
+
+  it("stops an active goal when its tile is deleted and hides it from the list", async () => {
+    await pauseBookQueueForTests(bookId);
+    const pending = await invoke({ action: "create", brief });
+    const reviewed = await create();
+    const removed = await engine.notebooks.removeCell(notebookId, pending.cellId);
+    if (!removed.ok) throw new Error(removed.error.message);
+    const listed = await invoke<{ goals: GoalSnapshot[] }>({ action: "list" });
+    expect(listed.goals.map(goal => goal.goalId)).toEqual([reviewed.goalId]);
+    expect(readGoal(engine, pending.goalId).status).toBe("cancelled");
+    expect(engine.jobs.queue.get(pending.planningJobId!)?.state).toBe("aborted");
+    expect((await raw({ action: "run", goal_id: pending.goalId, revision: 0 })).isError).toBe(true);
+  });
+
+  it("retries a failed goal from its first unfinished shot without regenerating finished shots", async () => {
+    const goal = await create();
+    await pauseBookQueueForTests(bookId);
+    const finished = uuidv7();
+    const chainId = uuidv7();
+    const producer = engine.notebooks.createCell({ type: "generate_video", slot: { row: 4, column: 0 }, tool: GOAL_VIDEO_TOOL, prompt: "Shot one" });
+    const output = engine.notebooks.createCell({ type: "video", slot: { row: 5, column: 0 } });
+    const tagged = engine.notebooks.createCell({
+      type: "generate_video", slot: { row: 4, column: 1 }, tool: GOAL_VIDEO_TOOL, prompt: "Shot two",
+      inputs: { chainRunId: `${chainId}:shot2` },
+    });
+    const board = engine.notebooks.read(notebookId);
+    if (!board.ok) throw new Error(board.error.message);
+    const placed = await engine.notebooks.write({
+      ...board.value, cells: [...board.value.cells, producer, output, tagged],
+      edges: [...board.value.edges, engine.notebooks.createEdge({ source: producer.id, target: output.id, targetInput: "media" })],
+    });
+    if (!placed.ok) throw new Error(placed.error.message);
+    const approval = { actor: "chat" as const, approvedAt: goal.createdAt, estimateUsd: null, estimateUnavailable: true };
+    const recorded: ChainRunRecord = {
+      kind: "chain-run", chainId, bookId, notebookId, requestId: `goal:${goal.goalId}:1`, fingerprint: "fixture-failed-shot",
+      status: "failed", createdAt: goal.createdAt, updatedAt: goal.updatedAt, error: "Provider rejected shot 2",
+      autoApply: false, effect: "generation", awaitingStepId: null,
+      steps: compileGoalSteps(goal.goalId, plan).map((step, index) => ({
+        ...step, status: index === 0 ? "completed" : index === 1 ? "failed" : "skipped",
+        outputs: index === 0 ? { asset_id: finished, cell_id: output.id, status: "completed" } : null,
+        error: index === 1 ? "Provider rejected shot 2" : null, childJobIds: [], pins: [], autoApply: false,
+        effect: step.tool === GOAL_VIDEO_TOOL ? "generation" : "mutation", requiresApproval: step.tool === GOAL_VIDEO_TOOL,
+        approval: step.tool === GOAL_VIDEO_TOOL ? approval : null, review: null,
+      })),
+    };
+    expect(engine.settings.set("application.chain-runs.v1", { runs: { [chainId]: recorded }, requestIndex: {} }).ok).toBe(true);
+    const running: GoalRecord = { ...readGoal(engine, goal.goalId), chainId, status: "running", clipIds: plan.shots.map(() => uuidv7()) };
+    saveGoal(engine, running);
+    const failedGoal = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(failedGoal.status).toBe("failed");
+    expect(failedGoal.steps.slice(0, 2)).toMatchObject([
+      { id: "shot1", status: "completed", artifactId: finished, cellId: producer.id, address: "@e1", outputCellId: output.id },
+      { id: "shot2", status: "failed", cellId: tagged.id, address: "@e2" },
+    ]);
+    const retried = await invoke({ action: "retry", goal_id: goal.goalId });
+    expect(retried.status).toBe("running");
+    await expect.poll(() => getChainRun(engine, chainId)?.steps[1]?.childJobIds.length).toBe(1);
+    const chain = getChainRun(engine, chainId)!;
+    expect(chain.steps[0]).toMatchObject({ status: "completed", outputs: { asset_id: finished } });
+    expect(chain.steps[1]!.status).toBe("running");
+    expect(chain.steps[1]!.startedAt).toBeTruthy();
+    expect(chain.steps.slice(2).map(step => step.status)).toEqual(["approved", "pending"]);
+    expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(1);
+    const snapshot = await invoke({ action: "status", goal_id: goal.goalId });
+    expect(snapshot.steps[1]).toMatchObject({ id: "shot2", status: "running" });
+    expect(snapshot.steps[1]!.startedAt).toBeTruthy();
+    cancelChainRun(engine, chainId);
+    await waitForChainRun(engine, chainId);
   });
 
   it("rejects cross-notebook access and premature assembly", async () => {
@@ -184,7 +286,7 @@ describe("video goal MCP lifecycle", () => {
     const goal = await create();
     const ids = [await video("red"), await video("green"), await video("blue")];
     const trackId = engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId;
-    const prior = saveGoal(engine, { ...readGoal(engine, goal.goalId), goalId: uuidv7(), plan: { ...plan, shots: [plan.shots[0]!] }, clipIds: [uuidv7()], trackId });
+    const prior = saveGoal(engine, { ...readGoal(engine, goal.goalId), goalId: uuidv7(), clipIds: [uuidv7()], trackId });
     await appendGoalClips(engine, prior, [ids[2]!]);
     const original = engine.sequences.getPrimary().clips[0]!;
     const chainId = uuidv7();

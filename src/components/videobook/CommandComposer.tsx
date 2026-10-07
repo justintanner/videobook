@@ -137,6 +137,7 @@ interface CommandComposerProps {
   onDockOpenChange?: (open: boolean) => void
   contextualContent?: ReactNode
   contextualHasHeader?: boolean
+  goalStatus?: ReactNode
   bookId: string
   callTool: (tool: string, args: Record<string, unknown>, options?: { chat?: ChatExecution }) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
@@ -216,6 +217,7 @@ export function CommandComposer({
   onDockOpenChange,
   contextualContent = null,
   contextualHasHeader = false,
+  goalStatus = null,
   bookId,
   callTool,
   chatModels,
@@ -1123,6 +1125,7 @@ export function CommandComposer({
           }}
           onKeyDown={handleInputKey}
         />
+        {goalStatus}
         {/* Mode and engine are one strip now: the lit cell names the mode you
             are in and carries that mode's engine, and the dim cell switches
             mode. ComposerModeSwitch owns the whole cluster, microphone

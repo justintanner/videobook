@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { ComposerOutcome } from '@/components/videobook/CommandComposer'
 import type { NotebookTimelineProps } from '@/components/videobook/NotebookTimeline'
+import type { GoalSnapshot } from '@/videobook/goals'
 
 export type MediaSlotOperation = 'attach' | 'upload'
 
@@ -62,3 +63,7 @@ export type TimelineContextValue = Omit<NotebookTimelineProps, 'address' | 'onSe
 }
 
 export const TimelineContext = createContext<TimelineContextValue | null>(null)
+
+export const GoalTileContext = createContext<ReadonlyMap<string, GoalSnapshot>>(new Map())
+
+export const GoalMarksContext = createContext<ReadonlyMap<string, string>>(new Map())

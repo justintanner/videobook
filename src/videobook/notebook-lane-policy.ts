@@ -52,7 +52,7 @@ const NOTEBOOK_STARTER_LANE_FAMILIES = [
 
 export function notebookLaneFamily(type: NotebookCellType): NotebookLaneFamily {
   const family = notebookCellFamily(type)
-  return family === 'data' ? 'work' : family
+  return family === 'data' || family === 'goal' ? 'work' : family
 }
 
 export function notebookLaneFamilyLabel(family: NotebookLaneFamily): string {

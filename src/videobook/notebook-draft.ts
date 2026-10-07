@@ -175,8 +175,9 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
     const frameProvenance = cellFrameProvenance(cellsById, cell)
     return {
       id: cell.id,
-      type: cell.type === 'timeline' ? 'timeline' : 'cell',
+      type: cell.type === 'timeline' || cell.type === 'goal' ? cell.type : 'cell',
       ...(cell.type === 'timeline' ? { dragHandle: '.notebook-timeline-header', connectable: false } : {}),
+      ...(cell.type === 'goal' ? { connectable: false } : {}),
       position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,

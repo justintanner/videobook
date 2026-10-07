@@ -1,0 +1,326 @@
+.command-line-shell:has(> .goal-status) {
+  grid-template-areas: 'actions editor goal mode send';
+  grid-template-columns: 32px minmax(120px, 1fr) minmax(0, max-content) auto auto;
+}
+
+.goal-status {
+  grid-area: goal;
+  display: flex;
+  min-width: 0;
+  height: 32px;
+}
+
+.goal-status-button {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px 0 9px;
+  border: 1px solid rgba(114, 231, 170, 0.26);
+  border-radius: 2px;
+  color: #bce6cf;
+  background: rgba(39, 106, 69, 0.12);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.goal-status-button:not(:disabled):hover,
+.goal-status-button:not(:disabled):focus-visible {
+  border-color: var(--control-border-hover);
+  background: var(--control-bg-hover);
+}
+
+.goal-status-button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.goal-status-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.goal-status[data-tone='review'] .goal-status-button {
+  border-color: rgba(227, 184, 105, 0.55);
+  background: rgba(60, 46, 16, 0.45);
+}
+
+.goal-status[data-tone='attention'] .goal-status-button {
+  border-color: rgba(240, 126, 126, 0.55);
+  background: rgba(70, 22, 22, 0.4);
+}
+
+.goal-status[data-tone='done'] .goal-status-button {
+  border-color: rgba(114, 231, 170, 0.55);
+}
+
+.goal-status-flag {
+  flex: 0 0 auto;
+  color: #b9a9f2;
+}
+
+.goal-status-kind {
+  flex: 0 0 auto;
+  color: #b9a9f2;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.goal-status-kind::after {
+  margin-left: 8px;
+  color: #6e9880;
+  content: '·';
+}
+
+.goal-status-text {
+  position: relative;
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 16px;
+  overflow: hidden;
+  line-height: 16px;
+}
+
+.goal-status-roll {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.goal-status-short {
+  display: none;
+}
+
+.goal-status-roll-in {
+  animation: goal-status-roll-in 420ms 660ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.goal-status-roll-out {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  animation: goal-status-roll-out 300ms 600ms ease-in forwards;
+}
+
+.goal-status-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.goal-status-dots > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #bce6cf;
+  animation: goal-status-dot 1.2s ease-in-out infinite;
+}
+
+.goal-status-dots > i:nth-child(2) { animation-delay: 0.15s; }
+.goal-status-dots > i:nth-child(3) { animation-delay: 0.3s; }
+
+.goal-status-ticks {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.goal-status-ticks > i {
+  width: 12px;
+  height: 5px;
+  box-sizing: border-box;
+  border: 1px solid rgba(114, 231, 170, 0.4);
+  border-radius: 2px;
+}
+
+.goal-status-ticks > i[data-state='done'] {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.goal-status-ticks > i[data-state='generating'] {
+  border-color: var(--green);
+  background: var(--green);
+  animation: goal-status-blink 1.15s ease-in-out infinite;
+}
+
+.goal-status-ticks > i[data-state='submitting'] {
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+
+.goal-status-ticks > i[data-state='failed'] {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.goal-status[data-wake] .goal-status-ticks > i[data-state='submitting'] {
+  animation: goal-status-tick-in 900ms 600ms ease-out backwards;
+}
+
+.goal-status-action {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.goal-status[data-tone='review'] .goal-status-action { color: #e3b869; }
+.goal-status[data-tone='attention'] .goal-status-action { color: #ffae9f; }
+
+.goal-status[data-wake] .goal-status-button {
+  animation: goal-status-glow 1.4s ease-out;
+}
+
+.goal-status[data-wake='attention'] .goal-status-button {
+  animation-name: goal-status-glow-attention;
+}
+
+.goal-status-scan::after {
+  width: 22%;
+  animation: command-scan-sweep 800ms 550ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.command-composer:has(.goal-status[data-wake='live']) {
+  animation: goal-wake-rail 1.4s ease-out;
+}
+
+.command-composer:has(.goal-status[data-wake='attention']) {
+  animation: goal-attention-rail 1.4s ease-out;
+}
+
+@keyframes goal-status-roll-in {
+  from {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes goal-status-roll-out {
+  to {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+}
+
+@keyframes goal-status-dot {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@keyframes goal-status-blink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@keyframes goal-status-tick-in {
+  0% {
+    border-color: rgba(114, 231, 170, 0.4);
+    background: transparent;
+    box-shadow: 0 0 0 0 rgba(99, 199, 216, 0.9);
+  }
+  20% {
+    border-color: var(--cyan);
+    background: var(--cyan);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(99, 199, 216, 0);
+  }
+}
+
+@keyframes goal-status-glow {
+  0% {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 0 rgba(99, 199, 216, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(99, 199, 216, 0);
+  }
+}
+
+@keyframes goal-status-glow-attention {
+  0% {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 0 rgba(240, 126, 126, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(240, 126, 126, 0);
+  }
+}
+
+@keyframes goal-wake-rail {
+  0%, 55% {
+    border-left-color: var(--cyan);
+    box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
+      0 0 26px rgba(99, 199, 216, 0.3),
+      inset 4px 0 18px rgba(99, 199, 216, 0.22);
+  }
+  100% {
+    border-left-color: var(--green);
+    box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
+      0 0 18px rgba(55, 176, 107, 0.07),
+      inset 0 1px rgba(179, 255, 199, 0.04);
+  }
+}
+
+@keyframes goal-attention-rail {
+  0%, 55% {
+    border-left-color: var(--danger);
+    box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
+      0 0 26px rgba(240, 126, 126, 0.26),
+      inset 4px 0 18px rgba(240, 126, 126, 0.2);
+  }
+  100% {
+    border-left-color: var(--green);
+    box-shadow:
+      0 20px 34px rgba(0, 0, 0, 0.62),
+      0 0 18px rgba(55, 176, 107, 0.07),
+      inset 0 1px rgba(179, 255, 199, 0.04);
+  }
+}
+
+@media (max-width: 600px) {
+  .command-line-shell:has(> .goal-status) {
+    grid-template-areas: 'editor editor editor editor' 'actions goal mode send';
+    grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  }
+
+  .goal-status-kind { display: none; }
+  .goal-status-action { display: none; }
+  .goal-status-long { display: none; }
+  .goal-status-short { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-status-roll-in,
+  .goal-status[data-wake] .goal-status-ticks > i { animation-delay: 0s; }
+  .goal-status-roll-out { display: none; }
+  .goal-status-scan { display: none; }
+}

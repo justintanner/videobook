@@ -78,6 +78,13 @@ import { notebookConnectionEdges, notebookConnectionWouldCreateCycle } from "../
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
+const GOAL_TILE_CREATE_ERROR = "Goal tiles are created by goal mode. Start one with /goal and a brief.";
+
+function moveGoalTile(cell: NotebookCell, patch: Partial<CellInput>): NotebookCell {
+  const changed = Object.entries(patch).filter(([key, value]) => key !== "slot" && value !== undefined);
+  if (changed.length > 0) throw new Error("Edit a goal's plan from its tile in goal mode");
+  return patch.slot === undefined ? cell : { ...cell, slot: patch.slot };
+}
 const notebookGridSlotSchema = z.object({
   row: z.number().int().min(0).max(NOTEBOOK_GRID_ROW_COUNT - 1),
   column: z.number().int().min(0).max(NOTEBOOK_GRID_COLUMN_COUNT - 1),
@@ -1418,6 +1425,7 @@ export function videobookDomainDefs(
         expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
+        if ((args.cell as CellInput).type === "goal") return failure(GOAL_TILE_CREATE_ERROR);
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
         let outputCell: NotebookCell | null = null;
         let outputEdge: NotebookDocument["edges"][number] | null = null;
@@ -1536,6 +1544,7 @@ export function videobookDomainDefs(
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
                 found = true;
+                if (cell.type === "goal") return moveGoalTile(cell, patch);
                 if (patch.type && patch.type !== cell.type) {
                   const isUnconnected = !notebook.edges.some((edge) =>
                     edge.source === cell.id || edge.target === cell.id);
