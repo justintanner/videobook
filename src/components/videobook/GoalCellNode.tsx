@@ -89,7 +89,7 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {view.planning ? (
             <>
               {view.note && <p className="goal-tile-brief">{view.note}</p>}
-              <span className="goal-tile-shimmer" aria-hidden="true"><i /><i /><i /></span>
+              <span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span>
             </>
           ) : (
             <>
