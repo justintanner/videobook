@@ -1,6 +1,6 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalPlanSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
+import { goalPlanSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage, type GoalStillStage } from "./goal-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
@@ -8,6 +8,19 @@ export type GoalStatus = "planning" | "review" | "running" | "completed" | "fail
 export type GoalEstimate = { usd: number | null; warnings: string[] };
 export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate>;
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
+export type GoalStillAttempt = {
+  stage: GoalStillStage;
+  index: number;
+  chainId: string;
+  stepId: string;
+  artifactId: string | null;
+  cellId: string | null;
+  basePrompt: string;
+  feedback: string | null;
+  parentArtifactId: string | null;
+  frameArtifactId: string | null;
+  createdAt: string;
+};
 export type GoalStageRun = {
   chainId: string;
   revision: number;
@@ -15,6 +28,7 @@ export type GoalStageRun = {
   shotIndexes: number[];
   outputs: GoalStageOutput[];
   previousChainIds: string[];
+  attempts?: GoalStillAttempt[];
 };
 
 export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number };

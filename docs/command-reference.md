@@ -570,7 +570,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-timeline` — Get the selected book's typed v2 timeline; MCP: `get_timeline`
 - `/get-watermark-config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.; MCP: `get_watermark_config`
 - `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
-- `/goal` — Build a video from character images, reviewing the full frame and storyboards before generating clips; UI: `start_goal`
+- `/goal` — Build a portrait 9:16 video from character images, reviewing the frame and storyboards before clips; request landscape or square to change format; UI: `start_goal`
 - `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`

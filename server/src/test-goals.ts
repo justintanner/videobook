@@ -10,10 +10,11 @@ import { getAllToolDefs } from "./tools/index.js";
 import { placeChainGeneration } from "./chain-generation.js";
 import { copyVideoFixture } from "./test-media-fixtures.js";
 import { probeVideo } from "./ffmpeg.js";
+import { goalStillAttempts } from "./goal-stills.js";
 
 export function goalTestPlan(count = 3): GoalPlan {
   return goalPlanSchema.parse({
-    version: 2, title: "The skateboard champion", continuity: "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.", aspectRatio: "16:9",
+    version: 2, title: "The skateboard champion", continuity: "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.", aspectRatio: "9:16",
     frame: { prompt: "Both characters stand beside the skateboard in the sunny park, full bodies visible." },
     shots: Array.from({ length: count }, (_, index) => ({
       title: `Park adventure ${index + 1}`, storyboardPrompt: `Character 1 balances on the skateboard while Character 2 watches, composition ${index + 1}.`,
@@ -62,7 +63,7 @@ export async function goalTestVideo(engine: Engine, root: string, color: string)
   return artifactId;
 }
 
-export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalGenerationStage, options: { failedIndex?: number; indexes?: number[]; videoIds?: string[] } = {}): Promise<string> {
+export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalGenerationStage, options: { failedIndex?: number; indexes?: number[]; videoIds?: string[]; legacy?: boolean } = {}): Promise<string> {
   const goal = readGoal(engine, goalId);
   const content = requireGoalContent(engine, goal);
   const plan = goalPlanSchema.parse(content.plan);
@@ -103,7 +104,12 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const written = engine.settings.set("application.chain-runs.v1", { ...store, runs: { ...store.runs, [chainId]: chain } });
   if (!written.ok) throw new Error(written.error.message);
   const previous = goal.stages[stage];
-  const run: GoalStageRun = { chainId, revision: content.revision, approvedAt: timestamp, shotIndexes: stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index), outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [] };
+  const run: GoalStageRun = {
+    chainId, revision: content.revision, approvedAt: timestamp,
+    shotIndexes: stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index),
+    outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
+    ...(stage !== "videos" && !options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp) } : {}),
+  };
   saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(stage === "videos" ? { clipIds: plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
   return chainId;
 }

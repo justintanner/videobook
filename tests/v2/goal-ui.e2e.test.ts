@@ -17,6 +17,9 @@ import { createHttpHandler } from '../../server/src/server.js'
 import { pauseBookQueueForTests, queue, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { goalTestPlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
+import { goalBriefConstraints } from '../../server/src/goal-plan.js'
+import { readGoal, requireGoalContent, saveGoal, writeGoalContent } from '../../server/src/goal-store.js'
+import { estimateGoal } from '../../server/src/jobs/plan-goal.js'
 import { getChainRun } from '../../server/src/chain-executor.js'
 import type { GoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
@@ -160,6 +163,10 @@ describe('staged goal mode in the browser', () => {
     expect(await panel().getByLabel('Character images').locator('img').count()).toBe(2)
     expect(await page.getByRole('button', { name: 'Open goals', exact: true }).count()).toBe(0)
     expect(await status().textContent()).toContain('Review plan')
+    expect(await tile(saved).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
+    expect(await panel().getByLabel('Format', { exact: true }).inputValue()).toBe('9:16')
+    expect(await panel().getByLabel('Shot 1 storyboard prompt', { exact: true }).getAttribute('rows')).toBe('2')
+    expect(await panel().locator('.goal-prompt-input').first().textContent()).toContain('/ 80 words')
     await panel().getByLabel('Full frame prompt', { exact: true }).fill('Both characters salute beside the skateboard, wide park view.')
     await panel().getByLabel('Shot 1 seconds', { exact: true }).fill('12')
     await screenshot('goal-plan')
@@ -178,7 +185,9 @@ describe('staged goal mode in the browser', () => {
     const running = await current(saved)
     expect(running.revision).toBe(2)
     expect(running.plan?.shots[0]?.durationSeconds).toBe(12)
-    expect(engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' })).toHaveLength(1)
+    const jobs = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' })
+    expect(jobs).toHaveLength(1)
+    expect(jobs[0]!.payload).toMatchObject({ input: { aspect_ratio: '9:16', resolution: '2K' } })
     expect(engine.jobs.queue.list({ type: 'generate_seedance25_video' })).toHaveLength(0)
     await expect.poll(() => page.locator('.cell-goal-mark').count(), { timeout: 15_000 }).toBe(2)
     expect(getChainRun(engine, running.chainId!)!.steps.map(step => step.id)).toEqual(['frame'])
@@ -187,6 +196,23 @@ describe('staged goal mode in the browser', () => {
     await expect.poll(async () => (await current(saved)).status).toBe('cancelled')
     expect(errors).toEqual([])
   }, 60_000)
+
+  scenario('shows portrait defaults for a goal created without a supplied plan or format words', async () => {
+    await pauseBookQueueForTests(bookId)
+    const created = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand' })
+    expect(created.plan).toBeNull()
+    const stored = readGoal(engine, created.goalId)
+    const content = requireGoalContent(engine, stored)
+    const constraints = goalBriefConstraints(content.brief)
+    const plan = { ...goalTestPlan(constraints.shotCount), aspectRatio: constraints.aspectRatio }
+    await writeGoalContent(engine, stored, { ...content, plan, revision: 1, estimate: await estimateGoal(engine, plan, content.characters) })
+    await engine.jobs.queue.abort(stored.planningJobId!, 'Fixture plan completed')
+    saveGoal(engine, { ...stored, status: 'review', stage: 'frame' })
+    await open(await current(created))
+    expect(await tile(created).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
+    expect(await panel().getByLabel('Format', { exact: true }).inputValue()).toBe('9:16')
+    expect(await panel().locator('.goal-editor-shot').count()).toBe(3)
+  }, 30_000)
 
   scenario('shows placeholder failure and retries only the frame with new tiles and provenance', async () => {
     const saved = await create()
@@ -229,7 +255,9 @@ describe('staged goal mode in the browser', () => {
     await expect.poll(async () => (await current(saved)).status).toBe('running')
     const regenerating = await current(saved)
     expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(['storyboard2'])
-    expect(regenerating.stages.storyboards!.outputs).toEqual(boards.stages.storyboards!.outputs)
+    expect(regenerating.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0])
+    expect(regenerating.stages.storyboards!.outputs[1]!.artifactId).toBe(boards.stages.storyboards!.outputs[1]!.artifactId)
+    expect(regenerating.stages.storyboards!.outputs[1]!.versions).toHaveLength(2)
   }, 60_000)
 
   scenario('combines a finished goal into one local video and opens its preview', async () => {

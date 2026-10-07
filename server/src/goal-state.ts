@@ -4,6 +4,7 @@ import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-execut
 import { emptyGoalEstimates, findGoalCell, goalContent, requireGoalContent, saveGoal, writeGoalContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
 import { GOAL_VIDEO_TOOL, type GoalGenerationStage } from "./goal-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { goalStillStaleReason } from "./goal-stills.js";
 
 export const LEGACY_GOAL_MESSAGE = "Goal mode now starts from character images. Start a new /goal.";
 
@@ -91,7 +92,12 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   const merged = new Map(run.outputs.map(output => [output.index, output]));
   for (const output of completedStageOutputs(engine, goal, document)) merged.set(output.index, output);
   const outputs = [...merged.values()].sort((a, b) => a.index - b.index);
-  let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { ...run, outputs } } };
+  const attempts = run.attempts?.map(attempt => {
+    if (attempt.artifactId) return attempt;
+    const step = goalChainSteps(engine, document, attempt.chainId).find(candidate => candidate.id === attempt.stepId);
+    return step?.status === "completed" && step.artifactId ? { ...attempt, artifactId: step.artifactId, cellId: step.outputCellId } : attempt;
+  });
+  let next: GoalRecord = { ...goal, stages: { ...goal.stages, [stage]: { ...run, outputs, ...(attempts ? { attempts } : {}) } } };
   if (stage === "videos" && goal.assembly) {
     next = { ...next, status: "completed", error: null };
   } else if (chain.status === "completed") {
@@ -119,7 +125,17 @@ export function publicGoal(engine: Engine, goal: GoalRecord, document: NotebookD
     ...run,
     outputs: run.outputs.map(output => {
       const outputCell = document.cells.find(candidate => candidate.id === output.cellId);
-      return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null };
+      const versions = (run.attempts ?? []).filter(attempt => attempt.index === output.index).slice().reverse().map(attempt => {
+        const versionCell = document.cells.find(candidate => candidate.id === attempt.cellId);
+        const step = getChainRun(engine, attempt.chainId)?.steps.find(candidate => candidate.id === attempt.stepId);
+        return {
+          ...attempt, address: versionCell ? notebookGridTag(versionCell.slot) : null,
+          status: step?.status ?? "interrupted" as const, current: attempt.artifactId === output.artifactId,
+        };
+      });
+      const stale = content.plan && "version" in content.plan && (stage === "frame" || stage === "storyboards")
+        ? goalStillStaleReason(engine, goal, document, content.plan, content.characters, stage, output) : null;
+      return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale };
     }),
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),

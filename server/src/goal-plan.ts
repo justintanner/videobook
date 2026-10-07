@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { ChainStep } from "./chain-plan.js";
 import type { GptImage25Variant } from "./gpt-image-2-5.js";
+import { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
+
+export { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 
 export const GOAL_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
 export const GOAL_IMAGE_TOOLS: Record<GptImage25Variant, string> = {
@@ -40,12 +43,43 @@ export const goalPlanSchema = legacyGoalPlanSchema.extend({
   }).strict()).min(1).max(GOAL_MAX_SHOTS),
 }).strict();
 
+export const goalPlannerResponseSchema = goalPlanSchema.extend({
+  title: goalPrompt(80),
+  continuity: goalPrompt(600),
+  frame: z.object({ prompt: goalPrompt(400) }).strict(),
+  shots: z.array(goalPlanSchema.shape.shots.element.extend({
+    title: goalPrompt(80),
+    storyboardPrompt: goalPrompt(300),
+    endingPrompt: goalPrompt(250).nullable().default(null),
+    videoPrompt: goalPrompt(400),
+  })).min(1).max(GOAL_MAX_SHOTS),
+});
+
 export type GoalPlan = z.infer<typeof goalPlanSchema>;
 export type LegacyGoalPlan = z.infer<typeof legacyGoalPlanSchema>;
 export type GoalDisplayPlan = GoalPlan | LegacyGoalPlan;
 export type GoalStage = "frame" | "storyboards" | "videos" | "assembly";
 export type GoalGenerationStage = Exclude<GoalStage, "assembly">;
+export type GoalStillStage = Extract<GoalGenerationStage, "frame" | "storyboards">;
 export type GoalCharacter = { artifactId: string; cellId: string; address: string; label: string };
+
+export function goalPromptBudgetIssues(plan: GoalPlan): string[] {
+  const fields: Array<[string, string, number]> = [
+    ["Title", plan.title, GOAL_PROMPT_BUDGET.title],
+    ["Continuity", plan.continuity, GOAL_PROMPT_BUDGET.continuity],
+    ["Frame", plan.frame.prompt, GOAL_PROMPT_BUDGET.frame],
+    ...plan.shots.flatMap((shot, index): Array<[string, string, number]> => [
+      [`Shot ${index + 1} title`, shot.title, GOAL_PROMPT_BUDGET.title],
+      [`Storyboard ${index + 1}`, shot.storyboardPrompt, GOAL_PROMPT_BUDGET.storyboard],
+      [`Ending ${index + 1}`, shot.endingPrompt ?? "", GOAL_PROMPT_BUDGET.ending],
+      [`Video ${index + 1}`, shot.videoPrompt, GOAL_PROMPT_BUDGET.video],
+    ]),
+  ];
+  return fields.flatMap(([label, value, limit]) => {
+    const words = goalPromptWords(value);
+    return words > limit ? [`${label}: ${words} words; limit ${limit}.`] : [];
+  });
+}
 
 export function goalBriefConstraints(brief: string): {
   shotCount: number;
@@ -70,16 +104,16 @@ export function goalBriefConstraints(brief: string): {
   if (!Number.isInteger(durationSeconds) || durationSeconds < 4 || durationSeconds > 30) {
     throw new Error("Each goal clip must be a whole number of seconds from 4 to 30.");
   }
-  const aspectRatio = /\b(?:9:16|portrait|vertical)\b/iu.test(brief) ? "9:16"
-    : /\b(?:1:1|square)\b/iu.test(brief) ? "1:1" : "16:9";
+  const aspectRatio = /\b(?:16:9|landscape|horizontal|widescreen)\b/iu.test(brief) ? "16:9"
+    : /\b(?:1:1|square)\b/iu.test(brief) ? "1:1" : "9:16";
   return { shotCount, durationSeconds, aspectRatio };
 }
 
 function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | "first" | "pair" | null = null): string {
-  if (frame === "pair") return "References: @firstframe is this shot's approved starting storyboard and @lastframe is its approved ending storyboard. Begin and end with those compositions while preserving character identities, clothing and setting.";
-  if (frame === "first") return "References: @firstframe is this shot's approved storyboard; begin with its composition and preserve the characters' identities, clothing and setting.";
-  const references = characters.map((character, index) => `@image${index + (frame === "full" ? 2 : 1)} is Character ${index + 1}: ${character.label.replace(/@[\p{L}\p{N}_-]+/gu, "").slice(0, 160)}`);
-  if (frame === "full") references.unshift("@image1 is the approved full frame; preserve its setting and visual style");
+  if (frame === "pair") return "Begin at @firstframe; end at @lastframe. Keep their characters, setting and style.";
+  if (frame === "first") return "Begin at @firstframe. Keep its characters, setting and style.";
+  const references = characters.map((_, index) => `@image${index + (frame === "full" ? 2 : 1)} is Character ${index + 1}`);
+  if (frame === "full") references.unshift("@image1 is the full frame; keep its characters, setting and style");
   return `References: ${references.join("; ")}.`;
 }
 
@@ -103,7 +137,7 @@ export function compileStoryboardSteps(plan: GoalPlan, characters: readonly Goal
     id: `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${plan.continuity}\n\nShot ${index + 1}: ${plan.shots[index]!.title}\n${ending ? goalEndingPrompt(plan, index) : plan.shots[index]!.storyboardPrompt}\n\n${goalReferenceLegend(characters, "full")}`,
+      prompt: `Shot ${index + 1}: ${plan.shots[index]!.title}. ${ending ? goalEndingPrompt(plan, index) : plan.shots[index]!.storyboardPrompt}\n\n${goalReferenceLegend(characters, "full")}`,
       image_refs: [frame, ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio,
       resolution: plan.imageResolution,
@@ -114,14 +148,20 @@ export function compileStoryboardSteps(plan: GoalPlan, characters: readonly Goal
 
 function goalEndingPrompt(plan: GoalPlan, index: number): string {
   const shot = plan.shots[index]!;
-  const next = plan.shots[index + 1];
-  return `Create one still image of the final moment of this shot, with the characters in their ending poses. ${shot.endingPrompt ?? shot.videoPrompt}${next ? `\nPrepare a natural transition into the next shot's opening composition: ${next.storyboardPrompt}` : "\nShow the final payoff with a clear, settled composition."}`;
+  return shot.endingPrompt ?? `Final moment: ${shot.videoPrompt}`;
+}
+
+export function goalStillPrompt(plan: GoalPlan, stage: GoalStillStage, index: number): string {
+  if (stage === "frame" && index === 0) return plan.frame.prompt;
+  if (stage === "storyboards" && index >= 0 && index < plan.shots.length) return plan.shots[index]!.storyboardPrompt;
+  if (stage === "storyboards" && plan.frameContinuity && index >= plan.shots.length && index < plan.shots.length * 2) return goalEndingPrompt(plan, index - plan.shots.length);
+  throw new Error("There is no still at this stage and index");
 }
 
 function goalShotParams(plan: GoalPlan, index: number, characters: readonly GoalCharacter[], storyboard: string, ending?: string): Record<string, unknown> {
   const shot = plan.shots[index]!;
   return {
-    prompt: `${plan.continuity}\n\nShot ${index + 1} of ${plan.shots.length}: ${shot.title}\n${shot.videoPrompt}\n\n${goalReferenceLegend(characters, ending ? "pair" : "first")}`,
+    prompt: `Shot ${index + 1}: ${shot.title}. ${shot.videoPrompt}\n\n${goalReferenceLegend(characters, ending ? "pair" : "first")}`,
     first_frame_ref: storyboard,
     ...(ending ? { last_frame_ref: ending } : {}),
     duration: String(shot.durationSeconds),

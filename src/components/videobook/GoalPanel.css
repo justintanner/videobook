@@ -233,6 +233,8 @@
 .goal-editor textarea {
   padding: 7px 8px;
   line-height: 1.45;
+  field-sizing: content;
+  min-height: calc(2lh + 16px);
   resize: vertical;
 }
 

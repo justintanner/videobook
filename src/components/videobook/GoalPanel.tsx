@@ -5,6 +5,7 @@ import type { AssetRecord } from '@/videobook/workspace-responses'
 import { formatGoalClock, goalPlanSeconds, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalTileView, isStagedGoalPlan, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
+import { GoalPromptInput } from './GoalPromptInput'
 import './GoalPanel.css'
 
 type GoalAction = Record<string, unknown>
@@ -71,8 +72,8 @@ function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onRegenera
       <div className="goal-editor-columns">
         <div className="goal-editor-settings">
           <label><span>Video title</span><input value={draft.title} maxLength={120} disabled={disabled} onChange={event => setDraft({ ...draft, title: event.target.value })} /></label>
-          <label><span>Format</span><select value={draft.aspectRatio} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, aspectRatio: event.target.value as GoalPlan['aspectRatio'] })}>
-            <option value="16:9">Landscape · 16:9</option><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option>
+          <label><span>Format</span><select aria-label="Format" value={draft.aspectRatio} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, aspectRatio: event.target.value as GoalPlan['aspectRatio'] })}>
+            <option value="9:16">Portrait · 9:16</option><option value="16:9">Landscape · 16:9</option><option value="1:1">Square · 1:1</option>
           </select></label>
           <label><span>Image model</span><select value={draft.imageModel} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, imageModel: event.target.value as GoalPlan['imageModel'] })}>
             <option value="sunburst">GPT Image 2.5 Sunburst</option><option value="flare">GPT Image 2.5 Flare</option>
@@ -87,10 +88,10 @@ function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onRegenera
             <option value="off">Off · Starting frames only</option><option value="on">On · Review starting and ending frames</option>
           </select></label>
           {draft.frameContinuity && <p className="goal-panel-muted">Adds {draft.shots.length} ending images to the storyboard cost. Each video uses its approved starting and ending frames.</p>}
-          <label><span>Characters and visual style</span><textarea aria-label="Characters and visual style" value={draft.continuity} maxLength={3000} rows={4} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, continuity: event.target.value })} /></label>
+          <GoalPromptInput label="Characters and visual style" value={draft.continuity} budget="continuity" maxLength={3000} disabled={disabled || !initial} onChange={continuity => setDraft({ ...draft, continuity })} />
           {stage !== 'videos' && <>
             {frame && <GoalMedia artifactId={frame.artifactId} cellId={frame.cellId} label="Full frame" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
-            <label><span>Full frame prompt</span><textarea aria-label="Full frame prompt" value={draft.frame.prompt} maxLength={6000} rows={4} disabled={disabled} onChange={event => setDraft({ ...draft, frame: { prompt: event.target.value } })} /></label>
+            <GoalPromptInput label="Full frame prompt" value={draft.frame.prompt} budget="frame" disabled={disabled} onChange={prompt => setDraft({ ...draft, frame: { prompt } })} />
             {frame && <button type="button" className="goal-panel-button" disabled={disabled || !valid} onClick={() => onRegenerate(plan)}>Regenerate frame{goal.estimate.frame.usd === null ? '' : ` · $${goal.estimate.frame.usd.toFixed(2)}`}</button>}
           </>}
           <div className="goal-editor-brief"><span>Brief</span><p>{goal.brief}</p></div>
@@ -111,11 +112,11 @@ function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onRegenera
                   {initial && <button type="button" className="goal-editor-remove" aria-label={`Remove shot ${index + 1}`} disabled={disabled || draft.shots.length === 1} onClick={() => setDraft({ ...draft, shots: draft.shots.filter((_, position) => position !== index) })}><X size={14} aria-hidden="true" /></button>}
                 </div>
                 {storyboard && <GoalMedia artifactId={storyboard.artifactId} cellId={storyboard.cellId} label={`Storyboard ${index + 1}${storyboard.address ? ` · ${storyboard.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
-                <label><span>Storyboard prompt</span><textarea aria-label={`Shot ${index + 1} storyboard prompt`} value={shot.storyboardPrompt} maxLength={6000} rows={3} disabled={disabled} onChange={event => updateShot(index, { storyboardPrompt: event.target.value })} /></label>
+                <GoalPromptInput label="Storyboard prompt" name={`Shot ${index + 1} storyboard prompt`} value={shot.storyboardPrompt} budget="storyboard" disabled={disabled} onChange={storyboardPrompt => updateShot(index, { storyboardPrompt })} />
                 {ending && <GoalMedia artifactId={ending.artifactId} cellId={ending.cellId} label={`Ending storyboard ${index + 1}${ending.address ? ` · ${ending.address}` : ''}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
-                {plan.frameContinuity && <label><span>Ending storyboard prompt</span><textarea aria-label={`Shot ${index + 1} ending storyboard prompt`} value={shot.endingPrompt ?? ''} placeholder="Use the final moment from the video prompt, or describe an ending pose" maxLength={6000} rows={3} disabled={disabled} onChange={event => updateShot(index, { endingPrompt: event.target.value.trim() ? event.target.value : null })} /></label>}
+                {plan.frameContinuity && <GoalPromptInput label="Ending storyboard prompt" name={`Shot ${index + 1} ending storyboard prompt`} value={shot.endingPrompt ?? ''} placeholder="Use the final moment from the video prompt, or describe an ending pose" budget="ending" disabled={disabled} onChange={endingPrompt => updateShot(index, { endingPrompt: endingPrompt.trim() ? endingPrompt : null })} />}
                 {storyboard && <button type="button" className="goal-panel-button" disabled={disabled || !valid} onClick={() => onRegenerate(plan, [index])}>Regenerate {plan.frameContinuity ? 'storyboard pair' : 'storyboard'} {index + 1}{goal.estimate.storyboards.usd === null ? '' : ` · $${(goal.estimate.storyboards.usd / plan.shots.length).toFixed(2)}`}</button>}
-                <label><span>Video prompt</span><textarea aria-label={`Shot ${index + 1} video prompt`} value={shot.videoPrompt} maxLength={6000} rows={3} disabled={disabled} onChange={event => updateShot(index, { videoPrompt: event.target.value })} /></label>
+                <GoalPromptInput label="Video prompt" name={`Shot ${index + 1} video prompt`} value={shot.videoPrompt} budget="video" disabled={disabled} onChange={videoPrompt => updateShot(index, { videoPrompt })} />
               </li>
             })}
           </ol>

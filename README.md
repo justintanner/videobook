@@ -49,7 +49,8 @@ mentioning 1–8 character image cells. Adjacent mentions such as `@a1@a2` work.
 Videobook saves the brief, character references, plan, revision, and estimates
 in a **goal tile** and opens its review panel in the chat dock. Unspecified
 counts default to three clips and unspecified durations to 10 seconds. Each
-clip can be 4–30 whole seconds, in landscape, portrait, or square format.
+clip can be 4–30 whole seconds. Portrait 9:16 is the default; request landscape
+(16:9) or square (1:1) explicitly.
 
 Each paid stage needs a separate approval:
 

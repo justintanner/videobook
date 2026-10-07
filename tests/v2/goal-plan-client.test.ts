@@ -5,7 +5,7 @@ import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 type Step = GoalSnapshot['steps'][number]
 type Stage = NonNullable<GoalSnapshot['stages']['frame']>
 const plan: GoalPlan = {
-  version: 2, title: 'Rainy commute', continuity: 'Two characters share a flooded street', aspectRatio: '16:9', imageModel: 'sunburst', imageResolution: '2K', videoResolution: '720p', frameContinuity: false,
+  version: 2, title: 'Rainy commute', continuity: 'Two characters share a flooded street', aspectRatio: '9:16', imageModel: 'sunburst', imageResolution: '2K', videoResolution: '720p', frameContinuity: false,
   frame: { prompt: 'Both characters beside a bicycle under an umbrella' },
   shots: [0, 1, 2].map(index => ({ title: `Commute ${index + 1}`, storyboardPrompt: `Still frame ${index + 1}`, endingPrompt: null, videoPrompt: `Action ${index + 1}`, durationSeconds: 10 })),
 }
@@ -28,7 +28,7 @@ function run(stage: GoalGenerationStage, statuses: Step['status'][]): Stage {
   }))
   return {
     chainId: `${stage}-chain`, revision: 1, approvedAt: '2026-10-07T10:00:00Z', previousChainIds: [], shotIndexes: statuses.map((_, index) => index), steps, allSteps: steps,
-    outputs: steps.flatMap((step, index) => step.status === 'completed' ? [{ index, artifactId: step.artifactId!, cellId: step.outputCellId, producerCellId: step.cellId, address: `@d${index + 1}` }] : []),
+    outputs: steps.flatMap((step, index) => step.status === 'completed' ? [{ index, artifactId: step.artifactId!, cellId: step.outputCellId, producerCellId: step.cellId, address: `@d${index + 1}`, versions: [], stale: null }] : []),
   }
 }
 function running(stage: GoalGenerationStage, statuses: Step['status'][], extra: Partial<GoalSnapshot> = {}): GoalSnapshot {

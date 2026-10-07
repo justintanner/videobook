@@ -311,7 +311,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/goal",
-    description: "Build a video from character images, reviewing the full frame and storyboards before generating clips",
+    description: "Build a portrait 9:16 video from character images, reviewing the frame and storyboards before clips; request landscape or square to change format",
     example: "/goal @a1 @a2 as Mr Bean in Thailand, two 10s clips",
     category: "action",
     icon: "Wand2",

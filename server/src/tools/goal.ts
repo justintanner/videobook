@@ -8,6 +8,7 @@ import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "
 import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
 import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileGoal } from "../goal-state.js";
+import { goalStillAttempts, goalStillStaleReason } from "../goal-stills.js";
 import {
   createGoalCell, emptyGoalEstimates, findGoalCell, goalContent, listGoals, readGoal, readGoalCell, requireGoalContent, saveGoal,
   writeGoalContent, type GoalRecord, type GoalStageOutput,
@@ -94,22 +95,16 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
       : compileVideoSteps(goal.goalId, plan, characters,
         plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
         plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
-  if (stage === "storyboards" && !regenerate) {
-    const frameRun = goal.stages.frame;
-    const frameStep = frameRun ? getChainRun(engine, frameRun.chainId)?.steps.find(step => step.id === "frame") : null;
-    if (frameStep?.params.prompt !== compileFrameSteps(plan, characters)[0]!.params.prompt) {
-      throw new Error("The full-frame prompt changed. Regenerate the frame before approving it.");
-    }
+  if (stage !== "frame") {
+    const frame = goal.stages.frame?.outputs[0];
+    outputReference(document, frame);
+    const stale = goalStillStaleReason(engine, goal, document, plan, characters, "frame", frame!);
+    if (stale) throw new Error(stale);
   }
   if (stage === "videos") {
-    const storyboardRun = goal.stages.storyboards;
-    const frame = outputReference(document, goal.stages.frame?.outputs[0]);
-    for (const expected of compileStoryboardSteps(plan, characters, frame)) {
-      const index = Number(expected.id.slice("storyboard".length)) - 1;
-      const artifactId = storyboardRun?.outputs.find(output => output.index === index)?.artifactId;
-      const source = storyboardRun && [...storyboardRun.previousChainIds, storyboardRun.chainId].flatMap(id => getChainRun(engine, id)?.steps ?? [])
-        .find(step => step.id === expected.id && (step.outputs?.asset_id ?? step.outputs?.img_asset_id) === artifactId);
-      if (source?.params.prompt !== expected.params.prompt) throw new Error(`${index >= plan.shots.length ? "Ending storyboard" : "Storyboard"} ${index % plan.shots.length + 1} changed. Regenerate it before approving videos.`);
+    for (const output of goal.stages.storyboards?.outputs ?? []) {
+      const stale = goalStillStaleReason(engine, goal, document, plan, characters, "storyboards", output);
+      if (stale) throw new Error(stale);
     }
   }
   const track = stage === "videos" && plan.shots.length > 1
@@ -126,14 +121,35 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
     effectForTool: name => name === "assemble_goal" ? "mutation" : "generation",
   }, lookup, { actor: "chat" });
   const previous = goal.stages[stage];
+  const approvedAt = new Date().toISOString();
   return saveGoal(engine, {
     ...goal, stage, chainId: chain.chainId, status: "running", error: null,
     ...(stage === "videos" ? { clipIds: plan.shots.map(() => uuidv7()), trackId: track?.trackId ?? null } : {}),
     stages: { ...goal.stages, [stage]: {
-      chainId: chain.chainId, revision: content.revision, approvedAt: new Date().toISOString(), shotIndexes: indexes,
+      chainId: chain.chainId, revision: content.revision, approvedAt, shotIndexes: indexes,
       outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
+      ...(stage !== "videos" ? { attempts: goalStillAttempts(goal, plan, stage, chain.chainId, steps, approvedAt) } : {}),
     } },
   });
+}
+
+function selectStill(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
+  requireModernGoal(goal);
+  if (goal.status !== "review") throw new Error("Select a still while reviewing the goal");
+  const stage = z.enum(["frame", "storyboards"]).parse(args.stage);
+  const index = z.number().int().nonnegative().parse(args.index);
+  const artifactId = z.string().uuid().parse(args.artifact_id);
+  const run = goal.stages[stage];
+  const attempt = run?.attempts?.find(item => item.stage === stage && item.index === index && item.artifactId === artifactId);
+  const step = attempt ? getChainRun(engine, attempt.chainId)?.steps.find(item => item.id === attempt.stepId) : null;
+  if (!run || !attempt || step?.status !== "completed") throw new Error("Choose a completed version of this goal's still");
+  const document = readNotebook(engine, goal.notebookId);
+  const producer = document.cells.find(cell => cell.inputs?.chainRunId === `${attempt.chainId}:${attempt.stepId}`);
+  const output = { index, artifactId, cellId: attempt.cellId, producerCellId: producer?.id ?? null, address: null };
+  const address = outputReference(document, output);
+  return saveGoal(engine, { ...goal, stages: { ...goal.stages, [stage]: {
+    ...run, outputs: [...run.outputs.filter(item => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index),
+  } } });
 }
 
 async function queuePlanning(engine: Engine, goal: GoalRecord, operationId: string): Promise<GoalRecord> {
@@ -222,6 +238,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   if (stored.notebookId !== notebookId) throw new Error("Goal does not belong to this notebook");
   const goal = await reconcileGoal(engine, stored, readNotebook(engine, notebookId));
   if (args.action === "update") return updateGoal(engine, goal, args);
+  if (args.action === "select") return selectStill(engine, goal, args);
   if (args.action === "approve" || args.action === "regenerate") return startStage(engine, goal, args, args.action === "regenerate");
   if (args.action === "cancel") return cancelGoal(engine, goal);
   if (args.action === "retry") return retryGoal(engine, goal);
@@ -253,10 +270,11 @@ export function goalDefs(engine: Engine): ToolDef[] {
     description: "Create a video goal from character image mentions, review its plan, then approve each paid stage: GPT Image 2.5 full frame, GPT Image 2.5 storyboards, and Seedance 2.5 videos. approve requires the current revision; each stage finishes at the next review. regenerate repeats the full frame or selected zero-based storyboard shot_indexes. Optional plan.frameContinuity (default false) adds one ending storyboard per shot; endingPrompt edits its pose, regeneration replaces the pair, and videos use both first and last frames. update edits a review, cancel stops remaining work, retry resumes the failed stage, and dismiss hides a finished goal. Multiple clips append in order to the sequence; one clip finishes without assembly. combine renders an assembled goal into one video locally, retaining clip audio; repeated calls reuse its output. The plan and character references live in the goal tile; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "cancel", "assemble", "retry", "dismiss", "combine"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "cancel", "assemble", "retry", "dismiss", "combine"]),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
       brief: z.string().trim().min(1).max(6000).optional(), plan: goalPlanSchema.optional(),
       revision: z.number().int().nonnegative().optional(), shot_indexes: z.array(z.number().int().min(0).max(7)).min(1).max(8).optional(),
+      stage: z.enum(["frame", "storyboards"]).optional(), index: z.number().int().min(0).max(15).optional(), artifact_id: z.string().uuid().optional(),
     },
     handler: async args => {
       try {
