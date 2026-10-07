@@ -82,7 +82,7 @@ export function GoalComposerStatus({ goal, disabled = false, onOpen }: GoalCompo
             )}
           </span>
           {line.busy && (
-            <span className="goal-status-dots" aria-hidden="true"><i /><i /><i /></span>
+            <span className="goal-status-spinner" aria-hidden="true" />
           )}
           {showTicks && (
             <span className="goal-status-ticks" aria-hidden="true">
