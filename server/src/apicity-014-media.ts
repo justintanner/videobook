@@ -1113,10 +1113,6 @@ export function apicity014ToolShape(toolName: string): ZodRawShape | null {
   return ACTIONS_BY_NAME.get(toolName)?.toolShape ?? null;
 }
 
-export function apicity014RequestSchema(toolName: string): ZodType | null {
-  return ACTIONS_BY_NAME.get(toolName)?.requestSchema ?? null;
-}
-
 export const APICITY_014_IMAGE_TASK_TYPES: string[] = ACTIONS
   .filter((action) => action.mediaType === "image")
   .map((action) => action.taskType);

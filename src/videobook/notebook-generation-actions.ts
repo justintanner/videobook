@@ -120,7 +120,7 @@ function numberAboveMaximum(control: GenerationControl, value: number): boolean 
     : value > control.maximum
 }
 
-export function generationControlError(
+function generationControlError(
   control: GenerationControl,
   settings: Record<string, GenerationControlValue>,
 ): string | null {

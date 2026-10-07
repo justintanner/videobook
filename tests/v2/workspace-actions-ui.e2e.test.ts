@@ -128,7 +128,7 @@ describe('workspace action launcher with real endpoints', () => {
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl)
-    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled()).toBe(true)
+    await expect.poll(() => page.getByLabel('Open actions', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
   })
 
   afterEach(async ({ task }) => {

@@ -122,29 +122,6 @@ export function imageEditSelectionPayload(
   }
 }
 
-export function sameImageEditSelection(
-  left: ImageEditSelection,
-  right: ImageEditSelection,
-): boolean {
-  if (left.subjectIds.length !== right.subjectIds.length) return false
-  if (left.regions.length !== right.regions.length) return false
-  if (!left.subjectIds.every((id, index) => id === right.subjectIds[index])) return false
-  if (!left.regions.every((region, index) => {
-    const other = right.regions[index]
-    return other
-      && region.id === other.id
-      && region.box.x === other.box.x
-      && region.box.y === other.box.y
-      && region.box.width === other.box.width
-      && region.box.height === other.box.height
-      && region.matchedSubjectId === other.matchedSubjectId
-  })) return false
-  const leftKeys = Object.keys(left.replacements)
-  const rightKeys = Object.keys(right.replacements)
-  return leftKeys.length === rightKeys.length
-    && leftKeys.every((key) => left.replacements[key] === right.replacements[key])
-}
-
 export type ImageReplacementTarget = {
   key: string
   box?: ImageEditBox

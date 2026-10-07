@@ -40,7 +40,7 @@ const UNNAMED_TARGET_INPUTS = new Set(["replace_audio"]);
 
 const KIND_ORDER: readonly GenerationInputMediaKind[] = ["image", "video", "audio"];
 
-export function generationInputMediaKind(
+function generationInputMediaKind(
   cellType: string,
 ): GenerationInputMediaKind | null {
   if (cellType === "image" || cellType === "generate_image") return "image";
@@ -59,7 +59,7 @@ export function generationInputMediaKind(
   return null;
 }
 
-export function numberedKindSlotIndex(
+function numberedKindSlotIndex(
   targetInput: string,
   kind: GenerationInputMediaKind,
 ): number | null {

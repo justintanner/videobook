@@ -45,7 +45,7 @@ function parseModelCapabilities(value: unknown): ImageEditModelOption['capabilit
   }
 }
 
-export function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
+function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
   const record = recordValue(payload)
   const rawModels = Array.isArray(record?.models) ? record.models : []
   const models: ImageEditModelOption[] = []

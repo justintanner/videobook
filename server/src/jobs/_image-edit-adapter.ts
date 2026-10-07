@@ -316,7 +316,7 @@ const gptImage25EditAdapter = (variant: keyof typeof GPT_IMAGE_2_5_MODELS): Imag
   });
 };
 
-export const SEEDREAM_I2I_ADAPTER: ImageEditAdapter = kieImageEditAdapter({
+const SEEDREAM_I2I_ADAPTER: ImageEditAdapter = kieImageEditAdapter({
   id: "seedream/5-pro-image-to-image",
   requestSchema: SeedreamProImageToImageRequestSchema,
   build: seedreamRegionReplacementRequest,
