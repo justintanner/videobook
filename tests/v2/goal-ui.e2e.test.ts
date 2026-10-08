@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import sharp from 'sharp'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
+import { findPrimaryMediaFile } from 'videobook-engine'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -17,7 +18,9 @@ import { createHttpHandler } from '../../server/src/server.js'
 import { pauseBookQueueForTests, queue, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { goalTestPlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
-import { goalBriefConstraints } from '../../server/src/goal-plan.js'
+import { compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
+import { goalPromptWords } from '../../server/src/goal-prompt-budget.js'
+import { probeVideo } from '../../server/src/ffmpeg.js'
 import { readGoal, requireGoalContent, saveGoal, writeGoalContent } from '../../server/src/goal-store.js'
 import { estimateGoal } from '../../server/src/jobs/plan-goal.js'
 import { getChainRun } from '../../server/src/chain-executor.js'
@@ -364,41 +367,116 @@ describe('staged goal mode in the browser', () => {
   }, 30_000)
 
   it.runIf(live)('plans and generates a complete two-shot goal with real providers', async () => {
-    const brief = '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video, landscape.'
+    const brief = '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video.'
+    const frameFeedback = 'Give Character 1 a red cap'
+    const storyboardFeedback = 'Move Character 2 closer'
+    const requests: Array<{ artifactId: string; stage: string; prompt: string; words: number; aspectRatio: string; path: string; width: number; height: number; duration?: number; hasAudio?: boolean }> = []
+    const reportPath = process.env.VIDEOBOOK_GOAL_REPORT ?? join(root, 'live-report.json')
+    const checkpoint = async (goal: GoalSnapshot) => writeFile(reportPath, JSON.stringify({ bookId, notebookId, root, goal, requests, usage: await call('get_book_usage') }, null, 2))
+    const mediaPath = async (artifactId: string, kind: 'image' | 'video') => {
+      const manifest = await engine.files.manifest(artifactId)
+      if (!manifest.ok) throw new Error(manifest.error.message)
+      const file = findPrimaryMediaFile(manifest.value.files, kind)
+      if (!file) throw new Error(`No ${kind} file for ${artifactId}`)
+      return join(manifest.value.path, file.name)
+    }
+    const inspect = async (goal: GoalSnapshot, stage: 'frame' | 'storyboards' | 'videos') => {
+      const ids = stage === 'videos' ? goal.stages[stage]!.outputs.map(output => output.artifactId)
+        : goal.stages[stage]!.attempts!.map(attempt => attempt.artifactId!)
+      for (const artifactId of ids.filter(id => !requests.some(request => request.artifactId === id))) {
+        const result = await call<{ payload: { input: { prompt: string; aspect_ratio: string } } }>('inspect_generation_request', { asset_id: artifactId })
+        const { prompt, aspect_ratio: aspectRatio } = result.payload.input
+        const words = goalPromptWords(prompt)
+        expect(words, prompt).toBeLessThan(stage === 'frame' ? 145 : stage === 'storyboards' ? 60 : 70)
+        expect(aspectRatio).toBe(stage === 'videos' ? 'adaptive' : '9:16')
+        const path = await mediaPath(artifactId, stage === 'videos' ? 'video' : 'image')
+        const media = stage === 'videos' ? await probeVideo(path) : await sharp(path).metadata()
+        expect(media.height).toBeGreaterThan(media.width!)
+        requests.push({ artifactId, stage, prompt, words, aspectRatio, path, width: media.width!, height: media.height!,
+          ...('hasAudio' in media ? { duration: media.duration, hasAudio: media.hasAudio } : {}) })
+      }
+      await checkpoint(goal)
+    }
     await command(`/goal ${brief}`)
-    const waitForGoal = async (stage: string, wanted: string, timeout = 600_000): Promise<GoalSnapshot> => {
+    const waitForGoal = async (stage: string, wanted: string, timeout = 1_800_000, previousChainId?: string | null): Promise<GoalSnapshot> => {
       const deadline = Date.now() + timeout
+      let lastProgress = ''
+      let lastLoggedAt = 0
       while (Date.now() < deadline) {
         const latest = (await goals()).goals.find(goal => goal.brief === brief)
+        const progress = latest ? `${latest.stage}:${latest.status}:${latest.chainId}` : 'creating'
+        if (progress !== lastProgress || Date.now() - lastLoggedAt >= 60_000) {
+          console.info(JSON.stringify({ goalId: latest?.goalId, progress, steps: latest?.steps.map(step => ({ id: step.id, status: step.status })) }))
+          lastProgress = progress
+          lastLoggedAt = Date.now()
+          if (latest) await checkpoint(latest)
+        }
         if (latest?.status === 'failed' || latest?.status === 'interrupted') throw new Error(latest.error ?? 'Goal failed')
-        if (latest?.status === wanted && (stage === '*' || latest.stage === stage)) return latest
+        if (latest?.status === wanted && (stage === '*' || latest.stage === stage) && latest.chainId !== previousChainId) return latest
         await new Promise(resolve => setTimeout(resolve, 2_000))
       }
       throw new Error(`Goal did not reach ${stage}:${wanted}`)
     }
     const planned = await waitForGoal('frame', 'review', 120_000)
-    const plan = { ...planned.plan, version: 2, imageResolution: '1K', videoResolution: '480p', shots: planned.plan!.shots.map(shot => ({ ...shot, durationSeconds: 4 })) }
+    const plan = goalPlanSchema.parse(planned.plan)
+    expect(plan.aspectRatio).toBe('9:16')
+    expect(plan.imageResolution).toBe('1K')
+    expect(plan.videoResolution).toBe('480p')
+    expect(plan.shots.map(shot => shot.durationSeconds)).toEqual([4, 4])
+    expect(goalPromptBudgetIssues(plan)).toEqual([])
+    const predictedBoards = [...compileStoryboardSteps(plan, planned.characters, '@a1'), compileReviseStillStep(plan, planned.characters, 'storyboards', 1, '@a1', storyboardFeedback, '@a2')]
+    for (const step of predictedBoards) expect(goalPromptWords(String(step.params.prompt)), String(step.params.prompt)).toBeLessThan(60)
+    for (const step of compileVideoSteps(planned.goalId, plan, planned.characters, ['@a1', '@a2'])) expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(70)
     const reviewed = await call<GoalSnapshot>('video_goal', { action: 'update', goal_id: planned.goalId, revision: planned.revision, plan })
     expect(reviewed.plan?.shots).toHaveLength(2)
     expect(reviewed.estimate.total.usd).not.toBeNull()
-    expect(reviewed.estimate.total.usd!).toBeLessThan(3)
-    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, estimate: reviewed.estimate }))
+    const mediaEstimate = reviewed.estimate.total.usd! + 2 * reviewed.estimate.still.usd!
+    expect(mediaEstimate).toBeLessThan(3)
+    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, reportPath, mediaEstimate }))
     await open(reviewed)
     await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
     const frame = await waitForGoal('storyboards', 'review')
     expect(frame.stages.frame!.outputs).toHaveLength(1)
+    await inspect(frame, 'frame')
     await status().click()
     await panel().getByRole('button', { name: /Use this frame/ }).waitFor({ state: 'visible', timeout: 30_000 })
     await screenshot('live-full-frame')
+    const frameCard = panel().getByRole('region', { name: 'Full frame', exact: true })
+    await frameCard.getByLabel('What should change in Full frame?', { exact: true }).fill(frameFeedback)
+    await frameCard.getByRole('button', { name: /^Revise ·/ }).click()
+    const revisedFrame = await waitForGoal('storyboards', 'review', 1_800_000, frame.chainId)
+    expect(revisedFrame.stages.frame!.attempts).toHaveLength(2)
+    expect(revisedFrame.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: frameFeedback, parentArtifactId: frame.stages.frame!.outputs[0]!.artifactId })
+    await inspect(revisedFrame, 'frame')
+    await status().click()
+    await frameCard.getByRole('button', { name: 'Full frame v1', exact: true }).click()
+    await expect.poll(async () => (await current(reviewed)).stages.frame!.outputs[0]!.artifactId).toBe(frame.stages.frame!.outputs[0]!.artifactId)
+    await frameCard.getByRole('button', { name: 'Full frame v2', exact: true }).click()
+    await expect.poll(async () => (await current(reviewed)).stages.frame!.outputs[0]!.artifactId).toBe(revisedFrame.stages.frame!.outputs[0]!.artifactId)
+    await screenshot('live-revised-frame')
     await panel().getByRole('button', { name: /Use this frame/ }).click()
     const boards = await waitForGoal('videos', 'review')
     expect(boards.stages.storyboards!.outputs).toHaveLength(2)
+    await inspect(boards, 'storyboards')
     await status().click()
     await panel().getByRole('button', { name: /Use these storyboards/ }).waitFor({ state: 'visible', timeout: 30_000 })
     await screenshot('live-storyboards')
+    const boardCard = panel().getByRole('region', { name: 'Storyboard 2', exact: true })
+    await boardCard.getByLabel('What should change in Storyboard 2?', { exact: true }).fill(storyboardFeedback)
+    await boardCard.getByRole('button', { name: /^Revise ·/ }).click()
+    const revisedBoards = await waitForGoal('videos', 'review', 1_800_000, boards.chainId)
+    expect(revisedBoards.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0])
+    expect(revisedBoards.stages.storyboards!.attempts).toHaveLength(3)
+    expect(revisedBoards.stages.storyboards!.attempts!.at(-1)).toMatchObject({ feedback: storyboardFeedback, parentArtifactId: boards.stages.storyboards!.outputs[1]!.artifactId, frameArtifactId: revisedFrame.stages.frame!.outputs[0]!.artifactId })
+    await inspect(revisedBoards, 'storyboards')
+    await status().click()
+    await panel().getByRole('button', { name: /Use these storyboards/ }).waitFor({ state: 'visible', timeout: 30_000 })
+    await screenshot('live-revised-storyboards')
     await panel().getByRole('button', { name: /Use these storyboards/ }).click()
-    const completed = await waitForGoal('*', 'completed', 900_000)
+    const completed = await waitForGoal('*', 'completed', 2_700_000)
     expect(completed.stages.videos!.outputs).toHaveLength(2)
+    await inspect(completed, 'videos')
+    expect(requests.filter(request => request.stage === 'videos').every(request => request.hasAudio && Math.abs(request.duration! - 4) <= 0.3)).toBe(true)
     expect(completed.assembly!.durationFrames).toBeGreaterThan(0)
     const sequence = engine.sequences.getPrimary()
     expect(sequence.clips.filter(clip => completed.clipIds.includes(clip.clipId))).toHaveLength(2)
@@ -409,14 +487,24 @@ describe('staged goal mode in the browser', () => {
       expect(outputs).toHaveLength(count)
       for (const output of outputs) {
         expect(document.value.cells.some(cell => cell.id === output.cellId && cell.outputArtifactId === output.artifactId)).toBe(true)
-        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength(stage === 'frame' ? 2 : stage === 'storyboards' ? 3 : 1)
+        const revised = completed.stages[stage]!.attempts?.some(attempt => attempt.artifactId === output.artifactId && attempt.feedback)
+        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength((stage === 'frame' ? 2 : stage === 'storyboards' ? 3 : 1) + (revised ? 1 : 0))
       }
     }
-    const usage = await call('get_book_usage')
-    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, usage, completed: completed.assembly }))
     await status().click()
+    await panel().getByRole('button', { name: 'Combine into one video', exact: true }).click()
+    await expect.poll(async () => (await current(reviewed)).combined?.status, { timeout: 120_000 }).toBe('completed')
+    const combined = await current(reviewed)
+    const combinedPath = await mediaPath(combined.combined!.artifactId, 'video')
+    const probe = await probeVideo(combinedPath)
+    expect(probe.height).toBeGreaterThan(probe.width)
+    expect(probe.hasAudio).toBe(true)
+    expect(Math.abs(probe.duration - 8)).toBeLessThanOrEqual(0.3)
+    expect((await call<GoalSnapshot>('video_goal', { action: 'combine', goal_id: reviewed.goalId })).combined?.artifactId).toBe(combined.combined!.artifactId)
+    await checkpoint(combined)
+    console.info(JSON.stringify({ goalId: reviewed.goalId, bookId, root, usage: await call('get_book_usage'), combinedPath, combined: probe }))
     await screenshot('live-complete')
     expect(errors).toEqual([])
-  }, 1_800_000)
+  }, 5_400_000)
 
 })

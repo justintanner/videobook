@@ -161,8 +161,8 @@ export function goalStillPrompt(plan: GoalPlan, stage: GoalStillStage, index: nu
 export function compileReviseStillStep(plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, index: number, current: string, feedback: string, frame?: string): ChainStep {
   const basePrompt = goalStillPrompt(plan, stage, index);
   if (stage === "storyboards" && !frame) throw new Error("Choose a full frame before revising storyboards");
-  const references = ["@image1 is the previous version", ...(frame ? ["@image2 is the full frame"] : []),
-    ...characters.map((_, position) => `@image${position + (frame ? 3 : 2)} is Character ${position + 1}`)];
+  const references = ["@image1: previous version", ...(frame ? ["@image2: full frame"] : []),
+    ...characters.map((_, position) => `@image${position + (frame ? 3 : 2)}: Character ${position + 1}`)];
   return {
     id: stage === "frame" ? "frame" : `storyboard${index + 1}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],

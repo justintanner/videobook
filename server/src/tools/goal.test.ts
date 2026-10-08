@@ -344,7 +344,7 @@ describe("staged video goals through MCP", () => {
     const step = getChainRun(engine, revised.chainId!)!.steps[0]!;
     const job = engine.jobs.queue.list({ type: "generate_gpt_image_2_5" })[0]!;
     expect(job.payload).toMatchObject({ sourceImageIds: [original.artifactId, ...imageIds], input: { aspect_ratio: "9:16", resolution: "2K", background: "opaque", prompt: expect.stringContaining("Revise @image1: Give Character 1 a red cap") } });
-    expect(step.params.prompt).toContain("@image2 is Character 1");
+    expect(step.params.prompt).toContain("@image2: Character 1");
     expect(revised.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: "Give Character 1 a red cap", parentArtifactId: original.artifactId, basePrompt: plan.frame.prompt });
     expect(revised.estimate.still).toEqual(frame.estimate.frame);
     await invoke({ action: "cancel", goal_id: frame.goalId });
@@ -378,7 +378,8 @@ describe("staged video goals through MCP", () => {
     expect(getChainRun(engine, ending.chainId!)!.steps.map(step => step.id)).toEqual(["storyboard5"]);
     const step = getChainRun(engine, ending.chainId!)!.steps[0]!;
     expect(step.pins.map(pin => pin.artifactId)).toEqual([revised.stages.storyboards!.outputs[4]!.artifactId, revised.stages.frame!.outputs[0]!.artifactId, ...imageIds]);
-    expect(step.params.prompt).toContain("@image2 is the full frame; @image3 is Character 1");
+    expect(step.params.prompt).toContain("@image2: full frame; @image3: Character 1");
+    expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(60);
     await invoke({ action: "cancel", goal_id: revised.goalId });
     await waitForChainRun(engine, ending.chainId!);
   });
