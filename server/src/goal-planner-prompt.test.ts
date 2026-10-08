@@ -15,7 +15,9 @@ describe("goal planner style guidance", () => {
     const text = goalPlannerInstructions({ id: "cinematic", options: {} }, goalBriefConstraints("two clips"));
     expect(text).toContain("short noun/verb fragments");
     expect(text).toContain("Let the storyboard guide the video");
+    expect(text).toContain("unlabeled panels");
     expect(text).toContain("do not retell the panels");
+    expect(text).toContain("Sound: ambience or speech. No music.");
     expect(text).toContain("ceilings, not targets");
     expect(text).toContain("video 12");
   });
@@ -25,7 +27,7 @@ describe("goal planner style guidance", () => {
     for (const format of style.options.find(option => option.key === "format")!.choices) {
       const selection = { id: style.id, options: { format: format.value, delivery: "mirror", camera: "iphone-main", light: "golden-hour" } };
       const text = goalPlannerInstructions(selection, goalBriefConstraints("two clips square"));
-      for (const anchor of ["hyper-realistic", "visible pores", "captions or on-screen text", "ambient room or street sound", "optional short spoken line", "Mirror", "iPhone main camera", "Golden hour", "Use 1:1", format.beats!]) expect(text.toLowerCase()).toContain(anchor.toLowerCase());
+      for (const anchor of ["hyper-realistic", "visible pores", "captions or on-screen text", "ambient room or street sound", "optional short spoken line", "No music", "Mirror", "iPhone main camera", "Golden hour", "Use 1:1", format.beats!]) expect(text.toLowerCase()).toContain(anchor.toLowerCase());
       for (const word of style.banned) expect(text).toContain(word);
     }
   });

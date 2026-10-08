@@ -143,7 +143,7 @@ export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalChara
 }
 
 function storyboardLayoutPrompt(plan: GoalPlan): string {
-  return `2x2 storyboard. Left-right, top-bottom: 1 setup; 2 action; 3 reaction; 4 ending. Each ${plan.aspectRatio}. Thin gutters. Numbers only.`;
+  return `2x2 storyboard. Unlabeled panels. Left-right, top-bottom: setup; action; reaction; ending. Each ${plan.aspectRatio}. Thin gutters. No text.`;
 }
 
 export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
@@ -197,7 +197,7 @@ function goalShotParams(plan: GoalPlan, index: number, storyboard: string, endin
   const shot = plan.shots[index]!;
   const fragment = goalStyleFragment(plan.style, "video");
   return {
-    prompt: `${shot.videoPrompt}\n\n@image1 storyboard. Follow panels 1–4 in order. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""} No grid, borders, text.`,
+    prompt: `${shot.videoPrompt}\n\n@image1 storyboard. Four beats in order, ${shot.durationSeconds / 4}s each. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""} No grid, borders, text. No music.`,
     image_refs: [storyboard, ...(ending ? [ending] : [])],
     duration: String(shot.durationSeconds),
     aspect_ratio: plan.aspectRatio,

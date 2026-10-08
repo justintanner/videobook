@@ -70,7 +70,9 @@ describe("video goal plans", () => {
     expect(storyboards[1]!.params.prompt).toContain("@image1 full frame: keep clothes, props");
     expect(storyboards[1]!.params.prompt).toContain("@image2 Character 1");
     expect(storyboards[1]!.params.prompt).toContain("2x2 storyboard");
-    expect(storyboards[1]!.params.prompt).toContain("1 setup; 2 action; 3 reaction; 4 ending");
+    expect(storyboards[1]!.params.prompt).toContain("setup; action; reaction; ending");
+    expect(storyboards[1]!.params.prompt).toContain("Unlabeled panels");
+    expect(storyboards[1]!.params.prompt).toContain("No text");
     expect(storyboards[1]!.params.prompt).toContain(plan.shots[1]!.videoPrompt);
     expect(storyboards[1]!.params.prompt).toContain("Each 9:16");
     expect(compileStoryboardSteps(plan, characters, "@b2", [1]).map(step => step.id)).toEqual(["storyboard2"]);
@@ -80,7 +82,9 @@ describe("video goal plans", () => {
     expect(videos[1]!.params.first_frame_ref).toBeUndefined();
     expect(videos[1]!.params.last_frame_ref).toBeUndefined();
     expect(videos[1]!.params.prompt).toContain("@image1 storyboard");
+    expect(videos[1]!.params.prompt).toContain("Four beats in order, 2.5s each");
     expect(videos[1]!.params.prompt).toContain("No grid, borders, text");
+    expect(videos[1]!.params.prompt).toContain("No music.");
     expect(normalizeSeedance25Request({ model: "bytedance/seedance-2-5", input: { ...videos[1]!.params, prompt: String(videos[1]!.params.prompt), reference_image_urls: ["https://example.test/storyboard.png"] } })).toMatchObject({ input: { aspect_ratio: "9:16" } });
     expect(videos[3]!.params.artifact_ids).toEqual([1, 2, 3].map(index => ({ $ref: { step_id: `shot${index}`, output: "asset_id" } })));
     expect(compileVideoSteps(uuidv7(), goalTestPlan(1), ["@c1"])).toHaveLength(1);
@@ -112,10 +116,18 @@ describe("video goal plans", () => {
     expect(steps[3]!.params.prompt).not.toContain("four-panel");
   });
 
+  it.each([{ seconds: 4, beat: "1s" }, { seconds: 10, beat: "2.5s" }, { seconds: 30, beat: "7.5s" }])("paces four storyboard beats within $seconds seconds", ({ seconds, beat }) => {
+    const timed = { ...plan, shots: [{ ...plan.shots[0]!, durationSeconds: seconds }] };
+    const [video] = compileVideoSteps(uuidv7(), timed, ["@c1"]);
+    expect(video!.params.prompt).toContain(`Four beats in order, ${beat} each`);
+  });
+
   it.each(["9:16", "16:9", "1:1"] as const)("keeps the four-panel contract when revising %s storyboards, including old single frames", aspectRatio => {
     const revised = compileReviseStillStep({ ...plan, aspectRatio }, characters, "storyboards", 1, "@c2", "Raise the umbrella", "@b2");
     expect(revised.params.image_refs).toEqual(["@c2", "@b2", "@a1", "@a2"]);
     expect(revised.params.prompt).toContain("2x2 storyboard");
+    expect(revised.params.prompt).toContain("Unlabeled panels");
+    expect(revised.params.prompt).toContain("No text");
     expect(revised.params.prompt).toContain(`Each ${aspectRatio}`);
     expect(revised.params.prompt).toContain("Four distinct moments");
     expect(revised.params.prompt).toContain(plan.shots[1]!.videoPrompt);
@@ -155,7 +167,7 @@ describe("video goal plans", () => {
       expect(step.params.aspect_ratio).toBe("9:16");
       expect(step.tool).toBe(stage === "video" ? GOAL_VIDEO_TOOL : GOAL_IMAGE_TOOLS.sunburst);
     }
-    expect(String(steps[4][0].params.prompt)).toMatch(/@image1 storyboard.*hyper-realistic.*@image2 ending pose.*No grid, borders, text\.$/su);
+    expect(String(steps[4][0].params.prompt)).toMatch(/@image1 storyboard.*hyper-realistic.*@image2 ending pose.*No grid, borders, text\. No music\.$/su);
     expect(goalStillPrompt(styled, "frame", 0)).toBe(goalStillPrompt(plan, "frame", 0));
     expect(goalStillPrompt(styled, "storyboards", 0)).toBe(goalStillPrompt(plan, "storyboards", 0));
   });

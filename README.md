@@ -92,8 +92,10 @@ Each paid stage needs a separate approval:
    full frame again. Choose **Use these storyboards · Generate videos** when
    every selected still is current. Each storyboard is a four-panel 2×2 sheet
    showing setup, action, reaction and ending, read left to right, then top to
-   bottom. Seedance uses it as a visual sequence reference for a full-screen
-   video in the chosen format; the grid and panel numbers stay out of the video.
+   bottom. New sheets use unlabeled panels. Video prompts give each beat a
+   quarter of the clip and request full-screen footage without the grid or
+   text. Sound is ambience or speech; prompts explicitly request no music.
+   Review the output for stray labels and continuity.
 4. **Combine:** multiple clips append in order after existing sequence content,
    using actual media durations. A single clip finishes without assembly.
    **Combine into one video** renders a shareable MP4 locally with the clips'
