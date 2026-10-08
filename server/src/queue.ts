@@ -15,6 +15,7 @@ import { ensureJobHandlersLoaded } from "./jobs/index.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 import { logger } from "./logger.js";
 import { testQueueCleanup } from "./test-queue-cleanup.js";
+import { preserveProviderTask } from "./provider-task-record.js";
 
 type JobPayload = Record<string, unknown>;
 
@@ -411,6 +412,14 @@ function makeWrappedResolver(
             }, 20_000);
           }
           const result = await handler(job.payload, context);
+          if (assetId && lease.current?.kind === "task") {
+            const pending = engine.jobs.pending.read(assetId);
+            if (pending.ok && pending.value) {
+              await preserveProviderTask(engine, pending.value).catch((error: unknown) => {
+                logger.warn("provider-task-record-failed", { bookId, assetId, error });
+              });
+            }
+          }
           if (assetId && lease.current?.kind === "owner") {
             engine.jobs.artifactWork.complete(assetId, lease.current.ownerId);
           }

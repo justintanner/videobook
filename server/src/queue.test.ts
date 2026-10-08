@@ -77,6 +77,8 @@ describe("server queue (Dolt-native)", () => {
     const pending = await cfs.jobs.pending.read(asset.value.artifactId);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value?.taskId : null).toBe(taskId);
+    const saved = await cfs.metadata.artifacts.read(asset.value.artifactId, "provider-task");
+    expect(saved.ok && saved.value).toMatchObject({ taskId, taskType: "fal_nano_banana" });
     await appQueue.stop();
   });
 

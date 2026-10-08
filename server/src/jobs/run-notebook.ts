@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { seedance25FrameAspectRatio } from "../seedance25.js";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import { z } from "zod";
@@ -85,6 +86,7 @@ import {
 import { sortByKindSlot } from "../generation-input-mentions.js";
 import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
+import { recoverNotebookProviderTask } from "../provider-task-record.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -2701,6 +2703,9 @@ export async function runNotebookCell(
                       ? "awaiting-output"
                       : "completed",
                     outputArtifactId: output.artifactId,
+                    ...(state.providerArtifactId
+                      ? { providerArtifactId: state.providerArtifactId }
+                      : {}),
                     updatedAt: state.updatedAt,
                     ...(state.completedAt
                       ? { completedAt: state.completedAt }
@@ -3728,9 +3733,11 @@ async function enqueueNotebookResume(
 async function awaitNotebookOutput(
   engine: Engine,
   input: AwaitNotebookOutputPayload,
+  signal: AbortSignal,
 ): Promise<void> {
   const deadline = Date.now() + 45 * 60_000;
   while (Date.now() < deadline) {
+    signal.throwIfAborted();
     const status = await engine.status.get(input.providerArtifactId);
     if (!status.ok) throw new Error(status.error.message);
     if (status.value === "ready") {
@@ -3752,11 +3759,15 @@ async function awaitNotebookOutput(
       return;
     }
     if (status.value === "error") {
-      const document = await failNotebookProviderOutput(engine, input);
-      await enqueueNotebookResume(input, document);
-      return;
+      const pending = engine.jobs.pending.read(input.providerArtifactId);
+      const failure = engine.jobs.failures.read(input.providerArtifactId);
+      if (!pending.ok || !pending.value || (failure.ok && failure.value)) {
+        const document = await failNotebookProviderOutput(engine, input);
+        await enqueueNotebookResume(input, document);
+        return;
+      }
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+    await delay(2_000, undefined, { signal });
   }
   const document = await failAwaitingNotebookCell(
     engine,
@@ -3767,13 +3778,15 @@ async function awaitNotebookOutput(
 }
 
 export function registerRunNotebookJob(engine: Engine): void {
-  registerJobHandler("await_notebook_output", async (payload) => {
+  registerJobHandler("await_notebook_output", async (payload, context) => {
     const input = payload as unknown as AwaitNotebookOutputPayload;
     try {
-      await awaitNotebookOutput(engine, input);
+      await awaitNotebookOutput(engine, input, context.signal);
       return { status: "completed" };
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
+      const reason: unknown = context.signal.aborted ? context.signal.reason : cause;
+      const message = reason instanceof Error ? reason.message : String(reason);
+      if (context.signal.aborted && message === "Queue stopped") throw reason;
       try {
         await failAwaitingNotebookCell(engine, input, message);
       } catch {
@@ -4084,14 +4097,16 @@ export async function reconcileAwaitingNotebookOutputs(
     for (const [cellId, state] of Object.entries(execution)) {
       if (
         state.status !== "awaiting-output"
-        || !state.providerArtifactId
         || !state.runId
       ) {
         continue;
       }
       const stateRunId = state.runId;
-      const providerArtifactId = state.providerArtifactId;
       const cell = notebook.cells.find((candidate) => candidate.id === cellId);
+      const providerArtifactId = state.providerArtifactId
+        ?? state.outputArtifactId
+        ?? cell?.outputArtifactId;
+      if (!providerArtifactId) continue;
       const producerCellId = cell
         ? concurrentProducerIdForCell(cell)
         : null;
@@ -4119,9 +4134,15 @@ export async function reconcileAwaitingNotebookOutputs(
       const awaitOutputCellId = cell && isImageVideoGenerationResult(cell)
         ? cellId
         : undefined;
-      if (latestFailed) {
-        const message = latestFailed.error?.message
-          ?? `Notebook await ${latestFailed.state}`;
+      const interrupted = latestFailed?.state === "aborted"
+        && latestFailed.error?.message === "Queue stopped";
+      if (latestFailed && !interrupted) {
+        const failure = engine.jobs.failures.read(providerArtifactId);
+        const message = failure.ok && failure.value
+          ? notebookProviderFailureMessage(engine, {
+              notebookId: notebook.id, cellId: awaitProducerId, providerArtifactId,
+            })
+          : latestFailed.error?.message ?? `Notebook await ${latestFailed.state}`;
         await failAwaitingNotebookCell(
           engine,
           {
@@ -4136,6 +4157,21 @@ export async function reconcileAwaitingNotebookOutputs(
           message,
         );
         continue;
+      }
+      const recovered = await recoverNotebookProviderTask(engine, providerArtifactId);
+      if (!recovered) {
+        const status = await engine.status.get(providerArtifactId);
+        const failure = engine.jobs.failures.read(providerArtifactId);
+        const active = engine.jobs.queue.list({
+          artifactId: providerArtifactId, states: ["queued", "running", "completing"],
+        });
+        if (status.ok && status.value !== "ready" && failure.ok && !failure.value
+          && active.length === 0) {
+          const written = await engine.jobs.failures.write(providerArtifactId, {
+            message: "Provider task could not be recovered after restart. No saved task ID or output is available.",
+          });
+          if (!written.ok) throw new Error(written.error.message);
+        }
       }
       const runPlan = notebookRunPlanRecords(notebook).find((record) =>
         record.runId === stateRunId

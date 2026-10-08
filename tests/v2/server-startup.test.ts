@@ -4,10 +4,12 @@ import { access, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from '@dolthub/doltlite'
+import sharp from 'sharp'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import type { Result } from 'videobook-engine'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager'
+import { placeChainGeneration } from '../../server/src/chain-generation'
 import { callTool, startServer, stopServer } from './mcp-http-test-server'
 import type { StartedServer } from './mcp-http-test-server'
 
@@ -23,6 +25,69 @@ describe('server startup', () => {
   afterEach(async () => {
     await Promise.all(servers.splice(0).map(stopServer))
     if (rootDir) await rm(rootDir, { recursive: true, force: true })
+  })
+
+  it.each(['ready', 'failed', 'missing'])('settles a shutdown-aborted result with %s provider output on server startup', async (providerStatus) => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-server-await-recovery-'))
+    const manager = new BookManager({ libraryDir: join(rootDir, 'books') })
+    const book = value(await manager.create('await-recovery'))
+    const engine = value(manager.get(book.bookId)).engine
+    const notebook = engine.notebooks.list()[0]!
+    const artifact = value(await engine.artifacts.create('image', 'Provider output'))
+    const runId = '019f0000-0000-7000-8000-000000000051:frame'
+    const placed = await placeChainGeneration({
+      engine, notebookId: notebook.id, tool: 'generate_kie_gpt_image_2_5_sunburst_image',
+      placement: 'generate_image', params: { prompt: 'A frame' },
+      artifactId: artifact.artifactId, runId, pins: [],
+    })
+    const current = value(engine.notebooks.read(notebook.id))
+    const execution = { ...current.execution?.[placed.outputCellId] }
+    delete execution.providerArtifactId
+    value(await engine.notebooks.write({
+      ...current, execution: { ...current.execution, [placed.outputCellId]: execution },
+    }))
+    value(await engine.generations.record({
+      notebookId: notebook.id, cellId: placed.producerCellId, outputCellId: placed.outputCellId,
+      runId, status: 'awaiting_provider', tool: 'generate_kie_gpt_image_2_5_sunburst_image',
+      provider: 'kie', providerArtifactId: artifact.artifactId,
+    }))
+    if (providerStatus === 'ready') {
+      const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: 'red' } }).png().toBuffer()
+      value(await engine.files.write(artifact.artifactId, 'original.png', image))
+    } else if (providerStatus === 'failed') {
+      value(await engine.jobs.failures.write(artifact.artifactId, { message: 'Provider rejected this request', failCode: '400' }))
+    }
+    const watcher = engine.jobs.queue.enqueue({
+      type: 'await_notebook_output',
+      payload: {
+        type: 'await_notebook_output', bookId: book.bookId, notebookId: notebook.id,
+        cellId: placed.producerCellId, outputCellId: placed.outputCellId, runId,
+        providerArtifactId: artifact.artifactId,
+      },
+    }).job
+    expect(await engine.jobs.queue.abort(watcher.id, 'Queue stopped')).toBe(true)
+    await manager.close()
+    const running = await startServer(rootDir)
+    servers.push(running)
+    const client = new Client({ name: 'startup-recovery-test', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL(running.url)))
+      const args = { book_id: book.bookId, notebook_id: notebook.id, cell_id: placed.outputCellId }
+      type Details = { execution: { status: string; error?: string }; generations: { latestStatus: string } }
+      await expect.poll(async () => (await callTool<Details>(client, 'get_notebook_cell_details', args)).execution.status,
+        { timeout: 15_000 }).toBe(providerStatus === 'ready' ? 'completed' : 'error')
+      const details = await callTool<Details>(client, 'get_notebook_cell_details', args)
+      expect(details.generations.latestStatus).toBe(providerStatus === 'ready' ? 'completed' : 'failed')
+      if (providerStatus === 'failed') expect(details.execution.error).toContain('Provider rejected this request')
+      if (providerStatus === 'missing') expect(details.execution.error).toContain('No saved task ID or output is available')
+      const jobs = await callTool<Array<{ type: string }>>(client, 'list_jobs', { book_id: book.bookId })
+      expect(jobs.every(job => job.type === 'await_notebook_output')).toBe(true)
+      expect(running.output.join('')).not.toContain('[startup-failed]')
+    } finally {
+      await client.close()
+    }
   })
 
   it.each([false, true])('opens the library after tagged image deletion with legacy leftovers=%s', async (legacy) => {

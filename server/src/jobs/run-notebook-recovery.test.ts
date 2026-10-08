@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine, JobState } from "videobook-engine";
@@ -8,6 +9,8 @@ import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { claimNotebookRunPlan } from "../notebook-run-plan.js";
 import { placeChainGeneration } from "../chain-generation.js";
 import { queue as appQueue, setEngineRoot } from "../queue.js";
+import { preserveProviderTask } from "../provider-task-record.js";
+import { pollPendingProviderTasks } from "../tools/reconcile-project-work.js";
 import {
   abortLeasedNotebookRunsOnStartup,
   failQueuedNotebookCells,
@@ -371,6 +374,151 @@ describe("awaiting notebook output startup recovery", () => {
     expect(engine.jobs.queue.list({ type: "run_notebook" })).toHaveLength(1);
     expect(await reconcileAwaitingNotebookOutputs(engine, fixture.bookId)).toBe(0);
     expect(engine.jobs.queue.list({ type: "await_notebook_output" })).toHaveLength(1);
+  });
+
+  it.each(["pending", "saved", "legacy", "completing"])(
+    "recovers a shutdown-interrupted result with %s provider state and surfaces the provider failure",
+    async (providerState) => {
+      const artifact = await engine.artifacts.create("video", "Interrupted Seedance output");
+      const notebook = await engine.notebooks.create("Interrupted generation");
+      if (!artifact.ok || !notebook.ok) throw new Error("Fixture creation failed");
+      const artifactId = artifact.value.artifactId;
+      const bookId = engine.book.get().bookId;
+      const runId = "019f0000-0000-7000-8000-000000000041:clip";
+      const placed = await placeChainGeneration({
+        engine, notebookId: notebook.value.id, tool: "generate_kie_seedance_2_5_video",
+        placement: "generate_video", params: { prompt: "A scene" },
+        artifactId, runId, pins: [],
+      });
+      const read = engine.notebooks.read(notebook.value.id);
+      if (!read.ok) throw new Error(read.error.message);
+      const outputState = read.value.execution?.[placed.outputCellId];
+      if (!outputState) throw new Error("Missing output state");
+      const legacyState = { ...outputState };
+      delete legacyState.providerArtifactId;
+      expect((await engine.notebooks.write({
+        ...read.value,
+        execution: { ...read.value.execution, [placed.outputCellId]: legacyState },
+      })).ok).toBe(true);
+      const recorded = await engine.generations.record({
+        notebookId: notebook.value.id, cellId: placed.producerCellId,
+        outputCellId: placed.outputCellId, runId, status: "awaiting_provider",
+        tool: "generate_kie_seedance_2_5_video", provider: "kie",
+        providerArtifactId: artifactId,
+      });
+      if (!recorded.ok) throw new Error(recorded.error.message);
+      const taskId = `restart-seedance-${providerState}`;
+      const owner = engine.jobs.artifactWork.begin(artifactId, {
+        kind: "generate", ownerKind: "job", durationMs: 60_000,
+      });
+      if (!owner) throw new Error("Missing fixture owner");
+      const pending = await engine.jobs.pending.write({
+        artifactId, taskId, taskType: "seedance2_video", meta: { prompt: "A scene" },
+      }, owner.ownerId);
+      if (!pending.ok || !pending.value) throw new Error("Missing pending task");
+      engine.jobs.artifactWork.complete(artifactId, owner.ownerId);
+      if (providerState === "saved") {
+        await preserveProviderTask(engine, pending.value.task);
+        expect(engine.jobs.pending.delete(artifactId).ok).toBe(true);
+      }
+      if (providerState === "legacy") {
+        expect(engine.jobs.pending.delete(artifactId).ok).toBe(true);
+        const submission = engine.jobs.queue.enqueue({
+          type: "generate_seedance25_video", artifactId,
+          payload: { type: "generate_seedance25_video", bookId, vidAssetId: artifactId, prompt: "A scene" },
+        }).job;
+        const running = engine.jobs.queue.dequeue(process.pid, 60_000);
+        expect(running?.id).toBe(submission.id);
+        if (!running) throw new Error("Missing submission job");
+        expect(await engine.jobs.queue.complete(running.id, { result: { success: true, taskId } }, running.fence)).toBe(true);
+      }
+      if (providerState === "completing") {
+        expect(engine.jobs.pending.markCompleting(artifactId).ok).toBe(true);
+      }
+      const watcher = engine.jobs.queue.enqueue({
+        type: "await_notebook_output",
+        payload: {
+          type: "await_notebook_output", bookId, notebookId: notebook.value.id,
+          cellId: placed.producerCellId, outputCellId: placed.outputCellId,
+          runId, providerArtifactId: artifactId,
+        },
+      }).job;
+      expect(await engine.jobs.queue.abort(watcher.id, "Queue stopped")).toBe(true);
+      closeEngineForTest(rootDir, engine);
+      engine = createEngineForTest(rootDir);
+      await engine.ready;
+      registerRunNotebookJob(engine);
+      await setEngineRoot(rootDir, engine);
+      expect(await reconcileAwaitingNotebookOutputs(engine, bookId)).toBe(1);
+      expect(await reconcileAwaitingNotebookOutputs(engine, bookId)).toBe(0);
+      const restored = engine.jobs.pending.read(artifactId);
+      expect(restored.ok && restored.value).toMatchObject({ taskId, completing: false });
+      const requests: string[] = [];
+      const server = createServer((request, response) => {
+        requests.push(request.url ?? "");
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ code: 200, data: {
+          taskId, state: "fail", failCode: "400",
+          failMsg: "The output video may be related to copyright restrictions.",
+        } }));
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test server address");
+      const previousKey = process.env.KIE_API_KEY;
+      process.env.KIE_API_KEY = "local-recovery-key";
+      try {
+        await pollPendingProviderTasks(engine, bookId, {
+          kieBaseURL: `http://127.0.0.1:${address.port}`,
+          nowMs: Date.now() + 60 * 60_000,
+        });
+        await expect.poll(() => {
+          const current = engine.notebooks.read(notebook.value.id);
+          return current.ok ? current.value.execution?.[placed.outputCellId]?.status : null;
+        }, { timeout: 5_000 }).toBe("error");
+        const current = engine.notebooks.read(notebook.value.id);
+        if (!current.ok) throw new Error(current.error.message);
+        expect(current.value.execution?.[placed.outputCellId]).toMatchObject({
+          status: "error", providerArtifactId: artifactId, runId,
+          error: "Kie failed: The output video may be related to copyright restrictions. (400)",
+        });
+        expect(current.value.execution?.[placed.producerCellId]).toBeUndefined();
+        expect(await engine.status.get(artifactId)).toMatchObject({ ok: true, value: "error" });
+        const generation = engine.generations.read(recorded.value.generationId);
+        expect(generation.ok && generation.value).toMatchObject({
+          status: "failed", error: expect.stringContaining("copyright restrictions"),
+        });
+        expect(requests).toEqual([`/api/v1/jobs/recordInfo?taskId=${taskId}`]);
+        expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(providerState === "legacy" ? 1 : 0);
+      } finally {
+        if (previousKey === undefined) delete process.env.KIE_API_KEY;
+        else process.env.KIE_API_KEY = previousKey;
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    },
+  );
+
+  it("stops an active output watcher promptly and preserves it for restart", async () => {
+    const fixture = await createAwaitingNotebook();
+    const owner = engine.jobs.artifactWork.begin(fixture.providerArtifactId, {
+      kind: "generate", ownerKind: "job", durationMs: 60_000,
+    });
+    if (!owner) throw new Error("Missing fixture owner");
+    const pending = await engine.jobs.pending.write({
+      artifactId: fixture.providerArtifactId, taskId: "shutdown-task", taskType: "gpt_image",
+    }, owner.ownerId);
+    expect(pending.ok).toBe(true);
+    registerRunNotebookJob(engine);
+    await setEngineRoot(rootDir, engine);
+    const watcher = await appQueue.enqueue("shutdown-watcher", { ...awaitPayload(fixture) });
+    await expect.poll(() => engine.jobs.queue.get(watcher.id)?.state).toBe("running");
+    const started = Date.now();
+    await appQueue.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    const notebook = engine.notebooks.read(fixture.notebookId);
+    expect(notebook.ok && notebook.value.execution?.[fixture.cellId]?.status).toBe("awaiting-output");
+    expect(engine.jobs.pending.read(fixture.providerArtifactId)).toMatchObject({ ok: true, value: { taskId: "shutdown-task" } });
   });
 
   it("repairs a queued cell and plan after its run job failed", async () => {

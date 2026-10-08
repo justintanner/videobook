@@ -1075,6 +1075,7 @@ export async function pollPendingProviderTasks(
   const timeoutMs = options.timeoutMs ?? PENDING_TASK_TIMEOUT_MS;
   const nowMs = options.nowMs ?? Date.now();
   const activeTasks: PendingTask[] = [];
+  const expiredTasks: PendingTask[] = [];
   for (const originalTask of tasks) {
     let t = originalTask;
     if (isQueuedKiePendingTask(t)) {
@@ -1093,14 +1094,9 @@ export async function pollPendingProviderTasks(
     }
     const ageMs = nowMs - t.createdAt;
     if (t.completing !== true && Number.isFinite(ageMs) && ageMs > timeoutMs) {
-      const ageMinutes = Math.round(ageMs / 60000);
-      const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
-      const prompt = metaPrompt(t.meta);
-      result.failed.push({ assetId: t.artifactId, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-      await failPendingTaskAndLog(engine, t.artifactId, t.taskId, { message: failMsg, prompt });
-    } else {
-      activeTasks.push(t);
+      expiredTasks.push(t);
     }
+    activeTasks.push(t);
   }
 
   // Completing tasks — reconciliation already enqueued a completion job for these on a
@@ -1498,6 +1494,19 @@ export async function pollPendingProviderTasks(
   }
 
 
+  for (const task of expiredTasks) {
+    if (options.signal?.aborted) break;
+    const current = engine.jobs.pending.read(task.artifactId);
+    if (!current.ok || !current.value || current.value.taskId !== task.taskId
+      || current.value.completing) continue;
+    const ageMinutes = Math.round((nowMs - task.createdAt) / 60_000);
+    const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
+    const prompt = metaPrompt(task.meta);
+    result.pending = result.pending.filter((entry) => entry.assetId !== task.artifactId);
+    result.failed = result.failed.filter((entry) => entry.assetId !== task.artifactId);
+    result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+  }
   return result;
 }
 
