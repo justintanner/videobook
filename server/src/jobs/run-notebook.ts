@@ -84,6 +84,7 @@ import {
 } from "../gemini-omni-clip.js";
 import { sortByKindSlot } from "../generation-input-mentions.js";
 import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
+import { generationPromptSurface } from "../prompt-surfaces.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -1379,6 +1380,23 @@ async function recordGenerationDispatch(
   }
 }
 
+async function recordGenerationPrompt(
+  engine: Engine,
+  cell: NotebookCell,
+  context: Record<string, string>,
+): Promise<void> {
+  const surface = generationPromptSurface(cell.type);
+  if (!surface || !cell.prompt?.trim()) return;
+  try {
+    const result = await engine.prompts.record({ surface, prompt: cell.prompt, context });
+    if (!result.ok) {
+      logger.warn("prompt-record-failed", { cellId: cell.id, error: result.error });
+    }
+  } catch (cause) {
+    logger.warn("prompt-record-failed", { cellId: cell.id, error: cause });
+  }
+}
+
 async function patchGeneration(
   engine: Engine,
   generationId: string | null,
@@ -1467,6 +1485,13 @@ async function generationTool(
     ...(resolvedPrompt ? { resolvedPrompt } : {}),
     ...(options.runId ? { runId: options.runId } : {}),
     ...(outputCellId ? { outputCellId } : {}),
+  });
+  await recordGenerationPrompt(engine, cell, {
+    tool: prepared.tool,
+    provider: prepared.provider,
+    model: prepared.model,
+    notebook_id: document.id,
+    cell_id: cell.id,
   });
   const fail = async (message: string): Promise<never> => {
     await patchGeneration(engine, generationId, {

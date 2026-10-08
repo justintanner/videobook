@@ -139,6 +139,8 @@ import {
   GenerationBody,
   type GenerationReviewSource,
 } from '@/components/videobook/confirm/bodies/GenerationBody'
+import { usePromptHistory } from '@/videobook/use-prompt-history'
+import { generationPromptSurface } from '../server/src/prompt-surfaces'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import {
   NotebookMediaFullscreen,
@@ -3442,6 +3444,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       false,
     )
   }, [pendingGenerationDraft, setPendingGenerationDraft])
+  const pendingGenerationPromptHistory = usePromptHistory({
+    call: mcp.state === 'ready' ? call : undefined,
+    bookId: bookId ?? '',
+    surface: pendingGenerationDraft ? generationPromptSurface(pendingGenerationDraft.cell.type) : null,
+    prompt: pendingGenerationDraft?.cell.prompt ?? '',
+    onApply: updatePendingGenerationPrompt,
+  })
   const updatePendingGenerationAction = useCallback((actionId: string) => {
     if (!pendingGenerationDraft) return
     const action = pendingGenerationActionOptions.find((candidate) =>
@@ -10715,6 +10724,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             sources={pendingGenerationSources}
             sourceOptions={pendingGenerationSourceOptions}
             voiceCatalog={elevenLabsVoices}
+            promptHistory={pendingGenerationPromptHistory}
             onActionChange={updatePendingGenerationAction}
             onAddSource={addPendingGenerationSource}
             onModeChange={updatePendingGenerationMode}

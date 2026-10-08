@@ -8637,7 +8637,8 @@ textarea:focus-visible {
   display: none;
 }
 
-.generation-review-prompt-section > label {
+.generation-review-prompt-section > label,
+.generation-review-prompt-section > .generation-review-prompt-field {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
@@ -8647,6 +8648,15 @@ textarea:focus-visible {
 .confirm-sheet .generation-review-prompt-section textarea {
   min-height: 84px;
   height: 100%;
+}
+
+.generation-review-prompt-section textarea {
+  min-height: 84px;
+  resize: none;
+}
+
+.generation-review-prompt-section .inspector-prompt-header {
+  gap: 8px;
 }
 
 /* ---- split ---- */

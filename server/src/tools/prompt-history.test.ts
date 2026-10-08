@@ -4,13 +4,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { generationPromptSurface } from "../prompt-surfaces.js";
 
 interface HistoryEntry {
-  id: number;
+  id: string;
   surface: string;
   prompt: string;
   params: Record<string, unknown> | null;
   created_at: number;
+  book: string;
 }
 
 function parseText<T>(result: Awaited<ReturnType<Client["callTool"]>>): T {
@@ -144,5 +146,41 @@ describe("prompt history tools", () => {
     client = await createTestClient(tempDir);
     const result = await record(client, "no-such", "chat", "hi");
     expect(result.isError).toBe(true);
+  });
+
+  it("omitting the surface lists every surface newest-first", async () => {
+    client = await createTestClient(tempDir);
+    await createProject(client, "p");
+    await record(client, "p", "video_generate", "video A");
+    await record(client, "p", "image_generate", "image A");
+    await record(client, "p", "chat", "chat A");
+    const result = await client.callTool({
+      name: "list_prompt_history",
+      arguments: { book_id: "p" },
+    });
+    const data = parseText<{ entries: HistoryEntry[]; page: { total: number } }>(result);
+    expect(data.entries.map((e) => e.prompt)).toEqual(["chat A", "image A", "video A"]);
+    expect(data.page.total).toBe(3);
+  });
+
+  it("entries carry the book name and library scope includes the current book", async () => {
+    client = await createTestClient(tempDir);
+    await createProject(client, "spider-realm");
+    await record(client, "spider-realm", "video_generate", "portal reveal");
+    const result = await client.callTool({
+      name: "list_prompt_history",
+      arguments: { book_id: "spider-realm", surface: "video_generate", scope: "library" },
+    });
+    const data = parseText<{ entries: HistoryEntry[] }>(result);
+    expect(data.entries).toHaveLength(1);
+    expect(data.entries[0].prompt).toBe("portal reveal");
+    expect(data.entries[0].book).toMatch(/\S/);
+  });
+
+  it("maps generation cell types to their prompt surfaces", () => {
+    expect(generationPromptSurface("generate_video")).toBe("video_generate");
+    expect(generationPromptSurface("generate_image")).toBe("image_generate");
+    expect(generationPromptSurface("generate_audio")).toBe("audio_generate");
+    expect(generationPromptSurface("video")).toBeNull();
   });
 });

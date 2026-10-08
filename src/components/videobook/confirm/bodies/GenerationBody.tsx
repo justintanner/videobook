@@ -8,6 +8,8 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { GenerationControlField } from '@/components/videobook/GenerationControlField'
+import { PromptHistoryControls } from '@/components/videobook/PromptHistoryControls'
+import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
 import { RichJson } from '@/components/videobook/RichJson'
 import {
@@ -60,6 +62,7 @@ type GenerationBodyProps = {
   sourceOptions: readonly GenerationReviewSource[]
   voiceCatalog?: ElevenLabsVoicesState
   promptEditor?: ReactNode
+  promptHistory?: PromptHistoryControl
   inputFooter?: ReactNode
   compatibleModeIds?: ReadonlySet<string>
   sourceVisible?: boolean
@@ -167,6 +170,7 @@ export function GenerationBody({
   sourceOptions,
   voiceCatalog,
   promptEditor,
+  promptHistory,
   inputFooter,
   compatibleModeIds,
   sourceVisible = false,
@@ -331,30 +335,6 @@ export function GenerationBody({
           )}
         </section>
 
-        <section className="generation-review-prompt-section" aria-label="Prompt">
-          {promptEditor ?? <label>
-            <span className="confirm-section-label">Prompt</span>
-            <textarea
-              rows={3}
-              value={draft.cell.prompt ?? ''}
-              aria-invalid={promptLeaks.length > 0}
-              disabled={busy}
-              onChange={(event) => onPromptChange(event.target.value)}
-            />
-          </label>}
-          {promptLeaks.length > 0 && (
-            <div className="generation-review-reference-errors" role="alert">
-              {promptLeaks.map((leak) => (
-                <span key={`${leak.token}:${leak.code}`} title={leak.message}>
-                  <CircleAlert size={12} aria-hidden="true" />
-                  <code>{leak.token}</code>
-                  {leak.message}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="generation-review-settings-section" aria-label="Settings">
           {frameAspectRatio && <p className="muted">{SEEDANCE25_FRAME_ASPECT_DESCRIPTION}</p>}
           <div className="generation-review-settings">
@@ -434,6 +414,37 @@ export function GenerationBody({
             {voiceCatalog?.warning && <small>{voiceCatalog.warning}</small>}
           </section>
         )}
+
+        <section className="generation-review-prompt-section" aria-label="Prompt">
+          {promptEditor ?? <div className="generation-review-prompt-field">
+            <div className="confirm-section-heading">
+              <span>Prompt</span>
+              {promptHistory && <PromptHistoryControls history={promptHistory} disabled={busy} />}
+            </div>
+            <textarea
+              rows={3}
+              aria-label="Prompt"
+              value={draft.cell.prompt ?? ''}
+              aria-invalid={promptLeaks.length > 0}
+              disabled={busy}
+              onChange={(event) => onPromptChange(event.target.value)}
+              onKeyDown={(event) => {
+                promptHistory?.handlePromptKeyDown(event)
+              }}
+            />
+          </div>}
+          {promptLeaks.length > 0 && (
+            <div className="generation-review-reference-errors" role="alert">
+              {promptLeaks.map((leak) => (
+                <span key={`${leak.token}:${leak.code}`} title={leak.message}>
+                  <CircleAlert size={12} aria-hidden="true" />
+                  <code>{leak.token}</code>
+                  {leak.message}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {sourceVisible && (

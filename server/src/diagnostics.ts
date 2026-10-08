@@ -5,6 +5,7 @@ const EVENTS = [
   "book-open", "book-open-slow", "book-catalog-gc", "provider-poll-failed",
   "ace-server-exited", "scheduled-post-failed", "scheduled-post-rearm-failed",
   "generation-record-failed", "generation-update-failed", "generation-list-failed",
+  "prompt-record-failed",
   "waveform-empty", "waveform-failed", "heartbeat-failed", "subtitle-cache-failed",
   "subtitle-translation-failed", "overlay-skipped", "kie-upload-fallback",
   "kie-upload-unconfigured", "fal-upload-fallback", "fal-upload-unconfigured",

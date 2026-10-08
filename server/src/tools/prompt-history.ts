@@ -1,7 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
-import { PROMPT_SURFACES, isPromptSurface } from "../prompt-surfaces.js";
+import { PROMPT_SURFACES, isPromptSurface, type PromptSurface } from "../prompt-surfaces.js";
+import { listBookEngines } from "../queue.js";
 
 const SURFACE_LIST = PROMPT_SURFACES.join(", ");
 const MAX_HISTORY_PAGE_SIZE = 1000;
@@ -60,12 +61,7 @@ export function recordPromptDef(engine: Engine): ToolDef {
         prompt,
         ...(params ? { context: params } : {}),
       });
-      if (!result.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: result.error.message }],
-        };
-      }
+      if (!result.ok) return errorResult(result.error.message);
       return {
         content: [
           { type: "text" as const, text: JSON.stringify({ id: result.value.id }) },
@@ -75,18 +71,88 @@ export function recordPromptDef(engine: Engine): ToolDef {
   };
 }
 
+interface PromptHistoryPayloadEntry {
+  id: string;
+  surface: string;
+  prompt: string;
+  params: Record<string, unknown>;
+  created_at: number;
+  book: string;
+}
+
+interface PromptHistoryPage {
+  entries: PromptHistoryPayloadEntry[];
+  total: number;
+}
+
+type PromptHistoryScope = "book" | "library";
+
+function errorResult(message: string) {
+  return {
+    isError: true as const,
+    content: [{ type: "text" as const, text: message }],
+  };
+}
+
+function readBookPrompts(
+  engine: Engine,
+  surface: PromptSurface | undefined,
+  limit: number,
+): PromptHistoryPage | string {
+  const filter = surface ? { surface } : {};
+  const entries = engine.prompts.list({ ...filter, limit });
+  if (!entries.ok) return entries.error.message;
+  const count = engine.prompts.count(filter);
+  if (!count.ok) return count.error.message;
+  const book = engine.book.get().name;
+  return {
+    total: count.value,
+    entries: entries.value.map((entry) => ({
+      id: entry.id,
+      surface: entry.surface,
+      prompt: entry.prompt,
+      params: entry.context,
+      created_at: entry.createdAt,
+      book,
+    })),
+  };
+}
+
+function mergePromptPages(pages: readonly PromptHistoryPage[]): PromptHistoryPage {
+  return {
+    total: pages.reduce((sum, page) => sum + page.total, 0),
+    entries: pages
+      .flatMap((page) => page.entries)
+      .sort((left, right) => right.created_at - left.created_at),
+  };
+}
+
+async function scopeEngines(
+  engine: Engine,
+  scope: PromptHistoryScope,
+): Promise<Engine[]> {
+  if (scope === "book") return [engine];
+  const engines = await listBookEngines();
+  return engines.includes(engine) ? engines : [engine, ...engines];
+}
+
 export function listPromptHistoryDef(engine: Engine): ToolDef {
   return {
     name: "list_prompt_history",
     description:
-      "List recent prompts for a given surface in the current project, newest-first.",
+      "List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.",
     schema: {
       book_id: z.string().describe("Book id"),
       surface: z
         .string()
+        .optional()
         .describe(
-          `Which input surface to read history for (${SURFACE_LIST})`,
+          `Which input surface to read history for (${SURFACE_LIST}); omit for every surface`,
         ),
+      scope: z
+        .enum(["book", "library"])
+        .optional()
+        .describe("book (default) reads this book; library reads every book in the library"),
       limit: z
         .number()
         .int()
@@ -102,51 +168,36 @@ export function listPromptHistoryDef(engine: Engine): ToolDef {
         .describe("Number of newer entries to skip"),
     },
     handler: async (args) => {
-      const { surface, limit, offset } = args as {
-        surface: string;
+      const { surface, scope, limit, offset } = args as {
+        surface?: string;
+        scope?: PromptHistoryScope;
         limit?: number;
         offset?: number;
       };
-      if (!isPromptSurface(surface)) return invalidSurface(surface);
-
+      if (surface !== undefined && !isPromptSurface(surface)) {
+        return invalidSurface(surface);
+      }
       const pageLimit = limit ?? 100;
       const pageOffset = offset ?? 0;
-      const entries = engine.prompts.list({
-        surface,
-        limit: pageOffset + pageLimit,
-      });
-      if (!entries.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: entries.error.message }],
-        };
+      const pages: PromptHistoryPage[] = [];
+      for (const bookEngine of await scopeEngines(engine, scope ?? "book")) {
+        const page = readBookPrompts(bookEngine, surface, pageOffset + pageLimit);
+        if (typeof page === "string") return errorResult(page);
+        pages.push(page);
       }
-      const count = engine.prompts.count({ surface });
-      if (!count.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: count.error.message }],
-        };
-      }
-      const pageEntries = entries.value.slice(pageOffset);
-      const payload = pageEntries.map((entry) => ({
-        id: entry.id,
-        surface: entry.surface,
-        prompt: entry.prompt,
-        params: entry.context,
-        created_at: entry.createdAt,
-      }));
+      const merged = mergePromptPages(pages);
+      const pageEntries = merged.entries.slice(pageOffset, pageOffset + pageLimit);
       return {
         content: [
           {
             type: "text" as const,
             text: JSON.stringify({
-              entries: payload,
+              entries: pageEntries,
               page: {
                 offset: pageOffset,
                 limit: pageLimit,
-                total: count.value,
-                has_more: pageOffset + pageEntries.length < count.value,
+                total: merged.total,
+                has_more: pageOffset + pageEntries.length < merged.total,
               },
             }),
           },

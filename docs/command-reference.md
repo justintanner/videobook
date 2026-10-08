@@ -230,7 +230,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_notebook_generation_plans` — List durable generation plans and their retryable lifecycle state
 - `list_notebook_run_plans` — List durable aggregate workbook run plans and their lifecycle state
 - `list_notebooks` — List canonical notebook documents
-- `list_prompt_history` — List recent prompts for a given surface in the current project, newest-first.
+- `list_prompt_history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.
 - `list_prompts` — List reusable prompts
 - `list_scenes` — List reusable scenes
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
@@ -603,7 +603,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-notebook-actions` — List the deterministic notebook action catalog for runnable cells; MCP: `list_notebook_actions`
 - `/list-notebook-generation-plans` — List durable generation plans and their retryable lifecycle state; MCP: `list_notebook_generation_plans`
 - `/list-notebook-run-plans` — List durable aggregate workbook run plans and their lifecycle state; MCP: `list_notebook_run_plans`
-- `/list-prompt-history` — List recent prompts for a given surface in the current project, newest-first.; MCP: `list_prompt_history`
+- `/list-prompt-history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.; MCP: `list_prompt_history`
 - `/list-prompts` — List reusable prompts; MCP: `list_prompts`
 - `/list-scenes` — List reusable scenes; MCP: `list_scenes`
 - `/list-sequence-replace-targets` — List clips that a search moment can explicitly replace; MCP: `list_sequence_replace_targets`

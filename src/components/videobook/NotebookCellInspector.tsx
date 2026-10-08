@@ -140,6 +140,9 @@ import {
   AutocompleteDropdown,
   type AutocompleteItem,
 } from '@/components/ui/AutocompleteDropdown'
+import { PromptHistoryControls } from './PromptHistoryControls'
+import { usePromptHistory } from '@/videobook/use-prompt-history'
+import { generationPromptSurface } from '../../../server/src/prompt-surfaces'
 
 const actionCellTypes = new Set<NotebookCell['type']>([
   'extract_audio',
@@ -2438,6 +2441,8 @@ function AnalysisCellInspector({
 function ExecutableCellInspector({
   headerActionHost,
   notebookId,
+  bookId,
+  assetTools,
   sourceVisible,
   cell,
   cells,
@@ -2464,6 +2469,8 @@ function ExecutableCellInspector({
   NotebookCellInspectorProps,
   | 'headerActionHost'
   | 'notebookId'
+  | 'bookId'
+  | 'assetTools'
   | 'sourceVisible'
   | 'cell'
   | 'cells'
@@ -2812,6 +2819,20 @@ function ExecutableCellInspector({
     setPromptMentionOpen(true)
     requestPromptMentionPreview(prompt)
   }
+  const applyHistoryPrompt = (prompt: string) => {
+    setPromptCopyState('idle')
+    setDraft((current) => ({ ...current, prompt }))
+    setPromptCaret(prompt.length)
+    setPromptMentionOpen(false)
+    requestPromptMentionPreview(prompt)
+  }
+  const promptHistory = usePromptHistory({
+    call: assetTools,
+    bookId,
+    surface: generationCell ? generationPromptSurface(cell.type) : null,
+    prompt: draft.prompt,
+    onApply: applyHistoryPrompt,
+  })
   const insertPromptSuggestion = (suggestion: AutocompleteItem) => {
     const beforeCaret = draft.prompt.slice(0, promptCaret)
     const mentionStart = beforeCaret.lastIndexOf('@')
@@ -3024,6 +3045,9 @@ function ExecutableCellInspector({
     <section className="inspector-prompt-field">
       <header className="inspector-prompt-header">
         <h3>Prompt</h3>
+        {generationCell && (
+          <PromptHistoryControls history={promptHistory} disabled={busy || saving} />
+        )}
         <button
           type="button"
           className={`inspector-prompt-copy${promptCopyState === 'copied' ? ' copied' : ''}`}
@@ -3073,7 +3097,10 @@ function ExecutableCellInspector({
           onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
           onBlur={() => setPromptMentionOpen(false)}
           onKeyDown={(event) => {
-            if (!showPromptSuggestions) return
+            if (!showPromptSuggestions) {
+              if (generationCell) promptHistory.handlePromptKeyDown(event)
+              return
+            }
             if (event.key === 'ArrowDown') {
               event.preventDefault()
               setPromptSuggestionIndex((current) =>
@@ -3858,6 +3885,8 @@ export function NotebookCellInspector({
     <ExecutableCellInspector
       headerActionHost={headerActionHost}
       notebookId={notebookId}
+      bookId={bookId}
+      assetTools={assetTools}
       artifactAssets={artifactAssets}
       sourceVisible={sourceVisible}
       cell={cell}
