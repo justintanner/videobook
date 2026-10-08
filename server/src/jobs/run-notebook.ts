@@ -68,6 +68,7 @@ import {
 } from "../openai-intelligence.js";
 import {
   notebookGenerationInputContract,
+  notebookGenerationInputError,
   notebookGenerationInputsAreCompatible,
 } from "../notebook-generation-contract.js";
 import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
@@ -992,16 +993,27 @@ function modelArgsWithMentions(
     : {};
   const upstream = upstreamValues(document, cell);
   const refFor = (artifactId: string): string => `@${artifactId}`;
+  const configuredMode = typeof cell.inputs?.generationMode === "string"
+    ? cell.inputs.generationMode
+    : undefined;
+  const inputContract = notebookGenerationInputContract(definition.name, definition.schema);
+  const compatibleModes = inputContract.modes.filter((mode) => notebookGenerationInputsAreCompatible(
+    inputContract, document, cell, mode.id,
+  ));
+  const hasFrameInput = upstream.some((entry) =>
+    entry.targetInput === "first_frame" || entry.targetInput === "last_frame");
+  const generationMode = inputContract.modes.find((mode) => mode.id === configuredMode)?.id
+    ?? compatibleModes.find((mode) => mode.id === (hasFrameInput ? "i2v" : "r2v"))?.id
+    ?? compatibleModes[0]?.id
+    ?? configuredMode;
+  const generationCell = { ...cell, inputs: { ...cell.inputs, generationMode } };
   const mentions = resolveGenerationInputReferences({
     engine,
     document,
-    cell,
-    prompt: promptFor(document, cell),
+    cell: generationCell,
+    prompt: promptFor(document, generationCell),
   });
   const prompt = mentions.prompt;
-  const generationMode = typeof cell.inputs?.generationMode === "string"
-    ? cell.inputs.generationMode
-    : undefined;
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
     ...generationSettings,
@@ -1010,6 +1022,11 @@ function modelArgsWithMentions(
   };
   delete args.generationMode;
   delete args.generationSettings;
+  if (generationMode === "r2v") {
+    delete args.first_frame_ref;
+    delete args.last_frame_ref;
+    delete args.end_frame_ref;
+  }
   if ("text" in definition.schema) {
     args.text = prompt;
   }
@@ -1025,19 +1042,19 @@ function modelArgsWithMentions(
       : "seedance25";
   }
   let firstFrame = upstream.find((entry) =>
-    entry.targetInput === "first_frame"
+    generationMode !== "r2v" && entry.targetInput === "first_frame"
     && typeof entry.output === "string"
     && isImageLikeCell(entry.cell));
   let lastFrame = upstream.find((entry) =>
-    entry.targetInput === "last_frame"
+    generationMode !== "r2v" && entry.targetInput === "last_frame"
     && typeof entry.output === "string"
     && isImageLikeCell(entry.cell));
   const genericImages = sortByKindSlot(
     upstream.filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && isImageLikeCell(source)
-      && targetInput !== "first_frame"
-      && targetInput !== "last_frame"),
+      && (generationMode === "r2v"
+        || (targetInput !== "first_frame" && targetInput !== "last_frame"))),
     "image",
   );
   const supportsFirstFrame = "first_frame_ref" in definition.schema;
@@ -1240,8 +1257,9 @@ export async function prepareNotebookGeneration(
     cell,
     generationMode,
   )) {
+    const inputError = notebookGenerationInputError(inputContract, document, cell, generationMode);
     throw new Error(
-      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for ${notebookGridTag(cell.slot)}`,
+      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for ${notebookGridTag(cell.slot)}${inputError ? `. ${inputError}` : ""}`,
     );
   }
   const preparedArgs = modelArgsWithMentions(

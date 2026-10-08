@@ -269,6 +269,6 @@ describe("notebook generation input contracts", () => {
       document,
       generate,
       "r2v",
-    )).toBe(false);
+    )).toBe(true);
   });
 });

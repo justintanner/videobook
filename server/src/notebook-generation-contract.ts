@@ -1,5 +1,7 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { readSlotConstraints } from "./zod-slots.js";
+import { generationModeInputError } from "./generation-input-policy.js";
+import { getActionSpec } from "./generation-registry.js";
 
 type NotebookGenerationInputKind = "image" | "video" | "audio";
 
@@ -254,7 +256,8 @@ export function notebookGenerationInputContract(
   ) {
     return wan30Contract(slots);
   }
-  return { modes: [mode("default", slots)] };
+  const modeId = getActionSpec(tool)?.operation === "reference_to_video" ? "r2v" : "default";
+  return { modes: [mode(modeId, slots)] };
 }
 
 function cellInputKind(cell: NotebookCell): NotebookGenerationInputKind | null {
@@ -305,71 +308,6 @@ function connectedInputs(
   });
 }
 
-function modeAcceptsInputs(
-  candidate: NotebookGenerationInputMode,
-  inputs: readonly ConnectedInput[],
-): boolean {
-  const normalizedInputs = frameModeInputs(candidate, inputs);
-  const counts = new Map(candidate.slots.map((slot) => [slot.field, 0]));
-  const sorted = [...normalizedInputs].sort((left, right) => {
-    const leftSpecific = left.target === left.kind ? 0 : 1;
-    const rightSpecific = right.target === right.kind ? 0 : 1;
-    return rightSpecific - leftSpecific;
-  });
-  for (const input of sorted) {
-    const slots = candidate.slots
-      .filter((slot) => {
-        if (slot.kind !== input.kind || !slot.targets.includes(input.target)) {
-          return false;
-        }
-        const count = counts.get(slot.field) ?? 0;
-        return slot.max === null || count < slot.max;
-      })
-      .sort((left, right) => {
-        const leftCount = counts.get(left.field) ?? 0;
-        const rightCount = counts.get(right.field) ?? 0;
-        const leftRequired = leftCount < left.min ? 1 : 0;
-        const rightRequired = rightCount < right.min ? 1 : 0;
-        if (leftRequired !== rightRequired) return rightRequired - leftRequired;
-        return left.targets.length - right.targets.length;
-      });
-    const slot = slots[0];
-    if (!slot) return false;
-    counts.set(slot.field, (counts.get(slot.field) ?? 0) + 1);
-  }
-  if (candidate.slots.some((slot) =>
-    (counts.get(slot.field) ?? 0) < slot.min)) {
-    return false;
-  }
-  return candidate.requiredGroups.every((group) =>
-    group.some((field) => (counts.get(field) ?? 0) > 0));
-}
-
-function frameModeInputs(
-  candidate: NotebookGenerationInputMode,
-  inputs: readonly ConnectedInput[],
-): ConnectedInput[] {
-  if (
-    candidate.id !== "i2v"
-    || candidate.slots.some((slot) => slot.targets.includes("image"))
-  ) return [...inputs];
-  const availableTargets = candidate.slots
-    .flatMap((slot) => slot.targets)
-    .filter((target) => target === "first_frame" || target === "last_frame")
-    .filter((target) => !inputs.some((input) => input.target === target));
-  let targetIndex = 0;
-  return inputs.map((input) => {
-    if (
-      input.kind !== "image"
-      || input.target !== "image"
-      || targetIndex >= availableTargets.length
-    ) return input;
-    const target = availableTargets[targetIndex];
-    targetIndex += 1;
-    return target ? { ...input, target } : input;
-  });
-}
-
 export function notebookGenerationInputsAreCompatible(
   contract: NotebookGenerationInputContract,
   document: NotebookDocument,
@@ -383,5 +321,16 @@ export function notebookGenerationInputsAreCompatible(
   const modes = modeId === "default" && configuredModes.length === 0
     ? contract.modes
     : configuredModes;
-  return modes.some((candidate) => modeAcceptsInputs(candidate, inputs));
+  return modes.some((candidate) => generationModeInputError(candidate, inputs) === null);
+}
+
+export function notebookGenerationInputError(
+  contract: NotebookGenerationInputContract,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  modeId?: string,
+): string | null {
+  const candidate = contract.modes.find((mode) => mode.id === modeId)
+    ?? (contract.modes.length === 1 ? contract.modes[0] : undefined);
+  return candidate ? generationModeInputError(candidate, connectedInputs(document, cell)) : null;
 }

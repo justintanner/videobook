@@ -926,6 +926,88 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('switches frame images to R2V references and combines image, video and audio inputs', async () => {
+    const page = await openApp()
+    const client = new Client({ name: 'reference-inputs-browser-e2e', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client.callTool({
+      name, arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+    })) as T
+    const created: string[] = []
+    try {
+      const frame = await call<{ cell_id: string }>('extract_notebook_frame', {
+        source_cell_id: videoCellId, frame_mode: 'time', timestamp_seconds: 1,
+      })
+      created.push(frame.cell_id)
+      await call('update_notebook_cell', { cell_id: frame.cell_id, cell: { slot: { row: 0, column: 3 } } })
+      const generator = await call<{ id: string }>('create_notebook_cell', {
+        cell: {
+          type: 'generate_video', slot: { row: 2, column: 7 },
+          prompt: 'Use @image1 and @firstframe', provider: 'kie', model: 'bytedance/seedance-2-5',
+          operation: 'generate_video', tool: 'generate_kie_seedance_2_5_video',
+          inputs: { generationMode: 'r2v', generationSettings: { duration: '20', aspect_ratio: '9:16' } },
+        },
+      })
+      created.push(generator.id)
+      for (const [source, target] of [[fullscreenImageCellId, 'image'], [frame.cell_id, 'first_frame']]) {
+        await call('connect_notebook_cells', { source_cell_id: source, target_cell_id: generator.id, target_input: target })
+      }
+      await expect.poll(async () => {
+        const notebook = await call<{ cells: Array<{ id: string; output_artifact_id?: string }> }>('get_notebook')
+        return notebook.cells.find((cell) => cell.id === frame.cell_id)?.output_artifact_id
+      }, { timeout: MCP_ROUNDTRIP_MS }).toBeTruthy()
+      await notebookCellNode(page, generator.id).click()
+      const inspector = page.locator('.generation-cell-inspector')
+      const editor = inspector.locator('.confirm-generation')
+      const payload = editor.locator('.generation-review-json pre')
+      const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
+      const mode = editor.getByLabel('Generation type')
+      const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate' })
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('Use @Image1 and @Image2')
+      expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
+      expect(await editor.locator('.generation-review-source strong').allTextContents()).toEqual(['@image1', '@image2'])
+      expect(await payload.textContent()).toContain('"reference_image_urls"')
+      expect(await payload.textContent()).not.toContain('"first_frame_url"')
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+
+      await mode.selectOption('i2v')
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"first_frame_url"')
+      expect(await prompt.inputValue()).toBe('Use @image1 and @firstframe')
+      expect(await payload.textContent()).not.toContain('"reference_image_urls"')
+      await mode.selectOption('r2v')
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"reference_image_urls"')
+      expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
+
+      for (const [tag, kind] of [['@a1', 'video'], ['@a2', 'audio']]) {
+        await editor.getByRole('button', { name: 'Add input', exact: true }).click()
+        await editor.getByTitle(`Add ${tag} as ${kind} input`, { exact: true }).click()
+        await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+          .toContain(`"reference_${kind}_urls"`)
+      }
+      await prompt.fill('Use @image1 and @image2 with @video1 and @audio1')
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('Use @Image1 and @Image2 with @Video1 and @Audio1')
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      expect(await inspector.locator('.inspector-generation-warning').count()).toBe(0)
+      await page.screenshot({ path: 'test-results/generation-r2v-references.png' })
+      await mode.selectOption('i2v')
+      await expect.poll(() => inspector.locator('.inspector-generation-warning').textContent())
+        .toMatch(/does not accept (video|audio) reference/)
+      expect(await generate.isEnabled()).toBe(false)
+      await mode.selectOption('r2v')
+      await expect.poll(() => generate.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      expect(observedCalls.some((request) => request.name === 'run_notebook_cell'
+        && request.arguments.cell_id === generator.id)).toBe(false)
+    } finally {
+      await collapseComposerDock(page)
+      for (const cellId of created.reverse()) await call('delete_notebook_cell', { cell_id: cellId })
+      await client.close()
+      notebookDirty = true
+    }
+  }, 60_000)
+
   it('assembles and persists a full-row Timeline with bounded rendering for long sequences', async () => {
     const page = await openApp()
     const client = new Client({ name: 'timeline-browser-e2e', version: '1' }, {

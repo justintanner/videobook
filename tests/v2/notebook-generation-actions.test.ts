@@ -511,12 +511,12 @@ describe('notebook generation actions', () => {
       { kind: 'image' as const, target: 'last_frame' },
     ]
     expect(compatibleGenerationModes(seedanceAction, inputs)
-      .map((mode) => mode.id)).toEqual(['i2v'])
+      .map((mode) => mode.id)).toEqual(['i2v', 'r2v'])
     expect(initialGenerationMode(seedanceAction, inputs, 'default')).toBe('i2v')
     expect(compatibleGenerationModes(seedanceAction, [
       ...inputs,
       { kind: 'image', target: 'first_frame' },
-    ])).toEqual([])
+    ]).map((mode) => mode.id)).toEqual(['r2v'])
   })
 
   it('offers Kling Omni transformation for a character image and motion video', () => {
@@ -622,7 +622,7 @@ describe('notebook generation actions', () => {
         { kind: 'image', target: 'first_frame' },
         { kind: 'image', target: 'last_frame' },
       ],
-    ).map((action) => action.tool)).toEqual([seedanceAction.tool])
+    ).map((action) => action.tool)).toEqual([geminiAction.tool, seedanceAction.tool])
     expect(compatibleGenerationActions(
       videoActions,
       'generate_video',
@@ -630,6 +630,6 @@ describe('notebook generation actions', () => {
         { kind: 'image', target: 'first_frame' },
         { kind: 'audio', target: 'audio' },
       ],
-    )).toEqual([])
+    ).map((action) => action.tool)).toEqual([seedanceAction.tool])
   })
 })

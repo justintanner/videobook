@@ -308,9 +308,19 @@ export function resolveGenerationInputReferences(input: {
   prompt: string;
 }): NotebookPromptResolution {
   const sources = new Map(
-    generationInputMentions(input.cell.id, input.document.cells, input.document.edges)
+    generationInputMentions(input.cell.id, input.document.cells, input.document.edges,
+      typeof input.cell.inputs?.generationMode === "string" ? input.cell.inputs.generationMode : undefined)
       .map((mention) => [mention.token, mention.sourceCellId]),
   );
+  if (input.cell.inputs?.generationMode === "r2v") {
+    for (const mention of generationInputMentions(
+      input.cell.id, input.document.cells, input.document.edges, "i2v",
+    )) {
+      if (mention.token === "firstframe" || mention.token === "lastframe") {
+        sources.set(mention.token, mention.sourceCellId);
+      }
+    }
+  }
   const resolved: ResolvedNotebookReference[] = [];
   const unresolved: NotebookReferenceIssue[] = [];
   for (const token of new Set(scanGenerationInputTokens(input.prompt))) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   generationInputMentions,
+  remapGenerationInputPrompt,
   scanGenerationInputTokens,
 } from "./generation-input-mentions.js";
 
@@ -55,5 +56,21 @@ describe("generation input mentions", () => {
     expect(scanGenerationInputTokens(
       "@Image1 meets @video12 and @firstframe; skip @image1x, @a1, image2",
     )).toEqual(["image1", "video12", "firstframe"]);
+  });
+
+  it("keeps frame references and prompt tokens aligned while switching modes and adding inputs", () => {
+    const edges = [edge("start", "first_frame"), edge("still-a", "image")];
+    const frames = generationInputMentions("target", cells, edges, "i2v");
+    const references = generationInputMentions("target", cells, edges, "r2v");
+    expect(references.map(({ token, sourceCellId }) => [token, sourceCellId])).toEqual([
+      ["image1", "still-a"], ["image2", "start"],
+    ]);
+    const prompt = remapGenerationInputPrompt("@IMAGE1 starts like @firstframe; @firstframex stays", frames, references);
+    expect(prompt).toBe("@IMAGE1 starts like @image2; @firstframex stays");
+    expect(remapGenerationInputPrompt(prompt, references, frames))
+      .toBe("@IMAGE1 starts like @firstframe; @firstframex stays");
+    const added = generationInputMentions("target", cells, [...edges, edge("still-b", "image_2")], "r2v");
+    expect(remapGenerationInputPrompt(prompt, references, added))
+      .toBe("@IMAGE1 starts like @image3; @firstframex stays");
   });
 });

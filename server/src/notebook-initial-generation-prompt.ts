@@ -95,7 +95,8 @@ function promptInputs(
     ["replace_audio", 5],
   ]);
   const tokens = new Map(
-    generationInputMentions(cell.id, document.cells, document.edges)
+    generationInputMentions(cell.id, document.cells, document.edges,
+      typeof cell.inputs?.generationMode === "string" ? cell.inputs.generationMode : undefined)
       .map((mention) => [`${mention.sourceCellId}:${mention.targetInput}`, mention.token]),
   );
   return document.edges

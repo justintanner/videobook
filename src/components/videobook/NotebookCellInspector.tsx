@@ -84,7 +84,8 @@ import {
   mentionMenuRows,
   type AssetMentionCandidate,
 } from '@/videobook/mention-suggestions'
-import { generationInputMentions } from '../../../server/src/generation-input-mentions'
+import { generationInputMentions, remapGenerationInputPrompt } from '../../../server/src/generation-input-mentions'
+import { generationModeInputError, generationModeInputTarget } from '../../../server/src/generation-input-policy'
 import {
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
@@ -253,7 +254,11 @@ function cellFormDraft(
   }
   const action = generationActionForSelection(actions, cell.type, selection)
   const draft = persistedCellFormDraft(cell, action?.controls)
-  return { ...draft, ...selection }
+  return {
+    ...draft,
+    ...selection,
+    generationMode: action ? initialGenerationMode(action, inputs, draft.generationMode) : draft.generationMode,
+  }
 }
 
 function cellFormIsDirty(
@@ -1048,9 +1053,10 @@ function generationInputMentionSources(
   cellId: string,
   cells: readonly NotebookCell[],
   edges: readonly NotebookEdge[],
+  modeId?: string,
 ): Array<{ token: string; cell: NotebookCell }> {
   const cellsById = new Map(cells.map((candidate) => [candidate.id, candidate]))
-  return generationInputMentions(cellId, cells, edges).flatMap((mention) => {
+  return generationInputMentions(cellId, cells, edges, modeId).flatMap((mention) => {
     const source = cellsById.get(mention.sourceCellId)
     return source ? [{ token: mention.token, cell: source }] : []
   })
@@ -2484,12 +2490,20 @@ function ExecutableCellInspector({
 }) {
   const formId = useId()
   const dock = useContext(ComposerDockContext)
-  const [draft, setDraft] = useState(() =>
-    cellFormDraft(
+  const [draft, setDraft] = useState(() => {
+    const initial = cellFormDraft(
       cell,
       generationActions,
       generationConnectedInputs(cell.id, cells, edges),
-    ))
+    )
+    if (!isNotebookGenerationCellType(cell.type) || initial.generationMode !== 'r2v') return initial
+    return {
+      ...initial,
+      prompt: remapGenerationInputPrompt(initial.prompt,
+        generationInputMentions(cell.id, cells, edges, 'i2v'),
+        generationInputMentions(cell.id, cells, edges, initial.generationMode)),
+    }
+  })
   const [saving, setSaving] = useState(false)
   const ensureVoiceCatalog = () => {
     if (!voiceCatalog) return
@@ -2582,6 +2596,10 @@ function ExecutableCellInspector({
   )
   const generationModeOptions = selectedGenerationAction?.inputContract.modes
     ?? []
+  const selectedInputMode = generationModeOptions.find((mode) => mode.id === effectiveGenerationMode)
+  const generationInputError = selectedInputMode
+    ? generationModeInputError(selectedInputMode, connectedGenerationInputs)
+    : null
   const generationAttachments = selectedGenerationAction
     ? generationInputAttachments(
         selectedGenerationAction,
@@ -2620,29 +2638,22 @@ function ExecutableCellInspector({
     () => notebookCyclicInputMentionValues(cells, edges, cell.id),
     [cell.id, cells, edges],
   )
-  const promptInputMentions = useMemo(
-    () => generationInputMentionSources(cell.id, cells, edges),
-    [cell.id, cells, edges],
-  )
-  const promptSuggestionItems = useMemo<AutocompleteItem[]>(() => {
-    const input = draft.prompt.slice(0, promptCaret)
-    const rows = generationCell
-      ? generationInputMentionRows(promptInputMentions, mentionAssets, input)
-      : mentionMenuRows(mentionAssets, cells, input, cyclicInputMentions)
-    return rows
-      .map((row) => ({
-        type: 'mention' as const,
-        value: row.value,
-        label: row.label,
-        description: row.description,
-        caption: row.caption,
-        thumbnailSrc: row.thumbnailUrl,
-        mediaKind: row.mediaKind ?? undefined,
-        empty: row.empty,
-        // Every slug wears the amber of the token it becomes in the prompt.
-        colorScheme: 'amber' as const,
-      }))
-  }, [cells, cyclicInputMentions, draft.prompt, generationCell, mentionAssets, promptCaret, promptInputMentions])
+  const promptInputMentions = generationInputMentionSources(cell.id, cells, edges, effectiveGenerationMode)
+  const promptSuggestionInput = draft.prompt.slice(0, promptCaret)
+  const promptSuggestionRows = generationCell
+    ? generationInputMentionRows(promptInputMentions, mentionAssets, promptSuggestionInput)
+    : mentionMenuRows(mentionAssets, cells, promptSuggestionInput, cyclicInputMentions)
+  const promptSuggestionItems: AutocompleteItem[] = promptSuggestionRows.map((row) => ({
+    type: 'mention',
+    value: row.value,
+    label: row.label,
+    description: row.description,
+    caption: row.caption,
+    thumbnailSrc: row.thumbnailUrl,
+    mediaKind: row.mediaKind ?? undefined,
+    empty: row.empty,
+    colorScheme: 'amber',
+  }))
   const showPromptSuggestions = promptMentionOpen
     && promptSuggestionItems.length > 0
   const action = notebookCellActionPresentation(
@@ -2832,13 +2843,14 @@ function ExecutableCellInspector({
       && selected.controls.some((control) => control.name === 'voice_id')) {
       ensureVoiceCatalog()
     }
+    const generationMode = initialGenerationMode(selected, connectedGenerationInputs)
     const next = {
       ...draft,
       ...generationSelectionForAction(selected),
-      generationMode: initialGenerationMode(
-        selected,
-        connectedGenerationInputs,
-      ),
+      generationMode,
+      prompt: remapGenerationInputPrompt(draft.prompt,
+        generationInputMentions(cell.id, cells, edges, effectiveGenerationMode),
+        generationInputMentions(cell.id, cells, edges, generationMode)),
       generationSettings: {},
     }
     setDraft(next)
@@ -2927,7 +2939,7 @@ function ExecutableCellInspector({
 
   const incomingEdges = edges.filter((edge) => edge.target === cell.id)
   const inputMentionTokens = new Map(
-    generationInputMentions(cell.id, cells, edges).map((mention) =>
+    generationInputMentions(cell.id, cells, edges, effectiveGenerationMode).map((mention) =>
       [`${mention.sourceCellId}:${mention.targetInput}`, mention.token]),
   )
   const sourceFor = (
@@ -2951,7 +2963,7 @@ function ExecutableCellInspector({
     sourceFor(
       edge.source,
       edge.targetInput,
-      undefined,
+      attachmentTargetLabel(generationModeInputTarget(effectiveGenerationMode, 'image', edge.targetInput)),
       inputMentionTokens.get(`${edge.source}:${edge.targetInput}`),
     ))
   const generationSourceOptions = generationAttachments.flatMap((attachment) =>
@@ -2998,8 +3010,15 @@ function ExecutableCellInspector({
     const nextEdges = sourceCellId
       ? [...retained, { id: targetInput, source: sourceCellId, target: cell.id, targetInput }]
       : retained
+    const next = {
+      ...draft,
+      prompt: remapGenerationInputPrompt(draft.prompt,
+        generationInputMentions(cell.id, cells, edges, effectiveGenerationMode),
+        generationInputMentions(cell.id, cells, nextEdges, effectiveGenerationMode)),
+    }
     await onSetInput(targetInput, sourceCellId)
-    refreshGenerationPreview(draft, nextEdges)
+    setDraft(next)
+    refreshGenerationPreview(next, nextEdges)
   }
   const promptEditor = textCell ? (
     <section className="inspector-prompt-field">
@@ -3232,7 +3251,13 @@ function ExecutableCellInspector({
             }}
             onSelectSource={(cellId) => onSelectSource?.(cellId)}
             onModeChange={(generationMode) => {
-              const next = { ...draft, generationMode }
+              const next = {
+                ...draft,
+                generationMode,
+                prompt: remapGenerationInputPrompt(draft.prompt,
+                  generationInputMentions(cell.id, cells, edges, effectiveGenerationMode),
+                  generationInputMentions(cell.id, cells, edges, generationMode)),
+              }
               setDraft(next)
               refreshGenerationPreview(next)
             }}
@@ -3314,12 +3339,12 @@ function ExecutableCellInspector({
           <div className="inspector-generation-warning" role="status">
             <CircleAlert size={14} />
             <span>
-              {!generationActionCompatible
+              {generationInputError ?? (!generationActionCompatible
                 ? 'This model does not accept the current inputs. Choose a compatible model or change the connections.'
                 : !generationModeCompatible
                   ? 'This generation type does not match the current inputs. Choose a compatible type or change the connections.'
                   : generationSettingsMessage
-                    ?? 'Complete the required generation settings before running.'}
+                    ?? 'Complete the required generation settings before running.')}
             </span>
           </div>
         )}

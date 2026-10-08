@@ -970,7 +970,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2 · Kie · incompatible</option>',
     )
-    expect(html).toContain('This model does not accept the current inputs.')
+    expect(html).toContain('This model does not accept image reference inputs.')
     expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)
     expect(html).toContain('aria-label="Generation payload JSON"')
     expect(previewCalls).toBe(0)

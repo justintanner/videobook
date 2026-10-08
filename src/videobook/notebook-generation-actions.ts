@@ -6,6 +6,7 @@ import {
   isNotebookGenerationCellType,
   type NotebookGenerationCellType,
 } from './notebook-cell-types'
+import { generationModeInputError, generationModeInputTarget } from '../../server/src/generation-input-policy'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 import {
@@ -500,7 +501,7 @@ export function generationInputAttachments(
       ? [{
           sourceCellId: edge.source,
           targetInput: edge.targetInput,
-          target: normalizedInputTarget(kind, edge.targetInput),
+          target: generationModeInputTarget(modeId, kind, normalizedInputTarget(kind, edge.targetInput)),
           kind,
         }]
       : []
@@ -540,76 +541,12 @@ export function generationInputAttachments(
   return options
 }
 
-function inputModeMatches(
-  mode: GenerationInputMode,
-  inputs: readonly GenerationConnectedInput[],
-): boolean {
-  const normalizedInputs = frameModeInputs(mode, inputs)
-  const counts = new Map(mode.slots.map((slot) => [slot.field, 0]))
-  const sortedInputs = [...normalizedInputs].sort((left, right) => {
-    const leftSpecific = left.target === left.kind ? 0 : 1
-    const rightSpecific = right.target === right.kind ? 0 : 1
-    return rightSpecific - leftSpecific
-  })
-  for (const input of sortedInputs) {
-    const candidates = mode.slots
-      .filter((slot) => {
-        if (slot.kind !== input.kind || !slot.targets.includes(input.target)) {
-          return false
-        }
-        const count = counts.get(slot.field) ?? 0
-        return slot.max === null || count < slot.max
-      })
-      .sort((left, right) => {
-        const leftCount = counts.get(left.field) ?? 0
-        const rightCount = counts.get(right.field) ?? 0
-        const leftRequired = leftCount < left.min ? 1 : 0
-        const rightRequired = rightCount < right.min ? 1 : 0
-        if (leftRequired !== rightRequired) return rightRequired - leftRequired
-        return left.targets.length - right.targets.length
-      })
-    const slot = candidates[0]
-    if (!slot) return false
-    counts.set(slot.field, (counts.get(slot.field) ?? 0) + 1)
-  }
-  if (mode.slots.some((slot) => (counts.get(slot.field) ?? 0) < slot.min)) {
-    return false
-  }
-  return mode.requiredGroups.every((group) =>
-    group.some((field) => (counts.get(field) ?? 0) > 0))
-}
-
-function frameModeInputs(
-  mode: GenerationInputMode,
-  inputs: readonly GenerationConnectedInput[],
-): GenerationConnectedInput[] {
-  if (
-    mode.id !== 'i2v'
-    || mode.slots.some((slot) => slot.targets.includes('image'))
-  ) return [...inputs]
-  const availableTargets = mode.slots
-    .flatMap((slot) => slot.targets)
-    .filter((target) => target === 'first_frame' || target === 'last_frame')
-    .filter((target) => !inputs.some((input) => input.target === target))
-  let targetIndex = 0
-  return inputs.map((input) => {
-    if (
-      input.kind !== 'image'
-      || input.target !== 'image'
-      || targetIndex >= availableTargets.length
-    ) return input
-    const target = availableTargets[targetIndex]
-    targetIndex += 1
-    return target ? { ...input, target } : input
-  })
-}
-
 export function compatibleGenerationModes(
   action: NotebookGenerationAction,
   inputs: readonly GenerationConnectedInput[],
 ): GenerationInputMode[] {
   return action.inputContract.modes.filter((mode) =>
-    inputModeMatches(mode, inputs))
+    generationModeInputError(mode, inputs) === null)
 }
 
 export function generationModeIsCompatible(
@@ -619,7 +556,7 @@ export function generationModeIsCompatible(
 ): boolean {
   const mode = action.inputContract.modes.find((candidate) =>
     candidate.id === modeId)
-  return Boolean(mode && inputModeMatches(mode, inputs))
+  return Boolean(mode && generationModeInputError(mode, inputs) === null)
 }
 
 export function initialGenerationMode(
@@ -656,7 +593,7 @@ export function generationActionIsCompatible(
   inputs: readonly GenerationConnectedInput[],
 ): boolean {
   return action.inputContract.modes.some((mode) =>
-    inputModeMatches(mode, inputs))
+    generationModeInputError(mode, inputs) === null)
 }
 
 function compareGenerationActions(

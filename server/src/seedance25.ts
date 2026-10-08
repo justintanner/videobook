@@ -17,6 +17,7 @@ export function seedance25FrameAspectRatio(
   if (tool !== "generate_kie_seedance_2_5_video"
     && tool !== "generate_seedance25_video"
     && tool !== "bytedance/seedance-2-5") return undefined;
+  if (input.generationMode === "r2v") return undefined;
   const frames = [input.first_frame_ref, input.last_frame_ref, input.first_frame_url, input.last_frame_url];
   return input.generationMode === "i2v"
     || frames.some((frame) => typeof frame === "string" && frame.trim().length > 0)

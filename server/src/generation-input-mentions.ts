@@ -14,6 +14,7 @@ export type GenerationInputMediaKind = "image" | "video" | "audio";
 export interface GenerationInputMentionCell {
   id: string;
   type: string;
+  inputs?: Record<string, unknown>;
 }
 
 export interface GenerationInputMentionEdge {
@@ -118,10 +119,11 @@ function frameMentions(inputs: readonly KindedInput[]): GenerationInputMention[]
 function numberedMentions(
   inputs: readonly KindedInput[],
   kind: GenerationInputMediaKind,
+  modeId?: string,
 ): GenerationInputMention[] {
   const named = inputs.filter((input) =>
     input.kind === kind
-    && !(kind === "image" && input.targetInput in FRAME_TOKENS)
+    && !(modeId !== "r2v" && kind === "image" && input.targetInput in FRAME_TOKENS)
     && !UNNAMED_TARGET_INPUTS.has(input.targetInput));
   return sortByKindSlot(named, kind).map((input, index) => ({
     ...input,
@@ -134,12 +136,42 @@ export function generationInputMentions(
   cellId: string,
   cells: readonly GenerationInputMentionCell[],
   edges: readonly GenerationInputMentionEdge[],
+  modeId?: string,
 ): GenerationInputMention[] {
+  const configuredMode = cells.find((cell) => cell.id === cellId)?.inputs?.generationMode;
+  const effectiveMode = modeId ?? configuredMode;
   const inputs = connectedInputs(cellId, cells, edges);
   return [
-    ...frameMentions(inputs),
-    ...KIND_ORDER.flatMap((kind) => numberedMentions(inputs, kind)),
+    ...(effectiveMode === "r2v" ? [] : frameMentions(inputs)),
+    ...KIND_ORDER.flatMap((kind) => numberedMentions(
+      inputs, kind, typeof effectiveMode === "string" ? effectiveMode : undefined,
+    )),
   ];
+}
+
+export function remapGenerationInputPrompt(
+  prompt: string,
+  previous: readonly GenerationInputMention[],
+  next: readonly GenerationInputMention[],
+): string {
+  const used = new Set([...previous, ...next].map((mention) => mention.token));
+  const replacements = new Map(previous.map((before) => {
+    const after = next.find((candidate) => candidate.sourceCellId === before.sourceCellId
+      && candidate.targetInput === before.targetInput)
+      ?? next.find((candidate) => candidate.targetInput === before.targetInput);
+    if (after) return [before.token, after.token];
+    if (!next.some((candidate) => candidate.token === before.token)) return [before.token, before.token];
+    let index = 1;
+    while (used.has(`${before.kind}${index}`)) index += 1;
+    const missing = `${before.kind}${index}`;
+    used.add(missing);
+    return [before.token, missing];
+  }));
+  return prompt.replace(/@((?:image|video|audio)\d+|firstframe|lastframe)(?![\w-])/giu,
+    (match, token: string) => {
+      const replacement = replacements.get(token.toLowerCase());
+      return replacement && replacement !== token.toLowerCase() ? `@${replacement}` : match;
+    });
 }
 
 /** "@image1"-style tokens in a prompt, lower-cased and without the "@". */

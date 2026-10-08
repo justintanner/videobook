@@ -323,7 +323,7 @@ export function GenerationBody({
                 {modes.map((mode) => (
                   <option key={mode.id} value={mode.id}>
                     {generationModeLabel(mode.id)}
-                    {compatibleModeIds && !compatibleModeIds.has(mode.id) ? ' · needs inputs' : ''}
+                    {compatibleModeIds && !compatibleModeIds.has(mode.id) ? ' · check inputs' : ''}
                   </option>
                 ))}
               </select>

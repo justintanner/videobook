@@ -62,6 +62,7 @@ import { notebookGenerationControls } from "../notebook-generation-controls.js";
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { translateToolPayload } from "../payload-builders.js";
+import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import {
   enqueueNotebookRunPlan,
@@ -765,6 +766,24 @@ function entityDefs(engine: Engine, type: EntityType): ToolDef[] {
       },
     },
   ];
+}
+
+function refreshGenerationInputPrompt(
+  previous: NotebookDocument,
+  next: NotebookDocument,
+  cellId: string,
+): NotebookDocument {
+  const seeded = seedInitialGenerationPrompt(next, cellId);
+  const before = previous.cells.find((cell) => cell.id === cellId);
+  const after = seeded.cells.find((cell) => cell.id === cellId);
+  if (!after?.prompt || before?.inputs?.generationMode !== "r2v" || after.prompt !== before.prompt) return seeded;
+  const prompt = remapGenerationInputPrompt(after.prompt,
+    generationInputMentions(cellId, previous.cells, previous.edges),
+    generationInputMentions(cellId, seeded.cells, seeded.edges));
+  return prompt === after.prompt ? seeded : {
+    ...seeded,
+    cells: seeded.cells.map((cell) => cell.id === cellId ? { ...cell, prompt } : cell),
+  };
 }
 
 export function videobookDomainDefs(
@@ -1835,7 +1854,7 @@ export function videobookDomainDefs(
                 edge.target,
                 edge.targetInput,
               );
-              return seedInitialGenerationPrompt({
+              return refreshGenerationInputPrompt(notebook, {
                 ...prepared,
                 edges: [...prepared.edges, edge],
               }, edge.target);
@@ -1866,7 +1885,7 @@ export function videobookDomainDefs(
               edges: notebook.edges.filter((edge) => edge.id !== edgeId),
             };
             return removed
-              ? seedInitialGenerationPrompt(disconnected, removed.target)
+              ? refreshGenerationInputPrompt(notebook, disconnected, removed.target)
               : disconnected;
           },
           { edgeId },
@@ -1943,7 +1962,7 @@ export function videobookDomainDefs(
               }
               const updated = { ...notebook, edges };
               const marked = markCellAndDescendantsStale(updated, targetCellId);
-              return seedInitialGenerationPrompt(marked, targetCellId);
+              return refreshGenerationInputPrompt(notebook, marked, targetCellId);
             },
             {
               targetCellId,

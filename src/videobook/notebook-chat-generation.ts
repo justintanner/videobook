@@ -364,7 +364,8 @@ export function notebookChatGenerationCellPrompt(
     targetInput: connection.targetInput,
   }))
   const tokens = new Map(
-    generationInputMentions(draft.cell.id, document.cells, edges)
+    generationInputMentions(draft.cell.id, document.cells, edges,
+      nonBlankStringValue(draft.cell.inputs?.generationMode) ?? undefined)
       .map((mention) => [mention.sourceCellId, mention.token]),
   )
   return replaceNotebookMentions(
