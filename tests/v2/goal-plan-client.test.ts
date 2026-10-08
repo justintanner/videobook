@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { composerGoal, goalCanRetry, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalStopLabel, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
 import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
+import { goalBriefStyle } from '../../server/src/goal-styles'
 
 type Step = GoalSnapshot['steps'][number]
 type Stage = NonNullable<GoalSnapshot['stages']['frame']>
 const plan: GoalPlan = {
+  style: { id: 'cinematic', options: {} },
   version: 2, title: 'Rainy commute', continuity: 'Two characters share a flooded street', aspectRatio: '9:16', imageModel: 'sunburst', imageResolution: '2K', videoResolution: '720p', frameContinuity: false,
   frame: { prompt: 'Both characters beside a bicycle under an umbrella' },
   shots: [0, 1, 2].map(index => ({ title: `Commute ${index + 1}`, storyboardPrompt: `Still frame ${index + 1}`, endingPrompt: null, videoPrompt: `Action ${index + 1}`, durationSeconds: 10 })),
@@ -43,7 +45,7 @@ function running(stage: GoalGenerationStage, statuses: Step['status'][], extra: 
 describe('staged goal model', () => {
   it('compares every editable field by value and tolerates reordered storage keys', () => {
     const reordered = JSON.parse(JSON.stringify(plan, Object.keys(plan).reverse())) as GoalPlan
-    expect(goalPlansEqual(plan, { ...reordered, frame: { prompt: plan.frame.prompt }, shots: structuredClone(plan.shots) })).toBe(true)
+    expect(goalPlansEqual(plan, { ...reordered, style: structuredClone(plan.style), frame: { prompt: plan.frame.prompt }, shots: structuredClone(plan.shots) })).toBe(true)
     for (const changed of [
       { ...plan, frame: { prompt: 'Changed' } }, { ...plan, imageResolution: '1K' as const }, { ...plan, videoResolution: '480p' as const }, { ...plan, imageModel: 'flare' as const },
       { ...plan, shots: plan.shots.map((shot, index) => index ? shot : { ...shot, storyboardPrompt: 'Changed' }) },
@@ -51,6 +53,20 @@ describe('staged goal model', () => {
       { ...plan, frameContinuity: true },
       { ...plan, shots: plan.shots.map((shot, index) => index ? shot : { ...shot, endingPrompt: 'Changed ending' }) },
     ]) expect(goalPlansEqual(plan, changed)).toBe(false)
+  })
+
+  it('compares style and option values and labels current, pending, fallback and legacy plans', () => {
+    const style = goalBriefStyle('IG influencer GRWM')
+    const styled = { ...plan, style }
+    expect(goalPlansEqual(plan, styled)).toBe(false)
+    expect(goalPlansEqual(styled, { ...styled, style: { ...style, options: Object.fromEntries(Object.entries(style.options).reverse()) } })).toBe(true)
+    expect(goalPlansEqual(styled, { ...styled, style: { ...style, options: { ...style.options, light: 'golden-hour' } } })).toBe(false)
+    expect(goalTileView(goal({ plan: styled }), null, undefined).styleLabel).toBe('IG Influencer')
+    expect(goalTileView(null, styled, undefined).styleLabel).toBe('IG Influencer')
+    expect(goalTileView(goal({ plan: null, status: 'planning', requestedStyle: style }), null, undefined).styleLabel).toBe('IG Influencer')
+    const { style: _style, ...oldPlan } = plan
+    expect(goalTileView(null, oldPlan as GoalPlan, undefined).styleLabel).toBe('Cinematic')
+    expect(goalTileView(null, { title: 'Old', continuity: 'Old', aspectRatio: '9:16', shots: [] }, undefined).styleLabel).toBeNull()
   })
 
   it('names the plan, frame, storyboard, video and assembly reviews and progress', () => {

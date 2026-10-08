@@ -1,0 +1,45 @@
+{
+  "plan": {
+    "version": 2,
+    "title": "The skateboard champion",
+    "continuity": "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.",
+    "aspectRatio": "9:16",
+    "imageModel": "sunburst",
+    "imageResolution": "2K",
+    "videoResolution": "720p",
+    "frameContinuity": true,
+    "frame": {
+      "prompt": "Both characters stand beside the skateboard in the sunny park, full bodies visible."
+    },
+    "shots": [
+      {
+        "title": "Park adventure 1",
+        "storyboardPrompt": "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
+        "videoPrompt": "Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.",
+        "endingPrompt": null,
+        "durationSeconds": 10
+      }
+    ]
+  },
+  "prompts": {
+    "frame": [
+      "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.\n\nBoth characters stand beside the skateboard in the sunny park, full bodies visible.\n\nReferences: @image1 is Character 1; @image2 is Character 2."
+    ],
+    "storyboards": [
+      "Create a four-panel storyboard sheet in a 2x2 grid, read left to right, top to bottom: 1 setup, 2 action, 3 reaction, 4 ending. Show distinct successive moments, each composed 9:16. Thin gutters; numbers 1\u20134 only, no captions.\n\nShot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.\n\nReferences: @image1 is the full frame; keep its characters, setting and style; @image2 is Character 1; @image3 is Character 2.",
+      "One ending frame. Final moment: Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.\n\nReferences: @image1 is the full frame; keep its characters, setting and style; @image2 is Character 1; @image3 is Character 2."
+    ],
+    "reviseFrame": [
+      "Both characters stand beside the skateboard in the sunny park, full bodies visible.\n\nRevise @image1: Raise the umbrella. Keep everything else the same.\n\n@image1: previous version; @image2: Character 1; @image3: Character 2."
+    ],
+    "reviseStoryboard": [
+      "Create a four-panel storyboard sheet in a 2x2 grid, read left to right, top to bottom: 1 setup, 2 action, 3 reaction, 4 ending. Show distinct successive moments, each composed 9:16. Thin gutters; numbers 1\u20134 only, no captions.\n\nShot 1: Park adventure 1 (10s). 1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.\nAction: Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.\n\nRevise @image1: Raise the umbrella. Keep unaffected details; expand a single-frame input into all four moments.\n\n@image1: previous version; @image2: full frame; @image3: Character 1; @image4: Character 2."
+    ],
+    "reviseEnding": [
+      "Final moment: Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.\n\nRevise @image1: Raise the umbrella. Keep everything else the same.\n\n@image1: previous version; @image2: full frame; @image3: Character 1; @image4: Character 2."
+    ],
+    "video": [
+      "Shot 1: Park adventure 1. Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action 1.\n\n@image1 is a four-panel storyboard: follow its moments left to right, top to bottom as one full-screen video. Preserve characters, setting and style. Never show the grid, borders or panel numbers. Use @image2 for the ending pose and composition."
+    ]
+  }
+}

@@ -25,7 +25,7 @@ const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
   video_goal: {
     actionId: "command.goal",
-    reason: "Goal mode defaults to portrait, reviews a compact plan, keeps selectable still versions and one-line revisions, then separately approves the frame, storyboards and videos.",
+    reason: "Goal mode defaults to portrait and Cinematic style. IG Influencer adds a hyper-realistic phone-shot style with content format, delivery, camera and light options, fixed after the frame. Review the plan and separately approve the frame, storyboards and videos; still versions remain selectable and revisable.",
   },
   assemble_goal: {
     actionId: "command.goal",

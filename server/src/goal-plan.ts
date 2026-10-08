@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ChainStep } from "./chain-plan.js";
 import type { GptImage25Variant } from "./gpt-image-2-5.js";
 import { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
+import { GOAL_STYLE_IDS, goalStyleFragment, resolveGoalStyleOptions, type GoalStyleStage } from "./goal-styles.js";
 
 export { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 
@@ -13,6 +14,13 @@ export const GOAL_IMAGE_TOOLS: Record<GptImage25Variant, string> = {
 const GOAL_MAX_SHOTS = 8;
 const goalPrompt = (limit: number) => z.string().trim().min(1).max(limit)
   .regex(/^[^@]*$/u, "Use Character 1, Character 2 and plain text in plan prompts; input references are added automatically");
+
+export const goalStyleSchema = z.object({
+  id: z.enum(GOAL_STYLE_IDS), options: z.record(z.string(), z.string()),
+}).strict().superRefine((style, context) => {
+  try { resolveGoalStyleOptions(style.id, style.options); }
+  catch (error) { context.addIssue({ code: "custom", path: ["options"], message: error instanceof Error ? error.message : String(error), fatal: true }); }
+}).overwrite(style => ({ ...style, options: resolveGoalStyleOptions(style.id, style.options) }));
 
 export const legacyGoalPlanSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -27,6 +35,7 @@ export const legacyGoalPlanSchema = z.object({
 
 export const goalPlanSchema = legacyGoalPlanSchema.extend({
   version: z.literal(2),
+  style: goalStyleSchema.default({ id: "cinematic", options: {} }),
   title: goalPrompt(120),
   continuity: goalPrompt(3000),
   imageModel: z.enum(["sunburst", "flare"]).default("sunburst"),
@@ -109,15 +118,18 @@ export function goalBriefConstraints(brief: string): {
   return { shotCount, durationSeconds, aspectRatio };
 }
 
+function styledGoalPrompt(plan: GoalPlan, stage: GoalStyleStage, text: string): string {
+  const fragment = goalStyleFragment(plan.style, stage);
+  return fragment ? `${text}\n\n${fragment}` : text;
+}
+
 function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | null = null): string {
-  const references = characters.map((_, index) => `@image${index + (frame === "full" ? 2 : 1)} is Character ${index + 1}`);
-  if (frame === "full") references.unshift("@image1 is the full frame; keep its characters, setting and style");
-  return `References: ${references.join("; ")}.`;
+  return `${[...(frame ? ["@image1 full frame"] : []), ...characters.map((_, index) => `@image${index + (frame ? 2 : 1)} Character ${index + 1}`)].join("; ")}.`;
 }
 
 function goalFrameParams(plan: GoalPlan, characters: readonly GoalCharacter[]): Record<string, unknown> {
   return {
-    prompt: `${plan.continuity}\n\n${plan.frame.prompt}\n\n${goalReferenceLegend(characters)}`,
+    prompt: `${styledGoalPrompt(plan, "frame", `${plan.continuity}\n\n${plan.frame.prompt}`)}\n\n${goalReferenceLegend(characters)}`,
     image_refs: characters.map(character => character.address),
     aspect_ratio: plan.aspectRatio,
     resolution: plan.imageResolution,
@@ -130,7 +142,7 @@ export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalChara
 }
 
 function storyboardLayoutPrompt(plan: GoalPlan): string {
-  return `Create a four-panel storyboard sheet in a 2x2 grid, read left to right, top to bottom: 1 setup, 2 action, 3 reaction, 4 ending. Show distinct successive moments, each composed ${plan.aspectRatio}. Thin gutters; numbers 1–4 only, no captions.`;
+  return `2x2 storyboard. Left-right, top-bottom: 1 setup; 2 action; 3 reaction; 4 ending. Each ${plan.aspectRatio}. Thin gutters. Numbers only.`;
 }
 
 export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
@@ -139,7 +151,7 @@ export function compileStoryboardSteps(plan: GoalPlan, characters: readonly Goal
     id: `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${ending ? `One ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan)}\n\n${goalStillPrompt(plan, "storyboards", index)}`}\n\n${goalReferenceLegend(characters, "full")}`,
+      prompt: `${styledGoalPrompt(plan, ending ? "ending" : "storyboard", ending ? `Ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan)}\n\n${goalStillPrompt(plan, "storyboards", index)}`)}\n\n${goalReferenceLegend(characters, "full")}`,
       image_refs: [frame, ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio,
       resolution: plan.imageResolution,
@@ -173,7 +185,7 @@ export function compileReviseStillStep(plan: GoalPlan, characters: readonly Goal
     id: stage === "frame" ? "frame" : `storyboard${index + 1}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${storyboard ? `${storyboardLayoutPrompt(plan)}\n\n` : ""}${basePrompt}\n\nRevise @image1: ${feedback.replace(/[.!?]+$/u, "")}. ${storyboard ? "Keep unaffected details; expand a single-frame input into all four moments." : "Keep everything else the same."}\n\n${references.join("; ")}.`,
+      prompt: `${styledGoalPrompt(plan, "revise", `${storyboard ? `${storyboardLayoutPrompt(plan)}\n\n` : ""}${basePrompt}\n\nChange @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep rest.${storyboard ? " Four distinct moments." : ""}`)}\n\n${references.join("; ")}.`,
       image_refs: [current, ...(frame ? [frame] : []), ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio, resolution: plan.imageResolution, background: "opaque",
     },
@@ -182,8 +194,9 @@ export function compileReviseStillStep(plan: GoalPlan, characters: readonly Goal
 
 function goalShotParams(plan: GoalPlan, index: number, storyboard: string, ending?: string): Record<string, unknown> {
   const shot = plan.shots[index]!;
+  const fragment = goalStyleFragment(plan.style, "video");
   return {
-    prompt: `Shot ${index + 1}: ${shot.title}. ${shot.videoPrompt}\n\n@image1 is a four-panel storyboard: follow its moments left to right, top to bottom as one full-screen video. Preserve characters, setting and style. Never show the grid, borders or panel numbers.${ending ? " Use @image2 for the ending pose and composition." : ""}`,
+    prompt: `${shot.videoPrompt}\n\n@image1 storyboard. Follow panels 1–4 in order. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""} No grid, borders, text.`,
     image_refs: [storyboard, ...(ending ? [ending] : [])],
     duration: String(shot.durationSeconds),
     aspect_ratio: plan.aspectRatio,

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { join } from 'node:path'
@@ -20,10 +20,12 @@ import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { goalTestPlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
 import { compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
 import { goalPromptWords } from '../../server/src/goal-prompt-budget.js'
+import { goalStyle } from '../../server/src/goal-styles.js'
 import { probeVideo } from '../../server/src/ffmpeg.js'
 import { readGoal, requireGoalContent, saveGoal, writeGoalContent } from '../../server/src/goal-store.js'
 import { estimateGoal } from '../../server/src/jobs/plan-goal.js'
-import { getChainRun } from '../../server/src/chain-executor.js'
+import { constrainGoalPlannerPlan } from '../../server/src/goal-planner-prompt.js'
+import { cancelChainRun, getChainRun, waitForChainRun } from '../../server/src/chain-executor.js'
 import type { GoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
@@ -113,6 +115,11 @@ describe('staged goal mode in the browser', () => {
       const asset = await call<{ assetId: string }>('upload_file', { filename: `character-${column + 1}.png`, data: bytes.toString('base64') })
       await call('create_notebook_cell', { cell: { type: 'image', slot: { row: 0, column }, output_artifact_id: asset.assetId } })
     }
+    if (live) {
+      const bytes = await readFile(new URL('../fixtures/goals/astronaut.png', import.meta.url))
+      const asset = await call<{ assetId: string }>('upload_file', { filename: 'portrait-reference.png', data: bytes.toString('base64') })
+      await call('create_notebook_cell', { cell: { type: 'image', slot: { row: 0, column: 2 }, output_artifact_id: asset.assetId } })
+    }
     const vitePort = await availablePort()
     appUrl = `http://127.0.0.1:${vitePort}`
     vite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], {
@@ -170,7 +177,7 @@ describe('staged goal mode in the browser', () => {
     expect(await tile(saved).locator('[title="Aspect ratio"]').textContent()).toBe('9:16')
     expect(await panel().getByRole('radio', { name: 'Portrait · 9:16', exact: true }).getAttribute('aria-checked')).toBe('true')
     expect(await panel().getByLabel('Shot 1 storyboard prompt', { exact: true }).getAttribute('rows')).toBe('2')
-    expect(await panel().locator('.goal-prompt-input').first().textContent()).toContain('/ 40 words')
+    expect(await panel().locator('.goal-prompt-input').first().textContent()).toContain('/ 32 words')
     await panel().getByText('Advanced', { exact: true }).click()
     await panel().getByLabel('Full frame prompt', { exact: true }).fill('Both characters salute beside the skateboard, wide park view.')
     await panel().getByLabel('Shot 1 seconds', { exact: true }).fill('12')
@@ -247,7 +254,7 @@ describe('staged goal mode in the browser', () => {
     await expect.poll(() => engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length, { timeout: 15_000 }).toBe(before + 1)
     const running = await current(created)
     const job = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).find(job => String(job.payload.input && (job.payload.input as Record<string, unknown>).prompt).includes('Give Character 1 a red cap'))!
-    expect(job.payload).toMatchObject({ sourceImageIds: [firstId, ...created.characters.map(character => character.artifactId)], input: { prompt: expect.stringContaining('Revise @image1: Give Character 1 a red cap') } })
+    expect(job.payload).toMatchObject({ sourceImageIds: [firstId, ...created.characters.map(character => character.artifactId)], input: { prompt: expect.stringContaining('Change @image1: Give Character 1 a red cap') } })
     expect(running.stages.frame!.attempts!.at(-1)).toMatchObject({ parentArtifactId: firstId, feedback: 'Give Character 1 a red cap' })
     await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Revising frame')
     await status().click()
@@ -259,6 +266,65 @@ describe('staged goal mode in the browser', () => {
     expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(2)
     await expect.poll(() => card.getByRole('button', { name: 'Full frame v1', exact: true }).getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('true')
     expect(await panel().getByRole('button', { name: /Use this frame/ }).isVisible()).toBe(true)
+    expect(errors).toEqual([])
+  }, 60_000)
+
+  scenario.each([{ width: 1440, height: 1000 }, { width: 390, height: 844 }])('detects, edits, saves and locks IG Influencer style at $width pixels', async viewport => {
+    await page.setViewportSize(viewport)
+    await pauseBookQueueForTests(bookId)
+    const brief = `@a1 as an IG influencer, GRWM morning routine, two 4s clips; review ${viewport.width}`
+    await command(`/goal ${brief}`)
+    await expect.poll(async () => (await goals()).goals.find(goal => goal.brief === brief)?.status, { timeout: 15_000 }).toBe('planning')
+    const created = (await goals()).goals.find(goal => goal.brief === brief)!
+    await open(created)
+    expect(await panel().textContent()).toContain('Planning an IG Influencer sequence')
+    expect(created.requestedStyle).toMatchObject({ id: 'ig-influencer', options: { format: 'grwm' } })
+    const stored = readGoal(engine, created.goalId)
+    const content = requireGoalContent(engine, stored)
+    const plan = constrainGoalPlannerPlan(goalTestPlan(2), brief, content.requestedStyle!)
+    await writeGoalContent(engine, stored, { ...content, plan, revision: 1, estimate: await estimateGoal(engine, plan, content.characters) })
+    await engine.jobs.queue.abort(stored.planningJobId!, 'Fixture plan completed')
+    saveGoal(engine, { ...stored, status: 'review', stage: 'frame' })
+    await open(await current(created))
+    expect(await panel().getByRole('radio', { name: 'IG Influencer', exact: true }).getAttribute('aria-checked')).toBe('true')
+    expect(await panel().getByLabel('Content format', { exact: true }).inputValue()).toBe('grwm')
+    await panel().getByRole('radio', { name: 'Cinematic', exact: true }).click()
+    expect(await panel().locator('.goal-style-options').count()).toBe(0)
+    await panel().getByRole('radio', { name: 'IG Influencer', exact: true }).click()
+    expect(await panel().getByLabel('Content format', { exact: true }).inputValue()).toBe('day-in-the-life')
+    await panel().getByLabel('Content format', { exact: true }).selectOption('grwm')
+    await panel().getByLabel('Delivery', { exact: true }).selectOption('mirror')
+    expect(await panel().getByLabel('Camera', { exact: true }).inputValue()).toBe('iphone-main')
+    await panel().getByRole('button', { name: 'Save plan', exact: true }).click()
+    await expect.poll(async () => goalPlanSchema.parse((await current(created)).plan).style.options.delivery).toBe('mirror')
+    await open(await current(created))
+    expect(await panel().getByLabel('Delivery', { exact: true }).inputValue()).toBe('mirror')
+    expect(await tile(created).locator('[title="Goal style"]').textContent()).toBe('IG Influencer')
+    expect(await status().locator('.goal-status-style').textContent()).toBe('IG Influencer')
+    await panel().getByText('Advanced', { exact: true }).click()
+    expect(await panel().locator('.goal-style-anchors').textContent()).toContain('skin pores')
+    await panel().locator('.goal-panel-body').evaluate(element => { element.scrollTop = 0 })
+    await screenshot(`goal-style-plan-${viewport.width}`)
+    const primary = panel().getByRole('button', { name: /^Generate frame ·/ })
+    const footer = await panel().locator('.goal-panel-bar').boundingBox()
+    const button = await primary.boundingBox()
+    expect(button!.y).toBeGreaterThanOrEqual(footer!.y)
+    expect(button!.y + button!.height).toBeLessThanOrEqual(viewport.height)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true)
+    await primary.click()
+    await expect.poll(async () => (await current(created)).status).toBe('running')
+    const running = await current(created)
+    await expect.poll(() => getChainRun(engine, running.chainId!)!.steps[0]!.childJobIds.length).toBe(1)
+    expect(getChainRun(engine, running.chainId!)!.steps[0]!.params.prompt).toContain('hyper-realistic')
+    cancelChainRun(engine, running.chainId!)
+    await waitForChainRun(engine, running.chainId!)
+    await seedGoalStage(engine, created.goalId, 'frame')
+    await open(await current(created))
+    await panel().getByText('Plan', { exact: true }).last().click()
+    expect(await panel().getByRole('radio', { name: 'IG Influencer', exact: true }).isDisabled()).toBe(true)
+    for (const name of ['Content format', 'Delivery', 'Camera', 'Light']) expect(await panel().getByLabel(name, { exact: true }).isDisabled()).toBe(true)
+    expect(await tile(created).locator('[title="Goal style"]').textContent()).toBe('IG Influencer')
+    await screenshot(`goal-style-locked-${viewport.width}`)
     expect(errors).toEqual([])
   }, 60_000)
 
@@ -332,7 +398,7 @@ describe('staged goal mode in the browser', () => {
     await expect.poll(async () => (await current(saved)).status).toBe('running')
     const regenerating = await current(saved)
     expect(getChainRun(engine, regenerating.chainId!)!.steps.map(step => step.id)).toEqual(['storyboard2'])
-    expect(getChainRun(engine, regenerating.chainId!)!.steps[0]!.params.prompt).toContain('four-panel storyboard sheet in a 2x2 grid')
+    expect(getChainRun(engine, regenerating.chainId!)!.steps[0]!.params.prompt).toContain('2x2 storyboard')
     expect(regenerating.stages.storyboards!.outputs[0]).toEqual(boards.stages.storyboards!.outputs[0])
     expect(regenerating.stages.storyboards!.outputs[1]!.artifactId).toBe(boards.stages.storyboards!.outputs[1]!.artifactId)
     expect(regenerating.stages.storyboards!.outputs[1]!.versions).toHaveLength(2)
@@ -403,12 +469,15 @@ describe('staged goal mode in the browser', () => {
     expect(errors).toEqual([])
   }, 30_000)
 
-  it.runIf(live)('plans and generates a complete two-shot goal with real providers', async () => {
-    const brief = '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video.'
-    const frameFeedback = 'Give Character 1 a red cap'
-    const storyboardFeedback = 'Move Character 2 closer'
+  it.runIf(live).each(['Cinematic', 'IG Influencer'])('plans and generates a complete two-shot %s goal with real providers', async styleLabel => {
+    const influencer = styleLabel === 'IG Influencer'
+    const brief = influencer
+      ? '@a3 as an IG influencer, GRWM morning routine. Selfie to camera. Same adult face and hair, casual white shirt, bedroom mirror. Two portrait 4s clips. 1K images and 480p video. Barebones prompts. Ambient room sound.'
+      : '@a1 @a2 make two 4s funny clips of the orange bird in a red scarf teaching the blue robot in a yellow scarf to skateboard in a sunny park. Simple friendly cartoon. 1K images and 480p video.'
+    const frameFeedback = influencer ? 'White headband' : 'Give Character 1 a red cap'
+    const storyboardFeedback = influencer ? 'Raise the chin' : 'Move Character 2 closer'
     const requests: Array<{ artifactId: string; stage: string; prompt: string; words: number; aspectRatio: string; path: string; width: number; height: number; duration?: number; hasAudio?: boolean }> = []
-    const reportPath = process.env.VIDEOBOOK_GOAL_REPORT ?? join(root, 'live-report.json')
+    const reportPath = process.env.VIDEOBOOK_GOAL_REPORT ?? join(root, `live-${influencer ? 'ig-influencer' : 'cinematic'}-report.json`)
     const checkpoint = async (goal: GoalSnapshot) => writeFile(reportPath, JSON.stringify({ bookId, notebookId, root, goal, requests, usage: await call('get_book_usage') }, null, 2))
     const mediaPath = async (artifactId: string, kind: 'image' | 'video') => {
       const manifest = await engine.files.manifest(artifactId)
@@ -425,6 +494,11 @@ describe('staged goal mode in the browser', () => {
         const { prompt, aspect_ratio: aspectRatio } = result.payload.input
         const words = goalPromptWords(prompt)
         expect(words, prompt).toBeLessThan(stage === 'frame' ? 145 : stage === 'storyboards' ? 210 : 110)
+        if (influencer) {
+          expect(prompt).toContain('hyper-realistic')
+          expect(prompt).toContain('skin pores')
+          for (const word of goalStyle('ig-influencer').banned) expect(prompt).not.toMatch(new RegExp(`\\b${word}\\b`, 'iu'))
+        }
         expect(aspectRatio).toBe('9:16')
         const path = await mediaPath(artifactId, stage === 'videos' ? 'video' : 'image')
         const media = stage === 'videos' ? await probeVideo(path) : await sharp(path).metadata()
@@ -457,6 +531,8 @@ describe('staged goal mode in the browser', () => {
     const planned = await waitForGoal('frame', 'review', 120_000)
     const plan = goalPlanSchema.parse(planned.plan)
     expect(plan.aspectRatio).toBe('9:16')
+    expect(plan.style.id).toBe(influencer ? 'ig-influencer' : 'cinematic')
+    if (influencer) expect(plan.style.options).toMatchObject({ format: 'grwm', delivery: 'selfie-to-camera', camera: 'iphone-front' })
     expect(plan.imageResolution).toBe('1K')
     expect(plan.videoResolution).toBe('480p')
     expect(plan.shots.map(shot => shot.durationSeconds)).toEqual([4, 4])
@@ -525,7 +601,7 @@ describe('staged goal mode in the browser', () => {
       for (const output of outputs) {
         expect(document.value.cells.some(cell => cell.id === output.cellId && cell.outputArtifactId === output.artifactId)).toBe(true)
         const revised = completed.stages[stage]!.attempts?.some(attempt => attempt.artifactId === output.artifactId && attempt.feedback)
-        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength((stage === 'frame' ? 2 : stage === 'storyboards' ? 3 : 1) + (revised ? 1 : 0))
+        expect(document.value.edges.filter(edge => edge.target === output.producerCellId)).toHaveLength((stage === 'frame' ? planned.characters.length : stage === 'storyboards' ? planned.characters.length + 1 : 1) + (revised ? 1 : 0))
       }
     }
     await status().click()

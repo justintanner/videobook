@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -9,10 +9,11 @@ import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
 import { pauseBookQueueForTests, stopBookQueue } from "../queue.js";
 import { cancelChainRun, getChainRun, waitForChainRun } from "../chain-executor.js";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, GOAL_IMAGE_TOOLS, GOAL_VIDEO_TOOL } from "../goal-plan.js";
+import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, goalStillPrompt, GOAL_PROMPT_BUDGET, GOAL_IMAGE_TOOLS, GOAL_VIDEO_TOOL } from "../goal-plan.js";
 import { normalizeSeedance25Request } from "../seedance25.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { goalPlannerBrief } from "../goal-characters.js";
+import { GOAL_STYLE_IDS, goalBriefStyle, goalStyleFragment, resolveGoalStyleOptions } from "../goal-styles.js";
 import { LEGACY_GOAL_MESSAGE } from "../goal-state.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
 import { goalTestCharacters, goalTestPlan, goalTestVideo, seedGoalStage } from "../test-goals.js";
@@ -31,6 +32,13 @@ describe("video goal plans", () => {
     expect(goalPlanSchema.safeParse({ ...plan, shots: [] }).success).toBe(false);
     expect(goalPlanSchema.safeParse({ ...plan, frame: { prompt: "Make @a1 the hero" } }).success).toBe(false);
     expect(goalPlanSchema.safeParse({ ...plan, shots: Array(9).fill(plan.shots[0]) }).success).toBe(false);
+    const { style: _style, ...withoutStyle } = plan;
+    expect(goalPlanSchema.parse(withoutStyle).style).toEqual({ id: "cinematic", options: {} });
+    expect(goalPlannerResponseSchema.parse(withoutStyle).style).toEqual({ id: "cinematic", options: {} });
+    expect(goalPlanSchema.safeParse({ ...plan, style: { id: "ig-influencer", options: { format: "invalid" } } }).success).toBe(false);
+    expect(goalPlanSchema.safeParse({ ...plan, style: { id: "cinematic", options: { format: "grwm" } } }).success).toBe(false);
+    expect(goalPlanSchema.parse({ ...plan, style: { id: "ig-influencer", options: { format: "grwm" } } }).style.options)
+      .toEqual(resolveGoalStyleOptions("ig-influencer", { format: "grwm" }));
     expect(goalBriefConstraints(brief)).toEqual({ shotCount: 3, durationSeconds: 10, aspectRatio: "9:16" });
     expect(goalBriefConstraints("two 4s funny clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
     expect(goalBriefConstraints("four 8-second clips, portrait")).toEqual({ shotCount: 4, durationSeconds: 8, aspectRatio: "9:16" });
@@ -50,24 +58,24 @@ describe("video goal plans", () => {
     const frame = compileFrameSteps(plan, characters);
     expect(frame).toHaveLength(1);
     expect(frame[0]).toMatchObject({ id: "frame", tool: GOAL_IMAGE_TOOLS.sunburst, params: { image_refs: ["@a1", "@a2"], resolution: "2K" } });
-    expect(frame[0]!.params.prompt).toContain("@image1 is Character 1");
+    expect(frame[0]!.params.prompt).toContain("@image1 Character 1");
     const storyboards = compileStoryboardSteps(plan, characters, "@b2");
     expect(storyboards).toHaveLength(3);
     expect(storyboards[1]).toMatchObject({ id: "storyboard2", params: { image_refs: ["@b2", "@a1", "@a2"] } });
-    expect(storyboards[1]!.params.prompt).toContain("@image1 is the full frame");
-    expect(storyboards[1]!.params.prompt).toContain("@image2 is Character 1");
-    expect(storyboards[1]!.params.prompt).toContain("four-panel storyboard sheet in a 2x2 grid");
-    expect(storyboards[1]!.params.prompt).toContain("1 setup, 2 action, 3 reaction, 4 ending");
+    expect(storyboards[1]!.params.prompt).toContain("@image1 full frame");
+    expect(storyboards[1]!.params.prompt).toContain("@image2 Character 1");
+    expect(storyboards[1]!.params.prompt).toContain("2x2 storyboard");
+    expect(storyboards[1]!.params.prompt).toContain("1 setup; 2 action; 3 reaction; 4 ending");
     expect(storyboards[1]!.params.prompt).toContain(plan.shots[1]!.videoPrompt);
-    expect(storyboards[1]!.params.prompt).toContain("each composed 9:16");
+    expect(storyboards[1]!.params.prompt).toContain("Each 9:16");
     expect(compileStoryboardSteps(plan, characters, "@b2", [1]).map(step => step.id)).toEqual(["storyboard2"]);
     const videos = compileVideoSteps(uuidv7(), plan, ["@c1", "@c2", "@c3"]);
     expect(videos).toHaveLength(4);
     expect(videos[1]).toMatchObject({ id: "shot2", tool: GOAL_VIDEO_TOOL, params: { image_refs: ["@c2"], duration: "10", aspect_ratio: "9:16", resolution: "720p", generate_audio: true } });
     expect(videos[1]!.params.first_frame_ref).toBeUndefined();
     expect(videos[1]!.params.last_frame_ref).toBeUndefined();
-    expect(videos[1]!.params.prompt).toContain("@image1 is a four-panel storyboard");
-    expect(videos[1]!.params.prompt).toContain("Never show the grid, borders or panel numbers");
+    expect(videos[1]!.params.prompt).toContain("@image1 storyboard");
+    expect(videos[1]!.params.prompt).toContain("No grid, borders, text");
     expect(normalizeSeedance25Request({ model: "bytedance/seedance-2-5", input: { ...videos[1]!.params, prompt: String(videos[1]!.params.prompt), reference_image_urls: ["https://example.test/storyboard.png"] } })).toMatchObject({ input: { aspect_ratio: "9:16" } });
     expect(videos[3]!.params.artifact_ids).toEqual([1, 2, 3].map(index => ({ $ref: { step_id: `shot${index}`, output: "asset_id" } })));
     expect(compileVideoSteps(uuidv7(), goalTestPlan(1), ["@c1"])).toHaveLength(1);
@@ -92,7 +100,7 @@ describe("video goal plans", () => {
     expect(() => compileVideoSteps(uuidv7(), paired, ["@c1", "@c2", "@c3"])).toThrow("ending frame");
     const videos = compileVideoSteps(uuidv7(), paired, ["@c1", "@c2", "@c3"], ["@d1", "@d2", "@d3"]);
     expect(videos[1]!.params).toMatchObject({ image_refs: ["@c2", "@d2"] });
-    expect(videos[1]!.params.prompt).toContain("Use @image2 for the ending pose");
+    expect(videos[1]!.params.prompt).toContain("@image2 ending pose");
     expect(videos[1]!.params.first_frame_ref).toBeUndefined();
     expect(videos[1]!.params.last_frame_ref).toBeUndefined();
     expect(steps[3]!.params.prompt).not.toContain("four-panel");
@@ -101,11 +109,11 @@ describe("video goal plans", () => {
   it.each(["9:16", "16:9", "1:1"] as const)("keeps the four-panel contract when revising %s storyboards, including old single frames", aspectRatio => {
     const revised = compileReviseStillStep({ ...plan, aspectRatio }, characters, "storyboards", 1, "@c2", "Raise the umbrella", "@b2");
     expect(revised.params.image_refs).toEqual(["@c2", "@b2", "@a1", "@a2"]);
-    expect(revised.params.prompt).toContain("four-panel storyboard sheet in a 2x2 grid");
-    expect(revised.params.prompt).toContain(`each composed ${aspectRatio}`);
-    expect(revised.params.prompt).toContain("expand a single-frame input into all four moments");
+    expect(revised.params.prompt).toContain("2x2 storyboard");
+    expect(revised.params.prompt).toContain(`Each ${aspectRatio}`);
+    expect(revised.params.prompt).toContain("Four distinct moments");
     expect(revised.params.prompt).toContain(plan.shots[1]!.videoPrompt);
-    expect(revised.params.prompt).toContain("Revise @image1: Raise the umbrella");
+    expect(revised.params.prompt).toContain("Change @image1: Raise the umbrella");
     expect(revised.params.prompt).toContain("@image2: full frame; @image3: Character 1");
   });
 
@@ -116,15 +124,68 @@ describe("video goal plans", () => {
     expect(goalPlanSchema.safeParse(long).success).toBe(true);
     expect(goalPlannerResponseSchema.safeParse(long).success).toBe(false);
     const words = (count: number) => Array(count).fill("word").join(" ");
+    const budget = GOAL_PROMPT_BUDGET;
     expect(goalPromptBudgetIssues({
-      ...plan, title: words(9), continuity: words(81), frame: { prompt: words(51) },
-      shots: [{ ...plan.shots[0]!, title: words(9), storyboardPrompt: words(41), endingPrompt: words(31), videoPrompt: words(51) }],
+      ...plan, title: words(budget.title + 1), continuity: words(budget.continuity + 1), frame: { prompt: words(budget.frame + 1) },
+      shots: [{ ...plan.shots[0]!, title: words(budget.title + 1), storyboardPrompt: words(budget.storyboard + 1), endingPrompt: words(budget.ending + 1), videoPrompt: words(budget.video + 1) }],
     })).toEqual([
-      "Title: 9 words; limit 8.", "Continuity: 81 words; limit 80.", "Frame: 51 words; limit 50.",
-      "Shot 1 title: 9 words; limit 8.", "Storyboard 1: 41 words; limit 40.", "Ending 1: 31 words; limit 30.", "Video 1: 51 words; limit 50.",
+      "Title: 7 words; limit 6.", "Continuity: 31 words; limit 30.", "Frame: 21 words; limit 20.",
+      "Shot 1 title: 7 words; limit 6.", "Storyboard 1: 33 words; limit 32.", "Ending 1: 13 words; limit 12.", "Video 1: 13 words; limit 12.",
     ]);
     expect(goalPromptWords("  one\n two\tthree  ")).toBe(3);
     expect(goalPromptWords(" ")).toBe(0);
+  });
+
+  it("adds compact style anchors to each stage without changing still base prompts or tools", () => {
+    const styled = { ...plan, frameContinuity: true, style: goalBriefStyle("IG influencer GRWM") };
+    const boards = compileStoryboardSteps(styled, characters, "@b2");
+    const steps = [
+      [compileFrameSteps(styled, characters)[0]!, "frame"], [boards[0]!, "storyboard"], [boards[3]!, "ending"],
+      [compileReviseStillStep(styled, characters, "storyboards", 0, "@c1", "Raise the umbrella", "@b2"), "revise"],
+      [compileVideoSteps("goal", styled, ["@c1", "@c2", "@c3"], ["@d1", "@d2", "@d3"])[0]!, "video"],
+    ] as const;
+    for (const [step, stage] of steps) {
+      expect(step.params.prompt).toContain(goalStyleFragment(styled.style, stage));
+      expect(step.params.aspect_ratio).toBe("9:16");
+      expect(step.tool).toBe(stage === "video" ? GOAL_VIDEO_TOOL : GOAL_IMAGE_TOOLS.sunburst);
+    }
+    expect(String(steps[4][0].params.prompt)).toMatch(/@image1 storyboard.*hyper-realistic.*@image2 ending pose.*No grid, borders, text\.$/su);
+    expect(goalStillPrompt(styled, "frame", 0)).toBe(goalStillPrompt(plan, "frame", 0));
+    expect(goalStillPrompt(styled, "storyboards", 0)).toBe(goalStillPrompt(plan, "storyboards", 0));
+  });
+
+  it.each(GOAL_STYLE_IDS)("keeps maximum planner-sized %s prompts terse with eight characters and ending references", id => {
+    const words = (count: number) => Array(count).fill("word").join(" ");
+    const budget = GOAL_PROMPT_BUDGET;
+    const bounded = goalPlanSchema.parse({
+      ...plan, style: { id, options: {} }, title: words(budget.title), continuity: words(budget.continuity), frame: { prompt: words(budget.frame) }, frameContinuity: true,
+      shots: [{ title: words(budget.title), storyboardPrompt: words(budget.storyboard), videoPrompt: words(budget.video), endingPrompt: words(budget.ending), durationSeconds: 30 }],
+    });
+    const eight = Array.from({ length: 8 }, (_, index) => ({ ...characters[0]!, address: `@a${index + 1}` }));
+    expect(goalPromptBudgetIssues(bounded)).toEqual([]);
+    for (const step of compileStoryboardSteps(bounded, eight, "@b2")) expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(140);
+    for (const [stage, index] of [["frame", 0], ["storyboards", 0], ["storyboards", 1]] as const) {
+      const step = compileReviseStillStep(bounded, eight, stage, index, "@c1", words(20), stage === "storyboards" ? "@b2" : undefined);
+      expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(160);
+    }
+    expect(goalPromptWords(String(compileVideoSteps("goal", bounded, ["@c1"], ["@d1"])[0]!.params.prompt))).toBeLessThan(60);
+  });
+
+  it("removes boilerplate from every previous cinematic prompt while leaving saved prose intact", async () => {
+    const previous = JSON.parse(await readFile(new URL("../../../tests/fixtures/goals/cinematic-prompts.json", import.meta.url), "utf8")) as { plan: unknown; prompts: Record<string, string[]> };
+    const saved = goalPlanSchema.parse(previous.plan);
+    const compiled = {
+      frame: compileFrameSteps(saved, characters), storyboards: compileStoryboardSteps(saved, characters, "@b2"),
+      reviseFrame: [compileReviseStillStep(saved, characters, "frame", 0, "@b2", "Raise the umbrella")],
+      reviseStoryboard: [compileReviseStillStep(saved, characters, "storyboards", 0, "@c1", "Raise the umbrella", "@b2")],
+      reviseEnding: [compileReviseStillStep(saved, characters, "storyboards", 1, "@d1", "Raise the umbrella", "@b2")],
+      video: compileVideoSteps("goal", saved, ["@c1"], ["@d1"]),
+    };
+    for (const [key, steps] of Object.entries(compiled)) {
+      steps.forEach((step, index) => expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(goalPromptWords(previous.prompts[key]![index]!)));
+    }
+    expect(compiled.frame[0]!.params.prompt).toContain(saved.frame.prompt);
+    expect(compiled.video[0]!.params.prompt).toContain(saved.shots[0]!.videoPrompt);
   });
 });
 
@@ -225,6 +286,43 @@ describe("staged video goals through MCP", () => {
     expect(notebook().edges.filter(edge => edge.target === producer.id).map(edge => edge.source)).toEqual(goal.characters.map(character => character.cellId));
     expect((await invoke({ action: "cancel", goal_id: goal.goalId })).status).toBe("cancelled");
     await waitForChainRun(engine, started.chainId!);
+  });
+
+  it("round-trips style edits, defaults old stored plans, and locks style and options after the frame", async () => {
+    const { style: _style, ...withoutStyle } = plan;
+    const created = await create({ plan: withoutStyle });
+    expect(created.plan).toEqual(plan);
+    const document = notebook();
+    const saved = await engine.notebooks.write({ ...document, cells: document.cells.map(cell => cell.id === created.cellId
+      ? { ...cell, inputs: { ...cell.inputs, plan: withoutStyle } } : cell) });
+    expect(saved.ok).toBe(true);
+    expect((await status(created.goalId)).plan).toEqual(plan);
+    const style = goalBriefStyle("IG influencer GRWM");
+    const changed = await invoke({ action: "update", goal_id: created.goalId, revision: created.revision, plan: { ...plan, style } });
+    expect(changed.revision).toBe(2);
+    expect(changed.plan).toMatchObject({ style });
+    expect((await invoke<{ goals: GoalSnapshot[] }>({ action: "list" })).goals[0]!.plan).toMatchObject({ style });
+    expect((await status(created.goalId)).plan).toMatchObject({ style });
+    expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs).not.toHaveProperty("requestedStyle");
+    const frame = await advance(changed, "frame");
+    for (const fixedStyle of [{ id: "cinematic", options: {} }, { ...style, options: { ...style.options, light: "golden-hour" } }]) {
+      const rejected = await raw({ action: "update", goal_id: frame.goalId, revision: frame.revision, plan: { ...frame.plan, style: fixedStyle } });
+      expect(rejected.isError).toBe(true);
+      expect(rejected.content).toEqual([expect.objectContaining({ text: expect.stringContaining("fixed after generating the full frame") })]);
+    }
+    expect((await status(created.goalId)).stages.frame!.outputs[0]!.stale).toBeNull();
+  });
+
+  it("stores detected style while planning and lets an explicit plan override brief keywords", async () => {
+    await pauseBookQueueForTests(bookId);
+    const styledBrief = "@a1 as an IG influencer, GRWM morning routine";
+    const created = await invoke({ action: "create", brief: styledBrief });
+    expect(created).toMatchObject({ status: "planning", plan: null, requestedStyle: goalBriefStyle(styledBrief) });
+    expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs?.requestedStyle).toEqual(goalBriefStyle(styledBrief));
+    expect((await status(created.goalId)).requestedStyle).toEqual(created.requestedStyle);
+    const explicit = await create({ brief: styledBrief });
+    expect(explicit.plan).toMatchObject({ style: { id: "cinematic", options: {} } });
+    expect(explicit).not.toHaveProperty("requestedStyle");
   });
 
   it("advances completed frames and storyboards to separate reviews and pins their inputs for the next stage", async () => {
@@ -340,12 +438,12 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, videos.chainId!);
   });
 
-  it("approves stored runs without attempt logs using the original compiled prompt comparison", async () => {
+  it.each([true, false])("approves stored runs without attempt logs with character labels=%s", async labels => {
     const created = await create();
     const chainId = await seedGoalStage(engine, created.goalId, "frame", { legacy: true });
     const store = engine.settings.get<{ runs: Record<string, NonNullable<ReturnType<typeof getChainRun>>>; requestIndex: Record<string, string> }>("application.chain-runs.v1")!;
     const chain = store.runs[chainId]!;
-    const legend = created.characters.map((character, index) => `@image${index + 1} is Character ${index + 1}: ${character.label}`).join("; ");
+    const legend = created.characters.map((character, index) => `@image${index + 1} is Character ${index + 1}${labels ? `: ${character.label}` : ""}`).join("; ");
     chain.steps[0]!.params.prompt = `${plan.continuity}\n\n${plan.frame.prompt}\n\nReferences: ${legend}.`;
     engine.settings.set("application.chain-runs.v1", store);
     const frame = await status(created.goalId);
@@ -406,7 +504,7 @@ describe("staged video goals through MCP", () => {
     await expect.poll(() => getChainRun(engine, revised.chainId!)?.steps[0]?.childJobIds.length).toBe(1);
     const step = getChainRun(engine, revised.chainId!)!.steps[0]!;
     const job = engine.jobs.queue.list({ type: "generate_gpt_image_2_5" })[0]!;
-    expect(job.payload).toMatchObject({ sourceImageIds: [original.artifactId, ...imageIds], input: { aspect_ratio: "9:16", resolution: "2K", background: "opaque", prompt: expect.stringContaining("Revise @image1: Give Character 1 a red cap") } });
+    expect(job.payload).toMatchObject({ sourceImageIds: [original.artifactId, ...imageIds], input: { aspect_ratio: "9:16", resolution: "2K", background: "opaque", prompt: expect.stringContaining("Change @image1: Give Character 1 a red cap") } });
     expect(step.params.prompt).toContain("@image2: Character 1");
     expect(revised.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: "Give Character 1 a red cap", parentArtifactId: original.artifactId, basePrompt: plan.frame.prompt });
     expect(revised.estimate.still).toEqual(frame.estimate.frame);

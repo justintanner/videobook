@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { GoalPlan, GoalStillStage } from '../../../server/src/goal-plan'
+import { GOAL_STYLE_IDS, goalStyle, goalStyleFragment, resolveGoalStyleOptions } from '../../../server/src/goal-styles'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import { goalPlanSeconds, goalPlansEqual, goalStillStale, type GoalSnapshot } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
@@ -30,6 +31,8 @@ export function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onR
     shot.title.trim() && shot.storyboardPrompt.trim() && shot.videoPrompt.trim() && Number.isInteger(shot.durationSeconds) && shot.durationSeconds >= 4 && shot.durationSeconds <= 30)
   const stage = goal.stage === 'assembly' ? 'videos' : goal.stage
   const initial = stage === 'frame'
+  const style = goalStyle(draft.style.id)
+  const styleAnchors = goalStyleFragment(draft.style, 'frame')
   const staleFrame = !initial && (Boolean(goalStillStale(goal, 'frame', 0)) || draft.frame.prompt !== saved.frame.prompt)
   const staleBoards = stage === 'videos' && draft.shots.some((shot, index) =>
     goalStillStale(goal, 'storyboards', index) || shot.storyboardPrompt !== saved.shots[index]?.storyboardPrompt
@@ -51,10 +54,17 @@ export function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onR
   const heading = <div className="goal-plan-heading">
     <label><span className="sr-only">Video title</span><input value={draft.title} maxLength={120} disabled={disabled} onChange={event => setDraft({ ...draft, title: event.target.value })} /></label>
     <div className="goal-formats" role="radiogroup" aria-label="Format">{formats.map(format => <button type="button" key={format.value} role="radio" aria-checked={draft.aspectRatio === format.value} className="goal-panel-button" disabled={disabled || !initial} onClick={() => setDraft({ ...draft, aspectRatio: format.value })}>{format.label}</button>)}</div>
+    <div className="goal-formats goal-styles" role="radiogroup" aria-label="Style">{GOAL_STYLE_IDS.map(id => <button type="button" key={id} role="radio" aria-checked={draft.style.id === id} className="goal-panel-button" disabled={disabled || !initial} title={goalStyle(id).summary} onClick={() => setDraft({ ...draft, style: { id, options: resolveGoalStyleOptions(id) } })}>{goalStyle(id).label}</button>)}</div>
+    {style.options.length > 0 && <div className="goal-style-options">{style.options.map(option => <label key={option.key}><span>{option.label}</span><select aria-label={option.label} value={draft.style.options[option.key]} disabled={disabled || !initial} onChange={event => {
+      const options = { ...draft.style.options, [option.key]: event.target.value }
+      if (option.key === 'delivery') delete options.camera
+      setDraft({ ...draft, style: { id: style.id, options: resolveGoalStyleOptions(style.id, options) } })
+    }}>{option.choices.map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}</select></label>)}</div>}
   </div>
   const advanced = <details className="goal-disclosure goal-advanced">
     <summary>Advanced</summary>
     <div className="goal-editor-settings">
+      {stage === 'videos' && heading}
       <div className="goal-characters" aria-label="Character images">{goal.characters.map(character => <GoalMedia key={character.cellId} artifactId={character.artifactId} cellId={character.cellId} label={`${character.address} · ${character.label}`} resolveAsset={resolveAsset} onOpen={onSelectCell} />)}</div>
       <div className="goal-advanced-options">
         <label><span>Image model</span><select aria-label="Image model" value={draft.imageModel} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, imageModel: event.target.value as GoalPlan['imageModel'] })}><option value="sunburst">GPT Image 2.5 Sunburst</option><option value="flare">GPT Image 2.5 Flare</option></select></label>
@@ -63,6 +73,7 @@ export function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onR
         <label><span>Ending frames</span><select aria-label="Ending frames" value={draft.frameContinuity ? 'on' : 'off'} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, frameContinuity: event.target.value === 'on' })}><option value="off">Off · Storyboards only</option><option value="on">On · Add ending references</option></select></label>
       </div>
       {draft.frameContinuity && <p className="goal-panel-muted">Adds {draft.shots.length} ending images to guide the final poses alongside each storyboard.</p>}
+      {styleAnchors && <p className="goal-panel-muted goal-style-anchors"><strong>Style anchors</strong> {styleAnchors}</p>}
       <GoalPromptInput label="Characters and visual style" value={draft.continuity} budget="continuity" maxLength={3000} disabled={disabled || !initial} onChange={continuity => setDraft({ ...draft, continuity })} />
       {initial && <GoalPromptInput label="Full frame prompt" value={draft.frame.prompt} budget="frame" disabled={disabled} onChange={prompt => setDraft({ ...draft, frame: { prompt } })} />}
       {initial && draft.frameContinuity && draft.shots.map((shot, index) => <GoalPromptInput key={shot.editorId} label={`Shot ${index + 1} ending frame prompt`} value={shot.endingPrompt ?? ''} placeholder="Final moment from the video prompt" budget="ending" disabled={disabled} onChange={endingPrompt => updateShot(index, { endingPrompt: endingPrompt.trim() ? endingPrompt : null })} />)}

@@ -498,6 +498,25 @@ span.goal-progress-address {
   gap: 12px;
 }
 
+.goal-style-options {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 8px 12px;
+}
+
+.goal-style-options label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #a4cbb6;
+  font-size: 11px;
+}
+
+.goal-style-options select { width: 100%; min-width: 0; }
+.goal-style-anchors { overflow-wrap: anywhere; }
+.goal-style-chip { width: fit-content; }
+
 .goal-brief-line {
   overflow-wrap: anywhere;
   font-size: 11px;

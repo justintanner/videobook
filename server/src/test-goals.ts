@@ -14,11 +14,11 @@ import { goalStillAttempts } from "./goal-stills.js";
 
 export function goalTestPlan(count = 3): GoalPlan {
   return goalPlanSchema.parse({
-    version: 2, title: "The skateboard champion", continuity: "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.", aspectRatio: "9:16",
+    version: 2, title: "The skateboard champion", continuity: "Character 1: terrier, red helmet. Character 2: tabby, blue scarf. Sunny park. Blue skateboard. Warm comic cinema.", aspectRatio: "9:16",
     frame: { prompt: "Both characters stand beside the skateboard in the sunny park, full bodies visible." },
     shots: Array.from({ length: count }, (_, index) => ({
       title: `Park adventure ${index + 1}`, storyboardPrompt: "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
-      videoPrompt: `Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action ${index + 1}.`, durationSeconds: 10,
+      videoPrompt: `Roll, stop. Birds, squeaky wheels. Action ${index + 1}.`, durationSeconds: 10,
     })),
   });
 }

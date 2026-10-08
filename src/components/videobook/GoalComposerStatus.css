@@ -69,6 +69,15 @@
   color: #b9a9f2;
 }
 
+.goal-status-style {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 .goal-status-kind {
   flex: 0 0 auto;
   color: #b9a9f2;
@@ -300,9 +309,19 @@
   }
 
   .goal-status-kind { display: none; }
+  .goal-status-flag { display: none; }
+  .goal-status-button { gap: 4px; padding-inline: 4px; }
+  .goal-status-style { font-size: 9px; padding-inline: 3px; }
   .goal-status-action { display: none; }
   .goal-status-long { display: none; }
   .goal-status-short { display: inline; }
+}
+
+@media (max-width: 360px) {
+  .command-line-shell:has(> .goal-status) {
+    grid-template-areas: 'editor editor editor' 'goal goal goal' 'actions mode send';
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

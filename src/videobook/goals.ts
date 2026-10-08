@@ -1,5 +1,6 @@
 import type { GoalSnapshot } from '../../server/src/tools/goal'
 import type { GoalDisplayPlan, GoalGenerationStage, GoalPlan, GoalStillStage } from '../../server/src/goal-plan'
+import { goalStyle, goalStylesEqual } from '../../server/src/goal-styles'
 
 export type { GoalSnapshot }
 export type GoalShotState = 'planned' | 'waiting' | 'submitting' | 'generating' | 'done' | 'failed' | 'skipped' | 'stopped'
@@ -52,6 +53,7 @@ export function goalPlansEqual(left: GoalPlan, right: GoalPlan): boolean {
     && left.aspectRatio === right.aspectRatio && left.imageModel === right.imageModel
     && left.imageResolution === right.imageResolution && left.videoResolution === right.videoResolution
     && Boolean(left.frameContinuity) === Boolean(right.frameContinuity)
+    && goalStylesEqual(left.style ?? { id: 'cinematic', options: {} }, right.style ?? { id: 'cinematic', options: {} })
     && left.frame.prompt === right.frame.prompt && left.shots.length === right.shots.length
     && left.shots.every((shot, index) => shot.title === right.shots[index]?.title
       && shot.storyboardPrompt === right.shots[index]?.storyboardPrompt
@@ -320,6 +322,7 @@ export type GoalTileView = {
   progressPercent: number
   shotsLabel: string | null
   aspectRatio: string | null
+  styleLabel: string | null
   thumbnails: GoalTileThumbnail[]
 }
 const TILE_ROW_LIMIT = 5
@@ -380,5 +383,7 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
     progressPercent: goal && progress ? overallProgress(goal, progress) : 0,
     shotsLabel: plan ? duration === null ? `${plan.shots.length} clips` : `${plan.shots.length} × ${duration}s` : null,
     aspectRatio: plan?.aspectRatio ?? null, thumbnails,
+    styleLabel: isStagedGoalPlan(plan) ? goalStyle(plan.style?.id ?? 'cinematic').label
+      : goal?.requestedStyle ? goalStyle(goal.requestedStyle.id).label : null,
   }
 }

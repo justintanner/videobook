@@ -1,6 +1,7 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalPlanSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage, type GoalStillStage } from "./goal-plan.js";
+import { goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage, type GoalStillStage } from "./goal-plan.js";
+import type { GoalStyleSelection } from "./goal-styles.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
@@ -63,6 +64,7 @@ export type GoalContent = {
   characters: GoalCharacter[];
   revision: number;
   plan: GoalDisplayPlan | null;
+  requestedStyle?: GoalStyleSelection;
   estimate: GoalEstimates;
 };
 
@@ -129,17 +131,21 @@ function charactersFrom(value: unknown): GoalCharacter[] {
 export function goalContent(cell: NotebookCell): GoalContent {
   const inputs = cell.inputs ?? {};
   const plan = goalPlanSchema.or(legacyGoalPlanSchema).safeParse(inputs.plan);
+  const requestedStyle = goalStyleSchema.safeParse(inputs.requestedStyle);
   return {
     brief: cell.prompt ?? "",
     characters: charactersFrom(inputs.characters),
     revision: typeof inputs.revision === "number" && Number.isInteger(inputs.revision) ? inputs.revision : 0,
     plan: plan.success ? plan.data : null,
+    ...(!plan.success && requestedStyle.success ? { requestedStyle: requestedStyle.data } : {}),
     estimate: estimatesFrom(inputs.estimate),
   };
 }
 
 function goalCellInputs(goalId: string, content: GoalContent): Record<string, unknown> {
-  return { goalId, revision: content.revision, plan: content.plan, characters: content.characters, estimate: content.estimate };
+  return { goalId, revision: content.revision, plan: content.plan, characters: content.characters, estimate: content.estimate,
+    ...(!content.plan && content.requestedStyle ? { requestedStyle: content.requestedStyle } : {}),
+  };
 }
 
 function goalCellText(content: GoalContent): { label: string; prompt: string } {

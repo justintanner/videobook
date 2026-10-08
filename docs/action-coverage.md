@@ -431,7 +431,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | Endpoint | Visible owner | Reason |
 | --- | --- | --- |
 | `upload_file` | `command.upload` | Import opens a native file picker and uploads media through the file workflow; users do not enter base64 data. |
-| `video_goal` | `command.goal` | Goal mode defaults to portrait, reviews a compact plan, keeps selectable still versions and one-line revisions, then separately approves the frame, storyboards and videos. |
+| `video_goal` | `command.goal` | Goal mode defaults to portrait and Cinematic style. IG Influencer adds a hyper-realistic phone-shot style with content format, delivery, camera and light options, fixed after the frame. Review the plan and separately approve the frame, storyboards and videos; still versions remain selectable and revisable. |
 | `assemble_goal` | `command.goal` | Goal mode appends its completed shots to the sequence in order. |
 | `push_chat_history` | `tool.chat` | Compatibility write for composer history; users enter messages through chat. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |

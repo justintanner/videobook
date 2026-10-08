@@ -33,11 +33,11 @@ const styles: Record<GoalStyleId, GoalStyle> = {
     defaults: { aspectRatio: "9:16", imageModel: "sunburst", imageResolution: "2K", videoResolution: "720p" },
     planner: "Use a hyper-realistic Instagram phone-camera register: real-world activity in present tense, one location per shot, candid framing with slight imperfection, light grain, unretouched skin with visible pores and texture. Use the selected iPhone camera and lighting; natural daylight or soft indoor light by default. No HDR crunch, beautify, captions or on-screen text. Avoid cinematic, masterpiece, editorial, Portra, Cinestill and all film-stock vocabulary. Match the delivery: address the camera for selfies, be caught mid-action when filmed by a friend, hold framing steady on a tripod, or show the reflection for a mirror shot. Make the selected content format explicit in the four beats. Sound is ambient room or street sound with an optional short spoken line.",
     fragments: {
-      frame: "hyper-realistic candid photo, unretouched skin, visible pores, light grain",
-      storyboard: "hyper-realistic candid photo, unretouched skin, visible pores, light grain",
-      ending: "hyper-realistic candid photo, unretouched skin, visible pores",
-      video: "hyper-realistic unretouched pores, natural motion, handheld micro-shake, ambient sound, optional short speech",
-      revise: "hyper-realistic candid photo, unretouched skin, visible pores",
+      frame: "hyper-realistic, skin pores, light grain",
+      storyboard: "hyper-realistic, skin pores, light grain",
+      ending: "hyper-realistic, skin pores",
+      video: "hyper-realistic skin pores, natural motion, handheld micro-shake, ambient sound",
+      revise: "hyper-realistic, skin pores",
     },
     banned: ["cinematic", "masterpiece", "editorial", "Portra", "Cinestill"],
     options: [
@@ -119,4 +119,30 @@ export function goalStyleSummary(selection: GoalStyleSelection): string {
   const style = goalStyle(selection.id);
   const options = resolveGoalStyleOptions(selection.id, selection.options);
   return [style.label, ...style.options.map(option => option.choices.find(choice => choice.value === options[option.key])!.label)].join(" · ");
+}
+
+export function goalStylesEqual(left: GoalStyleSelection, right: GoalStyleSelection): boolean {
+  if (left.id !== right.id) return false;
+  const a = resolveGoalStyleOptions(left.id, left.options);
+  const b = resolveGoalStyleOptions(right.id, right.options);
+  return Object.keys(a).every(key => a[key] === b[key]);
+}
+
+function firstKeyword(brief: string, keywords: string[]): number {
+  return Math.min(...keywords.map(keyword => {
+    const pattern = keyword.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/[ -]+/gu, "[\\s-]+");
+    const match = new RegExp(`(^|[^\\p{L}\\p{N}_-])${pattern}(?=$|[^\\p{L}\\p{N}_-])`, "iu").exec(brief);
+    return match ? match.index + match[1]!.length : Infinity;
+  }));
+}
+
+export function goalBriefStyle(brief: string): GoalStyleSelection {
+  const style = GOAL_STYLE_IDS.map(id => ({ style: goalStyle(id), index: firstKeyword(brief, goalStyle(id).briefKeywords) }))
+    .filter(match => Number.isFinite(match.index)).sort((left, right) => left.index - right.index)[0]?.style ?? goalStyle("cinematic");
+  const partial = Object.fromEntries(style.options.flatMap(option => {
+    const choice = option.choices.map(candidate => ({ value: candidate.value, index: firstKeyword(brief, candidate.briefKeywords) }))
+      .filter(match => Number.isFinite(match.index)).sort((left, right) => left.index - right.index)[0];
+    return choice ? [[option.key, choice.value]] : [];
+  }));
+  return { id: style.id, options: resolveGoalStyleOptions(style.id, partial) };
 }

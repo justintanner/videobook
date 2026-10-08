@@ -4,8 +4,10 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest } from "../openai-intelligence.js";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
-import { GOAL_PROMPT_BUDGET, goalBriefConstraints, goalPlannerResponseSchema, goalPromptBudgetIssues, compileFrameSteps, compileStoryboardSteps, compileVideoSteps, type GoalCharacter, type GoalPlan } from "../goal-plan.js";
+import { goalBriefConstraints, goalPlannerResponseSchema, goalPromptBudgetIssues, compileFrameSteps, compileStoryboardSteps, compileVideoSteps, type GoalCharacter, type GoalPlan } from "../goal-plan.js";
 import { goalPlannerBrief } from "../goal-characters.js";
+import { goalBriefStyle, goalStyle } from "../goal-styles.js";
+import { constrainGoalPlannerPlan, goalPlannerInstructions } from "../goal-planner-prompt.js";
 import { readAssetTagSummaries } from "../asset-tags.js";
 import { readGoal, requireGoalContent, saveGoal, writeGoalContent } from "../goal-store.js";
 import type { GoalEstimate, GoalEstimates } from "../goal-store.js";
@@ -41,16 +43,17 @@ export function registerPlanGoalJob(engine: Engine): void {
     const goal = readGoal(engine, goalId);
     if (goal.planVersion !== 2 || goal.status !== "planning") return { goalId };
     try {
-      const { brief, characters } = requireGoalContent(engine, goal);
+      const { brief, characters, requestedStyle } = requireGoalContent(engine, goal);
+      const style = requestedStyle ?? goalBriefStyle(brief);
       const constraints = goalBriefConstraints(brief);
       const tags = readAssetTagSummaries(engine, characters.map(character => character.artifactId));
       const notebook = engine.notebooks.read(goal.notebookId);
       if (!notebook.ok) throw new Error(notebook.error.message);
       const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), chatIntelligenceRequestOptions());
       const request = {
-        instructions: `Plan a coherent short video using the supplied character images. Return the version 2 JSON plan. Use concrete visual nouns and present tense, one action per shot, and one short sound clause per video prompt. No camera-jargon lists or stacked adjectives. Refer to numbered characters. Continuity defines their looks, props, setting and style; never repeat it in shot prompts. The frame shows all characters together. Each storyboard shows four successive moments of its clip in a 2x2 grid: setup, action, reaction, ending. Write storyboardPrompt as four short numbered visual beats showing how poses and expressions change, not one static composition. videoPrompt describes the same action and ending within the duration. Build an opening, escalation and payoff. Word limits: title ${GOAL_PROMPT_BUDGET.title}, continuity ${GOAL_PROMPT_BUDGET.continuity}, frame ${GOAL_PROMPT_BUDGET.frame}, storyboard ${GOAL_PROMPT_BUDGET.storyboard}, ending ${GOAL_PROMPT_BUDGET.ending}, video ${GOAL_PROMPT_BUDGET.video}. Respect shot count, duration and aspect ratio exactly. Default to portrait 9:16; compose vertically with centred or stacked subjects and headroom when using 9:16. Use Sunburst, 2K images and 720p video unless requested otherwise. Set frameContinuity to false and endingPrompt to null. Never put @tokens or grid addresses in prompts; the compiler adds references. Do not run tools, claim media was generated, invent assets or promise perfect continuity.`,
-        input: [{ role: "user" as const, content: JSON.stringify({ brief: goalPlannerBrief(brief, characters, notebook.value), characters: characters.map((character, index) => ({ role: `Character ${index + 1}`, label: character.label, tags: tags.get(character.artifactId)?.effective ?? [] })), ...constraints }) }],
-        text: { format: { type: "json_schema" as const, name: "video_goal_plan", strict: true, schema: z.toJSONSchema(goalPlannerResponseSchema) } },
+        instructions: goalPlannerInstructions(style, constraints),
+        input: [{ role: "user" as const, content: JSON.stringify({ brief: goalPlannerBrief(brief, characters, notebook.value), style: { ...style, label: goalStyle(style.id).label }, characters: characters.map((character, index) => ({ role: `Character ${index + 1}`, label: character.label, tags: tags.get(character.artifactId)?.effective ?? [] })), ...constraints }) }],
+        text: { format: { type: "json_schema" as const, name: "video_goal_plan", strict: true, schema: z.toJSONSchema(goalPlannerResponseSchema.omit({ style: true })) } },
         max_output_tokens: 2500,
       };
       const response = await responses(intelligenceRequest(request, chatIntelligenceRequestOptions()), context.signal);
@@ -65,10 +68,7 @@ export function registerPlanGoalJob(engine: Engine): void {
         if (!parsed.success || goalPromptBudgetIssues(parsed.data).length > 0) throw new Error("The planner wrote prompts that are too long. Try planning again.");
         plan = parsed.data;
       }
-      plan.frameContinuity = false;
-      if (plan.shots.length !== constraints.shotCount) throw new Error("The planner returned a different shot count. Try planning again.");
-      plan.aspectRatio = constraints.aspectRatio;
-      plan.shots = plan.shots.map((shot) => ({ ...shot, durationSeconds: constraints.durationSeconds }));
+      plan = constrainGoalPlannerPlan(plan, brief, style);
       const estimate = await estimateGoal(engine, plan, characters);
       await withNotebookMutation(`goal:${goalId}`, async () => {
         const current = readGoal(engine, goalId);

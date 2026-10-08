@@ -3970,12 +3970,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
     if (!brief) {
       if (!activeComposerGoal) {
-        return { ok: false, message: 'Mention the character images, for example /goal @a1 @a2 as Mr Bean in Thailand, two 10s clips' }
+        return { ok: false, message: 'Mention the character images, for example /goal @a1 as an IG influencer, GRWM morning routine. Cinematic is the default.' }
       }
       openGoalTile(activeComposerGoal.cellId)
       return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
     }
-    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the character images, for example /goal @a1 @a2 ...' }
+    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the character images, for example /goal @a1 as an IG influencer, GRWM morning routine' }
     const scope = { bookId, notebookId: notebook.id }
     const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
     if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {

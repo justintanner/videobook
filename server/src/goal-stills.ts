@@ -30,6 +30,14 @@ function legacyStillPrompt(plan: GoalPlan, characters: readonly GoalCharacter[],
   return `${plan.continuity}\n\nShot ${shotIndex + 1}: ${shot.title}\n${index < plan.shots.length ? shot.storyboardPrompt : ending}\n\nReferences: ${references.join("; ")}.`;
 }
 
+function preStyleStillPrompt(plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, index: number): string {
+  const references = characters.map((_, position) => `@image${position + (stage === "storyboards" ? 2 : 1)} is Character ${position + 1}`);
+  if (stage === "frame") return `${plan.continuity}\n\n${plan.frame.prompt}\n\nReferences: ${references.join("; ")}.`;
+  references.unshift("@image1 is the full frame; keep its characters, setting and style");
+  const shot = plan.shots[index % plan.shots.length]!;
+  return `One ending frame. ${shot.endingPrompt ?? `Final moment: ${shot.videoPrompt}`}\n\nReferences: ${references.join("; ")}.`;
+}
+
 export function goalStillStaleReason(engine: Engine, goal: GoalRecord, document: NotebookDocument, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, output: GoalStageOutput): string | null {
   const name = stage === "frame" ? "Full frame" : `${output.index >= plan.shots.length ? "Ending frame" : "Storyboard"} ${output.index % plan.shots.length + 1}`;
   const run = goal.stages[stage];
@@ -52,5 +60,8 @@ export function goalStillStaleReason(engine: Engine, goal: GoalRecord, document:
   const compiled = stage === "frame" ? compileFrameSteps(plan, characters)[0]!
     : compileStoryboardSteps(plan, characters, frameCell ? notebookGridTag(frameCell.slot) : "", [output.index % plan.shots.length])
       .find(step => step.id === `storyboard${output.index + 1}`);
-  return source?.params.prompt === compiled?.params.prompt || source?.params.prompt === legacyStillPrompt(plan, characters, stage, output.index) ? null : promptError;
+  return source?.params.prompt === compiled?.params.prompt || plan.style.id === "cinematic" && (
+    source?.params.prompt === legacyStillPrompt(plan, characters, stage, output.index)
+    || source?.params.prompt === preStyleStillPrompt(plan, characters, stage, output.index)
+  ) ? null : promptError;
 }

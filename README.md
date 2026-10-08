@@ -54,6 +54,32 @@ at 2K, and Seedance 2.5 at 720p with sound**. Request landscape (16:9) or square
 eight shots. Image model, resolution, continuity and ending-storyboard settings
 sit under **Advanced** in the compact plan review.
 
+**Cinematic** is the default style. **IG Influencer** uses hyper-realistic,
+candid iPhone footage, natural skin texture and simple light. Try
+`/goal @a1 as an IG influencer, GRWM morning routine`. The review offers:
+
+- **Content format:** GRWM (`grwm`, `get ready with me`), OOTD (`ootd`,
+  `outfit of the day`), Day in the life (`day in the life`, `vlog`), Travel reel,
+  Café (`cafe`, `café`, `brunch`), Gym, Skincare, Haul or Storytime.
+- **Delivery:** Selfie to camera (`selfie`, `front camera`), Filmed by a friend
+  (`filmed by`), Tripod or Mirror.
+- **Camera:** iPhone front (`front camera`, `iphone front`) or iPhone main
+  (`main camera`, `iphone main`). The default follows delivery: front for
+  selfies, main otherwise.
+- **Light:** Soft daylight (`soft daylight`, `natural daylight`), Golden hour,
+  Warm indoor light (`warm indoor`, `indoor warm`) or Night flash (`night out`,
+  `flash`).
+
+IG Influencer defaults to Day in the life, Selfie to camera and Soft daylight.
+`ig influencer`, `instagram influencer`, `influencer`, `insta reel` and
+`instagram reel` select it. Matching ignores case and accepts whole words;
+the first style and first option match in the brief win. Embedded names such
+as `Influencerella` do not match; a standalone style word even in a quoted
+label does. Option words alone do not switch away from Cinematic.
+Switching style resets its options. Style and options lock after the first
+frame. **Advanced → Style anchors** shows the compact wording added by the
+compiler; it is separate from editable prompts.
+
 Each paid stage needs a separate approval:
 
 1. **Plan → Frame:** review the title, format and short shot prompts, then
@@ -84,9 +110,11 @@ regenerated or revised into four-panel sheets before video approval.
 Format, image model and resolution, continuity, and shot count stay fixed after
 the first frame; its prompt remains editable at either still review.
 
-Planner word budgets are 8 for titles, 80 for continuity, 50 for the frame,
-40 for each storyboard, 30 for ending prompts and 50 for video prompts. New
-plans use bounded responses and one shortening retry. Saved plans retain their
+Prompts use barebones noun/verb fragments. The storyboard guides the video;
+video prompts add only essential motion and sound. Planner word ceilings are
+6 for titles, 30 for continuity, 20 for the frame, 32 for each storyboard,
+12 for ending prompts and 12 for video prompts. These are ceilings, not targets.
+New plans use bounded responses and one shortening retry. Saved plans retain their
 larger text limits, and word counts guide edits without blocking longer text.
 Only the frame repeats continuity; later requests use compact reference legends.
 
@@ -122,12 +150,24 @@ of plain-text `feedback` without @ references. `regenerate` accepts `stage`
 and `index` for one still, or legacy `shot_indexes` to regenerate selected
 storyboard pairs. Execution state and attempt history use scoped engine settings.
 
+The version-2 `plan` accepted by `create` and `update` can include
+`"style": { "id": "ig-influencer", "options": { "format": "grwm", "delivery": "selfie-to-camera", "camera": "iphone-front", "light": "soft-daylight" } }`.
+Missing options use the style defaults; unknown keys or choices are rejected.
+Omitting `style` means `{"id":"cinematic","options":{}}`, including in older
+stored plans. An explicit plan's style takes precedence over brief keywords.
+
 The provider-free browser check runs with `npm run test:e2e -- tests/v2/goal-ui.e2e.test.ts`.
-A separate paid check uses `VIDEOBOOK_RUN_MODEL_E2E=1 op run --env-file=.env.tpl -- npx vitest run --config vitest.goal-live.config.ts`.
+A separate paid check uses `VIDEOBOOK_RUN_MODEL_E2E=1 op run --env-file=.env.tpl -- npx vitest run --config vitest.goal-live.config.ts -t "IG Influencer goal with real providers"`.
+Choose `Cinematic goal with real providers` for the original scenario.
 It uses two portrait 4-second 480p clips, 1K images, and one revision at each
 still stage. It checks version selection, prompts, portrait media and identity,
 requires a media estimate below $3, and preserves its scratch book and spend records. The ordinary test setup keeps its network and
 credential restrictions.
+The IG test uses the checked-in NASA portrait from
+[scikit-image's public-domain astronaut sample](https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut)
+as a face reference. Its generated GRWM sequence is synthetic test media.
+Review the preserved outputs for identity, skin texture, phone-camera appearance,
+four visible story beats, sound and the absence of grids or borders in video.
 
 ## Storage
 

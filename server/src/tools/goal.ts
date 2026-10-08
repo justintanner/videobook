@@ -7,6 +7,7 @@ import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
 import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalStillPrompt, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
+import { goalBriefStyle, goalStylesEqual } from "../goal-styles.js";
 import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileGoal } from "../goal-state.js";
 import { goalStillAttempts, goalStillStaleReason } from "../goal-stills.js";
 import {
@@ -192,7 +193,10 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
     const plan = args.plan === undefined ? null : goalPlanSchema.parse(args.plan);
     const estimate = plan ? await estimateGoal(engine, plan, characters) : emptyGoalEstimates();
     const goalId = uuidv7();
-    const cell = await createGoalCell(engine, notebookId, goalId, { brief, characters, revision: plan ? 1 : 0, plan, estimate });
+    const cell = await createGoalCell(engine, notebookId, goalId, {
+      brief, characters, revision: plan ? 1 : 0, plan, estimate,
+      ...(!plan ? { requestedStyle: goalBriefStyle(brief) } : {}),
+    });
     const timestamp = new Date().toISOString();
     const goal = saveGoal(engine, {
       goalId, bookId, notebookId, cellId: cell.id, requestId, status: plan ? "review" : "planning", planVersion: 2, stage: "frame", stages: {},
@@ -206,7 +210,7 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
 function validateReviewEdit(goal: GoalRecord, previous: GoalPlan, plan: GoalPlan): void {
   if (goal.stage === "frame") return;
   if (previous.aspectRatio !== plan.aspectRatio || previous.imageModel !== plan.imageModel || previous.imageResolution !== plan.imageResolution
-    || previous.continuity !== plan.continuity || previous.shots.length !== plan.shots.length) {
+    || previous.continuity !== plan.continuity || previous.shots.length !== plan.shots.length || !goalStylesEqual(previous.style, plan.style)) {
     throw new Error("The characters, visual style, format and shot count are fixed after generating the full frame. Start a new goal to change them.");
   }
   if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending frames before generating the full frame. Start a new goal to change this setting.");
@@ -295,7 +299,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, four-panel storyboards and videos. Each storyboard is a 2x2 sequence of setup, action, reaction and ending; videos use the sheet as a reference, never as a literal first frame. Legacy single-frame previews need regeneration or revision before video approval. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older storyboard actions, durations, prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending frames; each can be revised independently, and video uses the storyboard plus its ending reference. update saves edits; cancel stops a running still revision or regeneration and returns to its review with the previous version, otherwise it stops the goal; retry resumes failed work, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
+    description: "Create a video goal from character images in Cinematic (default) or IG Influencer style. IG Influencer is hyper-realistic iPhone footage; mention the style and GRWM, OOTD or another content format, delivery, camera and light in the brief, or supply plan.style with id and options. Style and its options are editable before the full frame and fixed afterwards. Default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, four-panel storyboards and videos. Each storyboard is a 2x2 sequence of setup, action, reaction and ending; videos use the sheet as a reference, never as a literal first frame. Legacy single-frame previews need regeneration or revision before video approval. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older storyboard actions, durations, prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending frames; each can be revised independently, and video uses the storyboard plus its ending reference. update saves edits; cancel stops a running still revision or regeneration and returns to its review with the previous version, otherwise it stops the goal; retry resumes failed work, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine"]),
