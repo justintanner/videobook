@@ -539,6 +539,10 @@ span.goal-progress-address {
   height: 210px;
 }
 
+.goal-still-card[data-storyboard='true'] > .goal-media img {
+  height: clamp(200px, 32dvh, 360px);
+}
+
 .goal-versions {
   display: flex;
   gap: 6px;
@@ -597,6 +601,7 @@ span.goal-progress-address {
 
 @media (max-width: 600px) {
   .goal-still-card[data-stage='frame'] { grid-template-columns: minmax(0, 1fr); }
+  .goal-still-card[data-storyboard='true'] > .goal-media img { height: min(210px, 32dvh); }
   .goal-plan-heading { gap: 8px; }
   .goal-panel-primary { max-width: 100%; }
 }

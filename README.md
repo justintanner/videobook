@@ -64,9 +64,10 @@ Each paid stage needs a separate approval:
 3. **Storyboards → Videos:** use the same revision and version-selection loop
    for each storyboard. **Back to frame** lets you revise or regenerate the
    full frame again. Choose **Use these storyboards · Generate videos** when
-   every selected still is current. Each clip uses its storyboard as its first
-   frame; Seedance's adaptive format follows that image. Character appearance
-   comes through the storyboard, without separate video reference arrays.
+   every selected still is current. Each storyboard is a four-panel 2×2 sheet
+   showing setup, action, reaction and ending, read left to right, then top to
+   bottom. Seedance uses it as a visual sequence reference for a full-screen
+   video in the chosen format; the grid and panel numbers stay out of the video.
 4. **Combine:** multiple clips append in order after existing sequence content,
    using actual media durations. A single clip finishes without assembly.
    **Combine into one video** renders a shareable MP4 locally with the clips'
@@ -77,6 +78,9 @@ image and preserve the earlier one. A selected still made from an older plan
 prompt cannot be approved until it is regenerated, revised, or its prompt is
 restored. Changing the selected full frame preserves the old storyboards but
 marks them stale until they are regenerated or revised against that frame.
+Editing a shot's action, duration or storyboard prompt also requires a refreshed
+storyboard. Older single-frame previews stay available as versions but must be
+regenerated or revised into four-panel sheets before video approval.
 Format, image model and resolution, continuity, and shot count stay fixed after
 the first frame; its prompt remains editable at either still review.
 
@@ -87,10 +91,11 @@ larger text limits, and word counts guide edits without blocking longer text.
 Only the frame repeats continuity; later requests use compact reference legends.
 
 The primary button saves pending edits first; Cmd/Ctrl+Enter does the same.
-**Ending storyboards** is off by default. Enable it under Advanced before the
+**Ending frames** is off by default. Enable it under Advanced before the
 frame to add an ending image per shot. A blank ending prompt uses the final
 moment of the video prompt. Each ending image can be revised or regenerated
-independently, and its clip uses the approved starting and ending images.
+independently. Its clip uses the storyboard and ending image as visual
+references; the ending image guides the final pose and composition.
 
 Stage and per-image estimates label paid approvals. Every revision or fresh
 generation incurs its image cost again. Planning requires `OPENAI_API_KEY`

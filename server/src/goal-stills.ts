@@ -11,6 +11,7 @@ export function goalStillAttempts(goal: GoalRecord, plan: GoalPlan, stage: GoalS
     return {
       stage, index, chainId, stepId: step.id, artifactId: null, cellId: null,
       basePrompt: goalStillPrompt(plan, stage, index), feedback,
+      ...(stage === "storyboards" && index < plan.shots.length ? { storyboardLayout: "four-panel" as const } : {}),
       parentArtifactId: feedback ? goal.stages[stage]?.outputs.find(output => output.index === index)?.artifactId ?? null : null,
       frameArtifactId: stage === "storyboards" ? goal.stages.frame?.outputs[0]?.artifactId ?? null : null,
       createdAt,
@@ -30,9 +31,12 @@ function legacyStillPrompt(plan: GoalPlan, characters: readonly GoalCharacter[],
 }
 
 export function goalStillStaleReason(engine: Engine, goal: GoalRecord, document: NotebookDocument, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, output: GoalStageOutput): string | null {
-  const name = stage === "frame" ? "Full frame" : `${output.index >= plan.shots.length ? "Ending storyboard" : "Storyboard"} ${output.index % plan.shots.length + 1}`;
+  const name = stage === "frame" ? "Full frame" : `${output.index >= plan.shots.length ? "Ending frame" : "Storyboard"} ${output.index % plan.shots.length + 1}`;
   const run = goal.stages[stage];
   const attempt = run?.attempts?.find(item => item.index === output.index && item.artifactId === output.artifactId);
+  if (stage === "storyboards" && output.index < plan.shots.length && attempt?.storyboardLayout !== "four-panel") {
+    return `${name} is a legacy single-frame preview. Regenerate or revise it to create a four-panel storyboard.`;
+  }
   const promptError = `${name} was made from an older prompt. Regenerate or revise it, or restore the prompt.`;
   const frameError = `${name} was made from an older full frame. Regenerate the storyboards.`;
   if (attempt) {

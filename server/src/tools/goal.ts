@@ -106,7 +106,7 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
     : stage === "frame" ? compileFrameSteps(plan, characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes.map(position => position % plan.shots.length))
       .filter(step => index === null || step.id === `storyboard${index + 1}`)
-      : compileVideoSteps(goal.goalId, plan, characters,
+      : compileVideoSteps(goal.goalId, plan,
         plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
         plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
   if (stage !== "frame") {
@@ -209,7 +209,7 @@ function validateReviewEdit(goal: GoalRecord, previous: GoalPlan, plan: GoalPlan
     || previous.continuity !== plan.continuity || previous.shots.length !== plan.shots.length) {
     throw new Error("The characters, visual style, format and shot count are fixed after generating the full frame. Start a new goal to change them.");
   }
-  if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending storyboards before generating the full frame. Start a new goal to change this setting.");
+  if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending frames before generating the full frame. Start a new goal to change this setting.");
 }
 
 async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
@@ -295,7 +295,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, storyboards and videos. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending storyboards; each can be revised independently, and video uses the approved pair. update saves edits; cancel stops a running still revision or regeneration and returns to its review with the previous version, otherwise it stops the goal; retry resumes failed work, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
+    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, four-panel storyboards and videos. Each storyboard is a 2x2 sequence of setup, action, reaction and ending; videos use the sheet as a reference, never as a literal first frame. Legacy single-frame previews need regeneration or revision before video approval. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older storyboard actions, durations, prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending frames; each can be revised independently, and video uses the storyboard plus its ending reference. update saves edits; cancel stops a running still revision or regeneration and returns to its review with the previous version, otherwise it stops the goal; retry resumes failed work, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine"]),

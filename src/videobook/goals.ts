@@ -76,7 +76,7 @@ function revisionLabel(goal: GoalSnapshot): string | null {
   if (!attempt) return null
   if (attempt.stage === 'frame') return 'frame'
   const count = goal.plan?.shots.length ?? 1
-  return `${attempt.index >= count ? 'ending storyboard' : 'storyboard'} ${attempt.index % count + 1}`
+  return `${attempt.index >= count ? 'ending frame' : 'storyboard'} ${attempt.index % count + 1}`
 }
 
 export function goalCanRetry(goal: GoalSnapshot): boolean {

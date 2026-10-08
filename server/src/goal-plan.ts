@@ -109,9 +109,7 @@ export function goalBriefConstraints(brief: string): {
   return { shotCount, durationSeconds, aspectRatio };
 }
 
-function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | "first" | "pair" | null = null): string {
-  if (frame === "pair") return "Begin at @firstframe; end at @lastframe. Keep their characters, setting and style.";
-  if (frame === "first") return "Begin at @firstframe. Keep its characters, setting and style.";
+function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | null = null): string {
   const references = characters.map((_, index) => `@image${index + (frame === "full" ? 2 : 1)} is Character ${index + 1}`);
   if (frame === "full") references.unshift("@image1 is the full frame; keep its characters, setting and style");
   return `References: ${references.join("; ")}.`;
@@ -131,13 +129,17 @@ export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalChara
   return [{ id: "frame", tool: GOAL_IMAGE_TOOLS[plan.imageModel], params: goalFrameParams(plan, characters) }];
 }
 
+function storyboardLayoutPrompt(plan: GoalPlan): string {
+  return `Create a four-panel storyboard sheet in a 2x2 grid, read left to right, top to bottom: 1 setup, 2 action, 3 reaction, 4 ending. Show distinct successive moments, each composed ${plan.aspectRatio}. Thin gutters; numbers 1–4 only, no captions.`;
+}
+
 export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
   const frames = [...indexes.map(index => ({ index, ending: false })), ...(plan.frameContinuity ? indexes.map(index => ({ index, ending: true })) : [])];
   return frames.map(({ index, ending }) => ({
     id: `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `Shot ${index + 1}: ${plan.shots[index]!.title}. ${ending ? goalEndingPrompt(plan, index) : plan.shots[index]!.storyboardPrompt}\n\n${goalReferenceLegend(characters, "full")}`,
+      prompt: `${ending ? `One ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan)}\n\n${goalStillPrompt(plan, "storyboards", index)}`}\n\n${goalReferenceLegend(characters, "full")}`,
       image_refs: [frame, ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio,
       resolution: plan.imageResolution,
@@ -153,13 +155,17 @@ function goalEndingPrompt(plan: GoalPlan, index: number): string {
 
 export function goalStillPrompt(plan: GoalPlan, stage: GoalStillStage, index: number): string {
   if (stage === "frame" && index === 0) return plan.frame.prompt;
-  if (stage === "storyboards" && index >= 0 && index < plan.shots.length) return plan.shots[index]!.storyboardPrompt;
+  if (stage === "storyboards" && index >= 0 && index < plan.shots.length) {
+    const shot = plan.shots[index]!;
+    return `Shot ${index + 1}: ${shot.title} (${shot.durationSeconds}s). ${shot.storyboardPrompt}\nAction: ${shot.videoPrompt}`;
+  }
   if (stage === "storyboards" && plan.frameContinuity && index >= plan.shots.length && index < plan.shots.length * 2) return goalEndingPrompt(plan, index - plan.shots.length);
   throw new Error("There is no still at this stage and index");
 }
 
 export function compileReviseStillStep(plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, index: number, current: string, feedback: string, frame?: string): ChainStep {
   const basePrompt = goalStillPrompt(plan, stage, index);
+  const storyboard = stage === "storyboards" && index < plan.shots.length;
   if (stage === "storyboards" && !frame) throw new Error("Choose a full frame before revising storyboards");
   const references = ["@image1: previous version", ...(frame ? ["@image2: full frame"] : []),
     ...characters.map((_, position) => `@image${position + (frame ? 3 : 2)}: Character ${position + 1}`)];
@@ -167,19 +173,18 @@ export function compileReviseStillStep(plan: GoalPlan, characters: readonly Goal
     id: stage === "frame" ? "frame" : `storyboard${index + 1}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${basePrompt}\n\nRevise @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep everything else the same.\n\n${references.join("; ")}.`,
+      prompt: `${storyboard ? `${storyboardLayoutPrompt(plan)}\n\n` : ""}${basePrompt}\n\nRevise @image1: ${feedback.replace(/[.!?]+$/u, "")}. ${storyboard ? "Keep unaffected details; expand a single-frame input into all four moments." : "Keep everything else the same."}\n\n${references.join("; ")}.`,
       image_refs: [current, ...(frame ? [frame] : []), ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio, resolution: plan.imageResolution, background: "opaque",
     },
   };
 }
 
-function goalShotParams(plan: GoalPlan, index: number, characters: readonly GoalCharacter[], storyboard: string, ending?: string): Record<string, unknown> {
+function goalShotParams(plan: GoalPlan, index: number, storyboard: string, ending?: string): Record<string, unknown> {
   const shot = plan.shots[index]!;
   return {
-    prompt: `Shot ${index + 1}: ${shot.title}. ${shot.videoPrompt}\n\n${goalReferenceLegend(characters, ending ? "pair" : "first")}`,
-    first_frame_ref: storyboard,
-    ...(ending ? { last_frame_ref: ending } : {}),
+    prompt: `Shot ${index + 1}: ${shot.title}. ${shot.videoPrompt}\n\n@image1 is a four-panel storyboard: follow its moments left to right, top to bottom as one full-screen video. Preserve characters, setting and style. Never show the grid, borders or panel numbers.${ending ? " Use @image2 for the ending pose and composition." : ""}`,
+    image_refs: [storyboard, ...(ending ? [ending] : [])],
     duration: String(shot.durationSeconds),
     aspect_ratio: plan.aspectRatio,
     resolution: plan.videoResolution,
@@ -187,14 +192,14 @@ function goalShotParams(plan: GoalPlan, index: number, characters: readonly Goal
   };
 }
 
-export function compileVideoSteps(goalId: string, plan: GoalPlan, characters: readonly GoalCharacter[], storyboards: readonly string[], endings: readonly string[] = []): ChainStep[] {
+export function compileVideoSteps(goalId: string, plan: GoalPlan, storyboards: readonly string[], endings: readonly string[] = []): ChainStep[] {
   if (storyboards.length !== plan.shots.length) throw new Error("Approve a storyboard for every shot before generating videos");
-  if (plan.frameContinuity && endings.length !== plan.shots.length) throw new Error("Approve an ending storyboard for every shot before generating videos");
+  if (plan.frameContinuity && endings.length !== plan.shots.length) throw new Error("Approve an ending frame for every shot before generating videos");
   const steps: ChainStep[] = [
     ...plan.shots.map((_, index) => ({
       id: `shot${index + 1}`,
       tool: GOAL_VIDEO_TOOL,
-      params: goalShotParams(plan, index, characters, storyboards[index]!, plan.frameContinuity ? endings[index] : undefined),
+      params: goalShotParams(plan, index, storyboards[index]!, plan.frameContinuity ? endings[index] : undefined),
     })),
   ];
   if (plan.shots.length > 1) steps.push({

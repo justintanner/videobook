@@ -16,6 +16,7 @@ export type GoalStillAttempt = {
   artifactId: string | null;
   cellId: string | null;
   basePrompt: string;
+  storyboardLayout?: "four-panel";
   feedback: string | null;
   parentArtifactId: string | null;
   frameArtifactId: string | null;

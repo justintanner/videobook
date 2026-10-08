@@ -33,6 +33,7 @@ export function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onR
   const staleFrame = !initial && (Boolean(goalStillStale(goal, 'frame', 0)) || draft.frame.prompt !== saved.frame.prompt)
   const staleBoards = stage === 'videos' && draft.shots.some((shot, index) =>
     goalStillStale(goal, 'storyboards', index) || shot.storyboardPrompt !== saved.shots[index]?.storyboardPrompt
+    || shot.videoPrompt !== saved.shots[index]?.videoPrompt || shot.durationSeconds !== saved.shots[index]?.durationSeconds || shot.title !== saved.shots[index]?.title
     || draft.frameContinuity && (goalStillStale(goal, 'storyboards', index + draft.shots.length) || (shot.endingPrompt ?? shot.videoPrompt) !== (saved.shots[index]?.endingPrompt ?? saved.shots[index]?.videoPrompt)))
   const canApprove = !disabled && valid && !staleFrame && !staleBoards
   const estimate = goal.estimate[stage]
@@ -59,12 +60,12 @@ export function GoalReview({ goal, plan: saved, disabled, onSave, onApprove, onR
         <label><span>Image model</span><select aria-label="Image model" value={draft.imageModel} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, imageModel: event.target.value as GoalPlan['imageModel'] })}><option value="sunburst">GPT Image 2.5 Sunburst</option><option value="flare">GPT Image 2.5 Flare</option></select></label>
         <label><span>Image resolution</span><select aria-label="Image resolution" value={draft.imageResolution} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, imageResolution: event.target.value as GoalPlan['imageResolution'] })}><option value="1K">1K</option><option value="2K">2K</option></select></label>
         <label><span>Video resolution</span><select aria-label="Video resolution" value={draft.videoResolution} disabled={disabled} onChange={event => setDraft({ ...draft, videoResolution: event.target.value as GoalPlan['videoResolution'] })}><option value="480p">480p</option><option value="720p">720p</option></select></label>
-        <label><span>Ending storyboards</span><select aria-label="Ending storyboards" value={draft.frameContinuity ? 'on' : 'off'} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, frameContinuity: event.target.value === 'on' })}><option value="off">Off · Starting frames only</option><option value="on">On · Starting and ending frames</option></select></label>
+        <label><span>Ending frames</span><select aria-label="Ending frames" value={draft.frameContinuity ? 'on' : 'off'} disabled={disabled || !initial} onChange={event => setDraft({ ...draft, frameContinuity: event.target.value === 'on' })}><option value="off">Off · Storyboards only</option><option value="on">On · Add ending references</option></select></label>
       </div>
-      {draft.frameContinuity && <p className="goal-panel-muted">Adds {draft.shots.length} ending images. Each video uses its approved starting and ending frames.</p>}
+      {draft.frameContinuity && <p className="goal-panel-muted">Adds {draft.shots.length} ending images to guide the final poses alongside each storyboard.</p>}
       <GoalPromptInput label="Characters and visual style" value={draft.continuity} budget="continuity" maxLength={3000} disabled={disabled || !initial} onChange={continuity => setDraft({ ...draft, continuity })} />
       {initial && <GoalPromptInput label="Full frame prompt" value={draft.frame.prompt} budget="frame" disabled={disabled} onChange={prompt => setDraft({ ...draft, frame: { prompt } })} />}
-      {initial && draft.frameContinuity && draft.shots.map((shot, index) => <GoalPromptInput key={shot.editorId} label={`Shot ${index + 1} ending storyboard prompt`} value={shot.endingPrompt ?? ''} placeholder="Final moment from the video prompt" budget="ending" disabled={disabled} onChange={endingPrompt => updateShot(index, { endingPrompt: endingPrompt.trim() ? endingPrompt : null })} />)}
+      {initial && draft.frameContinuity && draft.shots.map((shot, index) => <GoalPromptInput key={shot.editorId} label={`Shot ${index + 1} ending frame prompt`} value={shot.endingPrompt ?? ''} placeholder="Final moment from the video prompt" budget="ending" disabled={disabled} onChange={endingPrompt => updateShot(index, { endingPrompt: endingPrompt.trim() ? endingPrompt : null })} />)}
     </div>
   </details>
   const shots = <div className="goal-editor-shots">

@@ -17,16 +17,24 @@ export function goalTestPlan(count = 3): GoalPlan {
     version: 2, title: "The skateboard champion", continuity: "Character 1 is a scruffy terrier in a red helmet. Character 2 is a tabby in a blue scarf. Both share a sunny park, a blue skateboard and warm comic cinema.", aspectRatio: "9:16",
     frame: { prompt: "Both characters stand beside the skateboard in the sunny park, full bodies visible." },
     shots: Array.from({ length: count }, (_, index) => ({
-      title: `Park adventure ${index + 1}`, storyboardPrompt: `Character 1 balances on the skateboard while Character 2 watches, composition ${index + 1}.`,
+      title: `Park adventure ${index + 1}`, storyboardPrompt: "1. Character 1 mounts the board. 2. Rolls forward. 3. Character 2 gasps. 4. Both grin.",
       videoPrompt: `Character 1 glides past Character 2, then comes to a comic stop. Tracking camera, birds and squeaking wheels, action ${index + 1}.`, durationSeconds: 10,
     })),
   });
 }
 
-async function goalTestImage(engine: Engine, label: string, color = "#cf593b"): Promise<string> {
+async function goalTestImage(engine: Engine, label: string, color = "#cf593b", storyboardAspect?: GoalPlan["aspectRatio"]): Promise<string> {
   const created = await engine.artifacts.create("image", label);
   if (!created.ok) throw new Error(created.error.message);
-  const bytes = await sharp({ create: { width: 96, height: 128, channels: 3, background: color } }).png().toBuffer();
+  const [width, height] = storyboardAspect === "16:9" ? [640, 360] : storyboardAspect === "1:1" ? [480, 480] : [360, 640];
+  const panels = ["#cf593b", "#2878b4", "#659653", "#9d70bc"].map((fill, index) => {
+    const x = (index % 2) * width / 2;
+    const y = Math.floor(index / 2) * height / 2;
+    return `<g transform="translate(${x} ${y})"><rect x="4" y="4" width="${width / 2 - 8}" height="${height / 2 - 8}" fill="${fill}"/><text x="16" y="34" fill="white" font-size="24">${index + 1}</text><circle cx="${width / 8 + index * 12}" cy="${height / 4}" r="18" fill="#f5ead9"/></g>`;
+  }).join("");
+  const bytes = storyboardAspect
+    ? await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#f5ead9"/>${panels}</svg>`)).png().toBuffer()
+    : await sharp({ create: { width: 96, height: 128, channels: 3, background: color } }).png().toBuffer();
   const written = await engine.files.write(created.value.artifactId, "original.png", bytes);
   if (!written.ok) throw new Error(written.error.message);
   return created.value.artifactId;
@@ -75,7 +83,7 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, content.characters, stage, revise.index, parent!.address!, revise.feedback, stage === "storyboards" ? frame : undefined)]
     : stage === "frame" ? compileFrameSteps(plan, content.characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, content.characters, frame, options.indexes)
-      : compileVideoSteps(goalId, plan, content.characters, storyboards, endings);
+      : compileVideoSteps(goalId, plan, storyboards, endings);
   const defs = getAllToolDefs(engine);
   const checked = await preflightChainPlan({ action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId, steps }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId, toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),
@@ -91,7 +99,7 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
     const skipped = options.failedIndex !== undefined && position > options.failedIndex;
     let outputs: Record<string, unknown> | null = null;
     if (!fails && !skipped) {
-      const artifactId = options.videoIds?.[index] ?? await goalTestImage(engine, step.id, index % 2 ? "#2878b4" : "#cf593b");
+      const artifactId = options.videoIds?.[index] ?? await goalTestImage(engine, step.id, index % 2 ? "#2878b4" : "#cf593b", stage === "storyboards" && index < plan.shots.length ? plan.aspectRatio : undefined);
       const placed = await placeChainGeneration({ engine, notebookId: goal.notebookId, tool: step.tool, placement: stage === "videos" ? "generate_video" : "generate_image", params: step.params, artifactId, runId: `${chainId}:${step.id}`, pins: step.pins });
       outputs = { asset_id: artifactId, [stage === "videos" ? "vid_asset_id" : "img_asset_id"]: artifactId, cell_id: placed.outputCellId, address: placed.address, status: "completed" };
     }

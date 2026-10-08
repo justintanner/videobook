@@ -6,15 +6,16 @@ import { GoalPromptInput } from './GoalPromptInput'
 
 type AssetResolver = (artifactId: string) => AssetRecord | null
 
-export function GoalMedia({ artifactId, cellId, label, resolveAsset, onOpen }: {
+export function GoalMedia({ artifactId, cellId, label, resolveAsset, onOpen, fullResolution = false }: {
   artifactId: string
   cellId: string | null
   label: string
   resolveAsset: AssetResolver
   onOpen: (cellId: string) => void
+  fullResolution?: boolean
 }) {
   const asset = resolveAsset(artifactId)
-  const url = asset?.thumbnailUrl ?? asset?.mediaUrl
+  const url = fullResolution ? asset?.mediaUrl ?? asset?.thumbnailUrl : asset?.thumbnailUrl ?? asset?.mediaUrl
   return <button type="button" className="goal-media" disabled={!cellId} onClick={() => { if (cellId) onOpen(cellId) }} aria-label={`Open ${label}`}>
     {url ? <img src={url} alt={label} /> : <span className="goal-media-pending">Preview pending</span>}
     <span>{label}</span>
@@ -40,15 +41,17 @@ export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerat
   if (!output) return null
   const count = goal.plan?.shots.length ?? 1
   const ending = stage === 'storyboards' && index >= count
-  const label = stage === 'frame' ? 'Full frame' : `${ending ? 'Ending storyboard' : 'Storyboard'} ${index % count + 1}`
+  const storyboard = stage === 'storyboards' && !ending
+  const label = stage === 'frame' ? 'Full frame' : `${ending ? 'Ending frame' : 'Storyboard'} ${index % count + 1}`
   const versions = goalStillVersions(goal, stage, index)
   const stale = goalStillStale(goal, stage, index)
   const estimate = stage === 'frame' ? goal.estimate.frame.usd : goal.estimate.still.usd
   const validFeedback = Boolean(feedback.trim()) && !feedback.includes('@')
   const revise = () => { if (!disabled && canGenerate && validFeedback) onRevise(feedback.trim()) }
-  return <section className="goal-still-card" aria-label={label} data-stage={stage}>
-    <GoalMedia artifactId={output.artifactId} cellId={output.cellId} label={label} resolveAsset={resolveAsset} onOpen={onOpen} />
+  return <section className="goal-still-card" aria-label={label} data-stage={stage} data-storyboard={storyboard}>
+    <GoalMedia artifactId={output.artifactId} cellId={output.cellId} label={label} resolveAsset={resolveAsset} onOpen={onOpen} fullResolution={storyboard} />
     <div className="goal-still-tools">
+      {storyboard && !stale && <p className="goal-panel-muted">Read left to right, then top to bottom.</p>}
       <div className="goal-versions" aria-label={`${label} versions`}>
         {versions.map((version, position) => {
           const asset = version.artifactId ? resolveAsset(version.artifactId) : null
@@ -73,7 +76,7 @@ export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerat
       {feedback.includes('@') && <p className="goal-panel-muted">Describe the change without @ references.</p>}
       <details className="goal-disclosure">
         <summary>Prompt</summary>
-        <GoalPromptInput label={stage === 'frame' ? 'Full frame prompt' : ending ? 'Ending storyboard prompt' : 'Storyboard prompt'} name={stage === 'frame' ? 'Full frame prompt' : `Shot ${index % count + 1} ${ending ? 'ending storyboard' : 'storyboard'} prompt`} budget={stage === 'frame' ? 'frame' : ending ? 'ending' : 'storyboard'} value={prompt} disabled={disabled} onChange={onPromptChange} />
+        <GoalPromptInput label={stage === 'frame' ? 'Full frame prompt' : ending ? 'Ending frame prompt' : 'Storyboard prompt'} name={stage === 'frame' ? 'Full frame prompt' : `Shot ${index % count + 1} ${ending ? 'ending frame' : 'storyboard'} prompt`} budget={stage === 'frame' ? 'frame' : ending ? 'ending' : 'storyboard'} value={prompt} disabled={disabled} onChange={onPromptChange} />
         <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate} onClick={onRegenerate}>Save and regenerate</button>
       </details>
     </div>
