@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerGoal, goalCanRetry, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
+import { composerGoal, goalCanRetry, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalStopLabel, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
 import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 
 type Step = GoalSnapshot['steps'][number]
@@ -156,10 +156,13 @@ describe('staged goal model', () => {
     expect(goalWake(goal({ stage: 'videos' }), current)?.from).toBe('Revising storyboard 2')
     expect(goalWake(current, { ...current, status: 'review', stage: 'videos' })?.from).toBe('Storyboard 2 revised')
     expect(goalGenerationMarks([current]).get('storyboards-producer-1')).toBe('SB 2 v2 · @a3')
-    const stopped = { ...current, status: 'cancelled' as const }
-    expect(goalCanRetry(stopped)).toBe(true)
-    expect(goalStatusLine(stopped).action).toBe('Retry')
-    expect(goalCanRetry(goal({ status: 'cancelled' }))).toBe(false)
+    expect(goalCanRetry({ ...current, status: 'cancelled' })).toBe(false)
+    expect(goalStatusLine({ ...current, status: 'cancelled' }).action).toBeNull()
+    expect(goalStopLabel(current)).toBe('Stop goal')
+    expect(goalStopLabel({ ...current, resumeStage: 'videos' })).toBe('Stop revision')
+    expect(goalStopLabel({ ...current, resumeStage: 'videos', stages: { ...current.stages, storyboards: { ...stage, attempts: [original] } } })).toBe('Stop regeneration')
+    const stoppedRun = { ...stage, chainId: 'older-chain', previousChainIds: ['storyboards-chain'] }
+    expect(goalWake(current, { ...current, status: 'review', stage: 'videos', chainId: 'older-chain', stages: { ...current.stages, storyboards: stoppedRun } })?.from).toBe('Storyboard 2 revision stopped')
     const frame = running('frame', ['running'])
     frame.stages.frame!.attempts = [{ ...revised, stage: 'frame', index: 0, stepId: 'frame', chainId: frame.chainId! }]
     expect(goalStatusLine(frame, 12).text).toBe('Revising frame · Generating 0:12')

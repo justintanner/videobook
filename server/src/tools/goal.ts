@@ -137,7 +137,7 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   const previous = goal.stages[stage];
   const approvedAt = new Date().toISOString();
   return saveGoal(engine, {
-    ...goal, stage, chainId: chain.chainId, status: "running", error: null,
+    ...goal, stage, chainId: chain.chainId, status: "running", error: null, resumeStage: regenerate ? goal.stage : null,
     ...(stage === "videos" ? { clipIds: plan.shots.map(() => uuidv7()), trackId: track?.trackId ?? null } : {}),
     stages: { ...goal.stages, [stage]: {
       chainId: chain.chainId, revision: content.revision, approvedAt, shotIndexes: indexes,
@@ -225,8 +225,25 @@ async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Pro
   return saveGoal(engine, goal);
 }
 
-async function cancelGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+function stopStillRun(engine: Engine, goal: GoalRecord): GoalRecord | null {
+  const stage = activeGoalStage(goal);
+  const run = goal.stages[stage];
+  const previousChainId = run?.previousChainIds.at(-1);
+  if (goal.status !== "running" || !goal.resumeStage || stage === "videos" || !run || !previousChainId || !goal.chainId) return null;
+  cancelChainRun(engine, goal.chainId);
+  return saveGoal(engine, {
+    ...goal, status: "review", stage: goal.resumeStage, chainId: previousChainId, error: null, resumeStage: null,
+    stages: { ...goal.stages, [stage]: {
+      ...run, chainId: previousChainId, previousChainIds: [...run.previousChainIds.slice(0, -1), run.chainId],
+      ...(run.attempts ? { attempts: run.attempts.filter(attempt => attempt.chainId !== run.chainId) } : {}),
+    } },
+  });
+}
+
+async function cancelGoal(engine: Engine, goal: GoalRecord, options: { discard?: boolean } = {}): Promise<GoalRecord> {
   if (!ACTIVE_STATUSES.has(goal.status)) return goal;
+  const resumed = options.discard ? null : stopStillRun(engine, goal);
+  if (resumed) return resumed;
   const cancelled = saveGoal(engine, { ...goal, status: "cancelled", error: null });
   if (cancelled.chainId) cancelChainRun(engine, cancelled.chainId);
   if (cancelled.planningJobId) await engine.jobs.queue.abort(cancelled.planningJobId, "Goal cancelled");
@@ -235,14 +252,12 @@ async function cancelGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord>
 
 async function retryGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   requireModernGoal(goal);
-  const stoppedRevision = goal.status === "cancelled" && goal.stages[activeGoalStage(goal)]?.attempts?.some(attempt => attempt.chainId === goal.chainId && attempt.feedback);
-  if (goal.status !== "failed" && goal.status !== "interrupted" && !stoppedRevision) throw new Error("Only a goal that failed, was interrupted or stopped during a revision can be retried");
+  if (goal.status !== "failed" && goal.status !== "interrupted") throw new Error("Only a goal that failed or was interrupted can be retried");
   requireGoalContent(engine, goal);
   if (!goal.chainId) return queuePlanning(engine, goal, `goal-plan-${goal.goalId}-${uuidv7()}`);
   if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before retrying this stage");
   const { lookup } = await goalToolLookup(engine);
-  const resumed = retryChainRun(engine, goal.chainId, lookup, { allowCancelled: Boolean(stoppedRevision) });
-  if (resumed.status === "cancelled") throw new Error("The stopped revision is still shutting down. Retry in a moment.");
+  retryChainRun(engine, goal.chainId, lookup);
   return saveGoal(engine, { ...goal, status: "running", error: null });
 }
 
@@ -271,7 +286,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
   for (const goal of listGoals(engine, notebook.id)) {
     await withNotebookMutation(`goal:${goal.goalId}`, async () => {
       if (findGoalCell(notebook, goal)) snapshots.push(await goalSnapshot(engine, readGoal(engine, goal.goalId)));
-      else await cancelGoal(engine, readGoal(engine, goal.goalId));
+      else await cancelGoal(engine, readGoal(engine, goal.goalId), { discard: true });
     });
   }
   return snapshots;
@@ -280,7 +295,7 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, storyboards and videos. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending storyboards; each can be revised independently, and video uses the approved pair. update saves edits; cancel stops the current chain, retry resumes failed work or a stopped revision, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
+    description: "Create a video goal from character images; default to portrait 9:16, three 10-second clips, Sunburst 2K stills and Seedance 720p video. Review the compact plan, then explicitly approve each paid stage: frame, storyboards and videos. Every still attempt is kept. select chooses a completed version using stage, index and artifact_id without changing the plan revision. revise uses the current revision, stage, index and plain-text feedback (1–300 characters, no @ references) to edit the selected still. regenerate makes a fresh still using stage/index, or selected storyboard pairs using shot_indexes. The full frame can be revised from either still review. Older prompts or full-frame references make stills stale and block approval until refreshed or restored. Advanced plan.frameContinuity adds ending storyboards; each can be revised independently, and video uses the approved pair. update saves edits; cancel stops a running still revision or regeneration and returns to its review with the previous version, otherwise it stops the goal; retry resumes failed work, and dismiss hides a finished goal. Multiple clips append in order; combine renders one video locally with sound and reuses completed output. The goal tile holds its plan and characters; deleting it stops the goal.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine"]),

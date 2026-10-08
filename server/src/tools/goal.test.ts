@@ -335,7 +335,7 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, boards.chainId!);
   });
 
-  it("revises the selected frame with ordered references and resumes only that revision after stopping", async () => {
+  it("revises the selected frame with ordered references and returns to its review when stopped", async () => {
     const frame = await advance(await create(), "frame");
     const original = frame.stages.frame!.outputs[0]!;
     await pauseBookQueueForTests(bookId);
@@ -347,16 +347,19 @@ describe("staged video goals through MCP", () => {
     expect(step.params.prompt).toContain("@image2: Character 1");
     expect(revised.stages.frame!.attempts!.at(-1)).toMatchObject({ feedback: "Give Character 1 a red cap", parentArtifactId: original.artifactId, basePrompt: plan.frame.prompt });
     expect(revised.estimate.still).toEqual(frame.estimate.frame);
-    await invoke({ action: "cancel", goal_id: frame.goalId });
+    expect(revised.resumeStage).toBe("storyboards");
+    const stopped = await invoke({ action: "cancel", goal_id: frame.goalId });
     await waitForChainRun(engine, revised.chainId!);
-    await expect.poll(async () => {
-      const result = await raw({ action: "retry", goal_id: frame.goalId });
-      return result.isError ? null : JSON.parse((result.content as Array<{ text: string }>)[0]!.text).status;
-    }).toBe("running");
-    expect((await status(frame.goalId)).chainId).toBe(revised.chainId);
-    expect((await status(frame.goalId)).stages.frame!.outputs[0]!.artifactId).toBe(original.artifactId);
-    await invoke({ action: "cancel", goal_id: frame.goalId });
-    await waitForChainRun(engine, revised.chainId!);
+    expect(stopped).toMatchObject({ status: "review", stage: "storyboards", chainId: frame.chainId, resumeStage: null });
+    expect(stopped.stages.frame!.outputs[0]!.artifactId).toBe(original.artifactId);
+    expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(1);
+    expect(stopped.stages.frame!.attempts!.map(attempt => attempt.chainId)).toEqual([frame.chainId]);
+    expect(stopped.stages.frame!.previousChainIds).toContain(revised.chainId);
+    expect(getChainRun(engine, revised.chainId!)?.status).toBe("cancelled");
+    expect((await raw({ action: "retry", goal_id: frame.goalId })).isError).toBe(true);
+    expect((await status(frame.goalId)).status).toBe("review");
+    const discarded = await invoke({ action: "cancel", goal_id: frame.goalId });
+    expect(discarded.status).toBe("cancelled");
   });
 
   it("completes revisions as selected versions and revises an ending storyboard independently", async () => {

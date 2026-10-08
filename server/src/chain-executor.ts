@@ -847,16 +847,15 @@ export function retryChainRun(
   engine: Engine,
   chainId: string,
   lookup: ToolLookup,
-  options: { allowCancelled?: boolean } = {},
 ): ChainRunRecord {
   const run = getChainRun(engine, chainId);
   if (!run) throw new Error("Chain run not found");
   if (inflight.has(chainId)) return run;
-  if (run.status !== "failed" && run.status !== "interrupted" && !(options.allowCancelled && run.status === "cancelled")) {
+  if (run.status !== "failed" && run.status !== "interrupted") {
     throw new Error("Only a failed or interrupted chain can be retried");
   }
   for (const step of run.steps) {
-    if (step.status !== "failed" && step.status !== "interrupted" && step.status !== "skipped" && !(options.allowCancelled && step.status === "cancelled")) continue;
+    if (step.status !== "failed" && step.status !== "interrupted" && step.status !== "skipped") continue;
     step.status = step.approval ? "approved" : "pending";
     step.outputs = null;
     step.error = null;

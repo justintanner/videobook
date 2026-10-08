@@ -101,9 +101,11 @@ The chat status reports each stage and revision with a generation clock.
 Progress adds STATUS rows, and notebook tiles carry provenance edges and
 version marks. Click the status or goal tile to reopen its review.
 **Stop goal** prevents remaining work; submitted requests may still finish and
-incur cost. Deleting the goal tile also stops it. **Retry** resumes the failed
-stage without repeating completed outputs, resumes a stopped still revision,
-or plans again after a planning failure. **Dismiss** hides a finished goal.
+incur cost. While a still is being revised or regenerated the button reads
+**Stop revision** or **Stop regeneration** and returns to the review with the
+previous version selected. Deleting the goal tile also stops it. **Retry**
+resumes the failed stage without repeating completed outputs, or plans again
+after a planning failure. **Dismiss** hides a finished goal.
 Version-1 goals remain readable; unfinished ones ask you to start a new `/goal`.
 
 MCP clients use `video_goal` actions `create`, `list`, `status`, `update`,

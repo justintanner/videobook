@@ -50,6 +50,7 @@ export type GoalRecord = {
   trackId: string | null;
   assembly: GoalAssembly | null;
   combined?: GoalCombinedVideo;
+  resumeStage?: GoalStage | null;
   error: string | null;
   dismissedAt: string | null;
   createdAt: string;

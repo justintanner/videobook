@@ -80,7 +80,19 @@ function revisionLabel(goal: GoalSnapshot): string | null {
 }
 
 export function goalCanRetry(goal: GoalSnapshot): boolean {
-  return goal.planVersion === 2 && (goal.status === 'failed' || goal.status === 'interrupted' || goal.status === 'cancelled' && Boolean(revisionAttempt(goal)))
+  return goal.planVersion === 2 && (goal.status === 'failed' || goal.status === 'interrupted')
+}
+
+export function goalStopLabel(goal: GoalSnapshot): string {
+  if (goal.status !== 'running' || !goal.resumeStage) return 'Stop goal'
+  return revisionAttempt(goal) ? 'Stop revision' : 'Stop regeneration'
+}
+
+function stoppedStillLabel(previous: GoalSnapshot, before: GoalProgress, after: GoalProgress, current: GoalSnapshot): string | null {
+  if (after.phase !== 'review' || !['frame', 'storyboards'].includes(before.phase)) return null
+  if (!previous.chainId || !current.stages[before.stage]?.previousChainIds.includes(previous.chainId)) return null
+  const revised = revisionLabel(previous)
+  return `${revised ? `${revised[0]!.toUpperCase()}${revised.slice(1)} revision` : before.stage === 'frame' ? 'Frame generation' : 'Storyboard generation'} stopped`
 }
 
 export function asGoal(value: unknown): GoalSnapshot {
@@ -225,7 +237,6 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
     action = goal.planVersion === 1 ? null : 'Retry'
     tone = 'attention'
   }
-  if (goal.status === 'cancelled' && goalCanRetry(goal)) action = 'Retry'
   return { text, short, announce: `Goal: ${text}`, action, tone, busy }
 }
 
@@ -241,9 +252,11 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   const after = goalProgress(current)
   let from = goalStatusLine(previous).text
   const revised = revisionLabel(current)
+  const stopped = stoppedStillLabel(previous, before, after, current)
   if (after.phase === 'failed' || after.phase === 'interrupted') from = goalStatusLine(current).text
   else if (after.phase === 'complete') from = current.assembly ? 'Sequence assembled' : 'Clip ready'
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
+  else if (stopped) from = stopped
   else if (after.phase === 'review' && revised) from = `${revised[0]!.toUpperCase()}${revised.slice(1)} revised`
   else if (after.phase === 'review' && after.stage === 'storyboards') from = 'Full frame ready'
   else if (after.phase === 'review' && after.stage === 'videos') from = 'Storyboards ready'

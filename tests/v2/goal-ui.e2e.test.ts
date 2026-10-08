@@ -226,7 +226,7 @@ describe('staged goal mode in the browser', () => {
     await screenshot('goal-plan-compact-phone')
   }, 30_000)
 
-  scenario('picks a frame version, revises it with feedback, and stops the new image request', async () => {
+  scenario('picks a frame version, revises it with feedback, and returns to the review when the revision is stopped', async () => {
     const created = await create()
     await seedGoalStage(engine, created.goalId, 'frame')
     const first = await current(created)
@@ -250,8 +250,14 @@ describe('staged goal mode in the browser', () => {
     expect(running.stages.frame!.attempts!.at(-1)).toMatchObject({ parentArtifactId: firstId, feedback: 'Give Character 1 a red cap' })
     await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Revising frame')
     await status().click()
-    await panel().getByRole('button', { name: 'Stop goal', exact: true }).click()
-    await expect.poll(async () => (await current(created)).status).toBe('cancelled')
+    await panel().getByRole('button', { name: 'Stop revision', exact: true }).click()
+    await expect.poll(async () => (await current(created)).status).toBe('review')
+    const stopped = await current(created)
+    expect(stopped.stage).toBe('storyboards')
+    expect(stopped.stages.frame!.outputs[0]!.artifactId).toBe(firstId)
+    expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(2)
+    await expect.poll(() => card.getByRole('button', { name: 'Full frame v1', exact: true }).getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('true')
+    expect(await panel().getByRole('button', { name: /Use this frame/ }).isVisible()).toBe(true)
     expect(errors).toEqual([])
   }, 60_000)
 

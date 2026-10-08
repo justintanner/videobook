@@ -2,7 +2,7 @@ import { useRef, useState, type KeyboardEvent } from 'react'
 import { Flag } from 'lucide-react'
 import type { GoalPlan, GoalStillStage } from '../../../server/src/goal-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { formatGoalClock, goalCanRetry, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalTileView, isStagedGoalPlan, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
+import { formatGoalClock, goalCanRetry, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalStopLabel, goalTileView, isStagedGoalPlan, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalReview } from './GoalReview'
@@ -91,7 +91,7 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
       <span className="inspector-cell-title goal-panel-title"><Flag size={14} className="goal-panel-flag" /><strong>GOAL</strong>{goal.address && <code className="inspector-cell-address">{goal.address}</code>}<span className="goal-panel-name" title={view.title}>{view.title}</span><span className="goal-tile-chip" data-tone={view.chip.tone}>{view.chip.label}</span></span>
       <div className="inspector-header-actions"><div className="inspector-generation-header-actions">
         {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>Discard goal</button>}
-        {active && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>Stop goal</button>}
+        {active && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goalStopLabel(goal)}</button>}
         {finished && <button type="button" disabled={disabled || Boolean(goal.dismissedAt)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>}
       </div><ComposerDockClose /></div>
     </header>
