@@ -67,7 +67,7 @@ describe("video goal plans", () => {
     const storyboards = compileStoryboardSteps(plan, characters, "@b2");
     expect(storyboards).toHaveLength(3);
     expect(storyboards[1]).toMatchObject({ id: "storyboard2", params: { image_refs: ["@b2", "@a1", "@a2"] } });
-    expect(storyboards[1]!.params.prompt).toContain("@image1 full frame");
+    expect(storyboards[1]!.params.prompt).toContain("@image1 full frame: keep clothes, props");
     expect(storyboards[1]!.params.prompt).toContain("@image2 Character 1");
     expect(storyboards[1]!.params.prompt).toContain("2x2 storyboard");
     expect(storyboards[1]!.params.prompt).toContain("1 setup; 2 action; 3 reaction; 4 ending");
@@ -99,6 +99,7 @@ describe("video goal plans", () => {
     const steps = compileStoryboardSteps(paired, characters, "@b2");
     expect(steps.map(step => step.id)).toEqual(["storyboard1", "storyboard2", "storyboard3", "storyboard4", "storyboard5", "storyboard6"]);
     expect(steps[3]!.params.prompt).toContain("Final moment");
+    expect(steps[3]!.params.prompt).toContain("@image1 full frame: keep clothes, props");
     expect(steps[3]!.params.prompt).not.toContain(plan.shots[1]!.storyboardPrompt);
     expect(steps[3]!.params.prompt).not.toContain(plan.continuity);
     expect(compileStoryboardSteps(paired, characters, "@b2", [1]).map(step => step.id)).toEqual(["storyboard2", "storyboard5"]);

@@ -125,7 +125,7 @@ function styledGoalPrompt(plan: GoalPlan, stage: GoalStyleStage, text: string): 
 }
 
 function goalReferenceLegend(characters: readonly GoalCharacter[], frame: "full" | null = null): string {
-  return `${[...(frame ? ["@image1 full frame"] : []), ...characters.map((_, index) => `@image${index + (frame ? 2 : 1)} Character ${index + 1}`)].join("; ")}.`;
+  return `${[...(frame ? ["@image1 full frame: keep clothes, props"] : []), ...characters.map((_, index) => `@image${index + (frame ? 2 : 1)} Character ${index + 1}`)].join("; ")}.`;
 }
 
 function goalFrameParams(plan: GoalPlan, characters: readonly GoalCharacter[]): Record<string, unknown> {
