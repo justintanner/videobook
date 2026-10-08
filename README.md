@@ -44,139 +44,64 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Video goals
 
-Enter `/goal @a1 @a2 as Mr Bean in Thailand`, mentioning 1–8 character
-image cells. Adjacent mentions such as `@a1@a2` work. The goal tile saves the
-brief, character references, plan, revision, and estimates.
+Enter `/goal @a1 @a2 @a3 interview with a giant microphone`, mentioning a
+scene screenshot and any character or prop images. The planner reads the
+images and suggests each reference's role. Review those roles before generating.
+Adjacent mentions such as `@a1@a2` work; a goal accepts up to eight references.
 
-The defaults are **portrait 9:16, three 10-second clips, GPT Image 2.5 Sunburst
-at 2K, and Seedance 2.5 at 720p with sound**. Request landscape (16:9) or square
-(1:1) explicitly. Each clip can be 4–30 whole seconds; a goal supports up to
-eight shots. Image model, resolution, continuity and ending-storyboard settings
-sit under **Advanced** in the compact plan review.
+New goals default to **one 20-second portrait video**, with **Nano Banana 2.1
+at 2K** for images and **Seedance 2.5 at 720p with audio and no music**.
+The source screenshot sets the visual style. Choose **Cinematic** or
+**IG Influencer** under **Advanced**, where format, models, resolutions,
+continuity, durations and optional additional clips are also available.
+Explicit requests such as `two 10s clips` still create multiple clips; scene
+or storyboard beat counts alone do not split the video.
 
-**Cinematic** is the default: photographic live-action, natural proportions and
-textures, restrained expressions and plausible motion. **IG Influencer** uses hyper-realistic,
-candid iPhone footage, natural skin texture and simple light. Try
-`/goal @a1 as an IG influencer, GRWM morning routine`. The review offers:
+The review has three stages, each with its own paid approval and estimate:
 
-- **Content format:** GRWM (`grwm`, `get ready with me`), OOTD (`ootd`,
-  `outfit of the day`), Day in the life (`day in the life`, `vlog`), Travel reel,
-  Café (`cafe`, `café`, `brunch`), Gym, Skincare, Haul or Storytime.
-- **Delivery:** Selfie to camera (`selfie`, `front camera`), Filmed by a friend
-  (`filmed by`), Tripod or Mirror.
-- **Camera:** iPhone front (`front camera`, `iphone front`) or iPhone main
-  (`main camera`, `iphone main`). The default follows delivery: front for
-  selfies, main otherwise.
-- **Light:** Soft daylight (`soft daylight`, `natural daylight`), Golden hour,
-  Warm indoor light (`warm indoor`, `indoor warm`) or Night flash (`night out`,
-  `flash`).
+1. **Scene:** review the requested edit and generate the scene. Inspect it,
+   revise it with a short instruction, regenerate it, or choose an earlier version.
+2. **Storyboard:** approve the scene to generate a six-panel sheet, arranged
+   in two columns and three rows. Panels run left to right, top to bottom,
+   with timestamps and brief action/camera notes below the pictures.
+3. **Video:** approve the storyboard to generate one continuous video using
+   the sheet, approved scene and original references. The sheet is a reference,
+   never a literal first frame. Video directions add motion, dialogue and ambience.
 
-IG Influencer defaults to Day in the life, Selfie to camera and Soft daylight.
-`ig influencer`, `instagram influencer`, `influencer`, `insta reel` and
-`instagram reel` select it. Matching ignores case and accepts whole words;
-the first style and first option match in the brief win. Embedded names such
-as `Influencerella` do not match; a standalone style word even in a quoted
-label does. Option words alone do not switch away from Cinematic.
-Switching style resets its options. Style and options lock after the first
-frame. **Advanced → Style anchors** shows the compact wording added by the
-compiler; it is separate from editable prompts.
+You can revisit and revise any stage after completion. Still revisions edit
+the selected image; video revisions rerun Seedance from the selected references
+and updated directions. All attempts remain visible, and stopping or failing a
+revision preserves the prior selection. Nothing regenerates downstream automatically.
 
-Each paid stage needs a separate approval:
+Changing an upstream prompt, setting, selected version or source image marks
+its dependent outputs stale. Refresh them before generating video. Changing
+only a video's motion or sound leaves its six-panel storyboard current.
+Clip count and storyboard layout stay fixed once generation begins. Saved
+older goals retain their models, styles, durations and four-panel storyboards.
 
-1. **Plan → Frame:** review the title, format and short shot prompts, then
-   choose **Generate frame** to show the characters together.
-2. **Frame → Storyboards:** inspect the frame, type a one-line change and
-   **Revise**, pick a previous version, or **Regenerate** a fresh take. Repeat
-   until it is right, then **Use this frame · Generate storyboards**.
-3. **Storyboards → Videos:** use the same revision and version-selection loop
-   for each storyboard. **Back to frame** lets you revise or regenerate the
-   full frame again. Choose **Use these storyboards · Generate videos** when
-   every selected still is current. Each storyboard is a four-panel 2×2 sheet
-   showing setup, action, reaction and ending, read left to right, then top to
-   bottom. Beneath each picture, new sheets show its time range and a brief
-   action/camera note. A 10-second clip uses 0–2.5s, 2.5–5s, 5–7.5s and 7.5–10s.
-   Video prompts give each beat a quarter of the clip and request full-screen
-   footage without the grid, notes or text. Sound is ambience or speech; prompts explicitly request no music.
-   Review the output for stray labels and continuity.
-4. **Combine:** multiple clips append in order after existing sequence content,
-   using actual media durations. A single clip finishes without assembly.
-   **Combine into one video** renders a shareable MP4 locally with the clips'
-   sound. Repeating the action reuses its output.
+Goal notebooks use separate rows for **references**, **goal and generators**,
+**generated images**, and **videos**. Groups exceeding eight cells continue on
+additional rows. Multi-clip timelines follow the videos. New output placement
+and **Arrange** use the same layout and preserve identities and connections.
 
-Every still attempt is kept as a version. Revisions start from the selected
-image and preserve the earlier one. A selected still made from an older plan
-prompt cannot be approved until it is regenerated, revised, or its prompt is
-restored. Changing the selected full frame preserves the old storyboards but
-marks them stale until they are regenerated or revised against that frame.
-Editing a shot's action, duration or storyboard prompt also requires a refreshed
-storyboard. Older single-frame previews stay available as versions but must be
-regenerated or revised into four-panel sheets before video approval.
-Format, image model and resolution, continuity, and shot count stay fixed after
-the first frame; its prompt remains editable at either still review.
+Multiple clips initially append in order using their actual media durations.
+After revising or selecting a different video version, **Assemble selected
+versions** updates the goal's unchanged timeline clips. If those clips were
+edited, assembly preserves the user's edits and asks for manual placement.
+**Combine into one video** renders the selected, assembled clips locally with
+their audio. Changing video selection invalidates an older combined output.
 
-Goal notebooks place references, goal tiles and generators on the first row,
-generated images on the second, videos on the third and the timeline on the
-fourth. Groups exceeding eight cells continue on extra rows, shifting later
-groups down. New goal outputs and **Arrange** use the same layout.
+Prompts stay concise: planner ceilings are 6 words for titles, 30 for
+continuity, 20 for the scene, 48 for a six-panel storyboard, and 12 for video
+directions. Longer saved prompts remain editable. Planning uses `OPENAI_API_KEY`
+and is billed separately; generation uses `KIE_API_KEY`. A structured version-2
+plan skips AI planning. Every paid stage or revision requires an explicit action.
+**Stop goal** stops remaining work; already submitted requests may still finish.
 
-Prompts use barebones noun/verb fragments. The storyboard guides the video;
-video prompts add only essential motion and sound. Planner word ceilings are
-6 for titles, 30 for continuity, 20 for the frame, 32 for each storyboard,
-12 for ending prompts and 12 for video prompts. These are ceilings, not targets.
-New plans use bounded responses and one shortening retry. Saved plans retain their
-larger text limits, and word counts guide edits without blocking longer text.
-Only the frame repeats continuity; later requests use compact reference legends.
-
-The primary button saves pending edits first; Cmd/Ctrl+Enter does the same.
-**Ending frames** is off by default. Enable it under Advanced before the
-frame to add an ending image per shot. A blank ending prompt uses the final
-moment of the video prompt. Each ending image can be revised or regenerated
-independently. Its clip uses the storyboard and ending image as visual
-references; the ending image guides the final pose and composition.
-
-Stage and per-image estimates label paid approvals. Every revision or fresh
-generation incurs its image cost again. Planning requires `OPENAI_API_KEY`
-and is billed separately; generation requires `KIE_API_KEY`. A structured
-version-2 plan skips AI planning.
-
-The chat status reports each stage and revision with a generation clock.
-Progress adds STATUS rows, and notebook tiles carry provenance edges and
-version marks. Click the status or goal tile to reopen its review.
-**Stop goal** prevents remaining work; submitted requests may still finish and
-incur cost. While a still is being revised or regenerated the button reads
-**Stop revision** or **Stop regeneration** and returns to the review with the
-previous version selected. Deleting the goal tile also stops it. **Retry**
-resumes the failed stage without repeating completed outputs, or plans again
-after a planning failure. **Dismiss** hides a finished goal.
-Version-1 goals remain readable; unfinished ones ask you to start a new `/goal`.
-
-MCP clients use `video_goal` actions `create`, `list`, `status`, `update`,
-`approve`, `select`, `revise`, `regenerate`, `cancel`, `retry`, `dismiss`,
-`assemble`, and `combine`. Paid approvals require the current `revision`.
-`select` takes `stage`, zero-based `index` and `artifact_id`, and leaves the
-plan revision unchanged. `revise` takes `stage`, `index` and 1–300 characters
-of plain-text `feedback` without @ references. `regenerate` accepts `stage`
-and `index` for one still, or legacy `shot_indexes` to regenerate selected
-storyboard pairs. Execution state and attempt history use scoped engine settings.
-
-The version-2 `plan` accepted by `create` and `update` can include
-`"style": { "id": "ig-influencer", "options": { "format": "grwm", "delivery": "selfie-to-camera", "camera": "iphone-front", "light": "soft-daylight" } }`.
-Missing options use the style defaults; unknown keys or choices are rejected.
-Omitting `style` means `{"id":"cinematic","options":{}}`, including in older
-stored plans. An explicit plan's style takes precedence over brief keywords.
-
-The provider-free browser check runs with `npm run test:e2e -- tests/v2/goal-ui.e2e.test.ts`.
-A separate paid check uses `VIDEOBOOK_RUN_MODEL_E2E=1 op run --env-file=.env.tpl -- npx vitest run --config vitest.goal-live.config.ts -t "IG Influencer goal with real providers"`.
-Choose `Cinematic goal with real providers` for the original scenario.
-It uses two portrait 4-second 480p clips, 1K images, and one revision at each
-still stage. It checks version selection, prompts, portrait media and identity,
-requires a media estimate below $3, and preserves its scratch book and spend records. The ordinary test setup keeps its network and
-credential restrictions.
-The IG test uses the checked-in NASA portrait from
-[scikit-image's public-domain astronaut sample](https://scikit-image.org/docs/stable/api/skimage.data.html#skimage.data.astronaut)
-as a face reference. Its generated GRWM sequence is synthetic test media.
-Review the preserved outputs for identity, skin texture, phone-camera appearance,
-four visible story beats, sound and the absence of grids or borders in video.
+New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
+model choices and saved producer reruns keep their chosen model. Apicity 0.14.1
+supplies the NB 2.1 schema and pricing; the OpenAI and xAI packages retain the
+repository's realtime patches.
 
 ## Storage
 

@@ -1,5 +1,5 @@
 import type { GoalSnapshot } from '../../server/src/tools/goal'
-import type { GoalDisplayPlan, GoalGenerationStage, GoalPlan, GoalStillStage } from '../../server/src/goal-plan'
+import type { GoalDisplayPlan, GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 import { goalStyle, goalStylesEqual } from '../../server/src/goal-styles'
 
 export type { GoalSnapshot }
@@ -52,6 +52,8 @@ export function goalPlansEqual(left: GoalPlan, right: GoalPlan): boolean {
   return left.title === right.title && left.continuity === right.continuity
     && left.aspectRatio === right.aspectRatio && left.imageModel === right.imageModel
     && left.imageResolution === right.imageResolution && left.videoResolution === right.videoResolution
+    && left.storyboardLayout === right.storyboardLayout
+    && JSON.stringify(left.referenceRoles ?? []) === JSON.stringify(right.referenceRoles ?? [])
     && Boolean(left.frameContinuity) === Boolean(right.frameContinuity)
     && goalStylesEqual(left.style ?? { id: 'cinematic', options: {} }, right.style ?? { id: 'cinematic', options: {} })
     && left.frame.prompt === right.frame.prompt && left.shots.length === right.shots.length
@@ -61,12 +63,23 @@ export function goalPlansEqual(left: GoalPlan, right: GoalPlan): boolean {
       && shot.videoPrompt === right.shots[index]?.videoPrompt && shot.durationSeconds === right.shots[index]?.durationSeconds)
 }
 
-export function goalStillVersions(goal: GoalSnapshot, stage: GoalStillStage, index: number) {
+export function goalStillVersions(goal: GoalSnapshot, stage: GoalGenerationStage, index: number) {
   return goal.stages[stage]?.outputs.find(output => output.index === index)?.versions ?? []
 }
 
-export function goalStillStale(goal: GoalSnapshot, stage: GoalStillStage, index: number): string | null {
+export function goalStillStale(goal: GoalSnapshot, stage: GoalGenerationStage, index: number): string | null {
   return goal.stages[stage]?.outputs.find(output => output.index === index)?.stale ?? null
+}
+
+export function goalOutputEstimate(goal: GoalSnapshot, stage: GoalGenerationStage, index: number): number | null {
+  const total = goal.estimate[stage].usd
+  if (total === null || stage === 'frame') return total
+  const count = goal.plan?.shots.length ?? 1
+  if (stage === 'videos' && goal.plan) {
+    const seconds = goal.plan.shots.reduce((sum, shot) => sum + shot.durationSeconds, 0)
+    return total * (goal.plan.shots[index]?.durationSeconds ?? 0) / seconds
+  }
+  return total / (count * (goal.plan && 'frameContinuity' in goal.plan && goal.plan.frameContinuity ? 2 : 1))
 }
 
 function revisionAttempt(goal: GoalSnapshot) {
@@ -77,6 +90,7 @@ function revisionLabel(goal: GoalSnapshot): string | null {
   const attempt = revisionAttempt(goal)
   if (!attempt) return null
   if (attempt.stage === 'frame') return 'frame'
+  if (attempt.stage === 'videos') return `video ${attempt.index + 1}`
   const count = goal.plan?.shots.length ?? 1
   return `${attempt.index >= count ? 'ending frame' : 'storyboard'} ${attempt.index % count + 1}`
 }
@@ -203,6 +217,7 @@ function failureText(progress: GoalProgress, word: string): string {
 
 export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null = null): GoalStatusLine {
   const progress = goalProgress(goal)
+  const simple = isStagedGoalPlan(goal.plan) && goal.plan.storyboardLayout === 'six-panel'
   let text = 'Stopped'
   let short = 'Stopped'
   let action: string | null = null
@@ -213,14 +228,14 @@ export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null
     tone = 'live'
     busy = true
   } else if (progress.phase === 'review') {
-    text = progress.stage === 'frame' ? `Review plan${estimateText(goal, 'frame')}` : progress.stage === 'storyboards' ? 'Review full frame' : 'Review storyboards'
+    text = progress.stage === 'frame' ? `Review ${simple ? 'scene' : 'plan'}${estimateText(goal, 'frame')}` : progress.stage === 'storyboards' ? simple ? 'Review scene' : 'Review full frame' : simple ? 'Review storyboard' : 'Review storyboards'
     short = action = 'Review'
     tone = 'review'
   } else if (['frame', 'storyboards', 'videos'].includes(progress.phase)) {
     const number = progress.active ? progress.active.index + 1 : progress.done + 1
     const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
     const revised = revisionLabel(goal)
-    text = `${revised ? `Revising ${revised}` : progress.stage === 'frame' ? 'Full frame' : `${progress.stage === 'storyboards' ? 'Storyboard' : 'Shot'} ${number} of ${progress.total}`} · ${activity}`
+    text = `${revised ? `Revising ${revised}` : progress.stage === 'frame' ? simple ? 'Scene' : 'Full frame' : `${progress.stage === 'storyboards' ? 'Storyboard' : 'Shot'} ${number} of ${progress.total}`} · ${activity}`
     short = progress.stage === 'frame' ? 'Frame' : `${progress.stage === 'storyboards' ? 'SB ' : ''}${number}/${progress.total}`
     tone = 'live'
   } else if (progress.phase === 'assembling') {
@@ -288,10 +303,10 @@ export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap
       const number = Number(match[2])
       let label = match[1] === 'frame' ? 'Frame' : match[1] === 'storyboard' && number > total
         ? `End ${number - total}/${total}` : `${match[1] === 'storyboard' ? 'SB ' : ''}${match[2]}/${total}`
-      const stage = match[1] === 'frame' ? 'frame' : match[1] === 'storyboard' ? 'storyboards' : null
+      const stage = match[1] === 'frame' ? 'frame' : match[1] === 'storyboard' ? 'storyboards' : 'videos'
       const attempts = stage ? goal.stages[stage]?.attempts?.filter(attempt => attempt.index === (stage === 'frame' ? 0 : number - 1)) ?? [] : []
       const version = attempts.findIndex(attempt => attempt.chainId === step.chainId && attempt.stepId === step.id)
-      if (attempts.length > 1 && version >= 0) label = `${stage === 'frame' ? 'Frame' : number > total ? `End ${number - total}` : `SB ${number}`} v${version + 1}`
+      if (attempts.length > 1 && version >= 0) label = `${stage === 'frame' ? 'Frame' : stage === 'videos' ? `Video ${number}` : number > total ? `End ${number - total}` : `SB ${number}`} v${version + 1}`
       for (const id of [step.cellId, step.outputCellId]) if (id) marks.set(id, `${label}${goal.address ? ` · ${goal.address}` : ''}`)
     }
   }

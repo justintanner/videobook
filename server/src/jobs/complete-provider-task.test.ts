@@ -23,6 +23,7 @@ const TINY_PNG = Buffer.from(
 
 describe("provider completion routing", () => {
   it.each([
+    ["nano_banana_2_1", "seedreamV5Image"],
     ["nano_banana_image", "nanoBananaImage"],
     ["fal_nano_banana_2_edit", "nanoBananaImage"],
     ["qwen2_image_edit", "qwenImage"],

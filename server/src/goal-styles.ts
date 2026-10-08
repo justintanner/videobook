@@ -1,4 +1,4 @@
-export const GOAL_STYLE_IDS = ["cinematic", "ig-influencer"] as const;
+export const GOAL_STYLE_IDS = ["source", "cinematic", "ig-influencer"] as const;
 export type GoalStyleId = typeof GOAL_STYLE_IDS[number];
 export type GoalStyleSelection = { id: GoalStyleId; options: Record<string, string> };
 export type GoalStyleStage = "frame" | "storyboard" | "ending" | "video" | "revise";
@@ -13,7 +13,7 @@ export type GoalStyle = {
   label: string;
   summary: string;
   briefKeywords: string[];
-  defaults: { aspectRatio?: "16:9" | "9:16" | "1:1"; imageModel?: "sunburst" | "flare"; imageResolution?: "1K" | "2K"; videoResolution?: "480p" | "720p" };
+  defaults: { aspectRatio?: "16:9" | "9:16" | "1:1"; imageModel?: "sunburst" | "flare" | "nano-banana-2-1"; imageResolution?: "1K" | "2K"; videoResolution?: "480p" | "720p" };
   planner: string;
   fragments: Record<GoalStyleStage, string>;
   banned: string[];
@@ -21,6 +21,19 @@ export type GoalStyle = {
 };
 
 const styles: Record<GoalStyleId, GoalStyle> = {
+  source: {
+    id: "source", label: "Match source", summary: "Keep the look, camera and lighting of the source screenshot.",
+    briefKeywords: [], defaults: { imageModel: "nano-banana-2-1", imageResolution: "2K", videoResolution: "720p" },
+    planner: "Infer the visual style, framing, lighting and camera from the scene reference. Preserve that look. Identify the scene screenshot, character references and prop references from the actual images and brief. Reference images are not necessarily people. Remove social-media interface overlays from generated pictures.",
+    fragments: {
+      frame: "Match the source scene's framing, lighting and visual style; remove interface overlays",
+      storyboard: "Keep the approved scene's visual style, people and props",
+      ending: "Keep the approved scene's visual style",
+      video: "Match the approved scene's camera and lighting; natural ambient sound",
+      revise: "Preserve the selected image's visual style",
+    },
+    banned: [], options: [],
+  },
   cinematic: {
     id: "cinematic", label: "Cinematic", summary: "Photographic live-action with natural proportions, textures and motion.",
     briefKeywords: ["cinematic"], defaults: {},
@@ -145,7 +158,7 @@ function firstKeyword(brief: string, keywords: string[]): number {
 
 export function goalBriefStyle(brief: string): GoalStyleSelection {
   const style = GOAL_STYLE_IDS.map(id => ({ style: goalStyle(id), index: firstKeyword(brief, goalStyle(id).briefKeywords) }))
-    .filter(match => Number.isFinite(match.index)).sort((left, right) => left.index - right.index)[0]?.style ?? goalStyle("cinematic");
+    .filter(match => Number.isFinite(match.index)).sort((left, right) => left.index - right.index)[0]?.style ?? goalStyle("source");
   const partial = Object.fromEntries(style.options.flatMap(option => {
     const choice = option.choices.map(candidate => ({ value: candidate.value, index: firstKeyword(brief, candidate.briefKeywords) }))
       .filter(match => Number.isFinite(match.index)).sort((left, right) => left.index - right.index)[0];

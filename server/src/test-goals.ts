@@ -12,7 +12,7 @@ import { getAllToolDefs } from "./tools/index.js";
 import { placeChainGeneration } from "./chain-generation.js";
 import { copyVideoFixture } from "./test-media-fixtures.js";
 import { probeVideo } from "./ffmpeg.js";
-import { goalStillAttempts } from "./goal-stills.js";
+import { goalAttemptFingerprints, goalStillAttempts } from "./goal-stills.js";
 import { extractVideoPoster } from "./video-poster.js";
 
 export function goalTestPlan(count = 3): GoalPlan {
@@ -26,14 +26,23 @@ export function goalTestPlan(count = 3): GoalPlan {
   });
 }
 
-async function goalTestImage(engine: Engine, label: string, color = "#cf593b", storyboardAspect?: GoalPlan["aspectRatio"]): Promise<string> {
+export function goalTestSimplePlan(count = 1): GoalPlan {
+  return goalPlanSchema.parse({
+    ...goalTestPlan(count), imageModel: "nano-banana-2-1", storyboardLayout: "six-panel", referenceRoles: ["scene", "character"], style: { id: "source", options: {} },
+    continuity: "Keep the source street, lighting and camera. Reference 2 replaces the interviewer.",
+    frame: { prompt: "Reference 2 interviews the woman in Reference 1; giant microphone." },
+    shots: goalTestPlan(count).shots.map(shot => ({ ...shot, durationSeconds: 20, storyboardPrompt: "Wide hook; interviewer raises microphone; woman responds; microphone grows; both react; beach payoff.", videoPrompt: "Natural gestures, lively timing. Street ambience, brief dialogue. No music." })),
+  });
+}
+
+async function goalTestImage(engine: Engine, label: string, color = "#cf593b", storyboardAspect?: GoalPlan["aspectRatio"], panelCount = 4): Promise<string> {
   const created = await engine.artifacts.create("image", label);
   if (!created.ok) throw new Error(created.error.message);
   const [width, height] = storyboardAspect === "16:9" ? [640, 360] : storyboardAspect === "1:1" ? [480, 480] : [360, 640];
-  const panels = ["#cf593b", "#2878b4", "#659653", "#9d70bc"].map((fill, index) => {
+  const panels = ["#cf593b", "#2878b4", "#659653", "#9d70bc", "#c89840", "#378c83"].slice(0, panelCount).map((fill, index) => {
     const x = (index % 2) * width / 2;
-    const y = Math.floor(index / 2) * height / 2;
-    return `<g transform="translate(${x} ${y})"><rect x="4" y="4" width="${width / 2 - 8}" height="${height / 2 - 8}" fill="${fill}"/><text x="16" y="34" fill="white" font-size="24">${index + 1}</text><circle cx="${width / 8 + index * 12}" cy="${height / 4}" r="18" fill="#f5ead9"/></g>`;
+    const y = Math.floor(index / 2) * height / (panelCount / 2);
+    return `<g transform="translate(${x} ${y})"><rect x="4" y="4" width="${width / 2 - 8}" height="${height / (panelCount / 2) - 8}" fill="${fill}"/><text x="16" y="34" fill="white" font-size="24">${index + 1}</text><circle cx="${width / 8 + index * 12}" cy="${height / 4}" r="18" fill="#f5ead9"/></g>`;
   }).join("");
   const bytes = storyboardAspect
     ? await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#f5ead9"/>${panels}</svg>`)).png().toBuffer()
@@ -95,7 +104,7 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, revise.index, address(parent!)!, revise.feedback, stage === "storyboards" ? frame : undefined)]
     : stage === "frame" ? compileFrameSteps(plan, characters)
     : stage === "storyboards" ? compileStoryboardSteps(plan, characters, frame, options.indexes)
-      : compileVideoSteps(goalId, plan, storyboards, endings);
+      : compileVideoSteps(goalId, plan, storyboards, endings, { frame, characters, indexes: options.indexes, feedback: revise?.feedback, assemble: !goal.stages.videos?.outputs.length });
   const defs = getAllToolDefs(engine);
   const checked = await preflightChainPlan({ action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId, steps }, {
     engine, bookId: goal.bookId, notebookId: goal.notebookId, toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),
@@ -111,7 +120,7 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
     const skipped = options.failedIndex !== undefined && position > options.failedIndex;
     let outputs: Record<string, unknown> | null = null;
     if (!fails && !skipped) {
-      const artifactId = options.videoIds?.[index] ?? await goalTestImage(engine, step.id, index % 2 ? "#2878b4" : "#cf593b", stage === "storyboards" && index < plan.shots.length ? plan.aspectRatio : undefined);
+      const artifactId = options.videoIds?.[index] ?? await goalTestImage(engine, step.id, index % 2 ? "#2878b4" : "#cf593b", stage === "storyboards" && index < plan.shots.length ? plan.aspectRatio : undefined, plan.storyboardLayout === "six-panel" ? 6 : 4);
       const placed = await placeChainGeneration({ engine, notebookId: goal.notebookId, tool: step.tool, placement: stage === "videos" ? "generate_video" : "generate_image", params: step.params, artifactId, runId: `${chainId}:${step.id}`, pins: step.pins });
       outputs = { asset_id: artifactId, [stage === "videos" ? "vid_asset_id" : "img_asset_id"]: artifactId, cell_id: placed.outputCellId, address: placed.address, status: "completed" };
     }
@@ -131,8 +140,8 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
     chainId, revision: content.revision, approvedAt: timestamp,
     shotIndexes: revise ? [revise.index] : stage === "frame" ? [0] : options.indexes ?? plan.shots.map((_, index) => index),
     outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
-    ...(stage !== "videos" && !options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp, revise?.feedback) } : {}),
+    ...(!options.legacy ? { attempts: goalStillAttempts(goal, plan, stage, chainId, steps, timestamp, revise?.feedback, plan.storyboardLayout === "six-panel" ? await goalAttemptFingerprints(engine, goal, plan, characters, stage, steps) : undefined) } : {}),
   };
-  saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(stage === "videos" ? { clipIds: plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
+  saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(previous?.outputs.length && plan.storyboardLayout === "six-panel" ? { resumeStage: goal.stage, resumeStatus: goal.status === "completed" ? "completed" as const : "review" as const, resumeOutputs: previous.outputs } : {}), ...(stage === "videos" ? { clipIds: goal.clipIds.length === plan.shots.length ? goal.clipIds : plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
   return chainId;
 }

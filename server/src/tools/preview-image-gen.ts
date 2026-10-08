@@ -1,4 +1,5 @@
 import { DEFAULT_GPT_IMAGE_MODEL } from "../gpt-image-2-5.js";
+import { NANO_BANANA_2_1_KEY } from "../image-edit-default.js";
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import {
@@ -34,6 +35,8 @@ export function selectPreviewImageModel(
   modelOptions: PreviewImageModelOption[],
 ): string {
   if (modelOverride) return modelOverride;
+  const preferredEdit = modelOptions.find(option => option.key === NANO_BANANA_2_1_KEY);
+  if (resolvedImageCount > 0 && preferredEdit && supportsResolvedImages(preferredEdit, resolvedImageCount)) return NANO_BANANA_2_1_KEY;
 
   const fallback = DEFAULT_GPT_IMAGE_MODEL.key;
   if (!historicalModel || historicalModel === "nano_banana") return fallback;

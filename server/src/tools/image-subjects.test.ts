@@ -1359,7 +1359,7 @@ describe("image subject tools", () => {
     expect(request.input.aspect_ratio).toBe("16:9");
   });
 
-  it("replaces two regions with two reference artifacts via Seedream 5 Pro", async () => {
+  it("replaces two regions with two reference artifacts via Nano Banana 2.1", async () => {
     await pauseBookQueueForTests(bookId);
     const originalKey = process.env.KIE_API_KEY;
     process.env.KIE_API_KEY = "test-key";
@@ -1417,7 +1417,7 @@ describe("image subject tools", () => {
           left.value.artifactId,
           right.value.artifactId,
         ]);
-        expect(provenance.value.model).toBe("seedream/5-pro-image-to-image");
+        expect(provenance.value.model).toBe("nano-banana-2-1");
       }
       const jobs = engine.jobs.queue.list({
         type: "generate_image_subject_edit",
@@ -1447,7 +1447,7 @@ describe("image subject tools", () => {
       expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
       expect(resultJson(preview)).toMatchObject({ payload: { input: {
         prompt: expect.stringContaining("reference image 3"),
-        image_urls: [source.artifactId, left.value.artifactId, right.value.artifactId]
+        image_input: [source.artifactId, left.value.artifactId, right.value.artifactId]
           .map((id) => `http://url.resolved.later.for/${id}`),
       } } });
     } finally {
@@ -1478,6 +1478,7 @@ describe("image subject tools", () => {
           object_hash: source.objectHash,
           operation: "replace",
           regions: tooMany,
+          model: "seedream/5-pro-image-to-image",
         },
       });
       expect(result.isError).toBe(true);
@@ -1766,14 +1767,14 @@ describe("image subject tools", () => {
         .find((candidate) => candidate.payload.jobId === parsed.job_id);
       expect(job?.payload).toMatchObject({
         operation: "whole_image",
-        modelId: "seedream/5-pro-image-to-image",
+        modelId: "nano-banana-2-1",
         subjectIds: [],
         prompt: "Make it look like a snowy night",
       });
       const notebook = engine.notebooks.read(source.notebookId);
       if (!notebook.ok) throw new Error(notebook.error.message);
       const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
-      expect(producer?.model).toBe("seedream/5-pro-image-to-image");
+      expect(producer?.model).toBe("nano-banana-2-1");
       expect(producer?.inputs?.generationMode).toBe("whole-image");
       const draft = {
         prompt: "Turn the white square into a spider portal",
@@ -1854,14 +1855,14 @@ describe("image subject tools", () => {
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(8);
+      expect(catalog.models).toHaveLength(9);
       expect(catalog.models[0]).toMatchObject({
-        id: "seedream/5-pro-image-to-image",
-        label: "Seedream 5 Pro",
+        id: "nano-banana-2-1",
+        label: "Nano Banana 2.1 Edit",
         provider: "kie",
         available: true,
       });
-      expect(catalog.default_model).toBe("seedream/5-pro-image-to-image");
+      expect(catalog.default_model).toBe("nano-banana-2-1");
       expect(catalog.last_used_model).toBeNull();
       const falEntry = catalog.models.find((model) => model.id === "fal-ai/nano-banana-2/edit");
       expect(falEntry?.available).toBe(false);

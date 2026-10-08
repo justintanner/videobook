@@ -15,7 +15,7 @@ describe("goal planner style guidance", () => {
     const text = goalPlannerInstructions({ id: "cinematic", options: {} }, goalBriefConstraints("two clips"));
     expect(text).toContain("short noun/verb fragments");
     expect(text).toContain("Let the storyboard guide the video");
-    expect(text).toContain("timing and shot notes below pictures");
+    expect(text).toContain("timestamps and shot notes below pictures");
     expect(text).toContain("action/camera notes");
     expect(text).toContain("Photographic live-action");
     expect(text).toContain("Comedy comes from situations and timing");
@@ -26,7 +26,7 @@ describe("goal planner style guidance", () => {
     expect(text).toContain("video 12");
   });
 
-  it("guides every content format with four beats and the selected phone options", () => {
+  it("guides every content format with six beats and the selected phone options", () => {
     const style = goalStyle("ig-influencer");
     for (const format of style.options.find(option => option.key === "format")!.choices) {
       const selection = { id: style.id, options: { format: format.value, delivery: "mirror", camera: "iphone-main", light: "golden-hour" } };
@@ -39,7 +39,7 @@ describe("goal planner style guidance", () => {
   it("forces the detected style and defaults while preserving explicitly requested settings", () => {
     const style = goalBriefStyle("IG influencer GRWM");
     const constrained = constrainGoalPlannerPlan(plan, "Two portrait 4s clips", style);
-    expect(constrained).toMatchObject({ style, aspectRatio: "9:16", imageModel: "sunburst", imageResolution: "2K", videoResolution: "720p", frameContinuity: false });
+    expect(constrained).toMatchObject({ style, aspectRatio: "9:16", imageModel: "nano-banana-2-1", storyboardLayout: "six-panel", imageResolution: "2K", videoResolution: "720p", frameContinuity: false });
     expect(constrained.shots.map(shot => [shot.durationSeconds, shot.endingPrompt])).toEqual([[4, null], [4, null]]);
     expect(constrainGoalPlannerPlan(plan, "two 4s clips square, Flare 1K images and 480p video", style)).toMatchObject({ aspectRatio: "1:1", imageModel: "flare", imageResolution: "1K", videoResolution: "480p" });
     expect(() => constrainGoalPlannerPlan(plan, "three clips", style)).toThrow("different shot count");

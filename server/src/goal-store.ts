@@ -1,6 +1,6 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage, type GoalStillStage } from "./goal-plan.js";
+import { goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
 import type { GoalStyleSelection } from "./goal-styles.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
@@ -11,14 +11,15 @@ export type GoalEstimate = { usd: number | null; warnings: string[] };
 export type GoalEstimates = Record<GoalGenerationStage | "total", GoalEstimate>;
 export type GoalStageOutput = { index: number; artifactId: string; cellId: string | null; producerCellId: string | null; address: string | null };
 export type GoalStillAttempt = {
-  stage: GoalStillStage;
+  stage: GoalGenerationStage;
   index: number;
   chainId: string;
   stepId: string;
   artifactId: string | null;
   cellId: string | null;
   basePrompt: string;
-  storyboardLayout?: "four-panel";
+  storyboardLayout?: "four-panel" | "six-panel";
+  fingerprint?: string;
   feedback: string | null;
   parentArtifactId: string | null;
   frameArtifactId: string | null;
@@ -34,8 +35,8 @@ export type GoalStageRun = {
   attempts?: GoalStillAttempt[];
 };
 
-export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number };
-export type GoalCombinedVideo = { artifactId: string; cellId: string; jobId: number | null; status: "running" | "completed" | "failed"; error: string | null };
+export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number; clipSnapshot?: string; artifactIds?: string[] };
+export type GoalCombinedVideo = { artifactId: string; cellId: string; jobId: number | null; status: "running" | "completed" | "failed"; error: string | null; sourceArtifactIds?: string[] };
 
 export type GoalRecord = {
   planVersion: 1 | 2;
@@ -54,6 +55,8 @@ export type GoalRecord = {
   assembly: GoalAssembly | null;
   combined?: GoalCombinedVideo;
   resumeStage?: GoalStage | null;
+  resumeStatus?: "review" | "completed" | null;
+  resumeOutputs?: GoalStageOutput[] | null;
   error: string | null;
   dismissedAt: string | null;
   createdAt: string;

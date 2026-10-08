@@ -17,6 +17,7 @@ const KIE_LIVE = !!process.env.KIE_API_KEY && !isPlaceholderApiKey(process.env.K
 const FAL_LIVE = !!process.env.FAL_API_KEY && !isPlaceholderApiKey(process.env.FAL_API_KEY);
 
 const EDIT_PROMPTS: Record<string, string> = {
+  "nano-banana-2-1": "Change the entire image to a uniform deep blue color",
   "seedream/5-pro-image-to-image": "Change the entire image to a uniform deep blue color",
   "gpt-image-2-5-flare-image-to-image": "Change the entire image to a uniform deep blue color",
   "gpt-image-2-5-sunburst-image-to-image": "Change the entire image to a uniform deep blue color",

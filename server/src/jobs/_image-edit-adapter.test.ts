@@ -60,12 +60,12 @@ function catalogSchemaParse(adapter: ImageEditAdapter, stored: unknown): boolean
 }
 
 function imageUrlsOf(request: ImageEditProviderRequest): unknown {
-  return request.input.image_urls ?? request.input.input_urls;
+  return request.input.image_input ?? request.input.image_urls ?? request.input.input_urls;
 }
 
 describe("image edit adapters", () => {
   it("exposes one adapter per catalog model with matching ids", () => {
-    expect(IMAGE_EDIT_ADAPTERS.length).toBe(8);
+    expect(IMAGE_EDIT_ADAPTERS.length).toBe(9);
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
       expect(findImageEditModel(adapter.id), adapter.id).toBeDefined();
     }

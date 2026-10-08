@@ -1,5 +1,6 @@
 import { findVideoFile, MVP_CONTRACT_VERSION, sourceTicksToSequenceFrames } from "videobook-engine";
-import type { Engine, EditIntent, InsertClipOperation } from "videobook-engine";
+import type { Engine, EditIntent, EditOperation } from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { registerJobHandler } from "../queue.js";
 import { readGoal, saveGoal, type GoalRecord } from "../goal-store.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
@@ -11,24 +12,28 @@ export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifact
   }
   const sequence = engine.sequences.getPrimary();
   const existing = sequence.clips.filter((clip) => goal.clipIds.includes(clip.clipId));
+  const snapshot = JSON.stringify(existing);
+  const unchangedSources = existing.length === artifactIds.length && goal.clipIds.every((id, index) => existing.find(clip => clip.clipId === id)?.source.artifactId === artifactIds[index]);
   if (existing.length) {
     if (existing.length !== artifactIds.length) throw new Error("Some goal clips were already edited or removed. Review the sequence before assembling again.");
-    return {
+    if (unchangedSources) return {
       sequenceId: sequence.sequenceId,
       startFrame: Math.min(...existing.map((clip) => clip.timelineStartFrame)),
       durationFrames: existing.reduce((sum, clip) => sum + clip.durationFrames, 0),
+      clipSnapshot: goal.assembly?.clipSnapshot ?? snapshot, artifactIds,
     };
+    if (!goal.assembly?.clipSnapshot || goal.assembly.clipSnapshot !== snapshot) throw new Error("The goal's timeline clips were edited. Keep those edits and place the revised videos manually.");
   }
-  if (goal.assembly) throw new Error("This goal was already assembled; its clips have since been removed");
+  if (goal.assembly && !existing.length) throw new Error("This goal was already assembled; its clips have since been removed");
   const track = sequence.tracks.find((candidate) => candidate.trackId === goal.trackId);
   if (!track || track.kind !== "video" || track.locked || !track.enabled) {
     throw new Error("The goal's video track is no longer editable. Unlock or enable it, then assemble again.");
   }
-  const startFrame = Math.max(0,
+  const startFrame = existing.length ? Math.min(...existing.map(clip => clip.timelineStartFrame)) : Math.max(0,
     ...sequence.clips.map((clip) => clip.timelineStartFrame + clip.durationFrames),
     ...sequence.captions.map((caption) => caption.timelineStartFrame + caption.durationFrames));
   let cursor = startFrame;
-  const operations: InsertClipOperation[] = [];
+  const operations: EditOperation[] = existing.map(clip => ({ kind: "remove-clip", clipId: clip.clipId, ripple: false }));
   for (const [index, artifactId] of artifactIds.entries()) {
     const status = await engine.status.get(artifactId);
     if (!status.ok || status.value !== "ready") throw new Error(`Shot ${index + 1} is still processing`);
@@ -57,8 +62,11 @@ export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifact
     });
     cursor += durationFrames;
   }
+  if (sequence.clips.some(clip => !goal.clipIds.includes(clip.clipId) && clip.trackId === track.trackId && clip.timelineStartFrame < cursor && clip.timelineStartFrame + clip.durationFrames > startFrame)) {
+    throw new Error("The revised clips would overlap other timeline edits. Place the revised videos manually.");
+  }
   const intent: EditIntent = {
-    intentVersion: MVP_CONTRACT_VERSION, commandId: goal.goalId, sequenceId: sequence.sequenceId,
+    intentVersion: MVP_CONTRACT_VERSION, commandId: uuidv7(), sequenceId: sequence.sequenceId,
     baseRevision: sequence.revision, actor: "goal", sourceSurface: "system",
     confirmationPolicy: "reversible-single-step", operations,
   };
@@ -66,7 +74,7 @@ export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifact
   if (!preview.ok) throw new Error(preview.error.message);
   const committed = await engine.edits.commit(intent, preview.value.previewHash);
   if (!committed.ok) throw new Error(committed.error.message);
-  return { sequenceId: sequence.sequenceId, startFrame, durationFrames: cursor - startFrame };
+  return { sequenceId: sequence.sequenceId, startFrame, durationFrames: cursor - startFrame, artifactIds, clipSnapshot: JSON.stringify(engine.sequences.getPrimary().clips.filter(clip => goal.clipIds.includes(clip.clipId))) };
 }
 
 export function registerAssembleGoalJob(engine: Engine): void {

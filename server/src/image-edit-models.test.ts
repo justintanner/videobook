@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  NanoBanana21RequestSchema,
   GptImage25FlareImageToImageRequestSchema,
   GptImage25SunburstImageToImageRequestSchema,
   GptImage2ImageToImageRequestSchema,
@@ -21,6 +22,8 @@ import {
 
 function imageFieldFor(entryId: string): { safeParse(value: unknown): { success: boolean } } | null {
   switch (entryId) {
+    case "nano-banana-2-1":
+      return NanoBanana21RequestSchema.shape.input.shape.image_input;
     case "seedream/5-pro-image-to-image":
       return SeedreamProImageToImageRequestSchema.shape.input.shape.image_urls;
     case "gpt-image-2-5-flare-image-to-image":
@@ -83,8 +86,8 @@ describe("image edit model catalog", () => {
     }
   });
 
-  it("keeps the seedream pro model as the default and ids unique", () => {
-    expect(DEFAULT_IMAGE_EDIT_MODEL_ID).toBe("seedream/5-pro-image-to-image");
+  it("uses Nano Banana 2.1 as the default and keeps ids unique", () => {
+    expect(DEFAULT_IMAGE_EDIT_MODEL_ID).toBe("nano-banana-2-1");
     expect(findImageEditModel(DEFAULT_IMAGE_EDIT_MODEL_ID)?.provider).toBe("kie");
     expect(new Set(IMAGE_EDIT_MODELS.map((entry) => entry.id)).size).toBe(IMAGE_EDIT_MODELS.length);
   });

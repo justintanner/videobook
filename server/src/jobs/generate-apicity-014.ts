@@ -9,6 +9,7 @@ import { submitFalJob } from "./_fal-shared.js";
 import { submitKieTask } from "./kie-paygate.js";
 import { resolveImageRefs } from "../tools/_image-inputs.js";
 import { resolveVideoRef } from "../tools/_seedance2-shared.js";
+import { transformProviderPrompt } from "../provider-prompt-transform.js";
 import {
   apicity014Action,
   apicity014Actions,
@@ -140,7 +141,8 @@ async function submitAction(
   ctx: JobHandlerContext,
   ownerId?: string,
 ): Promise<string> {
-  const media = await resolveJobMedia(engine, action, job.args);
+  const prompt = transformProviderPrompt(action.canonicalName, job.args);
+  const media = await resolveJobMedia(engine, action, { ...job.args, ...(prompt === undefined ? {} : { prompt }) });
   const payload = parsedPayload(action, media.args);
   const meta = generationMeta(job.args, action, media);
   if (action.provider === "kie") {
@@ -173,7 +175,7 @@ async function submitAction(
 export function registerApicity014Jobs(engine: Engine): void {
   for (const listed of apicity014Actions()) {
     const action = apicity014Action(listed.canonicalName);
-    if (!action) throw new Error(`Missing apicity 0.14.0 job for ${listed.canonicalName}`);
+    if (!action) throw new Error(`Missing apicity 0.14.1 job for ${listed.canonicalName}`);
     registerJobHandler(action.jobType, async (payload, ctx) => {
       const job = payload as Apicity014JobPayload;
       if (action.provider === "fal") {

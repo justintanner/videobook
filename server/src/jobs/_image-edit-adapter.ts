@@ -11,6 +11,7 @@ import {
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
 import {
+  NanoBanana21RequestSchema,
   GptImage2ImageToImageRequestSchema,
   SeedreamProImageToImageRequestSchema,
 } from "@apicity/kie/zod";
@@ -19,6 +20,8 @@ import sharp from "sharp";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { buildGptImage25Payload, GPT_IMAGE_2_5_MODELS } from "../gpt-image-2-5.js";
+import { buildNanoBanana21Payload } from "../nano-banana-2-1.js";
+import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-default.js";
 import { mintKieOtp } from "./kie-paygate.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -323,6 +326,15 @@ const SEEDREAM_I2I_ADAPTER: ImageEditAdapter = kieImageEditAdapter({
 });
 
 export const IMAGE_EDIT_ADAPTERS: readonly ImageEditAdapter[] = [
+  kieImageEditAdapter({
+    id: DEFAULT_IMAGE_EDIT_MODEL_ID,
+    requestSchema: NanoBanana21RequestSchema,
+    build: input => buildNanoBanana21Payload({
+      prompt: input.prompt,
+      aspect_ratio: closestAspectRatio(input.width, input.height),
+      output_format: "png",
+    }, input.imageUrls),
+  }),
   SEEDREAM_I2I_ADAPTER,
   gptImage25EditAdapter("flare"),
   gptImage25EditAdapter("sunburst"),

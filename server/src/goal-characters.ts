@@ -5,7 +5,7 @@ import { replaceNotebookMentions, scanNotebookMentions } from "videobook-engine/
 import { resolveNotebookPromptReferences } from "./notebook-reference-resolver.js";
 import type { GoalCharacter } from "./goal-plan.js";
 
-const GOAL_CHARACTER_HELP = "Mention the character images in the brief, for example /goal @a1 @a2 as ...";
+const GOAL_CHARACTER_HELP = "Mention the reference images in the brief, for example /goal @a1 @a2 as ...";
 
 export function resolveGoalCharacters(engine: Engine, document: NotebookDocument, brief: string): GoalCharacter[] {
   if (scanNotebookMentions(brief).length === 0) throw new Error(GOAL_CHARACTER_HELP);
@@ -24,7 +24,7 @@ export function resolveGoalCharacters(engine: Engine, document: NotebookDocument
     });
   }
   if (characters.size === 0) throw new Error(GOAL_CHARACTER_HELP);
-  if (characters.size > 8) throw new Error("A goal supports 1–8 character images");
+  if (characters.size > 8) throw new Error("A goal supports 1–8 reference images");
   return [...characters.values()];
 }
 
@@ -32,7 +32,7 @@ export function currentGoalCharacters(document: NotebookDocument, characters: re
   return characters.map(character => {
     const cell = document.cells.find(candidate => candidate.id === character.cellId);
     if (!cell || resolveNotebookCellArtifactId(document, cell) !== character.artifactId) {
-      throw new Error(`Character image ${character.address} changed or was removed. Start a new /goal.`);
+      throw new Error(`Reference image ${character.address} changed or was removed. Start a new /goal.`);
     }
     return { ...character, address: notebookGridTag(cell.slot) };
   });

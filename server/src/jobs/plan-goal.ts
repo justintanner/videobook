@@ -13,6 +13,7 @@ import { readGoal, requireGoalContent, saveGoal, writeGoalContent } from "../goa
 import type { GoalEstimate, GoalEstimates } from "../goal-store.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { assessToolCallEstimate } from "./cost-estimate-assessment.js";
+import { goalPlannerImages } from "../goal-reference-images.js";
 
 function sumEstimates(estimates: GoalEstimate[]): GoalEstimate {
   return {
@@ -52,12 +53,15 @@ export function registerPlanGoalJob(engine: Engine): void {
       const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"), chatIntelligenceRequestOptions());
       const request = {
         instructions: goalPlannerInstructions(style, constraints),
-        input: [{ role: "user" as const, content: JSON.stringify({ brief: goalPlannerBrief(brief, characters, notebook.value), style: { ...style, label: goalStyle(style.id).label }, characters: characters.map((character, index) => ({ role: `Character ${index + 1}`, label: character.label, tags: tags.get(character.artifactId)?.effective ?? [] })), ...constraints }) }],
+        input: [{ role: "user" as const, content: [
+          { type: "input_text" as const, text: JSON.stringify({ brief: goalPlannerBrief(brief, characters, notebook.value).replace(/Character (\d+)/gu, "Reference $1"), style: { ...style, label: goalStyle(style.id).label }, references: characters.map((character, index) => ({ name: `Reference ${index + 1}`, label: character.label, tags: tags.get(character.artifactId)?.effective ?? [] })), ...constraints }) },
+          ...await goalPlannerImages(engine, characters),
+        ] }],
         text: { format: { type: "json_schema" as const, name: "video_goal_plan", strict: true, schema: z.toJSONSchema(goalPlannerResponseSchema.omit({ style: true })) } },
         max_output_tokens: 2500,
       };
       const response = await responses(intelligenceRequest(request, chatIntelligenceRequestOptions()), context.signal);
-      let plan = goalPlannerResponseSchema.parse(JSON.parse(firstResponseText(response)));
+      let plan: GoalPlan = goalPlannerResponseSchema.parse(JSON.parse(firstResponseText(response)));
       const budgetIssues = goalPromptBudgetIssues(plan);
       if (budgetIssues.length > 0) {
         const revised = await responses(intelligenceRequest({
@@ -69,6 +73,7 @@ export function registerPlanGoalJob(engine: Engine): void {
         plan = parsed.data;
       }
       plan = constrainGoalPlannerPlan(plan, brief, style);
+      plan.referenceRoles = characters.map((_, index) => plan.referenceRoles?.[index] ?? "reference");
       const estimate = await estimateGoal(engine, plan, characters);
       await withNotebookMutation(`goal:${goalId}`, async () => {
         const current = readGoal(engine, goalId);

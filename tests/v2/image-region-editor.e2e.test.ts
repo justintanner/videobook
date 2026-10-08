@@ -131,6 +131,7 @@ describe('drawn region image editor through real MCP', () => {
     await page.getByRole('button', { name: 'Edit @a1 image', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Fullscreen preview for @a1' })
     const instruction = dialog.getByLabel('What should change?')
+    await expect.poll(() => dialog.getByLabel('Model', { exact: true }).inputValue()).toBe('nano-banana-2-1')
     const draw = dialog.getByRole('button', { name: 'Draw region', exact: true })
     const drawRegion = async (left: number, top: number, width: number, height: number) => {
       await draw.click()
@@ -163,8 +164,9 @@ describe('drawn region image editor through real MCP', () => {
     await rejectedByProviderConfig()
     expect(observed[1]?.arguments).toMatchObject({
       operation: 'remove', edit_regions: observed[0]!.arguments.edit_regions,
-      model: 'seedream/5-pro-image-to-image',
+      model: 'nano-banana-2-1',
     })
+    await dialog.getByLabel('Model', { exact: true }).selectOption('seedream/5-pro-image-to-image')
     await instruction.fill('')
     await dialog.getByRole('listbox', { name: 'Replacement for Region 1' })
       .getByRole('option', { name: '@a2', exact: true }).click()
@@ -172,6 +174,7 @@ describe('drawn region image editor through real MCP', () => {
     await rejectedByProviderConfig()
     expect(observed[2]?.arguments).toMatchObject({
       operation: 'replace', regions: [{ box: (observed[0]!.arguments.edit_regions as unknown[])[0], replacement_artifact_id: expect.any(String) }],
+      model: 'seedream/5-pro-image-to-image',
     })
     expect(observed[2]?.arguments).not.toHaveProperty('edit_regions')
     await dialog.getByRole('button', { name: 'Clear replacement for Region 1' }).click()
@@ -279,6 +282,7 @@ describe('drawn region image editor through real MCP', () => {
     await page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).click()
     await page.getByRole('button', { name: 'Edit @m1 image', exact: true }).click()
     const movedDialog = page.getByRole('dialog', { name: 'Fullscreen preview for @m1' })
+    await expect.poll(() => movedDialog.getByLabel('Model', { exact: true }).inputValue()).toBe('nano-banana-2-1')
     expect(await movedDialog.getByLabel('What should change?').inputValue()).toBe(prompt)
     await movedDialog.getByRole('button', { name: 'Draw region', exact: true }).click()
     const image = await movedDialog.locator('.notebook-subject-stage-svg > image').boundingBox()

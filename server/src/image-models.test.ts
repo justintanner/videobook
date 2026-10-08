@@ -378,9 +378,9 @@ describe("validateImageParams", () => {
 // ---------------------------------------------------------------------------
 
 describe("getImageModels", () => {
-  it("returns all 26 image models", () => {
+  it("returns all 27 image models", () => {
     const models = getImageModels();
-    expect(Object.keys(models)).toHaveLength(26);
+    expect(Object.keys(models)).toHaveLength(27);
     expect(models).toHaveProperty("nano_banana");
     expect(models).toHaveProperty("grok_imagine_image");
     expect(models).toHaveProperty("gpt_image");

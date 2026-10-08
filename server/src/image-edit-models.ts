@@ -1,5 +1,6 @@
 import type { ZodType } from "zod";
 import {
+  NanoBanana21RequestSchema,
   GptImage25FlareImageToImageRequestSchema,
   GptImage25SunburstImageToImageRequestSchema,
   GptImage2ImageToImageRequestSchema,
@@ -12,6 +13,8 @@ import {
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
 import { readSlotConstraints } from "./zod-slots.js";
+import { DEFAULT_IMAGE_EDIT_MODEL_ID, NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
+export { DEFAULT_IMAGE_EDIT_MODEL_ID } from "./image-edit-default.js";
 
 export type ImageEditCapability = "semantic" | "regionReplace" | "wholeImage" | "exactMask";
 
@@ -46,6 +49,16 @@ const STANDARD_IMAGE_EDIT_CAPABILITIES = {
 } as const;
 
 export const IMAGE_EDIT_MODELS: readonly ImageEditModelInfo[] = [
+  {
+    id: DEFAULT_IMAGE_EDIT_MODEL_ID,
+    label: "Nano Banana 2.1 Edit",
+    provider: "kie",
+    envKey: "KIE_API_KEY",
+    requestSchema: NanoBanana21RequestSchema,
+    maxInputImages: maxInputImagesFrom(NanoBanana21RequestSchema.shape.input.shape.image_input),
+    capabilities: STANDARD_IMAGE_EDIT_CAPABILITIES,
+    shadowedAction: NANO_BANANA_2_1_TOOL,
+  },
   {
     id: "seedream/5-pro-image-to-image",
     label: "Seedream 5 Pro",
@@ -127,8 +140,6 @@ export const IMAGE_EDIT_MODELS: readonly ImageEditModelInfo[] = [
     shadowedAction: "generate_fal_wan_2_7_edit_image",
   },
 ];
-
-export const DEFAULT_IMAGE_EDIT_MODEL_ID = "seedream/5-pro-image-to-image";
 
 export const IMAGE_EDIT_MODEL_IDS = IMAGE_EDIT_MODELS.map((model) => model.id) as [string, ...string[]];
 

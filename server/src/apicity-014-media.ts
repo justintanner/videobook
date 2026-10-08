@@ -19,10 +19,13 @@ import {
   FalXaiGrokImagineVideoV1p5LiteTextToVideoRequestSchema,
 } from "@apicity/fal/zod";
 import {
+  NanoBanana21RequestSchema,
   SeedreamFlashImageToImageRequestSchema,
   SeedreamFlashLayerDecompositionRequestSchema,
   SeedreamFlashTextToImageRequestSchema,
 } from "@apicity/kie/zod";
+import { DEFAULT_IMAGE_EDIT_MODEL_ID, NANO_BANANA_2_1_KEY, NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
+import { buildNanoBanana21Payload } from "./nano-banana-2-1.js";
 import {
   zodEnumOptionsOrNull,
   zodNumberRange,
@@ -248,6 +251,35 @@ function kieFlashPayload(
 }
 
 const ACTIONS: Apicity014Action[] = [
+  {
+    canonicalName: NANO_BANANA_2_1_TOOL,
+    provider: "kie",
+    endpointId: DEFAULT_IMAGE_EDIT_MODEL_ID,
+    releaseName: "KIE Nano Banana 2.1",
+    label: "Nano Banana 2.1",
+    description: "Generate or edit an image with Nano Banana 2.1 using up to 10 references",
+    listingKey: NANO_BANANA_2_1_KEY,
+    mediaType: "image",
+    operation: "generate_image",
+    schemaOwner: "@apicity/kie/zod",
+    requestSchema: NanoBanana21RequestSchema,
+    taskType: "nano_banana_2_1",
+    jobType: NANO_BANANA_2_1_TOOL,
+    provenanceModel: DEFAULT_IMAGE_EDIT_MODEL_ID,
+    imageSlots: { min: 0, max: 10 },
+    textOnly: false,
+    picker: pickerSchema({}, []),
+    toolShape: {
+      book_id: bookIdField(),
+      prompt: NanoBanana21RequestSchema.shape.input.shape.prompt,
+      image_refs: z.array(z.string()).max(10).optional(),
+      aspect_ratio: NanoBanana21RequestSchema.shape.input.shape.aspect_ratio,
+      resolution: NanoBanana21RequestSchema.shape.input.shape.resolution,
+      output_format: NanoBanana21RequestSchema.shape.input.shape.output_format,
+    },
+    videoParams: [], videoZod: {}, videoImageField: null,
+    build: args => buildNanoBanana21Payload(args, strings(args.image_refs)),
+  },
   {
     canonicalName: "generate_fal_bria_fibo_edit_1_5_product_holding",
     provider: "fal",
@@ -991,6 +1023,7 @@ export function apicity014Actions(): readonly Apicity014Action[] {
 }
 
 const KIE_SCHEMA_NAMES: Record<string, string> = {
+  [NANO_BANANA_2_1_TOOL]: "NanoBanana21RequestSchema",
   generate_kie_seedream_v5_flash_text_to_image: "SeedreamFlashTextToImageRequestSchema",
   generate_kie_seedream_v5_flash_image_to_image: "SeedreamFlashImageToImageRequestSchema",
   generate_kie_seedream_v5_flash_layer_decomposition: "SeedreamFlashLayerDecompositionRequestSchema",
@@ -1011,7 +1044,7 @@ export const APICITY_014_GENERATION_ACTIONS: GenerationActionSpec[] = ACTIONS.ma
 
 export type Apicity014ImageConfig = {
   key: string;
-  kieModelId?: "seedream/5-flash-text-to-image" | "seedream/5-flash-image-to-image" | "seedream/5-flash-layer-decomposition";
+  kieModelId?: "seedream/5-flash-text-to-image" | "seedream/5-flash-image-to-image" | "seedream/5-flash-layer-decomposition" | "nano-banana-2-1";
   tool_name: string;
   label: string;
   description: string;
@@ -1036,7 +1069,7 @@ export const APICITY_014_IMAGE_CONFIGS: Apicity014ImageConfig[] = ACTIONS
     imageFieldSchema: action.imageSlots ? imageArraySchema(action.imageSlots) : null,
     ...(action.provider === "kie" ? {
       kieModelId: action.endpointId as Apicity014ImageConfig["kieModelId"],
-      ...(action.imageSlots ? { kieImageField: action.canonicalName.endsWith("layer_decomposition") ? "image_url" : "image_urls" } : {}),
+      ...(action.imageSlots ? { kieImageField: action.canonicalName === NANO_BANANA_2_1_TOOL ? "image_input" : action.canonicalName.endsWith("layer_decomposition") ? "image_url" : "image_urls" } : {}),
     } : {
       falToolNames: action.textOnly
         ? { noRefs: action.canonicalName }

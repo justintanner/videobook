@@ -1,3 +1,4 @@
+import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../../server/src/image-edit-default'
 import { useCallback, useRef, useState } from 'react'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -71,7 +72,7 @@ function parseImageEditModelCatalog(payload: unknown): ImageEditModelCatalog {
   }
   return {
     models,
-    defaultModelId: nonBlankStringValue(record?.default_model) ?? models[0]?.id ?? 'seedream/5-pro-image-to-image',
+    defaultModelId: nonBlankStringValue(record?.default_model) ?? models[0]?.id ?? DEFAULT_IMAGE_EDIT_MODEL_ID,
     lastUsedModelId: nonBlankStringValue(record?.last_used_model),
   }
 }
@@ -114,7 +115,7 @@ export function useImageEditModels({
 
   return {
     models: catalog?.models ?? [],
-    defaultModelId: catalog?.defaultModelId ?? 'seedream/5-pro-image-to-image',
+    defaultModelId: catalog?.defaultModelId ?? DEFAULT_IMAGE_EDIT_MODEL_ID,
     lastUsedModelId: catalog?.lastUsedModelId ?? null,
     loading,
     error,

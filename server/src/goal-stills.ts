@@ -1,17 +1,62 @@
-import type { Engine, NotebookDocument } from "videobook-engine";
+import { resolveNotebookCellArtifactId, type Engine, type NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { getChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
-import { compileFrameSteps, compileStoryboardSteps, goalStillPrompt, type GoalCharacter, type GoalPlan, type GoalStillStage } from "./goal-plan.js";
+import { compileFrameSteps, compileStoryboardSteps, goalStillPrompt, type GoalCharacter, type GoalPlan, type GoalStillStage, type GoalGenerationStage } from "./goal-plan.js";
 import type { GoalRecord, GoalStageOutput, GoalStillAttempt } from "./goal-store.js";
+import { goalReferenceHashes } from "./goal-reference-images.js";
 
-export function goalStillAttempts(goal: GoalRecord, plan: GoalPlan, stage: GoalStillStage, chainId: string, steps: readonly ChainStep[], createdAt: string, feedback: string | null = null): GoalStillAttempt[] {
-  return [...(goal.stages[stage]?.attempts ?? []), ...steps.map(step => {
-    const index = stage === "frame" ? 0 : Number(step.id.slice("storyboard".length)) - 1;
+function goalStepIndex(stage: GoalGenerationStage, stepId: string): number {
+  return stage === "frame" ? 0 : Number(/\d+$/u.exec(stepId)?.[0]) - 1;
+}
+
+export async function goalStageFingerprint(engine: Engine, goal: GoalRecord, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalGenerationStage, index: number): Promise<string> {
+  const ids = characters.map(character => character.artifactId);
+  if (stage !== "frame") ids.push(goal.stages.frame?.outputs[0]?.artifactId ?? "");
+  if (stage === "videos") {
+    ids.push(goal.stages.storyboards?.outputs.find(output => output.index === index)?.artifactId ?? "");
+    if (plan.frameContinuity) ids.push(goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)?.artifactId ?? "");
+  }
+  return JSON.stringify({
+    prompt: stage === "videos" ? plan.shots[index]?.videoPrompt : goalStillPrompt(plan, stage, index),
+    aspectRatio: plan.aspectRatio, style: { id: plan.style.id, options: Object.entries(plan.style.options).sort() },
+    referenceRoles: plan.referenceRoles ?? [], references: await goalReferenceHashes(engine, ids),
+    ...(stage === "videos" ? { duration: plan.shots[index]?.durationSeconds, resolution: plan.videoResolution, audio: true }
+      : { model: plan.imageModel, resolution: plan.imageResolution, ...(stage === "frame" ? { continuity: plan.continuity } : { layout: plan.storyboardLayout ?? "four-panel" }) }),
+  });
+}
+
+export async function goalAttemptFingerprints(engine: Engine, goal: GoalRecord, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalGenerationStage, steps: readonly ChainStep[]): Promise<Record<string, string>> {
+  return Object.fromEntries(await Promise.all(steps.filter(step => step.id !== "assemble").map(async step => [step.id, await goalStageFingerprint(engine, goal, plan, characters, stage, goalStepIndex(stage, step.id))])));
+}
+
+export function goalStageAttempts(engine: Engine, goal: GoalRecord, stage: GoalGenerationStage): GoalStillAttempt[] {
+  const run = goal.stages[stage];
+  const attempts = [...(run?.attempts ?? [])];
+  if (!run || stage !== "videos") return attempts;
+  for (const chainId of [...run.previousChainIds, run.chainId]) {
+    for (const step of getChainRun(engine, chainId)?.steps ?? []) {
+      const artifactId = step.outputs?.asset_id ?? step.outputs?.vid_asset_id;
+      if (!/^shot\d+$/u.test(step.id) || step.status !== "completed" || typeof artifactId !== "string" || attempts.some(attempt => attempt.chainId === chainId && attempt.stepId === step.id)) continue;
+      attempts.push({
+        stage, index: goalStepIndex(stage, step.id), chainId, stepId: step.id, artifactId,
+        cellId: typeof step.outputs?.cell_id === "string" ? step.outputs.cell_id : null,
+        basePrompt: typeof step.params.prompt === "string" ? step.params.prompt.split("\n\n")[0]! : "",
+        feedback: null, parentArtifactId: null, frameArtifactId: null, createdAt: run.approvedAt,
+      });
+    }
+  }
+  return attempts;
+}
+
+export function goalStillAttempts(goal: GoalRecord, plan: GoalPlan, stage: GoalGenerationStage, chainId: string, steps: readonly ChainStep[], createdAt: string, feedback: string | null = null, fingerprints?: Record<string, string>, history = goal.stages[stage]?.attempts ?? []): GoalStillAttempt[] {
+  return [...history, ...steps.filter(step => step.id !== "assemble").map(step => {
+    const index = goalStepIndex(stage, step.id);
     return {
       stage, index, chainId, stepId: step.id, artifactId: null, cellId: null,
-      basePrompt: goalStillPrompt(plan, stage, index), feedback,
-      ...(stage === "storyboards" && index < plan.shots.length ? { storyboardLayout: "four-panel" as const } : {}),
+      basePrompt: stage === "videos" ? plan.shots[index]!.videoPrompt : goalStillPrompt(plan, stage, index), feedback,
+      ...(fingerprints?.[step.id] ? { fingerprint: fingerprints[step.id] } : {}),
+      ...(stage === "storyboards" && index < plan.shots.length ? { storyboardLayout: plan.storyboardLayout ?? "four-panel" as const } : {}),
       parentArtifactId: feedback ? goal.stages[stage]?.outputs.find(output => output.index === index)?.artifactId ?? null : null,
       frameArtifactId: stage === "storyboards" ? goal.stages.frame?.outputs[0]?.artifactId ?? null : null,
       createdAt,
@@ -38,11 +83,33 @@ function preStyleStillPrompt(plan: GoalPlan, characters: readonly GoalCharacter[
   return `One ending frame. ${shot.endingPrompt ?? `Final moment: ${shot.videoPrompt}`}\n\nReferences: ${references.join("; ")}.`;
 }
 
-export function goalStillStaleReason(engine: Engine, goal: GoalRecord, document: NotebookDocument, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalStillStage, output: GoalStageOutput): string | null {
+export async function goalStillStaleReason(engine: Engine, goal: GoalRecord, document: NotebookDocument, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalGenerationStage, output: GoalStageOutput): Promise<string | null> {
+  const cell = document.cells.find(candidate => candidate.id === output.cellId);
+  if (!cell || resolveNotebookCellArtifactId(document, cell) !== output.artifactId) return "The selected output changed or was removed. Choose another version or regenerate it.";
+  if (characters.some(character => !document.cells.some(candidate => candidate.id === character.cellId && resolveNotebookCellArtifactId(document, candidate) === character.artifactId))) return "A source reference changed or was removed.";
+  const attempt = goalStageAttempts(engine, goal, stage).find(item => item.index === output.index && item.artifactId === output.artifactId);
+  if (attempt?.fingerprint && attempt.fingerprint !== await goalStageFingerprint(engine, goal, plan, characters, stage, output.index)) return `${stage === "frame" ? "Scene" : stage === "storyboards" ? "Storyboard" : "Video"} uses older settings, prompts or references. Revise or regenerate it.`;
+  if (stage !== "frame") {
+    const frame = goal.stages.frame?.outputs[0];
+    if (!frame || await goalStillStaleReason(engine, goal, document, plan, characters, "frame", frame)) return "The scene has changed. Refresh it before continuing.";
+  }
+  if (stage === "videos") {
+    const indexes = [output.index, ...(plan.frameContinuity ? [output.index + plan.shots.length] : [])];
+    for (const index of indexes) {
+      const board = goal.stages.storyboards?.outputs.find(item => item.index === index);
+      if (!board || await goalStillStaleReason(engine, goal, document, plan, characters, "storyboards", board)) return "The storyboard has changed. Refresh it before generating video.";
+    }
+    if (attempt && !attempt.fingerprint) {
+      const step = getChainRun(engine, attempt.chainId)?.steps.find(item => item.id === attempt.stepId);
+      const expected = indexes.map(index => goal.stages.storyboards?.outputs.find(item => item.index === index)?.artifactId);
+      if (expected.some((id, index) => id !== step?.pins[index]?.artifactId)) return "Video uses an older storyboard. Revise or regenerate it.";
+    }
+    return attempt && attempt.basePrompt !== plan.shots[output.index]?.videoPrompt ? "Video uses older directions. Revise or regenerate it." : null;
+  }
+  if (attempt?.fingerprint) return null;
   const name = stage === "frame" ? "Full frame" : `${output.index >= plan.shots.length ? "Ending frame" : "Storyboard"} ${output.index % plan.shots.length + 1}`;
   const run = goal.stages[stage];
-  const attempt = run?.attempts?.find(item => item.index === output.index && item.artifactId === output.artifactId);
-  if (stage === "storyboards" && output.index < plan.shots.length && attempt?.storyboardLayout !== "four-panel") {
+  if (stage === "storyboards" && output.index < plan.shots.length && attempt?.storyboardLayout !== (plan.storyboardLayout ?? "four-panel")) {
     return `${name} is a legacy single-frame preview. Regenerate or revise it to create a four-panel storyboard.`;
   }
   const promptError = `${name} was made from an older prompt. Regenerate or revise it, or restore the prompt.`;

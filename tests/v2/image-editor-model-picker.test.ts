@@ -7,6 +7,14 @@ import type { ImageSubjectMap } from '../../src/videobook/image-subject-map'
 
 const models: ImageEditModelOption[] = [
   {
+    id: 'nano-banana-2-1',
+    label: 'Nano Banana 2.1 Edit',
+    provider: 'kie',
+    capabilities: { semantic: true, regionReplace: true, wholeImage: true, exactMask: false },
+    maxInputImages: 10,
+    available: true,
+  },
+  {
     id: 'seedream/5-pro-image-to-image',
     label: 'Seedream 5 Pro',
     provider: 'kie',
@@ -59,7 +67,7 @@ const subjectMap: ImageSubjectMap = {
 function renderEditor(overrides: {
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
-  lastUsedImageEditModelId?: string | null
+  defaultImageEditModelId?: string | null
   initialRegions?: readonly { id: string, box: { x: number, y: number, width: number, height: number } }[]
 }) {
   return renderToStaticMarkup(createElement(ImageEditorWorkspace, {
@@ -94,12 +102,12 @@ describe('image editor model picker', () => {
     expect(html.indexOf('image-editor-model')).toBeLessThan(html.indexOf('image-editor-submit'))
   })
 
-  it('prefills the last used model for the book before the catalog default', () => {
+  it('prefills Nano Banana 2.1 from the catalog default', () => {
     const html = renderEditor({
       imageEditModels: models,
-      lastUsedImageEditModelId: 'alibaba/qwen-image-3/edit',
+      defaultImageEditModelId: 'nano-banana-2-1',
     })
-    expect(html).toMatch(/value="alibaba\/qwen-image-3\/edit"[^>]*selected/)
+    expect(html).toMatch(/value="nano-banana-2-1"[^>]*selected/)
   })
 
   it('disables models that cannot serve the current target', () => {

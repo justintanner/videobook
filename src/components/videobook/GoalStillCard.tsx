@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { GoalStillStage } from '../../../server/src/goal-plan'
+import type { GoalGenerationStage } from '../../../server/src/goal-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { goalStillStale, goalStillVersions, type GoalSnapshot } from '@/videobook/goals'
+import { goalOutputEstimate, goalStillStale, goalStillVersions, type GoalSnapshot } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
 
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -24,7 +24,7 @@ export function GoalMedia({ artifactId, cellId, label, resolveAsset, onOpen, ful
 
 export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerate, resolveAsset, onOpen, onPromptChange, onRegenerate, onRevise, onSelect }: {
   goal: GoalSnapshot
-  stage: GoalStillStage
+  stage: GoalGenerationStage
   index: number
   prompt: string
   disabled: boolean
@@ -42,14 +42,17 @@ export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerat
   const count = goal.plan?.shots.length ?? 1
   const ending = stage === 'storyboards' && index >= count
   const storyboard = stage === 'storyboards' && !ending
-  const label = stage === 'frame' ? 'Full frame' : `${ending ? 'Ending frame' : 'Storyboard'} ${index % count + 1}`
+  const simple = goal.plan && 'storyboardLayout' in goal.plan && goal.plan.storyboardLayout === 'six-panel'
+  const label = stage === 'videos' ? `Video ${index + 1}` : stage === 'frame' ? simple ? 'Scene' : 'Full frame' : `${ending ? 'Ending frame' : 'Storyboard'} ${index % count + 1}`
   const versions = goalStillVersions(goal, stage, index)
   const stale = goalStillStale(goal, stage, index)
-  const estimate = stage === 'frame' ? goal.estimate.frame.usd : goal.estimate.still.usd
+  const estimate = goalOutputEstimate(goal, stage, index)
+  const cost = estimate === null ? ' · estimate unavailable' : ` · $${estimate.toFixed(2)}`
+  const asset = resolveAsset(output.artifactId)
   const validFeedback = Boolean(feedback.trim()) && !feedback.includes('@')
   const revise = () => { if (!disabled && canGenerate && validFeedback) onRevise(feedback.trim()) }
   return <section className="goal-still-card" aria-label={label} data-stage={stage} data-storyboard={storyboard}>
-    <GoalMedia artifactId={output.artifactId} cellId={output.cellId} label={label} resolveAsset={resolveAsset} onOpen={onOpen} fullResolution={storyboard} />
+    {stage === 'videos' && asset?.mediaUrl ? <video className="goal-video-preview" aria-label={label} src={asset.mediaUrl} poster={asset.thumbnailUrl ?? undefined} controls preload="metadata" /> : <GoalMedia artifactId={output.artifactId} cellId={output.cellId} label={label} resolveAsset={resolveAsset} onOpen={onOpen} fullResolution={storyboard} />}
     <div className="goal-still-tools">
       {storyboard && !stale && <p className="goal-panel-muted">Read left to right, then top to bottom.</p>}
       <div className="goal-versions" aria-label={`${label} versions`}>
@@ -70,14 +73,14 @@ export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerat
           event.stopPropagation()
           revise()
         }} />
-        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate || !validFeedback} onClick={revise}>Revise{estimate === null ? '' : ` · $${estimate.toFixed(2)}`}</button>
-        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate} onClick={onRegenerate}>Regenerate</button>
+        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate || !validFeedback} onClick={revise}>Revise{cost}</button>
+        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate} onClick={onRegenerate}>Regenerate{cost}</button>
       </div>
       {feedback.includes('@') && <p className="goal-panel-muted">Describe the change without @ references.</p>}
       <details className="goal-disclosure">
         <summary>Prompt</summary>
-        <GoalPromptInput label={stage === 'frame' ? 'Full frame prompt' : ending ? 'Ending frame prompt' : 'Storyboard prompt'} name={stage === 'frame' ? 'Full frame prompt' : `Shot ${index % count + 1} ${ending ? 'ending frame' : 'storyboard'} prompt`} budget={stage === 'frame' ? 'frame' : ending ? 'ending' : 'storyboard'} value={prompt} disabled={disabled} onChange={onPromptChange} />
-        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate} onClick={onRegenerate}>Save and regenerate</button>
+        <GoalPromptInput label={stage === 'videos' ? 'Video directions' : stage === 'frame' ? simple ? 'Scene prompt' : 'Full frame prompt' : ending ? 'Ending frame prompt' : 'Storyboard prompt'} name={stage === 'videos' ? `Shot ${index + 1} video prompt` : stage === 'frame' ? simple ? 'Scene prompt' : 'Full frame prompt' : `Shot ${index % count + 1} ${ending ? 'ending frame' : 'storyboard'} prompt`} wordLimit={storyboard && simple ? 48 : undefined} budget={stage === 'videos' ? 'video' : stage === 'frame' ? 'frame' : ending ? 'ending' : 'storyboard'} value={prompt} disabled={disabled} onChange={onPromptChange} />
+        <button type="button" className="goal-panel-button" disabled={disabled || !canGenerate} onClick={onRegenerate}>Save and regenerate{cost}</button>
       </details>
     </div>
   </section>

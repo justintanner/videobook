@@ -29,7 +29,8 @@ export function arrangeGoalNotebook(
     cells.forEach((cell, index) => slots.set(cell.id, { row: row + Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT), column: index % NOTEBOOK_GRID_COLUMN_COUNT }));
     row += Math.max(minimumRows, Math.ceil((cells.length + extra) / NOTEBOOK_GRID_COLUMN_COUNT));
   };
-  place([...referenceImages, ...goals, ...generators], reserve.generators);
+  place(referenceImages, 0, 0);
+  place([...goals, ...generators], reserve.generators);
   place(images, reserve.images);
   place(videos, reserve.videos);
   for (const timeline of timelines) {

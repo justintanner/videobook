@@ -7,7 +7,7 @@ const limits: Record<GoalStyleStage, number> = { frame: 25, storyboard: 20, endi
 
 describe("goal styles", () => {
   it("keeps cinematic stages photographic with compact live-action guidance", () => {
-    expect(GOAL_STYLE_IDS).toEqual(["cinematic", "ig-influencer"]);
+    expect(GOAL_STYLE_IDS).toEqual(["source", "cinematic", "ig-influencer"]);
     expect(goalStyle("cinematic")).toMatchObject({ defaults: {}, banned: [], options: [] });
     expect(goalStyle("cinematic").planner).toContain("avoid cartoon rendering");
     expect(resolveGoalStyleOptions("cinematic")).toEqual({});
@@ -57,9 +57,9 @@ describe("goal styles", () => {
     expect(goalBriefStyle("IG influencer first, then cinematic").id).toBe("ig-influencer");
   });
 
-  it("leaves unrelated briefs and embedded character names cinematic; standalone style words still select a style", () => {
+  it("matches source for unrelated briefs and embedded character names; standalone style words still select a style", () => {
     for (const brief of ["@a1 rides a skateboard", "@a1 Superinfluencer visits the gym", "@a1 influencerella vlog", "@a1 my_influencer travels", "@a1 influencer-robot storytime"]) {
-      expect(goalBriefStyle(brief)).toEqual({ id: "cinematic", options: {} });
+      expect(goalBriefStyle(brief)).toEqual({ id: "source", options: {} });
     }
     expect(goalBriefStyle('@a1 named "Influencer" visits a cafe').id).toBe("ig-influencer");
   });

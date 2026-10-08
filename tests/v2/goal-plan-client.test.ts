@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { composerGoal, goalCanRetry, goalGenerationMarks, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalStopLabel, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
+import { composerGoal, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalStopLabel, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
 import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
 import { goalBriefStyle } from '../../server/src/goal-styles'
 
@@ -14,7 +14,7 @@ const plan: GoalPlan = {
 const estimate = { frame: { usd: 0.2, warnings: [] }, still: { usd: 0.2, warnings: [] }, storyboards: { usd: 0.6, warnings: [] }, videos: { usd: 2.4, warnings: [] }, total: { usd: 3.2, warnings: [] } }
 function goal(extra: Partial<GoalSnapshot> = {}): GoalSnapshot {
   return {
-    kind: 'video-goal', planVersion: 2, stage: 'frame', stages: {}, goalId: 'goal-1', bookId: 'book', notebookId: 'notebook', cellId: 'goal-tile', address: '@a3', requestId: 'request',
+    kind: 'video-goal', assemblyStale: false, planVersion: 2, stage: 'frame', stages: {}, goalId: 'goal-1', bookId: 'book', notebookId: 'notebook', cellId: 'goal-tile', address: '@a3', requestId: 'request',
     brief: '@a1 @a2 ride through the rain, three 10s clips', characters: [], revision: 1, plan, estimate, status: 'review', error: null, chainId: null, planningJobId: null,
     clipIds: [], trackId: null, assembly: null, dismissedAt: null, createdAt: '2026-10-07T10:00:00Z', updatedAt: '2026-10-07T10:00:00Z', steps: [], ...extra,
   }
@@ -43,6 +43,14 @@ function running(stage: GoalGenerationStage, statuses: Step['status'][], extra: 
 }
 
 describe('staged goal model', () => {
+  it('prices video revisions by clip duration and includes optional ending images in still costs', () => {
+    const varied = goal({ plan: { ...plan, frameContinuity: true, shots: plan.shots.map((shot, index) => ({ ...shot, durationSeconds: [5, 10, 15][index]! })) } })
+    expect(goalOutputEstimate(varied, 'frame', 0)).toBe(0.2)
+    expect(goalOutputEstimate(varied, 'storyboards', 4)).toBeCloseTo(0.1)
+    expect([0, 1, 2].map(index => goalOutputEstimate(varied, 'videos', index))).toEqual([0.4, 0.8, 1.2])
+    expect(goalOutputEstimate(goal({ estimate: { ...estimate, videos: { usd: null, warnings: ['Pricing unavailable'] } } }), 'videos', 0)).toBeNull()
+  })
+
   it('compares every editable field by value and tolerates reordered storage keys', () => {
     const reordered = JSON.parse(JSON.stringify(plan, Object.keys(plan).reverse())) as GoalPlan
     expect(goalPlansEqual(plan, { ...reordered, style: structuredClone(plan.style), frame: { prompt: plan.frame.prompt }, shots: structuredClone(plan.shots) })).toBe(true)

@@ -3,7 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
 import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import { readGoal, requireGoalContent, saveGoal, type GoalRecord } from "../goal-store.js";
-import { completedGoalVideos, writeGoalCombinationState } from "../goal-state.js";
+import { completedGoalVideos, goalAssemblyStale, writeGoalCombinationState } from "../goal-state.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { nextGenerationOutputSlot } from "../notebook-placement.js";
 import { materializeArtifactFile, registerMediaProbe } from "../notebook-media-ops.js";
@@ -15,8 +15,9 @@ import { arrangeGoalNotebook } from "../notebook-goal-layout.js";
 
 export async function queueGoalCombination(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   if (goal.status !== "completed" || !goal.assembly) throw new Error("Complete and assemble the goal before combining its clips");
-  if (goal.combined && goal.combined.status !== "failed") return goal;
   const artifactIds = completedGoalVideos(engine, goal);
+  if (goalAssemblyStale(engine, goal)) throw new Error("Assemble the selected video versions before combining again");
+  if (goal.combined && goal.combined.status !== "failed") return goal;
   if (artifactIds.length < 2 || artifactIds.length !== goal.clipIds.length) throw new Error("The completed goal needs at least two clips");
   const content = requireGoalContent(engine, goal);
   const artifact = await engine.artifacts.create("video", `${content.plan?.title ?? "Video goal"} · Combined`);
@@ -36,7 +37,7 @@ export async function queueGoalCombination(engine: Engine, goal: GoalRecord): Pr
   });
   if (!placed.ok) throw new Error(placed.error.message);
   const jobId = `goal-combine-${goal.goalId}-${uuidv7()}`;
-  saveGoal(engine, { ...goal, combined: { artifactId, cellId, jobId: null, status: "running", error: null } });
+  saveGoal(engine, { ...goal, combined: { artifactId, cellId, jobId: null, status: "running", error: null, sourceArtifactIds: artifactIds } });
   try {
     const job = await queue.enqueue(jobId, { type: "combine_goal", bookId: goal.bookId, goalId: goal.goalId, assetId: artifactId, artifactIds, cellId });
     const current = readGoal(engine, goal.goalId);
@@ -51,6 +52,7 @@ export async function queueGoalCombination(engine: Engine, goal: GoalRecord): Pr
 async function writeCombinationState(engine: Engine, goalId: string, artifactId: string, error: string | null): Promise<void> {
   const goal = readGoal(engine, goalId);
   if (goal.combined?.artifactId !== artifactId) return;
+  if (goal.combined.sourceArtifactIds && JSON.stringify(goal.combined.sourceArtifactIds) !== JSON.stringify(completedGoalVideos(engine, goal))) error = "Video selection changed. Assemble the selected clips before combining again.";
   await writeGoalCombinationState(engine, goal, error);
 }
 

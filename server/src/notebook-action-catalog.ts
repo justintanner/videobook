@@ -326,6 +326,7 @@ const generationTitleOverrides: Record<string, string> = {
   generate_kie_gemini_omni_video: "Gemini Omni Video",
   generate_google_flow_omni_flash_video: "Gemini Omni Video",
   generate_kie_nano_banana_pro_text_to_image: "Nano Banana Pro",
+  generate_kie_nano_banana_2_1_image: "Nano Banana 2.1",
   generate_google_flow_nano_banana_pro_image: "Nano Banana Pro",
   generate_kie_seedance_2_5_video: "Seedance 2.5",
   generate_kie_kling_3_0_omni_text_to_video: "Kling 3.0 Omni",

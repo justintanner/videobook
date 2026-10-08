@@ -13,7 +13,7 @@ export function generateApicity014Defs(engine: Engine): ToolDef[] {
     const action = apicity014Action(listed.canonicalName);
     const schema = apicity014ToolShape(listed.canonicalName);
     if (!action || !schema) {
-      throw new Error(`Missing apicity 0.14.0 tool surface for ${listed.canonicalName}`);
+      throw new Error(`Missing apicity 0.14.1 tool surface for ${listed.canonicalName}`);
     }
     const envKey = action.provider === "fal" ? "FAL_API_KEY" : "KIE_API_KEY";
     const artifactKind = action.mediaType === "video" ? "vid" : "img";

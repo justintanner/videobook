@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 97
-- Provider actions: 88
+- Total actions: 98
+- Provider actions: 89
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -93,6 +93,7 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `reconcile_project_work` | workflow | `internal/sync` | workflow | reconcile_work | workflow_tool | `sync` |
 | `retry_generation` | workflow | `internal/retry-generation` | workflow | retry_generation | workflow_tool | `retry_generation` |
 | `clean_failed_assets` | workflow | `internal/clear-failed-tasks` | workflow | clean_assets | workflow_tool | `clear_failed_tasks` |
+| `generate_kie_nano_banana_2_1_image` | kie | `NanoBanana21RequestSchema` | image | generate_image | visible |  |
 | `generate_fal_bria_fibo_edit_1_5_product_holding` | fal | `bria/fibo-edit-1.5/product-holding` | image | product_holding | visible |  |
 | `generate_fal_bria_fibo_edit_1_5_virtual_try_on` | fal | `bria/fibo-edit-1.5/virtual-try-on` | image | virtual_try_on | visible |  |
 | `generate_fal_recraft_v4_1_flash_text_to_image` | fal | `recraft/v4.1/flash/text-to-image` | image | text_to_image | visible |  |

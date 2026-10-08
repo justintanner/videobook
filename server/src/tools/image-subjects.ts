@@ -44,7 +44,7 @@ function editModelCapacityError(
   entry: ImageEditModelInfo,
   replacementCount: number,
 ): string {
-  if (entry.id === DEFAULT_IMAGE_EDIT_MODEL_ID) {
+  if (entry.id === "seedream/5-pro-image-to-image") {
     return seedreamProImageUrlCapacityError(replacementCount);
   }
   const max = entry.maxInputImages ?? 1;

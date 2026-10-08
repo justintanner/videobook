@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
-import type { Engine } from "videobook-engine";
+import { MVP_CONTRACT_VERSION, type Engine, type EditIntent } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
@@ -17,7 +17,8 @@ import { goalPlannerBrief } from "../goal-characters.js";
 import { GOAL_STYLE_IDS, goalBriefStyle, goalStyleFragment, resolveGoalStyleOptions } from "../goal-styles.js";
 import { LEGACY_GOAL_MESSAGE } from "../goal-state.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
-import { goalTestCharacters, goalTestPlan, goalTestVideo, seedGoalStage } from "../test-goals.js";
+import { goalTestCharacters, goalTestPlan, goalTestSimplePlan, goalTestVideo, seedGoalStage } from "../test-goals.js";
+import { goalPlannerImages } from "../goal-reference-images.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { GoalSnapshot } from "./goal.js";
 
@@ -44,12 +45,12 @@ describe("video goal plans", () => {
     expect(goalBriefConstraints("two 4s funny clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
     expect(goalBriefConstraints("Two portrait 4s clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
     expect(goalBriefConstraints("two funny 4-second vertical clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
-    expect(goalBriefConstraints("2 landscape 8s shots")).toEqual({ shotCount: 2, durationSeconds: 8, aspectRatio: "16:9" });
-    expect(goalBriefConstraints("four square 6-second scenes")).toEqual({ shotCount: 4, durationSeconds: 6, aspectRatio: "1:1" });
-    expect(goalBriefConstraints("two portrait characters, 4s clips")).toEqual({ shotCount: 3, durationSeconds: 4, aspectRatio: "9:16" });
+    expect(goalBriefConstraints("2 landscape 8s shots")).toEqual({ shotCount: 1, durationSeconds: 8, aspectRatio: "16:9" });
+    expect(goalBriefConstraints("four square 6-second scenes")).toEqual({ shotCount: 1, durationSeconds: 6, aspectRatio: "1:1" });
+    expect(goalBriefConstraints("two portrait characters, 4s clips")).toEqual({ shotCount: 1, durationSeconds: 4, aspectRatio: "9:16" });
     expect(goalBriefConstraints("four 8-second clips, portrait")).toEqual({ shotCount: 4, durationSeconds: 8, aspectRatio: "9:16" });
     expect(goalBriefConstraints("2 x 12s, square")).toEqual({ shotCount: 2, durationSeconds: 12, aspectRatio: "1:1" });
-    expect(goalBriefConstraints("@a1 @a2 as Mr Bean in Thailand")).toEqual({ shotCount: 3, durationSeconds: 10, aspectRatio: "9:16" });
+    expect(goalBriefConstraints("@a1 @a2 as Mr Bean in Thailand")).toEqual({ shotCount: 1, durationSeconds: 20, aspectRatio: "9:16" });
     for (const format of ["landscape", "horizontal", "widescreen", "16:9"]) {
       expect(goalBriefConstraints(`@a1 @a2 as Mr Bean in Thailand, ${format}`).aspectRatio).toBe("16:9");
     }
@@ -144,7 +145,7 @@ describe("video goal plans", () => {
 
   it("budgets planner prompts without rejecting longer saved plans", () => {
     expect(goalPromptBudgetIssues(plan)).toEqual([]);
-    expect(goalPlannerResponseSchema.parse(plan)).toEqual(plan);
+    expect(goalPlannerResponseSchema.parse(plan)).toEqual({ ...plan, storyboardLayout: "six-panel", referenceRoles: [] });
     const long = { ...plan, continuity: "x".repeat(700) };
     expect(goalPlanSchema.safeParse(long).success).toBe(true);
     expect(goalPlannerResponseSchema.safeParse(long).success).toBe(false);
@@ -273,7 +274,7 @@ describe("staged video goals through MCP", () => {
 
   it("resolves adjacent image mentions, saves character edges and per-stage estimates, and fences invalid inputs", async () => {
     const goal = await create({ request_id: "same-request" });
-    expect(goal).toMatchObject({ planVersion: 2, stage: "frame", status: "review", revision: 1, address: "@a3", plan });
+    expect(goal).toMatchObject({ planVersion: 2, stage: "frame", status: "review", revision: 1, address: "@b1", plan });
     expect(goal.characters.map(character => character.artifactId)).toEqual(imageIds);
     expect(notebook().edges.filter(edge => edge.target === goal.cellId).map(edge => edge.targetInput)).toEqual(["character", "character_2"]);
     const { still: _still, ...stageEstimates } = goal.estimate;
@@ -282,7 +283,7 @@ describe("staged video goals through MCP", () => {
     expect(goal.estimate.total.usd).toBeCloseTo(goal.estimate.frame.usd! + goal.estimate.storyboards.usd! + goal.estimate.videos.usd!);
     expect((await create({ request_id: "same-request" })).goalId).toBe(goal.goalId);
     expect(engine.jobs.queue.list()).toHaveLength(0);
-    expect((await raw({ action: "create", brief: "A dog rides a skateboard", plan })).content).toEqual([expect.objectContaining({ text: expect.stringContaining("Mention the character images") })]);
+    expect((await raw({ action: "create", brief: "A dog rides a skateboard", plan })).content).toEqual([expect.objectContaining({ text: expect.stringContaining("Mention the reference images") })]);
     expect((await raw({ action: "create", brief: "@h8 goes skating", plan })).isError).toBe(true);
     const video = await engine.artifacts.create("video", "not an image");
     if (!video.ok) throw new Error(video.error.message);
@@ -568,8 +569,8 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, revised.chainId!);
     expect(stopped).toMatchObject({ status: "review", stage: "storyboards", chainId: frame.chainId, resumeStage: null });
     expect(stopped.stages.frame!.outputs[0]!.artifactId).toBe(original.artifactId);
-    expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(1);
-    expect(stopped.stages.frame!.attempts!.map(attempt => attempt.chainId)).toEqual([frame.chainId]);
+    expect(stopped.stages.frame!.outputs[0]!.versions).toHaveLength(2);
+    expect(stopped.stages.frame!.attempts!.map(attempt => attempt.chainId)).toEqual([frame.chainId, revised.chainId]);
     expect(stopped.stages.frame!.previousChainIds).toContain(revised.chainId);
     expect(getChainRun(engine, revised.chainId!)?.status).toBe("cancelled");
     expect((await raw({ action: "retry", goal_id: frame.goalId })).isError).toBe(true);
@@ -609,7 +610,8 @@ describe("staged video goals through MCP", () => {
     await pauseBookQueueForTests(bookId);
     const started = await invoke({ action, goal_id: updated.goalId, revision: updated.revision, stage: "frame", index: 0, feedback: "Move to the red bench" });
     expect(started).toMatchObject({ stage: "frame", status: "running" });
-    expect(started.stages.storyboards!.outputs).toEqual(boards.stages.storyboards!.outputs);
+    expect(started.stages.storyboards!.outputs.map(output => output.artifactId)).toEqual(boards.stages.storyboards!.outputs.map(output => output.artifactId));
+    expect(started.stages.storyboards!.outputs.every(output => output.stale)).toBe(true);
     await invoke({ action: "cancel", goal_id: started.goalId });
     await waitForChainRun(engine, started.chainId!);
     await seedGoalStage(engine, started.goalId, "frame", action === "revise" ? { revise: { index: 0, feedback: "Move to the red bench" } } : {});
@@ -698,6 +700,18 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, retried.chainId!);
   });
 
+  it("rejects retrying a failed storyboard after selecting a different scene version", async () => {
+    const first = await advance(await create({ plan: goalTestSimplePlan() }), "frame");
+    const second = await advance(first, "frame");
+    await seedGoalStage(engine, second.goalId, "storyboards", { failedIndex: 0 });
+    expect((await status(second.goalId)).status).toBe("failed");
+    await invoke({ action: "select", goal_id: second.goalId, stage: "frame", index: 0, artifact_id: first.stages.frame!.outputs[0]!.artifactId });
+    const rejected = await raw({ action: "retry", goal_id: second.goalId });
+    expect(rejected.isError).toBe(true);
+    expect(JSON.stringify(rejected.content)).toContain("selected versions changed");
+    expect(engine.jobs.queue.list()).toHaveLength(0);
+  });
+
   it("finishes a single clip without assembly and appends multiple clips idempotently", async () => {
     const single = await advance(await advance(await create({ plan: goalTestPlan(1), brief: "@a1 @a2 one clip" }), "frame"), "storyboards");
     const ids = [await goalTestVideo(engine, root, "red"), await goalTestVideo(engine, root, "green"), await goalTestVideo(engine, root, "blue")];
@@ -779,5 +793,155 @@ describe("staged video goals through MCP", () => {
     expect((await raw({ action: "approve", goal_id: goal.goalId })).isError).toBe(true);
     expect((await raw({ action: "assemble", goal_id: goal.goalId })).isError).toBe(true);
     expect((await raw({ action: "dismiss", goal_id: goal.goalId })).isError).toBe(true);
+  });
+
+  it("plans from real reference pixels and compiles a 20-second six-panel video with scene and supporting references", async () => {
+    const simple = goalTestSimplePlan();
+    const created = await create({ brief: "@a1 @a2 interview", plan: simple });
+    const images = await goalPlannerImages(engine, created.characters);
+    expect(images.filter(item => item.type === "input_text").map(item => item.text)).toEqual(["Reference 1: Character 1", "Reference 2: Character 2"]);
+    expect(images.filter(item => item.type === "input_image").every(item => item.image_url.startsWith("data:image/png;base64,iVBOR"))).toBe(true);
+    expect(compileFrameSteps(simple, created.characters)[0]!.tool).toBe("generate_kie_nano_banana_2_1_image");
+    const frame = await advance(created, "frame");
+    const boards = await advance(frame, "storyboards");
+    const storyboard = getChainRun(engine, boards.stages.storyboards!.chainId)!.steps[0]!;
+    expect(storyboard.params.prompt).toContain("2 columns by 3 rows, six-panel");
+    expect(storyboard.params.prompt).toContain("16.7–20s");
+    expect(storyboard.params.prompt).not.toContain(simple.shots[0]!.videoPrompt);
+    expect(storyboard.params.prompt).toContain("Reference 1 (scene)");
+    await pauseBookQueueForTests(bookId);
+    const videos = await approve(boards);
+    const steps = getChainRun(engine, videos.chainId!)!.steps;
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.pins.map(pin => pin.artifactId)).toEqual([boards.stages.storyboards!.outputs[0]!.artifactId, frame.stages.frame!.outputs[0]!.artifactId, ...imageIds]);
+    expect(steps[0]!.params).toMatchObject({ duration: "20", aspect_ratio: "9:16", generate_audio: true, resolution: "720p" });
+    expect(steps[0]!.params).not.toHaveProperty("first_frame_url");
+    expect(steps[0]!.params.prompt).toContain("Six beats in reading order");
+    expect(engine.sequences.getPrimary().clips).toHaveLength(0);
+    await invoke({ action: "cancel", goal_id: created.goalId });
+    await waitForChainRun(engine, videos.chainId!);
+  });
+
+  it("keeps completed video versions, revises only video directions, and restores the selected clip when stopped", async () => {
+    const simple = goalTestSimplePlan();
+    const boards = await advance(await advance(await create({ plan: simple }), "frame"), "storyboards");
+    const original = await goalTestVideo(engine, root, "red");
+    await seedGoalStage(engine, boards.goalId, "videos", { videoIds: [original] });
+    const completed = await status(boards.goalId);
+    expect(completed.status).toBe("completed");
+    const updatedPlan = { ...simple, shots: simple.shots.map(shot => ({ ...shot, videoPrompt: "Quicker gestures; waves and laughter." })) };
+    const updated = await invoke({ action: "update", goal_id: completed.goalId, revision: completed.revision, plan: updatedPlan });
+    expect(updated.stages.storyboards!.outputs[0]!.stale).toBeNull();
+    expect(updated.stages.videos!.outputs[0]!.stale).toBeTruthy();
+    await pauseBookQueueForTests(bookId);
+    const running = await invoke({ action: "revise", goal_id: completed.goalId, revision: updated.revision, stage: "videos", index: 0, feedback: "Hold the final reaction longer" });
+    const step = getChainRun(engine, running.chainId!)!.steps[0]!;
+    expect(step.params.prompt).toContain("Quicker gestures");
+    expect(step.params.prompt).toContain("Hold the final reaction longer");
+    expect(step.pins.some(pin => pin.artifactId === original)).toBe(false);
+    expect(running.stages.videos!.outputs[0]!.artifactId).toBe(original);
+    const stopped = await invoke({ action: "cancel", goal_id: completed.goalId });
+    await waitForChainRun(engine, running.chainId!);
+    expect(stopped).toMatchObject({ status: "completed", stage: "videos", clipIds: completed.clipIds });
+    expect(stopped.stages.videos!.outputs[0]!.artifactId).toBe(original);
+    expect(stopped.stages.videos!.attempts).toHaveLength(2);
+    const revised = await goalTestVideo(engine, root, "blue");
+    await seedGoalStage(engine, completed.goalId, "videos", { videoIds: [revised], revise: { index: 0, feedback: "Hold the final reaction longer" } });
+    const ready = await status(completed.goalId);
+    expect(ready).toMatchObject({ status: "completed", assembly: null });
+    expect(ready.stages.videos!.outputs[0]!.stale).toBeNull();
+    const selected = await invoke({ action: "select", goal_id: completed.goalId, revision: ready.revision, stage: "videos", index: 0, artifact_id: original });
+    expect(selected.stages.videos!.outputs[0]!.artifactId).toBe(original);
+    expect(selected.stages.videos!.outputs[0]!.versions.filter(version => version.artifactId)).toHaveLength(2);
+  });
+
+  it("marks dependencies stale for source pixels, image settings and selected scene changes without spending downstream", async () => {
+    const simple = goalTestSimplePlan();
+    const boards = await advance(await advance(await create({ plan: simple }), "frame"), "storyboards");
+    const updated = await invoke({ action: "update", goal_id: boards.goalId, revision: boards.revision, plan: { ...simple, imageResolution: "1K" } });
+    expect(updated.stages.frame!.outputs[0]!.stale).toBeTruthy();
+    expect(updated.stages.storyboards!.outputs[0]!.stale).toBeTruthy();
+    expect((await raw({ action: "approve", goal_id: boards.goalId, revision: updated.revision })).isError).toBe(true);
+    const restored = await invoke({ action: "update", goal_id: boards.goalId, revision: updated.revision, plan: simple });
+    expect(restored.stages.storyboards!.outputs[0]!.stale).toBeNull();
+    await seedGoalStage(engine, boards.goalId, "frame", { revise: { index: 0, feedback: "Bigger microphone" } });
+    const revised = await status(boards.goalId);
+    expect(revised.stage).toBe("videos");
+    expect(revised.stages.frame!.outputs[0]!.stale).toBeNull();
+    expect(revised.stages.storyboards!.outputs[0]!.stale).toBeTruthy();
+    const selected = await invoke({ action: "select", goal_id: boards.goalId, stage: "frame", index: 0, artifact_id: boards.stages.frame!.outputs[0]!.artifactId });
+    expect(selected.stages.storyboards!.outputs[0]!.stale).toBeNull();
+    const bytes = await engine.files.read(imageIds[1]!, "original.png");
+    if (!bytes.ok) throw new Error(bytes.error.message);
+    await engine.files.write(imageIds[0]!, "original.png", bytes.value);
+    expect((await status(boards.goalId)).stages.frame!.outputs[0]!.stale).toBeTruthy();
+    expect(engine.jobs.queue.list()).toHaveLength(0);
+  });
+
+  it("preserves a completed selection after a failed revision and safely reassembles only unchanged goal clips", async () => {
+    const simple = goalTestSimplePlan(2);
+    const boards = await advance(await advance(await create({ plan: simple }), "frame"), "storyboards");
+    const ids = await Promise.all(["red", "green", "blue"].map(color => goalTestVideo(engine, root, color)));
+    await seedGoalStage(engine, boards.goalId, "videos", { videoIds: ids.slice(0, 2) });
+    const assembled = await invoke({ action: "assemble", goal_id: boards.goalId });
+    const originalClips = engine.sequences.getPrimary().clips;
+    await seedGoalStage(engine, boards.goalId, "videos", { indexes: [0], videoIds: [ids[2]!], failedIndex: 0 });
+    const failed = await status(boards.goalId);
+    expect(failed.status).toBe("failed");
+    expect(failed.stages.videos!.outputs.map(output => output.artifactId)).toEqual(ids.slice(0, 2));
+    await seedGoalStage(engine, boards.goalId, "videos", { indexes: [0], videoIds: [ids[2]!] });
+    const revised = await status(boards.goalId);
+    expect(revised.assemblyStale).toBe(true);
+    expect(revised.clipIds).toEqual(assembled.clipIds);
+    expect(engine.sequences.getPrimary().clips).toEqual(originalClips);
+    expect((await raw({ action: "combine", goal_id: boards.goalId })).isError).toBe(true);
+    const reassembled = await invoke({ action: "assemble", goal_id: boards.goalId });
+    expect(reassembled.assemblyStale).toBe(false);
+    expect(engine.sequences.getPrimary().clips.map(clip => clip.source.artifactId)).toEqual([ids[2], ids[1]]);
+    const sequence = engine.sequences.getPrimary();
+    const clip = sequence.clips[0]!;
+    const intent: EditIntent = {
+      intentVersion: MVP_CONTRACT_VERSION, commandId: uuidv7(), sequenceId: sequence.sequenceId, baseRevision: sequence.revision,
+      actor: "user", sourceSurface: "system", confirmationPolicy: "reversible-single-step",
+      operations: [{ kind: "set-clip-audio", clipId: clip.clipId, audio: { ...clip.audio!, gainDb: -6 } }],
+    };
+    const preview = engine.edits.preview(intent);
+    if (!preview.ok) throw new Error(preview.error.message);
+    const changed = await engine.edits.commit(intent, preview.value.previewHash);
+    if (!changed.ok) throw new Error(changed.error.message);
+    await expect(appendGoalClips(engine, readGoal(engine, boards.goalId), ids.slice(0, 2))).rejects.toThrow("timeline clips were edited");
+    expect(engine.sequences.getPrimary().clips[0]!.audio?.gainDb).toBe(-6);
+    expect(engine.sequences.getPrimary().clips.map(clip => clip.source.artifactId)).toEqual([ids[2], ids[1]]);
+  });
+
+  it("retains legacy video versions when their original stage predates attempt history", async () => {
+    const boards = await advance(await advance(await create({ plan: goalTestPlan(1) }), "frame"), "storyboards");
+    const original = await goalTestVideo(engine, root, "red");
+    await seedGoalStage(engine, boards.goalId, "videos", { videoIds: [original], legacy: true });
+    const complete = await status(boards.goalId);
+    expect(complete.stages.videos!.outputs[0]!.versions[0]).toMatchObject({ artifactId: original, current: true });
+    await pauseBookQueueForTests(bookId);
+    const revision = await invoke({ action: "revise", goal_id: boards.goalId, revision: complete.revision, stage: "videos", index: 0, feedback: "Slow the reaction" });
+    expect(revision.stages.videos!.attempts!.map(attempt => attempt.artifactId)).toEqual([original, null]);
+    await invoke({ action: "cancel", goal_id: boards.goalId });
+    await waitForChainRun(engine, revision.chainId!);
+    const selected = await invoke({ action: "select", goal_id: boards.goalId, stage: "videos", index: 0, artifact_id: original });
+    expect(selected.stages.videos!.outputs[0]!.stale).toBeNull();
+  });
+
+  it("detects revised legacy assemblies without overwriting a timeline that lacks an edit snapshot", async () => {
+    const boards = await advance(await advance(await create({ plan: goalTestPlan(2) }), "frame"), "storyboards");
+    const ids = await Promise.all(["red", "blue", "green"].map(color => goalTestVideo(engine, root, color)));
+    await seedGoalStage(engine, boards.goalId, "videos", { videoIds: ids.slice(0, 2), legacy: true });
+    await invoke({ action: "assemble", goal_id: boards.goalId });
+    const stored = readGoal(engine, boards.goalId);
+    const { artifactIds: _ids, clipSnapshot: _snapshot, ...assembly } = stored.assembly!;
+    saveGoal(engine, { ...stored, assembly });
+    expect((await status(boards.goalId)).assemblyStale).toBe(false);
+    await seedGoalStage(engine, boards.goalId, "videos", { indexes: [0], videoIds: [ids[2]!] });
+    expect((await status(boards.goalId)).assemblyStale).toBe(true);
+    expect((await raw({ action: "combine", goal_id: boards.goalId })).isError).toBe(true);
+    expect((await raw({ action: "assemble", goal_id: boards.goalId })).isError).toBe(true);
+    expect(engine.sequences.getPrimary().clips.map(clip => clip.source.artifactId)).toEqual(ids.slice(0, 2));
   });
 });

@@ -90,7 +90,7 @@ export function GoalCellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <div className="goal-tile-body">
           <strong className="goal-tile-title" title={view.title}>{view.title}</strong>
           {view.styleLabel && <span className="cell-aspect-ratio goal-style-chip" title="Goal style">{view.styleLabel}</span>}
-          {goal && goal.characters.length > 0 && <span className="goal-tile-characters">{goal.characters.length} character{goal.characters.length === 1 ? '' : 's'}</span>}
+          {goal && goal.characters.length > 0 && <span className="goal-tile-characters">{goal.characters.length} reference{goal.characters.length === 1 ? '' : 's'}</span>}
           {view.thumbnails.length > 0 && <span className="goal-tile-thumbnails">
             {view.thumbnails.map(thumbnail => {
               const asset = media.get(thumbnail.artifactId)

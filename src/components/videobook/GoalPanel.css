@@ -624,3 +624,35 @@ span.goal-progress-address {
   .goal-plan-heading { gap: 8px; }
   .goal-panel-primary { max-width: 100%; }
 }
+
+.goal-stage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.goal-stage-tabs [aria-pressed='true'] {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.goal-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 180px));
+  gap: 10px;
+}
+
+.goal-reference-grid > div,
+.goal-simple-outputs {
+  display: grid;
+  gap: 10px;
+}
+
+.goal-reference-grid .goal-media img { height: 80px; }
+.goal-simple { gap: 10px; }
+.goal-simple .goal-still-card { grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr); }
+.goal-video-preview { width: 100%; max-height: 320px; background: #030907; }
+
+@media (max-width: 650px) {
+  .goal-simple .goal-still-card { grid-template-columns: minmax(0, 1fr); }
+}

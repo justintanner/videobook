@@ -39,7 +39,7 @@ type NotebookMediaFullscreenProps = {
   replacementCandidates?: readonly ImageReplacementCandidate[]
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
-  lastUsedImageEditModelId?: string | null
+  defaultImageEditModelId?: string | null
   onEstimateImageEditCost?: (
     modelId: string,
     operation: 'edit' | 'replace',
@@ -122,7 +122,7 @@ export function NotebookMediaFullscreen({
   replacementCandidates = [],
   imageEditModels,
   imageEditModelsLoading,
-  lastUsedImageEditModelId,
+  defaultImageEditModelId,
   onEstimateImageEditCost,
   onAnalyzeSubjects,
   onCaptureFrame,
@@ -340,7 +340,7 @@ export function NotebookMediaFullscreen({
           replacementCandidates={replacementCandidates}
           imageEditModels={imageEditModels}
           imageEditModelsLoading={imageEditModelsLoading}
-          lastUsedImageEditModelId={lastUsedImageEditModelId}
+          defaultImageEditModelId={defaultImageEditModelId}
           onEstimateImageEditCost={onEstimateImageEditCost}
           closeRef={closeRef}
           onAnalyzeSubjects={onAnalyzeSubjects}

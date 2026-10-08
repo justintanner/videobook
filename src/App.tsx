@@ -1,3 +1,4 @@
+import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../server/src/image-edit-default'
 import { presentChat, reviewChat, type ChatExecution } from '@/videobook/chat-turns'
 import {
   addHighlight,
@@ -2430,8 +2431,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? call('video_goal', { book_id: bookId, notebook_id: notebook.id, action: 'list' }, { background: true })
           : Promise.resolve(null),
       ])
-      if (!isCurrent() || activeMcpCallsRef.current.size > 0
-        || fetchedAt < watchSnapshotClockRef.current) return
+      if (!isCurrent() || activeMcpCallsRef.current.size > 0) return
+      if (goalResult.status === 'fulfilled' && goalResult.value) {
+        acceptGoals({ bookId, notebookId: notebook.id }, goalResult.value)
+      }
+      if (fetchedAt < watchSnapshotClockRef.current) return
       if (notebookResult.status !== 'fulfilled'
         || assetResult.status !== 'fulfilled'
         || jobResult.status !== 'fulfilled') return
@@ -2446,9 +2450,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       applyJobsSnapshot(nextJobs)
       applyNotebook(nextNotebook, nextAssets, nextJobs)
-      if (goalResult.status === 'fulfilled' && goalResult.value) {
-        acceptGoals({ bookId, notebookId: notebook.id }, goalResult.value)
-      }
     },
   })
 
@@ -3980,12 +3981,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
     if (!brief) {
       if (!activeComposerGoal) {
-        return { ok: false, message: 'Mention the character images, for example /goal @a1 as an IG influencer, GRWM morning routine. Cinematic is the default.' }
+        return { ok: false, message: 'Mention the reference images, for example /goal @a1 turn this screenshot into a 20-second video. The source style is preserved by default.' }
       }
       openGoalTile(activeComposerGoal.cellId)
       return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
     }
-    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the character images, for example /goal @a1 as an IG influencer, GRWM morning routine' }
+    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the reference images, for example /goal @a1 turn this screenshot into a 20-second video' }
     const scope = { bookId, notebookId: notebook.id }
     const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
     if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {
@@ -4296,7 +4297,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (watchScopeRef.current.notebookId !== session.notebookId) {
       throw new Error('The active notebook changed while the image editor was open')
     }
-    const editModelId = input.model ?? 'seedream/5-pro-image-to-image'
+    const editModelId = input.model ?? DEFAULT_IMAGE_EDIT_MODEL_ID
     const editModelProvider = editModelId.startsWith('fal-ai/')
       || editModelId.startsWith('alibaba/')
       ? 'fal'
@@ -11802,7 +11803,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           replacementCandidates={imageReplacementCandidates}
           imageEditModels={imageEditModels.models}
           imageEditModelsLoading={imageEditModels.loading}
-          lastUsedImageEditModelId={imageEditModels.lastUsedModelId}
+          defaultImageEditModelId={imageEditModels.defaultModelId}
           onEstimateImageEditCost={estimateImageEditCost}
           onEditSubjects={(input) =>
             editFullscreenSubjects(mediaFullscreen, input)}

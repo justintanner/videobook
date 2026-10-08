@@ -439,6 +439,7 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
 
   // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
   generate_kie_nano_banana_pro_text_to_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
+  generate_kie_nano_banana_2_1_image: kieTieredImage("nano-banana-2-1", "1K"),
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),

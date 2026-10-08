@@ -68,7 +68,7 @@ export type ImageEditorWorkspaceProps = {
   closeRef: RefObject<HTMLButtonElement | null>
   imageEditModels?: readonly ImageEditModelOption[]
   imageEditModelsLoading?: boolean
-  lastUsedImageEditModelId?: string | null
+  defaultImageEditModelId?: string | null
   onEstimateImageEditCost?: (
     modelId: string,
     operation: 'edit' | 'replace',
@@ -579,7 +579,7 @@ export function ImageEditorWorkspace({
   closeRef,
   imageEditModels,
   imageEditModelsLoading,
-  lastUsedImageEditModelId,
+  defaultImageEditModelId,
   onEstimateImageEditCost,
   onAnalyzeSubjects,
   onEditingChange,
@@ -630,7 +630,7 @@ export function ImageEditorWorkspace({
     || replacementTargets.some((target) => Boolean(replacements[target.key]))
   const editOperation: 'edit' | 'replace' = replacing ? 'replace' : 'edit'
   const effectiveModelId = selectedModelId
-    ?? lastUsedImageEditModelId
+    ?? defaultImageEditModelId
     ?? imageEditModels?.[0]?.id
     ?? null
   const modelSupportsTarget = (model: ImageEditModelOption) =>
