@@ -18,7 +18,7 @@ import { createHttpHandler } from '../../server/src/server.js'
 import { pauseBookQueueForTests, queue, setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { registerAllJobHandlers } from '../../server/src/jobs/index.js'
 import { goalTestPlan, goalTestVideo, seedGoalStage } from '../../server/src/test-goals.js'
-import { compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
+import { compileFrameSteps, compileReviseStillStep, compileStoryboardSteps, compileVideoSteps, goalBriefConstraints, goalPlanSchema, goalPromptBudgetIssues } from '../../server/src/goal-plan.js'
 import { goalPromptWords } from '../../server/src/goal-prompt-budget.js'
 import { goalStyle } from '../../server/src/goal-styles.js'
 import { probeVideo } from '../../server/src/ffmpeg.js'
@@ -479,6 +479,16 @@ describe('staged goal mode in the browser', () => {
     const requests: Array<{ artifactId: string; stage: string; prompt: string; words: number; aspectRatio: string; path: string; width: number; height: number; duration?: number; hasAudio?: boolean }> = []
     const reportPath = process.env.VIDEOBOOK_GOAL_REPORT ?? join(root, `live-${influencer ? 'ig-influencer' : 'cinematic'}-report.json`)
     const checkpoint = async (goal: GoalSnapshot) => writeFile(reportPath, JSON.stringify({ bookId, notebookId, root, goal, requests, usage: await call('get_book_usage') }, null, 2))
+    const inspectPrompt = (stage: 'frame' | 'storyboards' | 'videos', prompt: string) => {
+      const words = goalPromptWords(prompt)
+      expect(words, prompt).toBeLessThan(stage === 'frame' ? 145 : stage === 'storyboards' ? 210 : 110)
+      if (influencer) {
+        expect(prompt).toContain('hyper-realistic')
+        expect(prompt).toContain('skin pores')
+        for (const word of goalStyle('ig-influencer').banned) expect(prompt).not.toMatch(new RegExp(`\\b${word}\\b`, 'iu'))
+      }
+      return words
+    }
     const mediaPath = async (artifactId: string, kind: 'image' | 'video') => {
       const manifest = await engine.files.manifest(artifactId)
       if (!manifest.ok) throw new Error(manifest.error.message)
@@ -492,13 +502,7 @@ describe('staged goal mode in the browser', () => {
       for (const artifactId of ids.filter(id => !requests.some(request => request.artifactId === id))) {
         const result = await call<{ payload: { input: { prompt: string; aspect_ratio: string } } }>('inspect_generation_request', { asset_id: artifactId })
         const { prompt, aspect_ratio: aspectRatio } = result.payload.input
-        const words = goalPromptWords(prompt)
-        expect(words, prompt).toBeLessThan(stage === 'frame' ? 145 : stage === 'storyboards' ? 210 : 110)
-        if (influencer) {
-          expect(prompt).toContain('hyper-realistic')
-          expect(prompt).toContain('skin pores')
-          for (const word of goalStyle('ig-influencer').banned) expect(prompt).not.toMatch(new RegExp(`\\b${word}\\b`, 'iu'))
-        }
+        const words = inspectPrompt(stage, prompt)
         expect(aspectRatio).toBe('9:16')
         const path = await mediaPath(artifactId, stage === 'videos' ? 'video' : 'image')
         const media = stage === 'videos' ? await probeVideo(path) : await sharp(path).metadata()
@@ -537,9 +541,11 @@ describe('staged goal mode in the browser', () => {
     expect(plan.videoResolution).toBe('480p')
     expect(plan.shots.map(shot => shot.durationSeconds)).toEqual([4, 4])
     expect(goalPromptBudgetIssues(plan)).toEqual([])
+    const predictedFrames = [...compileFrameSteps(plan, planned.characters), compileReviseStillStep(plan, planned.characters, 'frame', 0, '@a1', frameFeedback)]
+    for (const step of predictedFrames) inspectPrompt('frame', String(step.params.prompt))
     const predictedBoards = [...compileStoryboardSteps(plan, planned.characters, '@a1'), compileReviseStillStep(plan, planned.characters, 'storyboards', 1, '@a1', storyboardFeedback, '@a2')]
-    for (const step of predictedBoards) expect(goalPromptWords(String(step.params.prompt)), String(step.params.prompt)).toBeLessThan(210)
-    for (const step of compileVideoSteps(planned.goalId, plan, ['@a1', '@a2'])) expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(110)
+    for (const step of predictedBoards) inspectPrompt('storyboards', String(step.params.prompt))
+    for (const step of compileVideoSteps(planned.goalId, plan, ['@a1', '@a2'])) if (typeof step.params.prompt === 'string') inspectPrompt('videos', step.params.prompt)
     const reviewed = await call<GoalSnapshot>('video_goal', { action: 'update', goal_id: planned.goalId, revision: planned.revision, plan })
     expect(reviewed.plan?.shots).toHaveLength(2)
     expect(reviewed.estimate.total.usd).not.toBeNull()

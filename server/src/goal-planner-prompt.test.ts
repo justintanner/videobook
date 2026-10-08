@@ -32,7 +32,7 @@ describe("goal planner style guidance", () => {
 
   it("forces the detected style and defaults while preserving explicitly requested settings", () => {
     const style = goalBriefStyle("IG influencer GRWM");
-    const constrained = constrainGoalPlannerPlan(plan, "two 4s clips", style);
+    const constrained = constrainGoalPlannerPlan(plan, "Two portrait 4s clips", style);
     expect(constrained).toMatchObject({ style, aspectRatio: "9:16", imageModel: "sunburst", imageResolution: "2K", videoResolution: "720p", frameContinuity: false });
     expect(constrained.shots.map(shot => [shot.durationSeconds, shot.endingPrompt])).toEqual([[4, null], [4, null]]);
     expect(constrainGoalPlannerPlan(plan, "two 4s clips square, Flare 1K images and 480p video", style)).toMatchObject({ aspectRatio: "1:1", imageModel: "flare", imageResolution: "1K", videoResolution: "480p" });

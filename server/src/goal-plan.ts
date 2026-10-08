@@ -99,7 +99,8 @@ export function goalBriefConstraints(brief: string): {
     one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
     nine: 9, ten: 10, eleven: 11, twelve: 12,
   };
-  const count = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:(?:\d+(?:\.\d+)?)[ -]*(?:s|secs?|seconds?)[ -]*)?(?:(?:short|funny|comedic|cinematic|animated|portrait|vertical|square|landscape|horizontal)[ -]+){0,3}(?:clips?|shots?|scenes?)\b/iu.exec(brief);
+  const modifiers = "(?:(?:short|funny|comedic|cinematic|animated|portrait|vertical|square|landscape|horizontal)[ -]+){0,3}";
+  const count = new RegExp(`\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\s+${modifiers}(?:\\d+(?:\\.\\d+)?[ -]*(?:s|secs?|seconds?)[ -]*)?${modifiers}(?:clips?|shots?|scenes?)\\b`, "iu").exec(brief);
   const multiplier = /\b(\d+)\s*[x×]\s*(\d+)\s*(?:s|secs?|seconds?)\b/iu.exec(brief);
   const clipDuration = /\b(\d+(?:\.\d+)?)[ -]*(?:s|secs?|seconds?)[ -]*(?:clips?|shots?|scenes?|each)\b/iu.exec(brief)
     ?? /\b(?:clips?|shots?|scenes?)\s+(?:of\s+)?(\d+(?:\.\d+)?)[ -]*(?:s|secs?|seconds?)\b/iu.exec(brief);

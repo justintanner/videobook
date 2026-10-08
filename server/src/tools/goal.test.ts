@@ -41,6 +41,11 @@ describe("video goal plans", () => {
       .toEqual(resolveGoalStyleOptions("ig-influencer", { format: "grwm" }));
     expect(goalBriefConstraints(brief)).toEqual({ shotCount: 3, durationSeconds: 10, aspectRatio: "9:16" });
     expect(goalBriefConstraints("two 4s funny clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
+    expect(goalBriefConstraints("Two portrait 4s clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
+    expect(goalBriefConstraints("two funny 4-second vertical clips")).toEqual({ shotCount: 2, durationSeconds: 4, aspectRatio: "9:16" });
+    expect(goalBriefConstraints("2 landscape 8s shots")).toEqual({ shotCount: 2, durationSeconds: 8, aspectRatio: "16:9" });
+    expect(goalBriefConstraints("four square 6-second scenes")).toEqual({ shotCount: 4, durationSeconds: 6, aspectRatio: "1:1" });
+    expect(goalBriefConstraints("two portrait characters, 4s clips")).toEqual({ shotCount: 3, durationSeconds: 4, aspectRatio: "9:16" });
     expect(goalBriefConstraints("four 8-second clips, portrait")).toEqual({ shotCount: 4, durationSeconds: 8, aspectRatio: "9:16" });
     expect(goalBriefConstraints("2 x 12s, square")).toEqual({ shotCount: 2, durationSeconds: 12, aspectRatio: "1:1" });
     expect(goalBriefConstraints("@a1 @a2 as Mr Bean in Thailand")).toEqual({ shotCount: 3, durationSeconds: 10, aspectRatio: "9:16" });
