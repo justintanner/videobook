@@ -5228,7 +5228,7 @@ describe('chat composer browser flow', () => {
     const autoArrange = page.getByLabel('Auto-arrange notebook')
     await autoArrange.waitFor({ state: 'visible' })
     expect(await autoArrange.getAttribute('title')).toBe(
-      'Arrange cells into Images, Gen, Videos, Audio, and Work lanes',
+      'Arrange cells by workflow and media type',
     )
     observedCalls.length = 0
     await autoArrange.click()

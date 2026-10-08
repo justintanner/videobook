@@ -11,6 +11,7 @@ import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { getActionSpec } from "./generation-registry.js";
 import { generationLabel } from "./artifact-label.js";
 import type { ChainPlacementKind, PinnedChainTarget } from "./chain-plan.js";
+import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 export type ChainGenerationPlacement = {
   producerCellId: string;
@@ -118,14 +119,15 @@ export async function placeChainGeneration(
         artifactId: input.artifactId,
         state: "awaiting-output",
       });
-      produced.producer = producer;
+      const arranged = arrangeGoalNotebook(allocated.document);
+      produced.producer = arranged.cells.find(cell => cell.id === producer.id)!;
       produced.outputCellId = allocated.outputCell.id;
       return {
-        ...allocated.document,
+        ...arranged,
         execution: {
-          ...(allocated.document.execution ?? {}),
+          ...(arranged.execution ?? {}),
           [allocated.outputCell.id]: {
-            fingerprint: notebookCellFingerprint(allocated.document, producer),
+            fingerprint: notebookCellFingerprint(arranged, produced.producer),
             status: "awaiting-output",
             runId: input.runId,
             providerArtifactId: input.artifactId,

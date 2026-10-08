@@ -4960,32 +4960,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const autoArrangeNotebook = async () => {
     if (!bookId || !notebook || notebook.cells.length === 0) return
-    const planned = planNotebookArrangement(notebook)
-    if (!planned.ok) {
-      setNotice(planned.message, 'error')
-      return
-    }
-    const currentSlots = new Map(notebook.cells.map((cell) => [cell.id, cell.slot]))
-    const changed = planned.slots.some((slot) => {
-      const current = currentSlots.get(slot.id)
-      return current?.row !== slot.row || current?.column !== slot.column
-    })
-    const reveal = () => revealNotebookArrangement(
-      () => notebookScrollRef.current,
-    )
-    if (!changed) {
-      setNotice('Notebook is already auto-arranged')
-      reveal()
-      return
-    }
-
-    const revision = asString(recordValue(notebook)?.revision)
     setBusy(true)
     try {
+      const current = asNotebook(await call('get_notebook', { book_id: bookId, notebook_id: notebook.id }))
+      if (!current) throw new Error('Unable to read the notebook before arranging')
+      if (watchScopeRef.current.bookId !== bookId || watchScopeRef.current.notebookId !== notebook.id) return
+      const planned = planNotebookArrangement(current)
+      if (!planned.ok) throw new Error(planned.message)
+      const currentSlots = new Map(current.cells.map(cell => [cell.id, cell.slot]))
+      const changed = planned.slots.some(slot => {
+        const previous = currentSlots.get(slot.id)
+        return previous?.row !== slot.row || previous?.column !== slot.column
+      })
+      const reveal = () => revealNotebookArrangement(() => notebookScrollRef.current)
+      if (!changed) {
+        await refreshNotebook(bookId, notebook.id)
+        setNotice('Notebook is already auto-arranged')
+        reveal()
+        return
+      }
       await call('move_notebook_cells', {
         book_id: bookId,
         notebook_id: notebook.id,
-        ...(revision ? { expected_revision: revision } : {}),
+        ...(current.revision ? { expected_revision: current.revision } : {}),
         slots: planned.slots,
       })
       await refreshNotebook(bookId, notebook.id)

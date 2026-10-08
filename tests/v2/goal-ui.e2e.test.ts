@@ -11,6 +11,7 @@ import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import type { Engine } from 'videobook-engine'
 import { findPrimaryMediaFile } from 'videobook-engine'
+import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -156,7 +157,8 @@ describe('staged goal mode in the browser', () => {
   afterEach(async context => {
     if (context.task.result?.state === 'fail') {
       await screenshot('goal-failure')
-      console.error(await panel().textContent())
+      console.error(errors)
+      console.error(await page.locator('body').innerText())
     }
     await page?.setViewportSize({ width: 1440, height: 1000 })
     for (const goal of (await goals()).goals) {
@@ -165,6 +167,63 @@ describe('staged goal mode in the browser', () => {
     await stopBookQueue(bookId)
     await queue.startBook(bookId)
   })
+
+  scenario('places goal generators, images, videos and timeline on separate rows and preserves them through Arrange', async () => {
+    const saved = await create()
+    await call('create_notebook_cell', { cell: { type: 'timeline', slot: { row: 9, column: 0 } } })
+    await seedGoalStage(engine, saved.goalId, 'frame')
+    await current(saved)
+    await seedGoalStage(engine, saved.goalId, 'storyboards')
+    await current(saved)
+    const videoIds = await Promise.all(['red', 'blue'].map(color => goalTestVideo(engine, root, color)))
+    await seedGoalStage(engine, saved.goalId, 'videos', { videoIds })
+    const complete = await call<GoalSnapshot>('video_goal', { action: 'assemble', goal_id: saved.goalId })
+    const read = engine.notebooks.read(notebookId)
+    if (!read.ok) throw new Error(read.error.message)
+    const cells = read.value.cells
+    const first = cells.filter(cell => cell.type === 'goal' || cell.type.startsWith('generate_') || saved.characters.some(character => character.cellId === cell.id))
+    expect(first).toHaveLength(8)
+    expect(first.every(cell => cell.slot.row === 0)).toBe(true)
+    expect(cells.filter(cell => cell.type === 'image' && !first.includes(cell)).every(cell => cell.slot.row === 1)).toBe(true)
+    expect(cells.filter(cell => cell.type === 'video').every(cell => cell.slot.row === 2)).toBe(true)
+    const timeline = cells.find(cell => cell.type === 'timeline')!
+    expect(timeline.slot).toEqual({ row: 3, column: 0 })
+    const sequence = engine.sequences.getPrimary()
+    const displaced = { ...read.value, cells: cells.map(cell => cell.id === timeline.id ? { ...cell, slot: { row: 10, column: 0 } } : cell) }
+    const moved = await engine.notebooks.write(displaced)
+    if (!moved.ok) throw new Error(moved.error.message)
+    await open(complete)
+    await panel().locator('[data-composer-dock-hide]').click()
+    await expect.poll(() => page.locator(`.react-flow__node[data-id="${timeline.id}"]`).textContent(), { timeout: 15_000 }).toContain('@k1')
+    const renamed = await engine.notebooks.write({ ...displaced, name: 'Goal layout review' })
+    if (!renamed.ok) throw new Error(renamed.error.message)
+    const moveResponse = page.waitForResponse(response => response.request().postData()?.includes('"move_notebook_cells"') ?? false)
+    await page.getByRole('button', { name: 'Auto-arrange notebook', exact: true }).click()
+    const movePayload = await (await moveResponse).text()
+    expect(movePayload).not.toContain('isError":true')
+    await expect.poll(() => {
+      const result = engine.notebooks.read(notebookId)
+      return result.ok ? result.value.cells.find(cell => cell.id === timeline.id)?.slot : null
+    }, { timeout: 15_000 }).toEqual({ row: 3, column: 0 })
+    expect(engine.sequences.getPrimary().clips).toEqual(sequence.clips)
+    const arranged = engine.notebooks.read(notebookId)
+    if (!arranged.ok) throw new Error(arranged.error.message)
+    expect(arranged.value.edges).toEqual(read.value.edges)
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      for (const cell of cells) {
+        const node = page.locator(`.react-flow__node[data-id="${cell.id}"]`)
+        await expect.poll(() => node.textContent()).toContain(notebookGridTag(cell.slot))
+      }
+      const rows = [first[0]!, cells.find(cell => cell.type === 'image' && cell.slot.row === 1)!, cells.find(cell => cell.type === 'video')!, timeline]
+      await expect.poll(async () => {
+        const bounds = await Promise.all(rows.map(cell => page.locator(`.react-flow__node[data-id="${cell.id}"]`).boundingBox()))
+        return bounds.every((box, index) => box && (index === 0 || box.y >= bounds[index - 1]!.y + bounds[index - 1]!.height))
+      }).toBe(true)
+      await screenshot(`goal-rows-${viewport.width}`)
+    }
+    expect(errors).toEqual([])
+  }, 60_000)
 
   scenario('reviews and saves before approving only the frame, shows stable queued progress, and stops', async () => {
     const saved = await create()
@@ -188,6 +247,7 @@ describe('staged goal mode in the browser', () => {
     expect(await status().locator('.goal-status-short').isVisible()).toBe(true)
     await screenshot('goal-phone')
     await page.setViewportSize({ width: 1440, height: 1000 })
+    const previousMarkers = await page.locator('.cell-goal-mark').count()
     await pauseBookQueueForTests(bookId)
     await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
     await expect.poll(async () => (await current(saved)).status).toBe('running')
@@ -201,7 +261,7 @@ describe('staged goal mode in the browser', () => {
     expect(jobs).toHaveLength(1)
     expect(jobs[0]!.payload).toMatchObject({ input: { aspect_ratio: '9:16', resolution: '2K' } })
     expect(engine.jobs.queue.list({ type: 'generate_seedance25_video' })).toHaveLength(0)
-    await expect.poll(() => page.locator('.cell-goal-mark').count(), { timeout: 15_000 }).toBe(2)
+    await expect.poll(() => page.locator('.cell-goal-mark').count(), { timeout: 15_000 }).toBe(previousMarkers + 2)
     expect(getChainRun(engine, running.chainId!)!.steps.map(step => step.id)).toEqual(['frame'])
     await status().click()
     await panel().getByRole('button', { name: 'Stop goal', exact: true }).click()

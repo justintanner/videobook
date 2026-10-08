@@ -2,8 +2,10 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "./goal-plan.js";
-import { requireGoalContent, readGoal, saveGoal, type GoalStageRun } from "./goal-store.js";
+import { requireGoalContent, readGoal, saveGoal, type GoalStageOutput, type GoalStageRun } from "./goal-store.js";
+import { currentGoalCharacters } from "./goal-characters.js";
 import { preflightChainPlan } from "./chain-plan.js";
 import type { ChainRunRecord } from "./chain-executor.js";
 import { getAllToolDefs } from "./tools/index.js";
@@ -11,6 +13,7 @@ import { placeChainGeneration } from "./chain-generation.js";
 import { copyVideoFixture } from "./test-media-fixtures.js";
 import { probeVideo } from "./ffmpeg.js";
 import { goalStillAttempts } from "./goal-stills.js";
+import { extractVideoPoster } from "./video-poster.js";
 
 export function goalTestPlan(count = 3): GoalPlan {
   return goalPlanSchema.parse({
@@ -68,6 +71,8 @@ export async function goalTestVideo(engine: Engine, root: string, color: string)
   const stream = probe.videoStream!;
   const registered = await engine.streams.register({ artifactId, sourcePath: "original.mp4", objectHash: manifest.value.files[0]!.objectHash, streamIndex: stream.index, kind: "video", codec: stream.codec, timeBase: stream.timeBase, durationTicks: stream.durationTicks, video: stream.video });
   if (!registered.ok) throw new Error(registered.error.message);
+  const poster = await engine.files.write(artifactId, "original.jpg", await extractVideoPoster(path, probe.duration));
+  if (!poster.ok) throw new Error(poster.error.message);
   return artifactId;
 }
 
@@ -75,14 +80,21 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   const goal = readGoal(engine, goalId);
   const content = requireGoalContent(engine, goal);
   const plan = goalPlanSchema.parse(content.plan);
-  const frame = goal.stages.frame?.outputs[0]?.address ?? content.characters[0]!.address;
-  const storyboards = plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index)?.address ?? frame);
-  const endings = plan.frameContinuity ? plan.shots.map((_, index) => goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)?.address ?? frame) : [];
+  const document = engine.notebooks.read(goal.notebookId);
+  if (!document.ok) throw new Error(document.error.message);
+  const characters = currentGoalCharacters(document.value, content.characters);
+  const address = (output: GoalStageOutput | undefined): string | undefined => {
+    const cell = document.value.cells.find(cell => cell.id === output?.cellId);
+    return cell ? notebookGridTag(cell.slot) : undefined;
+  };
+  const frame = address(goal.stages.frame?.outputs[0]) ?? characters[0]!.address;
+  const storyboards = plan.shots.map((_, index) => address(goal.stages.storyboards?.outputs.find(output => output.index === index)) ?? frame);
+  const endings = plan.frameContinuity ? plan.shots.map((_, index) => address(goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length)) ?? frame) : [];
   const revise = options.revise;
   const parent = revise ? goal.stages[stage]?.outputs.find(output => output.index === revise.index) : null;
-  const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, content.characters, stage, revise.index, parent!.address!, revise.feedback, stage === "storyboards" ? frame : undefined)]
-    : stage === "frame" ? compileFrameSteps(plan, content.characters)
-    : stage === "storyboards" ? compileStoryboardSteps(plan, content.characters, frame, options.indexes)
+  const steps = revise && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, revise.index, address(parent!)!, revise.feedback, stage === "storyboards" ? frame : undefined)]
+    : stage === "frame" ? compileFrameSteps(plan, characters)
+    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, frame, options.indexes)
       : compileVideoSteps(goalId, plan, storyboards, endings);
   const defs = getAllToolDefs(engine);
   const checked = await preflightChainPlan({ action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId, steps }, {

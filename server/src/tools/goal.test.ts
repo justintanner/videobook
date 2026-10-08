@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
 import { pauseBookQueueForTests, stopBookQueue } from "../queue.js";
@@ -71,8 +72,9 @@ describe("video goal plans", () => {
     expect(storyboards[1]!.params.prompt).toContain("@image2 Character 1");
     expect(storyboards[1]!.params.prompt).toContain("2x2 storyboard");
     expect(storyboards[1]!.params.prompt).toContain("setup; action; reaction; ending");
-    expect(storyboards[1]!.params.prompt).toContain("Unlabeled panels");
-    expect(storyboards[1]!.params.prompt).toContain("No text");
+    expect(storyboards[1]!.params.prompt).toContain("Below pictures: timing + action/camera notes");
+    expect(storyboards[1]!.params.prompt).toContain("Times: 0–2.5s; 2.5–5s; 5–7.5s; 7.5–10s");
+    expect(storyboards[1]!.params.prompt).toContain("Pictures text-free");
     expect(storyboards[1]!.params.prompt).toContain(plan.shots[1]!.videoPrompt);
     expect(storyboards[1]!.params.prompt).toContain("Each 9:16");
     expect(compileStoryboardSteps(plan, characters, "@b2", [1]).map(step => step.id)).toEqual(["storyboard2"]);
@@ -83,7 +85,7 @@ describe("video goal plans", () => {
     expect(videos[1]!.params.last_frame_ref).toBeUndefined();
     expect(videos[1]!.params.prompt).toContain("@image1 storyboard");
     expect(videos[1]!.params.prompt).toContain("Four beats in order, 2.5s each");
-    expect(videos[1]!.params.prompt).toContain("No grid, borders, text");
+    expect(videos[1]!.params.prompt).toContain("No grid, borders, notes, text");
     expect(videos[1]!.params.prompt).toContain("No music.");
     expect(normalizeSeedance25Request({ model: "bytedance/seedance-2-5", input: { ...videos[1]!.params, prompt: String(videos[1]!.params.prompt), reference_image_urls: ["https://example.test/storyboard.png"] } })).toMatchObject({ input: { aspect_ratio: "9:16" } });
     expect(videos[3]!.params.artifact_ids).toEqual([1, 2, 3].map(index => ({ $ref: { step_id: `shot${index}`, output: "asset_id" } })));
@@ -120,14 +122,19 @@ describe("video goal plans", () => {
     const timed = { ...plan, shots: [{ ...plan.shots[0]!, durationSeconds: seconds }] };
     const [video] = compileVideoSteps(uuidv7(), timed, ["@c1"]);
     expect(video!.params.prompt).toContain(`Four beats in order, ${beat} each`);
+    for (const step of [compileStoryboardSteps(timed, characters, "@b1")[0]!, compileReviseStillStep(timed, characters, "storyboards", 0, "@b2", "Raise chin", "@b1")]) {
+      expect(step.params.prompt).toContain(`Times: 0–${beat};`);
+      expect(step.params.prompt).toContain(`${seconds * 0.75}–${seconds}s`);
+      expect(step.params.prompt).toContain("action/camera notes");
+    }
   });
 
   it.each(["9:16", "16:9", "1:1"] as const)("keeps the four-panel contract when revising %s storyboards, including old single frames", aspectRatio => {
     const revised = compileReviseStillStep({ ...plan, aspectRatio }, characters, "storyboards", 1, "@c2", "Raise the umbrella", "@b2");
     expect(revised.params.image_refs).toEqual(["@c2", "@b2", "@a1", "@a2"]);
     expect(revised.params.prompt).toContain("2x2 storyboard");
-    expect(revised.params.prompt).toContain("Unlabeled panels");
-    expect(revised.params.prompt).toContain("No text");
+    expect(revised.params.prompt).toContain("Below pictures: timing + action/camera notes");
+    expect(revised.params.prompt).toContain("Pictures text-free");
     expect(revised.params.prompt).toContain(`Each ${aspectRatio}`);
     expect(revised.params.prompt).toContain("Four distinct moments");
     expect(revised.params.prompt).toContain(plan.shots[1]!.videoPrompt);
@@ -167,7 +174,7 @@ describe("video goal plans", () => {
       expect(step.params.aspect_ratio).toBe("9:16");
       expect(step.tool).toBe(stage === "video" ? GOAL_VIDEO_TOOL : GOAL_IMAGE_TOOLS.sunburst);
     }
-    expect(String(steps[4][0].params.prompt)).toMatch(/@image1 storyboard.*hyper-realistic.*@image2 ending pose.*No grid, borders, text\. No music\.$/su);
+    expect(String(steps[4][0].params.prompt)).toMatch(/@image1 storyboard.*hyper-realistic.*@image2 ending pose.*No grid, borders, notes, text\. No music\.$/su);
     expect(goalStillPrompt(styled, "frame", 0)).toBe(goalStillPrompt(plan, "frame", 0));
     expect(goalStillPrompt(styled, "storyboards", 0)).toBe(goalStillPrompt(plan, "storyboards", 0));
   });
@@ -200,7 +207,12 @@ describe("video goal plans", () => {
       video: compileVideoSteps("goal", saved, ["@c1"], ["@d1"]),
     };
     for (const [key, steps] of Object.entries(compiled)) {
-      steps.forEach((step, index) => expect(goalPromptWords(String(step.params.prompt))).toBeLessThan(goalPromptWords(previous.prompts[key]![index]!)));
+      steps.forEach((step, index) => {
+        const prompt = String(step.params.prompt);
+        const fragment = goalStyleFragment(saved.style, key === "video" ? "video" : "frame");
+        expect(prompt).toContain(fragment);
+        expect(goalPromptWords(prompt.replace(fragment, ""))).toBeLessThan(goalPromptWords(previous.prompts[key]![index]!));
+      });
     }
     expect(compiled.frame[0]!.params.prompt).toContain(saved.frame.prompt);
     expect(compiled.video[0]!.params.prompt).toContain(saved.shots[0]!.videoPrompt);
@@ -343,6 +355,25 @@ describe("staged video goals through MCP", () => {
     expect(explicit).not.toHaveProperty("requestedStyle");
   });
 
+  it("rejects row overflow before accepting paid generation even when individual slots remain", async () => {
+    const goal = await create();
+    const document = notebook();
+    const generators = Array.from({ length: 5 }, (_, index) => engine.notebooks.createCell({ type: "generate_image", slot: { row: 0, column: index + 3 } }));
+    const videos = Array.from({ length: 488 }, (_, index) => engine.notebooks.createCell({ type: "video", slot: { row: 2 + Math.floor(index / 8), column: index % 8 } }));
+    const timeline = engine.notebooks.createCell({ type: "timeline", slot: { row: 63, column: 0 } });
+    const filled = { ...document, cells: [...document.cells, ...generators, ...videos, timeline] };
+    const written = await engine.notebooks.write(filled);
+    expect(written.ok, written.ok ? undefined : written.error.message).toBe(true);
+    const before = notebook();
+    const jobs = engine.jobs.queue.list();
+    const result = await raw({ action: "approve", goal_id: goal.goalId, revision: goal.revision });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([expect.objectContaining({ text: expect.stringContaining("65 rows") })]);
+    expect(engine.jobs.queue.list()).toEqual(jobs);
+    expect(notebook().cells).toEqual(before.cells);
+    expect((await status(goal.goalId)).status).toBe("review");
+  });
+
   it("advances completed frames and storyboards to separate reviews and pins their inputs for the next stage", async () => {
     const goal = await create();
     const frame = await advance(goal, "frame");
@@ -393,8 +424,11 @@ describe("staged video goals through MCP", () => {
     await waitForChainRun(engine, regenerating.chainId!);
     await seedGoalStage(engine, ready.goalId, "storyboards", { indexes: [1] });
     const after = await status(ready.goalId);
-    expect(after.stages.storyboards!.outputs[0]).toEqual(before[0]);
-    expect(after.stages.storyboards!.outputs[2]).toEqual(before[2]);
+    for (const index of [0, 2]) {
+      const output = before[index]!;
+      const address = notebookGridTag(notebook().cells.find(cell => cell.id === output.cellId)!.slot);
+      expect(after.stages.storyboards!.outputs[index]).toEqual({ ...output, address, versions: output.versions.map(version => ({ ...version, address })) });
+    }
     expect(after.stages.storyboards!.outputs[1]!.artifactId).not.toBe(before[1]!.artifactId);
     expect(before.every(output => notebook().cells.some(cell => cell.id === output.cellId))).toBe(true);
     expect(after.stages.storyboards!.allSteps.length).toBeGreaterThan(3);
@@ -408,7 +442,10 @@ describe("staged video goals through MCP", () => {
     await engine.notebooks.write({ ...moved, cells: moved.cells.map(cell => cell.id === ready.characters[0]!.cellId ? { ...cell, slot: { row: 7, column: 0 } } : cell) });
     await pauseBookQueueForTests(bookId);
     const regenerate = await invoke({ action: "regenerate", goal_id: ready.goalId, revision: updated.revision });
-    expect(getChainRun(engine, regenerate.chainId!)?.steps[0]?.pins[0]?.address).toMatch(/h1/u);
+    expect(getChainRun(engine, regenerate.chainId!)?.steps[0]?.pins[0]).toMatchObject({
+      address: notebookGridTag(notebook().cells.find(cell => cell.id === ready.characters[0]!.cellId)!.slot),
+      cellId: ready.characters[0]!.cellId, artifactId: imageIds[0],
+    });
     await invoke({ action: "cancel", goal_id: ready.goalId });
     await waitForChainRun(engine, regenerate.chainId!);
   });

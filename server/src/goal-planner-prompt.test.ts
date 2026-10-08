@@ -15,7 +15,11 @@ describe("goal planner style guidance", () => {
     const text = goalPlannerInstructions({ id: "cinematic", options: {} }, goalBriefConstraints("two clips"));
     expect(text).toContain("short noun/verb fragments");
     expect(text).toContain("Let the storyboard guide the video");
-    expect(text).toContain("unlabeled panels");
+    expect(text).toContain("timing and shot notes below pictures");
+    expect(text).toContain("action/camera notes");
+    expect(text).toContain("Photographic live-action");
+    expect(text).toContain("Comedy comes from situations and timing");
+    expect(text).not.toContain("undefined");
     expect(text).toContain("do not retell the panels");
     expect(text).toContain("Sound: ambience or speech. No music.");
     expect(text).toContain("ceilings, not targets");

@@ -25,6 +25,7 @@ import {
   NOTEBOOK_LANE_FAMILY_ORDER,
   summarizeNotebookLaneRows,
 } from '../../src/videobook/notebook-lane-policy.js'
+import { arrangeGoalNotebook } from '../../server/src/notebook-goal-layout.js'
 
 function cell(
   id: string,
@@ -98,6 +99,52 @@ function familyOf(type: NotebookCellType) {
 }
 
 describe('notebook family-lane auto-arrange', () => {
+  it('groups goal references and generators above image and video outputs with the timeline last', () => {
+    const source = document([
+      cell('reference', 0, 0, 'image'), cell('goal', 0, 1, 'goal'),
+      cell('gen-image', 0, 2, 'generate_image'), cell('image-output', 0, 3, 'image'),
+      cell('timeline', 1, 0, 'timeline'), cell('gen-video', 2, 3, 'generate_video'), cell('video-output', 3, 3, 'video'),
+    ], [edge('reference', 'gen-image'), edge('gen-image', 'image-output'), edge('image-output', 'gen-video'), edge('gen-video', 'video-output')])
+    const before = structuredClone(source)
+    const slots = assignmentMap(planNotebookArrangement(source))
+    expect(slots.get('reference')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('goal')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('gen-image')).toEqual({ row: 0, column: 2 })
+    expect(slots.get('gen-video')).toEqual({ row: 0, column: 3 })
+    expect(slots.get('image-output')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('video-output')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('timeline')).toEqual({ row: 3, column: 0 })
+    const arranged = applyAssignments(source, slots)
+    expect(arrangeGoalNotebook(source)).toEqual(arranged)
+    expect(arrangeGoalNotebook(arranged)).toEqual(arranged)
+    expect(source).toEqual(before)
+    expect(arranged.edges).toEqual(before.edges)
+  })
+
+  it('keeps generated character references on top and gives overflow groups their own rows', () => {
+    const source = document([
+      { ...cell('reference', 3, 0, 'image'), inputs: { producerCellId: 'old-generator' } },
+      { ...cell('goal', 4, 0, 'goal'), inputs: { characters: [{ cellId: 'reference' }] } },
+      ...Array.from({ length: 9 }, (_, index) => cell(`gen-${index}`, 5, index % 8, 'generate_image')),
+      ...Array.from({ length: 9 }, (_, index) => ({ ...cell(`img-${index}`, 7, index % 8, 'image'), inputs: { producerCellId: `gen-${index}` } })),
+      cell('video', 8, 0, 'video'), cell('timeline', 0, 0, 'timeline'), cell('timeline-2', 1, 0, 'timeline'),
+    ])
+    const slots = assignmentMap(planNotebookArrangement(source))
+    expect(slots.get('reference')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('gen-8')).toEqual({ row: 1, column: 2 })
+    expect(slots.get('img-0')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('img-8')).toEqual({ row: 3, column: 0 })
+    expect(slots.get('video')).toEqual({ row: 4, column: 0 })
+    expect(slots.get('timeline')).toEqual({ row: 5, column: 0 })
+    expect(slots.get('timeline-2')).toEqual({ row: 6, column: 0 })
+  })
+
+  it('rejects a goal stage whose separate rows exceed capacity before allocating its outputs', () => {
+    const source = document([cell('goal', 0, 0, 'goal'), ...Array.from({ length: 61 }, (_, index) => cell(`timeline-${index}`, index + 1, 0, 'timeline'))])
+    expect(() => arrangeGoalNotebook(source, { generators: 8, images: 8, videos: 8 })).toThrow('65 rows')
+    expect(planNotebookArrangement(source).ok).toBe(true)
+  })
+
   it('keeps Timeline rows intact while arranging every other family around them', () => {
     const source = document([
       cell('timeline', 1, 0, 'timeline'),

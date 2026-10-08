@@ -1,14 +1,14 @@
 import { GOAL_PROMPT_BUDGET, goalBriefConstraints, type GoalPlan } from "./goal-plan.js";
 import { goalStyle, goalStyleSummary, resolveGoalStyleOptions, type GoalStyleSelection } from "./goal-styles.js";
 
-const cinematicInstructions = `Plan video. Return version 2 JSON. Barebones prompts: short noun/verb fragments, present tense. No filler, prose, jargon lists or stacked adjectives. Number characters. Continuity: identity, props, place, style once. Frame: all characters together. Storyboard: four distinct beats in order, setup/action/reaction/ending; 2x2 sheet, unlabeled panels. Let the storyboard guide the video. videoPrompt: only essential motion and sound; do not retell the panels. Sound: ambience or speech. No music. Opening, escalation, payoff. Word ceilings, not targets: title ${GOAL_PROMPT_BUDGET.title}, continuity ${GOAL_PROMPT_BUDGET.continuity}, frame ${GOAL_PROMPT_BUDGET.frame}, storyboard ${GOAL_PROMPT_BUDGET.storyboard}, ending ${GOAL_PROMPT_BUDGET.ending}, video ${GOAL_PROMPT_BUDGET.video}. Match shot count, seconds and aspect ratio. Portrait default; centre subjects, leave headroom. Sunburst, 2K, 720p unless specified. frameContinuity false; endingPrompt null. No @tokens, tools, invented assets or continuity promises.`;
+const cinematicInstructions = `Plan video. Return version 2 JSON. Barebones prompts: short noun/verb fragments, present tense. No filler, prose, jargon lists or stacked adjectives. Number characters. Continuity: identity, props, place, style once. Frame: all characters together. Storyboard: four semicolon-separated action/camera notes, setup/action/reaction/ending; 2x2 sheet with timing and shot notes below pictures. Let the storyboard guide the video. videoPrompt: only essential motion and sound; do not retell the panels. Sound: ambience or speech. No music. Opening, escalation, payoff. Word ceilings, not targets: title ${GOAL_PROMPT_BUDGET.title}, continuity ${GOAL_PROMPT_BUDGET.continuity}, frame ${GOAL_PROMPT_BUDGET.frame}, storyboard ${GOAL_PROMPT_BUDGET.storyboard}, ending ${GOAL_PROMPT_BUDGET.ending}, video ${GOAL_PROMPT_BUDGET.video}. Match shot count, seconds and aspect ratio. Portrait default; centre subjects, leave headroom. Sunburst, 2K, 720p unless specified. frameContinuity false; endingPrompt null. No @tokens, tools, invented assets or continuity promises.`;
 
 export function goalPlannerInstructions(selection: GoalStyleSelection, constraints: ReturnType<typeof goalBriefConstraints>): string {
   const style = goalStyle(selection.id);
   if (!style.planner) return cinematicInstructions;
   const options = resolveGoalStyleOptions(selection.id, selection.options);
   const beats = style.options.find(option => option.key === "format")?.choices.find(choice => choice.value === options.format)?.beats;
-  return `${cinematicInstructions}\n\n${style.planner} Selected style: ${goalStyleSummary(selection)}. Four beats: ${beats}. Use ${constraints.aspectRatio} throughout.`;
+  return `${cinematicInstructions}\n\n${style.planner} Selected style: ${goalStyleSummary(selection)}.${beats ? ` Four beats: ${beats}.` : ""} Use ${constraints.aspectRatio} throughout.`;
 }
 
 export function constrainGoalPlannerPlan(plan: GoalPlan, brief: string, selection: GoalStyleSelection): GoalPlan {

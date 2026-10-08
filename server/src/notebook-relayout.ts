@@ -19,6 +19,7 @@ import {
   findGenerateVideoOutput,
 } from "./notebook-cell-outputs.js";
 import { slotBelow, slotRight } from "./notebook-placement.js";
+import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 function bySlotThenId(left: NotebookCell, right: NotebookCell): number {
   if (left.slot.row !== right.slot.row) return left.slot.row - right.slot.row;
@@ -291,6 +292,7 @@ export function relayoutNotebookDocument(
   document: NotebookDocument,
 ): NotebookDocument {
   const migrated = migrateGenerationArtifacts(engine, document);
+  if (migrated.cells.some(cell => cell.type === "goal")) return arrangeGoalNotebook(migrated);
   return assignDirectionalSlots(migrated);
 }
 

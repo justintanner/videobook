@@ -45,7 +45,7 @@ export function NotebookToolbar({
         <button
           type="button"
           className="canvas-auto-arrange"
-          title="Arrange cells into Images, Gen, Videos, Audio, and Work lanes"
+          title="Arrange cells by workflow and media type"
           aria-label="Auto-arrange notebook"
           disabled={arrangeDisabled}
           onClick={() => void onArrange()}

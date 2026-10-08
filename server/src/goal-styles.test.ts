@@ -6,12 +6,16 @@ import { goalPromptWords } from "./goal-prompt-budget.js";
 const limits: Record<GoalStyleStage, number> = { frame: 25, storyboard: 20, ending: 15, video: 20, revise: 15 };
 
 describe("goal styles", () => {
-  it("keeps cinematic prompts empty and exposes the two styles", () => {
+  it("keeps cinematic stages photographic with compact live-action guidance", () => {
     expect(GOAL_STYLE_IDS).toEqual(["cinematic", "ig-influencer"]);
-    expect(goalStyle("cinematic")).toMatchObject({ defaults: {}, banned: [], options: [], planner: "" });
+    expect(goalStyle("cinematic")).toMatchObject({ defaults: {}, banned: [], options: [] });
+    expect(goalStyle("cinematic").planner).toContain("avoid cartoon rendering");
     expect(resolveGoalStyleOptions("cinematic")).toEqual({});
     for (const stage of Object.keys(limits) as GoalStyleStage[]) {
-      expect(goalStyleFragment({ id: "cinematic", options: {} }, stage)).toBe("");
+      const fragment = goalStyleFragment({ id: "cinematic", options: {} }, stage);
+      expect(fragment.toLowerCase()).toContain("live-action");
+      expect(fragment).not.toMatch(/^:/u);
+      expect(goalPromptWords(fragment)).toBeLessThanOrEqual(limits[stage]);
     }
   });
 

@@ -11,6 +11,7 @@ import {
   notebookLaneFamily,
   type NotebookLaneFamily,
 } from './notebook-lane-policy'
+import { arrangeGoalNotebook } from '../../server/src/notebook-goal-layout'
 
 interface NotebookAutoArrangeAssignment {
   id: string
@@ -68,6 +69,18 @@ export function planNotebookArrangement(
       'invalid-edge',
       'Cannot auto-arrange a notebook with duplicate cell IDs.',
     )
+  }
+  if (document.cells.some(cell => cell.type === 'goal')) {
+    try {
+      const arranged = arrangeGoalNotebook(document)
+      return {
+        ok: true,
+        rowCount: Math.max(...arranged.cells.map(cell => cell.slot.row + 1)),
+        slots: arranged.cells.map(cell => ({ id: cell.id, ...cell.slot })),
+      }
+    } catch (error) {
+      return failure('capacity', error instanceof Error ? error.message : String(error))
+    }
   }
 
   const idsByFamily: Record<NotebookLaneFamily, string[]> = {

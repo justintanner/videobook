@@ -17,6 +17,7 @@ import {
 import { estimateGoal } from "../jobs/plan-goal.js";
 import { queueGoalCombination } from "../jobs/combine-goal.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
+import { arrangeGoalNotebook } from "../notebook-goal-layout.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(value) }] });
@@ -70,9 +71,11 @@ async function ensureStageSpace(engine: Engine, goal: GoalRecord, stage: GoalGen
     if (NOTEBOOK_GRID_CAPACITY - occupied.length < count * 2 + (needsTimeline ? 8 : 0)) {
       throw new Error("The notebook needs two empty cells per stage output and a row for the timeline when combining clips");
     }
-    if (!needsTimeline) return document;
-    const timeline = engine.notebooks.createCell({ type: "timeline", label: plan.title, slot: firstEmptyNotebookGridRow(occupied) });
-    return { ...document, cells: [...document.cells, timeline] };
+    arrangeGoalNotebook(document, { generators: count, images: stage === "videos" ? 0 : count, videos: stage === "videos" ? count : 0, timelines: needsTimeline ? 1 : 0 });
+    const arranged = arrangeGoalNotebook(document);
+    if (!needsTimeline) return arranged;
+    const timeline = engine.notebooks.createCell({ type: "timeline", label: plan.title, slot: firstEmptyNotebookGridRow(notebookOccupiedSlots(arranged.cells)) });
+    return arrangeGoalNotebook({ ...arranged, cells: [...arranged.cells, timeline] });
   });
   if (!placed.ok) throw new Error(placed.error.message);
 }
@@ -98,18 +101,9 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   const indexes = index !== null ? [index] : stage === "frame" ? [0]
     : regenerate && Array.isArray(args.shot_indexes) ? [...new Set(z.array(z.number().int().min(0).max(plan.shots.length - 1)).min(1).parse(args.shot_indexes))].sort((a, b) => a - b)
       : plan.shots.map((_, index) => index);
-  const document = readNotebook(engine, goal.notebookId);
-  const characters = currentGoalCharacters(document, content.characters);
+  let document = readNotebook(engine, goal.notebookId);
+  let characters = currentGoalCharacters(document, content.characters);
   if (characters.length === 0) throw new Error("This goal has no character images. Start a new /goal.");
-  const steps = feedback && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, index!,
-    outputReference(document, goal.stages[stage]?.outputs.find(output => output.index === index)), feedback,
-    stage === "storyboards" ? outputReference(document, goal.stages.frame?.outputs[0]) : undefined)]
-    : stage === "frame" ? compileFrameSteps(plan, characters)
-    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes.map(position => position % plan.shots.length))
-      .filter(step => index === null || step.id === `storyboard${index + 1}`)
-      : compileVideoSteps(goal.goalId, plan,
-        plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
-        plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
   if (stage !== "frame") {
     const frame = goal.stages.frame?.outputs[0];
     outputReference(document, frame);
@@ -125,7 +119,19 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   const track = stage === "videos" && plan.shots.length > 1
     ? engine.sequences.getPrimary().tracks.find(candidate => candidate.kind === "video" && candidate.enabled && !candidate.locked) : null;
   if (stage === "videos" && plan.shots.length > 1 && !track) throw new Error("The sequence needs an enabled, unlocked video track");
-  await ensureStageSpace(engine, goal, stage, steps.filter(step => step.id !== "assemble").length, plan);
+  const count = stage === "frame" || feedback || index !== null ? 1 : indexes.length * (stage === "storyboards" && plan.frameContinuity ? 2 : 1);
+  await ensureStageSpace(engine, goal, stage, count, plan);
+  document = readNotebook(engine, goal.notebookId);
+  characters = currentGoalCharacters(document, content.characters);
+  const steps = feedback && stage !== "videos" ? [compileReviseStillStep(plan, characters, stage, index!,
+    outputReference(document, goal.stages[stage]?.outputs.find(output => output.index === index)), feedback,
+    stage === "storyboards" ? outputReference(document, goal.stages.frame?.outputs[0]) : undefined)]
+    : stage === "frame" ? compileFrameSteps(plan, characters)
+    : stage === "storyboards" ? compileStoryboardSteps(plan, characters, outputReference(document, goal.stages.frame?.outputs[0]), indexes.map(position => position % plan.shots.length))
+      .filter(step => index === null || step.id === `storyboard${index + 1}`)
+      : compileVideoSteps(goal.goalId, plan,
+        plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index))),
+        plan.frameContinuity ? plan.shots.map((_, index) => outputReference(document, goal.stages.storyboards?.outputs.find(output => output.index === index + plan.shots.length))) : []);
   const { defs, lookup } = await goalToolLookup(engine);
   const chain = await preflightAndAccept({
     action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId,

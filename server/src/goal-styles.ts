@@ -22,16 +22,23 @@ export type GoalStyle = {
 
 const styles: Record<GoalStyleId, GoalStyle> = {
   cinematic: {
-    id: "cinematic", label: "Cinematic", summary: "A coherent sequence with a shared visual style.",
-    briefKeywords: ["cinematic"], defaults: {}, planner: "",
-    fragments: { frame: "", storyboard: "", ending: "", video: "", revise: "" },
+    id: "cinematic", label: "Cinematic", summary: "Photographic live-action with natural proportions, textures and motion.",
+    briefKeywords: ["cinematic"], defaults: {},
+    planner: "Photographic live-action. Natural proportions, real skin and material textures, practical light. Restrained expressions and plausible motion. Comedy comes from situations and timing; avoid cartoon rendering, caricature, rubbery movement and exaggerated features.",
+    fragments: {
+      frame: "Photographic live-action, natural proportions, real textures",
+      storyboard: "Photographic live-action, natural proportions, real textures",
+      ending: "Photographic live-action, natural proportions, real textures",
+      video: "Live-action, natural motion, restrained expressions",
+      revise: "Photographic live-action, natural proportions, real textures",
+    },
     banned: [], options: [],
   },
   "ig-influencer": {
     id: "ig-influencer", label: "IG Influencer", summary: "Hyper-realistic, candid iPhone footage with natural skin and light.",
     briefKeywords: ["ig influencer", "instagram influencer", "influencer", "insta reel", "instagram reel"],
     defaults: { aspectRatio: "9:16", imageModel: "sunburst", imageResolution: "2K", videoResolution: "720p" },
-    planner: "Use a hyper-realistic Instagram phone-camera register: real-world activity in present tense, one location per shot, candid framing with slight imperfection, light grain, unretouched skin with visible pores and texture. Use the selected iPhone camera and lighting; natural daylight or soft indoor light by default. No HDR crunch, beautify, captions or on-screen text. Avoid cinematic, masterpiece, editorial, Portra, Cinestill and all film-stock vocabulary. Match the delivery: address the camera for selfies, be caught mid-action when filmed by a friend, hold framing steady on a tripod, or show the reflection for a mirror shot. Make the selected content format explicit in the four beats. Sound is ambient room or street sound with an optional short spoken line.",
+    planner: "Use a hyper-realistic Instagram phone-camera register: real-world activity in present tense, one location per shot, candid framing with slight imperfection, light grain, unretouched skin with visible pores and texture. Use the selected iPhone camera and lighting; natural daylight or soft indoor light by default. No HDR crunch or beautify. No captions or on-screen text inside pictures or video; storyboard notes go below pictures. Avoid cinematic, masterpiece, editorial, Portra, Cinestill and all film-stock vocabulary. Match the delivery: address the camera for selfies, be caught mid-action when filmed by a friend, hold framing steady on a tripod, or show the reflection for a mirror shot. Make the selected content format explicit in the four beats. Sound is ambient room or street sound with an optional short spoken line.",
     fragments: {
       frame: "hyper-realistic, skin pores, light grain",
       storyboard: "hyper-realistic, skin pores, light grain",
@@ -112,7 +119,7 @@ export function goalStyleFragment(selection: GoalStyleSelection, stage: GoalStyl
   if (!fragment) return "";
   if (stage === "video" && options.delivery === "tripod") fragment = fragment.replace("handheld micro-shake", "steady framing");
   const pieces = style.options.map(option => option.choices.find(choice => choice.value === options[option.key])!.prompt);
-  return `${pieces.join(", ")}: ${fragment}.`;
+  return `${pieces.length ? `${pieces.join(", ")}: ` : ""}${fragment}.`;
 }
 
 export function goalStyleSummary(selection: GoalStyleSelection): string {

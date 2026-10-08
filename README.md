@@ -54,7 +54,8 @@ at 2K, and Seedance 2.5 at 720p with sound**. Request landscape (16:9) or square
 eight shots. Image model, resolution, continuity and ending-storyboard settings
 sit under **Advanced** in the compact plan review.
 
-**Cinematic** is the default style. **IG Influencer** uses hyper-realistic,
+**Cinematic** is the default: photographic live-action, natural proportions and
+textures, restrained expressions and plausible motion. **IG Influencer** uses hyper-realistic,
 candid iPhone footage, natural skin texture and simple light. Try
 `/goal @a1 as an IG influencer, GRWM morning routine`. The review offers:
 
@@ -92,9 +93,10 @@ Each paid stage needs a separate approval:
    full frame again. Choose **Use these storyboards · Generate videos** when
    every selected still is current. Each storyboard is a four-panel 2×2 sheet
    showing setup, action, reaction and ending, read left to right, then top to
-   bottom. New sheets use unlabeled panels. Video prompts give each beat a
-   quarter of the clip and request full-screen footage without the grid or
-   text. Sound is ambience or speech; prompts explicitly request no music.
+   bottom. Beneath each picture, new sheets show its time range and a brief
+   action/camera note. A 10-second clip uses 0–2.5s, 2.5–5s, 5–7.5s and 7.5–10s.
+   Video prompts give each beat a quarter of the clip and request full-screen
+   footage without the grid, notes or text. Sound is ambience or speech; prompts explicitly request no music.
    Review the output for stray labels and continuity.
 4. **Combine:** multiple clips append in order after existing sequence content,
    using actual media durations. A single clip finishes without assembly.
@@ -111,6 +113,11 @@ storyboard. Older single-frame previews stay available as versions but must be
 regenerated or revised into four-panel sheets before video approval.
 Format, image model and resolution, continuity, and shot count stay fixed after
 the first frame; its prompt remains editable at either still review.
+
+Goal notebooks place references, goal tiles and generators on the first row,
+generated images on the second, videos on the third and the timeline on the
+fourth. Groups exceeding eight cells continue on extra rows, shifting later
+groups down. New goal outputs and **Arrange** use the same layout.
 
 Prompts use barebones noun/verb fragments. The storyboard guides the video;
 video prompts add only essential motion and sound. Planner word ceilings are

@@ -142,8 +142,10 @@ export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalChara
   return [{ id: "frame", tool: GOAL_IMAGE_TOOLS[plan.imageModel], params: goalFrameParams(plan, characters) }];
 }
 
-function storyboardLayoutPrompt(plan: GoalPlan): string {
-  return `2x2 storyboard. Unlabeled panels. Left-right, top-bottom: setup; action; reaction; ending. Each ${plan.aspectRatio}. Thin gutters. No text.`;
+function storyboardLayoutPrompt(plan: GoalPlan, index: number): string {
+  const beat = plan.shots[index]!.durationSeconds / 4;
+  const times = Array.from({ length: 4 }, (_, position) => `${position * beat}–${(position + 1) * beat}s`);
+  return `2x2 storyboard. Each ${plan.aspectRatio}. Left-right, top-bottom: setup; action; reaction; ending. Below pictures: timing + action/camera notes. Times: ${times.join("; ")}. Pictures text-free.`;
 }
 
 export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
@@ -152,7 +154,7 @@ export function compileStoryboardSteps(plan: GoalPlan, characters: readonly Goal
     id: `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${styledGoalPrompt(plan, ending ? "ending" : "storyboard", ending ? `Ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan)}\n\n${goalStillPrompt(plan, "storyboards", index)}`)}\n\n${goalReferenceLegend(characters, "full")}`,
+      prompt: `${styledGoalPrompt(plan, ending ? "ending" : "storyboard", ending ? `Ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan, index)}\n\n${goalStillPrompt(plan, "storyboards", index)}`)}\n\n${goalReferenceLegend(characters, "full")}`,
       image_refs: [frame, ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio,
       resolution: plan.imageResolution,
@@ -186,7 +188,7 @@ export function compileReviseStillStep(plan: GoalPlan, characters: readonly Goal
     id: stage === "frame" ? "frame" : `storyboard${index + 1}`,
     tool: GOAL_IMAGE_TOOLS[plan.imageModel],
     params: {
-      prompt: `${styledGoalPrompt(plan, "revise", `${storyboard ? `${storyboardLayoutPrompt(plan)}\n\n` : ""}${basePrompt}\n\nChange @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep rest.${storyboard ? " Four distinct moments." : ""}`)}\n\n${references.join("; ")}.`,
+      prompt: `${styledGoalPrompt(plan, "revise", `${storyboard ? `${storyboardLayoutPrompt(plan, index)}\n\n` : ""}${basePrompt}\n\nChange @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep rest.${storyboard ? " Four distinct moments." : ""}`)}\n\n${references.join("; ")}.`,
       image_refs: [current, ...(frame ? [frame] : []), ...characters.map(character => character.address)],
       aspect_ratio: plan.aspectRatio, resolution: plan.imageResolution, background: "opaque",
     },
@@ -197,7 +199,7 @@ function goalShotParams(plan: GoalPlan, index: number, storyboard: string, endin
   const shot = plan.shots[index]!;
   const fragment = goalStyleFragment(plan.style, "video");
   return {
-    prompt: `${shot.videoPrompt}\n\n@image1 storyboard. Four beats in order, ${shot.durationSeconds / 4}s each. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""} No grid, borders, text. No music.`,
+    prompt: `${shot.videoPrompt}\n\n@image1 storyboard. Four beats in order, ${shot.durationSeconds / 4}s each. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""} No grid, borders, notes, text. No music.`,
     image_refs: [storyboard, ...(ending ? [ending] : [])],
     duration: String(shot.durationSeconds),
     aspect_ratio: plan.aspectRatio,

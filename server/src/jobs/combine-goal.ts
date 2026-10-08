@@ -11,6 +11,7 @@ import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
 import { extractVideoPoster } from "../video-poster.js";
+import { arrangeGoalNotebook } from "../notebook-goal-layout.js";
 
 export async function queueGoalCombination(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
   if (goal.status !== "completed" || !goal.assembly) throw new Error("Complete and assemble the goal before combining its clips");
@@ -31,7 +32,7 @@ export async function queueGoalCombination(engine: Engine, goal: GoalRecord): Pr
     });
     const edges = (goal.stages.videos?.outputs ?? []).flatMap((output, index) => output.cellId && document.cells.some(source => source.id === output.cellId)
       ? [engine.notebooks.createEdge({ source: output.cellId, target: cell.id, targetInput: index === 0 ? "video" : `video_${index + 1}` })] : []);
-    return { ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] };
+    return arrangeGoalNotebook({ ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] });
   });
   if (!placed.ok) throw new Error(placed.error.message);
   const jobId = `goal-combine-${goal.goalId}-${uuidv7()}`;

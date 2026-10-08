@@ -3,6 +3,7 @@ import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-eng
 import { goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage, type GoalStillStage } from "./goal-plan.js";
 import type { GoalStyleSelection } from "./goal-styles.js";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
 export type GoalStatus = "planning" | "review" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
@@ -181,7 +182,9 @@ export async function createGoalCell(engine: Engine, notebookId: string, goalId:
     const edges = content.characters.map((character, index) => engine.notebooks.createEdge({
       source: character.cellId, target: cell.id, targetInput: index === 0 ? "character" : `character_${index + 1}`,
     }));
-    return { ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] };
+    const arranged = arrangeGoalNotebook({ ...document, cells: [...document.cells, cell], edges: [...document.edges, ...edges] });
+    created.cell = arranged.cells.find(candidate => candidate.id === cell.id)!;
+    return arranged;
   }, { goalId });
   if (!result.ok) throw new Error(result.error.message);
   if (!created.cell) throw new Error("The goal tile could not be placed");
