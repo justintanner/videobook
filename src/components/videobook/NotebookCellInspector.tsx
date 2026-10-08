@@ -112,6 +112,8 @@ import {
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
 import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
+import { ProviderTaskLink } from './ProviderTaskLink'
+import type { ProviderTaskStatus } from '../../../server/src/provider-status-link'
 import { useConfirmSheetKeys } from './confirm/useConfirmSheetKeys'
 import { ComposerDockContext } from './composer-dock-context'
 import type { GenerationCellPreview } from '@/videobook/use-generation-cell-preview'
@@ -401,6 +403,7 @@ type CellGenerationTransition = {
 }
 
 export type CellGenerationAttempt = {
+  providerTask?: ProviderTaskStatus | null
   attemptId: string
   status: GenerationStatus
   runId: string | null
@@ -1641,6 +1644,7 @@ function GeneratingStatusRow({
 function GeneratingMediaLayout({
   kind,
   address,
+  artifactId,
   state,
   cells,
   edges,
@@ -1657,6 +1661,7 @@ function GeneratingMediaLayout({
 }: {
   kind: MediaDockKind
   address: string
+  artifactId: string | null
   state: Exclude<MediaCellGenerationState, { kind: 'ready' }>
   cells: NotebookCell[]
   edges: NotebookEdge[]
@@ -1688,7 +1693,7 @@ function GeneratingMediaLayout({
     model,
     runId: running?.runId ?? null,
     jobNumber: cancelJobId ?? null,
-    providerArtifactId: running?.providerArtifactId ?? null,
+    providerArtifactId: running?.providerArtifactId ?? artifactId,
     writtenPrompt: producer?.prompt ?? running?.prompt ?? null,
   }
 
@@ -1823,6 +1828,7 @@ function MediaCellInspector({
         <GeneratingMediaLayout
           kind={kind}
           address={address}
+          artifactId={cell.outputArtifactId ?? null}
           state={generationState}
           cells={cells}
           edges={edges}
@@ -2558,16 +2564,28 @@ function ExecutableCellInspector({
   const connectedGenerationInputs = generationCellType
     ? generationConnectedInputs(cell.id, cells, edges)
     : []
+  const imageEdit = cell.tool === 'edit_image_subjects'
+  const inspectorGenerationActions = imageEdit
+    ? generationActions.filter((candidate) => candidate.tool === cell.tool)
+        .map((candidate) => ({
+          ...candidate,
+          inputContract: {
+            modes: candidate.inputContract.modes.filter((mode) =>
+              mode.id === cell.inputs?.generationMode),
+          },
+        }))
+    : generationActions
   const compatibleActions = generationCellType
     ? compatibleGenerationActions(
-        generationActions,
+        inspectorGenerationActions,
         generationCellType,
         connectedGenerationInputs,
+        imageEdit,
       )
     : []
   const selectedGenerationAction = generationCellType
     ? generationActionForSelection(
-        generationActions,
+        inspectorGenerationActions,
         generationCellType,
         generationSelection,
       )
@@ -2707,7 +2725,7 @@ function ExecutableCellInspector({
     inputEdges = edges,
   ): GenerationPreviewDraft => {
     const selected = generationCellType
-      ? generationActionForSelection(generationActions, generationCellType, value)
+      ? generationActionForSelection(inspectorGenerationActions, generationCellType, value)
       : null
     const inputs = generationConnectedInputs(cell.id, cells, inputEdges)
     return {
@@ -2864,7 +2882,7 @@ function ExecutableCellInspector({
       && selected.controls.some((control) => control.name === 'voice_id')) {
       ensureVoiceCatalog()
     }
-    const generationMode = initialGenerationMode(selected, connectedGenerationInputs)
+    const generationMode = initialGenerationMode(selected, connectedGenerationInputs, imageEdit ? draft.generationMode : '')
     const next = {
       ...draft,
       ...generationSelectionForAction(selected),
@@ -3366,7 +3384,9 @@ function ExecutableCellInspector({
           <div className="inspector-generation-warning" role="status">
             <CircleAlert size={14} />
             <span>
-              {generationInputError ?? (!generationActionCompatible
+              {!selectedGenerationAction
+                ? 'This saved action is unavailable. Choose a supported model.'
+                : generationInputError ?? (!generationActionCompatible
                 ? 'This model does not accept the current inputs. Choose a compatible model or change the connections.'
                 : !generationModeCompatible
                   ? 'This generation type does not match the current inputs. Choose a compatible type or change the connections.'
@@ -3666,6 +3686,7 @@ function CellGenerationsPanel({
                       {attempt.error}
                     </p>
                   )}
+                  {attempt.providerTask && <ProviderTaskLink task={attempt.providerTask} />}
                 </div>
               </div>
               {(attempt.payload !== undefined
@@ -3781,6 +3802,7 @@ export function NotebookCellInspector({
     edges,
     queuedCellIds,
     runErrors,
+    error,
     jobs,
   })
 

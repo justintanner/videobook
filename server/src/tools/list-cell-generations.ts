@@ -17,6 +17,8 @@ import {
   listGenerateVideoOutputs,
 } from "../notebook-cell-outputs.js";
 import { buildAssetList } from "./reconcile-project-work.js";
+import { readProviderTaskStatus } from "../provider-task-status.js";
+import type { ProviderTaskStatus } from "../provider-status-link.js";
 
 type CellGenerationTransition = {
   status: GenerationStatus;
@@ -35,6 +37,7 @@ type CellGenerationAttempt = {
   resolvedPrompt: string | null;
   artifactId: string | null;
   providerArtifactId: string | null;
+  providerTask: ProviderTaskStatus | null;
   error: string | null;
   mediaUrl: string | null;
   thumbnailUrl: string | null;
@@ -273,6 +276,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             resolvedPrompt: row.resolvedPrompt ?? null,
             artifactId: row.outputArtifactId ?? null,
             providerArtifactId: row.providerArtifactId ?? null,
+            providerTask: await readProviderTaskStatus(engine, row.providerArtifactId ?? joinArtifactId, row),
             error,
             mediaUrl: asset?.media_url ?? null,
             thumbnailUrl: asset?.thumbnail_url ?? null,

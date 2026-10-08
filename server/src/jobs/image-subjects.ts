@@ -69,7 +69,7 @@ export type ImageSubjectReplacementRegion = {
 
 type ReplacementRefInput = { assetId: string; filename: string };
 
-type GenerateImageSubjectEditPayload = {
+export type GenerateImageSubjectEditPayload = {
   type: "generate_image_subject_edit";
   imageAssetId: string;
   sourceArtifactId: string;
@@ -87,6 +87,7 @@ type GenerateImageSubjectEditPayload = {
   producerCellId: string;
   outputCellId: string;
   generationId?: string;
+  managedByNotebook?: boolean;
   jobId: string;
 };
 
@@ -396,6 +397,7 @@ async function updateNotebookEditState(
   state: "completed" | "error",
   error?: string,
 ): Promise<void> {
+  if (payload.managedByNotebook) return;
   const updatedAt = new Date().toISOString();
   const result = await mutateNotebook(
     engine,
@@ -472,6 +474,7 @@ async function updateNotebookEditProgress(
   payload: GenerateImageSubjectEditPayload,
   status: "running" | "awaiting_provider",
 ): Promise<void> {
+  if (payload.managedByNotebook) return;
   const updatedAt = new Date().toISOString();
   const inputState = status === "awaiting_provider" ? "awaiting-output" : "working";
   const result = await mutateNotebook(
@@ -682,6 +685,61 @@ function imageSubjectEditAdapter(modelId: string | undefined): ImageEditAdapter 
   const adapter = imageEditAdapter(modelId ?? DEFAULT_IMAGE_EDIT_MODEL_ID);
   if (!adapter) throw new Error(`Unknown image edit model: ${modelId}`);
   return adapter;
+}
+
+export async function previewImageSubjectEditRequest(
+  engine: Engine,
+  payload: Pick<GenerateImageSubjectEditPayload,
+    "sourceArtifactId" | "sourceObjectHash" | "subjectIds" | "operation" | "prompt"
+    | "regions" | "editRegions" | "replacementRefs" | "modelId">,
+  imageUrls: string[],
+): Promise<{ model: string; input: Record<string, unknown> }> {
+  const source = await resolveImageSubjectSource(engine, payload.sourceArtifactId);
+  if (source.objectHash !== payload.sourceObjectHash) {
+    throw new Error("The requested image version is stale; refresh the asset before editing");
+  }
+  const stored = await readImageSubjectMapRecord(engine, payload.sourceArtifactId);
+  const map = stored?.status === "ready" && stored.objectHash === source.objectHash ? stored : null;
+  const regional = (payload.editRegions?.length ?? 0) > 0;
+  if (payload.operation !== "whole_image" && payload.operation !== "replace" && !regional && !map) {
+    throw new Error("Analyze image subjects before editing them");
+  }
+  if (payload.subjectIds.some((id) => !map?.subjects.some((subject) => subject.id === id))) {
+    throw new Error("The saved subjects are unavailable; analyze the source image again");
+  }
+  if (!regional && payload.operation !== "whole_image" && payload.operation !== "replace"
+    && payload.subjectIds.length === 0) {
+    throw new Error("Select at least one subject to edit");
+  }
+  if ((payload.operation === "edit" || payload.operation === "whole_image") && !payload.prompt?.trim()) {
+    throw new Error("A prompt is required to edit selected subjects");
+  }
+  if (payload.operation === "remove" && !regional) {
+    return { model: "sharp/layer-composite", input: {
+      source_artifact_id: payload.sourceArtifactId, subject_ids: payload.subjectIds,
+    } };
+  }
+  if (!regional && payload.operation === "edit" && map
+    && imageSubjectEditRoute(map, payload.subjectIds) === "exact") {
+    const request = grokImagineImage2EditRequest(
+      map.grokSourceTaskId!, payload.prompt ?? "", exactEditMaskIndexes(map.subjects, payload.subjectIds)!,
+    );
+    return { model: request.model, input: { ...request.input } };
+  }
+  const prompt = regional
+    ? imageRegionEditPrompt(payload.editRegions!, payload.operation === "remove" ? "remove" : "edit", payload.prompt ?? "")
+    : payload.operation === "replace"
+      ? regionReplacementPrompt(map, payload.regions ?? [], [
+          { role: "base", artifactId: payload.sourceArtifactId },
+          ...(payload.replacementRefs ?? []).map((ref) => ({ role: "replacement" as const, artifactId: ref.assetId })),
+        ], payload.prompt ?? "")
+      : payload.operation === "whole_image" ? payload.prompt ?? ""
+        : semanticEditPrompt(map!, payload.subjectIds, payload.prompt ?? "");
+  const adapter = imageSubjectEditAdapter(payload.modelId);
+  const input = { prompt, imageUrls, width: source.width, height: source.height };
+  return payload.operation === "replace"
+    ? adapter.buildRegionRequest(input)
+    : adapter.buildSemanticRequest(input);
 }
 
 async function runAdapterImageSubjectEdit(
@@ -1009,6 +1067,7 @@ function generateImageSubjectEditPayload(
     ...(typeof value.generationId === "string"
       ? { generationId: value.generationId }
       : {}),
+    ...(value.managedByNotebook === true ? { managedByNotebook: true } : {}),
   };
 }
 

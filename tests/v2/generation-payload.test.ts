@@ -63,6 +63,7 @@ describe("generation payload inspection", () => {
     expect(value).toEqual({
       payload,
       meta: null,
+      providerTask: null,
       error: {
         message: persisted.value.message,
         failedAt: new Date(persisted.value.failedAt).toISOString(),

@@ -2,6 +2,7 @@ import { Check, Copy, RotateCcw } from 'lucide-react'
 import { Suspense, startTransition, use, useState, type ReactNode } from 'react'
 import type { ArtifactThumbAsset } from './ArtifactThumb'
 import { RichJson } from './RichJson'
+import { ProviderTaskLink } from './ProviderTaskLink'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import {
@@ -167,7 +168,7 @@ function runFactRows(
     inspection?.taskType
       ? { label: 'Task type', value: inspection.taskType }
       : null,
-    task
+    task && !inspection?.providerTask
       ? {
           label: 'Provider task',
           value: shortId(task.taskId),
@@ -222,6 +223,7 @@ function GeneratingRunFactsGrid({
           </div>
         ))}
       </dl>
+      {inspection?.providerTask && <ProviderTaskLink task={inspection.providerTask} />}
       {settings.length > 0 && (
         <ul className="inspector-generating-settings" aria-label="Request settings">
           {settings.map((setting) => (

@@ -88,6 +88,7 @@ export type NotebookGenerationAction = {
   defaultPriority: number | null
   inputContract: GenerationInputContract
   controls: GenerationControl[]
+  existingCellOnly?: boolean
 }
 
 export function effectiveGenerationControlValue(
@@ -344,6 +345,7 @@ export function asNotebookGenerationActions(
       defaultPriority: priority,
       inputContract: contract,
       controls,
+      ...(action.existingCellOnly === true ? { existingCellOnly: true } : {}),
     }]
   })
 }
@@ -351,8 +353,10 @@ export function asNotebookGenerationActions(
 export function generationActionsForCell(
   actions: readonly NotebookGenerationAction[],
   type: NotebookGenerationCellType,
+  includeExisting = false,
 ): NotebookGenerationAction[] {
-  return actions.filter((action) => action.cellTypes.includes(type))
+  return actions.filter((action) => action.cellTypes.includes(type)
+    && (includeExisting || !action.existingCellOnly))
 }
 
 function actionSelection(
@@ -395,9 +399,12 @@ export function generationActionForSelection(
   type: NotebookGenerationCellType,
   selection: GenerationSelection,
 ): NotebookGenerationAction | null {
-  const available = generationActionsForCell(actions, type)
+  const available = generationActionsForCell(actions, type, true)
+    .filter((action) => !action.existingCellOnly
+      || (action.tool === selection.tool && action.model === selection.model))
   const toolMatch = selection.tool
-    ? available.find((action) => action.tool === selection.tool)
+    ? available.filter((action) => action.tool === selection.tool)
+        .sort((left, right) => selectionScore(right, selection) - selectionScore(left, selection))[0]
     : undefined
   if (toolMatch) return toolMatch
   const legacyToolMatch = selection.model
@@ -613,8 +620,9 @@ export function compatibleGenerationActions(
   actions: readonly NotebookGenerationAction[],
   type: NotebookGenerationCellType,
   inputs: readonly GenerationConnectedInput[],
+  includeExisting = false,
 ): NotebookGenerationAction[] {
-  return generationActionsForCell(actions, type)
+  return generationActionsForCell(actions, type, includeExisting)
     .filter((action) => generationActionIsCompatible(action, inputs))
     .sort(compareGenerationActions)
 }

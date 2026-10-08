@@ -162,6 +162,8 @@ async function estimateOne(
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
+  if (toolName === "edit_image_subjects" && input.model === "sharp/layer-composite"
+    && input.operation === "remove") return { ...UNKNOWN_ESTIMATE };
   // Google Flow: local Gemini API list USD (+ plan credits metadata).
   // @apicity/cost@0.8.0 has googleflow credit×Pro rates; we keep API list USD
   // (docs/apicity-gaps.md §15, product choice A).

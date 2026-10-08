@@ -21,6 +21,14 @@ const localTypes = [
 ] satisfies NotebookCellType[]
 
 describe('notebook generation policy', () => {
+  it('runs local subject removal without cloud consent', () => {
+    expect(notebookCellRequiresCloudGenerationConsent({
+      type: 'generate_image', tool: 'edit_image_subjects', provider: 'local',
+    })).toBe(false)
+    expect(notebookCellRequiresCloudGenerationConsent({
+      type: 'generate_image', tool: 'edit_image_subjects', provider: 'fal',
+    })).toBe(true)
+  })
   it('requires cloud consent for prompt rewrites without accepting them as generate-cell targets', () => {
     const cell = { type: 'prompt' as const, operation: 'rewrite_prompt' }
 

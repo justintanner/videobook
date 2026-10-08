@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import { listNotebookActions } from '../../server/src/notebook-action-catalog'
 import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
@@ -285,6 +286,18 @@ describe('notebook generation actions', () => {
       operation: 'text_to_image',
       tool: 'generate_google_flow_nano_banana_pro_image',
     })
+  })
+
+  it('resolves saved edit models without offering workflow edits on new generation cells', () => {
+    const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
+    const selection = {
+      tool: 'edit_image_subjects', provider: 'fal', model: 'fal-ai/nano-banana-pro/edit', operation: 'image_to_image',
+    }
+    expect(generationActionForSelection(catalog, 'generate_image', selection)?.id)
+      .toBe('image-edit.fal-ai/nano-banana-pro/edit')
+    expect(generationActionForSelection(catalog, 'generate_image', { ...selection, tool: '' })).toBeNull()
+    expect(compatibleGenerationActions(catalog, 'generate_image', [{ kind: 'image', target: 'image' }])
+      .some((action) => action.existingCellOnly)).toBe(false)
   })
 
   it('preserves a configured incompatible action until it is changed', () => {

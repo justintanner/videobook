@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { NotebookCell } from 'videobook-engine'
+import { ProviderTaskLink } from './ProviderTaskLink'
 import {
   buildJobsRows,
   countJobsBands,
@@ -226,6 +227,7 @@ function JobsRowView({
           </span>
         </div>
         {row.live && <div className="jobs-progress" aria-hidden="true"><span /></div>}
+        {row.providerTask && <ProviderTaskLink task={row.providerTask} />}
       </div>
       <div className="jobs-cell jobs-cell-attempt">{row.attempt}</div>
       <div className="jobs-cell jobs-cell-time">

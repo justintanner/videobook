@@ -19,6 +19,7 @@ import type {
 import type { ServerCommand } from '@/lib/command-registry'
 import { type ChatModelCatalog, asChatModelCatalog } from '@/videobook/chat-models'
 import { type NotebookGenerationAction, asNotebookGenerationActions } from '@/videobook/notebook-generation-actions'
+import { parseProviderTaskStatus, type ProviderTaskStatus } from '../../server/src/provider-status-link'
 import type { CellAssetRevision } from '@/components/videobook/NotebookCellInspector'
 import {
   recordValue,
@@ -105,6 +106,7 @@ export type JobRecord = {
   error: { message: string; code: string | null } | null
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
+  providerTask?: ProviderTaskStatus | null
   enqueuedAt: number
   startedAt: number | null
   finishedAt: number | null
@@ -753,6 +755,7 @@ export function asJobs(value: unknown): JobRecord[] {
         : null,
       payload,
       result,
+      providerTask: parseProviderTaskStatus(item.providerTask),
       enqueuedAt: asNumber(item.enqueuedAt ?? item.enqueued_at) ?? 0,
       startedAt: asNumber(item.startedAt ?? item.started_at),
       finishedAt: asNumber(item.finishedAt ?? item.finished_at),

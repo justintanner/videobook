@@ -2,6 +2,8 @@
 // the persisted payload plus the pending task that tracks it. Parsed from the
 // inspect_generation_request tool result; everything else is derived.
 
+import { parseProviderTaskStatus, type ProviderTaskStatus } from '../../server/src/provider-status-link'
+
 export type GenerationRequestTask = {
   taskId: string
   submittedAt: string
@@ -13,6 +15,7 @@ export type GenerationRequestInspection = {
   taskType: string | null
   task: GenerationRequestTask | null
   errorMessage: string | null
+  providerTask?: ProviderTaskStatus | null
 }
 
 export type GenerationPayloadSetting = {
@@ -44,11 +47,13 @@ export function parseGenerationRequestInspection(
   value: unknown,
 ): GenerationRequestInspection {
   const record = asRecord(value) ?? {}
+  const providerTask = parseProviderTaskStatus(record.providerTask)
   return {
     payload: record.payload ?? null,
     taskType: asText(record.taskType),
     task: parseTask(record.task),
     errorMessage: asText(asRecord(record.error)?.message),
+    ...(providerTask ? { providerTask } : {}),
   }
 }
 

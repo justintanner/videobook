@@ -114,12 +114,13 @@ export function mediaCellGenerationState(input: {
   edges: readonly NotebookEdge[]
   queuedCellIds?: ReadonlySet<string>
   runErrors?: Readonly<Record<string, string>>
+  error?: string | null
   jobs?: readonly NotebookRunJobView[]
 }): MediaCellGenerationState {
   if (!isImageVideoGenerationResultCell(input.cell)) return { kind: 'ready' }
   const producer = producerOf(input.cell, input.cells, input.edges)
   const producerCellId = producer?.id ?? null
-  const runError = input.runErrors?.[input.cell.id]
+  const runError = input.runErrors?.[input.cell.id] ?? input.error
   if (runError) {
     return { kind: 'failed', message: runError, producerCellId }
   }

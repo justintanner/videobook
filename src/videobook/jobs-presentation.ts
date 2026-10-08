@@ -2,8 +2,10 @@ import type { NotebookCell } from 'videobook-engine'
 import type { CommandPlan } from '@/videobook/command-plan'
 import { notebookGridTag } from '@/videobook/notebook-grid'
 import { isPublishedPostCell } from '@/videobook/notebook-published-post'
+import type { ProviderTaskStatus } from '../../server/src/provider-status-link'
 
 export interface JobsScreenJob {
+  providerTask?: ProviderTaskStatus | null
   id: number
   operationId: string
   type: string
@@ -60,6 +62,7 @@ interface JobsRowTarget {
 }
 
 export interface JobsRow {
+  providerTask?: ProviderTaskStatus | null
   key: string
   source: JobsRowSource
   tone: JobsRowTone
@@ -272,6 +275,7 @@ function jobRow(job: JobsScreenJob, cells: NotebookCell[], now: number): JobsRow
     : null
   return {
     key: `job:${job.id}`,
+    providerTask: job.providerTask,
     source: { kind: 'job', jobId: job.id },
     tone,
     band: toneBand(tone),

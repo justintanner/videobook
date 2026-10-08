@@ -107,11 +107,13 @@ describe('mediaCellGenerationState', () => {
     })
   })
 
-  it('reports failed with the live run error message', () => {
+  it.each(['live', 'persisted'])('reports failed with the %s run error message', (source) => {
     expect(mediaCellGenerationState({
       ...base,
       cell: outputCell({ outputArtifactId: 'artifact-1' }),
-      runErrors: { [outputId]: 'Provider rejected the request' },
+      ...(source === 'live'
+        ? { runErrors: { [outputId]: 'Provider rejected the request' } }
+        : { error: 'Provider rejected the request' }),
     })).toEqual({
       kind: 'failed',
       message: 'Provider rejected the request',

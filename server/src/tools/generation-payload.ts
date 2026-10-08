@@ -1,5 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
+import { readProviderTaskStatus } from "../provider-task-status.js";
+import type { ProviderTaskStatus } from "../provider-status-link.js";
 import type { ToolDef } from "./tool-def.js";
 
 type GenerationErrorOut = {
@@ -21,12 +23,13 @@ type GenerationPayloadResponse = {
   error: GenerationErrorOut | null;
   taskType: string | null;
   task: GenerationTaskOut | null;
+  providerTask: ProviderTaskStatus | null;
 };
 
 export function generationPayloadDef(engine: Engine): ToolDef {
   return {
     name: "inspect_generation_request",
-    description: "Read the persisted Kie request payload, pending provider task (id, submit time), task meta, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.",
+    description: "Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Artifact id"),
@@ -34,10 +37,11 @@ export function generationPayloadDef(engine: Engine): ToolDef {
     handler: async (args) => {
       const { book_id: _book_id, asset_id } = args as { book_id: string; asset_id: string };
 
-      const [payloadRes, taskRes, errorRes] = await Promise.all([
+      const [payloadRes, taskRes, errorRes, providerTask] = await Promise.all([
         engine.metadata.artifacts.read<unknown>(asset_id, "generation-payload"),
         engine.jobs.pending.read(asset_id),
         engine.jobs.failures.read(asset_id),
+        readProviderTaskStatus(engine, asset_id),
       ]);
 
       const task = taskRes.ok ? taskRes.value : null;
@@ -56,6 +60,7 @@ export function generationPayloadDef(engine: Engine): ToolDef {
         meta: task ? task.meta : null,
         error,
         taskType: task ? task.taskType : null,
+        providerTask,
         task: task
           ? {
               taskId: task.taskId,

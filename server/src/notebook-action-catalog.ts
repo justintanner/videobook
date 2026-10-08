@@ -20,6 +20,7 @@ import {
 } from "./openai-intelligence.js";
 import type { NotebookGenerationInputContract } from "./notebook-generation-contract.js";
 import type { NotebookGenerationControl } from "./notebook-generation-controls.js";
+import { IMAGE_EDIT_MODELS } from "./image-edit-models.js";
 
 type NotebookActionKind =
   | "local"
@@ -61,6 +62,7 @@ interface NotebookAction {
   defaultPriority?: number;
   inputContract?: NotebookGenerationInputContract;
   controls?: NotebookGenerationControl[];
+  existingCellOnly?: boolean;
 }
 
 const LOCAL_ACTIONS: NotebookAction[] = [
@@ -438,7 +440,40 @@ export function listNotebookActions(options: {
       const action = generationAction(spec);
       return action ? [action] : [];
     });
-  return [...LOCAL_ACTIONS, ...generation]
+  const imageEdits: NotebookAction[] = [
+    ...IMAGE_EDIT_MODELS,
+    { id: "sharp/layer-composite", label: "Remove subjects", provider: "local" as const },
+  ].map((model) => ({
+    id: `image-edit.${model.id}`,
+    cellTypes: ["generate_image"],
+    kind: "generation",
+    operation: "image_to_image",
+    provider: model.provider,
+    providerLabel: model.provider === "local" ? "Local" : providerLabels[model.provider],
+    model: model.id,
+    tool: "edit_image_subjects",
+    title: model.label,
+    description: "Repeat an existing image edit with its saved subjects and regions",
+    outputKind: "artifact",
+    billable: model.provider !== "local",
+    defaults: {},
+    parameters: [],
+    requiredInputs: ["image"],
+    capabilities: { dualFrame: false, localMedia: true, requiresConfirmation: model.provider !== "local" },
+    existingCellOnly: true,
+    controls: [],
+    inputContract: {
+      modes: (model.provider === "local"
+        ? ["subject-remove"]
+        : ["whole-image", "subject-edit", "region-edit", "region-remove", "region-replace"]
+      ).map((id) => ({
+        id,
+        slots: [{ field: "artifact_id", kind: "image", targets: ["image"], min: 1, max: 1 }],
+        requiredGroups: [],
+      })),
+    },
+  }));
+  return [...LOCAL_ACTIONS, ...generation, ...imageEdits]
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -448,7 +483,8 @@ function actionsForCell(
   options: { includeHiddenGeneration?: boolean } = {},
 ): NotebookAction[] {
   const all = listNotebookActions(options).filter((action) =>
-    action.cellTypes.includes(cell.type));
+    action.cellTypes.includes(cell.type)
+    && (!action.existingCellOnly || cell.tool === action.tool));
   if (cell.type !== "generate_video") return all;
   const inputs = new Set(
     document.edges
@@ -548,7 +584,8 @@ export function validateCellConfiguration(
       ? generationAction(registeredSpec)
       : null;
     const match = actions.find((action) =>
-      action.tool === tool || action.id === tool || action.model === tool)
+      (action.tool === tool || action.id === tool || action.model === tool)
+      && (!action.existingCellOnly || action.model === normalizedCell.model))
       ?? registeredAction
       ?? undefined;
     if (!match || !match.cellTypes.includes(normalizedCell.type)) {

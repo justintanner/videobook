@@ -64,6 +64,7 @@ import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { translateToolPayload } from "../payload-builders.js";
 import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
+import { jobProviderTaskStatus } from "../provider-task-status.js";
 import {
   enqueueNotebookRunPlan,
   notebookRunPlanRecords,
@@ -1321,7 +1322,7 @@ export function videobookDomainDefs(
               ? action.cellTypes.includes(args.cell_type as NotebookCellType)
               : true)
           .map((action) => {
-            if (action.kind !== "generation" || !action.tool) return action;
+            if (action.kind !== "generation" || !action.tool || action.existingCellOnly) return action;
             const definition = definitions.get(action.tool);
             if (!definition) return action;
             const settingsSchema = action.cellTypes.includes("generate_video")
@@ -2099,7 +2100,9 @@ export function videobookDomainDefs(
             })),
           ];
           const translated = promptLeaks.length === 0
-            ? translateToolPayload(
+            ? prepared.imageEdit
+              ? { payload: prepared.imageEdit.providerPayload, provider_path: undefined }
+              : translateToolPayload(
                 prepared.tool,
                 prepared.input,
                 prepared.provider,
@@ -2333,12 +2336,16 @@ export function videobookDomainDefs(
         limit: z.number().int().positive().max(500).optional(),
         job_ids: z.array(z.number().int().positive()).min(1).max(100).optional(),
       },
-      handler: async (args) => json(Array.isArray(args.job_ids)
-        ? args.job_ids.flatMap((id) => {
+      handler: async (args) => {
+        const jobs = Array.isArray(args.job_ids) ? args.job_ids.flatMap((id) => {
             const job = engine.jobs.queue.get(Number(id));
             return job ? [job] : [];
           })
-        : engine.jobs.queue.list({ limit: Number(args.limit) || 200 })),
+          : engine.jobs.queue.list({ limit: Number(args.limit) || 200 });
+        return json(await Promise.all(jobs.map(async (job) => ({
+          ...job, providerTask: await jobProviderTaskStatus(engine, job),
+        }))));
+      },
     },
     {
       name: "cancel_job",

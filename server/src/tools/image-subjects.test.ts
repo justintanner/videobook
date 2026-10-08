@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
+import { v7 as uuidv7 } from "uuid";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
 import {
@@ -38,6 +39,7 @@ import {
   SEEDREAM_PRO_I2I_MAX_IMAGE_URLS,
 } from "../jobs/image-subjects.js";
 import { seedreamRegionReplacementRequest } from "../jobs/_image-edit-adapter.js";
+import { runNotebookCell, reconcileAwaitingNotebookOutputs } from "../jobs/run-notebook.js";
 import { createEngineForTest } from "../engine.js";
 import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
@@ -49,6 +51,7 @@ import {
   queue,
   recoverInterruptedSubjectEditArtifact,
   waitForJob,
+  waitForBookQueuesIdleForTests,
 } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 import {
@@ -1252,6 +1255,26 @@ describe("image subject tools", () => {
         targetInput: "media",
       }),
     ]));
+
+    const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id)!;
+    const preview = await client.callTool({ name: "preview_notebook_generation", arguments: {
+      book_id: bookId, notebook_id: source.notebookId, cell_id: producer.id,
+    } });
+    expect(preview.isError).not.toBe(true);
+    expect(resultJson(preview)).toMatchObject({ provider: "local", estimate: { usd: 0, warnings: [] } });
+    const rerun = await runNotebookCell(engine, bookId, source.notebookId, notebook.value, producer, { runId: uuidv7() });
+    expect(rerun.outputArtifactId).not.toBe(parsed.output_artifact_id);
+    await waitForBookQueuesIdleForTests();
+    await reconcileAwaitingNotebookOutputs(engine, bookId);
+    await waitForBookQueuesIdleForTests();
+    const rerunRead = await engine.files.read(rerun.outputArtifactId, "original.png");
+    if (!rerunRead.ok) throw new Error(rerunRead.error.message);
+    expect(await pixel(Buffer.from(rerunRead.value), 15, 15)).toEqual([20, 40, 180, 255]);
+    const rerunNotebook = engine.notebooks.read(source.notebookId);
+    if (!rerunNotebook.ok) throw new Error(rerunNotebook.error.message);
+    expect(rerunNotebook.value.cells.filter((cell) => cell.type === "generate_image")).toHaveLength(1);
+    expect(rerunNotebook.value.cells.find((cell) => cell.id === parsed.output_cell_id)?.outputArtifactId)
+      .toBe(parsed.output_artifact_id);
   });
 
   it("refuses to treat a published-post tile as the image-subject source cell", async () => {
@@ -1418,6 +1441,15 @@ describe("image subject tools", () => {
         role: "base",
         artifactId: source.artifactId,
       });
+      const preview = await client.callTool({ name: "preview_notebook_generation", arguments: {
+        book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id,
+      } });
+      expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
+      expect(resultJson(preview)).toMatchObject({ payload: { input: {
+        prompt: expect.stringContaining("reference image 3"),
+        image_urls: [source.artifactId, left.value.artifactId, right.value.artifactId]
+          .map((id) => `http://url.resolved.later.for/${id}`),
+      } } });
     } finally {
       if (originalKey) process.env.KIE_API_KEY = originalKey;
       else delete process.env.KIE_API_KEY;
@@ -1591,6 +1623,15 @@ describe("image subject tools", () => {
         const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
         expect(producer?.provider).toBe(entry.provider);
         expect(producer?.model).toBe(entry.id);
+        const preview = await client.callTool({ name: "preview_notebook_generation", arguments: {
+          book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id,
+        } });
+        expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
+        expect(resultJson(preview)).toMatchObject({
+          provider: entry.provider,
+          model: entry.id,
+          payload: { input: { prompt: expect.stringContaining("Modify only these selected subjects") } },
+        });
       } finally {
         if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
         else delete process.env.KIE_API_KEY;
@@ -1651,6 +1692,13 @@ describe("image subject tools", () => {
         model: DEFAULT_IMAGE_EDIT_MODEL_ID,
         inputs: { editRegions: regions, generationMode: `region-${operation}` },
       });
+      const preview = await client.callTool({ name: "preview_notebook_generation", arguments: {
+        book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id,
+      } });
+      expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
+      expect(resultJson(preview)).toMatchObject({ payload: { input: {
+        prompt: expect.stringContaining("0.5000"),
+      } } });
       const unchanged = await resolveImageSubjectSource(engine, source.artifactId);
       expect(unchanged.objectHash).toBe(source.objectHash);
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1727,6 +1775,30 @@ describe("image subject tools", () => {
       const producer = notebook.value.cells.find((cell) => cell.id === parsed.producer_cell_id);
       expect(producer?.model).toBe("seedream/5-pro-image-to-image");
       expect(producer?.inputs?.generationMode).toBe("whole-image");
+      const draft = {
+        prompt: "Turn the white square into a spider portal",
+        provider: "fal", model: "fal-ai/nano-banana-pro/edit",
+        operation: "image_to_image", tool: "edit_image_subjects", inputs: producer!.inputs,
+      };
+      const preview = await client.callTool({ name: "preview_notebook_generation", arguments: {
+        book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id, draft,
+      } });
+      expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
+      expect(resultJson(preview)).toMatchObject({ provider: "fal", payload: {
+        endpoint_id: "fal-ai/nano-banana-pro/edit", input: { prompt: draft.prompt },
+      } });
+      const rerun = await runNotebookCell(engine, bookId, source.notebookId, notebook.value,
+        { ...producer!, ...draft }, { confirmPaid: true, runId: uuidv7() });
+      const rerunJob = engine.jobs.queue.list({ type: "generate_image_subject_edit" })
+        .find((candidate) => candidate.payload.imageAssetId === rerun.outputArtifactId);
+      expect(rerunJob?.payload).toMatchObject({ operation: "whole_image", managedByNotebook: true,
+        sourceArtifactId: source.artifactId, sourceObjectHash: source.objectHash });
+      const stale = await client.callTool({ name: "preview_notebook_generation", arguments: {
+        book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id,
+        draft: { ...draft, inputs: { ...draft.inputs, sourceObjectHash: "stale" } },
+      } });
+      expect(stale.isError).toBe(true);
+      expect((stale.content as TextContent)[0]!.text).toContain("stale");
     } finally {
       if (originalKey) process.env.KIE_API_KEY = originalKey;
       else delete process.env.KIE_API_KEY;

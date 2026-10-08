@@ -87,6 +87,7 @@ import { sortByKindSlot } from "../generation-input-mentions.js";
 import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
+import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -263,6 +264,7 @@ export function notebookCellMediaType(
 
 export function notebookCellIsPaid(cell: NotebookCell): boolean {
   return cell.operation === "rewrite_prompt"
+    || (cell.tool === "edit_image_subjects" && cell.provider !== "local")
     || Boolean(getActionSpec(cell.tool ?? cell.model ?? ""));
 }
 
@@ -1214,9 +1216,20 @@ export async function prepareNotebookGeneration(
   model: string;
   input: Record<string, unknown>;
   mentions: NotebookPromptResolution;
+  imageEdit?: Awaited<ReturnType<typeof prepareNotebookImageEdit>>;
 }> {
   const tool = resolveNotebookGenerationTool(cell);
   if (!tool) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
+  if (tool === "edit_image_subjects") {
+    const mentions = resolveGenerationInputReferences({ engine, document, cell, prompt: cell.prompt ?? "" });
+    const issues = [...mentions.unresolved, ...mentions.unconnected];
+    if (!options.allowReferenceIssues && issues.length > 0) {
+      throw new Error(issues.map((issue) => issue.message).join("; "));
+    }
+    const imageEdit = await prepareNotebookImageEdit(engine, document, cell, mentions.prompt);
+    return { tool, provider: imageEdit.provider, model: imageEdit.model,
+      input: imageEdit.input, mentions, imageEdit };
+  }
   const spec = getActionSpec(tool);
   if (spec) {
     const expected = cell.type === "generate_video"
@@ -1504,7 +1517,23 @@ async function generationTool(
   };
   let response: ToolResult;
   try {
-    response = await definition.handler(prepared.input);
+    if (prepared.imageEdit) {
+      if (!outputCellId) throw new Error("Image edit has no notebook output cell");
+      const output = await engine.artifacts.create({ kind: "image", label: cell.label ?? "Edited image" });
+      if (!output.ok) throw new Error(output.error.message);
+      const imageAssetId = output.value.artifactId;
+      const jobId = `notebook-image-edit-${imageAssetId}`;
+      await queue.enqueue(jobId, {
+        ...prepared.imageEdit.jobInput,
+        type: "generate_image_subject_edit", imageAssetId, bookId,
+        notebookId: document.id, producerCellId: cell.id, outputCellId, jobId,
+        managedByNotebook: true,
+        ...(generationId ? { generationId } : {}),
+      });
+      response = { content: [{ type: "text", text: JSON.stringify({ image_asset_id: imageAssetId }) }] };
+    } else {
+      response = await definition.handler(prepared.input);
+    }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     return fail(message);
@@ -2362,9 +2391,11 @@ async function executeLocalOrGeneration(
       || cell.type === "generate_image"
       || cell.type === "generate_audio"
     )
-    && getActionSpec(resolveNotebookGenerationTool(cell) ?? "")
+    && (getActionSpec(resolveNotebookGenerationTool(cell) ?? "")
+      || cell.tool === "edit_image_subjects")
   ) {
     const requiresConfirmation = cell.inputs?.requiresConfirmation === true
+      || (cell.tool === "edit_image_subjects" && cell.provider !== "local")
       || (cell.tool ?? cell.model ?? "").includes("seedance")
       || (cell.tool ?? cell.model) === DEFAULT_ANIMATION_TOOL;
     if (requiresConfirmation && !options.confirmPaid) {
@@ -2622,6 +2653,7 @@ export async function runNotebookCell(
         const fillActionPrompt = Boolean(resolvedPrompt)
           && !actionBefore?.prompt;
         const fillActionModel = output.model !== undefined
+          && actionBefore?.tool !== "edit_image_subjects"
           && output.model !== actionBefore?.model;
         const fillActionTool = fillActionModel && !actionBefore?.tool;
         const actionCellChanged = fillActionPrompt || fillActionModel;

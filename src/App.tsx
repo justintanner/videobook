@@ -3628,6 +3628,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       edges: notebook?.edges ?? [],
       queuedCellIds,
       runErrors: cellRunErrors,
+      error: selectedCellError,
       jobs: inspectorJobViews,
     })
     : null

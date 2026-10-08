@@ -13,6 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
+import { resolveImageSubjectSource } from '../../server/src/image-subject-map.js'
+import { reconcileImageSubjectJobFailures } from '../../server/src/jobs/image-subjects.js'
 import { abortActiveBookJobsForTests, pauseBookQueueForTests, queue, setEngineRoot } from '../../server/src/queue.js'
 import { availablePort, record, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { ObservedToolCall, StartedProcess } from './e2e-harness.js'
@@ -325,6 +327,83 @@ describe('drawn region image editor through real MCP', () => {
       if (originalKey === undefined) delete process.env.KIE_API_KEY
       else process.env.KIE_API_KEY = originalKey
       await abortActiveBookJobsForTests()
+    }
+  }, 60_000)
+
+  it('reopens an image edit with its model, editable prompt, and provider status links', async () => {
+    await pauseBookQueueForTests(bookId)
+    const book = books.get(bookId)
+    if (!book.ok) throw new Error(book.error.message)
+    const engine = book.value.engine
+    const document = engine.notebooks.read(notebookId)
+    if (!document.ok) throw new Error(document.error.message)
+    const cell = document.value.cells.find((candidate) => candidate.id === sourceCellId)!
+    const source = await resolveImageSubjectSource(engine, cell.outputArtifactId!)
+    const originalKey = process.env.FAL_API_KEY
+    process.env.FAL_API_KEY = 'test-key'
+    try {
+      const edited = record(await call('edit_image_subjects', {
+        source_cell_id: sourceCellId, artifact_id: source.artifactId,
+        object_hash: source.objectHash, operation: 'whole_image',
+        prompt: 'A portal behind the person', model: 'fal-ai/nano-banana-pro/edit',
+      }))!
+      const artifactId = String(edited.output_artifact_id)
+      const providerTaskId = 'fal-browser-status-request'
+      await engine.metadata.artifacts.write(artifactId, 'generation-payload', {
+        endpoint_id: 'fal-ai/nano-banana-pro/edit', input: { prompt: 'A portal behind the person' },
+      })
+      await engine.metadata.artifacts.write(artifactId, 'kie-task-id', { taskId: providerTaskId })
+      const job = engine.jobs.queue.list({ type: 'generate_image_subject_edit' })
+        .find((candidate) => candidate.payload.imageAssetId === artifactId)!
+      await engine.jobs.queue.abort(job.id, 'Provider rejected this request')
+      await reconcileImageSubjectJobFailures(engine, bookId)
+      await page.reload()
+      await page.locator(`.react-flow__node[data-id="${String(edited.producer_cell_id)}"] .cell-node`).click()
+      const editor = page.locator('.generation-cell-inspector .confirm-generation')
+      await expect.poll(() => editor.getByLabel('Generation model').inputValue()).toBe('image-edit.fal-ai/nano-banana-pro/edit')
+      const payload = editor.locator('.generation-review-json pre')
+      await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('"endpoint_id": "fal-ai/nano-banana-pro/edit"')
+      expect(await page.getByText('This model does not accept the current inputs.', { exact: false }).count()).toBe(0)
+      await editor.getByRole('textbox', { name: 'Prompt', exact: true }).fill('A spider portal behind the person')
+      await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('A spider portal behind the person')
+      const link = editor.getByRole('link', { name: 'fal requests' })
+      expect(await link.getAttribute('href')).toBe('https://fal.ai/models/fal-ai/nano-banana-pro/edit/requests')
+      expect(await link.getAttribute('target')).toBe('_blank')
+      expect(await link.getAttribute('rel')).toContain('noopener')
+      await editor.getByLabel('Generation model').selectOption('image-edit.seedream/5-pro-image-to-image')
+      await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('seedream/5-pro-image-to-image')
+      expect(await editor.getByRole('link', { name: 'Kie logs' }).getAttribute('href')).toBe('https://kie.ai/logs')
+      await editor.getByLabel('Generation model').selectOption('image-edit.fal-ai/nano-banana-pro/edit')
+      await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('fal-ai/nano-banana-pro/edit')
+      await page.screenshot({ path: '/tmp/videobook-image-edit-inspector.png' })
+      const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate', exact: true })
+      await expect.poll(() => generate.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await generate.click()
+      await expect.poll(() => page.locator('.command-composer').getAttribute('data-dock-open'), { timeout: 15_000 }).toBe('false')
+      const updated = engine.notebooks.read(notebookId)
+      if (!updated.ok) throw new Error(updated.error.message)
+      const producer = updated.value.cells.find((candidate) => candidate.id === edited.producer_cell_id)!
+      expect(producer.prompt).toBe('A spider portal behind the person')
+      expect(producer.inputs).toMatchObject({ generationMode: 'whole-image', sourceObjectHash: source.objectHash })
+      expect(updated.value.cells.filter((candidate) => candidate.inputs?.producerCellId === producer.id)).toHaveLength(2)
+      await page.locator(`.react-flow__node[data-id="${String(edited.output_cell_id)}"] .cell-node`).click()
+      const failedOutput = page.locator('.inspector-media-generating[data-generation="failed"]')
+      const failedLink = failedOutput.getByRole('link', { name: 'fal requests' })
+      await failedLink.waitFor({ state: 'visible' })
+      expect(await failedLink.getAttribute('href')).toBe('https://fal.ai/models/fal-ai/nano-banana-pro/edit/requests')
+      expect(await failedOutput.locator('.provider-task-link').textContent()).toContain(providerTaskId)
+      await page.screenshot({ path: '/tmp/videobook-failed-output-status-link.png' })
+      await page.getByLabel('Open Jobs').click()
+      const jobRow = page.locator('.jobs-row').filter({ hasText: providerTaskId })
+      await jobRow.waitFor({ state: 'visible' })
+      expect(await jobRow.getByRole('link', { name: 'fal requests' }).getAttribute('target')).toBe('_blank')
+      expect(await jobRow.getByLabel('Copy provider request ID').isVisible()).toBe(true)
+      await page.screenshot({ path: '/tmp/videobook-provider-job-link.png' })
+    } finally {
+      if (originalKey === undefined) delete process.env.FAL_API_KEY
+      else process.env.FAL_API_KEY = originalKey
+      await abortActiveBookJobsForTests()
+      await page.goto(new URL('/', page.url()).toString())
     }
   }, 60_000)
 

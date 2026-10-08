@@ -208,7 +208,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the chat watermark review.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
 - `insert_timeline_slot` — Typed timelines cannot contain empty slots; assign an asset directly with assign_slot
-- `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted Kie request payload, pending provider task (id, submit time), task meta, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
+- `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
 - `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.
@@ -579,7 +579,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/insert` — Preview inserting media into the sequence; preview or workspace operation
 - `/insert-slot` — Insert an empty timeline slot before or after another slot; MCP: `insert_timeline_slot`
-- `/inspect-generation-request` — Read the persisted Kie request payload, pending provider task (id, submit time), task meta, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
+- `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
