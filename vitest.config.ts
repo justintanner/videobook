@@ -128,6 +128,7 @@ export default defineConfig({
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',
       'server/src/chain-plan.test.ts',
+      'server/src/goal-styles.test.ts',
       'server/src/chain-executor.test.ts',
       'server/src/dialog-quality.test.ts',
       'server/src/downloads-dest.test.ts',
