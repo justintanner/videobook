@@ -165,6 +165,14 @@ export function transformProviderPrompt(
     case "generate_kie_nano_banana_2_1_image":
       transformed = naturalImagePrompt(prompt, args).replace(/@image([1-9]\d*)\b/giu, "reference image $1");
       break;
+    case "generate_kie_vidu_q4_image_to_video":
+    case "generate_kie_vidu_q4_reference_to_video":
+      transformed = replaceNaturalAssetMentions(prompt, {
+        imageRefs,
+        audioRefs: stringArray(args.audio_refs),
+      }).replace(/@(image|audio)([1-9]\d*)(?![\w-])/giu,
+        (_match, kind: string, index: string) => `reference ${kind.toLowerCase()} ${index}`);
+      break;
     case "generate_kie_kling_3_0_omni_text_to_video":
     case "generate_kie_kling_3_0_omni_image_to_video":
     case "generate_kie_kling_3_0_video":

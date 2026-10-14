@@ -99,9 +99,16 @@ plan skips AI planning. Every paid stage or revision requires an explicit action
 **Stop goal** stops remaining work; already submitted requests may still finish.
 
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
-model choices and saved producer reruns keep their chosen model. Apicity 0.14.1
+model choices and saved producer reruns keep their chosen model. Apicity 0.14.2
 supplies the NB 2.1 schema and pricing; the OpenAI and xAI packages retain the
 repository's realtime patches.
+
+Video generation also includes **Vidu Q4 image-to-video** and **Vidu Q4
+reference-to-video** through KIE. Both support 3–16 seconds, 540p through 4k,
+and optional generated audio. Image-to-video uses one image and inherits its
+aspect ratio. Reference-to-video accepts 1–15 images and up to three MP3 audio
+references, each 3–12 seconds and at most 50 MB. Cost previews use the selected
+duration and resolution from Apicity's published rates.
 
 ## Storage
 

@@ -66,7 +66,7 @@ function rateFor(provider: Provider, model: string): ModelPricing | undefined {
 }
 
 function unknownPrice(warnings = ["Price unavailable for this model"]): Price {
-  return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-0.14.1:${PRICING_AS_OF}`, warnings, units: null, unit: null };
+  return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-0.14.2:${PRICING_AS_OF}`, warnings, units: null, unit: null };
 }
 
 function tokenPrice(provider: Provider, model: string, tokens: ReturnType<typeof reportedTokens>): Price {
@@ -94,7 +94,7 @@ function priceRequest(provider: Provider, model: string, payload: RecordValue, e
     if (estimate.warnings.length || estimate.source === "tokens-heuristic+table") return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
     return {
       ...unknownPrice([]), costUsd: estimate.usd, basis: estimate.source === "free" ? "free" : "estimated",
-      rateSource: rateFor(provider, model)?.source.url ?? null, pricingVersion: `apicity-0.14.1:${estimate.rateAsOf}`,
+      rateSource: rateFor(provider, model)?.source.url ?? null, pricingVersion: `apicity-0.14.2:${estimate.rateAsOf}`,
       units: estimate.breakdown.units ?? null, unit: estimate.breakdown.unit ?? null,
     };
   } catch { return unknownPrice(); }

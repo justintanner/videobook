@@ -23,7 +23,10 @@ import {
   SeedreamFlashImageToImageRequestSchema,
   SeedreamFlashLayerDecompositionRequestSchema,
   SeedreamFlashTextToImageRequestSchema,
+  ViduQ4ImageToVideoRequestSchema,
+  ViduQ4ReferenceToVideoRequestSchema,
 } from "@apicity/kie/zod";
+import { apicityField, apicityStringArrayField } from "./tools/schema-from-apicity.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, NANO_BANANA_2_1_KEY, NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
 import { buildNanoBanana21Payload } from "./nano-banana-2-1.js";
 import {
@@ -217,6 +220,9 @@ const grokLiteT2v = FalXaiGrokImagineVideoV1p5LiteTextToVideoRequestSchema;
 const kieFlashText = SeedreamFlashTextToImageRequestSchema;
 const kieFlashEdit = SeedreamFlashImageToImageRequestSchema;
 const kieFlashLayers = SeedreamFlashLayerDecompositionRequestSchema;
+const viduImage = ViduQ4ImageToVideoRequestSchema.shape.input;
+const viduReference = ViduQ4ReferenceToVideoRequestSchema.shape.input;
+const VIDU_IMAGES: ImageSlots = { min: 1, max: 15 };
 
 function fiboPayload(
   args: Record<string, unknown>,
@@ -250,7 +256,104 @@ function kieFlashPayload(
   return { model, input };
 }
 
+function viduPayload(
+  model: "vidu-q4/image-to-video" | "vidu-q4/reference-to-video",
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  copyText(input, "prompt", args.prompt);
+  copyNumber(input, "duration", args.duration);
+  copyText(input, "resolution", args.resolution);
+  copyFlag(input, "audio", args.audio);
+  if (model === "vidu-q4/image-to-video") {
+    input.image_url = strings(args.image_refs)[0] ?? "";
+  } else {
+    input.reference_image_urls = strings(args.image_refs);
+    if (args.audio_refs !== undefined) input.reference_audio_urls = strings(args.audio_refs);
+    copyText(input, "aspect_ratio", args.aspect_ratio);
+  }
+  return { model, input };
+}
+
 const ACTIONS: Apicity014Action[] = [
+  {
+    canonicalName: "generate_kie_vidu_q4_image_to_video",
+    provider: "kie",
+    endpointId: "vidu-q4/image-to-video",
+    releaseName: "Vidu Q4 image-to-video",
+    label: "Vidu Q4 image-to-video",
+    description: "Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image",
+    listingKey: "vidu_q4_i2v",
+    mediaType: "video",
+    operation: "image_to_video",
+    schemaOwner: "@apicity/kie/zod",
+    requestSchema: ViduQ4ImageToVideoRequestSchema,
+    taskType: "vidu_q4_image_to_video",
+    jobType: "generate_kie_vidu_q4_image_to_video",
+    provenanceModel: "vidu-q4/image-to-video",
+    imageSlots: ONE_IMAGE,
+    textOnly: false,
+    picker: pickerSchema({}, []),
+    toolShape: {
+      book_id: bookIdField(),
+      prompt: viduImage.shape.prompt,
+      image_refs: imageRefsZod(ONE_IMAGE, "Source image; output inherits its aspect ratio"),
+      duration: apicityField(viduImage.shape.duration, "Duration in seconds (3-16)"),
+      resolution: viduImage.shape.resolution,
+      audio: viduImage.shape.audio,
+    },
+    videoParams: ["prompt", "image_refs", "duration", "resolution", "audio"],
+    videoZod: {
+      prompt: viduImage.shape.prompt,
+      image_refs: imageRefsZod(ONE_IMAGE, "Source image; output inherits its aspect ratio"),
+      duration: viduImage.shape.duration,
+      resolution: viduImage.shape.resolution,
+      audio: viduImage.shape.audio,
+    },
+    videoImageField: imageRefsZod(ONE_IMAGE, "Source image"),
+    build: (args) => viduPayload("vidu-q4/image-to-video", args),
+  },
+  {
+    canonicalName: "generate_kie_vidu_q4_reference_to_video",
+    provider: "kie",
+    endpointId: "vidu-q4/reference-to-video",
+    releaseName: "Vidu Q4 reference-to-video",
+    label: "Vidu Q4 reference-to-video",
+    description: "Generate video with Vidu Q4 using 1-15 reference images and up to 3 audio references, with 3-16 seconds and 540p to 4k output",
+    listingKey: "vidu_q4_r2v",
+    mediaType: "video",
+    operation: "reference_to_video",
+    schemaOwner: "@apicity/kie/zod",
+    requestSchema: ViduQ4ReferenceToVideoRequestSchema,
+    taskType: "vidu_q4_reference_to_video",
+    jobType: "generate_kie_vidu_q4_reference_to_video",
+    provenanceModel: "vidu-q4/reference-to-video",
+    imageSlots: VIDU_IMAGES,
+    textOnly: false,
+    picker: pickerSchema({}, []),
+    toolShape: {
+      book_id: bookIdField(),
+      prompt: viduReference.shape.prompt,
+      image_refs: apicityStringArrayField(viduReference.shape.reference_image_urls, "Reference images in prompt order (1-15)", { required: true }),
+      audio_refs: apicityStringArrayField(viduReference.shape.reference_audio_urls, "MP3 audio references (up to 3, each 3-12 seconds and up to 50 MB)"),
+      aspect_ratio: viduReference.shape.aspect_ratio,
+      duration: apicityField(viduReference.shape.duration, "Duration in seconds (3-16)"),
+      resolution: viduReference.shape.resolution,
+      audio: viduReference.shape.audio,
+    },
+    videoParams: ["prompt", "image_refs", "audio_refs", "aspect_ratio", "duration", "resolution", "audio"],
+    videoZod: {
+      prompt: viduReference.shape.prompt,
+      image_refs: viduReference.shape.reference_image_urls,
+      audio_refs: viduReference.shape.reference_audio_urls,
+      aspect_ratio: viduReference.shape.aspect_ratio,
+      duration: viduReference.shape.duration,
+      resolution: viduReference.shape.resolution,
+      audio: viduReference.shape.audio,
+    },
+    videoImageField: viduReference.shape.reference_image_urls,
+    build: (args) => viduPayload("vidu-q4/reference-to-video", args),
+  },
   {
     canonicalName: NANO_BANANA_2_1_TOOL,
     provider: "kie",
@@ -1023,6 +1126,8 @@ export function apicity014Actions(): readonly Apicity014Action[] {
 }
 
 const KIE_SCHEMA_NAMES: Record<string, string> = {
+  generate_kie_vidu_q4_image_to_video: "ViduQ4ImageToVideoRequestSchema",
+  generate_kie_vidu_q4_reference_to_video: "ViduQ4ReferenceToVideoRequestSchema",
   [NANO_BANANA_2_1_TOOL]: "NanoBanana21RequestSchema",
   generate_kie_seedream_v5_flash_text_to_image: "SeedreamFlashTextToImageRequestSchema",
   generate_kie_seedream_v5_flash_image_to_image: "SeedreamFlashImageToImageRequestSchema",
@@ -1089,8 +1194,8 @@ export type Apicity014VideoModel = {
   description: string;
   params: string[];
   defaults: Record<string, unknown>;
-  providers: [];
-  falToolNames: { noRefs?: string; withRefs?: string };
+  providers: Array<{ key: string; label: string; provider_path: string; envKey: string }>;
+  falToolNames?: { noRefs?: string; withRefs?: string };
 };
 
 export const APICITY_014_VIDEO_MODELS: Record<string, Apicity014VideoModel> = Object.fromEntries(
@@ -1102,10 +1207,14 @@ export const APICITY_014_VIDEO_MODELS: Record<string, Apicity014VideoModel> = Ob
       description: action.description,
       params: action.videoParams,
       defaults: {},
-      providers: [],
-      falToolNames: action.textOnly
-        ? { noRefs: action.canonicalName }
-        : { withRefs: action.canonicalName },
+      providers: action.provider === "kie"
+        ? [{ key: "kie", label: "Kie", provider_path: KIE_PATH, envKey: "KIE_API_KEY" }]
+        : [],
+      ...(action.provider === "fal" ? {
+        falToolNames: action.textOnly
+          ? { noRefs: action.canonicalName }
+          : { withRefs: action.canonicalName },
+      } : {}),
     },
   ]),
 );

@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (336)
+## MCP endpoints (338)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -182,6 +182,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.
 - `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.
 - `generate_kie_veo_3_0_video` (historical names, not exposed: `generate_veo3_video`) — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.
+- `generate_kie_vidu_q4_image_to_video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image
+- `generate_kie_vidu_q4_reference_to_video` — Generate video with Vidu Q4 using 1-15 reference images and up to 3 audio references, with 3-16 seconds and 540p to 4k output
 - `generate_kie_volcengine_video_to_video_lip_sync` (historical names, not exposed: `generate_volcengine_lipsync_video`) — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.
 - `generate_kie_wan_3_0_prime_video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
 - `generate_kie_wan_3_0_video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
@@ -347,7 +349,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (407; 146 dedicated command routes)
+## Slash actions (409; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -546,6 +548,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-kie-seedream-v5-lite-text-to-image` — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_text_to_image`
 - `/generate-kie-veo-3-0-fast-video` — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_fast_video`
 - `/generate-kie-veo-3-0-video` — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_video`
+- `/generate-kie-vidu-q4-image-to-video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image; MCP: `generate_kie_vidu_q4_image_to_video`
+- `/generate-kie-vidu-q4-reference-to-video` — Generate video with Vidu Q4 using 1-15 reference images and up to 3 audio references, with 3-16 seconds and 540p to 4k output; MCP: `generate_kie_vidu_q4_reference_to_video`
 - `/generate-kie-volcengine-video-to-video-lip-sync` — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_volcengine_video_to_video_lip_sync`
 - `/generate-kie-wan-3-0-prime-video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_prime_video`
 - `/generate-kie-wan-3-0-video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_video`

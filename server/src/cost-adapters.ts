@@ -18,6 +18,7 @@ import {
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
   Seedance25InputSchema,
+  ViduQ4ImageToVideoRequestSchema,
 } from "@apicity/kie/zod";
 
 type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
@@ -67,6 +68,8 @@ const GPT_IMAGE_I2I_RESOLUTION = apicityDefault<string>(GptImage2ImageToImageReq
 const GPT_IMAGE_T2I_RESOLUTION = apicityDefault<string>(GptImage2TextToImageRequestSchema.shape.input.shape.resolution, "GPT Image text-to-image resolution");
 const NANO_BANANA_PRO_RESOLUTION = apicityDefault<string>(NanoBananaProRequestSchema.shape.input.shape.resolution, "Nano Banana Pro resolution");
 const GEMINI_OMNI_RESOLUTION = apicityDefault<string>(GeminiOmniVideoRequestSchema.shape.input.shape.resolution, "Gemini Omni resolution");
+const VIDU_Q4_DURATION = apicityDefault<number>(ViduQ4ImageToVideoRequestSchema.shape.input.shape.duration, "Vidu Q4 duration");
+const VIDU_Q4_RESOLUTION = apicityDefault<string>(ViduQ4ImageToVideoRequestSchema.shape.input.shape.resolution, "Vidu Q4 resolution");
 
 // OpenAI text payloads mirror the upstream API body. The cost lib's
 // extractor flattens chat/responses payloads to a single string for the
@@ -371,6 +374,8 @@ export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: nu
 // google-flow-cost.ts — package googleflow rates are credit×Pro, not API USD
 // (docs/apicity-gaps.md §15, product choice A).
 const KIE_ADAPTERS: Record<string, CostAdapter> = {
+  generate_kie_vidu_q4_image_to_video: kieResolutionVideo("vidu-q4/image-to-video", VIDU_Q4_RESOLUTION, VIDU_Q4_DURATION),
+  generate_kie_vidu_q4_reference_to_video: kieResolutionVideo("vidu-q4/reference-to-video", VIDU_Q4_RESOLUTION, VIDU_Q4_DURATION),
   // --- KIE per-second video ---
   generate_kie_seedance_2_0_video: kieSeedance("bytedance/seedance-2", SEEDANCE2_DURATION),
   generate_kie_seedance_2_0_fast_video: kieSeedance("bytedance/seedance-2-fast", SEEDANCE2_FAST_DURATION),

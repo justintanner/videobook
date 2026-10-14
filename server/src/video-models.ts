@@ -1158,6 +1158,11 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
 
     const prop = { ...base };
 
+    if (toolName === "generate_kie_vidu_q4_image_to_video" || toolName === "generate_kie_vidu_q4_reference_to_video") {
+      if (param === "image_refs") prop.description = "Reference image assets in prompt order";
+      if (param === "audio_refs") prop.description = "MP3 audio references (up to 3, each 3-12 seconds and up to 50 MB)";
+    }
+
     // Tool-specific enum/description overrides
     if (toolName === "generate_kie_kling_3_0_motion_control" || canonical === "generate_kie_kling_3_0_motion_control") {
       if (param === "prompt") prop.description = "Optional motion description";
@@ -1443,6 +1448,7 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       && canonical !== "generate_kie_omnihuman_1_5_video"
       && toolName !== "generate_kie_kling_3_0_motion_control"
       && canonical !== "generate_kie_kling_3_0_motion_control"
+      && toolName !== "generate_kie_vidu_q4_image_to_video"
     ) required.add(param);
     if ((toolName === "generate_kie_grok_imagine_image_to_video" || canonical === "generate_fal_grok_imagine_video") && param === "image_refs") required.add(param);
     if (param === "image_ref" && (toolName === "generate_kie_omnihuman_1_5_video" || canonical === "generate_kie_omnihuman_1_5_video")) required.add(param);

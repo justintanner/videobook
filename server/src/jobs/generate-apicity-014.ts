@@ -8,7 +8,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { submitFalJob } from "./_fal-shared.js";
 import { submitKieTask } from "./kie-paygate.js";
 import { resolveImageRefs } from "../tools/_image-inputs.js";
-import { resolveVideoRef } from "../tools/_seedance2-shared.js";
+import { resolveAudioRef, resolveVideoRef } from "../tools/_seedance2-shared.js";
 import { transformProviderPrompt } from "../provider-prompt-transform.js";
 import {
   apicity014Action,
@@ -30,6 +30,7 @@ type ResolvedMedia = {
   args: Record<string, unknown>;
   sourceImageIds: string[];
   sourceVideoIds: string[];
+  sourceAudioIds: string[];
 };
 
 function isHttpUrl(value: string): boolean {
@@ -81,6 +82,19 @@ async function resolveVideoUrl(
   return uploadMedia(engine, provider, resolved.value.assetId, resolved.value.filename);
 }
 
+async function resolveAudioUrl(
+  engine: Engine,
+  provider: Apicity014Action["provider"],
+  ref: string,
+  sourceAudioIds: string[],
+): Promise<string> {
+  if (isHttpUrl(ref)) return ref;
+  const resolved = await resolveAudioRef(engine, ref);
+  if (!resolved.ok) throw new Error(resolved.error);
+  sourceAudioIds.push(resolved.value.assetId);
+  return uploadMedia(engine, provider, resolved.value.assetId, resolved.value.filename);
+}
+
 async function resolveJobMedia(
   engine: Engine,
   action: Apicity014Action,
@@ -88,6 +102,7 @@ async function resolveJobMedia(
 ): Promise<ResolvedMedia> {
   const sourceImageIds: string[] = [];
   const sourceVideoIds: string[] = [];
+  const sourceAudioIds: string[] = [];
   const resolved: Record<string, unknown> = { ...args };
   if ("image_refs" in args) {
     const urls: string[] = [];
@@ -106,7 +121,14 @@ async function resolveJobMedia(
     }
     resolved.video_refs = urls;
   }
-  return { args: resolved, sourceImageIds, sourceVideoIds };
+  if ("audio_refs" in args) {
+    const urls: string[] = [];
+    for (const ref of stringList(args.audio_refs)) {
+      urls.push(await resolveAudioUrl(engine, action.provider, ref, sourceAudioIds));
+    }
+    resolved.audio_refs = urls;
+  }
+  return { args: resolved, sourceImageIds, sourceVideoIds, sourceAudioIds };
 }
 
 function parsedPayload(action: Apicity014Action, args: Record<string, unknown>): Record<string, unknown> {
@@ -129,6 +151,7 @@ function generationMeta(
     prompt: typeof args.prompt === "string" ? args.prompt : "",
     sourceImageIds: media.sourceImageIds,
     sourceVideoIds: media.sourceVideoIds,
+    sourceAudioIds: media.sourceAudioIds,
     model: action.provenanceModel,
     apiModel: action.provenanceModel,
   };
@@ -175,7 +198,7 @@ async function submitAction(
 export function registerApicity014Jobs(engine: Engine): void {
   for (const listed of apicity014Actions()) {
     const action = apicity014Action(listed.canonicalName);
-    if (!action) throw new Error(`Missing apicity 0.14.1 job for ${listed.canonicalName}`);
+    if (!action) throw new Error(`Missing apicity 0.14 job for ${listed.canonicalName}`);
     registerJobHandler(action.jobType, async (payload, ctx) => {
       const job = payload as Apicity014JobPayload;
       if (action.provider === "fal") {

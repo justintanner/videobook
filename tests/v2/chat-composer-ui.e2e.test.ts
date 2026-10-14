@@ -4295,6 +4295,53 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 90_000)
 
+  it('previews both Vidu Q4 models and their settings without submitting generation', async () => {
+    const page = await openApp()
+    await collapseComposerDock(page)
+    await notebookCellNode(page, directVideoGenerationCellId).click()
+    const editor = page.locator('.generation-cell-inspector .confirm-generation')
+    const model = editor.getByLabel('Generation model')
+    const source = editor.locator('.generation-review-json pre')
+    const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
+    observedCalls.length = 0
+    try {
+      await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
+      await editor.getByRole('button', { name: 'Add input', exact: true }).click()
+      await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
+      await model.selectOption('generation.generate_kie_vidu_q4_image_to_video')
+      await prompt.fill('')
+      await editor.getByLabel('Duration', { exact: true }).selectOption('string:3')
+      await editor.getByLabel('Resolution', { exact: true }).selectOption('string:540p')
+      const audio = editor.getByRole('switch', { name: 'Audio', exact: true })
+      await audio.setChecked(false)
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"model": "vidu-q4/image-to-video"')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"audio": false')
+      expect(await source.textContent()).toContain('"image_url"')
+      expect(await source.textContent()).toContain('"duration": 3')
+      expect(await editor.getByLabel('Aspect ratio', { exact: true }).count()).toBe(0)
+
+      await model.selectOption('generation.generate_kie_vidu_q4_reference_to_video')
+      await prompt.fill('Animate @image1 in a gentle breeze')
+      await editor.getByLabel('Aspect ratio', { exact: true }).selectOption('string:9:16')
+      await editor.getByLabel('Resolution', { exact: true }).selectOption('string:4k')
+      await editor.getByLabel('Duration', { exact: true }).selectOption('string:16')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"model": "vidu-q4/reference-to-video"')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"duration": 16')
+      expect(await source.textContent()).toContain('"reference_image_urls"')
+      expect(await source.textContent()).toContain('Animate reference image 1 in a gentle breeze')
+      expect(await source.textContent()).toContain('"aspect_ratio": "9:16"')
+      expect(await source.textContent()).toContain('"resolution": "4k"')
+      expect(observedCalls.some(call => call.name === 'run_notebook'
+        || call.name.startsWith('generate_kie_vidu_q4'))).toBe(false)
+    } finally {
+      notebookDirty = true
+    }
+  }, 60_000)
+
   it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()

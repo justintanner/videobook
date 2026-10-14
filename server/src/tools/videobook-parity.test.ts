@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(336);
-    expect(new Set(names).size).toBe(336);
+    expect(names).toHaveLength(338);
+    expect(new Set(names).size).toBe(338);
     expect(names).toEqual(
       expect.arrayContaining([
         "analyze_music",
@@ -94,6 +94,8 @@ describe("Videobook MCP parity", () => {
         "generate_fal_wan_3_0_prime_text_to_video",
         "generate_fal_wan_3_0_prime_image_to_video",
         "generate_fal_wan_3_0_prime_reference_to_video",
+        "generate_kie_vidu_q4_image_to_video",
+        "generate_kie_vidu_q4_reference_to_video",
         "generate_kie_wan_3_0_video",
         "generate_kie_wan_3_0_prime_video",
         "generate_kie_qwen_3_0_edit_image",
