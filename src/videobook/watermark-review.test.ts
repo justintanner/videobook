@@ -4,6 +4,61 @@ import {
   watermarkFadeWindow,
   watermarkPreviewOpacity,
 } from './watermark-review'
+import { resolveWatermarkReviewInputs } from './watermark-review-preferences'
+
+describe('remembered watermark review inputs', () => {
+  it('retains both aliases while explicit routed inputs override remembered settings', () => {
+    expect(resolveWatermarkReviewInputs({
+      platform: 'tiktok',
+      handles: { x: 'x_alias', tiktok: 'tiktok.alias' },
+      includeHandle: true,
+      handleStartSeconds: 2,
+      handleEndSeconds: 8,
+      handleOpacity: 0.7,
+    }, {
+      platform: 'x',
+      handle: 'requested_alias',
+      includeHandle: false,
+      handleStartSeconds: 0,
+      handleEndSeconds: null,
+    }, 12)).toMatchObject({
+      platform: 'x',
+      handles: { x: 'requested_alias', tiktok: 'tiktok.alias' },
+      includeHandle: false,
+      handleStartSeconds: 0,
+      handleEndSeconds: null,
+      handleOpacity: 0.7,
+    })
+  })
+
+  it('fits remembered timings to a shorter clip without creating an empty window', () => {
+    expect(resolveWatermarkReviewInputs({
+      qrStartSeconds: 1,
+      qrEndSeconds: 8,
+      handleStartSeconds: 6,
+      handleEndSeconds: 10,
+    }, {}, 3)).toMatchObject({
+      qrStartSeconds: 1,
+      qrEndSeconds: 3,
+      handleStartSeconds: 0,
+      handleEndSeconds: null,
+    })
+  })
+
+  it('keeps explicit timing, blank aliases and a whole-clip end without fallback', () => {
+    expect(resolveWatermarkReviewInputs({
+      platform: 'tiktok',
+      handles: { tiktok: '' },
+      handleStartSeconds: 0,
+      handleEndSeconds: null,
+    }, { handleStartSeconds: 2, handleEndSeconds: 4 }, null)).toMatchObject({
+      platform: 'tiktok',
+      handles: { tiktok: '' },
+      handleStartSeconds: 2,
+      handleEndSeconds: 4,
+    })
+  })
+})
 
 describe('watermarkFadeWindow', () => {
   it('leaves a whole-clip watermark with hard edges', () => {

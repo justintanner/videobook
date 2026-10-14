@@ -105,10 +105,12 @@ describe('watermark chat review', () => {
     // QR runs 0–4s of 12s: no fade in at the clip start, so the playhead at
     // 0s previews the full set opacity.
     expect(html).toContain('opacity:0.35')
-    expect(html.match(/type="number"/g)).toHaveLength(4)
+    expect(html.match(/type="number"/g)).toHaveLength(6)
     expect(html).toContain('aria-label="QR start"')
     expect(html).toContain('aria-label="QR end"')
     expect(html).toContain('aria-label="Handle end"')
+    expect(html).toContain('aria-label="QR duration"')
+    expect(html).toContain('aria-label="Handle duration"')
     expect(html).toContain('>Include handle</strong>')
     expect(html).toContain('aria-label="Set QR start from playhead"')
     expect(html).toContain('aria-label="Use whole clip for Handle"')
@@ -131,6 +133,9 @@ describe('watermark chat review', () => {
     expect(html).toContain('https://www.tiktok.com/@creator.name')
     expect(html).toContain('>creator.name</span>')
     expect(html).toContain('value="tiktok" selected=""')
+    const duration = html.match(/<input[^>]+aria-label="Handle duration"[^>]*>/)?.[0]
+    expect(duration).toContain('value="8"')
+    expect(html.indexOf('aria-label="Handle duration"')).toBeLessThan(html.indexOf('<video'))
   })
 
   it('gives the footer back the moment the sheet cannot apply', () => {
@@ -172,7 +177,9 @@ describe('watermark chat review', () => {
     expect(html).toContain('disabled=""')
     expect(html).not.toContain('watermark-preview-x-icon')
     expect(html).toContain('<output for="watermark-handle-opacity">60%</output>')
-    expect(html.match(/type="number"/g)).toHaveLength(2)
+    expect(html.match(/type="number"/g)).toHaveLength(3)
+    const duration = html.match(/<input[^>]+aria-label="Handle duration"[^>]*>/)?.[0]
+    expect(duration).toContain('value="11"')
   })
 
   it('previews the handle sitting on the QR', () => {
@@ -207,7 +214,7 @@ describe('watermark chat review', () => {
     expect(html).not.toContain('aria-label="Handle end"')
     expect(html).not.toContain('Handle end time must be after its start time.')
     expect(html).not.toContain('id="watermark-handle-opacity"')
-    expect(html.match(/type="number"/g)).toHaveLength(2)
+    expect(html.match(/type="number"/g)).toHaveLength(3)
   })
 
   it('explains a missing handle in the footer and marks the field', () => {

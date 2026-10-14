@@ -63,7 +63,7 @@ export interface WatermarkReviewState {
   error: string | null
 }
 
-type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
+export type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'platform'
   | 'url'
   | 'includeQr'
@@ -403,6 +403,7 @@ function WatermarkTimingRow({
 }) {
   const valid = watermarkTimingValid(startSeconds, endSeconds, duration)
   const window = watermarkTimelineWindow(startSeconds, endSeconds, duration)
+  const windowDuration = endSeconds ?? (duration > 0 ? duration : null)
   return (
     <div className="confirm-watermark-timing" role="group" aria-label={`${label} timing`}>
       <div className="confirm-watermark-timing-row">
@@ -417,39 +418,68 @@ function WatermarkTimingRow({
             style={{ left: `${playhead}%` }}
           />
         </div>
-        <input
-          id={`${idPrefix}-start`}
-          aria-label={`${label} start`}
-          type="number"
-          min="0"
-          max={duration > 0 ? duration : undefined}
-          step="0.1"
-          value={startSeconds}
-          disabled={busy}
-          onChange={(event) => onChange(
-            Math.max(0, Number(event.target.value) || 0),
-            endSeconds,
-          )}
-        />
-        <span className="confirm-watermark-timing-arrow" aria-hidden="true">→</span>
-        <input
-          id={`${idPrefix}-end`}
-          aria-label={`${label} end`}
-          aria-invalid={!valid}
-          type="number"
-          min="0"
-          max={duration > 0 ? duration : undefined}
-          step="0.1"
-          value={endSeconds ?? ''}
-          placeholder={duration > 0 ? duration.toFixed(1) : 'Clip end'}
-          disabled={busy}
-          onChange={(event) => onChange(
-            startSeconds,
-            event.target.value === ''
-              ? null
-              : Math.max(0, Number(event.target.value) || 0),
-          )}
-        />
+        <label className="confirm-watermark-timing-field">
+          <span>Start (s)</span>
+          <input
+            id={`${idPrefix}-start`}
+            aria-label={`${label} start`}
+            type="number"
+            min="0"
+            max={duration > 0 ? duration : undefined}
+            step="0.1"
+            value={startSeconds}
+            disabled={busy}
+            onChange={(event) => onChange(
+              Math.max(0, Number(event.target.value) || 0),
+              endSeconds,
+            )}
+          />
+        </label>
+        <label className="confirm-watermark-timing-field">
+          <span>End (s)</span>
+          <input
+            id={`${idPrefix}-end`}
+            aria-label={`${label} end`}
+            aria-invalid={!valid}
+            type="number"
+            min="0"
+            max={duration > 0 ? duration : undefined}
+            step="0.1"
+            value={endSeconds ?? ''}
+            placeholder={duration > 0 ? duration.toFixed(1) : 'Clip end'}
+            disabled={busy}
+            onChange={(event) => onChange(
+              startSeconds,
+              event.target.value === ''
+                ? null
+                : Math.max(0, Number(event.target.value) || 0),
+            )}
+          />
+        </label>
+        <label className="confirm-watermark-timing-field">
+          <span>Duration (s)</span>
+          <input
+            id={`${idPrefix}-duration`}
+            aria-label={`${label} duration`}
+            aria-invalid={!valid}
+            type="number"
+            min="0"
+            max={duration > 0 ? Math.max(0, duration - startSeconds) : undefined}
+            step="any"
+            value={windowDuration === null ? '' : Number(Math.max(0, windowDuration - startSeconds).toFixed(6))}
+            placeholder="Clip end"
+            disabled={busy}
+            onChange={(event) => onChange(
+              startSeconds,
+              event.target.value === ''
+                ? null
+                : Number(Math.min(
+                    duration > 0 ? duration : Infinity,
+                    startSeconds + Math.max(0, Number(event.target.value) || 0),
+                  ).toFixed(6)),
+            )}
+          />
+        </label>
         <div className="confirm-watermark-timing-actions">
           <button
             type="button"
@@ -530,7 +560,6 @@ export function WatermarkBody({
   const previewPosition = state.position === 'auto' ? 'bottom-right' : state.position
   const previewWidth = state.width !== null && state.width > 0 ? state.width : 16
   const previewHeight = state.height !== null && state.height > 0 ? state.height : 9
-  const tallPreview = previewHeight >= previewWidth
   const playhead = duration > 0
     ? clamp((currentTime / duration) * 100, 0, 100)
     : 0
@@ -542,9 +571,46 @@ export function WatermarkBody({
           <span>Preview</span>
           <strong>{secondsLabel(currentTime)} / {duration > 0 ? secondsLabel(duration) : '—'}</strong>
         </div>
+        <div className="confirm-watermark-timings">
+          {state.includeQr && (
+            <WatermarkTimingRow
+              busy={busy}
+              currentTime={currentTime}
+              duration={duration}
+              endSeconds={state.qrEndSeconds}
+              idPrefix="watermark-qr-timing"
+              label="QR"
+              playhead={playhead}
+              startSeconds={state.qrStartSeconds}
+              onChange={(qrStartSeconds, qrEndSeconds) => onChange({
+                qrStartSeconds,
+                qrEndSeconds,
+              })}
+            />
+          )}
+          {state.includeHandle && (
+            <WatermarkTimingRow
+              busy={busy}
+              currentTime={currentTime}
+              duration={duration}
+              endSeconds={state.handleEndSeconds}
+              idPrefix="watermark-handle-timing"
+              label="Handle"
+              playhead={playhead}
+              startSeconds={state.handleStartSeconds}
+              onChange={(handleStartSeconds, handleEndSeconds) => onChange({
+                handleStartSeconds,
+                handleEndSeconds,
+              })}
+            />
+          )}
+        </div>
         <div
-          className={`watermark-video-stage${tallPreview ? ' tall' : ' wide'}`}
-          style={{ aspectRatio: `${previewWidth} / ${previewHeight}` }}
+          className="watermark-video-stage"
+          style={{
+            aspectRatio: `${previewWidth} / ${previewHeight}`,
+            '--watermark-preview-ratio': previewWidth / previewHeight,
+          } as CSSProperties}
         >
           {state.mediaUrl ? (
             <video
@@ -619,40 +685,6 @@ export function WatermarkBody({
           )}
           {state.includeQr && state.position === 'auto' && (
             <span className="watermark-auto-preview">AUTO · QR previewing bottom right</span>
-          )}
-        </div>
-        <div className="confirm-watermark-timings">
-          {state.includeQr && (
-            <WatermarkTimingRow
-              busy={busy}
-              currentTime={currentTime}
-              duration={duration}
-              endSeconds={state.qrEndSeconds}
-              idPrefix="watermark-qr-timing"
-              label="QR"
-              playhead={playhead}
-              startSeconds={state.qrStartSeconds}
-              onChange={(qrStartSeconds, qrEndSeconds) => onChange({
-                qrStartSeconds,
-                qrEndSeconds,
-              })}
-            />
-          )}
-          {state.includeHandle && (
-            <WatermarkTimingRow
-              busy={busy}
-              currentTime={currentTime}
-              duration={duration}
-              endSeconds={state.handleEndSeconds}
-              idPrefix="watermark-handle-timing"
-              label="Handle"
-              playhead={playhead}
-              startSeconds={state.handleStartSeconds}
-              onChange={(handleStartSeconds, handleEndSeconds) => onChange({
-                handleStartSeconds,
-                handleEndSeconds,
-              })}
-            />
           )}
         </div>
       </section>

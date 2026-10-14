@@ -8505,7 +8505,7 @@ textarea:focus-visible {
 
 .confirm-watermark-timing-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 54px 12px 62px auto;
+  grid-template-columns: 44px minmax(32px, 1fr) repeat(3, 68px) auto;
   align-items: center;
   gap: 7px;
   color: #789e87;
@@ -8514,18 +8514,18 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
+.confirm-watermark-timing-field {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
 .confirm-sheet .confirm-watermark-timing-row input[type='number'] {
   min-height: 24px;
   padding: 0 6px;
   font-size: 10px;
   letter-spacing: 0;
   text-transform: none;
-}
-
-.confirm-watermark-timing-arrow {
-  color: var(--muted);
-  font-size: 10px;
-  text-align: center;
 }
 
 .confirm-watermark-timing-actions {
@@ -8774,7 +8774,7 @@ textarea:focus-visible {
   }
 
   .confirm-watermark-timing-row {
-    grid-template-columns: 44px minmax(0, 1fr) 54px 12px 62px;
+    grid-template-columns: 44px minmax(0, 1fr) repeat(3, minmax(52px, 1fr));
   }
 
   .confirm-watermark-timing-actions {
@@ -12688,22 +12688,13 @@ textarea:focus-visible {
   position: relative;
   display: grid;
   place-items: center;
+  justify-self: center;
+  width: min(100%, calc(var(--watermark-preview-ratio) * min(36vh, 380px)));
   overflow: hidden;
   border: 1px solid rgba(84, 126, 101, 0.24);
   background:
     radial-gradient(circle at 30% 24%, rgba(50, 147, 91, 0.1), transparent 40%),
     #000;
-}
-
-.watermark-video-stage.wide {
-  width: 100%;
-}
-
-.watermark-video-stage.tall {
-  width: auto;
-  height: min(48vh, 520px);
-  max-width: 100%;
-  justify-self: center;
 }
 
 .watermark-video-stage > video,
@@ -12823,16 +12814,6 @@ textarea:focus-visible {
   width: 2px;
   background: #f2fff7;
   box-shadow: 0 0 8px rgba(216, 255, 231, 0.8);
-}
-
-@media (max-width: 860px) {
-  .watermark-video-stage {
-    max-height: 52vh;
-  }
-
-  .watermark-video-stage.tall {
-    height: 52vh;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

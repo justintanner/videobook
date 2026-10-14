@@ -146,7 +146,7 @@ import {
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
 import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
-import type { WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
+import type { WatermarkReviewPatch, WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import { useImageEditModels } from './videobook/use-image-edit-models'
@@ -158,6 +158,12 @@ import {
 } from './videobook/speak-preview'
 import { resolveFullscreenTarget } from './videobook/fullscreen-target'
 import { resolveWatermarkTarget } from './videobook/watermark-target'
+import {
+  fitWatermarkReviewTiming,
+  readWatermarkReviewPreferences,
+  resolveWatermarkReviewInputs,
+  saveWatermarkReviewPreferences,
+} from './videobook/watermark-review-preferences'
 import {
   clampHandlePadding,
   clampHandleRounding,
@@ -5353,83 +5359,67 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const openWatermarkReview = (
     assetId: string,
     targetLabel: string,
-    initial: {
-      platform?: WatermarkReviewState['platform']
-      handle?: string
-      url?: string
-      includeQr?: boolean
-      includeHandle?: boolean
-      position?: WatermarkReviewState['position']
-      handleVerticalPercent?: number
-      handlePlacement?: WatermarkReviewState['handlePlacement']
-      includePlatformIcon?: boolean
-      includeHandleBorder?: boolean
-      handlePadding?: number
-      handlePaddingY?: number
-      handleRounding?: number
-      qrOpacity?: number
-      handleOpacity?: number
-      qrStartSeconds?: number
-      qrEndSeconds?: number | null
-      handleStartSeconds?: number
-      handleEndSeconds?: number | null
-      fadeSeconds?: number
-      saveDefault?: boolean
-    } = {},
+    initial: WatermarkReviewPatch = {},
     chat?: ChatExecution,
   ) => {
     const targetAsset = assets.find((asset) => asset.artifactId === assetId)
+    const inputs = resolveWatermarkReviewInputs(
+      readWatermarkReviewPreferences(bookId), initial, targetAsset?.duration ?? null,
+    )
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, false, () => setPendingChatAction(null))
-    reviewChat(chat, true, () => setPendingWatermarkReview({
-      assetId,
-      targetLabel,
-      mediaUrl: targetAsset?.mediaUrl ?? null,
-      thumbnailUrl: targetAsset?.thumbnailUrl ?? null,
-      width: targetAsset?.width ?? null,
-      height: targetAsset?.height ?? null,
-      durationSeconds: targetAsset?.duration ?? null,
-      platform: initial.platform ?? 'x',
-      identities: {
-        x: { handle: initial.platform !== 'tiktok' ? initial.handle ?? '' : '', recent: [] },
-        tiktok: { handle: initial.platform === 'tiktok' ? initial.handle ?? '' : '', recent: [] },
-      },
-      url: initial.url ?? '',
-      includeQr: initial.includeQr ?? true,
-      includeHandle: initial.includeHandle ?? true,
-      position: initial.position ?? 'auto',
-      handleVerticalPercent: initial.handleVerticalPercent === undefined
-        ? DEFAULT_HANDLE_VERTICAL_PERCENT
-        : clampHandleVerticalPercent(initial.handleVerticalPercent),
-      handlePlacement: initial.handlePlacement ?? 'center',
-      includePlatformIcon: initial.includePlatformIcon ?? true,
-      includeHandleBorder: initial.includeHandleBorder ?? true,
-      handlePadding: initial.handlePadding === undefined
-        ? DEFAULT_HANDLE_PADDING
-        : clampHandlePadding(initial.handlePadding),
-      handlePaddingY: initial.handlePaddingY === undefined
-        ? DEFAULT_HANDLE_PADDING
-        : clampHandlePadding(initial.handlePaddingY),
-      handleRounding: initial.handleRounding === undefined
-        ? DEFAULT_HANDLE_ROUNDING
-        : clampHandleRounding(initial.handleRounding),
-      qrOpacity: initial.qrOpacity === undefined
-        ? DEFAULT_WATERMARK_OPACITY
-        : clampWatermarkOpacity(initial.qrOpacity),
-      handleOpacity: initial.handleOpacity === undefined
-        ? DEFAULT_WATERMARK_OPACITY
-        : clampWatermarkOpacity(initial.handleOpacity),
-      qrStartSeconds: initial.qrStartSeconds ?? 0,
-      qrEndSeconds: initial.qrEndSeconds ?? null,
-      handleStartSeconds: initial.handleStartSeconds ?? 0,
-      handleEndSeconds: initial.handleEndSeconds ?? null,
-      fadeSeconds: initial.fadeSeconds === undefined
-        ? DEFAULT_WATERMARK_FADE_SECONDS
-        : clampWatermarkFadeSeconds(initial.fadeSeconds),
-      saveDefault: initial.saveDefault ?? false,
-      loadingConfig: true,
-      error: null,
-    }))
+    reviewChat(chat, true, () => {
+      saveWatermarkReviewPreferences(bookId, inputs.platform, initial)
+      setPendingWatermarkReview({
+        assetId,
+        targetLabel,
+        mediaUrl: targetAsset?.mediaUrl ?? null,
+        thumbnailUrl: targetAsset?.thumbnailUrl ?? null,
+        width: targetAsset?.width ?? null,
+        height: targetAsset?.height ?? null,
+        durationSeconds: targetAsset?.duration ?? null,
+        platform: inputs.platform,
+        identities: {
+          x: { handle: inputs.handles?.x ?? '', recent: [] },
+          tiktok: { handle: inputs.handles?.tiktok ?? '', recent: [] },
+        },
+        url: inputs.url ?? '',
+        includeQr: inputs.includeQr ?? true,
+        includeHandle: inputs.includeHandle ?? true,
+        position: inputs.position ?? 'auto',
+        handleVerticalPercent: inputs.handleVerticalPercent === undefined
+          ? DEFAULT_HANDLE_VERTICAL_PERCENT
+          : clampHandleVerticalPercent(inputs.handleVerticalPercent),
+        handlePlacement: inputs.handlePlacement ?? 'center',
+        includePlatformIcon: inputs.includePlatformIcon ?? true,
+        includeHandleBorder: inputs.includeHandleBorder ?? true,
+        handlePadding: inputs.handlePadding === undefined
+          ? DEFAULT_HANDLE_PADDING
+          : clampHandlePadding(inputs.handlePadding),
+        handlePaddingY: inputs.handlePaddingY === undefined
+          ? DEFAULT_HANDLE_PADDING
+          : clampHandlePadding(inputs.handlePaddingY),
+        handleRounding: inputs.handleRounding === undefined
+          ? DEFAULT_HANDLE_ROUNDING
+          : clampHandleRounding(inputs.handleRounding),
+        qrOpacity: inputs.qrOpacity === undefined
+          ? DEFAULT_WATERMARK_OPACITY
+          : clampWatermarkOpacity(inputs.qrOpacity),
+        handleOpacity: inputs.handleOpacity === undefined
+          ? DEFAULT_WATERMARK_OPACITY
+          : clampWatermarkOpacity(inputs.handleOpacity),
+        qrStartSeconds: inputs.qrStartSeconds ?? 0,
+        qrEndSeconds: inputs.qrEndSeconds ?? null,
+        handleStartSeconds: inputs.handleStartSeconds ?? 0,
+        handleEndSeconds: inputs.handleEndSeconds ?? null,
+        fadeSeconds: inputs.fadeSeconds === undefined
+          ? DEFAULT_WATERMARK_FADE_SECONDS
+          : clampWatermarkFadeSeconds(inputs.fadeSeconds),
+        saveDefault: inputs.saveDefault ?? false,
+        loadingConfig: true,
+        error: null,
+      })
+    })
     void Promise.allSettled(WATERMARK_PLATFORMS.map(async (platform) => {
       const config = recordValue(await call('get_watermark_config', {
         book_id: bookId,
@@ -5440,6 +5430,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const recent = Array.isArray(config?.recent)
         ? config.recent.filter((entry): entry is string => typeof entry === 'string')
         : []
+      const rememberedHandle = readWatermarkReviewPreferences(bookId).handles?.[platform]
       presentChat(chat, () => setPendingWatermarkReview((current) =>
         current && current.assetId === assetId
           ? {
@@ -5447,8 +5438,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               identities: {
                 ...current.identities,
                 [platform]: {
-                  handle: current.identities[platform].handle
-                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? ''),
+                  handle: rememberedHandle ?? (current.identities[platform].handle
+                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? '')),
                   recent,
                 },
               },
@@ -10376,22 +10367,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <WatermarkBody
             busy={busy}
             state={review}
-            onChange={({ handle, ...patch }) => setPendingWatermarkReview((current) => {
-              if (!current) return current
-              return {
-                ...current,
-                ...patch,
-                identities: handle === undefined ? current.identities : {
-                  ...current.identities,
-                  [current.platform]: { ...current.identities[current.platform], handle },
-                },
-                error: null,
-              }
-            })}
+            onChange={({ handle, ...patch }) => {
+              saveWatermarkReviewPreferences(bookId, review.platform, { handle, ...patch })
+              setPendingWatermarkReview((current) => {
+                if (!current) return current
+                return {
+                  ...current,
+                  ...patch,
+                  identities: handle === undefined ? current.identities : {
+                    ...current.identities,
+                    [current.platform]: { ...current.identities[current.platform], handle },
+                  },
+                  error: null,
+                }
+              })
+            }}
             onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
               current
                 ? {
                     ...current,
+                    ...(current.durationSeconds === null
+                      ? fitWatermarkReviewTiming(current, metadata.durationSeconds)
+                      : {}),
                     durationSeconds: metadata.durationSeconds,
                     width: metadata.width,
                     height: metadata.height,
