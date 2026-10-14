@@ -3260,6 +3260,8 @@ describe('chat composer browser flow', () => {
       await review.getByRole('spinbutton', { name: 'QR end' }).fill('0.6')
       await review.getByRole('spinbutton', { name: 'Handle start' }).fill('0.2')
       await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0.8')
+      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
+      await review.getByLabel('TikTok handle').fill('creator.name')
       await expect.poll(async () => {
         await dismissConfirmStatus(page)
         return await review.getByRole('button', { name: 'Apply' }).isEnabled()
@@ -3275,12 +3277,13 @@ describe('chat composer browser flow', () => {
       expect(applyCalls.at(-1)?.arguments).toMatchObject({
         book_id: bookId,
         asset_id: videoArtifactId,
-        handle: 'justinwtanner',
+        handle: 'creator.name',
         include_qr: true,
         include_handle: true,
         position: 'bottom-left',
         handle_vertical_percent: 62,
-        include_x_icon: false,
+        platform: 'tiktok',
+        include_platform_icon: false,
         include_handle_border: false,
         handle_padding: 64,
         handle_padding_y: 40,
@@ -3310,6 +3313,26 @@ describe('chat composer browser flow', () => {
       expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('50')
       expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('50')
       await review.getByLabel('X handle').fill('temporary')
+      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
+      const tiktokHandle = review.getByLabel('TikTok handle')
+      expect(await tiktokHandle.inputValue()).toBe('')
+      await tiktokHandle.fill('creator.long_tiktok.name')
+      expect(await review.getByLabel('QR link').getAttribute('placeholder')).toBe('https://www.tiktok.com/@creator.long_tiktok.name')
+      expect(await previewHandle.locator('.watermark-preview-tiktok-icon').count()).toBe(1)
+      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(0)
+      await review.getByRole('combobox', { name: 'Platform' }).selectOption('x')
+      expect(await review.getByLabel('X handle').inputValue()).toBe('temporary')
+      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
+      expect(await tiktokHandle.inputValue()).toBe('creator.long_tiktok.name')
+      await review.getByRole('slider', { name: 'Handle padding X' }).fill('96')
+      expect(await previewHandleLabel.evaluate((element) => {
+        const label = element.getBoundingClientRect()
+        const pill = element.parentElement?.getBoundingClientRect()
+        return pill !== undefined && label.left >= pill.left && label.right <= pill.right
+      })).toBe(true)
+      await review.getByRole('checkbox', { name: 'Show TikTok icon' }).uncheck()
+      expect(await previewHandle.locator('.watermark-preview-tiktok-icon').count()).toBe(0)
+      await review.getByRole('combobox', { name: 'Platform' }).selectOption('x')
       await review.getByLabel('QR link').fill('https://example.com/qr-only')
       await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0')
       expect(await review.getByText('Handle end time must be after its start time.', { exact: true }).count()).toBe(1)

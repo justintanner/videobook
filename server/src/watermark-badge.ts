@@ -1,6 +1,8 @@
 import type { Engine } from "videobook-engine";
 import sharp, { type OverlayOptions } from "sharp";
 import QRCode from "qrcode";
+import { WATERMARK_LOGO_PATHS, watermarkProfileUrl } from "./watermark-platform.js";
+import type { WatermarkPlatform } from "./watermark-platform.js";
 import { writeImageVariants } from "./tools/concat-images.js";
 
 export const DEFAULT_HANDLE = "justinwtanner";
@@ -33,6 +35,8 @@ export const MAX_HANDLE_ROUNDING = 100;
 export type WatermarkBadgeVariant = "combined" | "qr" | "handle";
 
 type WatermarkBadgeOptions = {
+  platform?: WatermarkPlatform;
+  includePlatformIcon?: boolean;
   includeQr?: boolean;
   variant?: WatermarkBadgeVariant;
   includeXIcon?: boolean;
@@ -42,11 +46,8 @@ type WatermarkBadgeOptions = {
   handleRounding?: number;
 };
 
-const X_LOGO_PATH =
-  "M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z";
-
-export function defaultUrl(handle: string): string {
-  return `https://x.com/${handle}`;
+export function defaultUrl(handle: string, platform: WatermarkPlatform = "x"): string {
+  return watermarkProfileUrl(handle, platform);
 }
 
 export function watermarkHandleLabel(handle: string): string {
@@ -119,10 +120,11 @@ export async function buildWatermarkBadgePng(
   handle: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<Buffer> {
+  const platform = options.platform ?? "x";
   const variant = watermarkBadgeVariant(options);
   const includeQr = variant !== "handle";
   const includeHandle = variant !== "qr";
-  const includeXIcon = includeHandle && (options.includeXIcon ?? true);
+  const includePlatformIcon = includeHandle && (options.includePlatformIcon ?? options.includeXIcon ?? true);
   const includeHandleBorder = includeHandle && (options.includeHandleBorder ?? true);
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
   const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
@@ -143,7 +145,7 @@ export async function buildWatermarkBadgePng(
   const label = watermarkHandleLabel(handle);
   const iconSize = HANDLE_PILL_CONTENT;
   const iconGap = 14;
-  const iconSpace = includeXIcon ? iconSize + iconGap : 0;
+  const iconSpace = includePlatformIcon ? iconSize + iconGap : 0;
   const availableWidth = BADGE_WIDTH - 2 - handlePadding * 2 - iconSpace;
   const fontSize = Math.max(
     12,
@@ -181,7 +183,7 @@ export async function buildWatermarkBadgePng(
     : "";
   const pill = includeHandle
     ? `<rect x="${pillX}" y="${pillY + 1}" width="${pillWidth}" height="${pillHeight - 2}" rx="${pillRadius}" fill="#0B0B0F" fill-opacity="0.92"${border}/>
-  ${includeXIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${X_LOGO_PATH}" fill="#FFFFFF"/></svg>` : ""}`
+  ${includePlatformIcon ? `<svg x="${contentX}" y="${logoY}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"><path d="${WATERMARK_LOGO_PATHS[platform]}" fill="#FFFFFF"/></svg>` : ""}`
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BADGE_WIDTH}" height="${badgeHeight}" viewBox="0 0 ${BADGE_WIDTH} ${badgeHeight}">
   ${tile}
@@ -214,8 +216,9 @@ export async function createWatermarkAsset(
   url: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<WatermarkAssetResult> {
+  const platform = options.platform ?? "x";
   const variant = watermarkBadgeVariant(options);
-  const includeXIcon = options.includeXIcon ?? true;
+  const includePlatformIcon = options.includePlatformIcon ?? options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
   const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
@@ -224,7 +227,8 @@ export async function createWatermarkAsset(
   try {
     buffer = await buildWatermarkBadgePng(url, handle, {
       variant,
-      includeXIcon,
+      platform,
+      includePlatformIcon,
       includeHandleBorder,
       handlePadding,
       handlePaddingY,
@@ -254,9 +258,11 @@ export async function createWatermarkAsset(
     created_at: new Date().toISOString(),
     handle,
     url,
+    platform,
     include_qr: variant !== "handle",
     include_handle: variant !== "qr",
-    include_x_icon: variant !== "qr" && includeXIcon,
+    include_platform_icon: variant !== "qr" && includePlatformIcon,
+    include_x_icon: variant !== "qr" && platform === "x" && includePlatformIcon,
     include_handle_border: variant !== "qr" && includeHandleBorder,
     handle_padding: variant !== "qr" ? handlePadding : null,
     handle_padding_y: variant !== "qr" ? handlePaddingY : null,
@@ -286,9 +292,10 @@ export async function findWatermarkAsset(
   url: string,
   options: WatermarkBadgeOptions = {},
 ): Promise<string | null> {
+  const platform = options.platform ?? "x";
   const variant = watermarkBadgeVariant(options);
   const layout = watermarkBadgeLayout(variant);
-  const includeXIcon = options.includeXIcon ?? true;
+  const includePlatformIcon = options.includePlatformIcon ?? options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
   const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
@@ -303,9 +310,10 @@ export async function findWatermarkAsset(
     if (
       meta.value.origin === "watermark"
       && meta.value.layout === layout
+      && (meta.value.platform ?? "x") === platform
       && meta.value.handle === handle
       && (variant === "handle" || meta.value.url === url)
-      && (variant === "qr" || meta.value.include_x_icon === includeXIcon)
+      && (variant === "qr" || (meta.value.include_platform_icon ?? meta.value.include_x_icon) === includePlatformIcon)
       && (variant === "qr" || meta.value.include_handle_border === includeHandleBorder)
       && (variant === "qr" || meta.value.handle_padding === handlePadding)
       && (variant === "qr" || storedPaddingY === handlePaddingY)

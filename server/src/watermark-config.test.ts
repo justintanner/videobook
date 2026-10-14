@@ -39,6 +39,22 @@ describe("watermark-config store", () => {
     expect(await readConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });
   });
 
+  it("keeps TikTok preferences separate from existing X preferences and authentication", async () => {
+    await recordTestHandle("x_alias", { saveDefault: true });
+    await setTestAuthenticatedHandle("signed_in_x");
+    expect(await readWatermarkConfig(engine, "tiktok")).toEqual({
+      savedHandle: null, recent: [], authenticatedHandle: null,
+    });
+    await recordHandle("  @creator.name  ", { platform: "tiktok", saveDefault: true }, engine);
+    await recordHandle("CREATOR.NAME", { platform: "tiktok" }, engine);
+    expect(await readWatermarkConfig(engine, "tiktok")).toEqual({
+      savedHandle: "creator.name", recent: ["CREATOR.NAME"], authenticatedHandle: null,
+    });
+    expect(await readConfig()).toEqual({
+      savedHandle: "x_alias", recent: ["x_alias"], authenticatedHandle: "signed_in_x",
+    });
+  });
+
   it("normalizes handles (strips @ and whitespace)", () => {
     expect(normalizeHandle("  @alice ")).toBe("alice");
     expect(normalizeHandle("@@bob")).toBe("@bob"); // only one leading @ is stripped

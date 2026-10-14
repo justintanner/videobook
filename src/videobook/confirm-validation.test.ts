@@ -32,7 +32,7 @@ describe('watermark validation', () => {
 
   it('names the missing handle and the way out', () => {
     expect(watermarkValidation(watermark({ handle: ' @ ' })).blocking)
-      .toBe('Include handle is on but no X handle is set. Type a handle, or turn Include handle off.')
+      .toBe('Include handle is on but no handle is set. Type a handle, or turn Include handle off.')
   })
 
   it('needs something for the QR to link to', () => {

@@ -61,6 +61,49 @@ describe("create_watermark tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  it("creates a TikTok badge and remembers its alias independently of X", async () => {
+    const result = await client!.callTool({
+      name: "create_watermark_card",
+      arguments: { book_id: PROJECT, platform: "tiktok", handle: "  @creator.name ", save_default: true },
+    });
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(resultText(result)) as { asset_id: string; url: string };
+    expect(parsed).toMatchObject({
+      platform: "tiktok", handle: "creator.name", url: "https://www.tiktok.com/@creator.name",
+      include_platform_icon: true, include_x_icon: false,
+    });
+    const png = await fs.files.read(parsed.asset_id, "original.png");
+    if (!png.ok) throw new Error(png.error.message);
+    expect(await decodeQr(Buffer.from(png.value))).toBe(parsed.url);
+    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original");
+    expect(metadata.ok && metadata.value).toMatchObject({
+      platform: "tiktok", include_platform_icon: true, include_x_icon: false,
+    });
+    const config = await client!.callTool({
+      name: "get_watermark_config",
+      arguments: { book_id: PROJECT, platform: "tiktok" },
+    });
+    expect(JSON.parse(resultText(config))).toEqual({
+      savedHandle: "creator.name", recent: ["creator.name"], authenticatedHandle: null,
+    });
+    expect((await readWatermarkConfig(fs)).savedHandle).toBeNull();
+    const saved = await client!.callTool({
+      name: "create_watermark_card",
+      arguments: { book_id: PROJECT, platform: "tiktok", include_platform_icon: false },
+    });
+    expect(JSON.parse(resultText(saved))).toMatchObject({ handle: "creator.name", include_platform_icon: false });
+  });
+
+  it("requires a TikTok alias instead of using the X default", async () => {
+    const before = fs.artifacts.list().length;
+    const result = await client!.callTool({
+      name: "create_watermark_card",
+      arguments: { book_id: PROJECT, platform: "tiktok" },
+    });
+    expect(result.isError).toBe(true);
+    expect(fs.artifacts.list()).toHaveLength(before);
+  });
+
   it("creates a ready image asset holding the QR card", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",

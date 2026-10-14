@@ -8,7 +8,7 @@ import {
 } from '../../src/components/videobook/confirm/bodies/WatermarkBody'
 import { watermarkValidation } from '../../src/videobook/confirm-validation'
 
-function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string {
+function renderWatermark(overrides: Partial<WatermarkReviewState> & { handle?: string } = {}): string {
   const state: WatermarkReviewState = {
     assetId: 'vid-1',
     targetLabel: '@a1',
@@ -17,14 +17,18 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
     width: 1920,
     height: 1080,
     durationSeconds: 12,
-    handle: 'someone',
+    platform: 'x',
+    identities: {
+      x: { handle: overrides.handle ?? 'someone', recent: ['someone'] },
+      tiktok: { handle: 'creator.name', recent: ['creator.name'] },
+    },
     url: 'https://example.com/profile',
     includeQr: true,
     includeHandle: true,
     position: 'middle-center',
     handleVerticalPercent: 33,
     handlePlacement: 'center',
-    includeXIcon: true,
+    includePlatformIcon: true,
     includeHandleBorder: true,
     handlePadding: 48,
     handlePaddingY: 24,
@@ -37,7 +41,6 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
     handleEndSeconds: 8,
     fadeSeconds: 0.5,
     saveDefault: false,
-    recent: ['someone'],
     loadingConfig: false,
     error: null,
     ...overrides,
@@ -60,7 +63,7 @@ function renderWatermark(overrides: Partial<WatermarkReviewState> = {}): string 
     kind: 'watermark',
     tag: 'WATERMARK · CHAT',
     title: 'Add handle and QR to the video',
-    validation: watermarkValidation(state),
+    validation: watermarkValidation({ ...state, handle: state.identities[state.platform].handle }),
     onCancel: () => undefined,
   }))
 }
@@ -119,6 +122,17 @@ describe('watermark chat review', () => {
     expect(html).toContain('class="confirm-sheet-apply">Apply <kbd>↵</kbd>')
   })
 
+  it('previews a TikTok alias with its own icon and profile link', () => {
+    const html = renderWatermark({ platform: 'tiktok', url: '' })
+    expect(html).toContain('TikTok handle')
+    expect(html).toContain('Show TikTok icon')
+    expect(html).toContain('watermark-preview-tiktok-icon')
+    expect(html).not.toContain('watermark-preview-x-icon')
+    expect(html).toContain('https://www.tiktok.com/@creator.name')
+    expect(html).toContain('>creator.name</span>')
+    expect(html).toContain('value="tiktok" selected=""')
+  })
+
   it('gives the footer back the moment the sheet cannot apply', () => {
     const html = renderWatermark({ includeQr: false, includeHandle: false })
     expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
@@ -136,7 +150,7 @@ describe('watermark chat review', () => {
       position: 'top-left',
       handleVerticalPercent: 68,
       handlePlacement: 'center',
-      includeXIcon: false,
+      includePlatformIcon: false,
       includeHandleBorder: false,
       handlePadding: 0,
       handlePaddingY: 0,
@@ -200,7 +214,7 @@ describe('watermark chat review', () => {
     const html = renderWatermark({ handle: '' })
     expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
     expect(html).toContain('Can’t apply')
-    expect(html).toContain('no X handle is set')
+    expect(html).toContain('no handle is set')
     expect(html).toContain('class="confirm-sheet-apply" disabled=""')
     expect(html).toContain('aria-invalid="true"')
     expect(html).toContain('Required while Include handle is on')

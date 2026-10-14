@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { WATERMARK_LOGO_PATHS, WATERMARK_PLATFORM_LABELS, WATERMARK_PLATFORMS, isWatermarkPlatform, watermarkProfileUrl } from '../../../../../server/src/watermark-platform'
+import type { WatermarkPlatform } from '../../../../../server/src/watermark-platform'
 import type { CSSProperties } from 'react'
 import { Play } from 'lucide-react'
 import {
@@ -36,14 +38,15 @@ export interface WatermarkReviewState {
   width: number | null
   height: number | null
   durationSeconds: number | null
-  handle: string
+  platform: WatermarkPlatform
+  identities: Record<WatermarkPlatform, { handle: string; recent: string[] }>
   url: string
   includeQr: boolean
   includeHandle: boolean
   position: WatermarkPosition
   handleVerticalPercent: number
   handlePlacement: WatermarkHandlePlacement
-  includeXIcon: boolean
+  includePlatformIcon: boolean
   includeHandleBorder: boolean
   handlePadding: number
   handlePaddingY: number
@@ -56,20 +59,19 @@ export interface WatermarkReviewState {
   handleEndSeconds: number | null
   fadeSeconds: number
   saveDefault: boolean
-  recent: string[]
   loadingConfig: boolean
   error: string | null
 }
 
 type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
-  | 'handle'
+  | 'platform'
   | 'url'
   | 'includeQr'
   | 'includeHandle'
   | 'position'
   | 'handleVerticalPercent'
   | 'handlePlacement'
-  | 'includeXIcon'
+  | 'includePlatformIcon'
   | 'includeHandleBorder'
   | 'handlePadding'
   | 'handlePaddingY'
@@ -82,7 +84,7 @@ type WatermarkReviewPatch = Partial<Pick<WatermarkReviewState,
   | 'handleEndSeconds'
   | 'fadeSeconds'
   | 'saveDefault'
->>
+>> & { handle?: string }
 
 type MediaMetadata = {
   durationSeconds: number
@@ -139,7 +141,6 @@ const QR_PREVIEW_ROWS = [
 ] as const
 
 const QR_PREVIEW_SIZE = QR_PREVIEW_ROWS.length
-const X_LOGO_PATH = 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z'
 
 function buildQrPreviewPath(): string {
   const modules: string[] = []
@@ -177,14 +178,14 @@ function WatermarkQrPreview() {
   )
 }
 
-function WatermarkXIcon() {
+function WatermarkPlatformIcon({ platform }: { platform: WatermarkPlatform }) {
   return (
     <svg
-      className="watermark-preview-x-icon"
+      className={`watermark-preview-platform-icon watermark-preview-${platform}-icon`}
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <path d={X_LOGO_PATH} fill="currentColor" />
+      <path d={WATERMARK_LOGO_PATHS[platform]} fill="currentColor" />
     </svg>
   )
 }
@@ -503,8 +504,10 @@ export function WatermarkBody({
   onMediaMetadata: (metadata: MediaMetadata) => void
 }) {
   const [currentTime, setCurrentTime] = useState(0)
-  const handle = watermarkHandleValue(state.handle)
-  const urlPlaceholder = handle ? `https://x.com/${handle}` : 'https://x.com/<handle>'
+  const identity = state.identities[state.platform]
+  const handle = watermarkHandleValue(identity.handle)
+  const platformLabel = WATERMARK_PLATFORM_LABELS[state.platform]
+  const urlPlaceholder = watermarkProfileUrl(handle || '<handle>', state.platform)
   const duration = state.durationSeconds ?? 0
   const handleMissing = state.includeHandle && !handle
   const linkMissing = state.includeQr && !state.url.trim() && !handle
@@ -609,7 +612,7 @@ export function WatermarkBody({
                   state.handleRounding,
                 )}
               >
-                {state.includeXIcon && <WatermarkXIcon />}
+                {state.includePlatformIcon && <WatermarkPlatformIcon platform={state.platform} />}
                 <span>{handle || 'handle'}</span>
               </span>
             </span>
@@ -657,6 +660,21 @@ export function WatermarkBody({
       <div className="confirm-watermark-controls">
         <section className="confirm-section" aria-label="Identity">
           <span className="confirm-section-label">Identity</span>
+          <label className="confirm-field">
+            <span>Platform</span>
+            <select
+              value={state.platform}
+              disabled={busy}
+              onChange={(event) => {
+                const platform = event.target.value
+                if (isWatermarkPlatform(platform)) onChange({ platform })
+              }}
+            >
+              {WATERMARK_PLATFORMS.map((platform) => (
+                <option key={platform} value={platform}>{WATERMARK_PLATFORM_LABELS[platform]}</option>
+              ))}
+            </select>
+          </label>
           <WatermarkToggle
             busy={busy}
             checked={state.includeHandle}
@@ -668,12 +686,12 @@ export function WatermarkBody({
           {state.includeHandle && (
             <>
               <label className="confirm-field">
-                <span>X handle</span>
+                <span>{platformLabel} handle</span>
                 <div className={`confirm-handle-field${handleMissing ? ' invalid' : ''}`}>
                   <span aria-hidden="true">@</span>
                   <input
                     type="text"
-                    value={state.handle}
+                    value={identity.handle}
                     placeholder={state.loadingConfig ? 'Loading…' : 'handle'}
                     aria-invalid={handleMissing}
                     disabled={busy}
@@ -684,9 +702,9 @@ export function WatermarkBody({
                   <span className="confirm-field-error">Required while Include handle is on</span>
                 )}
               </label>
-              {state.recent.length > 0 && (
+              {identity.recent.length > 0 && (
                 <div className="confirm-chips" role="group" aria-label="Recent handles">
-                  {state.recent.map((recentHandle) => (
+                  {identity.recent.map((recentHandle) => (
                     <button
                       key={recentHandle}
                       type="button"
@@ -748,10 +766,10 @@ export function WatermarkBody({
             <>
               <WatermarkToggle
                 busy={busy}
-                checked={state.includeXIcon}
-                description="X mark before the handle"
-                label="Show X icon"
-                onChange={(includeXIcon) => onChange({ includeXIcon })}
+                checked={state.includePlatformIcon}
+                description={`${platformLabel} mark before the handle`}
+                label={`Show ${platformLabel} icon`}
+                onChange={(includePlatformIcon) => onChange({ includePlatformIcon })}
               />
               <WatermarkToggle
                 busy={busy}

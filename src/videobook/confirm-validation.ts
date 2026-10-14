@@ -61,7 +61,7 @@ export function watermarkValidation(input: WatermarkValidationInput): ConfirmVal
     return blocking('Include a handle, a QR code, or both.')
   }
   if (input.includeHandle && !handle) {
-    return blocking('Include handle is on but no X handle is set. Type a handle, or turn Include handle off.')
+    return blocking('Include handle is on but no handle is set. Type a handle, or turn Include handle off.')
   }
   if (input.includeQr && !url && !handle) {
     return blocking('Include QR code is on but there is nothing to link. Enter a QR link, or a handle it can point to.')

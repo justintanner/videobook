@@ -12,6 +12,7 @@
 
 import type { Engine } from "videobook-engine";
 import { getActiveEngine } from "./queue.js";
+import type { WatermarkPlatform } from "./watermark-platform.js";
 
 const RECENT_LIMIT = 8;
 
@@ -37,8 +38,12 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function readConfig(engine: Engine): WatermarkConfig {
-  const parsed = engine.settings.get<Partial<WatermarkConfig>>(SETTINGS_KEY);
+function settingsKey(platform: WatermarkPlatform): string {
+  return platform === "x" ? SETTINGS_KEY : "application.watermark.tiktok.v1";
+}
+
+function readConfig(engine: Engine, platform: WatermarkPlatform = "x"): WatermarkConfig {
+  const parsed = engine.settings.get<Partial<WatermarkConfig>>(settingsKey(platform));
   if (!parsed) return { ...EMPTY_CONFIG };
   const recent = Array.isArray(parsed.recent)
     ? parsed.recent.filter((handle): handle is string => typeof handle === "string")
@@ -50,15 +55,17 @@ function readConfig(engine: Engine): WatermarkConfig {
 
 export async function readWatermarkConfig(
   engine: Engine = getActiveEngine(),
+  platform: WatermarkPlatform = "x",
 ): Promise<WatermarkConfig> {
-  return readConfig(engine);
+  return readConfig(engine, platform);
 }
 
 function writeWatermarkConfig(
   engine: Engine,
   config: WatermarkConfig,
+  platform: WatermarkPlatform = "x",
 ): void {
-  const written = engine.settings.set(SETTINGS_KEY, config);
+  const written = engine.settings.set(settingsKey(platform), config);
   if (!written.ok) throw new Error(written.error.message);
 }
 
@@ -67,21 +74,22 @@ function writeWatermarkConfig(
  *  blank handles. Returns the updated config. */
 export async function recordHandle(
   handle: string,
-  opts: { saveDefault?: boolean } = {},
+  opts: { saveDefault?: boolean; platform?: WatermarkPlatform } = {},
   engine: Engine = getActiveEngine(),
 ): Promise<WatermarkConfig> {
   const normalized = normalizeHandle(handle);
-  if (!normalized) return readConfig(engine);
+  const platform = opts.platform ?? "x";
+  if (!normalized) return readConfig(engine, platform);
 
   return serialize(async () => {
-    const current = readConfig(engine);
+    const current = readConfig(engine, platform);
     const deduped = current.recent.filter((h) => h.toLowerCase() !== normalized.toLowerCase());
     const next: WatermarkConfig = {
       savedHandle: opts.saveDefault ? normalized : current.savedHandle,
       recent: [normalized, ...deduped].slice(0, RECENT_LIMIT),
       authenticatedHandle: current.authenticatedHandle,
     };
-    writeWatermarkConfig(engine, next);
+    writeWatermarkConfig(engine, next, platform);
     return next;
   });
 }

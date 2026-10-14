@@ -153,13 +153,17 @@ describe('composition endpoints over HTTP MCP', () => {
 
   it('reads the correct book watermark preferences after restarting the server', async () => {
     await call('create_watermark_card', { handle: 'cat_test', save_default: true })
+    await call('create_watermark_card', { platform: 'tiktok', handle: 'cat.tiktok', save_default: true })
     expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
+    expect(await call('get_watermark_config', { platform: 'tiktok' })).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'], authenticatedHandle: null })
     const other = (await callTool<{ bookId: string }>(client, 'create_book', { name: 'Other book' })).bookId
     expect(await call('get_watermark_config', { book_id: other })).toMatchObject({ savedHandle: null, recent: [] })
+    expect(await call('get_watermark_config', { book_id: other, platform: 'tiktok' })).toMatchObject({ savedHandle: null, recent: [] })
     await client.close()
     await stopServer(server)
     await connect()
     expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
+    expect(await call('get_watermark_config', { platform: 'tiktok' })).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'], authenticatedHandle: null })
   })
 
   it('burns a timed QR overlay while preserving video and audio duration', async () => {

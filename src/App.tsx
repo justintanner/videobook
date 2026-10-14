@@ -1,3 +1,4 @@
+import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { coldOpenRangeError } from '../server/src/cold-open-model'
 import { prepareColdOpenReview, renderColdOpenReview, type ColdOpenReview } from '@/videobook/cold-open-review'
@@ -5353,6 +5354,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     assetId: string,
     targetLabel: string,
     initial: {
+      platform?: WatermarkReviewState['platform']
       handle?: string
       url?: string
       includeQr?: boolean
@@ -5360,7 +5362,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       position?: WatermarkReviewState['position']
       handleVerticalPercent?: number
       handlePlacement?: WatermarkReviewState['handlePlacement']
-      includeXIcon?: boolean
+      includePlatformIcon?: boolean
       includeHandleBorder?: boolean
       handlePadding?: number
       handlePaddingY?: number
@@ -5387,7 +5389,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       width: targetAsset?.width ?? null,
       height: targetAsset?.height ?? null,
       durationSeconds: targetAsset?.duration ?? null,
-      handle: initial.handle?.replace(/^@/, '') ?? '',
+      platform: initial.platform ?? 'x',
+      identities: {
+        x: { handle: initial.platform !== 'tiktok' ? initial.handle ?? '' : '', recent: [] },
+        tiktok: { handle: initial.platform === 'tiktok' ? initial.handle ?? '' : '', recent: [] },
+      },
       url: initial.url ?? '',
       includeQr: initial.includeQr ?? true,
       includeHandle: initial.includeHandle ?? true,
@@ -5396,7 +5402,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? DEFAULT_HANDLE_VERTICAL_PERCENT
         : clampHandleVerticalPercent(initial.handleVerticalPercent),
       handlePlacement: initial.handlePlacement ?? 'center',
-      includeXIcon: initial.includeXIcon ?? true,
+      includePlatformIcon: initial.includePlatformIcon ?? true,
       includeHandleBorder: initial.includeHandleBorder ?? true,
       handlePadding: initial.handlePadding === undefined
         ? DEFAULT_HANDLE_PADDING
@@ -5421,34 +5427,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? DEFAULT_WATERMARK_FADE_SECONDS
         : clampWatermarkFadeSeconds(initial.fadeSeconds),
       saveDefault: initial.saveDefault ?? false,
-      recent: [],
       loadingConfig: true,
       error: null,
     }))
-    void (async () => {
-      try {
-        const config = recordValue(await call('get_watermark_config', { book_id: bookId }, { background: true, chat }))
-        const savedHandle = asString(config?.savedHandle)
-        const authenticatedHandle = asString(config?.authenticatedHandle)
-        const recent = Array.isArray(config?.recent)
-          ? config.recent.filter((entry): entry is string => typeof entry === 'string')
-          : []
-        presentChat(chat, () => setPendingWatermarkReview((current) =>
-          current && current.assetId === assetId
-            ? {
-                ...current,
-                handle: current.handle || (savedHandle ?? authenticatedHandle ?? recent[0] ?? ''),
-                recent,
-                loadingConfig: false,
-              }
-            : current))
-      } catch {
-        presentChat(chat, () => setPendingWatermarkReview((current) =>
-          current && current.assetId === assetId
-            ? { ...current, loadingConfig: false }
-            : current))
-      }
-    })()
+    void Promise.allSettled(WATERMARK_PLATFORMS.map(async (platform) => {
+      const config = recordValue(await call('get_watermark_config', {
+        book_id: bookId,
+        platform,
+      }, { background: true, chat }))
+      const savedHandle = asString(config?.savedHandle)
+      const authenticatedHandle = asString(config?.authenticatedHandle)
+      const recent = Array.isArray(config?.recent)
+        ? config.recent.filter((entry): entry is string => typeof entry === 'string')
+        : []
+      presentChat(chat, () => setPendingWatermarkReview((current) =>
+        current && current.assetId === assetId
+          ? {
+              ...current,
+              identities: {
+                ...current.identities,
+                [platform]: {
+                  handle: current.identities[platform].handle
+                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? ''),
+                  recent,
+                },
+              },
+            }
+          : current))
+    })).then(() => {
+      presentChat(chat, () => setPendingWatermarkReview((current) =>
+        current && current.assetId === assetId
+          ? { ...current, loadingConfig: false }
+          : current))
+    })
   }
 
   const submitWatermark = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
@@ -5458,14 +5469,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const {
       assetId,
       targetLabel,
-      handle,
+      platform,
+      identities,
       url,
       includeQr,
       includeHandle,
       position,
       handleVerticalPercent,
       handlePlacement,
-      includeXIcon,
+      includePlatformIcon,
       includeHandleBorder,
       handlePadding,
       handlePaddingY,
@@ -5479,7 +5491,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       fadeSeconds,
       saveDefault,
     } = pendingWatermarkReview
-    const trimmedHandle = handle.replace(/^@/, '').trim()
+    const trimmedHandle = identities[platform].handle.trim().replace(/^@/, '').trim()
     const trimmedUrl = url.trim()
     if (!includeQr && !includeHandle) {
       return {
@@ -5492,7 +5504,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (includeHandle && !trimmedHandle) {
       return {
         ok: false,
-        message: 'Enter an X handle before applying the watermark.',
+        message: 'Enter a handle before applying the watermark.',
         nextInput: '/apply',
         selectInput: false,
       }
@@ -5514,6 +5526,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const result = recordValue(await call('apply_watermark', {
         book_id: bookId,
         asset_id: assetId,
+        platform,
         ...(trimmedHandle && (includeHandle || !trimmedUrl) ? { handle: trimmedHandle } : {}),
         include_qr: includeQr,
         include_handle: includeHandle,
@@ -5522,7 +5535,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(includeHandle && includeQr && handlePlacement !== 'center'
           ? { handle_position: handlePlacement }
           : {}),
-        ...(includeHandle ? { include_x_icon: includeXIcon } : {}),
+        ...(includeHandle ? { include_platform_icon: includePlatformIcon } : {}),
         ...(includeHandle ? { include_handle_border: includeHandleBorder } : {}),
         ...(includeHandle ? { handle_padding: handlePadding } : {}),
         ...(includeHandle ? { handle_padding_y: handlePaddingY } : {}),
@@ -7913,7 +7926,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const fadeSeconds = asNumber(plan.params.fade_seconds)
       const requestedPosition = plan.params.position
       const requestedHandlePlacement = plan.params.handle_position
+      const requestedPlatformIcon = plan.params.include_platform_icon ?? plan.params.include_x_icon
       openWatermarkReview(target.artifactId, target.label, {
+        ...(isWatermarkPlatform(plan.params.platform) ? { platform: plan.params.platform } : {}),
         ...(asString(plan.params.handle)
           ? { handle: asString(plan.params.handle) ?? undefined }
           : {}),
@@ -7935,8 +7950,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...(isWatermarkHandlePlacement(requestedHandlePlacement)
           ? { handlePlacement: requestedHandlePlacement }
           : {}),
-        ...(typeof plan.params.include_x_icon === 'boolean'
-          ? { includeXIcon: plan.params.include_x_icon }
+        ...(typeof requestedPlatformIcon === 'boolean'
+          ? { includePlatformIcon: requestedPlatformIcon }
           : {}),
         ...(typeof plan.params.include_handle_border === 'boolean'
           ? { includeHandleBorder: plan.params.include_handle_border }
@@ -10353,7 +10368,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           title={title}
           address={review.targetLabel}
           effect={{ label: 'Rebuilds playable proxy', tone: 'default' }}
-          validation={watermarkValidation(review)}
+          validation={watermarkValidation({ ...review, handle: review.identities[review.platform].handle })}
           busy={busy}
           applyFormId={COMMAND_COMPOSER_FORM_ID}
           onCancel={dismissPendingCommandPlan}
@@ -10361,8 +10376,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <WatermarkBody
             busy={busy}
             state={review}
-            onChange={(patch) => setPendingWatermarkReview((current) =>
-              current ? { ...current, ...patch, error: null } : current)}
+            onChange={({ handle, ...patch }) => setPendingWatermarkReview((current) => {
+              if (!current) return current
+              return {
+                ...current,
+                ...patch,
+                identities: handle === undefined ? current.identities : {
+                  ...current.identities,
+                  [current.platform]: { ...current.identities[current.platform], handle },
+                },
+                error: null,
+              }
+            })}
             onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
               current
                 ? {

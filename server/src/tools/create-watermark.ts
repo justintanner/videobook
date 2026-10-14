@@ -1,7 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
+import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
+import type { WatermarkPlatform } from "../watermark-platform.js";
 import type { ToolDef } from "./tool-def.js";
-import { normalizeHandle, recordHandle } from "../watermark-config.js";
+import { normalizeHandle, readWatermarkConfig, recordHandle } from "../watermark-config.js";
 import {
   createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
@@ -18,19 +20,24 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
-      "Generate a compact transparent QR plus plain X handle badge and store it as an image artifact. The X icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
+      "Generate a compact transparent QR plus plain X or TikTok alias badge and store it as an image artifact. The platform icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
     schema: {
       book_id: z.string().describe("Book id"),
-      handle: z.string().optional().describe(`X handle without @ (default: ${DEFAULT_HANDLE})`),
-      url: z.string().optional().describe("URL the QR code resolves to (default: https://x.com/<handle>)"),
+      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default x)"),
+      handle: z.string().optional().describe(`X or TikTok alias without @ (X default: ${DEFAULT_HANDLE}; TikTok default: saved alias)`),
+      url: z.string().optional().describe("URL the QR code resolves to (default: the selected X or TikTok profile URL)"),
       save_default: z
         .boolean()
         .optional()
         .describe("Remember this handle as the default for future watermarks"),
+      include_platform_icon: z
+        .boolean()
+        .optional()
+        .describe("Show the selected platform icon before the plain alias (default true; overrides include_x_icon)"),
       include_x_icon: z
         .boolean()
         .optional()
-        .describe("Show the X icon before the plain handle (default true)"),
+        .describe("Legacy alias for include_platform_icon (default true)"),
       include_handle_border: z
         .boolean()
         .optional()
@@ -62,6 +69,8 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         handle,
         url,
         save_default,
+        platform = "x",
+        include_platform_icon,
         include_x_icon = true,
         include_handle_border = true,
         handle_padding = DEFAULT_HANDLE_PADDING,
@@ -72,6 +81,8 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         handle?: string;
         url?: string;
         save_default?: boolean;
+        platform?: WatermarkPlatform;
+        include_platform_icon?: boolean;
         include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
@@ -79,17 +90,20 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         handle_rounding?: number;
       };
 
-      const resolvedHandle = normalizeHandle(handle ?? DEFAULT_HANDLE);
+      const config = await readWatermarkConfig(engine, platform);
+      const fallbackHandle = platform === "x" ? DEFAULT_HANDLE : config.savedHandle ?? config.recent[0] ?? "";
+      const resolvedHandle = normalizeHandle(handle ?? fallbackHandle);
       if (!resolvedHandle) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "handle must be a non-empty string" }],
         };
       }
-      const resolvedUrl = url ?? defaultUrl(resolvedHandle);
+      const resolvedUrl = url ?? defaultUrl(resolvedHandle, platform);
 
       const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
-        includeXIcon: include_x_icon,
+        platform,
+        includePlatformIcon: include_platform_icon ?? include_x_icon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
         handlePaddingY: handle_padding_y,
@@ -103,7 +117,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
       }
 
       // Remember the handle so the next watermark review defaults to it.
-      await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
+      await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
 
       return {
         content: [{
@@ -112,7 +126,9 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
             asset_id: created.assetId,
             handle: resolvedHandle,
             url: resolvedUrl,
-            include_x_icon,
+            platform,
+            include_platform_icon: include_platform_icon ?? include_x_icon,
+            include_x_icon: platform === "x" && (include_platform_icon ?? include_x_icon),
             include_handle_border,
             handle_padding,
             handle_padding_y,

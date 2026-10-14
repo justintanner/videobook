@@ -2,6 +2,8 @@ import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { join } from "node:path";
 import { z } from "zod";
+import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
+import type { WatermarkPlatform } from "../watermark-platform.js";
 import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
 import { sampleEvenly } from "../frame-utils.js";
@@ -88,7 +90,8 @@ type BurnPlacement = {
   visionRequest: BurnWatermarkPlacementRequest | null;
 };
 type WatermarkAssetAppearance = {
-  includeXIcon: boolean;
+  platform: WatermarkPlatform;
+  includePlatformIcon: boolean;
   includeHandleBorder: boolean;
   handlePadding: number;
   handlePaddingY: number;
@@ -279,12 +282,13 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns an optional positioned QR and optional X handle. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional X icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.",
+      "Previewed watermark apply for video: burns an optional positioned QR and optional X or TikTok alias. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional platform icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
-      handle: z.string().optional().describe("X handle without @ (default: saved handle)"),
-      url: z.string().optional().describe("URL the QR code resolves to (default: https://x.com/<handle>)"),
+      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default x)"),
+      handle: z.string().optional().describe("X or TikTok alias without @ (default: saved alias for the platform)"),
+      url: z.string().optional().describe("URL the QR code resolves to (default: the selected X or TikTok profile URL)"),
       save_default: z
         .boolean()
         .optional()
@@ -311,10 +315,14 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .enum(WATERMARK_HANDLE_PLACEMENTS)
         .optional()
         .describe("Burn-mode handle placement: center (default), above-qr, on-qr, or below-qr"),
+      include_platform_icon: z
+        .boolean()
+        .optional()
+        .describe("Show the selected platform icon before the plain alias (default true; overrides include_x_icon)"),
       include_x_icon: z
         .boolean()
         .optional()
-        .describe("Show the X icon before the plain handle (default true)"),
+        .describe("Legacy alias for include_platform_icon (default true)"),
       include_handle_border: z
         .boolean()
         .optional()
@@ -425,6 +433,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         position = "auto",
         handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
         handle_position = "center",
+        platform = "x",
+        include_platform_icon,
         include_x_icon = true,
         include_handle_border = true,
         handle_padding = DEFAULT_HANDLE_PADDING,
@@ -455,6 +465,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         position?: WatermarkPositionOption;
         handle_vertical_percent?: number;
         handle_position?: WatermarkHandlePlacement;
+        platform?: WatermarkPlatform;
+        include_platform_icon?: boolean;
         include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
@@ -533,8 +545,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
       }
 
-      const config = await readWatermarkConfig(engine);
-      const fallbackHandle = config.savedHandle ?? config.authenticatedHandle ?? DEFAULT_HANDLE;
+      const config = await readWatermarkConfig(engine, platform);
+      const fallbackHandle = config.savedHandle ?? config.authenticatedHandle ?? config.recent[0]
+        ?? (platform === "x" ? DEFAULT_HANDLE : "");
       const resolvedHandle = normalizeHandle(handle ?? (include_handle || url === undefined ? fallbackHandle : "")) ?? "";
       if (include_handle && !resolvedHandle) {
         return {
@@ -542,7 +555,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           content: [{ type: "text" as const, text: "handle must be a non-empty string" }],
         };
       }
-      const resolvedUrl = (url ?? (resolvedHandle ? defaultUrl(resolvedHandle) : "")).trim();
+      const resolvedUrl = (url ?? (resolvedHandle ? defaultUrl(resolvedHandle, platform) : "")).trim();
       if (include_qr && !resolvedUrl) {
         return {
           isError: true as const,
@@ -553,7 +566,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         ? handle_position
         : "center";
       const appearance: WatermarkAssetAppearance = {
-        includeXIcon: include_x_icon,
+        platform,
+        includePlatformIcon: include_platform_icon ?? include_x_icon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
         handlePaddingY: handle_padding_y,
@@ -625,7 +639,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         requested_position: position,
         handle_vertical_percent,
         handle_position: include_handle ? resolvedHandlePosition : null,
-        include_x_icon,
+        platform,
+        include_platform_icon: include_platform_icon ?? include_x_icon,
+        include_x_icon: platform === "x" && (include_platform_icon ?? include_x_icon),
         include_handle_border,
         handle_padding,
         handle_padding_y,
@@ -663,7 +679,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
             content: [{ type: "text" as const, text: written.error }],
           };
         }
-        await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
+        await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
         return {
           content: [{
             type: "text" as const,
@@ -756,7 +772,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       };
 
       await engine.jobs.failures.clear(asset_id);
-      await recordHandle(resolvedHandle, { saveDefault: save_default }, engine).catch(() => undefined);
+      await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
 
       if (!wait) {
         // Return as soon as the burn is queued; the frame-aware corner is

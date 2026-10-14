@@ -322,6 +322,55 @@ describe("apply_watermark tool", () => {
     expect(other.card_asset_id).not.toBe(first.card_asset_id);
   });
 
+  it("separates platform badge caches and keeps legacy X badges reusable", async () => {
+    const assetId = await createRealVideoAsset();
+    const args = { asset_id: assetId, handle: "someone", include_qr: false, mode: "overlay" };
+    const x = await apply(args);
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(x.card_asset_id, "original");
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    const legacy = { ...metadata.value };
+    delete legacy.platform;
+    delete legacy.include_platform_icon;
+    expect((await fs.metadata.artifacts.write(x.card_asset_id, "original", legacy)).ok).toBe(true);
+    expect((await apply(args)).card_asset_id).toBe(x.card_asset_id);
+    const tiktok = await apply({ ...args, platform: "tiktok", save_default: true });
+    expect(tiktok.card_asset_id).not.toBe(x.card_asset_id);
+    expect(tiktok).toMatchObject({ platform: "tiktok", include_platform_icon: true, include_x_icon: false });
+    expect((await apply({ ...args, platform: "tiktok" })).card_asset_id).toBe(tiktok.card_asset_id);
+    const withoutIcon = await apply({ ...args, platform: "tiktok", include_platform_icon: false });
+    expect(withoutIcon.card_asset_id).not.toBe(tiktok.card_asset_id);
+    const tiktokPixels = await fs.files.read(tiktok.card_asset_id, "original.png");
+    const xPixels = await fs.files.read(x.card_asset_id, "original.png");
+    expect(tiktokPixels.ok && tiktokPixels.value).not.toEqual(xPixels.ok && xPixels.value);
+    expect(await readWatermarkConfig(fs, "tiktok")).toMatchObject({ savedHandle: "someone" });
+    expect(await readWatermarkConfig(fs)).toMatchObject({ savedHandle: null });
+  });
+
+  it("burns a saved TikTok alias into real video and rebuilds playback", async () => {
+    const assetId = await createRealVideoAsset();
+    await client.callTool({
+      name: "create_watermark_card",
+      arguments: { book_id: bookId, platform: "tiktok", handle: "@creator.name", save_default: true },
+    });
+    const originalPath = join(tempDir, "before-tiktok.mp4");
+    await copyVideoFixture(COMMON_VIDEO_FIXTURES.watermark, originalPath);
+    const result = await apply({ asset_id: assetId, platform: "tiktok", include_qr: false });
+    expect(result).toMatchObject({
+      status: "completed", platform: "tiktok", handle: "creator.name",
+      url: "https://www.tiktok.com/@creator.name", include_platform_icon: true, include_x_icon: false,
+    });
+    const after = await fs.files.manifest(assetId);
+    if (!after.ok) throw new Error(after.error.message);
+    const source = findVideoFile(after.value.files)!;
+    const proxy = after.value.files.find((file) => file.name === "proxy.mp4");
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "proxy");
+    expect(metadata.ok && proxy && videoProxyMetadataMatches(metadata.value, source, proxy)).toBe(true);
+    expect(await frameRegionDifference(tempDir, originalPath, join(after.value.path, source.name), 5, {
+      left: 50, top: 50, width: 220, height: 60,
+    })).toBeGreaterThan(0.5);
+    await expectOverlayCleared(fs, assetId);
+  }, 120_000);
+
   it("records handles and defaults to the saved handle", async () => {
     const assetId = await createRealVideoAsset();
     await apply({ asset_id: assetId, handle: "alice", save_default: true, mode: "overlay" });
