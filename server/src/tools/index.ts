@@ -1,3 +1,4 @@
+import { coldOpenDefs } from "./cold-open.js";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { Engine } from "videobook-engine";
@@ -234,6 +235,7 @@ import { listChatModelsDef } from "../chat-models.js";
 
 export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
   return [
+    ...coldOpenDefs(engine),
     trimVideoDef(engine),
     trimAudioDef(engine),
     splitVideoDef(engine),

@@ -6,7 +6,7 @@ import { GENERATION_ACTIONS } from "./generation-registry.js";
  * dispatch paid cells on our behalf.
  */
 const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "analyze_video", "analyze_jokes", "suggest_cuts", "suggest_sfx", "apply_sfx",
+  "prepare_cold_open", "analyze_video", "analyze_jokes", "suggest_cuts", "suggest_sfx", "apply_sfx",
   "transcribe", "translate_subtitles", "isolate_vocals", "clean_video_audio",
   "make_cover_song", "extend_audio_asset", "rewrite_prompt", "rewrite_script",
   "describe_image", "analyze_image_subjects", "edit_image_subjects", "rename_all",

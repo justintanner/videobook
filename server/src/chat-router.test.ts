@@ -203,6 +203,7 @@ describe("chat routing catalog", () => {
     });
     expect(getRoutableTool(tools, "trim_video")?.autoApply).toBe(false);
     expect(getRoutableTool(tools, "split_video")?.autoApply).toBe(false);
+    expect(getRoutableTool(tools, "prepare_cold_open")).toMatchObject({ effect: "mutation", autoApply: false });
     expect(getRoutableTool(tools, "post")).toMatchObject({
       effect: "mutation",
       autoApply: false,
@@ -266,6 +267,7 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("Recent conversation:");
     expect(prompt).toContain("remaining/rest/remainder");
     expect(prompt).toContain("use extract_video_clip");
+    expect(prompt).toContain("use prepare_cold_open");
     expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
     expect(prompt).toContain("For splice_video:");
     expect(prompt).toContain('{"id","tool","params"}');

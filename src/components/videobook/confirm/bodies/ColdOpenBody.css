@@ -1,0 +1,34 @@
+.cold-open-review-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 1fr);
+  gap: 16px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.cold-open-review-body video {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: 300px;
+  object-fit: contain;
+  background: #111;
+}
+
+.cold-open-controls {
+  min-width: 0;
+  overflow: auto;
+}
+
+.cold-open-controls p { margin: 0 0 12px; }
+.cold-open-bounds, .cold-open-playback { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cold-open-bounds label { display: grid; gap: 4px; flex: 1; min-width: 90px; }
+.cold-open-bounds input { width: 100%; min-width: 0; }
+.cold-open-playback button { padding: 6px 10px; }
+
+@media (max-width: 600px) {
+  .cold-open-review-body { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .cold-open-review-body video { height: 150px; }
+  .cold-open-controls { overflow: visible; }
+}

@@ -128,6 +128,7 @@ function effectForTool(
   category: RoutableToolInfo["category"],
 ): Exclude<RoutableToolInfo["effect"], "view"> {
   if (category === "generation") return "generation";
+  if (name === "prepare_cold_open") return "mutation";
   if (
     READ_ONLY_TOOL_NAMES.has(name)
     || READ_ONLY_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix))
@@ -666,6 +667,7 @@ Parameter guidelines:
 - Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
 - For duplicate_asset, use asset_id for the source, pass an explicit empty grid address as destination without @, and omit destination when the copy should go directly below the source
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
+- When the user asks for a cold open or an exciting highlight before the full clip, use prepare_cold_open. The user reviews its range before edit_cold_open creates the copy. Never invent source hashes or request IDs.
 - When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
 - For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it

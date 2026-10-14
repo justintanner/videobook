@@ -247,6 +247,8 @@ export const VIDEO_EDITING_COMMANDS: Command[] = [
 ];
 
 export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
+  { tool: "prepare_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Select an AI highlight for review" },
+  { tool: "edit_cold_open", exposure: "composite", command: "/edit-cold-open", purpose: "Render a reviewed cold-open copy" },
   { tool: "trim_video", exposure: "direct", command: "/trim-video", purpose: "Keep or remove a time range from video" },
   { tool: "trim_audio", exposure: "direct", command: "/trim-audio", purpose: "Keep or remove a time range from audio" },
   { tool: "split_video", exposure: "composite", command: "/split", purpose: "Create and run two notebook split branches" },

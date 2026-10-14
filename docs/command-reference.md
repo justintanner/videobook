@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (338)
+## MCP endpoints (340)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -80,6 +80,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this book and include per-book byte/chunk reclamation in the report.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
+- `edit_cold_open` — Create a new cold-open video copy from a reviewed highlight: selected source range, hard cut, then the complete original clip. Requires a suggestion from prepare_cold_open and the user's reviewed start/end times. Preserves the source. Poll list_jobs for the output artifact and notebook cell.
 - `edit_image_subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
@@ -256,6 +257,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
+- `prepare_cold_open` — Select an exciting 2–5 second video highlight with AI for a cold-open copy. Start here when asked for a cold open: review and adjust the returned range before calling edit_cold_open. Returns a cached suggestion or an analysis job ID; read its result with list_jobs. Does not create a video copy.
 - `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
@@ -349,7 +351,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (409; 146 dedicated command routes)
+## Slash actions (410; 147 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -438,6 +440,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/download` — Download video from URL; MCP: `download_video`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
+- `/edit-cold-open` — Review an AI-selected highlight, then create a copy with the highlight followed by the full original clip; UI: `open_cold_open`
 - `/edit-image-subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image; MCP: `edit_image_subjects`
 - `/enqueue-notebook-run` — Revalidate and enqueue a persisted aggregate workbook plan; MCP: `enqueue_notebook_run`
 - `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`

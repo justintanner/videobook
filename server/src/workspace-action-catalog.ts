@@ -23,6 +23,8 @@ const uiActions = new Set<string>(UI_ACTION_IDS);
 const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 
 const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
+  prepare_cold_open: { actionId: "command.edit-cold-open", reason: "Selects a highlight in the cold-open review." },
+  edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {
     actionId: "command.goal",
     reason: "Goal mode defaults to portrait and Cinematic style. IG Influencer adds a hyper-realistic phone-shot style with content format, delivery, camera and light options, fixed after the frame. Review the plan and separately approve the frame, storyboards and videos; still versions remain selectable and revisable.",
@@ -81,7 +83,7 @@ function uiGroup(action: UiActionId): ActionGroup {
   if (/timeline|music_video|slot_player/u.test(action)) return "Sequence";
   if (/notebook/u.test(action)) return "Notebook";
   if (/speak|audio/u.test(action)) return "Audio";
-  if (/viewer|settings|watermark|crop|osg|skeleton/u.test(action)) return "Video";
+  if (/viewer|settings|watermark|cold_open|crop|osg|skeleton/u.test(action)) return "Video";
   if (/asset|clipboard|upload|rename/u.test(action)) return "Media";
   return "Workspace";
 }

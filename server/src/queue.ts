@@ -270,6 +270,7 @@ function jobTypeToAssetWorkKind(
     case "crop_video":
     case "crop_image":
       return { kind: "crop" };
+    case "edit_cold_open":
     case "splice_video":
     case "smooth_scene_concat":
       return { kind: "splice" };

@@ -1,3 +1,6 @@
+import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
+import { coldOpenRangeError } from '../server/src/cold-open-model'
+import { prepareColdOpenReview, renderColdOpenReview, type ColdOpenReview } from '@/videobook/cold-open-review'
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../server/src/image-edit-default'
 import { presentChat, reviewChat, type ChatExecution } from '@/videobook/chat-turns'
 import {
@@ -690,6 +693,7 @@ type PendingCommandPlan = {
 }
 
 type PendingChatAction =
+  | { kind: 'cold-open'; review: ColdOpenReview }
   | {
       kind: 'generation'
       draft: NotebookChatGenerationDraft
@@ -7830,6 +7834,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return initialXPostThreadReview({ steps, credits }, maxCharacters)
   }
 
+  const openColdOpenReview = (reference?: string, chat?: ChatExecution): ComposerOutcome => {
+    if (mcp.state !== 'ready' || !bookId || !notebook) return { ok: false, message: 'Open a connected notebook before making a cold open.' }
+    const normalized = reference?.replace(/^@/, '')
+    const mention = normalized ? commandMentionAssets.find(item => item.artifactId === normalized || item.cellAddress.toLowerCase() === normalized.toLowerCase()) : null
+    const assetId = mention?.artifactId ?? normalized ?? selectedNotebookCell?.outputArtifactId
+    const asset = assetId ? assetById.get(assetId) : null
+    if (!asset || !['video', 'final'].includes(asset.type) || !asset.mediaUrl) return { ok: false, message: 'Select a playable video or use /edit-cold-open @a1.' }
+    const mediaUrl = asset.mediaUrl
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
+    reviewChat(chat, false, () => setPendingWatermarkReview(null))
+    reviewChat(chat, true, () => setPendingChatAction({
+      kind: 'cold-open',
+      review: { bookId, notebookId: notebook.id, assetId: asset.artifactId,
+        label: mention ? `@${mention.cellAddress}` : asset.label ?? asset.id,
+        mediaUrl, requestId: uuidv7(), suggestion: null },
+    }))
+    setComposerDockOpen(true)
+    return applyReadyOutcome('Cold-open review opened')
+  }
+
   const previewRoutedChatAction = async (
     plan: ChatActionPlan,
     originalInput: string,
@@ -7843,6 +7867,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         assetId.startsWith('@') ? assetId : `@${assetId}`,
         commandMentionAssets,
       ))[0] ?? null
+    }
+    if (plan.tool === 'prepare_cold_open' || plan.tool === 'edit_cold_open') {
+      return openColdOpenReview(asString(plan.params.asset_id) ?? undefined, chat)
     }
     if (plan.tool === 'show_media_fullscreen') {
       const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
@@ -8359,6 +8386,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   ): Promise<ComposerOutcome> => {
     if (!pendingChatAction || !bookId) {
       return { ok: false, message: 'There is no pending chat action.' }
+    }
+    if (pendingChatAction.kind === 'cold-open') {
+      const review = pendingChatAction.review
+      const current = () => watchScopeRef.current.bookId === review.bookId
+        && watchScopeRef.current.notebookId === review.notebookId && (chat?.isCurrent() ?? true)
+      const coldCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean }) => call(tool, args, { ...options, chat })
+      if (!review.suggestion) {
+        const prepared = await prepareColdOpenReview(coldCall, review, current)
+        reviewChat(chat, true, () => setPendingChatAction({ kind: 'cold-open', review: prepared }))
+        return applyReadyOutcome('Adjust the highlight, then create the copy')
+      }
+      const output = await renderColdOpenReview(coldCall, review, current)
+      await refreshBookData(review.bookId, review.notebookId, current, chat)
+      if (!current()) return { ok: true, message: `Cold-open copy created as ${output.address}` }
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      selectCanvasCell(output.cellId)
+      collapseComposerAfterCellCreation(chat)
+      return { ok: true, message: `Cold-open copy created as ${output.address}` }
     }
     if (pendingChatAction.kind === 'generation') {
       return await applyPendingGenerationAction(pendingChatAction, promptOverride, chat)
@@ -9075,6 +9120,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           return { ok: false, message: action.message }
         }
         return await runSpeakGeneration(action.text, action.voiceId, chat)
+      }
+      if (command.uiAction === 'open_cold_open') {
+        const parsed = parseCommandArgs(resolvedRest, command.params)
+        return openColdOpenReview(asString(parsed.asset_ref) ?? undefined, chat)
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -9961,6 +10010,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       && (contextMenuVisualAsset.type === 'video'
         || contextMenuVisualAsset.type === 'final')
     ) {
+      contextMenuActions.push({ id: 'cold-open', label: 'Edit cold open', icon: 'split', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({
         id: 'download',
         label: 'Download video',
@@ -10113,6 +10163,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'library') {
       openMediaLibrary(contextMenuCell.id)
+      return
+    }
+    if (actionId === 'cold-open' && contextMenuVisualAsset) {
+      const result = openColdOpenReview(contextMenuVisualAsset.artifactId)
+      if (!result.ok) setNotice(result.message, 'error')
       return
     }
     if (actionId === 'download') {
@@ -10414,6 +10469,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onSelectSource={selectPendingGenerationSource}
             onSettingChange={updatePendingGenerationSetting}
           />
+        </ConfirmSheet>
+      )
+    }
+    if (pendingChatAction.kind === 'cold-open') {
+      const review = pendingChatAction.review
+      const selection = review.suggestion
+      return (
+        <ConfirmSheet
+          kind="cold-open"
+          ariaLabel="Cold-open review"
+          tag="COLD OPEN"
+          title="Highlight, then the full clip"
+          address={review.label}
+          effect={{ label: 'New video copy', tone: 'default' }}
+          validation={{ blocking: selection ? coldOpenRangeError(selection.startSeconds, selection.endSeconds, selection.durationSeconds) : null, notice: null }}
+          busy={busy}
+          busyLabel={selection ? 'Creating copy…' : 'Finding highlight…'}
+          applyLabel={selection ? 'Create copy' : 'Find highlight'}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <ColdOpenBody review={review} disabled={busy} onChange={(startSeconds, endSeconds) => setPendingChatAction(current =>
+            current?.kind === 'cold-open' && current.review.suggestion
+              ? { ...current, review: { ...current.review, requestId: uuidv7(), suggestion: { ...current.review.suggestion, startSeconds, endSeconds } } }
+              : current)} />
         </ConfirmSheet>
       )
     }

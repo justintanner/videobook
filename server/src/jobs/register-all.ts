@@ -1,3 +1,4 @@
+import { registerColdOpenJobs } from "./cold-open.js";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { bookManager } from "../engine.js";
@@ -173,6 +174,7 @@ export function registerAllJobHandlers(
   registerTrimAudioJob(engine);
   registerSplitVideoJob(engine);
   registerExtractVideoClipJob(engine);
+  registerColdOpenJobs(engine);
   registerEvenSplitJob(engine);
   registerPadVideoJob(engine);
   registerCropVideoJob(engine);
