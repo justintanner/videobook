@@ -5212,7 +5212,7 @@ describe('chat composer browser flow', () => {
       return document.activeElement?.getAttribute('aria-label')
     })).toBe('Add cell')
     await page.keyboard.press('Tab')
-    expect(await page.getByLabel('Auto-arrange notebook')
+    expect(await page.getByLabel('Add image', { exact: true })
       .evaluate((element) => document.activeElement === element)).toBe(true)
 
     await trigger.click()
@@ -5230,7 +5230,7 @@ describe('chat composer browser flow', () => {
     await search.press('Tab')
     await page.keyboard.press('Tab')
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
-    expect(await page.getByLabel('Auto-arrange notebook')
+    expect(await page.getByLabel('Add image', { exact: true })
       .evaluate((element) => document.activeElement === element)).toBe(true)
   }, 60_000)
 
@@ -5255,6 +5255,33 @@ describe('chat composer browser flow', () => {
     await expect.poll(() => observedCalls.some((call) =>
       call.name === 'create_notebook_cell'
       && record(call.arguments.cell)?.type === 'generate_audio'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+    notebookDirty = true
+  }, 60_000)
+
+  it('adds image and video cells from toolbar shortcuts straight into the docked library', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await openApp()
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled(), {
+      timeout: MCP_ROUNDTRIP_MS,
+    }).toBe(true)
+
+    for (const kind of ['image', 'video'] as const) {
+      observedCalls.length = 0
+      await page.getByLabel(`Add ${kind}`, { exact: true }).click()
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'create_notebook_cell'
+        && record(call.arguments.cell)?.type === kind), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      const library = page.getByRole('region', { name: `Choose ${kind} media` })
+      await library.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      await expect.poll(() => observedCalls.some((call) =>
+        call.name === 'search_library_assets'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      const search = library.getByLabel('Search library', { exact: true })
+      await expect.poll(() => search.evaluate((element) => document.activeElement === element)).toBe(true)
+      await search.press('Escape')
+      await library.waitFor({ state: 'hidden' })
+    }
     notebookDirty = true
   }, 60_000)
 

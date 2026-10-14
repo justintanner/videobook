@@ -1,4 +1,4 @@
-import { Ellipsis, LayoutGrid, Trash2, X } from 'lucide-react'
+import { Ellipsis, Image, LayoutGrid, Trash2, Video, X } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 
@@ -33,6 +33,28 @@ export function NotebookToolbar({
     <div className="canvas-toolbar" data-composer-focus="return" role="group" aria-label="Notebook canvas controls">
       <div className="canvas-primary-actions" role="group" aria-label="Notebook editing tools">
         <NotebookCellAddMenu disabled={busy} onAdd={onAdd} onDragEnd={onAddDragEnd} />
+        <button
+          type="button"
+          className="canvas-auto-arrange canvas-quick-add"
+          title="Add an image cell and pick from recent media"
+          aria-label="Add image"
+          disabled={busy}
+          onClick={() => void onAdd('image')}
+        >
+          <Image size={15} />
+          <span>Image</span>
+        </button>
+        <button
+          type="button"
+          className="canvas-auto-arrange canvas-quick-add"
+          title="Add a video cell and pick from recent media"
+          aria-label="Add video"
+          disabled={busy}
+          onClick={() => void onAdd('video')}
+        >
+          <Video size={15} />
+          <span>Video</span>
+        </button>
         <button
           type="button"
           className="canvas-auto-arrange"

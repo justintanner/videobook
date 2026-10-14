@@ -786,7 +786,7 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Escape')
     await focused(add)
     await page.keyboard.press('Tab')
-    await focused(page.getByLabel('Auto-arrange notebook'))
+    await focused(page.getByLabel('Add image', { exact: true }))
     const blank = await blankToolbarPosition()
     for (let index = 0; index < 12; index += 1) {
       await toolbar().click({ position: blank })
