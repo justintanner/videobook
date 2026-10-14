@@ -30,7 +30,6 @@ import { useVoicePreviewPlayer } from '@/videobook/voice-preview-player'
 import { persistSpeakVoiceId } from '@/videobook/speak-preview'
 import type { ElevenLabsVoicesState } from '@/videobook/use-elevenlabs-voices'
 import { recordValue } from '@/videobook/value-decoders'
-import { ProviderTaskLink } from '@/components/videobook/ProviderTaskLink'
 
 const emptyDoltArtifactAssets: DoltArtifactAssets = new Map()
 import {
@@ -316,9 +315,6 @@ export function GenerationBody({
               ))}
             </select>
           </label>
-          {(draft.action.provider === 'kie' || draft.action.provider === 'fal') && (
-            <ProviderTaskLink task={{ provider: draft.action.provider, model: draft.action.model, taskId: null }} />
-          )}
           {modes.length > 1 && (
             <label>
               <span className="confirm-section-label">Type</span>

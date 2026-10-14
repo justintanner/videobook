@@ -334,7 +334,7 @@ describe('drawn region image editor through real MCP', () => {
     }
   }, 60_000)
 
-  it('reopens an image edit with its model, editable prompt, and provider status links', async () => {
+  it('reopens an image edit with its model and editable prompt, keeping provider links on the failed output', async () => {
     await pauseBookQueueForTests(bookId)
     const book = books.get(bookId)
     if (!book.ok) throw new Error(book.error.message)
@@ -370,13 +370,10 @@ describe('drawn region image editor through real MCP', () => {
       expect(await page.getByText('This model does not accept the current inputs.', { exact: false }).count()).toBe(0)
       await editor.getByRole('textbox', { name: 'Prompt', exact: true }).fill('A spider portal behind the person')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('A spider portal behind the person')
-      const link = editor.getByRole('link', { name: 'fal requests' })
-      expect(await link.getAttribute('href')).toBe('https://fal.ai/models/fal-ai/nano-banana-pro/edit/requests')
-      expect(await link.getAttribute('target')).toBe('_blank')
-      expect(await link.getAttribute('rel')).toContain('noopener')
+      expect(await editor.getByRole('link', { name: 'fal requests' }).count()).toBe(0)
       await editor.getByLabel('Generation model').selectOption('image-edit.seedream/5-pro-image-to-image')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('seedream/5-pro-image-to-image')
-      expect(await editor.getByRole('link', { name: 'Kie logs' }).getAttribute('href')).toBe('https://kie.ai/logs')
+      expect(await editor.getByRole('link', { name: 'Kie logs' }).count()).toBe(0)
       await editor.getByLabel('Generation model').selectOption('image-edit.fal-ai/nano-banana-pro/edit')
       await expect.poll(() => payload.textContent(), { timeout: 15_000 }).toContain('fal-ai/nano-banana-pro/edit')
       await page.screenshot({ path: '/tmp/videobook-image-edit-inspector.png' })
@@ -395,6 +392,8 @@ describe('drawn region image editor through real MCP', () => {
       const failedLink = failedOutput.getByRole('link', { name: 'fal requests' })
       await failedLink.waitFor({ state: 'visible' })
       expect(await failedLink.getAttribute('href')).toBe('https://fal.ai/models/fal-ai/nano-banana-pro/edit/requests')
+      expect(await failedLink.getAttribute('target')).toBe('_blank')
+      expect(await failedLink.getAttribute('rel')).toContain('noopener')
       expect(await failedOutput.locator('.provider-task-link').textContent()).toContain(providerTaskId)
       await page.screenshot({ path: '/tmp/videobook-failed-output-status-link.png' })
       await page.getByLabel('Open Jobs').click()
