@@ -174,7 +174,7 @@ describe.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('HEIC temporary reve
     ])('prepares $filename through $surface without MIME metadata and releases it on $release', async ({ surface, filename, release }) => {
       await page.locator(`.react-flow__node[data-id="${cellId}"] .cell-node`).click({ button: 'right' })
       await page.getByRole('menuitem', { name: 'Choose media' }).click()
-      const library = page.getByRole('dialog', { name: 'Choose image media' })
+      const library = page.getByRole('region', { name: 'Choose image media' })
       await library.getByRole('tab', { name: 'Image reverse' }).click()
       const reference = library.locator('.reverse-search-reference')
       expect(await reference.locator('input[type="file"]').getAttribute('accept')).toContain('.heic,.heif')
@@ -213,7 +213,8 @@ describe.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('HEIC temporary reve
         await expect.poll(() => reference.locator('img').count(), { timeout }).toBe(0)
         await expect.poll(async () => (await fetch(`${serverUrl}${descriptor.preview_url}`)).status, { timeout }).toBe(404)
       }
-      await library.getByLabel('Close media library').click()
+      await library.getByRole('tab', { name: 'Image reverse' }).press('Escape')
+      await library.waitFor({ state: 'hidden' })
       await expect.poll(async () => (await fetch(`${serverUrl}${descriptor.preview_url}`)).status, { timeout }).toBe(404)
       await expect(call('search_library_assets', { kinds: ['image'], reference_id: descriptor.reference_id })).rejects.toThrow('expired or was released')
     }, 120_000)

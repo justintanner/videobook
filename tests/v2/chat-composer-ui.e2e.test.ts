@@ -1667,7 +1667,7 @@ describe('chat composer browser flow', () => {
       const squares = [...element.querySelectorAll('.notebook-grid-square')].slice(0, 8)
       const squareBounds = squares.map(square => square.getBoundingClientRect())
       const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
-      const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-upload strong, .cell-media-slot-upload span, .cell-media-slot-library')]
+      const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
       const prompts = [...element.querySelectorAll('.cell-copy-text p')]
       return {
         zoom,
@@ -4691,7 +4691,7 @@ describe('chat composer browser flow', () => {
     await history.waitFor({ state: 'hidden' })
   }, 60_000)
 
-  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('repairs missing Similar coverage through the Library dialog and finds the source', async () => {
+  it.runIf(process.env.VIDEOBOOK_RUN_MODEL_E2E === '1')('repairs missing Similar coverage through the docked Library and finds the source', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const client = new Client({ name: 'search-repair-ui', version: '1.0.0' }, {
       capabilities: {}, supportedProtocolVersions: ['2026-07-28'],
@@ -4711,7 +4711,7 @@ describe('chat composer browser flow', () => {
     await target.waitFor({ state: 'visible' })
     await target.click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Choose media' }).click()
-    const library = page.getByRole('dialog', { name: 'Choose image media' })
+    const library = page.getByRole('region', { name: 'Choose image media' })
     await library.waitFor({ state: 'visible' })
     const repair = library.getByRole('button', { name: 'Index missing media' })
     await repair.waitFor({ state: 'visible', timeout: 30_000 })
@@ -4728,7 +4728,8 @@ describe('chat composer browser flow', () => {
     expect(await library.locator('.media-library-asset').count()).toBeGreaterThan(0)
     expect(await library.locator('.media-library-asset').first().locator('img').getAttribute('src')).toContain(`/${assetId}/`)
     if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
-    await page.getByLabel('Close media library').click()
+    await library.getByLabel('Search library', { exact: true }).press('Escape')
+    await library.waitFor({ state: 'hidden' })
   })
 
   it('opens a complete context menu from every cell tile with delete last', async () => {
@@ -5001,9 +5002,9 @@ describe('chat composer browser flow', () => {
       'Delete cell',
     ])
     await emptyMediaMenu.getByRole('menuitem', { name: 'Choose media' }).click()
-    const mediaLibrary = page.getByRole('dialog', { name: 'Choose image media' })
+    const mediaLibrary = page.getByRole('region', { name: 'Choose image media' })
     await mediaLibrary.waitFor({ state: 'visible' })
-    await page.getByLabel('Close media library').click()
+    await mediaLibrary.getByLabel('Search library', { exact: true }).press('Escape')
     await mediaLibrary.waitFor({ state: 'hidden' })
 
     const runningTarget = notebookCellNode(page, generationCellId)

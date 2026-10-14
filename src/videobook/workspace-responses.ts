@@ -65,6 +65,7 @@ export type LibraryAssetRecord = AssetRecord & {
   errorMessage: string | null
   owningBookId: string
   owningBookName: string
+  lastUsedAt: string | null
 }
 
 type LibrarySearchResult = LibraryBrowseResult<LibraryAssetRecord> & {
@@ -631,8 +632,9 @@ export function asLibrarySearchResult(
       const work = recordValue(item?.assetWork)
       const workMeta = recordValue(work?.meta)
       const errorMessage = asString(recordValue(workMeta?.error)?.message)
+      const lastUsedAt = (item && asString(item.last_used_at)) ?? null
       return owningBookId && owningBookName
-        ? [{ ...asset, owningBookId, owningBookName, errorMessage }]
+        ? [{ ...asset, owningBookId, owningBookName, errorMessage, lastUsedAt }]
         : []
     }),
     page: {

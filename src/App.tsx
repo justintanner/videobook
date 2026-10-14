@@ -39,19 +39,15 @@ import {
   BookOpen,
   Braces,
   Code,
-  Film,
   History,
-  Image,
   Library,
   Mic,
   Plus,
-  Search,
   Settings,
   Sparkles,
   Square,
   Undo2,
   Upload,
-  X,
 } from 'lucide-react'
 import { v7 as uuidv7 } from 'uuid'
 import type {
@@ -88,7 +84,6 @@ import {
   type TagFilterTerm,
   type TagSuggestion,
 } from './videobook/asset-tag-editing'
-import { AssetTagSummary } from '@/components/videobook/AssetTagSummary'
 import { LibraryScreen } from '@/components/videobook/LibraryScreen'
 import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
@@ -116,7 +111,6 @@ import {
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
 import { composerReferences } from '@/videobook/composer-references'
-import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { JobsScreen } from '@/components/videobook/JobsScreen'
 import {
@@ -135,14 +129,13 @@ import {
   type CellGenerationAttempt,
   type NotebookCellInspectorAsset,
 } from '@/components/videobook/NotebookCellInspector'
-import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
+import { MediaLibraryPanel, type MediaLibraryPanelState } from '@/components/videobook/MediaLibraryPanel'
 import {
   GenerationBody,
   type GenerationReviewSource,
 } from '@/components/videobook/confirm/bodies/GenerationBody'
 import { usePromptHistory } from '@/videobook/use-prompt-history'
 import { generationPromptSurface } from '../server/src/prompt-surfaces'
-import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import {
   NotebookMediaFullscreen,
   type ImageReplacementCandidate,
@@ -430,6 +423,7 @@ import {
 } from '@/videobook/notebook-lane-policy'
 import {
   mediaKindForFile,
+  mediaFileAccept,
   type PassiveMediaKind,
   passiveMediaKind,
   dataTransferHasFiles,
@@ -451,10 +445,6 @@ import {
   type ChainRunValue,
   type ChainStepReviewValue,
 } from '@/videobook/chat-action-review'
-import {
-  handleModalDialogKeyDown,
-  shouldDismissModalDialogFromBackdrop,
-} from '@/videobook/modal-dialog-interactions'
 import { nextHistorySequence } from '@/videobook/history-sequence'
 import {
   beginMcpCall,
@@ -674,14 +664,6 @@ type MediaLibraryPickerState = {
   /** Exact tag terms narrowing this search; changing them resets paging. */
   tagFilters: TagFilterTerm[]
   tagSuggestions: TagSuggestion[]
-}
-
-type MediaLibraryDialogState = MediaLibraryPickerState & {
-  mode: MediaSearchMode
-  reference: SearchReferenceDescriptor | null
-  referenceStartSeconds: string
-  referenceDurationSeconds: string
-  preparingReference: boolean
 }
 
 type MediaLibrarySearchCriteria = {
@@ -1209,337 +1191,6 @@ async function fileObjectHash(file: File): Promise<string> {
 
 function slotContextMenuId(slot: NotebookGridSlot): string {
   return `slot-context-menu-${slot.row}-${slot.column}`
-}
-
-function MediaLibraryDialog({
-  state,
-  kind,
-  targetBookId,
-  onClose,
-  onMode,
-  onDraftQuery,
-  onSearch,
-  onLoadMore,
-  onAttach,
-  onReferenceFile,
-  onClearReference,
-  onReferenceStart,
-  onReferenceDuration,
-  onSimilar,
-  onRepairIndexes,
-  onToggleTagFilter,
-  onClearTagFilters,
-  onTagQuery,
-}: {
-  state: MediaLibraryDialogState
-  kind: PassiveMediaKind
-  targetBookId: string
-  onClose: () => void
-  onMode: (mode: MediaSearchMode) => void
-  onDraftQuery: (query: string) => void
-  onSearch: () => void
-  onLoadMore: () => void
-  onAttach: (asset: LibraryAssetRecord) => void
-  onReferenceFile: (file: File) => void
-  onClearReference: () => void
-  onReferenceStart: (value: string) => void
-  onReferenceDuration: (value: string) => void
-  onSimilar: (asset: LibraryAssetRecord) => void
-  onRepairIndexes: () => void
-  onToggleTagFilter: (term: TagFilterTerm) => void
-  onClearTagFilters: () => void
-  onTagQuery: (prefix: string) => void
-}) {
-  const dialogRef = useRef<HTMLElement | null>(null)
-  const busy = state.activeArtifactId !== null || state.preparingReference
-  const searchModes: Array<{
-    id: MediaSearchMode
-    label: string
-    icon: typeof Search
-  }> = [
-    { id: 'text', label: 'Text', icon: Search },
-    { id: 'image-reverse', label: 'Image reverse', icon: Image },
-    { id: 'video-reverse', label: 'Vid reverse', icon: Film },
-  ]
-
-  return (
-    <div
-      className="media-library-backdrop"
-      onMouseDown={(event) => {
-        if (shouldDismissModalDialogFromBackdrop(
-          event.currentTarget,
-          event.target,
-          busy,
-        )) onClose()
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="media-library-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="media-library-title"
-        aria-describedby="media-library-description"
-        onKeyDown={(event) => handleModalDialogKeyDown(event, {
-          busy,
-          container: dialogRef.current,
-          onClose,
-        })}
-      >
-        <header>
-          <div>
-            <span>ALL BOOKS</span>
-            <h2 id="media-library-title">Choose {kind} media</h2>
-            <p id="media-library-description">
-              Recent compatible assets appear first. Assets from another book are copied safely.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="media-library-close"
-            aria-label="Close media library"
-            data-composer-focus="return"
-            disabled={busy}
-            onClick={onClose}
-          >
-            <X size={17} />
-          </button>
-        </header>
-        <div className="media-library-modes" role="tablist" aria-label="Search mode">
-          {searchModes.map((item) => {
-            const Icon = item.icon
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={state.mode === item.id}
-                className={state.mode === item.id ? 'active' : ''}
-                disabled={busy}
-                onClick={() => onMode(item.id)}
-              >
-                <Icon size={14} />{item.label}
-              </button>
-            )
-          })}
-        </div>
-        <div className="media-library-search-panel">
-          {state.mode === 'text' ? (
-            <form
-              className="media-library-search"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!busy) onSearch()
-              }}
-            >
-              <label htmlFor="media-library-query">Search library</label>
-              <div>
-                <input
-                  id="media-library-query"
-                  type="search"
-                  value={state.draftQuery}
-                  placeholder={`Search ${kind} assets`}
-                  autoFocus
-                  disabled={busy}
-                  onChange={(event) => onDraftQuery(event.target.value)}
-                />
-                <button type="submit" disabled={busy || state.loading}>
-                  <Search size={14} />Search
-                </button>
-              </div>
-            </form>
-          ) : (
-            <ReverseSearchReference
-              mode={state.mode}
-              reference={state.reference}
-              preparing={state.preparingReference}
-              disabled={state.activeArtifactId !== null}
-              startSeconds={state.referenceStartSeconds}
-              durationSeconds={state.referenceDurationSeconds}
-              onFile={onReferenceFile}
-              onClear={onClearReference}
-              onStartSeconds={onReferenceStart}
-              onDurationSeconds={onReferenceDuration}
-            >
-              <p className="media-library-similar-hint">
-                Or choose Similar on an existing visual asset below. Reverse search spans all books.
-              </p>
-            </ReverseSearchReference>
-          )}
-          {state.mode !== 'text' && state.reference && (
-            <button
-              type="button"
-              className="media-library-reverse-submit"
-              disabled={busy || state.loading}
-              onClick={onSearch}
-            >
-              <Search size={14} />Search similar media
-            </button>
-          )}
-        </div>
-        <div className="media-library-tag-filters">
-          <label className="media-library-tag-input-label">
-            <span className="sr-only">Filter by tag</span>
-            <input
-              className="media-library-tag-input"
-              list="media-library-tag-suggestions"
-              placeholder="Filter by tag"
-              aria-label="Filter by tag"
-              autoComplete="off"
-              onChange={(event) => onTagQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return
-                event.preventDefault()
-                const typed = event.currentTarget.value.trim()
-                if (!typed) return
-                const match = state.tagSuggestions.find((suggestion) =>
-                  suggestion.label.toLowerCase() === typed.toLowerCase())
-                if (!match) return
-                onToggleTagFilter({
-                  facet: match.facet,
-                  key: match.key,
-                  label: match.label,
-                })
-                event.currentTarget.value = ''
-              }}
-            />
-          </label>
-          <datalist id="media-library-tag-suggestions">
-            {state.tagSuggestions.map((suggestion) => (
-              <option
-                key={`${suggestion.facet}/${suggestion.key}`}
-                value={suggestion.label}
-              >
-                {`${suggestion.facet} · ${suggestion.assets}`}
-              </option>
-            ))}
-          </datalist>
-          {state.tagFilters.map((term) => (
-            <button
-              type="button"
-              key={`${term.facet}/${term.key}`}
-              className="media-library-tag-filter"
-              aria-label={`Remove tag filter ${term.label}`}
-              onClick={() => onToggleTagFilter(term)}
-            >
-              {term.label}
-              <X size={11} />
-            </button>
-          ))}
-          {state.tagFilters.length > 0 && (
-            <button
-              type="button"
-              className="media-library-tag-clear"
-              onClick={onClearTagFilters}
-            >
-              Clear tags
-            </button>
-          )}
-        </div>
-        <div className="media-library-results" aria-busy={state.loading || state.loadingMore}>
-          {state.error && <p className="media-library-error" role="alert">{state.error}</p>}
-          {state.unindexedVisualAssets > 0 && (
-            <div className="media-library-warning" role="status">
-              {state.unindexedVisualAssets} media {state.unindexedVisualAssets === 1 ? 'asset is' : 'assets are'} missing from Similar search.
-              {' '}
-              <button type="button" disabled={busy || state.loading || state.preparingIndex} onClick={onRepairIndexes}>
-                {state.preparingIndex ? 'Indexing…' : 'Index missing media'}
-              </button>
-            </div>
-          )}
-          {state.booksWithErrors.length > 0 && (
-            <p className="media-library-warning" role="status">
-              {state.booksWithErrors.length} book
-              {state.booksWithErrors.length === 1 ? '' : 's'} could not be searched.
-            </p>
-          )}
-          {state.loading && state.assets.length === 0 ? (
-            <div className="media-library-loading">
-              <BusyIndicator size={24} />{state.preparingIndex ? 'Preparing search…' : 'Loading recent media…'}
-            </div>
-          ) : state.assets.length === 0 ? (
-            <div className="media-library-empty">
-              <Library size={24} />
-              <strong>No compatible media found</strong>
-              <span>
-                {state.tagFilters.length > 0
-                  ? 'No media carries every selected tag. Clear a tag or try another search.'
-                  : 'Try another search or upload a file directly into the slot.'}
-              </span>
-            </div>
-          ) : (
-            <div className="media-library-grid">
-              {state.assets.map((asset) => {
-                const active = state.activeArtifactId === asset.artifactId
-                const label = asset.label.trim() || 'Untitled media'
-                return (
-                  <article
-                    key={`${asset.owningBookId}:${asset.artifactId}`}
-                    className="media-library-asset"
-                  >
-                    <MediaLibraryAssetPreview asset={asset} />
-                    <AssetTagSummary
-                      tags={asset.tags}
-                      onFilter={onToggleTagFilter}
-                      activeTerms={state.tagFilters}
-                    />
-                    <span className="media-library-asset-copy">
-                      <strong>{label}</strong>
-                      <small>
-                        {asset.owningBookName}
-                        {asset.owningBookId === targetBookId ? ' · this book' : ' · copy'}
-                      </small>
-                    </span>
-                    {active && (
-                      <span className="media-library-asset-busy">
-                        <BusyIndicator size={16} />Attaching…
-                      </span>
-                    )}
-                    <span className="media-library-asset-actions">
-                      {(asset.type === 'image'
-                        || asset.type === 'video'
-                        || asset.type === 'final') && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onSimilar(asset)}
-                        >
-                          <Search size={13} />Similar
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        aria-label={`Use ${label} from ${asset.owningBookName}`}
-                        onClick={() => onAttach(asset)}
-                      >
-                        Use
-                      </button>
-                    </span>
-                  </article>
-                )
-              })}
-            </div>
-          )}
-        </div>
-        <footer>
-          <span>
-            {state.assets.length} of {state.page.total} compatible assets
-          </span>
-          {state.page.hasMore && (
-            <button
-              type="button"
-              disabled={busy || state.loadingMore}
-              onClick={onLoadMore}
-            >
-              {state.loadingMore ? <BusyIndicator size={14} /> : <Plus size={14} />}
-              {state.preparingIndex ? 'Preparing search…' : state.loadingMore ? 'Loading…' : 'Load more'}
-            </button>
-          )}
-        </footer>
-      </section>
-    </div>
-  )
 }
 
 type TimelinePreviewSession = {
@@ -4781,13 +4432,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             : {}),
         },
       }))
-      await refreshBookData(bookId, notebook.id)
+      const updatedNotebook = await refreshBookData(bookId, notebook.id)
       rememberLastWorkSlot(slot)
       if (type === 'timeline' && typeof created?.id === 'string') {
         selectCanvasCell(created.id)
         requestAnimationFrame(() => document.querySelector(`[data-id="${created.id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
       }
-      collapseComposerAfterCellCreation()
+      if (passiveMediaKind(type) && typeof created?.id === 'string') {
+        openMediaLibrary(created.id, updatedNotebook)
+      } else {
+        collapseComposerAfterCellCreation()
+      }
       setNotice(`Added ${notebookGridTag(slot)} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -5342,9 +4997,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     append: boolean,
     criteria?: MediaLibrarySearchCriteria,
     tagFilters?: readonly TagFilterTerm[],
+    knownKind?: PassiveMediaKind,
   ) => {
     const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
-    const kind = cell && passiveMediaKind(cell.type)
+    const kind = knownKind ?? (cell && passiveMediaKind(cell.type))
     if (!kind) return
     const activeCriteria = criteria
       ?? (mediaLibraryPicker?.cellId === cellId
@@ -5462,16 +5118,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const openMediaLibrary = (cellId: string) => {
-    if (!notebook || mcp.state !== 'ready') return
-    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
-    const kind = cell && passiveMediaKind(cell.type)
+  const emptyMediaSlotKind = (
+    cellId: string,
+    currentNotebook: NotebookDocument | null | undefined = notebook,
+  ): PassiveMediaKind | null => {
+    const cell = currentNotebook?.cells.find((candidate) => candidate.id === cellId)
+    const kind = cell ? passiveMediaKind(cell.type) : null
     if (
       !cell
       || !kind
       || cell.outputArtifactId
-      || notebook.edges.some((edge) => edge.target === cellId)
-    ) return
+      || currentNotebook?.edges.some((edge) => edge.target === cellId)
+    ) return null
+    return kind
+  }
+
+  const openMediaLibrary = (
+    cellId: string,
+    currentNotebook: NotebookDocument | null | undefined = notebook,
+  ) => {
+    if (!currentNotebook || mcp.state !== 'ready') return
+    const kind = emptyMediaSlotKind(cellId, currentNotebook)
+    if (!kind) return
+    if (selectedCellIdsRef.current.size !== 1 || !selectedCellIdsRef.current.has(cellId)) {
+      selectCanvasCell(cellId)
+    }
+    setSourceViewCellId(null)
+    setHistoryViewCellId(null)
+    setComposerDockOpen(true)
     mediaLibraryOpenerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
@@ -5498,7 +5172,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       reference: null,
       referenceStartSeconds: '0',
       referenceDurationSeconds: '',
-    })
+    }, [], kind)
+  }
+
+  const dismissMediaLibrary = () => {
+    closeMediaLibrary()
+    setComposerDockOpen(false)
   }
 
   const attachLibraryAsset = async (asset: LibraryAssetRecord) => {
@@ -9462,7 +9141,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (tool === 'forget_asset') {
       const target = assets.find((asset) => asset.artifactId === values.asset_id)
       if (!target) throw new Error('Choose media from the current project.')
-      const result = await forgetAsset({ ...target, errorMessage: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)
+      const result = await forgetAsset({ ...target, errorMessage: null, lastUsedAt: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)
       if (!result.ok) throw new Error(result.message)
       setActionDialog(null)
       return { message: result.message }
@@ -9854,9 +9533,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryKind = mediaLibraryCell
     ? passiveMediaKind(mediaLibraryCell.type)
     : null
-  const mediaLibraryDialogState: MediaLibraryDialogState | null = mediaLibraryPicker
+  const mediaLibraryPanelState: MediaLibraryPanelState | null = mediaLibraryPicker
     ? {
         ...mediaLibraryPicker,
+        uploading: mediaSlotStates[mediaLibraryPicker.cellId]?.operation === 'upload',
         mode: mediaLibraryReference.state.mode,
         reference: mediaLibraryReference.state.reference,
         referenceStartSeconds: mediaLibraryReference.state.startSeconds,
@@ -10088,6 +9768,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const openCellInspector = (cellId: string) => {
+    if (emptyMediaSlotKind(cellId) && mcp.state === 'ready') {
+      openMediaLibrary(cellId)
+      return
+    }
     selectCanvasCell(cellId)
     setSourceViewCellId(null)
     setHistoryViewCellId(null)
@@ -10992,6 +10676,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cell) void deleteNotebookCells([cell])
     },
   }
+  const selectedMediaLibraryState = mediaLibraryPanelState
+    && selectedNotebookCell?.id === mediaLibraryPanelState.cellId
+    && !selectedNotebookCell.outputArtifactId
+    ? mediaLibraryPanelState
+    : null
   const selectedGoal = selectedNotebookCell?.type === 'goal' ? goalTiles.get(selectedNotebookCell.id) ?? null : null
   const goalDockContent = !timelinePreviewOpen && selectedNotebookCell?.type === 'goal' ? (
     selectedGoal ? (
@@ -11110,71 +10799,96 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         </div>
       </header>
-      <NotebookCellInspector
-        key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
-        headerActionHost={inspectorActionHost}
-        notebookId={notebook?.id ?? ''}
-        bookId={bookId}
-        assetTools={mcp.state === 'ready' ? call : undefined}
-        cell={selectedNotebookCell}
-        cells={notebook?.cells ?? []}
-        edges={notebook?.edges ?? []}
-        asset={selectedCell.data.asset}
-        cellAssets={notebookCellAssets}
-        versionAssets={selectedCellVersionAssets}
-        status={selectedCell.data.status}
-        error={selectedCellError}
-        queuedCellIds={queuedCellIds}
-        runErrors={cellRunErrors}
-        jobs={inspectorJobViews}
-        onCancelJob={cancelJob}
-        generationActions={generationActions}
-        mentionAssets={commandMentionAssets}
-        voiceCatalog={elevenLabsVoices}
-        busy={busy || Boolean(selectedMediaSlotState?.operation)}
-        deleting={deletingCellIds.has(selectedNotebookCell.id)}
-        sourceVisible={sourceViewCellId === selectedNotebookCell.id}
-        historyVisible={
-          historyViewCellId === selectedNotebookCell.id
-        }
-        history={
-          historyState
-          && historyState.cellId === selectedNotebookCell.id
-          && historyState.assetId === selectedNotebookCell.outputArtifactId
-            ? {
-                revisions: historyState.revisions,
-                loading: historyState.loading,
-                error: historyState.error,
-              }
-            : historyViewCellId === selectedNotebookCell.id
-              || (sourceViewCellId === selectedNotebookCell.id
-                && selectedNotebookCell.outputArtifactId)
+      {selectedMediaLibraryState && mediaLibraryKind ? (
+        <MediaLibraryPanel
+          state={selectedMediaLibraryState}
+          kind={mediaLibraryKind}
+          accept={mediaFileAccept[mediaLibraryKind]}
+          targetBookId={bookId}
+          onClose={dismissMediaLibrary}
+          onMode={changeMediaLibraryMode}
+          onDraftQuery={updateMediaLibraryDraft}
+          onSearch={searchMediaLibrary}
+          onLoadMore={loadMoreMediaLibrary}
+          onAttach={(asset) => void attachLibraryAsset(asset)}
+          onUpload={(file) => void uploadMediaSlotFile(selectedMediaLibraryState.cellId, file)}
+          onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
+          onClearReference={clearMediaLibraryReference}
+          onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
+          onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
+          onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
+          onRepairIndexes={() => void repairMediaLibraryIndexes()}
+          onToggleTagFilter={toggleMediaLibraryTagFilter}
+          onClearTagFilters={clearMediaLibraryTagFilters}
+          onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
+        />
+      ) : (
+        <NotebookCellInspector
+          key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
+          headerActionHost={inspectorActionHost}
+          notebookId={notebook?.id ?? ''}
+          bookId={bookId}
+          assetTools={mcp.state === 'ready' ? call : undefined}
+          cell={selectedNotebookCell}
+          cells={notebook?.cells ?? []}
+          edges={notebook?.edges ?? []}
+          asset={selectedCell.data.asset}
+          cellAssets={notebookCellAssets}
+          versionAssets={selectedCellVersionAssets}
+          status={selectedCell.data.status}
+          error={selectedCellError}
+          queuedCellIds={queuedCellIds}
+          runErrors={cellRunErrors}
+          jobs={inspectorJobViews}
+          onCancelJob={cancelJob}
+          generationActions={generationActions}
+          mentionAssets={commandMentionAssets}
+          voiceCatalog={elevenLabsVoices}
+          busy={busy || Boolean(selectedMediaSlotState?.operation)}
+          deleting={deletingCellIds.has(selectedNotebookCell.id)}
+          sourceVisible={sourceViewCellId === selectedNotebookCell.id}
+          historyVisible={
+            historyViewCellId === selectedNotebookCell.id
+          }
+          history={
+            historyState
+            && historyState.cellId === selectedNotebookCell.id
+            && historyState.assetId === selectedNotebookCell.outputArtifactId
               ? {
-                  revisions: [],
-                  loading: true,
-                  error: null,
+                  revisions: historyState.revisions,
+                  loading: historyState.loading,
+                  error: historyState.error,
                 }
-              : undefined
-        }
-        onUpdate={updateCell}
-        onSetInput={setSelectedCellInput}
-        onRun={runCell}
-        onDelete={deleteSelectedCell}
-        onOpenFullscreen={(asset, mode) => {
-          openMediaFullscreen(selectedNotebookCell, asset, undefined, mode)
-        }}
-        onPreviewPayload={previewGenerationPayload}
-        initialGenerationPreview={generationCellPreview?.cellId === selectedNotebookCell.id
-          ? generationCellPreview
-          : undefined}
-        onSelectSource={selectCanvasCell}
-        onLoadGenerationPayload={loadGenerationPayload}
-        onInspectGenerationRequest={inspectGenerationRequest}
-        mediaInsightWork={mediaInsightWork}
-        onTranscribeAsset={transcribeAsset}
-        onLoadTranscriptJson={loadTranscriptJson}
-        onDownloadTranscriptSrt={exportTranscriptSrt}
-      />
+              : historyViewCellId === selectedNotebookCell.id
+                || (sourceViewCellId === selectedNotebookCell.id
+                  && selectedNotebookCell.outputArtifactId)
+                ? {
+                    revisions: [],
+                    loading: true,
+                    error: null,
+                  }
+                : undefined
+          }
+          onUpdate={updateCell}
+          onSetInput={setSelectedCellInput}
+          onRun={runCell}
+          onDelete={deleteSelectedCell}
+          onOpenFullscreen={(asset, mode) => {
+            openMediaFullscreen(selectedNotebookCell, asset, undefined, mode)
+          }}
+          onPreviewPayload={previewGenerationPayload}
+          initialGenerationPreview={generationCellPreview?.cellId === selectedNotebookCell.id
+            ? generationCellPreview
+            : undefined}
+          onSelectSource={selectCanvasCell}
+          onLoadGenerationPayload={loadGenerationPayload}
+          onInspectGenerationRequest={inspectGenerationRequest}
+          mediaInsightWork={mediaInsightWork}
+          onTranscribeAsset={transcribeAsset}
+          onLoadTranscriptJson={loadTranscriptJson}
+          onDownloadTranscriptSrt={exportTranscriptSrt}
+        />
+      )}
     </div>
   ) : null)
   /* Whichever contextual panel is on screen draws the dock's close control in
@@ -11394,6 +11108,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         if (node.type !== 'timeline' && currentSelection.size === 1
                           && nextId === node.id && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
                           revealNotebookCanvasCell(node.id)
+                          if (mediaLibraryPicker?.cellId !== node.id) openMediaLibrary(node.id)
                         }
                       }}
                       onPaneClick={() => {
@@ -11656,29 +11371,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           returnFocus={cellContextMenu.returnFocus}
           onAction={handleSlotContextAction}
           onClose={closeCellContextMenu}
-        />
-      )}
-
-      {mediaLibraryDialogState && mediaLibraryKind && (
-        <MediaLibraryDialog
-          state={mediaLibraryDialogState}
-          kind={mediaLibraryKind}
-          targetBookId={bookId}
-          onClose={closeMediaLibrary}
-          onMode={changeMediaLibraryMode}
-          onDraftQuery={updateMediaLibraryDraft}
-          onSearch={searchMediaLibrary}
-          onLoadMore={loadMoreMediaLibrary}
-          onAttach={(asset) => void attachLibraryAsset(asset)}
-          onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
-          onClearReference={clearMediaLibraryReference}
-          onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
-          onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
-          onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
-          onRepairIndexes={() => void repairMediaLibraryIndexes()}
-          onToggleTagFilter={toggleMediaLibraryTagFilter}
-          onClearTagFilters={clearMediaLibraryTagFilters}
-          onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
         />
       )}
 

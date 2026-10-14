@@ -381,13 +381,13 @@ describe("hostile search content across browser surfaces", () => {
     expect(pageErrors).toEqual([]);
   }, 60_000);
 
-  it("renders the owning project slug in the media library dialog", async () => {
+  it("renders the owning project slug in the docked media library", async () => {
     if (!page) throw new Error("Browser page was not initialized");
     await page.goto(appUrl, { waitUntil: "commit" });
     const opener = page.locator(".cell-media-slot-library").first();
     await opener.waitFor({ state: "visible", timeout: 30_000 });
     await opener.click();
-    const dialog = page.locator('.media-library-dialog[role="dialog"]');
+    const dialog = page.getByRole("region", { name: "Choose image media" });
     await dialog.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     const asset = dialog.locator(".media-library-asset").first();
     await asset.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });

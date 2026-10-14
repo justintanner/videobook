@@ -18,6 +18,7 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { comparableHitScore } from "./search-scoring.js";
 import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-work.js";
+import { assetRecency, readAssetUsage, recordAssetUse } from "./asset-usage.js";
 import {
   matchesTagFilter,
   tagFacetCounts,
@@ -40,6 +41,7 @@ type MediaCellType = "audio" | "image" | "video";
 interface LibraryAsset extends ProjectAsset {
   owning_book_id: string;
   owning_book_name: string;
+  last_used_at: string | null;
   search_match?: {
     score: number;
     location: SearchHit["location"];
@@ -216,6 +218,7 @@ export async function setNotebookMediaSlot(
     },
   );
   if (!result.ok) throw new Error(result.error.message);
+  if (resolved) recordAssetUse(engine, resolved.artifactId);
   return {
     cellId: input.cellId,
     outputArtifactId: resolved?.artifactId ?? null,
@@ -252,6 +255,24 @@ function matchesQuery(asset: LibraryAsset, query: string): boolean {
     asset.owning_book_name,
     asset.prompt ?? "",
   ].some((value) => value.toLowerCase().includes(query));
+}
+
+function lastUsedAt(usedAt: number | undefined): string | null {
+  return usedAt === undefined ? null : new Date(usedAt).toISOString();
+}
+
+function libraryAssetRecency(asset: LibraryAsset): number {
+  const used = asset.last_used_at ? Date.parse(asset.last_used_at) : undefined;
+  return assetRecency(asset.created_at, used);
+}
+
+function compareRecentlyUsed(left: LibraryAsset, right: LibraryAsset): number {
+  const recency = libraryAssetRecency(right) - libraryAssetRecency(left);
+  if (recency !== 0) return recency;
+  const created = Date.parse(right.created_at) - Date.parse(left.created_at);
+  return created !== 0
+    ? created
+    : left.artifact_id.localeCompare(right.artifact_id);
 }
 
 export async function searchLibraryAssets(
@@ -293,6 +314,7 @@ export async function searchLibraryAssets(
         summary.bookId,
         "newest",
       ));
+      const usage = readAssetUsage(engine);
       const eligible = builtAssets
         .filter((asset) =>
           kindMatches(requested, asset.type)
@@ -301,6 +323,7 @@ export async function searchLibraryAssets(
           ...asset,
           owning_book_id: summary.bookId,
           owning_book_name: summary.name,
+          last_used_at: lastUsedAt(usage.get(asset.artifact_id)),
         }));
       const statusCounts = countBrowseStatuses(eligible);
       const readyAssets = eligible.filter((asset) => asset.status === "ready");
@@ -439,14 +462,7 @@ export async function searchLibraryAssets(
         : left.asset.artifact_id.localeCompare(right.asset.artifact_id);
     })
     .map((item) => item.asset);
-  if (!query && !prepared) {
-    ranked.sort((left, right) => {
-      const created = Date.parse(right.created_at) - Date.parse(left.created_at);
-      return created !== 0
-        ? created
-        : left.artifact_id.localeCompare(right.artifact_id);
-    });
-  }
+  if (!query && !prepared) ranked.sort(compareRecentlyUsed);
   const paged = pageLibraryAssets(ranked, {
     offset: input.offset ?? 0,
     limit: input.limit ?? 50,
@@ -755,6 +771,8 @@ export async function copyAndAttachLibraryAsset(
       },
     );
     if (!result.ok) throw new Error(result.error.message);
+    recordAssetUse(sourceBook.engine, copied.sourceArtifactId);
+    recordAssetUse(targetBook.engine, copied.targetArtifactId);
     return {
       ...copied,
       notebookId: input.notebookId,

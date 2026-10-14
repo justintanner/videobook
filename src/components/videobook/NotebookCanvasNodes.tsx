@@ -10,7 +10,7 @@ import {
   CircleDot,
   Film,
   Upload,
-  Search,
+  Images,
   Check,
   Layers2,
   Sparkles,
@@ -241,19 +241,6 @@ function MediaSlotTile({
     >
       <button
         type="button"
-        className="cell-media-slot-upload"
-        disabled={busy || !ready}
-        onClick={(event) => {
-          event.stopPropagation()
-          inputRef.current?.click()
-        }}
-      >
-        {busy ? <BusyIndicator size={24} /> : <Upload size={24} />}
-        <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
-        <span>Drop one file or choose from this device</span>
-      </button>
-      <button
-        type="button"
         className="cell-media-slot-library"
         disabled={busy || !ready}
         onClick={(event) => {
@@ -261,7 +248,20 @@ function MediaSlotTile({
           onOpenLibrary(cellId)
         }}
       >
-        <Search size={13} />Search library
+        {busy ? <BusyIndicator size={22} /> : <Images size={22} />}
+        <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
+        <span>Recent media or drop a file</span>
+      </button>
+      <button
+        type="button"
+        className="cell-media-slot-upload"
+        disabled={busy || !ready}
+        onClick={(event) => {
+          event.stopPropagation()
+          inputRef.current?.click()
+        }}
+      >
+        <Upload size={13} />Upload file
       </button>
       <input
         ref={inputRef}

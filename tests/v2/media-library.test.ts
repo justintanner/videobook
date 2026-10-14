@@ -242,6 +242,43 @@ describe('media Library slots', () => {
       })
   })
 
+  it('browses media recently used first and records a slot attachment as use', async () => {
+    const created = await books.create('recent-book')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    const older = await readyArtifact(engine, 'image', 'older still', 'original.png', 'older bytes')
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    const newer = await readyArtifact(engine, 'image', 'newer still', 'original.png', 'newer bytes')
+    const notebook = engine.notebooks.list()[0]!
+    const slot = cell(engine, { type: 'image', label: 'slot', slot: { row: 0, column: 0 } })
+    await writeNotebook(engine, { ...notebook, cells: [slot], edges: [] })
+
+    const before = await searchLibraryAssets(books, { kinds: ['image'] })
+    expect(before.assets.map((asset) => asset.artifact_id))
+      .toEqual([newer.artifactId, older.artifactId])
+    expect(before.assets.every((asset) => asset.last_used_at === null)).toBe(true)
+
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    await setNotebookMediaSlot(engine, {
+      notebookId: notebook.id,
+      cellId: slot.id,
+      artifactRef: older.artifactId,
+    })
+
+    const after = await searchLibraryAssets(books, { kinds: ['image'] })
+    expect(after.assets.map((asset) => asset.artifact_id))
+      .toEqual([older.artifactId, newer.artifactId])
+    expect(Date.parse(after.assets[0]!.last_used_at ?? ''))
+      .toBeGreaterThan(Date.parse(after.assets[1]!.created_at))
+    expect(after.assets[1]!.last_used_at).toBeNull()
+
+    const queried = await searchLibraryAssets(books, { kinds: ['image'], query: 'still' })
+    expect(queried.assets.map((asset) => asset.artifact_id))
+      .toEqual([newer.artifactId, older.artifactId])
+  })
+
   it('filters Library search by exact tags without an embedding index', async () => {
     const alpha = await books.create('tag-alpha')
     const beta = await books.create('tag-beta')

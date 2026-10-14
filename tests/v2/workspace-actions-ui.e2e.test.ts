@@ -644,7 +644,7 @@ describe('workspace action launcher with real endpoints', () => {
       await page.goto(appUrl, { waitUntil: 'commit' })
       const node = page.locator(`.react-flow__node[data-id="${String(cell.id)}"]`)
       await node.locator('.cell-media-slot-library').click()
-      const dialog = page.getByRole('dialog', { name: 'Choose image media', exact: true })
+      const dialog = page.getByRole('region', { name: 'Choose image media', exact: true })
       await dialog.waitFor()
       await expect.poll(() => dialog.locator('.media-library-asset').count(), { timeout: 15_000 }).toBeGreaterThan(0)
       expect(await dialog.locator('.media-library-asset').filter({ hasText: 'action-image' }).count(), `cycle ${cycle}`).toBe(1)
