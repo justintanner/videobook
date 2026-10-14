@@ -52,6 +52,16 @@ describe('composer focus through real workspace interactions', () => {
     return page.locator(`.react-flow__node[data-id="${id}"] .cell-node`)
   }
 
+  function toolbar(): Locator {
+    return page.getByRole('group', { name: 'Notebook canvas controls' })
+  }
+
+  async function blankToolbarPosition(): Promise<{ x: number; y: number }> {
+    const bounds = await toolbar().boundingBox()
+    if (!bounds) throw new Error('Could not measure the notebook toolbar')
+    return { x: bounds.width - 4, y: bounds.height / 2 }
+  }
+
   async function focused(target: Locator): Promise<void> {
     await expect.poll(() => target.evaluate(element => ({
       focused: document.activeElement === element,
@@ -342,12 +352,13 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Backspace')
     expect(await input().textContent()).toBe('draf')
     expect(await cell(videoCellId).count()).toBe(1)
-    // The inspector side column became the chat dock, so the toolbar is zoom
-    // and selection now — there is no separate inspector to close.
-    for (const label of ['Zoom out', 'Fit grid to width', 'Clear selection']) {
-      await page.getByLabel(label, { exact: true }).click()
-      await focused(input())
-    }
+    // The inspector side column became the chat dock, so the toolbar holds
+    // the selection controls — there is no separate inspector to close.
+    await toolbar().click({ position: await blankToolbarPosition() })
+    await focused(input())
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
+    await page.getByLabel('Clear selection', { exact: true }).click()
+    await focused(input())
     await page.locator('.react-flow__pane').click({ position: { x: 850, y: 450 } })
     await focused(input())
     expect(await input().textContent()).toBe('draf')
@@ -776,8 +787,9 @@ describe('composer focus through real workspace interactions', () => {
     await focused(add)
     await page.keyboard.press('Tab')
     await focused(page.getByLabel('Auto-arrange notebook'))
+    const blank = await blankToolbarPosition()
     for (let index = 0; index < 12; index += 1) {
-      await page.getByLabel('Fit grid to width', { exact: true }).click()
+      await toolbar().click({ position: blank })
       await page.keyboard.press('Tab')
       await page.waitForTimeout(35)
       expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
@@ -970,7 +982,7 @@ describe('composer focus through real workspace interactions', () => {
     await page.goto(appUrl)
     await ready()
     expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
-    await page.getByLabel('Fit grid to width', { exact: true }).tap()
+    await toolbar().tap({ position: await blankToolbarPosition() })
     await page.waitForTimeout(50)
     expect(await input().evaluate(element => document.activeElement === element)).toBe(false)
   })

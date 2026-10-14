@@ -1278,15 +1278,11 @@ describe('chat composer browser flow', () => {
       const lastAudio = current.tracks.filter((track) => track.kind === 'audio').at(-1)!
       await timeline.getByLabel(`Remove ${lastAudio.name}`, { exact: true }).click()
       await expect.poll(async () => (await call<Sequence>('get_primary_sequence')).tracks.some((track) => track.trackId === lastAudio.trackId), { timeout: MCP_ROUNDTRIP_MS }).toBe(false)
-      const notebookZoom = page.getByRole('group', { name: 'Notebook zoom controls' })
-      await notebookZoom.getByLabel('Zoom out', { exact: true }).click()
-      if (await notebookZoom.getByLabel('Zoom out', { exact: true }).isEnabled()) await notebookZoom.getByLabel('Zoom out', { exact: true }).click()
-      for (const zoom of [50, 75, 100]) {
-        await expect.poll(() => notebookZoom.getByLabel('Fit grid to width', { exact: true }).textContent()).toBe(`${zoom}%`)
+      for (const width of [1024, 1920, 2560]) {
+        await page.setViewportSize({ width, height: 1000 })
         await fitTimeline(501)
-        if (zoom < 100) await notebookZoom.getByLabel('Zoom in', { exact: true }).click()
       }
-      await page.getByLabel('Fit grid to width', { exact: true }).click()
+      await page.setViewportSize({ width: 1440, height: 1000 })
       await fitTimeline(501)
       await page.screenshot({ path: '/tmp/videobook-timeline-long.png' })
     } finally {
@@ -1657,8 +1653,8 @@ describe('chat composer browser flow', () => {
 
   it('fits eight columns with readable cell details and compact canvas spacing', async () => {
     const page = await openApp()
-    const fit = page.getByLabel('Fit grid to width', { exact: true })
-    await fit.click()
+    expect(await page.getByRole('group', { name: 'Notebook zoom controls' }).count()).toBe(0)
+    expect(await page.getByLabel('Fit grid to width', { exact: true }).count()).toBe(0)
     await collapseComposerDock(page)
     const scroll = page.locator('.notebook-horizontal-scroll')
     const readLayout = () => scroll.evaluate(element => {
@@ -1669,11 +1665,15 @@ describe('chat composer browser flow', () => {
       const bounds = element.getBoundingClientRect()
       const zoom = new DOMMatrix(getComputedStyle(viewport).transform).a
       const squares = [...element.querySelectorAll('.notebook-grid-square')].slice(0, 8)
+      const squareBounds = squares.map(square => square.getBoundingClientRect())
       const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
       const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-upload strong, .cell-media-slot-upload span, .cell-media-slot-library')]
       const prompts = [...element.querySelectorAll('.cell-copy-text p')]
       return {
         zoom,
+        fitZoom: element.clientWidth / 2088,
+        leftGutter: Math.min(...squareBounds.map(rect => rect.left)),
+        unusedWidth: bounds.left + element.clientWidth - Math.max(...squareBounds.map(rect => rect.right)),
         topGap: bounds.top - header.getBoundingClientRect().bottom,
         bottomClearance: parseFloat(getComputedStyle(element).paddingBottom) - Math.max(0, bounds.bottom - composer.getBoundingClientRect().top),
         overflow: element.scrollWidth - element.clientWidth,
@@ -1714,9 +1714,9 @@ describe('chat composer browser flow', () => {
         }),
       }
     })
-    const expectReadableDetails = (layout: Awaited<ReturnType<typeof readLayout>>) => {
-      expect(layout.detailTextSize).toBeCloseTo(11, 2)
-      expect(layout.promptTextSize).toBeCloseTo(13, 2)
+    const expectReadableDetails = (layout: Awaited<ReturnType<typeof readLayout>>, textScale = 1) => {
+      expect(layout.detailTextSize).toBeCloseTo(11 * textScale, 2)
+      expect(layout.promptTextSize).toBeCloseTo(13 * textScale, 2)
       expect(layout).toMatchObject({
         detailsOutsideCards: [],
         promptsUseWholeLines: true,
@@ -1724,40 +1724,41 @@ describe('chat composer browser flow', () => {
       })
     }
 
-    for (const width of [1280, 1476, 1920]) {
+    for (const width of [1024, 1280, 1476, 1920, 2560]) {
       await page.setViewportSize({ width, height: 850 })
-      await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
+      await expect.poll(async () => {
+        const layout = await readLayout()
+        return layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
+      }).toBe(true)
       const layout = await readLayout()
       expect(layout).toMatchObject({ columnsVisible: true, addressesInsideCards: true })
+      expect(layout.leftGutter).toBeCloseTo(28, 0)
+      expect(Math.abs(layout.unusedWidth)).toBeLessThanOrEqual(1)
       expect(layout.topGap).toBeGreaterThanOrEqual(8)
       expect(layout.topGap).toBeLessThanOrEqual(24)
       expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
-      expect(layout.emptyTextSize).toBeCloseTo(11, 2)
-      expect(layout.addressTextSize).toBeCloseTo(14, 2)
-      expectReadableDetails(layout)
+      const textScale = Math.min(1, layout.zoom / 0.5)
+      expect(layout.emptyTextSize).toBeCloseTo(11 * textScale, 2)
+      expect(layout.addressTextSize).toBeCloseTo(14 * textScale, 2)
+      expectReadableDetails(layout, textScale)
       await expectGridWithoutSidebar(page)
-      expect(await fit.getAttribute('aria-pressed')).toBe('true')
-      expect(await fit.textContent()).toBe('Fit')
     }
 
-    for (const width of [1024, 390]) {
-      await page.setViewportSize({ width, height: 850 })
-      await expect.poll(async () => (await readLayout()).zoom).toBe(0.5)
-      const layout = await readLayout()
-      expect(layout.overflow).toBeGreaterThan(0)
-      expect(layout.addressesInsideCards).toBe(true)
-      expect(layout.addressTextSize).toBeCloseTo(14, 2)
-      expectReadableDetails(layout)
-      expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
-      await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth })
-      const last = page.locator('.notebook-grid-square-label').filter({ hasText: /^@a8$/u })
-      const bounds = await last.boundingBox()
-      expect(bounds!.x).toBeGreaterThanOrEqual(0)
-      expect(bounds!.x + bounds!.width).toBeLessThan(width)
-    }
+    await page.setViewportSize({ width: 390, height: 850 })
+    await expect.poll(async () => (await readLayout()).zoom).toBe(0.5)
+    const phone = await readLayout()
+    expect(phone.overflow).toBeGreaterThan(0)
+    expect(phone.addressesInsideCards).toBe(true)
+    expect(phone.addressTextSize).toBeCloseTo(14, 2)
+    expectReadableDetails(phone)
+    expect(phone.bottomClearance).toBeGreaterThanOrEqual(4)
+    await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth })
+    const lastSlot = page.locator('.notebook-grid-square-label').filter({ hasText: /^@a8$/u })
+    const lastBounds = await lastSlot.boundingBox()
+    expect(lastBounds!.x).toBeGreaterThanOrEqual(0)
+    expect(lastBounds!.x + lastBounds!.width).toBeLessThan(390)
 
     await page.setViewportSize({ width: 1476, height: 850 })
-    await fit.click()
     const input = page.getByLabel('Videobook command input')
     await input.fill('Keep my draft while resizing the notebook')
     const selected = notebookCellNode(page, videoCellId)
@@ -1778,25 +1779,31 @@ describe('chat composer browser flow', () => {
     expect(await selected.getAttribute('data-selection')).toBe('primary')
     expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
 
-    await page.getByLabel('Zoom in', { exact: true }).click()
-    await expect.poll(async () => await fit.textContent()).toBe('75%')
-    await page.setViewportSize({ width: 1476, height: 850 })
-    expect(await fit.textContent()).toBe('75%')
-    expectReadableDetails(await readLayout())
-    await page.getByLabel('Zoom in', { exact: true }).click()
-    await expect.poll(async () => await fit.textContent()).toBe('100%')
-    expectReadableDetails(await readLayout())
+    const scaleBefore = (await readLayout()).zoom
+    await page.locator('.react-flow__pane').evaluate((pane) => {
+      const bounds = pane.getBoundingClientRect()
+      pane.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        ctrlKey: true,
+        deltaY: -240,
+        clientX: bounds.left + 40,
+        clientY: bounds.top + 40,
+      }))
+    })
+    await wait(150)
+    expect((await readLayout()).zoom).toBe(scaleBefore)
     await scroll.evaluate(element => { element.scrollLeft = 120 })
-    await fit.click()
-    await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
     expect(await scroll.evaluate(element => element.scrollLeft)).toBe(0)
     expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
     await input.fill('')
     await page.getByLabel('Clear selection', { exact: true }).click()
     await page.getByLabel('Open Library', { exact: true }).click()
     await page.getByRole('button', { name: '/videobook', exact: true }).click()
-    await expect.poll(async () => (await readLayout()).overflow).toBeLessThanOrEqual(1)
-    expect(await fit.getAttribute('aria-pressed')).toBe('true')
+    await expect.poll(async () => {
+      const layout = await readLayout()
+      return layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
+    }).toBe(true)
   }, 60_000)
 
   it('centers clicked tiles above the preview dock and clears it at the final row', async () => {
@@ -1856,7 +1863,6 @@ describe('chat composer browser flow', () => {
         { width: 390, height: 844 },
       ]) {
         await page.setViewportSize(viewport)
-        await page.getByLabel('Fit grid to width', { exact: true }).click()
         await collapseComposerDock(page)
         for (const id of [imageId, videoId, lastId]) {
           await positionForClick(id)
@@ -1873,13 +1879,12 @@ describe('chat composer browser flow', () => {
           await expect.poll(() => input.evaluate((element) => document.activeElement === element)).toBe(true)
         }
       }
-      await page.setViewportSize({ width: 1440, height: 1000 })
-      await page.getByLabel('Zoom in', { exact: true }).click()
-      await page.getByLabel('Zoom in', { exact: true }).click()
+      await page.setViewportSize({ width: 2560, height: 1000 })
+      await expect.poll(async () => (await layout(imageId)).zoom).toBeGreaterThan(1)
       await positionForClick(imageId)
       await notebookCellNode(page, imageId).locator('.cell-node-type-label').click()
       await expect.poll(async () => (await layout(imageId)).centerError).toBeLessThanOrEqual(2)
-      expect((await layout(imageId)).zoom).toBe(1)
+      expect((await layout(imageId)).left).toBe(0)
       await page.keyboard.down('Shift')
       try {
         const beforeMultiSelect = await scroll.evaluate(async (element) => {
@@ -1912,12 +1917,10 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('keeps refreshing after a same-slot drag without losing selection, zoom, scroll, or drafts', async () => {
+  it('keeps refreshing after a same-slot drag without losing selection, scale, scroll, or drafts', async () => {
     const page = await openApp()
     const selected = notebookCellNode(page, videoCellId)
     await selected.click()
-    await page.getByLabel('Fit grid to width', { exact: true }).click()
-    await page.getByLabel('Zoom in', { exact: true }).click()
     const dragHandle = await selected.locator('.cell-node-type-label').boundingBox()
     if (!dragHandle) throw new Error('Could not measure the video cell drag handle')
     const dragX = dragHandle.x + dragHandle.width / 2
@@ -1930,6 +1933,9 @@ describe('chat composer browser flow', () => {
     const draft = 'Keep this draft while other clients edit the notebook'
     await input.fill(draft)
     const scroll = page.locator('.notebook-horizontal-scroll')
+    const scale = () => scroll.evaluate((element) =>
+      new DOMMatrix(getComputedStyle(element.querySelector('.react-flow__viewport')!).transform).a)
+    const scaleBefore = await scale()
     const scrollPosition = await scroll.evaluate((element) => ({
       left: element.scrollLeft,
       top: element.scrollTop,
@@ -1969,7 +1975,7 @@ describe('chat composer browser flow', () => {
       await expect.poll(async () => await added.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       cellId = ''
       expect(await selected.getAttribute('data-selection')).toBe('primary')
-      expect(await page.getByLabel('Fit grid to width', { exact: true }).textContent()).toContain('75%')
+      expect(await scale()).toBe(scaleBefore)
       expect(await input.textContent()).toBe(draft)
       expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
       expect(await input.isEnabled()).toBe(true)
@@ -1979,7 +1985,6 @@ describe('chat composer browser flow', () => {
       if (cellId) await tool('delete_notebook_cell', { cell_id: cellId })
       await client.close()
       await input.fill('')
-      await page.getByLabel('Fit grid to width', { exact: true }).click()
       notebookDirty = true
     }
   }, 60_000)
@@ -5152,7 +5157,10 @@ describe('chat composer browser flow', () => {
 
     await trigger.click()
     expect(await search.inputValue()).toBe('')
-    await page.getByLabel('Fit grid to width', { exact: true }).click()
+    const toolbar = page.getByRole('group', { name: 'Notebook canvas controls' })
+    const toolbarBounds = await toolbar.boundingBox()
+    if (!toolbarBounds) throw new Error('Could not measure the notebook toolbar')
+    await toolbar.click({ position: { x: toolbarBounds.width - 4, y: toolbarBounds.height / 2 } })
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
     await expect.poll(async () => await page.getByLabel('Videobook command input')
       .evaluate((element) => document.activeElement === element)).toBe(true)
@@ -5252,13 +5260,8 @@ describe('chat composer browser flow', () => {
       expect(await imageLane.boundingBox()).toEqual(fullRowPosition)
 
       const before = record(await tool('get_notebook', scope))
-      for (const width of [1440, 390]) {
+      for (const width of [1440, 2560, 390]) {
         await page.setViewportSize({ width, height: 800 })
-        await page.getByLabel('Fit grid to width').click()
-        await expectGridWithoutSidebar(page)
-        await page.getByLabel('Zoom in').click()
-        await expect.poll(async () => await page.getByLabel('Fit grid to width').textContent())
-          .toContain('75%')
         await expectGridWithoutSidebar(page)
         await page.locator('.notebook-horizontal-scroll').evaluate((element) =>
           element.scrollTo({ left: 200, top: 110 }))
@@ -5302,10 +5305,9 @@ describe('chat composer browser flow', () => {
     const selected = notebookCellNode(page, fullscreenImageCellId)
     await selected.click()
     expect(await selected.getAttribute('data-selection')).toBe('primary')
-    await page.getByLabel('Fit grid to width').click()
-    await page.getByLabel('Zoom in').click()
-    const zoomLevel = page.getByLabel('Fit grid to width')
-    await expect.poll(async () => await zoomLevel.textContent()).toContain('75%')
+    const scale = () => page!.locator('.notebook-horizontal-scroll').evaluate((element) =>
+      new DOMMatrix(getComputedStyle(element.querySelector('.react-flow__viewport')!).transform).a)
+    const scaleBefore = await scale()
 
     const autoArrange = page.getByLabel('Auto-arrange notebook')
     await autoArrange.waitFor({ state: 'visible' })
@@ -5355,7 +5357,7 @@ describe('chat composer browser flow', () => {
       }))).toMatchObject({ top: 0 })
     await expect.poll(async () => await page!.locator('.notebook-horizontal-scroll')
       .evaluate((element) => element.scrollLeft)).toBe(0)
-    expect(await zoomLevel.textContent()).toContain('75%')
+    expect(await scale()).toBe(scaleBefore)
     expect(await selected.getAttribute('data-selection')).toBe('primary')
 
     const lanes = await page.locator('.notebook-lane').evaluateAll((elements) =>

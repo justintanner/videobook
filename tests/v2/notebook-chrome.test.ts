@@ -132,15 +132,15 @@ describe('notebook chrome tokens', () => {
       .toBe('calc(var(--notebook-composer-clearance) + 88px)')
   })
 
-  it('aligns the scroll container and both scrollbars on the chrome inset', () => {
+  it('keeps equal gutters with the scrollbar lane inside the right one', () => {
     const scroll = rule(css, '.notebook-horizontal-scroll')
     expect(declaration(scroll, 'margin'))
-      .toBe('var(--notebook-chrome-top) var(--notebook-chrome-inset) 0')
+      .toBe('var(--notebook-chrome-top) calc(var(--notebook-chrome-inset) - var(--notebook-scrollbar-size)) 0 var(--notebook-chrome-inset)')
     expect(declaration(scroll, 'height'))
       .toBe('calc(100% - var(--notebook-chrome-top))')
-    // The last column clears the scrollbar lane by the same gutter the first
-    // column gets on the left.
-    expect(declaration(scroll, 'padding-right')).toBe('var(--notebook-chrome-inset)')
+    expect(scroll).not.toMatch(/(?:^|\n)\s*padding-right:/u)
+    expect(declaration(scroll, 'overflow-x')).toBe('hidden')
+    expect(declaration(scroll, 'overflow-y')).toBe('auto')
     expect(declaration(scroll, 'scrollbar-gutter')).toBe('stable')
     expect(declaration(scroll, 'scrollbar-width')).toBe('auto')
     expect(declaration(scroll, 'scrollbar-color')).toBe('auto')
@@ -149,6 +149,14 @@ describe('notebook chrome tokens', () => {
     expect(declaration(bar, 'height')).toBe('var(--notebook-scrollbar-size)')
     expect(declaration(rule(css, '.canvas'), '--notebook-scrollbar-size'))
       .toBe('10px')
+  })
+
+  it('fits the grid to the width on desktop and keeps the phone floor scrollable', () => {
+    expect(declaration(rule(css, '.canvas'), '--notebook-minimum-zoom')).toBe('0')
+    const phone = braceBlock(css, css.indexOf('@media (max-width: 720px) {'))
+    expect(declaration(rule(phone, '.canvas'), '--notebook-minimum-zoom')).toBe('0.5')
+    expect(declaration(rule(phone, '.notebook-horizontal-scroll'), 'overflow-x')).toBe('auto')
+    expect(css).not.toContain('.canvas-zoom-panel')
   })
 
   it('does not reserve a side column for notebook inspector chrome', () => {

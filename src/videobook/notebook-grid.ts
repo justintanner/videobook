@@ -23,7 +23,7 @@ export interface NotebookGridData extends Record<string, unknown> {
 export const notebookGrid = {
   /* Origins are 0: the scroll container's --notebook-chrome-inset margin in
      src/index.css supplies the page gutter, so the first cell lands on the
-     same line as the header logo and the horizontal scrollbar track. */
+     same line as the header logo. */
   originX: 0,
   originY: 0,
   squareSize: 240,
@@ -34,9 +34,7 @@ export const notebookGrid = {
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
   trailingRowCount: 1,
-  minimumZoom: 0.5,
-  maximumZoom: 1,
-  zoomStep: 0.25,
+  detailZoomFloor: 0.5,
 } as const
 
 function roundedSlot(slot: NotebookGridSlot): NotebookGridSlot {
@@ -375,23 +373,16 @@ interface NotebookGridMetricsOptions {
 }
 
 export function normalizeNotebookGridZoom(zoom: number): number {
-  if (!Number.isFinite(zoom)) return 1
-  return Math.min(notebookGrid.maximumZoom, Math.max(notebookGrid.minimumZoom, zoom))
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
 }
 
-export function fitNotebookGridZoom(viewportWidth: number): number {
+export function notebookGridDetailScale(zoom: number): number {
+  return 1 / Math.max(normalizeNotebookGridZoom(zoom), notebookGrid.detailZoomFloor)
+}
+
+export function fitNotebookGridZoom(viewportWidth: number, minimumZoom = 0): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 1
-  return normalizeNotebookGridZoom(viewportWidth / gridWidth())
-}
-
-export function stepNotebookGridZoom(zoom: number, change: number): number {
-  const current = normalizeNotebookGridZoom(zoom)
-  if (!Number.isFinite(change) || change === 0) return current
-  const step = notebookGrid.zoomStep
-  const index = change > 0
-    ? Math.floor((current + 0.000001) / step) + 1
-    : Math.ceil((current - 0.000001) / step) - 1
-  return normalizeNotebookGridZoom(index * step)
+  return Math.max(Number.isFinite(minimumZoom) ? minimumZoom : 0, viewportWidth / gridWidth())
 }
 
 function gridWidth(): number {

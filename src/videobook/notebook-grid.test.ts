@@ -13,6 +13,7 @@ import {
   nextVerticalSlotFrom,
   normalizeNotebookGridZoom,
   notebookGrid,
+  notebookGridDetailScale,
   notebookGridDropSlot,
   notebookGridFrameSize,
   notebookGridMetrics,
@@ -24,7 +25,6 @@ import {
   resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
-  stepNotebookGridZoom,
   type NotebookGridData,
 } from './notebook-grid'
 import {
@@ -437,13 +437,13 @@ describe('notebook grid', () => {
     expect(notebookGridDropSlot({ x: 100_000, y: 100_000 }, metrics))
       .toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
     expect(notebookGridFrameSize(notebookGridMetrics([]), 1.5)).toEqual({
-      width: 2088,
-      height: 768,
+      width: 3132,
+      height: 1152,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 0,
       y: -40,
-      zoom: 1,
+      zoom: 1.5,
     })
   })
 
@@ -465,38 +465,42 @@ describe('notebook grid', () => {
       .toEqual({ row: 0, column: 0 })
   })
 
-  it('preserves fractional zoom within readable limits', () => {
-    expect(normalizeNotebookGridZoom(0.1)).toBe(notebookGrid.minimumZoom)
-    expect(normalizeNotebookGridZoom(0.8)).toBe(0.8)
+  it('keeps any positive zoom and falls back to 1 for invalid zoom', () => {
+    expect(normalizeNotebookGridZoom(0.1)).toBe(0.1)
     expect(normalizeNotebookGridZoom(0.635)).toBe(0.635)
-    expect(normalizeNotebookGridZoom(4)).toBe(notebookGrid.maximumZoom)
+    expect(normalizeNotebookGridZoom(1.2)).toBe(1.2)
+    expect(normalizeNotebookGridZoom(0)).toBe(1)
+    expect(normalizeNotebookGridZoom(-1)).toBe(1)
     expect(normalizeNotebookGridZoom(Number.NaN)).toBe(1)
   })
 
-  it('fits all eight columns across the full measured width', () => {
+  it('fits all eight columns across the full measured width at any size', () => {
     const metrics = notebookGridMetrics([])
-    for (const width of [1230, 1426, 1870]) {
+    for (const width of [370, 968, 1224, 1384, 1864, 2504, 3784]) {
       const zoom = fitNotebookGridZoom(width)
       const frame = notebookGridFrameSize(metrics, zoom)
       expect(frame.width).toBeCloseTo(width)
       expect(notebookGridViewport(metrics, zoom).zoom).toBe(zoom)
       expect(frame.height).toBeCloseTo(metrics.height * zoom)
     }
-    expect(fitNotebookGridZoom(360)).toBe(0.5)
-    expect(fitNotebookGridZoom(2510)).toBe(1)
+    expect(fitNotebookGridZoom(1224) * notebookGrid.squareSize).toBeCloseTo(140.69, 2)
+    expect(fitNotebookGridZoom(2504) * notebookGrid.squareSize).toBeCloseTo(287.82, 2)
     expect(fitNotebookGridZoom(0)).toBe(1)
     expect(fitNotebookGridZoom(Number.NaN)).toBe(1)
     expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(4)
   })
 
-  it('steps manual zoom to the next preset from fractional fit or pinch zoom', () => {
-    expect(stepNotebookGridZoom(0.635, -0.25)).toBe(0.5)
-    expect(stepNotebookGridZoom(0.635, 0.25)).toBe(0.75)
-    expect(stepNotebookGridZoom(0.75, 0.25)).toBe(1)
-    expect(stepNotebookGridZoom(0.75, -0.25)).toBe(0.5)
-    expect(stepNotebookGridZoom(0.9, -0.25)).toBe(0.75)
-    expect(stepNotebookGridZoom(0.5, -0.25)).toBe(0.5)
-    expect(stepNotebookGridZoom(1, 0.25)).toBe(1)
-    expect(stepNotebookGridZoom(0.635, 0)).toBe(0.635)
+  it('keeps cell details at screen size until cells drop below half scale', () => {
+    expect(notebookGridDetailScale(1.2)).toBeCloseTo(1 / 1.2)
+    expect(notebookGridDetailScale(0.6)).toBeCloseTo(1 / 0.6)
+    expect(notebookGridDetailScale(0.5)).toBe(2)
+    expect(notebookGridDetailScale(0.4636)).toBe(2)
+    expect(notebookGridDetailScale(Number.NaN)).toBe(1)
+  })
+
+  it('holds a minimum zoom only when the layout asks for one', () => {
+    expect(fitNotebookGridZoom(370, 0.5)).toBe(0.5)
+    expect(fitNotebookGridZoom(1864, 0.5)).toBeCloseTo(1864 / 2088)
+    expect(fitNotebookGridZoom(370, Number.NaN)).toBeCloseTo(370 / 2088)
   })
 })

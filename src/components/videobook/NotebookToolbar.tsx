@@ -1,11 +1,8 @@
-import { Ellipsis, LayoutGrid, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Ellipsis, LayoutGrid, Trash2, X } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
-import { notebookGrid } from '@/videobook/notebook-grid'
 
 type NotebookToolbarProps = {
-  zoom: number
-  fitting: boolean
   busy: boolean
   arrangeDisabled: boolean
   selectedCount: number
@@ -13,16 +10,12 @@ type NotebookToolbarProps = {
   onAdd: (type: NotebookCellAddType) => void | Promise<void>
   onAddDragEnd: () => void
   onArrange: () => void | Promise<void>
-  onAdjustZoom: (change: number) => void
-  onResetZoom: () => void
   onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
   onSelectionActions?: () => void
 }
 
 export function NotebookToolbar({
-  zoom,
-  fitting,
   busy,
   arrangeDisabled,
   selectedCount,
@@ -30,8 +23,6 @@ export function NotebookToolbar({
   onAdd,
   onAddDragEnd,
   onArrange,
-  onAdjustZoom,
-  onResetZoom,
   onDeleteSelection,
   onClearSelection,
   onSelectionActions,
@@ -52,36 +43,6 @@ export function NotebookToolbar({
         >
           <LayoutGrid size={15} />
           <span>Arrange</span>
-        </button>
-      </div>
-      <div className="canvas-zoom-panel" role="group" aria-label="Notebook zoom controls">
-        <button
-          type="button"
-          title="Zoom out"
-          aria-label="Zoom out"
-          disabled={zoom <= notebookGrid.minimumZoom}
-          onClick={() => onAdjustZoom(-notebookGrid.zoomStep)}
-        >
-          <ZoomOut size={15} />
-        </button>
-        <button
-          type="button"
-          className="canvas-zoom-level"
-          title={`Fit grid to width (${Math.round(zoom * 100)}%)`}
-          aria-label="Fit grid to width"
-          aria-pressed={fitting}
-          onClick={onResetZoom}
-        >
-          {fitting ? 'Fit' : `${Math.round(zoom * 100)}%`}
-        </button>
-        <button
-          type="button"
-          title="Zoom in"
-          aria-label="Zoom in"
-          disabled={zoom >= notebookGrid.maximumZoom}
-          onClick={() => onAdjustZoom(notebookGrid.zoomStep)}
-        >
-          <ZoomIn size={15} />
         </button>
       </div>
       {selectedCount > 0 && (

@@ -1403,49 +1403,6 @@ textarea:focus-visible {
   gap: 6px;
 }
 
-.canvas-zoom-panel {
-  display: flex;
-  height: 32px;
-}
-
-.canvas-zoom-panel button {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--control-border);
-  color: var(--control-fg);
-  background: var(--control-bg);
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.canvas-zoom-panel button + button {
-  border-left: 0;
-}
-
-.canvas-zoom-panel button:hover,
-.canvas-zoom-panel button:focus-visible {
-  border-color: var(--control-border-hover);
-  color: var(--control-fg-hover);
-  background: var(--control-bg-hover);
-}
-
-.canvas-zoom-panel button:disabled {
-  color: rgba(139, 177, 155, 0.35);
-  cursor: default;
-  background: rgba(4, 19, 12, 0.78);
-}
-
-.canvas-zoom-panel .canvas-zoom-level {
-  width: 44px;
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1;
-  letter-spacing: 0.06em;
-}
-
 .canvas-add-menu {
   position: relative;
   pointer-events: auto;
@@ -1700,6 +1657,7 @@ textarea:focus-visible {
   --notebook-chrome-gap: var(--app-gap);
   --notebook-chrome-top: 20px;
   --notebook-scrollbar-size: 10px;
+  --notebook-minimum-zoom: 0;
   --notebook-composer-clearance: calc(var(--app-gutter) + var(--notebook-command-row-height, 58px) + var(--app-gap) + 16px);
   /* How far up the dissolve reaches. The clearance alone would start the ramp
      level with the dock and read as an edge; the extra band puts most of the
@@ -1845,11 +1803,7 @@ textarea:focus-visible {
   height: calc(100% - var(--notebook-chrome-top));
   min-width: 0;
   min-height: 0;
-  margin: var(--notebook-chrome-top) var(--notebook-chrome-inset) 0;
-  /* The last column would otherwise end against the scrollbar lane while the
-     first has a full gutter. Padding inside the scroll keeps both margins the
-     same and still scrolls past the end of the grid. */
-  padding-right: var(--notebook-chrome-inset);
+  margin: var(--notebook-chrome-top) calc(var(--notebook-chrome-inset) - var(--notebook-scrollbar-size)) 0 var(--notebook-chrome-inset);
   /* The clearance is padding on the scroll, not on the canvas: the grid runs
      the full height and dissolves into the ground under the composer, rather
      than stopping dead at a flat black band. The last row still scrolls clear
@@ -1867,7 +1821,8 @@ textarea:focus-visible {
     #000 calc(100% - var(--notebook-fade-height)),
     transparent 100%
   );
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overflow-anchor: none;
   overscroll-behavior-x: contain;
   overscroll-behavior-y: contain;
@@ -11236,6 +11191,14 @@ textarea:focus-visible {
   .app-shell {
     --app-gutter: 10px;
     grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+  }
+
+  .canvas {
+    --notebook-minimum-zoom: 0.5;
+  }
+
+  .notebook-horizontal-scroll {
+    overflow-x: auto;
   }
 
   .brand-project-home {

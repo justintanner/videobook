@@ -330,6 +330,7 @@ import {
   parseNotebookGridAddress,
   notebookGrid,
   notebookGridAddress,
+  notebookGridDetailScale,
   notebookGridDropSlot,
   notebookGridFrameSize,
   notebookGridMetrics,
@@ -1552,7 +1553,6 @@ const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
 const notebookDefaultEdgeOptions = { selectable: false }
 const notebookMultiSelectionKeys = ['Shift', 'Control', 'Meta']
-const notebookZoomActivationKeys = ['Control', 'Meta']
 const notebookPanOnDragButtons: number[] = []
 
 type AppProps = {
@@ -1682,10 +1682,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     scrollRef: notebookScrollRef,
     surface: notebookSurface,
     zoom: notebookZoom,
-    fitting: notebookFitting,
-    updateViewport: updateNotebookViewport,
-    adjustZoom: adjustNotebookZoom,
-    fitToWidth: resetNotebookZoom,
     revealCell: revealNotebookCanvasCell,
   } = useNotebookViewport(bookId, notebook?.id, screen === 'notebook')
   const [commandRowHeight, setCommandRowHeight] = useState(58)
@@ -3155,7 +3151,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
-      '--notebook-detail-scale': 1 / notebookZoom,
+      '--notebook-detail-scale': notebookGridDetailScale(notebookZoom),
       width: notebookFrameSize.width,
       height: notebookFrameSize.height,
     }) as CSSProperties,
@@ -11248,8 +11244,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         </div>
         {screen === 'notebook' && notebook && (
           <NotebookToolbar
-            fitting={notebookFitting}
-            zoom={notebookZoom}
             busy={busy}
             arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
             selectedCount={selectedNotebookCells.length}
@@ -11257,8 +11251,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
-            onAdjustZoom={adjustNotebookZoom}
-            onResetZoom={resetNotebookZoom}
             onDeleteSelection={deleteSelectedCells}
             onSelectionActions={() => void openWorkspaceActions(undefined, {
               cell_id: selectedNotebookCell?.id,
@@ -11336,7 +11328,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
                       viewport={notebookViewport}
-                      onViewportChange={updateNotebookViewport}
                       onInit={(instance) => {
                         flowRef.current = instance
                       }}
@@ -11461,8 +11452,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       onDrop={handleNotebookFlowDrop}
                       onDragLeave={handleNotebookFlowDragLeave}
                       onDragOver={handleNotebookFlowDragOver}
-                      minZoom={notebookGrid.minimumZoom}
-                      maxZoom={notebookGrid.maximumZoom}
+                      minZoom={notebookZoom}
+                      maxZoom={notebookZoom}
                       defaultEdgeOptions={notebookDefaultEdgeOptions}
                       elementsSelectable
                       multiSelectionKeyCode={notebookMultiSelectionKeys}
@@ -11473,8 +11464,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       selectionOnDrag
                       selectNodesOnDrag={false}
                       zoomOnScroll={false}
-                      zoomOnPinch
-                      zoomActivationKeyCode={notebookZoomActivationKeys}
+                      zoomOnPinch={false}
+                      zoomActivationKeyCode={null}
                       zoomOnDoubleClick={false}
                       preventScrolling={false}
                       deleteKeyCode={null}
