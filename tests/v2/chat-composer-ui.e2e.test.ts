@@ -4920,7 +4920,19 @@ describe('chat composer browser flow', () => {
       const createdGenerationNode = notebookCellNode(page, createdGenerationCellId)
       await createdGenerationNode.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await createdGenerationNode.getAttribute('data-selection')).toBe('primary')
-      expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+      expect(await page.locator('.command-composer').getAttribute('data-dock-open')).toBe('true')
+      const generationEditor = page.locator('.generation-cell-inspector .confirm-generation')
+      await generationEditor.waitFor({ state: 'visible' })
+      expect(await generationEditor.getByRole('textbox', { name: 'Prompt', exact: true }).textContent())
+        .toContain('@image1')
+      expect(await generationEditor.getByRole('button', { name: `Remove ${duplicateSourceAddress} input`, exact: true }).isVisible()).toBe(true)
+      await expect.poll(() => generationEditor.locator('.generation-review-json pre').textContent(), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toContain('"prompt"')
+      expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
+      if (generation.cellType === 'generate_video' && process.env.VIDEOBOOK_E2E_SCREENSHOT) {
+        await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
+      }
       await createdGenerationNode.click({ button: 'right' })
       const createdGenerationMenu = page.getByRole('menu', {
         name: /Cell actions for/,

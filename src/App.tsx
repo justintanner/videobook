@@ -10388,11 +10388,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : {}),
       })
       rememberLastWorkSlot(draft.cell.slot)
-      await refreshBookData(bookId, notebookId)
-      selectCanvasCell(materialized.cellId)
-      setSourceViewCellId(null)
-      setHistoryViewCellId(null)
-      collapseComposerAfterCellCreation()
+      const updatedNotebook = await refreshBookData(bookId, notebookId)
+      openCellInspector(materialized.cellId)
+      selectGenerationCellPreview(materialized.cellId, undefined, updatedNotebook)
       revealNotebookCanvasCell(materialized.cellId)
       setNotice(
         `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,

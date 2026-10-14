@@ -27,14 +27,15 @@ export function useGenerationCellPreview({
   const [preview, setPreview] = useState<SelectedPreview | null>(null)
   const requestRef = useRef<{ key: string } | null>(null)
   const scope = `${bookId}:${notebook?.id}`
-  const select = useCallback((cellId: string | null, initialValue?: unknown) => {
-    const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
-    if (!bookId || !notebook || !cellId || (initialValue === undefined && (!cell || !isNotebookGenerationCellType(cell.type)))) {
+  const select = useCallback((cellId: string | null, initialValue?: unknown, currentNotebook = notebook) => {
+    const cell = currentNotebook?.cells.find((candidate) => candidate.id === cellId)
+    if (!bookId || !currentNotebook || !cellId || (initialValue === undefined && (!cell || !isNotebookGenerationCellType(cell.type)))) {
       requestRef.current = null
       setPreview(null)
       return
     }
-    const identity = { scope, cellId }
+    const selectedScope = `${bookId}:${currentNotebook.id}`
+    const identity = { scope: selectedScope, cellId }
     if (initialValue !== undefined) {
       requestRef.current = null
       setPreview({ ...identity, value: initialValue, loading: false, error: null })
@@ -42,14 +43,14 @@ export function useGenerationCellPreview({
     }
     if (!cell) return
     if (!ready) return
-    const key = JSON.stringify([scope, cell, notebook.edges.filter((edge) => edge.target === cellId)])
+    const key = JSON.stringify([selectedScope, cell, currentNotebook.edges.filter((edge) => edge.target === cellId)])
     if (requestRef.current?.key === key) return
     const request = { key }
     requestRef.current = request
     setPreview({ ...identity, value: null, loading: true, error: null })
     void call('preview_notebook_generation', {
       book_id: bookId,
-      notebook_id: notebook.id,
+      notebook_id: currentNotebook.id,
       cell_id: cell.id,
     }, { background: true }).then((value) => {
       if (requestRef.current !== request) return
@@ -64,7 +65,7 @@ export function useGenerationCellPreview({
         error: error instanceof Error ? error.message : String(error),
       })
     })
-  }, [bookId, call, notebook, ready, scope])
+  }, [bookId, call, notebook, ready])
 
   return { preview: preview?.scope === scope ? preview : null, select }
 }
