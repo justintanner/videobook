@@ -24,10 +24,13 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/AliveCaptions') || id.includes('/src/remotion/AliveCaptionsPreview')) {
     return 'alive-captions'
   }
+  if (id.includes('/src/components/videobook/confirm/bodies/')) {
+    return 'confirm-bodies'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }
-  if (id.includes('/src/videobook/')) {
+  if (id.includes('/src/videobook/') || id.includes('/server/src/')) {
     return 'videobook'
   }
   if (!id.includes('/node_modules/')) return undefined

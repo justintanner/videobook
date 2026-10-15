@@ -19,8 +19,10 @@ import {
   resolveDeliverySource,
   reviewWithIcloudStatus,
   type ICloudStatus,
+  postPlatformArgs,
   type PostDeliveryReview,
 } from './post-delivery-review'
+import { editCopyVersion, initialCopyState } from './post-copy-review'
 
 function postView(overrides: Partial<PostView['runtime']> = {}, frozen = true): PostView {
   return {
@@ -57,7 +59,7 @@ function review(overrides: Partial<PostDeliveryReview> = {}): PostDeliveryReview
     entry: 'icloud',
     destination: 'icloud',
     pinnedDestination: false,
-    caption: 'Draft caption',
+    copy: initialCopyState(postView()),
     icloudFolder: 'my-book/post-b1-479eab',
     dropboxFolder: '/Videobook/my-book/post-b1-479eab',
     connection: { connected: true, pending: false, hasCredentials: true, error: null },
@@ -140,9 +142,25 @@ describe('post delivery review', () => {
 
   it('sends the caption only when it changed and is still editable', () => {
     expect(postDeliveryArgs(postView(), review({ icloudFolder: 'skate/' }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, folder: 'skate' })
-    expect(postDeliveryArgs(postView(), review({ caption: 'New' }))).toMatchObject({ caption: 'New' })
+    const edited = editCopyVersion(initialCopyState(postView()), { body: 'New', tags: ['rain'] })
+    expect(postDeliveryArgs(postView(), review({ copy: edited }))).toMatchObject({ caption: 'New\n\n#rain' })
     const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
-    expect(postDeliveryArgs(frozen, review({ caption: 'New' }))).not.toHaveProperty('caption')
+    expect(postDeliveryArgs(frozen, review({ copy: edited }))).not.toHaveProperty('caption')
+  })
+
+  it('saves a changed platform before delivery while the Post is still a draft', () => {
+    expect(postPlatformArgs(postView(), review())).toBeNull()
+    const copy = { ...initialCopyState(postView()), platform: 'x' as const }
+    expect(postPlatformArgs(postView(), review({ copy }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, platform: 'x' })
+    const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
+    expect(postPlatformArgs(frozen, review({ copy }))).toBeNull()
+  })
+
+  it('waits for Astra and warns past the platform limit', () => {
+    const drafting = { ...initialCopyState(postView()), drafting: { requestId: 'r', language: 'en' as const } }
+    expect(postDeliveryValidation(postView(), review({ copy: drafting })).blocking).toBe('Astra is writing the caption…')
+    const long = editCopyVersion({ ...initialCopyState(postView()), platform: 'x' }, { body: 'a'.repeat(281) })
+    expect(postDeliveryValidation(postView(), review({ copy: long }))).toEqual({ blocking: null, notice: "Over X's 280-character limit. Shorten it or regen with Astra." })
     expect(postDeliveryArgs(postView(), review({ destination: 'dropbox', dropboxFolder: '/Out/' })).folder).toBe('/Out')
   })
 

@@ -201,6 +201,187 @@
   gap: 6px;
 }
 
+.post-copy-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 4px;
+}
+
+.post-copy-group .post-delivery-switch {
+  flex-wrap: wrap;
+}
+
+.post-copy-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.post-copy-caption-label,
+.post-copy-caption-meta,
+.post-copy-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.post-copy-versions {
+  gap: 4px;
+}
+
+.post-copy-versions button,
+.post-copy-tag button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  color: #86ab95;
+  background: transparent;
+  cursor: pointer;
+}
+
+.post-copy-versions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.post-copy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid rgba(127, 212, 154, 0.35);
+  color: var(--green);
+  font-size: 9px;
+}
+
+.post-copy-drafting {
+  flex: 1;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px dashed var(--control-border);
+  color: var(--green);
+  font-size: 12px;
+}
+
+.post-copy-tags,
+.post-copy-regen {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.post-copy-tag-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1px solid var(--control-border);
+}
+
+.post-copy-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 8px;
+  border: 1px solid rgba(127, 212, 154, 0.35);
+  color: #cdeedb;
+  background: rgba(127, 212, 154, 0.08);
+  font-size: 11px;
+}
+
+.post-copy-tag button {
+  border: 0;
+}
+
+.post-copy-tag-field input {
+  flex: 1;
+  min-width: 120px;
+  min-height: 26px;
+  border: 0;
+  background: transparent;
+  color: #cdeedb;
+  font: inherit;
+  font-size: 11px;
+}
+
+.post-copy-tag-field input:focus {
+  outline: none;
+}
+
+.post-copy-regen {
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: rgba(2, 11, 7, 0.78);
+}
+
+.post-copy-regen .post-delivery-label-row label {
+  color: var(--green);
+}
+
+.post-copy-regen-row {
+  display: flex;
+  gap: 6px;
+}
+
+.post-copy-regen-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+}
+
+.post-copy-regen-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--green);
+  color: #04120a;
+  background: var(--green);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.post-copy-regen-button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.post-copy-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.post-copy-presets button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #86ab95;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.post-copy-presets button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+}
+
 @media (max-width: 900px) {
   .post-delivery-body {
     grid-template-columns: minmax(0, 1fr);

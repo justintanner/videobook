@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (353)
+## MCP endpoints (354)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -80,6 +80,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `disconnect_notebook_cells` — Delete a notebook edge
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this book and include per-book byte/chunk reclamation in the report.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
+- `draft_post_copy` — Draft a Post's caption and hashtags with Astra from the source clip's video analysis, transcript and generation prompts. Analyzes the clip first when it has no analysis yet. language picks English or Thai; platform defaults to the Post's platform and sets the length and tag budget. instruction, caption and tags rewrite an existing draft. Returns the draft without saving it.
 - `dropbox_connect_start` — Connect Dropbox with offline OAuth access; returns an authorization URL. Credentials stay in application state.
 - `dropbox_connect_status` — Read Dropbox connection status without exposing credentials.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source

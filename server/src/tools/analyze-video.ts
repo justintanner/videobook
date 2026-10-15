@@ -19,6 +19,23 @@ function ok(payload: Record<string, unknown>): ToolResult {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
 }
 
+export async function analyzeVideoJobPayload(engine: Engine, assetId: string, bookId: string, purpose?: "tagging"): Promise<Record<string, unknown>> {
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const [timed, plain] = await Promise.all([
+    engine.files.read(assetId, TIMED_TRANSCRIPT_FILE),
+    engine.files.read(assetId, PLAIN_TRANSCRIPT_FILE),
+  ]);
+  return {
+    type: "analyze_video",
+    assetId,
+    assetDir: manifest.value.path,
+    bookId,
+    hasTranscription: timed.ok || plain.ok,
+    ...(purpose ? { purpose } : {}),
+  };
+}
+
 export function analyzeVideoDef(engine: Engine): ToolDef {
   return {
     name: "analyze_video",
@@ -54,22 +71,11 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
         return ok({ asset_id, status: "already_analyzed" });
       }
 
-      const [timed, plain] = await Promise.all([
-        engine.files.read(asset_id, TIMED_TRANSCRIPT_FILE),
-        engine.files.read(asset_id, PLAIN_TRANSCRIPT_FILE),
-      ]);
-
       // Stable dedupe key: repeated clicks collapse onto one queued job, and the
       // partial unique index only covers active states so a later re-analysis
       // still enqueues.
       const jobId = `analyze-video-${asset_id}`;
-      await queue.enqueue(jobId, {
-        type: "analyze_video",
-        assetId: asset_id,
-        assetDir: manifestResult.value.path,
-        bookId: book_id,
-        hasTranscription: timed.ok || plain.ok,
-      } as unknown as Record<string, unknown>);
+      await queue.enqueue(jobId, await analyzeVideoJobPayload(engine, asset_id, book_id));
 
       return ok({ asset_id, job_id: jobId, status: "enqueued" });
     },

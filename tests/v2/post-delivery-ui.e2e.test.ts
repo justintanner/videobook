@@ -77,6 +77,7 @@ describe('Post delivery review in the chat composer', () => {
       ...process.env,
       NODE_ENV: 'test',
       DROPBOX_CLIENT_ID: '',
+      OPENAI_API_KEY: '',
       PORT: String(port),
       VIDEOBOOK_LIBRARY_DIR: join(root, 'books'),
       VIDEOBOOK_APP_STATE_PATH: join(root, 'app-state.json'),
@@ -238,8 +239,21 @@ describe('Post delivery review in the chat composer', () => {
     await review().getByRole('button', { name: /Cancel/ }).click()
     await review().waitFor({ state: 'hidden' })
 
+    expect(calls).not.toContain('draft_post_copy')
     await command('/save-post-to-icloud @d2')
     await review().waitFor({ state: 'visible', timeout: 15_000 })
+    await expect.poll(() => calls.filter(name => name === 'draft_post_copy').length, { timeout: 15_000 }).toBe(1)
+    await expect.poll(() => review().getByText('OPENAI_API_KEY is not set', { exact: false }).count(), { timeout: 15_000 }).toBeGreaterThan(0)
+    expect(await review().getByRole('button', { name: 'X', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await review().getByRole('button', { name: 'EN', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await review().getByLabel('Regen with Astra', { exact: true }).isVisible()).toBe(true)
+    await review().getByRole('button', { name: 'TH · ไทย', exact: true }).click()
+    await expect.poll(() => calls.filter(name => name === 'draft_post_copy').length, { timeout: 15_000 }).toBe(2)
+    expect(await review().getByRole('button', { name: 'TH · ไทย', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await review().getByLabel('Tags', { exact: true }).fill('rain day')
+    await review().getByLabel('Tags', { exact: true }).press('Enter')
+    expect(await review().getByRole('button', { name: 'Remove tag rain', exact: true }).count()).toBe(1)
+    expect(await review().getByRole('button', { name: 'Remove tag day', exact: true }).count()).toBe(1)
     expect(calls.filter(name => name === 'create_post').length).toBe(beforeCreates + 1)
     const created = (await call<{ posts: PostWire[] }>('list_posts')).posts.filter(item => item.id !== post.id)
     expect(created).toHaveLength(1)

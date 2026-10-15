@@ -9,6 +9,7 @@ import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import {
   defaultDropboxFolder,
   defaultIcloudFolder,
+  deliveryCaptionLocked,
   fetchDropboxConnection,
   fetchIcloudStatus,
   latestPostForSource,
@@ -16,6 +17,7 @@ import {
   postDeliveryReceipt,
   postDeliveryTool,
   postDeliveryValidation,
+  postPlatformArgs,
   resolveDeliveryPost,
   resolveDeliverySource,
   reviewWithIcloudStatus,
@@ -24,6 +26,15 @@ import {
   type DeliveryDestination,
   type PostDeliveryReview,
 } from '@/videobook/post-delivery-review'
+import {
+  appendCopyDraft,
+  copyDraftArgs,
+  copyNeedsDraft,
+  initialCopyState,
+  postCopyDraftFromTool,
+  type PostCopyState,
+} from '@/videobook/post-copy-review'
+import type { PostCopyLanguage } from '../server/src/posts/post-copy-format'
 import { coldOpenRangeError } from '../server/src/cold-open-model'
 import { prepareColdOpenReview, renderColdOpenReview, type ColdOpenReview } from '@/videobook/cold-open-review'
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../server/src/image-edit-default'
@@ -8000,9 +8011,41 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const draftPostCopyFor = async (targetBookId: string, postId: string, copy: PostCopyState, language: PostCopyLanguage, instruction: string | null) => {
+    const requestId = uuidv7()
+    const ownsRequest = (current: PendingChatAction | null) => current?.kind === 'post-delivery'
+      && current.review.postId === postId && current.review.copy.drafting?.requestId === requestId
+    setPendingChatAction(current => current?.kind === 'post-delivery' && current.review.postId === postId
+      ? { ...current, review: { ...current.review, copy: { ...current.review.copy, drafting: { requestId, language }, error: null } } }
+      : current)
+    try {
+      const draft = postCopyDraftFromTool(await call('draft_post_copy', copyDraftArgs(targetBookId, postId, copy, language, instruction)))
+      setPendingChatAction(current => ownsRequest(current) && current?.kind === 'post-delivery'
+        ? { ...current, review: { ...current.review, copy: appendCopyDraft(current.review.copy, language, draft, instruction) } }
+        : current)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setPendingChatAction(current => ownsRequest(current) && current?.kind === 'post-delivery'
+        ? { ...current, review: { ...current.review, copy: { ...current.review.copy, drafting: null, error: message } } }
+        : current)
+    }
+  }
+
+  const choosePostCopyLanguage = (post: PostView, review: PostDeliveryReview, language: PostCopyLanguage) => {
+    const copy = { ...review.copy, language }
+    updatePendingDelivery({ copy })
+    if (copyNeedsDraft(copy, language, deliveryCaptionLocked(post))) void draftPostCopyFor(review.bookId, post.id, copy, language, null)
+  }
+
+  const regenPostCopy = (post: PostView, review: PostDeliveryReview) => {
+    if (deliveryCaptionLocked(post) || review.copy.drafting) return
+    void draftPostCopyFor(review.bookId, post.id, review.copy, review.copy.language, review.copy.prompt.trim() || null)
+  }
+
   const openDeliveryReviewForPost = (post: PostView, entry: DeliveryDestination, chat?: ChatExecution): ComposerOutcome => {
     if (!bookId || !notebook) return { ok: false, message: 'Open a connected notebook before delivering a Post.' }
     const bookName = activeBook?.name ?? 'book'
+    const copy = initialCopyState(post)
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction({
@@ -8014,7 +8057,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         entry,
         destination: entry,
         pinnedDestination: false,
-        caption: post.definition.caption,
+        copy,
         icloudFolder: defaultIcloudFolder(post, bookName),
         dropboxFolder: defaultDropboxFolder(post, bookName),
         connection: null,
@@ -8027,6 +8070,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setComposerDockOpen(true)
     void checkPostIcloudStatus()
     if (entry === 'dropbox') void checkPostDropboxConnection()
+    if (copyNeedsDraft(copy, copy.language, deliveryCaptionLocked(post))) void draftPostCopyFor(bookId, post.id, copy, copy.language, null)
     return applyReadyOutcome(entry === 'dropbox' ? 'Dropbox upload review opened' : 'Save to iPhone review opened')
   }
 
@@ -8598,6 +8642,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!post || validation.blocking) return { ok: false, message: validation.blocking ?? 'This Post is no longer on the canvas.' }
       const current = () => watchScopeRef.current.bookId === review.bookId
         && watchScopeRef.current.notebookId === review.notebookId && (chat?.isCurrent() ?? true)
+      const platformArgs = postPlatformArgs(post, review)
+      if (platformArgs) await call('update_post', platformArgs, { chat })
       const saved = await call(postDeliveryTool(review.destination), postDeliveryArgs(post, review), { chat }) as PostView
       await refreshBookData(review.bookId, review.notebookId, current, chat)
       const message = postDeliveryReceipt(saved, review.destination)
@@ -8606,7 +8652,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           kind: 'post-delivery',
           review: {
             ...review,
-            caption: saved.definition.caption,
             icloudFolder: saved.runtime.icloud?.folder ?? review.icloudFolder,
             dropboxFolder: saved.runtime.dropbox?.folder ?? review.dropboxFolder,
             receipt: message,
@@ -10749,7 +10794,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               asset={postAsset}
               review={review}
               busy={busy}
-              onCaptionChange={caption => updatePendingDelivery({ caption })}
+              onCopyChange={copy => updatePendingDelivery({ copy })}
+              onLanguage={language => choosePostCopyLanguage(post, review, language)}
+              onRegen={() => regenPostCopy(post, review)}
               onFolderChange={folder => updatePendingDelivery(icloud ? { icloudFolder: folder } : { dropboxFolder: folder })}
               onDestination={chooseDeliveryDestination}
               onConnect={() => void connectPostDropbox()}

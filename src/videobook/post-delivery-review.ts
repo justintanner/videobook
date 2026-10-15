@@ -3,6 +3,7 @@ import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import type { PostView } from '../../server/src/posts/post-contract'
 import { defaultPostFolderName, icloudFolderError } from '../../server/src/posts/post-folder'
 import type { ConfirmValidation } from './confirm-validation'
+import { copyCaption, copyLimitNotice, type PostCopyState } from './post-copy-review'
 
 export type DeliveryDestination = 'icloud' | 'dropbox'
 
@@ -35,7 +36,7 @@ export type PostDeliveryReview = {
   entry: DeliveryDestination
   destination: DeliveryDestination
   pinnedDestination: boolean
-  caption: string
+  copy: PostCopyState
   icloudFolder: string
   dropboxFolder: string
   connection: DropboxConnection | null
@@ -147,20 +148,30 @@ export function icloudShareHint(status: ICloudStatus | null): string | null {
   return null
 }
 
+function copyBlocking(post: PostView | null, review: PostDeliveryReview): string | null {
+  if (!post || deliveryCaptionLocked(post)) return null
+  if (review.copy.drafting) return 'Astra is writing the caption…'
+  return null
+}
+
+function copyNotice(post: PostView | null, review: PostDeliveryReview): string | null {
+  return post && !deliveryCaptionLocked(post) ? copyLimitNotice(review.copy) : null
+}
+
 export function postDeliveryValidation(post: PostView | null, review: PostDeliveryReview): ConfirmValidation {
-  const common = postBlocking(post, review.caption)
+  const common = postBlocking(post, copyCaption(review.copy)) ?? copyBlocking(post, review)
   if (review.destination === 'dropbox') {
     const blocking = common ?? dropboxFolderError(review.dropboxFolder) ?? connectionError(review.connection, review.connecting)
     const notice = post?.runtime.dropbox && !post.runtime.dropbox.completedAt && post.runtime.dropbox.folder === review.dropboxFolder.trim()
       ? 'A previous upload to this folder stopped early. Uploading resumes where it left off.'
-      : null
+      : copyNotice(post, review)
     return { blocking, notice: blocking ? null : notice }
   }
   const availability = !review.icloud
     ? 'Checking iCloud Drive…'
     : review.icloud.available ? null : (review.icloud.reason ?? ICLOUD_UNAVAILABLE)
   const blocking = common ?? availability ?? icloudFolderError(review.icloudFolder)
-  return { blocking, notice: null }
+  return { blocking, notice: blocking ? null : copyNotice(post, review) }
 }
 
 export function postDeliveryArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> {
@@ -169,8 +180,13 @@ export function postDeliveryArgs(post: PostView, review: PostDeliveryReview): Re
     book_id: review.bookId,
     post_cell_id: post.id,
     folder,
-    ...(!deliveryCaptionLocked(post) && review.caption !== post.definition.caption ? { caption: review.caption } : {}),
+    ...(!deliveryCaptionLocked(post) && copyCaption(review.copy) !== post.definition.caption ? { caption: copyCaption(review.copy) } : {}),
   }
+}
+
+export function postPlatformArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> | null {
+  if (deliveryCaptionLocked(post) || review.copy.platform === post.definition.platform) return null
+  return { book_id: review.bookId, post_cell_id: post.id, platform: review.copy.platform }
 }
 
 export function postDeliveryTool(destination: DeliveryDestination): 'save_post_to_icloud' | 'upload_post_to_dropbox' {

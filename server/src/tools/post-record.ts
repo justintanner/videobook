@@ -9,6 +9,10 @@ import type { PostMetrics, PostPlatform, PostView } from "../posts/post-contract
 import { recordPostMetrics } from "../posts/post-metrics.js";
 import { dropboxStatus, startDropboxConnect } from "../posts/dropbox-auth.js";
 import { icloudStatus, postIcloudSyncStatus } from "../posts/icloud-drive.js";
+import { postAnalysisTarget } from "../posts/post-copy.js";
+import { POST_COPY_LANGUAGES } from "../posts/post-copy-format.js";
+import { getApiKey } from "../api-key.js";
+import { analyzeVideoJobPayload } from "./analyze-video.js";
 
 const book = { book_id: z.string() };
 const target = { ...book, post_cell_id: z.string().uuid() };
@@ -19,6 +23,26 @@ function define(name: string, description: string, schema: ToolDef["schema"], ha
     try { return { content: [{ type: "text", text: JSON.stringify(await handler(args)) }] }; }
     catch (error) { return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] }; }
   } };
+}
+
+async function draftPostCopyTool(engine: Engine, args: Record<string, unknown>): Promise<unknown> {
+  if (!getApiKey("OPENAI_API_KEY")) throw new Error("OPENAI_API_KEY is not set");
+  const bookId = String(args.book_id);
+  const postCellId = String(args.post_cell_id);
+  const post = getPost(engine, postCellId);
+  if (!post.definition.source) throw new Error(`${post.address} has no saved source clip. Choose one in the Post panel.`);
+  const target = await postAnalysisTarget(engine, post);
+  if (target?.analyzable && !target.analyzed) {
+    await queue.enqueueAndWait(`post-copy-analysis-${target.assetId}-${randomUUID()}`, await analyzeVideoJobPayload(engine, target.assetId, bookId, "tagging"));
+  }
+  const request = {
+    platform: (args.platform as PostPlatform | undefined) ?? post.definition.platform,
+    language: args.language ?? "en",
+    instruction: typeof args.instruction === "string" ? args.instruction : undefined,
+    caption: typeof args.caption === "string" ? args.caption : undefined,
+    tags: Array.isArray(args.tags) ? args.tags.filter((tag): tag is string => typeof tag === "string") : undefined,
+  };
+  return queue.enqueueAndWait(`post-copy-${postCellId}-${randomUUID()}`, { type: "post_copy", bookId, postCellId, request });
 }
 
 export function postRecordDefs(engine: Engine): ToolDef[] {
@@ -40,6 +64,7 @@ export function postRecordDefs(engine: Engine): ToolDef[] {
     }),
     define("upload_post_to_dropbox", "Upload the frozen Post media and caption.txt to a private Dropbox folder. A caption saves to the Post first and freezes with the first delivery. Interrupted uploads resume without replacing unrelated files.", { ...target, folder: z.string().optional(), caption: fields.caption }, async (args) => queue.enqueueAndWait(`post-dropbox-${args.post_cell_id}-${randomUUID()}`, { type: "post_dropbox", bookId: String(args.book_id), postCellId: String(args.post_cell_id), folder: args.folder, caption: args.caption })),
     define("save_post_to_icloud", "Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.", { ...target, folder: z.string().max(500).optional(), caption: fields.caption }, async (args) => queue.enqueueAndWait(`post-icloud-${args.post_cell_id}-${randomUUID()}`, { type: "post_icloud", bookId: String(args.book_id), postCellId: String(args.post_cell_id), folder: args.folder, caption: args.caption })),
+    define("draft_post_copy", "Draft a Post's caption and hashtags with Astra from the source clip's video analysis, transcript and generation prompts. Analyzes the clip first when it has no analysis yet. language picks English or Thai; platform defaults to the Post's platform and sets the length and tag budget. instruction, caption and tags rewrite an existing draft. Returns the draft without saving it.", { ...target, language: z.enum(POST_COPY_LANGUAGES).default("en"), platform: z.enum(POST_PLATFORMS).optional(), instruction: z.string().max(1000).optional(), caption: fields.caption, tags: z.array(z.string().max(100)).max(50).optional() }, async (args) => draftPostCopyTool(engine, args)),
     define("refresh_post_metrics", "Fetch a current X metrics observation. Non-X publications use record_post_metrics. Unknown values remain unknown.", target, async (args) => queue.enqueueAndWait(`post-metrics-${args.post_cell_id}-${randomUUID()}`, { type: "post_metrics", bookId: String(args.book_id), postCellId: String(args.post_cell_id) })),
     define("record_post_metrics", "Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.", { ...target, observed_at: z.string().datetime(), values: z.partialRecord(z.enum(POST_METRIC_NAMES), z.number().int().nonnegative().nullable()).refine((value) => Object.keys(value).length > 0), note: z.string().optional() }, async (args) => {
       recordPostMetrics(engine, String(args.post_cell_id), { source: "manual", observedAt: String(args.observed_at), values: args.values as PostMetrics, note: args.note as string | undefined });
