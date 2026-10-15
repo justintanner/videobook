@@ -64,9 +64,9 @@ export async function goalTestCharacters(engine: Engine, notebookId: string): Pr
   return ids;
 }
 
-export async function goalTestVideo(engine: Engine, root: string, color: string): Promise<string> {
+export async function goalTestVideo(engine: Engine, root: string, color: string, size = { width: 160, height: 90 }): Promise<string> {
   const path = join(root, `${uuidv7()}.mp4`);
-  await copyVideoFixture({ width: 160, height: 90, durationSec: 4, fps: 10, source: "color", color, audio: { frequency: 440 } }, path);
+  await copyVideoFixture({ ...size, durationSec: 4, fps: 10, source: "color", color, audio: { frequency: 440 } }, path);
   const created = await engine.artifacts.create("video", color);
   if (!created.ok) throw new Error(created.error.message);
   const artifactId = created.value.artifactId;

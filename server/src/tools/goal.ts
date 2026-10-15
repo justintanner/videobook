@@ -7,7 +7,7 @@ import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
 import { compileFrameSteps, compileGoalV3Approval, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlanV3Schema, goalStillPrompt, isGoalPlanV3, refreshGoalPlanV3, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
 import { buildGoalPlanV3, type GoalPlanV3 } from "../goal-plan-v3.js";
-import { estimateGoalV3, goalMediaCharacters, resolveGoalMediaReferences, sampleGoalVideoFrames } from "../goal-v3-runtime.js";
+import { estimateGoalV3, goalMediaCharacters, resolveGoalMediaReferences, captureGoalSceneFrame } from "../goal-v3-runtime.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
 import { goalStylesEqual } from "../goal-styles.js";
 import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
@@ -334,8 +334,7 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
       const sourced = supplied === undefined
         ? await resolveGoalMediaReferences(engine, document, brief)
         : supplied.references;
-      const sampledFrames = supplied === undefined ? await sampleGoalVideoFrames(engine, sourced) : supplied.sampledFrames;
-      const plan = supplied === undefined ? buildGoalPlanV3({ brief, references: sourced, sampledFrames }) : supplied;
+      const plan = supplied ?? buildGoalPlanV3({ brief, references: sourced, frame: await captureGoalSceneFrame(engine, notebookId, sourced) });
       const media = plan.references;
       const characters = goalMediaCharacters(media);
       const estimate = await estimateGoalV3(engine, plan);

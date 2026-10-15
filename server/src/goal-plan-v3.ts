@@ -11,7 +11,6 @@ import {
   LIGHTNING_SCENE_PROMPT_WORDS,
   LIGHTNING_SCENE_RESOLUTION,
   LIGHTNING_SCENE_TOOL,
-  LIGHTNING_VIDEO_ASPECT_RATIO,
   LIGHTNING_VIDEO_DURATION_SECONDS,
   LIGHTNING_VIDEO_GENERATE_AUDIO,
   LIGHTNING_VIDEO_OUTPUT_FORMAT,
@@ -89,10 +88,26 @@ export function isGoalPlanV3(plan: { version?: unknown } | null | undefined): pl
   return plan?.version === 3;
 }
 
-export function goalV3Timing(brief: string): { aspectRatio: GoalPlanV3["aspectRatio"]; durationSeconds: number } {
+export type GoalAspectRatio = GoalPlanV3["aspectRatio"];
+
+export type GoalSceneFrame = {
+  reference: Omit<GoalMediaRef, "slot">;
+  seconds: number;
+  aspectRatio: GoalAspectRatio;
+};
+
+export function closestGoalAspectRatio(width: number, height: number): GoalAspectRatio {
+  const ratio = Math.log(width / height);
+  const candidates: [GoalAspectRatio, number][] = [["16:9", 16 / 9], ["9:16", 9 / 16], ["1:1", 1]];
+  return candidates.reduce((best, candidate) =>
+    Math.abs(ratio - Math.log(candidate[1])) < Math.abs(ratio - Math.log(best[1])) ? candidate : best)[0];
+}
+
+export function goalV3Timing(brief: string, fallbackAspectRatio: GoalAspectRatio = LIGHTNING_SCENE_ASPECT_RATIO): { aspectRatio: GoalAspectRatio; durationSeconds: number } {
   const aspectRatio = /\b(?:9:16|portrait|vertical)\b/iu.test(brief) ? "9:16"
     : /\b(?:1:1|square)\b/iu.test(brief) ? "1:1"
-      : LIGHTNING_SCENE_ASPECT_RATIO;
+      : /\b(?:16:9|landscape|horizontal)\b/iu.test(brief) ? "16:9"
+        : fallbackAspectRatio;
   const match = /(?:^|\s)(\d+)[ -]*(?:s|secs?|seconds?)\b/iu.exec(brief);
   const parsed = match ? Number(match[1]) : Number.NaN;
   const durationSeconds = Number.isInteger(parsed) && parsed >= 4 && parsed <= 30
@@ -133,6 +148,19 @@ function promptWithSlots(body: string, slots: readonly string[], maxWords: numbe
   return prompt.length > 0 ? prompt : slots.join(" ");
 }
 
+function framePrompt(body: string, characterSlots: readonly string[], authored: boolean): string {
+  const instruction = characterSlots.length > 0
+    ? `Place ${characterSlots.join(" and ")} into @image1, keeping its framing, setting and light.`
+    : "Edit @image1, keeping its framing, setting and light.";
+  const kept = limitedWords(body, LIGHTNING_SCENE_PROMPT_WORDS - goalPromptWords(instruction), authored);
+  return [instruction, kept].filter(part => part.length > 0).join(" ");
+}
+
+function sceneImageRefs(images: readonly GoalMediaRef[], frame: GoalSceneFrame | null): GoalMediaRef[] {
+  if (!frame) return images.slice(0, IMAGE_LIMIT);
+  return [frame.reference, ...images].slice(0, IMAGE_LIMIT).map((reference, index) => ({ ...reference, slot: `@image${index + 1}` }));
+}
+
 function titleFrom(body: string): string {
   const title = body.split(/\s+/u).filter(Boolean).slice(0, 6).join(" ").slice(0, 80).trim();
   return title.length > 0 ? title : "Video";
@@ -150,19 +178,21 @@ function assignSlots(references: readonly Omit<GoalMediaRef, "slot">[]): GoalMed
 export function buildGoalPlanV3(input: {
   brief: string;
   references: readonly Omit<GoalMediaRef, "slot">[];
-  sampledFrames: GoalPlanV3["sampledFrames"];
+  frame: GoalSceneFrame | null;
 }): GoalPlanV3 {
   const references = assignSlots(input.references);
   const images = references.filter(reference => reference.kind === "image");
   const videos = references.filter(reference => reference.kind === "video");
-  const timing = goalV3Timing(input.brief);
+  const timing = goalV3Timing(input.brief, input.frame?.aspectRatio);
   const copy = authoredCopy(input.brief);
   const prose = briefProse(input.brief);
   const sceneBody = copy.scene ?? prose;
   const videoBody = copy.video ?? prose;
-  const sceneSlots = images.slice(0, IMAGE_LIMIT).map(reference => reference.slot);
+  const sceneRefs = sceneImageRefs(images, input.frame);
   const videoSlots = [...images.slice(0, IMAGE_LIMIT), ...videos.slice(0, VIDEO_LIMIT)].map(reference => reference.slot);
-  const scenePrompt = promptWithSlots(sceneBody, sceneSlots, LIGHTNING_SCENE_PROMPT_WORDS, copy.scene !== null);
+  const scenePrompt = input.frame
+    ? framePrompt(sceneBody, sceneRefs.slice(1).map(reference => reference.slot), copy.scene !== null)
+    : promptWithSlots(sceneBody, sceneRefs.map(reference => reference.slot), LIGHTNING_SCENE_PROMPT_WORDS, copy.scene !== null);
   const videoPrompt = promptWithSlots(videoBody, videoSlots, LIGHTNING_VIDEO_PROMPT_WORDS, copy.video !== null);
   const profile = LIGHTNING_WATERMARK_PROFILE;
   return goalPlanV3Schema.parse({
@@ -176,12 +206,12 @@ export function buildGoalPlanV3(input: {
       aspectRatio: timing.aspectRatio,
       resolution: LIGHTNING_SCENE_RESOLUTION,
       outputFormat: LIGHTNING_SCENE_OUTPUT_FORMAT,
-      imageRefs: images.slice(0, IMAGE_LIMIT),
+      imageRefs: sceneRefs,
     },
     video: {
       prompt: videoPrompt,
       tool: LIGHTNING_VIDEO_TOOL,
-      aspectRatio: timing.aspectRatio === LIGHTNING_VIDEO_ASPECT_RATIO ? LIGHTNING_VIDEO_ASPECT_RATIO : timing.aspectRatio,
+      aspectRatio: timing.aspectRatio,
       resolution: LIGHTNING_VIDEO_RESOLUTION,
       durationSeconds: timing.durationSeconds,
       generateAudio: LIGHTNING_VIDEO_GENERATE_AUDIO,
@@ -190,7 +220,9 @@ export function buildGoalPlanV3(input: {
       videoRefs: videos.slice(0, VIDEO_LIMIT),
     },
     references,
-    sampledFrames: input.sampledFrames,
+    sampledFrames: input.frame
+      ? [{ artifactId: input.frame.reference.artifactId, objectHash: input.frame.reference.objectHash, seconds: input.frame.seconds }]
+      : [],
     finish: {
       suggestedColdOpenSeconds: LIGHTNING_COLD_OPEN_SECONDS,
       watermark: {

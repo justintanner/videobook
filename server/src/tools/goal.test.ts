@@ -292,7 +292,11 @@ describe("staged video goals through MCP", () => {
     const job = providerJob(artifactId);
     let current = job;
     if (current.state === "queued") {
-      const leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+      let leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+      while (leased?.type === "process_image") {
+        await engine.jobs.queue.complete(leased.id, { result: { settled: true } });
+        leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+      }
       if (!leased || leased.id !== job.id) throw new Error(`leased ${leased?.type ?? "nothing"} instead of ${job.type}`);
       current = leased;
     }
@@ -1030,7 +1034,16 @@ describe("staged video goals through MCP", () => {
     if (!imageManifest.ok || !videoFile) throw new Error("missing reference media");
     const imageFile = findPrimaryMediaFile(imageManifest.value.files, "image");
     expect(plan.references.map(reference => reference.objectHash).sort()).toEqual([imageFile!.objectHash, videoFile.objectHash].sort());
-    expect(plan.sampledFrames).toEqual([{ artifactId: videoId, objectHash: videoFile.objectHash, seconds: 1 }]);
+    const frameRef = plan.scene.imageRefs[0]!;
+    const frameCell = notebook().cells.find(cell => cell.id === frameRef.cellId);
+    const frameManifest = await engine.files.manifest(frameRef.artifactId);
+    if (!frameCell || !frameManifest.ok) throw new Error("missing scene frame");
+    expect(frameCell).toMatchObject({ type: "image", outputArtifactId: frameRef.artifactId, inputs: { sourceCellId: videoCell.id, atSeconds: 1 } });
+    expect(notebook().edges.some(edge => edge.source === videoCell.id && edge.target === frameCell.id)).toBe(true);
+    expect(frameRef).toMatchObject({ kind: "image", slot: "@image1", objectHash: findPrimaryMediaFile(frameManifest.value.files, "image")!.objectHash });
+    expect(plan.scene.imageRefs.map(reference => [reference.slot, reference.artifactId])).toEqual([["@image1", frameRef.artifactId], ["@image2", imageIds[0]]]);
+    expect(plan.scene.prompt).toMatch(/^Place @image2 into @image1, keeping its framing/u);
+    expect(plan.sampledFrames).toEqual([{ artifactId: frameRef.artifactId, objectHash: frameRef.objectHash, seconds: 1 }]);
     const after = await engine.files.manifest(videoId);
     expect(after.ok && after.value.files.map(file => file.name).sort()).toEqual(before.value.files.map(file => file.name).sort());
     expect(notebook().edges.filter(edge => edge.target === goal.cellId).map(edge => edge.targetInput)).toEqual(["character"]);
@@ -1061,6 +1074,12 @@ describe("staged video goals through MCP", () => {
 
     const portrait = await invoke({ action: "create", brief: `${mention()} a portrait clip of the market` });
     expect(portrait.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16", durationSeconds: 13 } });
+    const tallId = await goalTestVideo(engine, root, "blue", { width: 90, height: 160 });
+    const tallCell = engine.notebooks.createCell({ type: "video", label: "Tall clip", slot: { row: 7, column: 0 }, outputArtifactId: tallId });
+    const tallInserted = await engine.notebooks.insertCell(notebookId, tallCell);
+    expect(tallInserted.ok, tallInserted.ok ? "" : tallInserted.error.message).toBe(true);
+    const tall = await invoke({ action: "create", brief: `${mention().split(" ")[0]} ${notebookGridTag(tallCell.slot)} a clip of the workshop` });
+    expect(tall.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16" } });
     const timed = await invoke({ action: "create", brief: `${mention()} 10 seconds through the market` });
     expect(timed.plan).toMatchObject({ video: { durationSeconds: 10 } });
     expect(timed.estimate.videos.usd).toBeLessThan(goal.estimate.videos.usd!);
@@ -1284,7 +1303,9 @@ describe("staged video goals through MCP", () => {
     expect(videoOnly.characters).toHaveLength(0);
     expect(notebook().edges.filter(edge => edge.target === videoOnly.cellId)).toHaveLength(0);
     const scene = await approve(videoOnly);
-    expect(getChainRun(engine, scene.chainId!)?.steps[0]?.params.image_refs).toBeUndefined();
+    if (!videoOnly.plan || !("version" in videoOnly.plan) || videoOnly.plan.version !== 3) throw new Error("expected a v3 plan");
+    expect(videoOnly.plan.scene.prompt).toMatch(/^Edit @image1, keeping its framing/u);
+    expect(getChainRun(engine, scene.chainId!)?.steps[0]?.params.image_refs).toEqual([notebookGridTag(notebook().cells.find(cell => cell.id === videoOnly.plan!.scene.imageRefs[0]!.cellId)!.slot)]);
     const sceneArtifactId = await settleChain(scene.chainId!, "image");
     const ready = await status(videoOnly.goalId);
     expect(ready).toMatchObject({ status: "review", stage: "videos" });

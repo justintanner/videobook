@@ -114,7 +114,7 @@ export function GoalV3Review({ goal, plan, disabled, resolveAsset, onPreviewCell
     <p className="goal-panel-muted">{plan.video.durationSeconds}s video · {plan.aspectRatio} · Seedance 2.5</p>
     {runningGeneration && <p role="status">{goal.stage === 'videos' ? 'Generating the video.' : 'Generating the scene.'}</p>}
     {view === 'scene' && <>
-      <div className="goal-reference-grid" aria-label="Scene references">{plan.references.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
+      <div className="goal-reference-grid" aria-label="Scene references">{plan.scene.imageRefs.map(ref => <GoalMedia key={ref.slot} artifactId={ref.artifactId} cellId={ref.cellId} label={`${ref.slot} · ${ref.address}`} resolveAsset={resolveAsset} onOpen={onPreviewCell} />)}</div>
       {sceneOutput && <GoalMedia artifactId={sceneOutput.artifactId} cellId={sceneOutput.cellId} label="Approved scene" resolveAsset={resolveAsset} onOpen={onPreviewCell} />}
       {sceneOutput && <div className="goal-versions" aria-label="Scene versions">{versions('frame', 'Scene')}</div>}
       <label><span>Title</span><input aria-label="Video title" value={title} maxLength={120} disabled={disabled || finishing} onChange={event => setTitle(event.target.value)} /></label>
