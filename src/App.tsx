@@ -1,6 +1,4 @@
 import { PostInspector } from '@/components/videobook/PostInspector'
-import { PostsPanel } from '@/components/videobook/PostsPanel'
-import { usePostsPanel } from '@/videobook/use-post-actions'
 import type { PostView } from '../server/src/posts/post-contract'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
@@ -4452,7 +4450,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     showScreen,
   ])
 
-  const postsPanel = usePostsPanel(call, bookId)
   const selectedPost = (notebook as NotebookSnapshot | null)?.posts?.find(post => post.id === selectedCellId)
 
   const createPublication = async (sourceCellId?: string) => {
@@ -11389,7 +11386,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
             selectedCount={selectedNotebookCells.length}
             activeAddress={selectedNotebookCell ? notebookGridTag(selectedNotebookCell.slot) : null}
-            onOpenPosts={() => void postsPanel.open()}
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
@@ -11776,13 +11772,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
       </>
 
-      {postsPanel.posts && <PostsPanel posts={postsPanel.posts} loading={postsPanel.loading} error={postsPanel.error} onClose={postsPanel.close} onRefresh={postsPanel.open}
-        onSelect={post => { postsPanel.close(); void refreshBookData(bookId, post.notebookId).then(() => openCellInspector(post.id)) }}
-        onDeliver={(post, destination) => {
-          postsPanel.close()
-          const result = openPostDeliveryReview(post.id, destination)
-          if (!result.ok) setNotice(result.message, 'error')
-        }} />}
       {cellContextMenu && contextMenuCell && (
         <NotebookCellContextMenu
           actions={contextMenuActions}

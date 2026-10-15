@@ -178,18 +178,6 @@ describe('Post delivery review in the chat composer', () => {
     await page.reload()
     await expect.poll(() => postNode().getByText('iPhone', { exact: true }).count(), { timeout: 30_000 }).toBe(1)
 
-    await page.getByRole('button', { name: 'Posts', exact: true }).click()
-    const posts = page.getByRole('dialog', { name: 'Book posts' })
-    await posts.waitFor({ state: 'visible' })
-    await expect.poll(() => posts.getByText('iPhone', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThan(0)
-    const beforePanel = uploads()
-    await posts.getByRole('button', { name: 'Save to iPhone', exact: true }).click()
-    await review().waitFor({ state: 'visible' })
-    expect(await review().getByRole('button', { name: 'iCloud · iPhone', exact: true }).getAttribute('aria-pressed')).toBe('true')
-    expect(uploads()).toBe(beforePanel)
-    await review().getByRole('button', { name: /Cancel/ }).click()
-    await review().waitFor({ state: 'hidden' })
-
     const collapse = page.getByLabel('Collapse chat', { exact: true })
     if (await collapse.isVisible()) await collapse.click()
     const clear = page.getByLabel('Clear selection', { exact: true })

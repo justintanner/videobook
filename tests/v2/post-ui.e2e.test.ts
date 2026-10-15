@@ -82,7 +82,7 @@ describe('Post cells from clip to publication in the browser', () => {
     if (root) await rm(root, { recursive: true, force: true })
   }, 30_000)
 
-  it('creates a Post from d2, saves a manual publication, records metrics and compares results', async () => {
+  it('creates a Post from d2, saves a manual publication, records metrics and keeps results', async () => {
     const source = page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`)
     await source.click({ button: 'right', timeout: 30_000 })
     await page.getByRole('menuitem', { name: 'Create Post', exact: true }).click()
@@ -103,18 +103,8 @@ describe('Post cells from clip to publication in the browser', () => {
     await expect.poll(async () => (await call<{ posts: PostView[] }>('list_posts')).posts[0]?.runtime.metrics.length, { timeout: 30_000 }).toBe(1)
     await mkdir('/tmp/videobook-post-evidence', { recursive: true })
     await page.screenshot({ path: '/tmp/videobook-post-evidence/inspector.png', fullPage: true })
-    await page.getByRole('button', { name: 'Posts', exact: true }).click()
-    const table = page.getByRole('dialog', { name: 'Book posts' })
-    await table.getByRole('cell', { name: '1,200', exact: true }).waitFor({ timeout: 30_000 })
-    expect(await table.getByRole('cell', { name: '85', exact: true }).count()).toBe(1)
-    await table.getByLabel('Observation age').selectOption('24')
-    expect(await table.getByRole('cell', { name: '1,200', exact: true }).count()).toBe(0)
-    await table.getByLabel('Observation age').selectOption('latest')
-    await page.screenshot({ path: '/tmp/videobook-post-evidence/table.png', fullPage: true })
-    await table.getByRole('button', { name: 'Close posts' }).click()
     await page.reload()
-    await page.getByRole('button', { name: 'Posts', exact: true }).click()
-    await table.getByRole('cell', { name: '1,200', exact: true }).waitFor({ timeout: 30_000 })
+    expect((await call<{ posts: PostView[] }>('list_posts')).posts[0]?.runtime.metrics.at(-1)?.values.views).toBe(1200)
     expect(errors).toEqual([])
   }, 90_000)
 })
