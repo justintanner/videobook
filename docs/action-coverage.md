@@ -96,6 +96,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.track-add` | `/track-add` |  | sequence | none | `/track-add` | slash, launcher | composer | none |
 | `command.track-remove` | `/track-remove` |  | sequence | track: track_id | `/track-remove` | slash, launcher | composer | none |
 | `command.upload` | `/upload` |  | book | none | `open_upload` | slash, launcher | dialog | none |
+| `command.upload-post-to-dropbox` | `/upload-post-to-dropbox` |  | book | none | `open_post_dropbox` | slash, launcher | dialog | none |
 | `command.voices` | `/voices` |  | book | none | `speak_preview` | slash, launcher | dialog | none |
 | `command.volume` | `/volume` |  | sequence | clip: clip_id | `/volume` | slash, launcher | composer | none |
 | `command.watermark` | `/watermark` |  | book | asset: asset_ref | `open_watermark` | slash, launcher | dialog | none |
@@ -432,7 +433,6 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.update_script` | `/update-script` |  | book | asset: asset_id | `update_script` | slash, launcher, cell-menu, library-menu | dialog | none |
 | `tool.update_sequence_rhythm` | `/update-sequence-rhythm` |  | sequence | none | `update_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.update_timeline_audio` | `/update-timeline-audio` |  | book | none | `update_timeline_audio` | slash, launcher | dialog | none |
-| `tool.upload_post_to_dropbox` | `/upload-post-to-dropbox` |  | book | cell: post_cell_id | `upload_post_to_dropbox` | slash, launcher, cell-menu, selection-menu | dialog | external |
 | `tool.upscale_kie_grok_imagine_video` | `/grok-upscale` |  | book | asset: asset_id | `upscale_kie_grok_imagine_video` | slash, launcher, cell-menu, library-menu | dialog | generation |
 | `tool.validate_sequence_export` | `/validate-sequence-export` |  | book | none | `validate_sequence_export` | slash, launcher | dialog | none |
 | `tool.verify_x_mentions` | `/verify-x-mentions` |  | book | none | `verify_x_mentions` | slash, launcher | dialog | generation |
@@ -452,5 +452,6 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `push_chat_history` | `tool.chat` | Compatibility write for composer history; users enter messages through chat. |
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |
 | `slash_commands` | `command.actions` | Loads slash suggestions and dynamic project shortcuts in the Actions launcher. |
+| `upload_post_to_dropbox` | `command.upload-post-to-dropbox` | Uploads after the composer review shows the Post, its editable caption and the destination folder. |
 | `check_duplicate_bytes` | `command.upload` | Checks existing immutable bytes during Import before uploading a file. |
 | `list_workspace_actions` | `command.actions` | Loads the Actions launcher and its typed forms. |

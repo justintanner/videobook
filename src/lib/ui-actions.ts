@@ -22,6 +22,7 @@ type UiActionCallbacks = {
   settings_bg: (mode: string) => void
   settings_osg: (field: string, value: string) => void
   open_cold_open: (assetId: string) => void
+  open_post_dropbox: (postRef: string) => void
   open_watermark: (assetId: string) => void
   open_post_composer: (assetId: string, text: string) => void
   open_notebook: (name?: string) => void
@@ -103,6 +104,9 @@ export function executeUiAction(
       break
     case 'open_cold_open':
       (callback as UiActionCallbacks['open_cold_open'])(args.asset_ref ?? raw)
+      break
+    case 'open_post_dropbox':
+      (callback as UiActionCallbacks['open_post_dropbox'])(args.post_ref ?? raw)
       break
     case 'open_watermark':
       (callback as UiActionCallbacks['open_watermark'])(args.asset_ref ?? raw)

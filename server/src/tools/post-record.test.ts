@@ -190,6 +190,43 @@ describe("Post publication records", () => {
     expect([...files.values()][1]!.bytes.toString()).toBe("Caption\n\nCredit");
   });
 
+  it("saves an edited caption before the first Dropbox delivery and refuses to change it afterwards", async () => {
+    const files = new Map<string, Buffer>();
+    const sessions = new Map<string, Buffer>();
+    const base = await serve(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      const body = Buffer.concat(chunks);
+      const args = JSON.parse(String(req.headers["dropbox-api-arg"] ?? "{}")) as { cursor?: { session_id: string }; commit?: { path: string } };
+      res.setHeader("Content-Type", "application/json");
+      const metadata = (path: string, bytes: Buffer) => ({ ".tag": "file", id: `id:${path}`, rev: "rev1", name: path.split("/").at(-1), size: bytes.length, content_hash: dropboxContentHash(bytes), client_modified: new Date().toISOString(), server_modified: new Date().toISOString() });
+      if (req.url === "/files/get_metadata") {
+        const path = (JSON.parse(body.toString()) as { path: string }).path;
+        const file = files.get(path);
+        res.writeHead(file ? 200 : 409).end(JSON.stringify(file ? metadata(path, file) : { error_summary: "path/not_found/", error: { ".tag": "path", path: { ".tag": "not_found" } } }));
+      } else if (req.url === "/files/upload_session/start") {
+        const id = `session-${sessions.size}`;
+        sessions.set(id, body);
+        res.end(JSON.stringify({ session_id: id }));
+      } else if (req.url === "/files/upload_session/append_v2") {
+        sessions.set(args.cursor!.session_id, Buffer.concat([sessions.get(args.cursor!.session_id)!, body]));
+        res.end("null");
+      } else if (req.url === "/files/upload_session/finish") {
+        const bytes = sessions.get(args.cursor!.session_id)!;
+        files.set(args.commit!.path, bytes);
+        res.end(JSON.stringify(metadata(args.commit!.path, bytes)));
+      } else res.writeHead(404).end("{}");
+    });
+    const client = createDropbox({ oauthToken: "local-test-token", apiBaseURL: base, contentBaseURL: base });
+    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Draft caption" });
+    await uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Edited in review" });
+    expect(getPost(engine, post.id).definition.caption).toBe("Edited in review");
+    expect(files.get("/Deliveries/skate/caption.txt")?.toString()).toBe("Edited in review");
+    await expect(uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Another caption" })).rejects.toThrow("frozen at its first delivery");
+    await uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Edited in review" });
+    expect(getPost(engine, post.id).runtime.dropbox?.completedAt).toBeTruthy();
+  });
+
   it("collects available X metrics and labels shared media views", async () => {
     let requests = 0;
     const base = await serve((req, res) => {

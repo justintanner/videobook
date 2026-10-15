@@ -4,7 +4,7 @@ import { DropboxError } from "@apicity/dropbox";
 import type { DropboxProvider } from "@apicity/dropbox";
 import type { Engine } from "videobook-engine";
 import { dropboxClient } from "./dropbox-auth.js";
-import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime } from "./post-store.js";
+import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime, updatePost } from "./post-store.js";
 import type { PostUploadFile } from "./post-contract.js";
 
 const CHUNK = 8 * 1024 * 1024;
@@ -76,9 +76,16 @@ async function uploadFile(client: DropboxProvider, bytes: Buffer, initial: PostU
   throw new Error("Dropbox upload could not reconcile its saved position. Retry the upload.");
 }
 
-export async function uploadPostToDropbox(engine: Engine, id: string, options: { folder?: string; client?: DropboxProvider; signal?: AbortSignal } = {}) {
+async function applyCaption(engine: Engine, id: string, caption: string | undefined) {
   const post = getPost(engine, id);
-  if (["posting", "needs_reconciliation", "scheduled"].includes(post.runtime.status)) throw new Error("Resolve or cancel the current publication before uploading");
+  if (caption === undefined || caption === post.definition.caption) return post;
+  if (post.runtime.outbound) throw new Error("This Post's caption was frozen at its first delivery. Create a new Post to deliver a different caption.");
+  return updatePost(engine, id, { caption });
+}
+
+export async function uploadPostToDropbox(engine: Engine, id: string, options: { folder?: string; caption?: string; client?: DropboxProvider; signal?: AbortSignal } = {}) {
+  if (["posting", "needs_reconciliation", "scheduled"].includes(getPost(engine, id).runtime.status)) throw new Error("Resolve or cancel the current publication before uploading");
+  const post = await applyCaption(engine, id, options.caption);
   const outbound = await freezePostOutbound(engine, id);
   const folder = options.folder?.replace(/\/+$/, "") ?? post.runtime.dropbox?.folder ?? `/Videobook/${engine.book.get().name}/${id}`;
   if (!folder.startsWith("/") || folder.includes("..") || [...folder].some(character => character.charCodeAt(0) < 32)) throw new Error("Use an absolute Dropbox folder without .. segments");

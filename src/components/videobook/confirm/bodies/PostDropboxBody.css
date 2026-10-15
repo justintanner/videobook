@@ -1,0 +1,185 @@
+.post-dropbox-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(220px, 300px);
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.post-dropbox-post {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(2, 11, 7, 0.78);
+}
+
+.post-dropbox-post-blocked {
+  border-color: rgba(231, 201, 121, 0.4);
+}
+
+.post-dropbox-media {
+  display: grid;
+  width: 90px;
+  height: 160px;
+  place-items: center;
+  overflow: hidden;
+  background: #0c1f15;
+}
+
+.post-dropbox-media img,
+.post-dropbox-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.post-dropbox-media-fallback {
+  color: var(--muted);
+}
+
+.post-dropbox-post-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: #86ab95;
+  font-size: 11px;
+}
+
+.post-dropbox-post-copy strong {
+  color: #cdeedb;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.post-dropbox-warning,
+.post-dropbox-done,
+.post-dropbox-account-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-dropbox-warning {
+  color: #e7c979;
+}
+
+.post-dropbox-done,
+.post-dropbox-account-ready {
+  color: var(--green);
+}
+
+.post-dropbox-post-copy button,
+.post-dropbox-account button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  color: var(--control-fg);
+  background: var(--control-bg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.post-dropbox-post-copy button {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.post-dropbox-post-copy button:hover:not(:disabled),
+.post-dropbox-account button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
+.post-dropbox-account button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.post-dropbox-caption,
+.post-dropbox-destination {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.post-dropbox-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.post-dropbox-label-row label,
+.post-dropbox-heading {
+  color: #86ab95;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.post-dropbox-caption small,
+.post-dropbox-destination > small,
+.post-dropbox-label-row small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.confirm-sheet .post-dropbox-caption textarea {
+  flex: 1;
+  min-height: 120px;
+  border-color: var(--control-border);
+  font-size: 12px;
+}
+
+.confirm-sheet .post-dropbox-caption textarea:read-only {
+  border-color: var(--line);
+  color: #86ab95;
+}
+
+.post-dropbox-destination > .confirm-field {
+  margin-top: 8px;
+}
+
+.post-dropbox-account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  color: #a9d6bf;
+  font-size: 11px;
+}
+
+.post-dropbox-account-ready {
+  flex-direction: row;
+}
+
+.post-dropbox-account-missing {
+  border-color: rgba(231, 201, 121, 0.4);
+}
+
+.post-dropbox-account-missing > span {
+  color: #e7c979;
+}
+
+.post-dropbox-account-missing > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 900px) {
+  .post-dropbox-body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: auto;
+  }
+}

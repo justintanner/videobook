@@ -60,6 +60,10 @@ describe('workspace action launcher with real endpoints', () => {
     return Buffer.from(await response.arrayBuffer())
   }
 
+  const COMPOSER_SHEET_ACTIONS: Readonly<Record<string, string>> = {
+    'command.upload-post-to-dropbox': 'Select a Post cell',
+  }
+
   async function openActions(command?: string): Promise<void> {
     const libraryActions = page.getByLabel('Open library actions', { exact: true })
     if (await libraryActions.isVisible()) await libraryActions.click()
@@ -202,6 +206,13 @@ describe('workspace action launcher with real endpoints', () => {
       await search.fill(action.command)
       await page.locator(`.workspace-actions-list [data-action-id="${action.id}"]`).click()
       await page.getByRole('button', { name: 'Send command', exact: true }).click()
+      const sheetOutcome = COMPOSER_SHEET_ACTIONS[action.id]
+      if (sheetOutcome) {
+        await expect.poll(() => page.getByText(sheetOutcome, { exact: false }).count(), { timeout: MCP_ROUNDTRIP_MS }).toBeGreaterThan(0)
+        expect(await page.locator('form.workspace-action-form').count(), action.id).toBe(0)
+        await openActions()
+        continue
+      }
       await page.locator(`form.workspace-action-form[data-action-id="${action.id}"]`).waitFor()
       expect(await page.getByRole('button', { name: /^(?:Run action|Review action)$/u }).count(), action.id).toBe(1)
       await page.getByRole('button', { name: 'All actions', exact: true }).click()
