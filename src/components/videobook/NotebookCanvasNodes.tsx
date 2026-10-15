@@ -28,6 +28,7 @@ import {
   notebookOutputVersionArtifactIds,
   isImageVideoGenerationResultCell,
 } from '@/videobook/notebook-cell-presentation'
+import { postDeliveryBadges } from '@/videobook/post-delivery-review'
 import type { CanvasCellData, CanvasNode } from '@/videobook/notebook-canvas'
 import { isNotebookGenerationCellType, notebookCellFamily } from '@/videobook/notebook-cell-types'
 import { notebookGridTag, notebookGridAddress } from '@/videobook/notebook-grid'
@@ -629,7 +630,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <div className="post-tile">
             <strong>{data.post?.definition.platform ?? 'Publication'} · {(data.post?.runtime.status ?? 'draft').replaceAll('_', ' ')}</strong>
             <p>{data.post?.definition.caption || 'Track a clip from idea to published results'}</p>
-            <small>{data.post?.runtime.postedAt ? new Date(data.post.runtime.postedAt).toLocaleDateString() : data.post?.runtime.dropbox?.completedAt ? 'Dropbox files ready · paste the post link' : 'Saved clip → delivery → results'}</small>
+            <small>{data.post?.runtime.postedAt ? new Date(data.post.runtime.postedAt).toLocaleDateString() : 'Saved clip → delivery → results'}</small>
+            {data.post && postDeliveryBadges(data.post).length > 0 && <div className="post-tile-badges">{postDeliveryBadges(data.post).map(badge => <span key={badge} className="post-badge">{badge}</span>)}</div>}
             <div className="post-tile-stats"><span>{data.post?.runtime.metrics.at(-1)?.values.impressions?.toLocaleString() ?? '—'} impressions</span><span>{data.post?.runtime.metrics.at(-1)?.values.likes?.toLocaleString() ?? '—'} likes</span></div>
           </div>
         ) : emptyMediaSlot && slotKind ? (

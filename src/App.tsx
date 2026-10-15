@@ -10155,6 +10155,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     : []
   const contextMenuActions: NotebookCellContextAction[] = []
   if (contextMenuCell && contextMenuNode) {
+    if (contextMenuCell.type === 'post') {
+      const deliveryDisabled = busy || mcp.state !== 'ready'
+      contextMenuActions.push(
+        { id: 'save-iphone', label: 'Save to iPhone', icon: 'upload', disabled: deliveryDisabled },
+        { id: 'upload-dropbox', label: 'Upload to Dropbox', icon: 'upload', disabled: deliveryDisabled },
+      )
+    }
     contextMenuActions.push({
       id: 'inspect',
       label: contextMenuCell.type === 'goal' ? 'Open goal' : 'Edit cell',
@@ -10337,6 +10344,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
+    if (actionId === 'save-iphone' || actionId === 'upload-dropbox') {
+      const result = openPostDeliveryReview(contextMenuCell.id, actionId === 'upload-dropbox' ? 'dropbox' : 'icloud')
+      if (!result.ok) setNotice(result.message, 'error')
+      return
+    }
     if (actionId === 'create-post') { void createPublication(contextMenuCell.id); return }
     if (actionId === 'inspect') {
       openCellInspector(contextMenuCell.id)
@@ -11145,6 +11157,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <PostInspector key={selectedPost.id} post={selectedPost} cells={notebook?.cells ?? []}
           asset={selectedCell.data.asset} bookId={bookId} call={mcp.state === 'ready' ? call : undefined}
           onRefresh={() => refreshBookData(bookId, notebook?.id)} onSelectCell={openCellInspector}
+          onDeliver={destination => {
+            const result = openPostDeliveryReview(selectedPost.id, destination)
+            if (!result.ok) setNotice(result.message, 'error')
+          }}
           onReviewX={reviewPublicationOnX} onDelete={() => void deleteNotebookCells([selectedNotebookCell])} />
       ) : (
         <NotebookCellInspector
@@ -11672,7 +11688,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       </>
 
       {postsPanel.posts && <PostsPanel posts={postsPanel.posts} loading={postsPanel.loading} error={postsPanel.error} onClose={postsPanel.close} onRefresh={postsPanel.open}
-        onSelect={post => { postsPanel.close(); void refreshBookData(bookId, post.notebookId).then(() => openCellInspector(post.id)) }} />}
+        onSelect={post => { postsPanel.close(); void refreshBookData(bookId, post.notebookId).then(() => openCellInspector(post.id)) }}
+        onDeliver={(post, destination) => {
+          postsPanel.close()
+          const result = openPostDeliveryReview(post.id, destination)
+          if (!result.ok) setNotice(result.message, 'error')
+        }} />}
       {cellContextMenu && contextMenuCell && (
         <NotebookCellContextMenu
           actions={contextMenuActions}

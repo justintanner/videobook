@@ -15,6 +15,7 @@ import {
   Rows3,
   Scissors,
   Trash2,
+  Upload,
   Video,
   type LucideIcon,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ type NotebookCellContextActionIcon =
   | 'run'
   | 'source'
   | 'split'
+  | 'upload'
   | 'more'
 
 export type NotebookCellContextAction = {
@@ -84,6 +86,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   run: Play,
   source: Braces,
   split: Scissors,
+  upload: Upload,
   more: Ellipsis,
 }
 

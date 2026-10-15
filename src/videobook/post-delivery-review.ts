@@ -160,6 +160,17 @@ export function postDeliveryTool(destination: DeliveryDestination): 'save_post_t
   return destination === 'icloud' ? 'save_post_to_icloud' : 'upload_post_to_dropbox'
 }
 
+export function postDeliveryBadges(post: PostView): Array<'iPhone' | 'Dropbox'> {
+  const badges: Array<'iPhone' | 'Dropbox'> = []
+  if (post.runtime.icloud?.completedAt) badges.push('iPhone')
+  if (post.runtime.dropbox?.completedAt) badges.push('Dropbox')
+  return badges
+}
+
+export function icloudPhoneReceipt(folder: string): string {
+  return `On iPhone · iCloud Drive › Videobook › ${folder}`
+}
+
 export function postDeliveryReceipt(post: PostView, destination: DeliveryDestination): string {
   if (destination === 'icloud') {
     const folder = post.runtime.icloud?.folder

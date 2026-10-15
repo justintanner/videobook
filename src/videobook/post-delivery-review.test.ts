@@ -5,8 +5,10 @@ import {
   defaultDropboxFolder,
   defaultIcloudFolder,
   deliveryDestinationForEntry,
+  icloudPhoneReceipt,
   icloudProgressLabel,
   icloudShareHint,
+  postDeliveryBadges,
   icloudSyncFromTool,
   icloudSyncShouldPoll,
   postDeliveryArgs,
@@ -138,5 +140,9 @@ describe('post delivery review', () => {
     expect(icloudSyncShouldPoll('not-icloud')).toBe(false)
     expect(icloudSyncFromTool({ phase: 'not-icloud', error: null })).toEqual({ phase: 'not-icloud', error: null })
     expect(postDeliveryReceipt(postView({ icloud: { folder: 'my-book/post-b1-479eab', completedAt: '2026-10-15T00:00:00.000Z' } }), 'icloud')).toBe('Saved @b1 to iCloud · Videobook/my-book/post-b1-479eab')
+    expect(icloudPhoneReceipt('my-book/post-b1-479eab')).toBe('On iPhone · iCloud Drive › Videobook › my-book/post-b1-479eab')
+    expect(postDeliveryBadges(postView())).toEqual([])
+    expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate', completedAt: '2026-10-15T00:00:00.000Z' }, dropbox: { folder: '/Clients/rain', video: { path: '/Clients/rain/clip.mp4', hash: 'a', offset: 0 }, caption: { path: '/Clients/rain/caption.txt', hash: 'b', offset: 0 }, completedAt: '2026-10-15T00:00:00.000Z' } }))).toEqual(['iPhone', 'Dropbox'])
+    expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate' } }))).toEqual([])
   })
 })

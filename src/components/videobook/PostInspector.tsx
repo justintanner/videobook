@@ -3,6 +3,8 @@ import type { NotebookCell } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { POST_METRIC_NAMES, POST_PLATFORMS } from '../../../server/src/posts/post-contract'
 import type { PostDefinition, PostMetrics, PostPlatform, PostView } from '../../../server/src/posts/post-contract'
+import { icloudPhoneReceipt } from '@/videobook/post-delivery-review'
+import type { DeliveryDestination } from '@/videobook/post-delivery-review'
 import { usePostActions } from '@/videobook/use-post-actions'
 import type { PostToolCall } from '@/videobook/use-post-actions'
 import type { AssetRecord } from '@/videobook/workspace-responses'
@@ -14,7 +16,7 @@ function localObservationTime() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 23)
 }
 
-export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onSelectCell, onReviewX, onDelete }: {
+export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onSelectCell, onDeliver, onReviewX, onDelete }: {
   post: PostView
   cells: readonly NotebookCell[]
   asset?: AssetRecord
@@ -22,6 +24,7 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   call?: PostToolCall
   onRefresh: () => Promise<unknown>
   onSelectCell: (id: string) => void
+  onDeliver: (destination: DeliveryDestination) => void
   onReviewX: (post: PostView) => Promise<unknown>
   onDelete: () => void
 }) {
@@ -37,7 +40,6 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   const [postedAt, setPostedAt] = useState(xPostLocalDateTimeValue(post.runtime.postedAt ?? new Date().toISOString()))
   const [observedAt, setObservedAt] = useState(localObservationTime)
   const [metrics, setMetrics] = useState<Record<string, string>>({})
-  const [folder, setFolder] = useState(post.runtime.dropbox?.folder ?? '')
   const locked = Boolean(post.runtime.outbound || post.runtime.url || post.runtime.status === 'scheduled')
   const source = cells.find(cell => cell.id === post.definition.source?.cellId)
   const latest = post.runtime.metrics.at(-1)
@@ -65,14 +67,15 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
     {post.runtime.error && <p role="alert" className="post-error">{post.runtime.error}</p>}
     {!post.runtime.url && <div className="post-delivery">
       <h3>Deliver</h3>
-      <label>Dropbox folder<input value={folder} onChange={event => setFolder(event.target.value)} placeholder="Default: /Videobook/book/post" /></label>
-      <p>Upload the saved clip and caption.txt, then publish manually.</p>
-      <button type="button" disabled={actions.busy || !post.definition.source?.snapshotArtifactId || dirty || post.runtime.status === 'scheduled'} onClick={() => void run('upload_post_to_dropbox', folder ? { folder } : {})}>{post.runtime.dropbox?.completedAt ? 'Verify Dropbox files' : post.runtime.dropbox ? 'Resume Dropbox upload' : 'Upload to Dropbox'}</button>
+      <p>Review the clip and caption, then save them where you will publish.</p>
+      <button type="button" onClick={() => onDeliver('icloud')}>Save to iPhone</button>
+      <button type="button" onClick={() => onDeliver('dropbox')}>Upload to Dropbox</button>
       {post.definition.platform === 'x' && !post.runtime.xRequest && !['scheduled', 'needs_reconciliation', 'posting'].includes(post.runtime.status) && <button type="button" disabled={actions.busy || !post.definition.source?.snapshotArtifactId || !caption.trim() || dirty} onClick={() => void onReviewX(post)}>Review X post…</button>}
       {post.definition.platform === 'x' && post.runtime.xRequest && post.runtime.status === 'failed' && <button type="button" disabled={actions.busy} onClick={() => void run('post')}>Retry saved X post</button>}
       {dirty && <small>Save your draft before delivering.</small>}
       {post.runtime.scheduledFor && <p>Scheduled for {new Date(post.runtime.scheduledFor).toLocaleString()}</p>}
     </div>}
+    {post.runtime.icloud?.completedAt && <div className="post-receipt"><strong>{icloudPhoneReceipt(post.runtime.icloud.folder)}</strong></div>}
     {post.runtime.dropbox && <div className="post-receipt"><strong>{post.runtime.dropbox.completedAt ? 'Dropbox files ready' : 'Dropbox upload saved'}</strong><span>{post.runtime.dropbox.folder}</span><small>Clip: {post.runtime.dropbox.video.rev ? 'uploaded' : `${post.runtime.dropbox.video.offset.toLocaleString()} bytes saved`} · Caption: {post.runtime.dropbox.caption.rev ? 'uploaded' : 'pending'}</small></div>}
     {post.runtime.url ? <div className="post-receipt"><a href={post.runtime.url} target="_blank" rel="noreferrer">Open published post ↗</a><span>{post.runtime.postedAt ? new Date(post.runtime.postedAt).toLocaleString() : 'Publication time unknown'}</span>{post.runtime.x?.replies.map(reply => <a key={reply.tweet_id} href={reply.tweet_url} target="_blank" rel="noreferrer">Open reply ↗</a>)}</div> : <form onSubmit={event => { event.preventDefault(); void run('link_post', { url, posted_at: new Date(postedAt).toISOString() }) }}><h3>Published manually?</h3><label>Post URL<input type="url" value={url} required placeholder="https://…" onChange={event => setUrl(event.target.value)} /></label><label>Published at<input type="datetime-local" required value={postedAt} onChange={event => setPostedAt(event.target.value)} /></label><button disabled={actions.busy || !post.definition.source || dirty}>Save published link</button></form>}
     {post.runtime.url && <div className="post-results"><h3>Results</h3>
