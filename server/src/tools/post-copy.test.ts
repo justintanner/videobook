@@ -121,6 +121,7 @@ describe("draft_post_copy with Astra", () => {
     expect(prompt).toContain("INSTRUCTION FROM THE CREATOR: mention the storm");
     expect(prompt).toContain("A man rides a scooter in heavy rain holding a pink umbrella");
     expect(prompt).toContain("under 2200 characters");
+    expect(prompt).toContain("one or two words plus one or two emoji");
   });
 
   it("rewrites the current draft and rejects an empty caption", async () => {

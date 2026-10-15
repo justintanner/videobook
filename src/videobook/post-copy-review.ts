@@ -43,7 +43,7 @@ export const COPY_PLATFORMS: ReadonlyArray<{ id: PostPlatform; label: string }> 
   { id: 'other', label: 'Other' },
 ]
 
-export const COPY_PROMPT_PRESETS: readonly string[] = ['Shorter', 'Punchier hook', 'More playful', 'Fewer tags', 'Add a call to action']
+export const COPY_PROMPT_PRESETS: readonly string[] = ['Longer caption', 'Punchier', 'More emoji', 'Fewer tags', 'Add a call to action']
 
 const THAI_SCRIPT = /[฀-๿]/u
 
