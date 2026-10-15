@@ -4165,7 +4165,7 @@ describe('chat composer browser flow', () => {
     expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
 
     const imageModel = editor.getByLabel('Generation model')
-    expect(await imageModel.inputValue()).toBe('generation.generate_kie_gpt_image_2_5_sunburst_image')
+    expect(await imageModel.inputValue()).toBe('generation.generate_kie_nano_banana_2_1_image')
     expect(await editor.getByLabel('Resolution', { exact: true }).inputValue()).toBe('string:2K')
     expect(await source.textContent()).toContain('"resolution": "2K"')
     const gptModels = await imageModel.locator('option').allTextContents()
@@ -4266,8 +4266,8 @@ describe('chat composer browser flow', () => {
         estimate: bounds('.generation-review-estimate-section'),
       }
     })
-    expect(layout.model.bottom).toBeLessThanOrEqual(layout.prompt.top)
-    expect(layout.prompt.bottom).toBeLessThanOrEqual(layout.settings.top)
+    expect(layout.model.bottom).toBeLessThanOrEqual(layout.settings.top)
+    expect(layout.settings.bottom).toBeLessThanOrEqual(layout.prompt.top)
     expect(layout.prompt.right).toBeLessThan(layout.estimate.left)
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     expect(await source.isVisible()).toBe(true)

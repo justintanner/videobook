@@ -267,7 +267,7 @@ describe('notebook initial generation prompts', () => {
       inputs?: Record<string, unknown>
       tool?: string
     }
-    expect(target.tool).toBe('generate_kie_gemini_omni_video')
+    expect(target.tool).toBe('generate_kie_seedance_2_5_video')
     expect(target.inputs?.generationMode).toBeUndefined()
 
     resultJson(await invoke('connect_notebook_cells', {
@@ -290,10 +290,10 @@ describe('notebook initial generation prompts', () => {
       connectedTarget,
       created.bookId,
     )
-    expect(prepared.tool).toBe('generate_kie_gemini_omni_video')
+    expect(prepared.tool).toBe('generate_kie_seedance_2_5_video')
     expect(prepared.input.image_refs).toEqual([
       `@${artifact.value.artifactId}`,
     ])
-    expect(prepared.input.duration).toBe('8')
+    expect(prepared.input.duration).toBe('13')
   })
 })

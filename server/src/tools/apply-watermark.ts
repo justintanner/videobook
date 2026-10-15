@@ -8,7 +8,6 @@ import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
 import { sampleEvenly } from "../frame-utils.js";
 import {
-  DEFAULT_WATERMARK_FADE_SECONDS,
   MAX_WATERMARK_FADE_SECONDS,
 } from "../jobs/burn-watermark.js";
 import type {
@@ -31,7 +30,6 @@ import { queue } from "../queue.js";
 import {
   scoreWatermarkCornersForCanvas,
   WATERMARK_MIN_DIM_FRACTION,
-  WATERMARK_OPACITY,
   WATERMARK_OSG_SIZE,
   watermarkOsgScale,
 } from "../remotion/osg-spec.js";
@@ -40,7 +38,6 @@ import {
   createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
   DEFAULT_HANDLE_ROUNDING,
-  DEFAULT_HANDLE,
   defaultUrl,
   findWatermarkAsset,
   MAX_HANDLE_PADDING,
@@ -51,10 +48,10 @@ import {
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import type { WatermarkBadgeVariant } from "../watermark-badge.js";
-import { normalizeHandle, readWatermarkConfig, recordHandle } from "../watermark-config.js";
+import { LIGHTNING_FADE_SECONDS, watermarkProfileToSave, watermarkWindowsFor } from "../lightning-defaults.js";
+import { effectiveWatermarkProfile, normalizeHandle, readWatermarkConfig, recordHandle, saveWatermarkProfile } from "../watermark-config.js";
 import { effectiveWatermarkTiming } from "../watermark-timing.js";
 import {
-  DEFAULT_HANDLE_VERTICAL_PERCENT,
   MAX_HANDLE_VERTICAL_PERCENT,
   MIN_HANDLE_VERTICAL_PERCENT,
   WATERMARK_HANDLE_PLACEMENTS,
@@ -286,7 +283,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),
-      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default x)"),
+      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default tiktok)"),
       handle: z.string().optional().describe("X or TikTok alias without @ (default: saved alias for the platform)"),
       url: z.string().optional().describe("URL the QR code resolves to (default: the selected X or TikTok profile URL)"),
       save_default: z
@@ -304,13 +301,13 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       position: z
         .enum(WATERMARK_POSITION_OPTIONS)
         .optional()
-        .describe("QR placement anchor, or auto (default) to choose the least-busy corner"),
+        .describe("QR placement anchor. A fresh TikTok profile uses bottom-right; X uses auto"),
       handle_vertical_percent: z
         .number()
         .min(MIN_HANDLE_VERTICAL_PERCENT)
         .max(MAX_HANDLE_VERTICAL_PERCENT)
         .optional()
-        .describe("Burn-mode centered-handle centerline as percent from the top (default 33; range 10-90). Ignored when handle_position attaches the handle to the QR"),
+        .describe("Burn-mode centered-handle centerline as percent from the top (fresh TikTok 10, X 33; range 10-90). Ignored when handle_position attaches the handle to the QR"),
       handle_position: z
         .enum(WATERMARK_HANDLE_PLACEMENTS)
         .optional()
@@ -383,7 +380,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .min(0)
         .max(MAX_WATERMARK_FADE_SECONDS)
         .optional()
-        .describe(`Burn-mode fade in/out length in seconds at a watermark edge that falls inside the clip (default ${DEFAULT_WATERMARK_FADE_SECONDS}; 0 keeps hard edges). Whole-clip watermarks never fade`),
+        .describe(`Burn-mode fade in/out length in seconds at a watermark edge that falls inside the clip (fresh TikTok ${LIGHTNING_FADE_SECONDS}, X 0.5; 0 keeps hard edges). Whole-clip watermarks never fade`),
       opacity: z
         .number()
         .min(0.05)
@@ -395,13 +392,13 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .min(0.05)
         .max(1)
         .optional()
-        .describe("QR opacity from 0.05 to 1 (default 0.5)"),
+        .describe("QR opacity from 0.05 to 1 (fresh TikTok 0.37, X 0.5)"),
       handle_opacity: z
         .number()
         .min(0.05)
         .max(1)
         .optional()
-        .describe("Handle opacity from 0.05 to 1 (default 0.5)"),
+        .describe("Handle opacity from 0.05 to 1 (fresh TikTok 0.28, X 0.5)"),
       scale: z
         .number()
         .min(0.5)
@@ -430,29 +427,29 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         save_default,
         include_qr = true,
         include_handle = true,
-        position = "auto",
-        handle_vertical_percent = DEFAULT_HANDLE_VERTICAL_PERCENT,
-        handle_position = "center",
-        platform = "x",
+        position: positionArg,
+        handle_vertical_percent: handleVerticalArg,
+        handle_position: handlePositionArg,
+        platform: platformArg,
         include_platform_icon,
-        include_x_icon = true,
-        include_handle_border = true,
-        handle_padding = DEFAULT_HANDLE_PADDING,
-        handle_padding_y = DEFAULT_HANDLE_PADDING,
-        handle_rounding = DEFAULT_HANDLE_ROUNDING,
+        include_x_icon,
+        include_handle_border: borderArg,
+        handle_padding: paddingArg,
+        handle_padding_y: paddingYArg,
+        handle_rounding: roundingArg,
         start_seconds,
         end_seconds,
         qr_start_seconds,
         qr_end_seconds,
         handle_start_seconds,
         handle_end_seconds,
-        fade_seconds = DEFAULT_WATERMARK_FADE_SECONDS,
-        opacity = WATERMARK_OPACITY,
+        fade_seconds: fadeArg,
+        opacity: opacityArg,
         qr_opacity,
         handle_opacity,
-        scale = 1,
+        scale: scaleArg,
         card_asset_id,
-        mode = "burn",
+        mode: modeArg,
         wait = true,
       } = args as {
         book_id: string;
@@ -488,12 +485,37 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         wait?: boolean;
       };
 
-      const resolvedQrStartSeconds = qr_start_seconds ?? start_seconds;
-      const resolvedQrEndSeconds = qr_end_seconds ?? end_seconds;
-      const resolvedHandleStartSeconds = handle_start_seconds ?? start_seconds;
-      const resolvedHandleEndSeconds = handle_end_seconds ?? end_seconds;
-      const resolvedQrOpacity = qr_opacity ?? opacity;
+      const platform: WatermarkPlatform = platformArg ?? "tiktok";
+      const config = await readWatermarkConfig(engine, platform);
+      const profile = effectiveWatermarkProfile(config, platform);
+      const position = positionArg ?? (profile.qrPosition === "auto" ? "auto" : profile.qrPosition);
+      const handle_vertical_percent = handleVerticalArg ?? profile.handleVerticalPercent;
+      const handle_position = handlePositionArg ?? profile.handlePlacement;
+      const include_handle_border = borderArg ?? profile.includeHandleBorder;
+      const handle_padding = paddingArg ?? profile.handlePaddingX;
+      const handle_padding_y = paddingYArg ?? profile.handlePaddingY;
+      const handle_rounding = roundingArg ?? profile.handleRounding;
+      const fade_seconds = fadeArg ?? profile.fadeSeconds;
+      const opacity = opacityArg ?? profile.handleOpacity;
+      const scale = scaleArg ?? profile.scale;
+      const mode = modeArg ?? profile.mode;
+      const includePlatformIcon = include_platform_icon ?? include_x_icon ?? profile.includePlatformIcon;
+      let resolvedQrStartSeconds = qr_start_seconds ?? start_seconds;
+      let resolvedQrEndSeconds = qr_end_seconds ?? end_seconds;
+      let resolvedHandleStartSeconds = handle_start_seconds ?? start_seconds;
+      let resolvedHandleEndSeconds = handle_end_seconds ?? end_seconds;
+      const resolvedQrOpacity = qr_opacity ?? opacityArg ?? profile.qrOpacity;
       const resolvedHandleOpacity = handle_opacity ?? opacity;
+      const callerSetTiming = start_seconds !== undefined
+        || end_seconds !== undefined
+        || qr_start_seconds !== undefined
+        || qr_end_seconds !== undefined
+        || handle_start_seconds !== undefined
+        || handle_end_seconds !== undefined;
+      const storedQrStart = config.profile?.qrStartSeconds;
+      const storedQrEnd = config.profile?.qrEndSeconds;
+      const storedAbsolute = !callerSetTiming
+        && (typeof storedQrStart === "number" || typeof storedQrEnd === "number");
       if (!include_qr && !include_handle) {
         return {
           isError: true as const,
@@ -531,6 +553,25 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const videoPath = join(assetDir, videoFile.name);
       try {
         const video = await probeVideo(videoPath);
+        const profileTimesTheClip = profile.handleEndSeconds != null || profile.qrLeadSeconds != null;
+        if (storedAbsolute) {
+          if (typeof storedQrStart === "number") resolvedQrStartSeconds = storedQrStart;
+          if (typeof storedQrEnd === "number") resolvedQrEndSeconds = storedQrEnd;
+          if (typeof config.profile?.handleStartSeconds === "number") resolvedHandleStartSeconds = config.profile.handleStartSeconds;
+          if (typeof config.profile?.handleEndSeconds === "number") resolvedHandleEndSeconds = config.profile.handleEndSeconds;
+        } else if (
+          profileTimesTheClip
+          && resolvedQrStartSeconds === undefined
+          && resolvedQrEndSeconds === undefined
+          && resolvedHandleStartSeconds === undefined
+          && resolvedHandleEndSeconds === undefined
+        ) {
+          const windows = watermarkWindowsFor(profile, video.videoDuration);
+          resolvedQrStartSeconds = windows.qrStartSeconds;
+          resolvedQrEndSeconds = windows.qrEndSeconds;
+          resolvedHandleStartSeconds = windows.handleStartSeconds;
+          resolvedHandleEndSeconds = windows.handleEndSeconds;
+        }
         if (include_qr) effectiveWatermarkTiming("QR watermark", video.videoDuration, resolvedQrStartSeconds, resolvedQrEndSeconds);
         if (include_handle) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
         if (mode === "overlay" && include_qr && include_handle && (
@@ -545,9 +586,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
       }
 
-      const config = await readWatermarkConfig(engine, platform);
       const fallbackHandle = config.savedHandle ?? config.authenticatedHandle ?? config.recent[0]
-        ?? (platform === "x" ? DEFAULT_HANDLE : "");
+        ?? profile.handle;
       const resolvedHandle = normalizeHandle(handle ?? (include_handle || url === undefined ? fallbackHandle : "")) ?? "";
       if (include_handle && !resolvedHandle) {
         return {
@@ -555,7 +595,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           content: [{ type: "text" as const, text: "handle must be a non-empty string" }],
         };
       }
-      const resolvedUrl = (url ?? (resolvedHandle ? defaultUrl(resolvedHandle, platform) : "")).trim();
+      const storedProfileUrl = typeof config.profile?.profileUrl === "string" ? config.profile.profileUrl.trim() : "";
+      const resolvedUrl = (url ?? (storedProfileUrl || (resolvedHandle ? defaultUrl(resolvedHandle, platform) : ""))).trim();
       if (include_qr && !resolvedUrl) {
         return {
           isError: true as const,
@@ -567,12 +608,34 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         : "center";
       const appearance: WatermarkAssetAppearance = {
         platform,
-        includePlatformIcon: include_platform_icon ?? include_x_icon,
+        includePlatformIcon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
         handlePaddingY: handle_padding_y,
         handleRounding: handle_rounding,
       };
+      const savedProfile = watermarkProfileToSave(profile, {
+        handle: resolvedHandle,
+        profileUrl: resolvedUrl,
+        includePlatformIcon,
+        includeHandleBorder: include_handle_border,
+        handlePaddingX: handle_padding,
+        handlePaddingY: handle_padding_y,
+        handleRounding: handle_rounding,
+        scale,
+        mode,
+        handlePlacement: handle_position,
+        handleVerticalPercent: handle_vertical_percent,
+        handleOpacity: resolvedHandleOpacity,
+        qrOpacity: resolvedQrOpacity,
+        fadeSeconds: fade_seconds,
+      }, {
+        explicit: callerSetTiming,
+        qrStartSeconds: resolvedQrStartSeconds,
+        qrEndSeconds: resolvedQrEndSeconds,
+        handleStartSeconds: resolvedHandleStartSeconds,
+        handleEndSeconds: resolvedHandleEndSeconds,
+      });
 
       let cardAssetId: string;
       let qrAssetId: string | null = null;
@@ -640,8 +703,8 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_vertical_percent,
         handle_position: include_handle ? resolvedHandlePosition : null,
         platform,
-        include_platform_icon: include_platform_icon ?? include_x_icon,
-        include_x_icon: platform === "x" && (include_platform_icon ?? include_x_icon),
+        include_platform_icon: includePlatformIcon,
+        include_x_icon: platform === "x" && includePlatformIcon,
         include_handle_border,
         handle_padding,
         handle_padding_y,
@@ -680,6 +743,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
           };
         }
         await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
+        if (save_default && resolvedHandle) {
+          await saveWatermarkProfile(savedProfile, platform, engine).catch(() => undefined);
+        }
         return {
           content: [{
             type: "text" as const,
@@ -773,6 +839,9 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
 
       await engine.jobs.failures.clear(asset_id);
       await recordHandle(resolvedHandle, { saveDefault: save_default, platform }, engine).catch(() => undefined);
+      if (save_default && resolvedHandle) {
+        await saveWatermarkProfile(savedProfile, platform, engine).catch(() => undefined);
+      }
 
       if (!wait) {
         // Return as soon as the burn is queued; the frame-aware corner is

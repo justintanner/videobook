@@ -83,8 +83,9 @@ describe("create_watermark tool", () => {
       name: "get_watermark_config",
       arguments: { book_id: PROJECT, platform: "tiktok" },
     });
-    expect(JSON.parse(resultText(config))).toEqual({
+    expect(JSON.parse(resultText(config))).toMatchObject({
       savedHandle: "creator.name", recent: ["creator.name"], authenticatedHandle: null,
+      profile: { handle: "creator.name", platform: "tiktok" },
     });
     expect((await readWatermarkConfig(fs)).savedHandle).toBeNull();
     const saved = await client!.callTool({
@@ -94,14 +95,17 @@ describe("create_watermark tool", () => {
     expect(JSON.parse(resultText(saved))).toMatchObject({ handle: "creator.name", include_platform_icon: false });
   });
 
-  it("requires a TikTok alias instead of using the X default", async () => {
-    const before = fs.artifacts.list().length;
+  it("uses the TikTok alias instead of the X default", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
       arguments: { book_id: PROJECT, platform: "tiktok" },
     });
-    expect(result.isError).toBe(true);
-    expect(fs.artifacts.list()).toHaveLength(before);
+    expect(result.isError).not.toBe(true);
+    expect(JSON.parse(resultText(result))).toMatchObject({
+      platform: "tiktok",
+      handle: "jtbkk",
+      url: "https://www.tiktok.com/@jtbkk",
+    });
   });
 
   it("creates a ready image asset holding the QR card", async () => {
@@ -109,6 +113,7 @@ describe("create_watermark tool", () => {
       name: "create_watermark_card",
       arguments: {
         book_id: PROJECT,
+        platform: "x",
         handle: "@someone",
         include_x_icon: false,
         include_handle_border: false,
@@ -174,7 +179,7 @@ describe("create_watermark tool", () => {
   it("defaults the handle and derives the X URL", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
-      arguments: { book_id: PROJECT },
+      arguments: { book_id: PROJECT, platform: "x" },
     });
 
     expect(result.isError).not.toBe(true);
@@ -195,11 +200,11 @@ describe("create_watermark tool", () => {
   it("remembers used handles and the saved default", async () => {
     await client!.callTool({
       name: "create_watermark_card",
-      arguments: { book_id: PROJECT, handle: "alice", save_default: true },
+      arguments: { book_id: PROJECT, platform: "x", handle: "alice", save_default: true },
     });
     await client!.callTool({
       name: "create_watermark_card",
-      arguments: { book_id: PROJECT, handle: "@bob" },
+      arguments: { book_id: PROJECT, platform: "x", handle: "@bob" },
     });
 
     // Most-recent-first; saved default stays pinned to the save_default handle.
@@ -210,7 +215,7 @@ describe("create_watermark tool", () => {
     // get_watermark_config exposes the same state to the client.
     const cfgResult = await client!.callTool({
       name: "get_watermark_config",
-      arguments: { book_id: PROJECT },
+      arguments: { book_id: PROJECT, platform: "x" },
     });
     expect(cfgResult.isError).not.toBe(true);
     const exposed = JSON.parse(resultText(cfgResult)) as { savedHandle: string | null; recent: string[]; authenticatedHandle: string | null };

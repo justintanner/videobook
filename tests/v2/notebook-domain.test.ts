@@ -192,9 +192,9 @@ describe('v2 notebook domain tools', () => {
     }
     expect(image).toMatchObject({
       provider: 'kie',
-      model: 'GptImage25SunburstTextToImageRequestSchema',
+      model: 'NanoBanana21RequestSchema',
       operation: 'generate_image',
-      tool: 'generate_kie_gpt_image_2_5_sunburst_image',
+      tool: 'generate_kie_nano_banana_2_1_image',
     })
     expect(image.output_cell).toBeUndefined()
 

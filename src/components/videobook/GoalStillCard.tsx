@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { GoalGenerationStage } from '../../../server/src/goal-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { goalOutputEstimate, goalStillStale, goalStillVersions, type GoalSnapshot } from '@/videobook/goals'
+import { goalOutputEstimate, goalStillStale, goalStillVersions, planShots, type GoalSnapshot } from '@/videobook/goals'
 import { GoalPromptInput } from './GoalPromptInput'
 
 type AssetResolver = (artifactId: string) => AssetRecord | null
@@ -39,7 +39,7 @@ export function GoalStillCard({ goal, stage, index, prompt, disabled, canGenerat
   const [feedback, setFeedback] = useState('')
   const output = goal.stages[stage]?.outputs.find(item => item.index === index)
   if (!output) return null
-  const count = goal.plan?.shots.length ?? 1
+  const count = Math.max(1, planShots(goal.plan).length)
   const ending = stage === 'storyboards' && index >= count
   const storyboard = stage === 'storyboards' && !ending
   const simple = goal.plan && 'storyboardLayout' in goal.plan && goal.plan.storyboardLayout === 'six-panel'

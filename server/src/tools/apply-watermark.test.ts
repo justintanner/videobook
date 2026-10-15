@@ -143,7 +143,7 @@ describe("apply_watermark tool", () => {
   async function apply(args: Record<string, unknown>): Promise<ApplyResult> {
     const result = await client.callTool({
       name: "apply_watermark",
-      arguments: { book_id: bookId, ...args },
+      arguments: { book_id: bookId, platform: "x", ...args },
     });
     expect(result.isError).toBeFalsy();
     return JSON.parse((result.content as TextContent)[0].text) as ApplyResult;
@@ -366,8 +366,8 @@ describe("apply_watermark tool", () => {
     const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "proxy");
     expect(metadata.ok && proxy && videoProxyMetadataMatches(metadata.value, source, proxy)).toBe(true);
     expect(await frameRegionDifference(tempDir, originalPath, join(after.value.path, source.name), 5, {
-      left: 50, top: 50, width: 220, height: 60,
-    })).toBeGreaterThan(0.5);
+      left: 40, top: 0, width: 240, height: 48,
+    })).toBeGreaterThan(0.4);
     await expectOverlayCleared(fs, assetId);
   }, 120_000);
 
@@ -643,6 +643,68 @@ describe("apply_watermark tool", () => {
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("qr_end_seconds");
   });
+
+  it("saves the full TikTok timing profile and replays an explicit window", async () => {
+    const fresh = await client.callTool({ name: "get_watermark_config", arguments: { book_id: bookId } });
+    expect(fresh.isError).toBeFalsy();
+    const config = JSON.parse((fresh.content as TextContent)[0].text) as { profile: Record<string, unknown> };
+    expect(config.profile).toMatchObject({
+      platform: "tiktok",
+      handle: "jtbkk",
+      profileUrl: "https://www.tiktok.com/@jtbkk",
+      includePlatformIcon: true,
+      includeHandleBorder: true,
+      handlePaddingX: 15,
+      handlePaddingY: 12,
+      handleRounding: 56,
+      scale: 1,
+      mode: "burn",
+      handleVerticalPercent: 10,
+      handleStartSeconds: 0,
+      handleEndSeconds: 3,
+      handleOpacity: 0.28,
+      qrLeadSeconds: 2.3,
+      qrOpacity: 0.37,
+      fadeSeconds: 0.3,
+    });
+    const assetId = await createRealVideoAsset();
+    const saved = await apply({ asset_id: assetId, platform: "tiktok", save_default: true, wait: false });
+    expect(saved).toMatchObject({ handle_end_seconds: 1, qr_start_seconds: 0, qr_end_seconds: 1, mode: "burn" });
+    expect((await readWatermarkConfig(fs, "tiktok")).profile).toMatchObject({
+      handle: "jtbkk",
+      profileUrl: "https://www.tiktok.com/@jtbkk",
+      handleEndSeconds: 3,
+      qrLeadSeconds: 2.3,
+      qrStartSeconds: null,
+      qrEndSeconds: null,
+      handleOpacity: 0.28,
+      qrOpacity: 0.37,
+    });
+    await apply({
+      asset_id: assetId,
+      platform: "tiktok",
+      save_default: true,
+      wait: false,
+      handle_end_seconds: 0.5,
+      qr_start_seconds: 0.2,
+      qr_end_seconds: 0.8,
+    });
+    expect((await readWatermarkConfig(fs, "tiktok")).profile).toMatchObject({
+      handleEndSeconds: 0.5,
+      qrLeadSeconds: null,
+      qrStartSeconds: 0.2,
+      qrEndSeconds: 0.8,
+    });
+    const replay = await apply({ asset_id: assetId, platform: "tiktok", wait: false });
+    expect(replay).toMatchObject({ handle_end_seconds: 0.5, qr_start_seconds: 0.2, qr_end_seconds: 0.8 });
+    expect((await readWatermarkConfig(fs, "tiktok")).profile?.qrLeadSeconds).toBeNull();
+    await apply({ asset_id: assetId, platform: "x", handle: "alice", save_default: true, mode: "overlay" });
+    expect((await readWatermarkConfig(fs, "tiktok")).profile).toMatchObject({ qrStartSeconds: 0.2, qrEndSeconds: 0.8 });
+    expect(await readWatermarkConfig(fs, "x")).toMatchObject({
+      savedHandle: "alice",
+      profile: { handle: "alice", handleEndSeconds: null, qrLeadSeconds: null, qrStartSeconds: null, qrEndSeconds: null },
+    });
+  }, 60_000);
 
   it("rejects a watermark with neither QR nor handle", async () => {
     const assetId = await createRealVideoAsset();

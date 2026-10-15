@@ -7,6 +7,7 @@
  * Only identity, labels, and image slot limits are configured here.
  */
 import { GPT_IMAGE_2_5_MODELS, GPT_IMAGE_2_5_REFERENCE_SCHEMA } from "./gpt-image-2-5.js";
+import { LIGHTNING_SCENE_MODEL_KEY, LIGHTNING_SCENE_SCHEMA_DEFAULTS, LIGHTNING_SCENE_TOOL } from "./lightning-defaults.js";
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
 import { createKie } from "./usage-providers.js";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
@@ -319,6 +320,11 @@ function getImageDefaultsForConfig(config: ImageModelConfig): Record<string, unk
   for (const [fieldName, schema] of Object.entries(config.defaultSchemas ?? {})) {
     const result = zodDefault(schema);
     if (result.hasDefault) defaults[fieldName] = result.value;
+  }
+  if (config.key === LIGHTNING_SCENE_MODEL_KEY || config.tool_name === LIGHTNING_SCENE_TOOL) {
+    for (const [fieldName, value] of Object.entries(LIGHTNING_SCENE_SCHEMA_DEFAULTS)) {
+      defaults[fieldName] ??= value;
+    }
   }
   return defaults;
 }

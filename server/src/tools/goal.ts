@@ -5,17 +5,20 @@ import { resolveNotebookCellArtifactId } from "videobook-engine";
 import { firstEmptyNotebookGridRow, notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_CAPACITY } from "videobook-engine/notebook-grid";
 import { queue } from "../queue.js";
 import { cancelChainRun, getChainRun, preflightAndAccept, retryChainRun } from "../chain-executor.js";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalStillPrompt, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
+import { compileFrameSteps, compileGoalV3Approval, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlanV3Schema, goalStillPrompt, isGoalPlanV3, refreshGoalPlanV3, type GoalGenerationStage, type GoalPlan } from "../goal-plan.js";
+import { buildGoalPlanV3, type GoalPlanV3 } from "../goal-plan-v3.js";
+import { estimateGoalV3, goalMediaCharacters, resolveGoalMediaReferences, sampleGoalVideoFrames } from "../goal-v3-runtime.js";
 import { currentGoalCharacters, resolveGoalCharacters } from "../goal-characters.js";
-import { goalBriefStyle, goalStylesEqual } from "../goal-styles.js";
-import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileGoal } from "../goal-state.js";
-import { goalAttemptFingerprints, goalStageAttempts, goalStageFingerprint, goalStillAttempts, goalStillStaleReason } from "../goal-stills.js";
+import { goalStylesEqual } from "../goal-styles.js";
+import { activeGoalStage, completedGoalVideos, LEGACY_GOAL_MESSAGE, publicGoal, reconcileFinish, reconcileGoal } from "../goal-state.js";
+import { goalAttemptFingerprints, goalStageAttempts, goalStageFingerprint, goalStillAttempts, goalStillStaleReason, goalV3Fingerprint } from "../goal-stills.js";
 import {
-  createGoalCell, emptyGoalEstimates, findGoalCell, goalContent, listGoals, readGoal, readGoalCell, requireGoalContent, saveGoal,
+  createGoalCell, findGoalCell, goalContent, listGoals, readGoal, readGoalCell, requireGoalContent, saveGoal,
   writeGoalContent, type GoalRecord, type GoalStageOutput,
 } from "../goal-store.js";
 import { estimateGoal } from "../jobs/plan-goal.js";
 import { queueGoalCombination } from "../jobs/combine-goal.js";
+import { queueGoalFinish } from "../jobs/finish-goal.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { arrangeGoalNotebook } from "../notebook-goal-layout.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -24,6 +27,10 @@ const json = (value: unknown): ToolResult => ({ content: [{ type: "text", text: 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const failure = (error: unknown): ToolResult => ({ isError: true, content: [{ type: "text", text: errorMessage(error) }] });
 const ACTIVE_STATUSES = new Set(["planning", "review", "running"]);
+const V3_ASSEMBLY_MESSAGE = "Scene and video goals do not use storyboard editing or multi-clip assembly.";
+const V3_FINISH_REVIEW_MESSAGE = "The video is in finishing review. Revise the scene or video before generating again.";
+const V3_SETTINGS_MESSAGE = "Scene and video settings stay with this goal. Start a new goal to change them.";
+const STALE_RETRY_MESSAGE = "The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.";
 type GoalArgs = Record<string, unknown>;
 const stageSchema = z.enum(["frame", "storyboards", "videos"]);
 const feedbackSchema = z.string().trim().min(1).max(300).regex(/^[^@]*$/u, "Use plain text without @ references in revision feedback");
@@ -36,18 +43,24 @@ function readNotebook(engine: Engine, notebookId: string): NotebookDocument {
 }
 
 async function goalSnapshot(engine: Engine, goal: GoalRecord): Promise<GoalSnapshot> {
-  const current = await reconcileGoal(engine, goal, readNotebook(engine, goal.notebookId));
-  return publicGoal(engine, current, readNotebook(engine, goal.notebookId));
+  const finished = reconcileFinish(engine, goal);
+  const current = await reconcileGoal(engine, finished, readNotebook(engine, finished.notebookId));
+  return publicGoal(engine, current, readNotebook(engine, finished.notebookId));
 }
 
 function requireModernGoal(goal: GoalRecord): void {
+  if (goal.planVersion === 3) throw new Error(V3_ASSEMBLY_MESSAGE);
   if (goal.planVersion !== 2) throw new Error(LEGACY_GOAL_MESSAGE);
 }
 
-function requireRevision(engine: Engine, goal: GoalRecord, revision: unknown): GoalPlan {
+function assertRevision(engine: Engine, goal: GoalRecord, revision: unknown) {
   const content = requireGoalContent(engine, goal);
   if (content.revision !== revision) throw new Error("The goal changed. Review the current version before approving it.");
-  return goalPlanSchema.parse(content.plan);
+  return content;
+}
+
+function requireRevision(engine: Engine, goal: GoalRecord, revision: unknown): GoalPlan {
+  return goalPlanSchema.parse(assertRevision(engine, goal, revision).plan);
 }
 
 async function goalToolLookup(engine: Engine) {
@@ -80,7 +93,86 @@ async function ensureStageSpace(engine: Engine, goal: GoalRecord, stage: GoalGen
   if (!placed.ok) throw new Error(placed.error.message);
 }
 
+async function ensureV3Space(engine: Engine, goal: GoalRecord, stage: "frame" | "videos"): Promise<void> {
+  const placed = await mutateNotebook(engine, goal.notebookId, "goal_stage_space", document => {
+    const occupied = notebookOccupiedSlots(document.cells);
+    if (NOTEBOOK_GRID_CAPACITY - occupied.length < 2) {
+      throw new Error("The notebook needs two empty cells per stage output and a row for the timeline when combining clips");
+    }
+    return arrangeGoalNotebook(document, { generators: 1, images: stage === "videos" ? 0 : 1, videos: stage === "videos" ? 1 : 0 });
+  });
+  if (!placed.ok) throw new Error(placed.error.message);
+}
+
+function v3Stage(goal: GoalRecord, args: GoalArgs, regenerate: boolean): "frame" | "videos" {
+  if (!regenerate) return goal.stage === "videos" ? "videos" : "frame";
+  const requested = args.stage !== undefined || args.action === "revise" ? stageSchema.parse(args.stage) : goal.stage === "videos" ? "frame" : null;
+  if (requested === "storyboards") throw new Error(V3_ASSEMBLY_MESSAGE);
+  if (requested !== "frame" && requested !== "videos") throw new Error("There are no stage outputs to regenerate yet");
+  return requested;
+}
+
+async function startV3Stage(engine: Engine, goal: GoalRecord, args: GoalArgs, regenerate: boolean): Promise<GoalRecord> {
+  if (!regenerate && goal.status === "running" && goal.stages[activeGoalStage(goal)]?.revision === args.revision) return goal;
+  if (!(regenerate ? ["review", "completed", "failed", "interrupted"] : ["review"]).includes(goal.status)) throw new Error("Review the goal before approving, regenerating or revising a stage");
+  const content = assertRevision(engine, goal, args.revision);
+  const stage = v3Stage(goal, args, regenerate);
+  const feedback = args.action === "revise" ? feedbackSchema.parse(args.feedback) : null;
+  if (regenerate && args.index !== undefined && z.number().int().nonnegative().parse(args.index) !== 0) throw new Error("There is no current output to regenerate or revise");
+  if (regenerate && !goal.stages[stage]?.outputs.length) throw new Error("There is no current output to regenerate or revise");
+  if (!regenerate && stage === "videos" && goal.finish) throw new Error(V3_FINISH_REVIEW_MESSAGE);
+  if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before generating this stage");
+  if (stage === "videos") outputReference(readNotebook(engine, goal.notebookId), goal.stages.frame?.outputs[0]);
+  await ensureV3Space(engine, goal, stage);
+  const document = readNotebook(engine, goal.notebookId);
+  const plan = refreshGoalPlanV3(goalPlanV3Schema.parse(content.plan), document);
+  const sceneOutput = goal.stages.frame?.outputs[0];
+  const sceneAddress = stage === "videos" ? outputReference(document, sceneOutput) : undefined;
+  if (stage === "videos" && sceneOutput) {
+    const sceneAttempt = goal.stages.frame?.attempts?.find(attempt => attempt.artifactId === sceneOutput.artifactId && attempt.fingerprint);
+    if (sceneAttempt?.fingerprint && sceneAttempt.fingerprint !== await goalV3Fingerprint(engine, plan, "frame", null)) {
+      throw new Error("The scene has changed. Refresh it before continuing.");
+    }
+  }
+  const compiled = compileGoalV3Approval(plan, stage, sceneAddress);
+  const step = feedback ? { ...compiled, params: { ...compiled.params, prompt: `${String(compiled.params.prompt)}\n\n${feedback}` } } : compiled;
+  const fingerprint = await goalV3Fingerprint(engine, plan, stage, stage === "videos" ? sceneOutput?.artifactId ?? null : null);
+  const { defs, lookup } = await goalToolLookup(engine);
+  const chain = await preflightAndAccept({
+    action: "run", version: 1, book_id: goal.bookId, notebook_id: goal.notebookId,
+    request_id: `goal:${goal.goalId}:${stage}:${content.revision}${feedback ? `:revise:0:${goal.stages[stage]?.attempts?.length ?? 0}` : regenerate ? `:regenerate:0:${goal.stages[stage]?.attempts?.length ?? 0}` : ""}`,
+    steps: [step],
+  }, {
+    engine, bookId: goal.bookId, notebookId: goal.notebookId,
+    toolSchemas: new Map(defs.map(def => [def.name, def.schema])), autoApplyTools: new Set(),
+    effectForTool: name => name === "assemble_goal" ? "mutation" : "generation",
+  }, lookup, { actor: "chat" });
+  const previous = goal.stages[stage];
+  const approvedAt = new Date().toISOString();
+  const { finish: _finish, ...stored } = goal;
+  return saveGoal(engine, {
+    ...(regenerate ? stored : goal),
+    stage, chainId: chain.chainId, status: "running", error: null,
+    ...(regenerate ? { finish: null, resumeFinish: goal.finish ?? null } : {}),
+    resumeStage: regenerate ? goal.resumeStage ?? goal.stage : null,
+    resumeStatus: regenerate ? goal.status === "completed" || goal.resumeStatus === "completed" ? "completed" : "review" : null,
+    resumeOutputs: regenerate ? previous?.outputs ?? [] : null,
+    stages: { ...goal.stages, [stage]: {
+      chainId: chain.chainId, revision: content.revision, approvedAt, shotIndexes: [0],
+      outputs: previous?.outputs ?? [], previousChainIds: previous ? [...previous.previousChainIds, previous.chainId] : [],
+      attempts: [...(previous?.attempts ?? []), {
+        stage, index: 0, chainId: chain.chainId, stepId: step.id, artifactId: null, cellId: null,
+        basePrompt: stage === "videos" ? plan.video.prompt : plan.scene.prompt, feedback, fingerprint,
+        parentArtifactId: feedback ? previous?.outputs[0]?.artifactId ?? null : null,
+        frameArtifactId: stage === "videos" ? sceneOutput?.artifactId ?? null : null, createdAt: approvedAt,
+      }],
+    } },
+  });
+}
+
 async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, regenerate: boolean): Promise<GoalRecord> {
+  if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
+  if (goal.planVersion === 3) return startV3Stage(engine, goal, args, regenerate);
   requireModernGoal(goal);
   const content = requireGoalContent(engine, goal);
   if (!regenerate && goal.status === "running" && goal.stages[activeGoalStage(goal)]?.revision === args.revision) return goal;
@@ -158,7 +250,35 @@ async function startStage(engine: Engine, goal: GoalRecord, args: GoalArgs, rege
   });
 }
 
+function selectV3Version(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
+  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Select a version while reviewing the goal");
+  if (args.revision !== undefined) assertRevision(engine, goal, args.revision);
+  const stage = stageSchema.parse(args.stage);
+  if (stage === "storyboards") throw new Error(V3_ASSEMBLY_MESSAGE);
+  const index = z.number().int().nonnegative().parse(args.index);
+  const artifactId = z.string().uuid().parse(args.artifact_id);
+  const run = goal.stages[stage];
+  const attempts = goalStageAttempts(engine, goal, stage);
+  const attempt = attempts.find(item => item.stage === stage && item.index === index && item.artifactId === artifactId);
+  const step = attempt ? getChainRun(engine, attempt.chainId)?.steps.find(item => item.id === attempt.stepId) : null;
+  if (!run || !attempt || step?.status !== "completed") throw new Error("Choose a completed version of this goal's output");
+  const document = readNotebook(engine, goal.notebookId);
+  const producer = document.cells.find(cell => cell.inputs?.chainRunId === `${attempt.chainId}:${attempt.stepId}`);
+  const output = { index, artifactId, cellId: attempt.cellId, producerCellId: producer?.id ?? null, address: null };
+  const address = outputReference(document, output);
+  const videoChanged = stage === "videos" && run.outputs.find(item => item.index === index)?.artifactId !== artifactId;
+  const sceneChanged = stage === "frame" && run.outputs[0]?.artifactId !== artifactId;
+  const finish = videoChanged
+    ? { status: "review" as const, sourceArtifactId: artifactId, finalArtifactId: null, error: null }
+    : sceneChanged ? null : goal.finish ?? null;
+  return saveGoal(engine, { ...goal, finish, stages: { ...goal.stages, [stage]: {
+    ...run, attempts, outputs: [...run.outputs.filter(item => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index),
+  } } });
+}
+
 function selectStill(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
+  if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
+  if (goal.planVersion === 3) return selectV3Version(engine, goal, args);
   requireModernGoal(goal);
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Select a version while reviewing the goal");
   if (args.revision !== undefined) requireRevision(engine, goal, args.revision);
@@ -200,22 +320,38 @@ async function createGoal(engine: Engine, bookId: string, notebookId: string, ar
       if (cell && goalContent(cell).brief !== brief) throw new Error("This request_id already belongs to a different goal");
       return goalSnapshot(engine, existing);
     }
-    goalBriefConstraints(brief);
-    const characters = resolveGoalCharacters(engine, readNotebook(engine, notebookId), brief);
-    const plan = args.plan === undefined ? null : goalPlanSchema.parse(args.plan);
-    const estimate = plan ? await estimateGoal(engine, plan, characters) : emptyGoalEstimates();
+    const document = readNotebook(engine, notebookId);
+    const supplied = args.plan === undefined ? undefined : z.union([goalPlanV3Schema, goalPlanSchema]).parse(args.plan);
     const goalId = uuidv7();
-    const cell = await createGoalCell(engine, notebookId, goalId, {
-      brief, characters, revision: plan ? 1 : 0, plan, estimate,
-      ...(!plan ? { requestedStyle: goalBriefStyle(brief) } : {}),
-    });
     const timestamp = new Date().toISOString();
+    if (supplied === undefined || isGoalPlanV3(supplied)) {
+      const sourced = supplied === undefined
+        ? await resolveGoalMediaReferences(engine, document, brief)
+        : supplied.references;
+      const sampledFrames = supplied === undefined ? await sampleGoalVideoFrames(engine, sourced) : supplied.sampledFrames;
+      const plan = supplied === undefined ? buildGoalPlanV3({ brief, references: sourced, sampledFrames }) : supplied;
+      const media = plan.references;
+      const characters = goalMediaCharacters(media);
+      const estimate = await estimateGoalV3(engine, plan);
+      const cell = await createGoalCell(engine, notebookId, goalId, { brief, characters, media, revision: 1, plan, estimate });
+      const goal = saveGoal(engine, {
+        goalId, bookId, notebookId, cellId: cell.id, requestId, status: "review", planVersion: 3, stage: "frame", stages: {},
+        chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
+        dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
+      });
+      return goalSnapshot(engine, goal);
+    }
+    goalBriefConstraints(brief);
+    const characters = resolveGoalCharacters(engine, document, brief);
+    const plan = supplied;
+    const estimate = await estimateGoal(engine, plan, characters);
+    const cell = await createGoalCell(engine, notebookId, goalId, { brief, characters, revision: 1, plan, estimate });
     const goal = saveGoal(engine, {
-      goalId, bookId, notebookId, cellId: cell.id, requestId, status: plan ? "review" : "planning", planVersion: 2, stage: "frame", stages: {},
+      goalId, bookId, notebookId, cellId: cell.id, requestId, status: "review", planVersion: 2, stage: "frame", stages: {},
       chainId: null, planningJobId: null, clipIds: [], trackId: null, assembly: null, error: null,
       dismissedAt: null, createdAt: timestamp, updatedAt: timestamp,
     });
-    return goalSnapshot(engine, plan ? goal : await queuePlanning(engine, goal, `goal-plan-${goalId}`));
+    return goalSnapshot(engine, goal);
   });
 }
 
@@ -233,7 +369,39 @@ function validateReviewEdit(goal: GoalRecord, previous: GoalPlan, plan: GoalPlan
   if (previous.frameContinuity !== plan.frameContinuity) throw new Error("Choose ending frames before generating the full frame. Start a new goal to change this setting.");
 }
 
+function v3LockedShape(plan: GoalPlanV3): string {
+  const ref = (item: GoalPlanV3["references"][number]) => ({
+    kind: item.kind, artifactId: item.artifactId, cellId: item.cellId, slot: item.slot, objectHash: item.objectHash,
+  });
+  return JSON.stringify({
+    aspectRatio: plan.aspectRatio,
+    scene: { ...plan.scene, prompt: "", imageRefs: plan.scene.imageRefs.map(ref) },
+    video: {
+      ...plan.video, prompt: "",
+      imageRefs: plan.video.imageRefs.map(ref), videoRefs: plan.video.videoRefs.map(ref),
+    },
+    references: plan.references.map(ref),
+    sampledFrames: plan.sampledFrames,
+    finish: plan.finish,
+  });
+}
+
+async function updateV3Goal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Wait until generation stops before editing the goal");
+  const content = assertRevision(engine, goal, args.revision);
+  const previous = goalPlanV3Schema.parse(content.plan);
+  const supplied = args.plan;
+  if (!supplied || typeof supplied !== "object" || !("version" in supplied) || supplied.version !== 3) throw new Error(V3_ASSEMBLY_MESSAGE);
+  const plan = goalPlanV3Schema.parse(supplied);
+  if (v3LockedShape(previous) !== v3LockedShape(plan)) throw new Error(V3_SETTINGS_MESSAGE);
+  if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
+  const promptChanged = previous.scene.prompt !== plan.scene.prompt || previous.video.prompt !== plan.video.prompt;
+  await writeGoalContent(engine, goal, { ...content, plan, revision: content.revision + 1 });
+  return saveGoal(engine, { ...goal, ...(promptChanged ? { finish: null } : {}) });
+}
+
 async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {
+  if (goal.planVersion === 3) return updateV3Goal(engine, goal, args);
   requireModernGoal(goal);
   if (!["review", "completed", "failed", "interrupted"].includes(goal.status)) throw new Error("Wait until generation stops before editing the goal");
   const previous = requireRevision(engine, goal, args.revision);
@@ -252,8 +420,10 @@ function stopStillRun(engine: Engine, goal: GoalRecord): GoalRecord | null {
   const previousChainId = run?.previousChainIds.at(-1);
   if (goal.status !== "running" || !goal.resumeStage || !run || !previousChainId || !goal.chainId) return null;
   cancelChainRun(engine, goal.chainId);
+  const finish = goal.resumeFinish === undefined ? goal.finish : goal.resumeFinish;
   return saveGoal(engine, {
     ...goal, status: goal.resumeStatus ?? "review", stage: goal.resumeStage, chainId: previousChainId, error: null, resumeStage: null, resumeStatus: null, resumeOutputs: null,
+    ...(goal.resumeFinish !== undefined ? { resumeFinish: null, finish } : {}),
     stages: { ...goal.stages, [stage]: {
       ...run, outputs: goal.resumeOutputs ?? run.outputs, chainId: previousChainId, previousChainIds: [...run.previousChainIds.slice(0, -1), run.chainId],
     } },
@@ -261,6 +431,10 @@ function stopStillRun(engine: Engine, goal: GoalRecord): GoalRecord | null {
 }
 
 async function cancelGoal(engine: Engine, goal: GoalRecord, options: { discard?: boolean } = {}): Promise<GoalRecord> {
+  if (goal.planVersion === 3 && goal.finish?.status === "running") {
+    if (goal.finish.jobId) await engine.jobs.queue.abort(goal.finish.jobId, "Finishing cancelled");
+    return saveGoal(engine, { ...goal, status: "review", error: null, finish: { ...goal.finish, status: "cancelled", error: null } });
+  }
   if (!ACTIVE_STATUSES.has(goal.status)) return goal;
   const resumed = options.discard ? null : stopStillRun(engine, goal);
   if (resumed) return resumed;
@@ -270,7 +444,29 @@ async function cancelGoal(engine: Engine, goal: GoalRecord, options: { discard?:
   return cancelled;
 }
 
+async function retryV3Goal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+  if (goal.status !== "failed" && goal.status !== "interrupted") throw new Error("Only a goal that failed or was interrupted can be retried");
+  const content = requireGoalContent(engine, goal);
+  if (!goal.chainId) throw new Error("There is no generation to retry. Approve the current stage.");
+  const stage = activeGoalStage(goal);
+  if (stage === "storyboards") throw new Error(V3_ASSEMBLY_MESSAGE);
+  const run = goal.stages[stage];
+  if (run && run.revision !== content.revision) throw new Error("The plan changed after this attempt. Regenerate using the current plan instead of retrying the older request.");
+  const plan = refreshGoalPlanV3(goalPlanV3Schema.parse(content.plan), readNotebook(engine, goal.notebookId));
+  const sceneArtifactId = stage === "videos" ? goal.stages.frame?.outputs[0]?.artifactId ?? null : null;
+  for (const attempt of run?.attempts ?? []) {
+    if (attempt.chainId !== goal.chainId || !attempt.fingerprint) continue;
+    if (attempt.fingerprint !== await goalV3Fingerprint(engine, plan, stage, sceneArtifactId)) throw new Error(STALE_RETRY_MESSAGE);
+  }
+  if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before retrying this stage");
+  const { lookup } = await goalToolLookup(engine);
+  retryChainRun(engine, goal.chainId, lookup);
+  return saveGoal(engine, { ...goal, status: "running", error: null });
+}
+
 async function retryGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> {
+  if (goal.planVersion === 1) throw new Error(LEGACY_GOAL_MESSAGE);
+  if (goal.planVersion === 3) return retryV3Goal(engine, goal);
   requireModernGoal(goal);
   if (goal.status !== "failed" && goal.status !== "interrupted") throw new Error("Only a goal that failed or was interrupted can be retried");
   const content = requireGoalContent(engine, goal);
@@ -282,7 +478,7 @@ async function retryGoal(engine: Engine, goal: GoalRecord): Promise<GoalRecord> 
   for (const attempt of run?.attempts ?? []) {
     if (attempt.chainId !== goal.chainId || !attempt.fingerprint) continue;
     if (attempt.fingerprint !== await goalStageFingerprint(engine, goal, plan, content.characters, stage, attempt.index)) {
-      throw new Error("The references or selected versions changed after this attempt. Regenerate using the current selection instead of retrying the older request.");
+      throw new Error(STALE_RETRY_MESSAGE);
     }
   }
   if (!process.env.KIE_API_KEY) throw new Error("Set KIE_API_KEY in Settings before retrying this stage");
@@ -299,6 +495,7 @@ async function applyGoalAction(engine: Engine, notebookId: string, goalId: strin
   if (args.action === "select") return selectStill(engine, goal, args);
   if (args.action === "approve" || args.action === "regenerate" || args.action === "revise") return startStage(engine, goal, args, args.action !== "approve");
   if (args.action === "cancel") return cancelGoal(engine, goal);
+  if (args.action === "finish") return queueGoalFinish(engine, goal, args);
   if (args.action === "retry") return retryGoal(engine, goal);
   if (args.action === "combine") {
     requireModernGoal(goal);
@@ -325,12 +522,13 @@ async function listGoalSnapshots(engine: Engine, notebook: NotebookDocument): Pr
 export function goalDefs(engine: Engine): ToolDef[] {
   return [{
     name: "video_goal", scope: "book",
-    description: "Create a goal from screenshot, character and prop references. New goals default to one 20-second portrait video: Nano Banana 2.1 scene, six-panel storyboard (2 columns by 3 rows), then Seedance 2.5 720p with audio and no music. Match source style unless Cinematic or IG Influencer is requested. Inspect references during planning and edit their roles before generating. Explicit approval is required for each paid stage. Multiple clips are optional. update saves the plan; revise edits a selected image or reruns video with feedback; regenerate makes fresh outputs; select picks any completed version, including after goal completion. All attempts remain available. Upstream changes mark dependent outputs stale; refresh them before generating video. Video motion or sound edits do not invalidate six-panel storyboards. Legacy plans retain their settings and four-panel layout. cancel restores the previous output during revision; retry resumes failed work. Multi-clip revisions require explicit assemble and never overwrite user-edited timeline clips; combine renders the selected assembled clips locally. Deleting the goal tile stops it.",
+    description: "Create a goal from image and video references. A new goal with no supplied plan is one concise scene and one Seedance 2.5 video: Nano Banana 2.1 at 16:9, 2K, JPG, then 16:9, 1080p, 13 seconds, MP4, with audio. Portrait or square only when the brief says so. No storyboard, ending frame, or style preset. Approving a new goal generates the scene, then the video, and stops at finishing review. finish suggests a 2.3 second cold open, then burns the saved watermark onto a copy after the range is approved. An explicit v2 plan keeps that plan's settings, storyboard, and approval stages. Explicit approval is required before paid generation. update saves a new goal's title and scene or video prompt, or a v2 plan; revise edits a selected image or reruns video with feedback; regenerate makes fresh outputs; select picks any completed version, including after goal completion. Legacy v1 plans stay readable. cancel restores the previous output during revision; retry resumes failed work when the plan and references are unchanged. Multi-clip revisions require explicit assemble and never overwrite user-edited timeline clips; combine renders the selected assembled clips locally. Deleting the goal tile stops it.",
     schema: {
       book_id: z.string().uuid(), notebook_id: z.string().uuid(),
-      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine"]),
+      action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine", "finish"]),
+      start_seconds: z.number().min(0).optional(), end_seconds: z.number().min(0).optional(),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
-      brief: z.string().trim().min(1).max(6000).optional(), plan: goalPlanSchema.optional(),
+      brief: z.string().trim().min(1).max(6000).optional(), plan: z.union([goalPlanV3Schema, goalPlanSchema]).optional(),
       revision: z.number().int().nonnegative().optional(), shot_indexes: z.array(z.number().int().min(0).max(7)).min(1).max(8).optional(),
       stage: stageSchema.optional(), index: z.number().int().min(0).max(15).optional(), artifact_id: z.string().uuid().optional(), feedback: feedbackSchema.optional(),
     },

@@ -787,6 +787,12 @@ export async function pauseBookQueueForTests(bookId: string): Promise<void> {
   ]);
 }
 
+export async function resumeBookQueueForTests(bookId: string): Promise<void> {
+  if (!testEngines.has(bookId)) throw new Error("Only test book queues may be resumed");
+  const info = await ensureRunner(bookId);
+  info.runner.start();
+}
+
 export async function waitForBookQueuesIdleForTests(options: {
   budgetMs?: number;
   fileLabel?: string;

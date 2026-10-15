@@ -3,6 +3,7 @@
  */
 import type { ResolvedArtifactRef } from "./artifact-refs.js";
 import { geminiOmniClipInputError } from "./gemini-omni-clip.js";
+import { LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS, LIGHTNING_VIDEO_TOOL } from "./lightning-defaults.js";
 import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from "./seedance25.js";
 import {
   GrokImageToVideoRequestSchema,
@@ -1471,6 +1472,14 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
       (toolName === "generate_kie_kling_3_0_motion_control" || canonical === "generate_kie_kling_3_0_motion_control")
       && (param === "character_image_refs" || param === "motion_video_refs")
     ) required.add(param);
+  }
+
+  if (toolName === LIGHTNING_VIDEO_TOOL || canonical === LIGHTNING_VIDEO_TOOL) {
+    for (const [key, value] of Object.entries(LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS)) {
+      defaults[key] = value;
+      const prop = properties[key];
+      if (prop) prop.default = value;
+    }
   }
 
   return { type: "object", properties, required: Array.from(required), defaults };

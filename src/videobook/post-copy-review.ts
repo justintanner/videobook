@@ -1,3 +1,4 @@
+import { LIGHTNING_POST_LANGUAGE, LIGHTNING_POST_TAGS } from '../../server/src/lightning-defaults'
 import type { PostPlatform, PostView } from '../../server/src/posts/post-contract'
 import {
   joinCaptionTags,
@@ -53,11 +54,14 @@ export function captionLanguage(text: string): PostCopyLanguage {
 
 export function initialCopyState(post: PostView): PostCopyState {
   const caption = post.definition.caption
-  const language = captionLanguage(caption)
+  const freshTikTok = post.definition.platform === 'tiktok' && !caption.trim()
+  const language = freshTikTok ? LIGHTNING_POST_LANGUAGE : captionLanguage(caption)
   const parts = splitCaptionTags(caption)
   const tracks: PostCopyState['tracks'] = caption.trim()
     ? { [language]: { versions: [{ body: parts.body, tags: parts.tags, origin: 'saved', instruction: null }], index: 0 } }
-    : {}
+    : freshTikTok
+      ? { th: { versions: [{ body: '', tags: [...LIGHTNING_POST_TAGS], origin: 'auto', instruction: null }], index: 0 } }
+      : {}
   return { language, platform: post.definition.platform, tracks, prompt: '', drafting: null, error: null }
 }
 
@@ -99,7 +103,13 @@ export function appendCopyDraft(copy: PostCopyState, language: PostCopyLanguage,
   const track = copy.tracks[language] ?? { versions: [], index: 0 }
   const version: CopyVersion = { body: draft.caption, tags: draft.tags, origin: instruction ? 'astra' : 'auto', instruction }
   const versions = [...track.versions, version]
-  return { ...copy, tracks: { ...copy.tracks, [language]: { versions, index: versions.length - 1 } }, drafting: null, error: null }
+  return {
+    ...copy,
+    language,
+    tracks: { ...copy.tracks, [language]: { versions, index: versions.length - 1 } },
+    drafting: null,
+    error: null,
+  }
 }
 
 export function stepCopyVersion(copy: PostCopyState, delta: number): PostCopyState {
@@ -110,7 +120,9 @@ export function stepCopyVersion(copy: PostCopyState, delta: number): PostCopySta
 }
 
 export function copyNeedsDraft(copy: PostCopyState, language: PostCopyLanguage, locked: boolean): boolean {
-  return !locked && !copy.drafting && !copy.tracks[language]?.versions.length
+  const track = copy.tracks[language]
+  const body = track?.versions[track.index]?.body.trim() ?? ''
+  return !locked && !copy.drafting && body.length === 0
 }
 
 export function copyDraftArgs(bookId: string, postId: string, copy: PostCopyState, language: PostCopyLanguage, instruction: string | null): Record<string, unknown> {
@@ -141,6 +153,7 @@ export function copyProvenance(copy: PostCopyState): string {
   if (version.origin === 'saved') return 'Saved caption'
   if (version.origin === 'edited') return 'Edited by you · Regen keeps this version in history'
   if (version.origin === 'astra') return `Rewritten by Astra · “${version.instruction ?? ''}”`
+  if (!version.body.trim()) return `No ${language} caption yet`
   return `Drafted by Astra from the video analysis · ${language}`
 }
 

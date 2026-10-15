@@ -108,6 +108,7 @@ describe("Post publication records", () => {
     source = { ...source, inputs: { producerCellId: idea.id } };
     value(await engine.notebooks.write({ ...notebook, cells: [goal, idea, source], edges: [] }));
     const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id });
+    expect(post.definition).toMatchObject({ platform: "tiktok", delivery: "icloud" });
     expect(post.definition.lineage.map(cell => cell.prompt).filter(Boolean)).toEqual(["Teach courage through a skating dog", "A dog learns to skate"]);
   });
 
@@ -337,7 +338,7 @@ describe("Post publication records", () => {
       res.end(JSON.stringify({ data: { id: "123", text: "Clip", public_metrics: { like_count: 0, impression_count: 200 } }, includes: { media: [{ media_key: "7_123", type: "video", public_metrics: { view_count: 500 } }] } }));
     });
     const x = createX({ accessToken: "local-test-token", baseURL: base });
-    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id });
+    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, platform: "x" });
     await linkPost(engine, post.id, "https://twitter.com/creator/status/123?s=20", new Date(Date.now() - 7200_000).toISOString());
     const result = await refreshPostMetrics(engine, post.id, { x });
     expect(requests).toBe(2);
@@ -364,7 +365,7 @@ describe("Post publication records", () => {
     const x = createX({ accessToken: "local-test-token", baseURL: base });
     const attachment = value(await engine.artifacts.create("image", "Reply image"));
     value(await engine.files.write(attachment.artifactId, "original.png", Buffer.from("frozen reply image")));
-    const draft = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Scheduled caption" });
+    const draft = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, platform: "x", caption: "Scheduled caption" });
     const checkpoint = engine.head;
     const args = { engine, assetId: source.outputArtifactId!, postCellId: draft.id, bookId: engine.book.get().bookId, text: "Scheduled caption", followups: [{ text: "Behind the scenes", image_asset_ids: [attachment.artifactId] }], x };
     const post = await prepareXPublication(args);
@@ -389,7 +390,7 @@ describe("Post publication records", () => {
     let status = 429;
     const base = await serve((_req, res) => { res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify({ title: "Unavailable" })); });
     const x = createX({ accessToken: "local-test-token", baseURL: base });
-    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id });
+    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, platform: "x" });
     await linkPost(engine, post.id, "https://x.com/creator/status/456", new Date(Date.now() - 86_400_000).toISOString());
     await expect(refreshPostMetrics(engine, post.id, { x })).rejects.toThrow();
     expect(new Date(getPost(engine, post.id).runtime.nextMetricAt!).getTime()).toBeGreaterThan(Date.now() + 14 * 60_000);

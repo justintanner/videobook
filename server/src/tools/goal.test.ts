@@ -1,16 +1,22 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { promisify } from "node:util";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import type { Client } from "@modelcontextprotocol/client";
-import { MVP_CONTRACT_VERSION, type Engine, type EditIntent } from "videobook-engine";
+import { findPrimaryMediaFile, MVP_CONTRACT_VERSION, type Engine, type EditIntent } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
-import { pauseBookQueueForTests, stopBookQueue } from "../queue.js";
-import { cancelChainRun, getChainRun, waitForChainRun } from "../chain-executor.js";
-import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, goalStillPrompt, GOAL_PROMPT_BUDGET, GOAL_IMAGE_TOOLS, GOAL_VIDEO_TOOL } from "../goal-plan.js";
+import { pauseBookQueueForTests, resumeBookQueueForTests, stopBookQueue } from "../queue.js";
+import { cancelChainRun, getChainRun, resumeOpenChains, waitForChainRun } from "../chain-executor.js";
+import { copyVideoFixture } from "../test-media-fixtures.js";
+import { compileFrameSteps, compileGoalV3Steps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, goalStillPrompt, GOAL_PROMPT_BUDGET, GOAL_IMAGE_TOOLS, GOAL_VIDEO_TOOL } from "../goal-plan.js";
+import { buildNanoBanana21Payload, withLightningSceneDefaults } from "../nano-banana-2-1.js";
+import { translateToolPayload } from "../payload-builders.js";
 import { normalizeSeedance25Request } from "../seedance25.js";
 import { readGoal, saveGoal } from "../goal-store.js";
 import { goalPlannerBrief } from "../goal-characters.js";
@@ -19,7 +25,9 @@ import { LEGACY_GOAL_MESSAGE } from "../goal-state.js";
 import { appendGoalClips } from "../jobs/assemble-goal.js";
 import { goalTestCharacters, goalTestPlan, goalTestSimplePlan, goalTestVideo, seedGoalStage } from "../test-goals.js";
 import { goalPlannerImages } from "../goal-reference-images.js";
-import { probeVideo } from "../ffmpeg.js";
+import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { saveWatermarkProfile } from "../watermark-config.js";
+import { registerMediaProbe } from "../notebook-media-ops.js";
 import type { GoalSnapshot } from "./goal.js";
 
 const brief = "@a1@a2 make a funny video of a dog on a skateboard, three 10s clips";
@@ -271,6 +279,51 @@ describe("staged video goals through MCP", () => {
     await seedGoalStage(engine, goal.goalId, stage);
     return status(goal.goalId);
   }
+  const textOf = (result: { content?: unknown }) => (result.content as Array<{ text?: string }> | undefined)?.[0]?.text ?? "";
+  function providerJob(artifactId: string) {
+    const job = engine.jobs.queue.list().find(item => item.artifactId === artifactId && item.type.startsWith("generate_"));
+    if (!job) {
+      const seen = engine.jobs.queue.list().map(item => `${item.type}:${item.state}:${item.artifactId ?? ""}`).join(", ");
+      throw new Error(`missing provider job for ${artifactId}; queued=[${seen}]`);
+    }
+    return job;
+  }
+  async function completeProviderJob(artifactId: string): Promise<void> {
+    const job = providerJob(artifactId);
+    let current = job;
+    if (current.state === "queued") {
+      const leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+      if (!leased || leased.id !== job.id) throw new Error(`leased ${leased?.type ?? "nothing"} instead of ${job.type}`);
+      current = leased;
+    }
+    const completed = await engine.jobs.queue.complete(current.id, { result: { settled: true } });
+    if (!completed) throw new Error(`could not complete ${job.type} from ${current.state}`);
+  }
+  async function settleChain(chainId: string, kind: "image" | "video"): Promise<string> {
+    await expect.poll(() => {
+      const step = getChainRun(engine, chainId)?.steps[0];
+      const artifactId = step?.outputs?.img_asset_id ?? step?.outputs?.vid_asset_id;
+      return step?.status === "running" && typeof artifactId === "string" && step.childJobIds.length > 0;
+    }, { timeout: 15_000 }).toBe(true);
+    const step = getChainRun(engine, chainId)!.steps[0]!;
+    const artifactId = String(step.outputs?.img_asset_id ?? step.outputs?.vid_asset_id);
+    if (kind === "image") {
+      const written = await engine.files.write(artifactId, "original.jpg", await sharp({ create: { width: 96, height: 54, channels: 3, background: "#cf593b" } }).jpeg().toBuffer());
+      if (!written.ok) throw new Error(written.error.message);
+    } else {
+      const path = join(root, `${artifactId}.mp4`);
+      await copyVideoFixture({ width: 160, height: 90, durationSec: 4, fps: 12, source: "color", color: "blue", audio: { frequency: 440 } }, path);
+      const written = await engine.files.writeFromPath(artifactId, "original.mp4", path);
+      if (!written.ok) throw new Error(written.error.message);
+      await registerMediaProbe(engine, artifactId, "original.mp4", await probeVideo(path));
+    }
+    await completeProviderJob(artifactId);
+    await expect.poll(() => engine.jobs.queue.list().some(job => job.type === "await_notebook_output" && job.payload.providerArtifactId === artifactId), { timeout: 15_000 }).toBe(true);
+    await resumeBookQueueForTests(bookId);
+    await expect.poll(() => getChainRun(engine, chainId)?.status, { timeout: 20_000 }).toBe("completed");
+    await pauseBookQueueForTests(bookId);
+    return artifactId;
+  }
 
   it("resolves adjacent image mentions, saves character edges and per-stage estimates, and fences invalid inputs", async () => {
     const goal = await create({ request_id: "same-request" });
@@ -344,13 +397,13 @@ describe("staged video goals through MCP", () => {
     expect((await status(created.goalId)).stages.frame!.outputs[0]!.stale).toBeNull();
   });
 
-  it("stores detected style while planning and lets an explicit plan override brief keywords", async () => {
-    await pauseBookQueueForTests(bookId);
+  it("keeps a new goal on the lightning plan and lets an explicit plan override brief keywords", async () => {
     const styledBrief = "@a1 as an IG influencer, GRWM morning routine";
     const created = await invoke({ action: "create", brief: styledBrief });
-    expect(created).toMatchObject({ status: "planning", plan: null, requestedStyle: goalBriefStyle(styledBrief) });
-    expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs?.requestedStyle).toEqual(goalBriefStyle(styledBrief));
-    expect((await status(created.goalId)).requestedStyle).toEqual(created.requestedStyle);
+    expect(created).toMatchObject({ status: "review", planVersion: 3 });
+    expect(created.plan).toMatchObject({ version: 3, aspectRatio: "16:9", video: { durationSeconds: 13 } });
+    expect(created).not.toHaveProperty("requestedStyle");
+    expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs).not.toHaveProperty("requestedStyle");
     const explicit = await create({ brief: styledBrief });
     expect(explicit.plan).toMatchObject({ style: { id: "cinematic", options: {} } });
     expect(explicit).not.toHaveProperty("requestedStyle");
@@ -668,13 +721,13 @@ describe("staged video goals through MCP", () => {
   });
 
   it("persists planning failures, retries planning, and stops a removed goal", async () => {
-    const failed = await invoke({ action: "create", brief });
-    await expect.poll(async () => (await status(failed.goalId)).status).toBe("failed");
-    expect((await status(failed.goalId)).error).toContain("placeholder");
+    const seeded = await create();
+    saveGoal(engine, { ...readGoal(engine, seeded.goalId), status: "failed", chainId: null, error: "placeholder key" });
     await pauseBookQueueForTests(bookId);
-    const retried = await invoke({ action: "retry", goal_id: failed.goalId });
-    expect(retried).toMatchObject({ status: "planning", stage: "frame", error: null });
-    expect(retried.planningJobId).not.toBe(failed.planningJobId);
+    const retried = await invoke({ action: "retry", goal_id: seeded.goalId });
+    expect(retried).toMatchObject({ status: "planning", stage: "frame", error: null, planVersion: 2 });
+    expect(retried.planningJobId).toBeTruthy();
+    expect(retried.planningJobId).not.toBe(seeded.planningJobId);
     expect(engine.jobs.queue.list({ type: "generate_gpt_image_2_5" })).toHaveLength(0);
     expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(0);
     await engine.notebooks.removeCell(notebookId, retried.cellId);
@@ -944,4 +997,486 @@ describe("staged video goals through MCP", () => {
     expect((await raw({ action: "assemble", goal_id: boards.goalId })).isError).toBe(true);
     expect(engine.sequences.getPrimary().clips.map(clip => clip.source.artifactId)).toEqual(ids.slice(0, 2));
   });
+
+  it("plans a concise v3 scene and video from mixed image and video references", async () => {
+    const videoId = await goalTestVideo(engine, root, "red");
+    const before = await engine.files.manifest(videoId);
+    if (!before.ok) throw new Error(before.error.message);
+    const videoCell = engine.notebooks.createCell({ type: "video", label: "Market clip", slot: { row: 0, column: 2 }, outputArtifactId: videoId });
+    const inserted = await engine.notebooks.insertCell(notebookId, videoCell);
+    expect(inserted.ok, inserted.ok ? "" : inserted.error.message).toBe(true);
+    const goal = await invoke({ action: "create", brief: "@a1 @a3 skate through the morning market" });
+    expect(engine.jobs.queue.list({ type: "plan_goal" })).toHaveLength(0);
+    expect(goal).toMatchObject({
+      planVersion: 3, status: "review", stage: "frame",
+      plan: {
+        version: 3, aspectRatio: "16:9",
+        scene: { tool: "generate_kie_nano_banana_2_1_image", model: "nano_banana_2_1", aspectRatio: "16:9", resolution: "2K", outputFormat: "jpg" },
+        video: { tool: "generate_kie_seedance_2_5_video", aspectRatio: "16:9", resolution: "1080p", durationSeconds: 13, generateAudio: true, outputFormat: "mp4" },
+        finish: { suggestedColdOpenSeconds: 2.3, watermark: { platform: "tiktok", handle: "jtbkk", mode: "burn" } },
+      },
+    });
+    if (!goal.plan || !("version" in goal.plan) || goal.plan.version !== 3) throw new Error("expected a v3 plan");
+    const plan = goal.plan;
+    expect(plan).not.toHaveProperty("shots");
+    expect(goalPromptWords(plan.scene.prompt)).toBeLessThanOrEqual(25);
+    expect(goalPromptWords(plan.video.prompt)).toBeLessThanOrEqual(60);
+    expect(plan.scene.prompt).toContain("@image1");
+    expect(plan.video.prompt).toContain("@image1");
+    expect(plan.video.prompt).toContain("@video1");
+    expect(`${plan.scene.prompt} ${plan.video.prompt}`).not.toMatch(/@a\d|storyboard|cinematic|Thailand/u);
+    const videoFile = findPrimaryMediaFile(before.value.files, "video");
+    const imageManifest = await engine.files.manifest(imageIds[0]!);
+    if (!imageManifest.ok || !videoFile) throw new Error("missing reference media");
+    const imageFile = findPrimaryMediaFile(imageManifest.value.files, "image");
+    expect(plan.references.map(reference => reference.objectHash).sort()).toEqual([imageFile!.objectHash, videoFile.objectHash].sort());
+    expect(plan.sampledFrames).toEqual([{ artifactId: videoId, objectHash: videoFile.objectHash, seconds: 1 }]);
+    const after = await engine.files.manifest(videoId);
+    expect(after.ok && after.value.files.map(file => file.name).sort()).toEqual(before.value.files.map(file => file.name).sort());
+    expect(notebook().edges.filter(edge => edge.target === goal.cellId).map(edge => edge.targetInput)).toEqual(["character"]);
+    expect(plan.references.find(reference => reference.kind === "video")).toMatchObject({ artifactId: videoId, cellId: videoCell.id, objectHash: videoFile.objectHash });
+    expect(goal.estimate.videos.usd).toBeGreaterThan(0);
+    expect(goal.estimate.total.usd).toBeCloseTo((goal.estimate.frame.usd ?? 0) + (goal.estimate.storyboards.usd ?? 0) + (goal.estimate.videos.usd ?? 0));
+
+    const mention = () => {
+      const document = notebook();
+      const image = document.cells.find(cell => cell.outputArtifactId === imageIds[0]);
+      const video = document.cells.find(cell => cell.outputArtifactId === videoId);
+      if (!image || !video) throw new Error("missing reference cells");
+      return `${notebookGridTag(image.slot)} ${notebookGridTag(video.slot)}`;
+    };
+    const quote = "keep every word of this authored scene even when it runs past the twenty five word ceiling for fresh scene prompts today and again tomorrow morning";
+    const authored = await invoke({ action: "create", brief: `${mention()} scene: "${quote}"` });
+    if (!authored.plan || !("version" in authored.plan) || authored.plan.version !== 3) throw new Error("expected a quoted v3 plan");
+    expect(goalPromptWords(quote)).toBeGreaterThan(25);
+    expect(authored.plan.scene.prompt).toContain(quote);
+    expect(authored.plan.scene.prompt).toContain("@image1");
+
+    const many = Array.from({ length: 40 }, (_, index) => `word${index}`).join(" ");
+    const truncated = await invoke({ action: "create", brief: `${mention()} ${many}` });
+    if (!truncated.plan || !("version" in truncated.plan) || truncated.plan.version !== 3) throw new Error("expected a truncated v3 plan");
+    expect(goalPromptWords(truncated.plan.scene.prompt)).toBeLessThanOrEqual(25);
+    expect(goalPromptWords(truncated.plan.video.prompt)).toBeLessThanOrEqual(60);
+    expect(truncated.plan.scene.prompt).not.toContain("word39");
+
+    const portrait = await invoke({ action: "create", brief: `${mention()} a portrait clip of the market` });
+    expect(portrait.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16", durationSeconds: 13 } });
+    const timed = await invoke({ action: "create", brief: `${mention()} 10 seconds through the market` });
+    expect(timed.plan).toMatchObject({ video: { durationSeconds: 10 } });
+    expect(timed.estimate.videos.usd).toBeLessThan(goal.estimate.videos.usd!);
+
+    const steps = compileGoalV3Steps(plan);
+    expect(steps.map(step => step.id)).toEqual(["scene", "video"]);
+    expect(JSON.stringify(steps)).not.toMatch(/storyboard|ending|cinematic/iu);
+    const sceneParams = steps[0]!.params;
+    const { image_refs: _sceneRefs, ...sceneArgs } = sceneParams;
+    expect(buildNanoBanana21Payload(withLightningSceneDefaults(sceneArgs), ["https://example.test/scene.png"]).input).toMatchObject({
+      aspect_ratio: "16:9", resolution: "2K", output_format: "jpg",
+    });
+    const videoPayload = translateToolPayload("generate_kie_seedance_2_5_video", {
+      ...steps[1]!.params,
+      image_refs: ["https://example.test/ref.png"],
+      video_refs: ["https://example.test/motion.mp4"],
+    });
+    expect(videoPayload?.payload).toMatchObject({
+      model: "bytedance/seedance-2-5",
+      input: {
+        reference_image_urls: ["https://example.test/ref.png"],
+        reference_video_urls: ["https://example.test/motion.mp4"],
+        aspect_ratio: "16:9", resolution: "1080p", duration: 13, generate_audio: true, output_format: "mp4",
+      },
+    });
+
+    const document = notebook();
+    const image = document.cells.find(cell => cell.outputArtifactId === imageIds[0])!;
+    const slot = { row: 6, column: 3 };
+    const written = await engine.notebooks.write({
+      ...document,
+      cells: document.cells.map(cell => cell.id === image.id ? { ...cell, slot } : cell),
+    });
+    expect(written.ok, written.ok ? "" : written.error.message).toBe(true);
+    const refreshed = await status(goal.goalId);
+    if (!refreshed.plan || !("version" in refreshed.plan) || refreshed.plan.version !== 3) throw new Error("expected the refreshed v3 plan");
+    expect(refreshed.plan.scene.prompt).toBe(plan.scene.prompt);
+    expect(refreshed.plan.video.prompt).toBe(plan.video.prompt);
+    expect(refreshed.plan.references.find(reference => reference.cellId === image.id)?.address).toBe(notebookGridTag(slot));
+    expect(refreshed.plan.scene.imageRefs.find(reference => reference.cellId === image.id)?.address).toBe(notebookGridTag(slot));
+    const classicBrief = imageIds.map(id => {
+      const cell = notebook().cells.find(item => item.outputArtifactId === id);
+      if (!cell) throw new Error("missing image cell");
+      return notebookGridTag(cell.slot);
+    }).join(" ");
+    const classic = await create({ brief: `${classicBrief} make a funny video of a dog on a skateboard, three 10s clips` });
+    expect(classic.planVersion).toBe(2);
+    expect(classic.plan).toMatchObject({ version: 2 });
+  }, 60_000);
+
+  it("approves a v3 scene then a video and stops at finishing review", async () => {
+    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    expect(goal).toMatchObject({ planVersion: 3, status: "review", stage: "frame", finalArtifactId: null, finish: null });
+    expect(goal.estimate.still.usd).toBe(goal.estimate.frame.usd);
+    expect(goal.estimate.still.usd).toBeGreaterThan(0);
+    expect(textOf(await raw({ action: "approve", goal_id: goal.goalId, revision: 0 }))).toContain("The goal changed");
+    delete process.env.KIE_API_KEY;
+    expect(textOf(await raw({ action: "approve", goal_id: goal.goalId, revision: goal.revision }))).toContain("KIE_API_KEY");
+    process.env.KIE_API_KEY = "test-goal-key";
+    await pauseBookQueueForTests(bookId);
+    const started = await approve(goal);
+    expect((await approve(goal)).chainId).toBe(started.chainId);
+    const sceneChain = getChainRun(engine, started.chainId!)!;
+    expect(sceneChain.steps.map(step => ({ id: step.id, tool: step.tool }))).toEqual([{ id: "scene", tool: "generate_kie_nano_banana_2_1_image" }]);
+    expect(sceneChain.steps[0]!.approval?.actor).toBe("chat");
+    expect(sceneChain.steps.some(step => step.id === "assemble" || step.tool.includes("storyboard"))).toBe(false);
+    expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(0);
+    const sceneArtifactId = await settleChain(started.chainId!, "image");
+    const reviewed = await status(goal.goalId);
+    expect(reviewed).toMatchObject({ status: "review", stage: "videos", revision: goal.revision + 1, finalArtifactId: null, finish: null });
+    expect(reviewed.stages.frame?.outputs[0]?.artifactId).toBe(sceneArtifactId);
+    expect(reviewed.estimate.still.usd).toBe(reviewed.estimate.videos.usd);
+    expect(reviewed.estimate.still.usd).toBeGreaterThan(0);
+    expect(readGoal(engine, goal.goalId)).toMatchObject({ status: "review", stage: "videos", chainId: started.chainId });
+    expect((await status(goal.goalId)).stages.frame?.outputs[0]?.artifactId).toBe(sceneArtifactId);
+    const other = await engine.notebooks.create("Other goals");
+    if (!other.ok) throw new Error(other.error.message);
+    expect((await raw({ action: "status", goal_id: goal.goalId, notebook_id: other.value.id })).isError).toBe(true);
+
+    const videoRun = await approve(reviewed);
+    const videoChain = getChainRun(engine, videoRun.chainId!)!;
+    expect(videoChain.steps.map(step => step.id)).toEqual(["video"]);
+    expect(videoChain.steps[0]).toMatchObject({ tool: "generate_kie_seedance_2_5_video" });
+    expect(videoChain.steps[0]!.pins.some(pin => pin.artifactId === sceneArtifactId)).toBe(true);
+    expect(videoChain.steps[0]!.approval?.actor).toBe("chat");
+    expect(videoChain.steps.some(step => step.id === "assemble" || step.tool.includes("storyboard"))).toBe(false);
+    const videoArtifactId = await settleChain(videoRun.chainId!, "video");
+    const finishing = await status(goal.goalId);
+    expect(finishing.status).toBe("review");
+    expect(finishing.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null, error: null });
+    expect(finishing.finalArtifactId).toBeNull();
+    expect(finishing.stages.videos?.outputs.map(output => output.artifactId)).toEqual([videoArtifactId]);
+    expect(textOf(await raw({ action: "approve", goal_id: goal.goalId, revision: finishing.revision }))).toContain("finishing review");
+    expect(textOf(await raw({ action: "assemble", goal_id: goal.goalId }))).toContain("storyboard");
+    expect(textOf(await raw({ action: "update", goal_id: goal.goalId, revision: finishing.revision, plan }))).toContain("storyboard");
+    expect(engine.sequences.getPrimary().clips).toHaveLength(0);
+
+    const again = await invoke({ action: "regenerate", goal_id: goal.goalId, revision: finishing.revision, stage: "videos", index: 0 });
+    expect(again.finish).toBeNull();
+    expect(again.status).toBe("running");
+    const replacement = await settleChain(again.chainId!, "video");
+    const replaced = await status(goal.goalId);
+    expect(replaced.finish).toMatchObject({ status: "review", sourceArtifactId: replacement, finalArtifactId: null });
+    const selected = await invoke({ action: "select", goal_id: goal.goalId, revision: replaced.revision, stage: "videos", index: 0, artifact_id: videoArtifactId });
+    expect(selected.stages.videos?.outputs[0]?.artifactId).toBe(videoArtifactId);
+    expect(selected.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null });
+    const revising = await invoke({ action: "revise", goal_id: goal.goalId, revision: selected.revision, stage: "frame", index: 0, feedback: "Raise the board" });
+    expect(revising.finish).toBeNull();
+    expect(revising.status).toBe("running");
+    expect(getChainRun(engine, revising.chainId!)?.steps[0]?.params.prompt).toContain("Raise the board");
+    const restored = await invoke({ action: "cancel", goal_id: goal.goalId });
+    await waitForChainRun(engine, revising.chainId!);
+    expect(restored).toMatchObject({ status: "review", stage: "videos" });
+    expect(restored.stages.frame?.outputs[0]?.artifactId).toBe(sceneArtifactId);
+    expect(restored.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null });
+    expect(engine.sequences.getPrimary().clips).toHaveLength(0);
+  }, 60_000);
+
+  it("saves a v3 title and prompt without rewriting settings or a title-only finish", async () => {
+    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    if (!goal.plan || !("version" in goal.plan) || goal.plan.version !== 3) throw new Error("expected a v3 plan");
+    const videoId = await goalTestVideo(engine, root, "green");
+    const seeded = { status: "review" as const, sourceArtifactId: videoId, finalArtifactId: null, error: null };
+    saveGoal(engine, { ...readGoal(engine, goal.goalId), finish: seeded });
+    const titled = await invoke({ action: "update", goal_id: goal.goalId, revision: goal.revision, plan: { ...goal.plan, title: "Market morning" } });
+    expect(titled.revision).toBe(goal.revision + 1);
+    expect(titled.finish).toMatchObject(seeded);
+    expect(titled.estimate.total).toEqual(goal.estimate.total);
+    if (!titled.plan || !("scene" in titled.plan)) throw new Error("expected the saved scene");
+    const authored = "keep every word of this authored scene even when it runs past the twenty five word ceiling for fresh scene prompts today and again tomorrow morning";
+    const prompted = await invoke({
+      action: "update", goal_id: goal.goalId, revision: titled.revision,
+      plan: { ...titled.plan, scene: { ...titled.plan.scene, prompt: authored } },
+    });
+    expect(prompted.finish).toBeNull();
+    expect(prompted.revision).toBe(titled.revision + 1);
+    expect(prompted.estimate.total).toEqual(goal.estimate.total);
+    if (!prompted.plan || !("scene" in prompted.plan)) throw new Error("expected the edited scene");
+    expect(prompted.plan.scene.prompt).toBe(authored);
+    const rejected = await raw({
+      action: "update", goal_id: goal.goalId, revision: prompted.revision,
+      plan: { ...prompted.plan, scene: { ...prompted.plan.scene, aspectRatio: "9:16" } },
+    });
+    expect(textOf(rejected)).toContain("settings stay with this goal");
+    expect((await status(goal.goalId)).revision).toBe(prompted.revision);
+  }, 60_000);
+
+  it("retries an interrupted v3 scene unless the reference changed, including a video-only goal", async () => {
+    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    await pauseBookQueueForTests(bookId);
+    const started = await approve(goal);
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    const providerArtifactId = String(getChainRun(engine, started.chainId!)!.steps[0]!.outputs?.img_asset_id);
+    expect(await engine.jobs.queue.abort(providerJob(providerArtifactId).id, "Fixture generation stopped")).toBe(true);
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    const chain = getChainRun(engine, started.chainId!)!;
+    const store = engine.settings.get<{ runs: Record<string, typeof chain>; requestIndex: Record<string, string> }>("application.chain-runs.v1") ?? { runs: {}, requestIndex: {} };
+    const restored = engine.settings.set("application.chain-runs.v1", {
+      ...store,
+      runs: { ...store.runs, [chain.chainId]: { ...chain, status: "running", error: null, steps: chain.steps.map(step => ({ ...step, status: "running" as const, error: null })) } },
+    });
+    if (!restored.ok) throw new Error(restored.error.message);
+    resumeOpenChains(engine, () => undefined);
+    expect(getChainRun(engine, started.chainId!)?.status).toBe("interrupted");
+    const interrupted = await status(goal.goalId);
+    expect(interrupted.status).toBe("interrupted");
+    const retried = await invoke({ action: "retry", goal_id: goal.goalId });
+    expect(retried.status).toBe("running");
+    expect(retried.chainId).toBe(started.chainId);
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    const runningArtifactId = String(getChainRun(engine, retried.chainId!)!.steps[0]!.outputs?.img_asset_id);
+    const aborted = await engine.jobs.queue.abort(providerJob(runningArtifactId).id, "Fixture generation stopped");
+    expect(aborted).toBe(true);
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    const failed = await status(goal.goalId);
+    expect(failed.status).toBe("failed");
+    const rewritten = await engine.files.write(imageIds[0]!, "original.png", await sharp({ create: { width: 32, height: 32, channels: 3, background: "#111111" } }).png().toBuffer());
+    if (!rewritten.ok) throw new Error(rewritten.error.message);
+    expect(textOf(await raw({ action: "retry", goal_id: goal.goalId }))).toContain("references or selected versions changed");
+
+    const videoId = await goalTestVideo(engine, root, "green");
+    const videoCell = engine.notebooks.createCell({ type: "video", label: "Only clip", slot: { row: 4, column: 0 }, outputArtifactId: videoId });
+    const inserted = await engine.notebooks.insertCell(notebookId, videoCell);
+    expect(inserted.ok, inserted.ok ? "" : inserted.error.message).toBe(true);
+    const videoAddress = notebookGridTag(notebook().cells.find(cell => cell.id === videoCell.id)!.slot);
+    const videoOnly = await invoke({ action: "create", brief: `${videoAddress} glide over the market` });
+    expect(videoOnly.characters).toHaveLength(0);
+    expect(notebook().edges.filter(edge => edge.target === videoOnly.cellId)).toHaveLength(0);
+    const scene = await approve(videoOnly);
+    expect(getChainRun(engine, scene.chainId!)?.steps[0]?.params.image_refs).toBeUndefined();
+    const sceneArtifactId = await settleChain(scene.chainId!, "image");
+    const ready = await status(videoOnly.goalId);
+    expect(ready).toMatchObject({ status: "review", stage: "videos" });
+    const video = await approve(ready);
+    const pins = getChainRun(engine, video.chainId!)!.steps[0]!.pins.map(pin => pin.artifactId);
+    expect(pins).toEqual(expect.arrayContaining([sceneArtifactId, videoId]));
+    expect(pins).toHaveLength(2);
+    await invoke({ action: "cancel", goal_id: videoOnly.goalId });
+    await waitForChainRun(engine, video.chainId!);
+  }, 60_000);
+
+  it("refuses to finish a v2 goal with a cold open", async () => {
+    const goal = await create();
+    expect(textOf(await raw({ action: "finish", goal_id: goal.goalId }))).toContain("scene and video goal");
+  });
+
+  it("finishes a reviewed video with one cold-open copy and one watermarked copy", async () => {
+    const exec = promisify(execFile);
+    async function mediaHash(artifactId: string): Promise<string> {
+      const manifest = await engine.files.manifest(artifactId);
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      const file = findPrimaryMediaFile(manifest.value.files, "video");
+      if (!file) throw new Error(`missing video ${artifactId}`);
+      return file.objectHash;
+    }
+    async function mediaProbe(artifactId: string) {
+      const manifest = await engine.files.manifest(artifactId);
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      const file = findPrimaryMediaFile(manifest.value.files, "video");
+      if (!file) throw new Error(`missing video ${artifactId}`);
+      return { file, probe: await probeVideo(join(manifest.value.path, file.name)) };
+    }
+    async function frameAt(artifactId: string, seconds: number): Promise<Buffer> {
+      const media = await mediaProbe(artifactId);
+      const manifest = await engine.files.manifest(artifactId);
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      const frame = await exec(FFMPEG, [
+        "-v", "error", "-ss", String(seconds), "-i", join(manifest.value.path, media.file.name),
+        "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
+      ], { encoding: "buffer", maxBuffer: 2_000_000 });
+      return frame.stdout;
+    }
+    const regionMean = (left: Buffer, right: Buffer, width: number, box: { x: number; y: number; w: number; h: number }): number => {
+      let sum = 0;
+      let count = 0;
+      for (let y = box.y; y < box.y + box.h; y += 1) {
+        for (let x = box.x; x < box.x + box.w; x += 1) {
+          const offset = (y * width + x) * 3;
+          sum += Math.abs(left[offset]! - right[offset]!) + Math.abs(left[offset + 1]! - right[offset + 1]!) + Math.abs(left[offset + 2]! - right[offset + 2]!);
+          count += 3;
+        }
+      }
+      return count === 0 ? 0 : sum / count;
+    };
+    const coldOpens = () => engine.jobs.queue.list({ type: "edit_cold_open" }).length;
+    const burns = () => engine.jobs.queue.list({ type: "burn_watermark" }).length;
+    let latest: GoalSnapshot | null = null;
+    async function awaitFinish(goalId: string): Promise<GoalSnapshot> {
+      await resumeBookQueueForTests(bookId);
+      try {
+        await expect.poll(async () => {
+          latest = await status(goalId);
+          return `${latest.status}:${latest.finish?.status ?? "none"}:${latest.finish?.error ?? ""}`;
+        }, { timeout: 120_000, interval: 500 }).toBe("completed:completed:");
+      } finally {
+        await pauseBookQueueForTests(bookId);
+      }
+      if (!latest?.finish || latest.finish.status !== "completed" || !latest.finalArtifactId) throw new Error("finish did not complete");
+      return latest;
+    }
+
+    await pauseBookQueueForTests(bookId);
+    const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    const scene = await approve(goal);
+    const sceneChainId = scene.chainId!;
+    await settleChain(sceneChainId, "image");
+    const reviewed = await status(goal.goalId);
+    const video = await approve(reviewed);
+    const videoChainId = video.chainId!;
+    const videoArtifactId = await settleChain(videoChainId, "video");
+    const sourceHash = await mediaHash(videoArtifactId);
+    const sourceProbe = await mediaProbe(videoArtifactId);
+
+    const suggested = await invoke({ action: "finish", goal_id: goal.goalId });
+    expect(suggested.coldOpen).toMatchObject({ startSeconds: 0, endSeconds: 2.3, analysisUsd: 0, sourceObjectHash: sourceHash });
+    expect(suggested.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null });
+    expect(suggested.finalArtifactId).toBeNull();
+    expect(engine.jobs.queue.list({ type: "finish_goal" })).toHaveLength(0);
+    expect(engine.jobs.queue.list({ type: "prepare_cold_open" })).toHaveLength(0);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+
+    const queued = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 0.5 });
+    expect(queued.finish).toMatchObject({ status: "running", sourceArtifactId: videoArtifactId, finalArtifactId: null, startSeconds: 0, endSeconds: 0.5 });
+    const firstJobId = readGoal(engine, goal.goalId).finish?.jobId;
+    expect(firstJobId).toEqual(queued.finish?.jobId);
+    expect(typeof firstJobId).toBe("number");
+    expect(engine.jobs.queue.get(firstJobId!)?.state).toBe("queued");
+    const finished = await awaitFinish(goal.goalId);
+    const coldOpenArtifactId = finished.finish?.coldOpenArtifactId;
+    const finalArtifactId = finished.finalArtifactId;
+    if (!coldOpenArtifactId || !finalArtifactId) throw new Error("missing finish artifacts");
+    const coldProbe = await mediaProbe(coldOpenArtifactId);
+    const finalProbe = await mediaProbe(finalArtifactId);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(await mediaHash(coldOpenArtifactId)).not.toBe(sourceHash);
+    expect(await mediaHash(finalArtifactId)).not.toBe(await mediaHash(coldOpenArtifactId));
+    expect(coldProbe.probe).toMatchObject({ width: sourceProbe.probe.width, height: sourceProbe.probe.height, hasAudio: true });
+    expect(finalProbe.probe).toMatchObject({ width: sourceProbe.probe.width, height: sourceProbe.probe.height, hasAudio: true });
+    expect(coldProbe.probe.fps).toBeCloseTo(sourceProbe.probe.fps, 0);
+    expect(finalProbe.probe.fps).toBeCloseTo(sourceProbe.probe.fps, 0);
+    expect(Math.abs(coldProbe.probe.videoDuration - (sourceProbe.probe.videoDuration + 0.5))).toBeLessThan(0.25);
+    expect(Math.abs(finalProbe.probe.videoDuration - coldProbe.probe.videoDuration)).toBeLessThan(0.5);
+    const width = sourceProbe.probe.width;
+    const height = sourceProbe.probe.height;
+    const handleBox = { x: Math.round(width * 0.2), y: 0, w: Math.round(width * 0.6), h: Math.max(8, Math.round(height * 0.28)) };
+    const quietBox = { x: 0, y: Math.round(height * 0.4), w: Math.round(width * 0.45), h: Math.round(height * 0.2) };
+    const qrBox = { x: Math.round(width * 0.55), y: Math.round(height * 0.5), w: Math.round(width * 0.4), h: Math.round(height * 0.45) };
+    const earlyFinal = await frameAt(finalArtifactId, 1);
+    const earlyCold = await frameAt(coldOpenArtifactId, 1);
+    const handleDelta = regionMean(earlyFinal, earlyCold, width, handleBox);
+    const earlyQuiet = regionMean(earlyFinal, earlyCold, width, quietBox);
+    expect(handleDelta, `handle ${handleDelta} quiet ${earlyQuiet}`).toBeGreaterThan(1);
+    expect(handleDelta).toBeGreaterThan(earlyQuiet * 3);
+    const lateAt = Math.max(0, coldProbe.probe.videoDuration - 1.2);
+    const lateFinal = await frameAt(finalArtifactId, lateAt);
+    const lateCold = await frameAt(coldOpenArtifactId, lateAt);
+    const qrRegion = regionMean(lateFinal, lateCold, width, qrBox);
+    const lateQuiet = regionMean(lateFinal, lateCold, width, { x: 0, y: 0, w: Math.round(width * 0.3), h: Math.round(height * 0.25) });
+    expect(qrRegion, `qr ${qrRegion} quiet ${lateQuiet}`).toBeGreaterThan(1);
+    expect(qrRegion).toBeGreaterThan(lateQuiet * 3);
+    expect(notebook().cells.some(cell => cell.outputArtifactId === videoArtifactId)).toBe(true);
+    expect(notebook().cells.some(cell => cell.outputArtifactId === finalArtifactId)).toBe(true);
+    expect(coldOpens()).toBe(1);
+    expect(burns()).toBe(1);
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+
+    const stored = readGoal(engine, goal.goalId);
+    saveGoal(engine, {
+      ...stored, status: "review",
+      finish: stored.finish ? { ...stored.finish, status: "running", finalArtifactId: null, error: null } : stored.finish,
+    });
+    const recovered = await status(goal.goalId);
+    expect(recovered).toMatchObject({ status: "completed", finalArtifactId });
+    expect(recovered.finish?.coldOpenArtifactId).toBe(coldOpenArtifactId);
+    expect(coldOpens()).toBe(1);
+    expect(burns()).toBe(1);
+    const finalHash = await mediaHash(finalArtifactId);
+    const replay = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 0.5 });
+    expect(replay.finalArtifactId).toBe(finalArtifactId);
+    expect(replay.finish?.coldOpenArtifactId).toBe(coldOpenArtifactId);
+    expect(await mediaHash(finalArtifactId)).toBe(finalHash);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(coldOpens()).toBe(1);
+    expect(burns()).toBe(1);
+
+    const changedRange = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1 });
+    expect(changedRange.finish).toMatchObject({ status: "running", finalArtifactId: null, sourceArtifactId: videoArtifactId });
+    const abortedJobId = readGoal(engine, goal.goalId).finish?.jobId;
+    expect(typeof abortedJobId).toBe("number");
+    expect(engine.jobs.queue.get(abortedJobId!)?.state).toBe("queued");
+    expect(await engine.jobs.queue.abort(abortedJobId!, "Finishing cancelled")).toBe(true);
+    const aborted = await status(goal.goalId);
+    expect(aborted.status).toBe("review");
+    expect(aborted.finish?.status).toBe("failed");
+    expect(aborted.finalArtifactId).toBeNull();
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+    expect(textOf(await raw({ action: "retry", goal_id: goal.goalId }))).toContain("failed or was interrupted");
+    expect(coldOpens()).toBe(1);
+    const retried = await awaitFinish((await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1 })).goalId);
+    expect(retried.finalArtifactId).not.toBe(finalArtifactId);
+    expect(retried.finish?.coldOpenArtifactId).not.toBe(coldOpenArtifactId);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(coldOpens()).toBe(2);
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+    const secondFinal = retried.finalArtifactId!;
+
+    await saveWatermarkProfile({ handle: "nightmarket" }, "tiktok", engine);
+    const rewatermarked = await awaitFinish((await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1 })).goalId);
+    expect(rewatermarked.finalArtifactId).not.toBe(secondFinal);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(await mediaHash(secondFinal)).not.toBe(sourceHash);
+    expect(coldOpens()).toBe(3);
+    const thirdFinal = rewatermarked.finalArtifactId!;
+    const thirdHash = await mediaHash(thirdFinal);
+
+    const cancelling = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1.5 });
+    expect(cancelling.finish?.status).toBe("running");
+    expect(engine.jobs.queue.get(readGoal(engine, goal.goalId).finish!.jobId!)?.state).toBe("queued");
+    const cancelled = await invoke({ action: "cancel", goal_id: goal.goalId });
+    expect(cancelled).toMatchObject({ status: "review" });
+    expect(cancelled.finish?.status).toBe("cancelled");
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+    expect(engine.jobs.queue.list().some(job => job.type.startsWith("generate_") && ["queued", "running", "completing"].includes(job.state))).toBe(false);
+    expect(coldOpens()).toBe(3);
+    expect(await mediaHash(thirdFinal)).toBe(thirdHash);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+
+    saveGoal(engine, {
+      ...readGoal(engine, goal.goalId), status: "review",
+      assembly: { sequenceId: "seq", startFrame: 0, durationFrames: 1, artifactIds: ["not-the-selected-video"] },
+    });
+    expect(textOf(await raw({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 0.5 }))).toContain("timeline clips were edited");
+    expect(engine.sequences.getPrimary().clips).toHaveLength(0);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+
+    const combinedId = await goalTestVideo(engine, root, "green");
+    const combinedHash = await mediaHash(combinedId);
+    saveGoal(engine, {
+      ...readGoal(engine, goal.goalId), status: "review",
+      assembly: { sequenceId: "seq", startFrame: 0, durationFrames: 1, artifactIds: [videoArtifactId] },
+      combined: { artifactId: combinedId, cellId: goal.cellId, jobId: null, status: "completed", error: null },
+    });
+    const combinedStart = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 0.5 });
+    expect(combinedStart.finish).toMatchObject({ status: "running", sourceArtifactId: combinedId, finalArtifactId: null });
+    const combinedDone = await awaitFinish(goal.goalId);
+    expect(combinedDone.finish?.sourceArtifactId).toBe(combinedId);
+    expect(combinedDone.finalArtifactId).not.toBe(combinedId);
+    expect(await mediaHash(combinedId)).toBe(combinedHash);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(await mediaHash(thirdFinal)).toBe(thirdHash);
+    expect(engine.sequences.getPrimary().clips).toHaveLength(0);
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+  }, 300_000);
 });

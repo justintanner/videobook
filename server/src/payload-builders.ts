@@ -1,4 +1,11 @@
 import { buildGptImage25Payload } from "./gpt-image-2-5.js";
+import {
+  LIGHTNING_VIDEO_ASPECT_RATIO,
+  LIGHTNING_VIDEO_DURATION_SECONDS,
+  LIGHTNING_VIDEO_GENERATE_AUDIO,
+  LIGHTNING_VIDEO_OUTPUT_FORMAT,
+  LIGHTNING_VIDEO_RESOLUTION,
+} from "./lightning-defaults.js";
 import { seedance25FrameAspectRatio } from "./seedance25.js";
 import type { GptImage25Input } from "./gpt-image-2-5.js";
 /**
@@ -673,16 +680,16 @@ function buildSeedance25VideoPayload(
 ): Seedance25Request {
   const inputSchema = Seedance25InputSchema.shape;
   const returnLastFrame = valueOrZodDefault(args.return_last_frame, inputSchema.return_last_frame);
-  const generateAudio = valueOrZodDefault(args.generate_audio, inputSchema.generate_audio);
-  const resolution = valueOrZodDefault(args.resolution, inputSchema.resolution);
+  const generateAudio = args.generate_audio ?? LIGHTNING_VIDEO_GENERATE_AUDIO;
+  const resolution = args.resolution ?? LIGHTNING_VIDEO_RESOLUTION;
   const aspectRatio = seedance25FrameAspectRatio("bytedance/seedance-2-5", {
     first_frame_url: opts.firstFrameUrl,
     last_frame_url: opts.lastFrameUrl,
-  }) ?? valueOrZodDefault(args.aspect_ratio, inputSchema.aspect_ratio);
+  }) ?? args.aspect_ratio ?? LIGHTNING_VIDEO_ASPECT_RATIO;
   const duration = args.duration !== undefined
     ? parseInt(args.duration, 10)
-    : valueOrZodDefault<number>(undefined, inputSchema.duration);
-  const outputFormat = valueOrZodDefault(args.output_format, inputSchema.output_format);
+    : LIGHTNING_VIDEO_DURATION_SECONDS;
+  const outputFormat = args.output_format ?? LIGHTNING_VIDEO_OUTPUT_FORMAT;
   const nsfwChecker = valueOrZodDefault(args.nsfw_checker, inputSchema.nsfw_checker);
   return {
     model: "bytedance/seedance-2-5",

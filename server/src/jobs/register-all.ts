@@ -35,6 +35,7 @@ import { registerAnalyzeMusicJob } from "./analyze-music.js";
 import { registerPlanGoalJob } from "./plan-goal.js";
 import { registerAssembleGoalJob } from "./assemble-goal.js";
 import { registerCombineGoalJob } from "./combine-goal.js";
+import { registerFinishGoalJob } from "./finish-goal.js";
 import { registerLabelMusicSectionsJob } from "./label-music-sections.js";
 import { registerEditingMomentsJob } from "./analyze-editing-moments.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
@@ -199,6 +200,7 @@ export function registerAllJobHandlers(
   registerPlanGoalJob(engine);
   registerAssembleGoalJob(engine);
   registerCombineGoalJob(engine);
+  registerFinishGoalJob(engine);
   registerLabelMusicSectionsJob(engine);
   registerEditingMomentsJob(engine);
   registerReplaceVideoAudioJob(engine);

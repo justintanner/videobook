@@ -27,6 +27,12 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/confirm/bodies/')) {
     return 'confirm-bodies'
   }
+  if (
+    id.includes('/src/components/videobook/Goal')
+    || id.includes('/src/components/videobook/SimpleGoal')
+  ) {
+    return 'goal-ui'
+  }
   if (id.includes('/src/components/')) {
     return 'ui'
   }

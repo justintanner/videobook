@@ -1,5 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
+import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
 import type { ToolDef } from "./tool-def.js";
@@ -23,8 +24,8 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
       "Generate a compact transparent QR plus plain X or TikTok alias badge and store it as an image artifact. The platform icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
     schema: {
       book_id: z.string().describe("Book id"),
-      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default x)"),
-      handle: z.string().optional().describe(`X or TikTok alias without @ (X default: ${DEFAULT_HANDLE}; TikTok default: saved alias)`),
+      platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default tiktok)"),
+      handle: z.string().optional().describe(`X or TikTok alias without @ (X default: ${DEFAULT_HANDLE}; TikTok default: ${LIGHTNING_WATERMARK_PROFILE.handle})`),
       url: z.string().optional().describe("URL the QR code resolves to (default: the selected X or TikTok profile URL)"),
       save_default: z
         .boolean()
@@ -69,13 +70,13 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         handle,
         url,
         save_default,
-        platform = "x",
+        platform = "tiktok",
         include_platform_icon,
         include_x_icon = true,
         include_handle_border = true,
-        handle_padding = DEFAULT_HANDLE_PADDING,
-        handle_padding_y = DEFAULT_HANDLE_PADDING,
-        handle_rounding = DEFAULT_HANDLE_ROUNDING,
+        handle_padding = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingX : DEFAULT_HANDLE_PADDING,
+        handle_padding_y = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingY : DEFAULT_HANDLE_PADDING,
+        handle_rounding = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handleRounding : DEFAULT_HANDLE_ROUNDING,
       } = args as {
         book_id: string;
         handle?: string;
@@ -91,7 +92,9 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
       };
 
       const config = await readWatermarkConfig(engine, platform);
-      const fallbackHandle = platform === "x" ? DEFAULT_HANDLE : config.savedHandle ?? config.recent[0] ?? "";
+      const fallbackHandle = platform === "x"
+        ? DEFAULT_HANDLE
+        : config.savedHandle ?? config.recent[0] ?? (platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handle : "");
       const resolvedHandle = normalizeHandle(handle ?? fallbackHandle);
       if (!resolvedHandle) {
         return {

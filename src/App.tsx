@@ -3684,12 +3684,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return { ok: false, message: 'Open a notebook first.' }
     if (!brief) {
       if (!activeComposerGoal) {
-        return { ok: false, message: 'Mention the reference images, for example /goal @a1 turn this screenshot into a 20-second video. The source style is preserved by default.' }
+        return { ok: false, message: 'Mention the reference images or videos, for example /goal @a1 @a2 as a short clip.' }
       }
       openGoalTile(activeComposerGoal.cellId)
       return { ok: true, message: `Opened goal ${activeComposerGoal.address ?? ''}`.trim() }
     }
-    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the reference images, for example /goal @a1 turn this screenshot into a 20-second video' }
+    if (scanNotebookMentions(brief).length === 0) return { ok: false, message: 'Mention the reference images or videos, for example /goal @a1 @a2 as a short clip' }
     const scope = { bookId, notebookId: notebook.id }
     const goal = await actOnGoal(scope, { action: 'create', brief, request_id: uuidv7() }, chat)
     if (watchScopeRef.current.bookId !== scope.bookId || watchScopeRef.current.notebookId !== scope.notebookId || chat?.isCurrent() === false) {
@@ -5494,16 +5494,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const recent = Array.isArray(config?.recent)
         ? config.recent.filter((entry): entry is string => typeof entry === 'string')
         : []
+      const profile = recordValue(config?.profile)
+      const profileHandle = asString(profile?.handle)
+      const profileUrl = asString(profile?.profileUrl)
       const rememberedHandle = readWatermarkReviewPreferences(bookId).handles?.[platform]
       presentChat(chat, () => setPendingWatermarkReview((current) =>
         current && current.assetId === assetId
           ? {
               ...current,
+              url: current.url || (platform === current.platform ? profileUrl ?? '' : current.url),
               identities: {
                 ...current.identities,
                 [platform]: {
                   handle: rememberedHandle ?? (current.identities[platform].handle
-                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? '')),
+                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? profileHandle ?? '')),
                   recent,
                 },
               },

@@ -48,6 +48,11 @@ export function isStagedGoalPlan(plan: GoalDisplayPlan | null): plan is GoalPlan
   return Boolean(plan && 'version' in plan && plan.version === 2)
 }
 
+export function planShots(plan: GoalDisplayPlan | null | undefined) {
+  if (!plan || !('shots' in plan)) return []
+  return plan.shots
+}
+
 export function goalPlansEqual(left: GoalPlan, right: GoalPlan): boolean {
   return left.title === right.title && left.continuity === right.continuity
     && left.aspectRatio === right.aspectRatio && left.imageModel === right.imageModel
@@ -74,10 +79,11 @@ export function goalStillStale(goal: GoalSnapshot, stage: GoalGenerationStage, i
 export function goalOutputEstimate(goal: GoalSnapshot, stage: GoalGenerationStage, index: number): number | null {
   const total = goal.estimate[stage].usd
   if (total === null || stage === 'frame') return total
-  const count = goal.plan?.shots.length ?? 1
-  if (stage === 'videos' && goal.plan) {
-    const seconds = goal.plan.shots.reduce((sum, shot) => sum + shot.durationSeconds, 0)
-    return total * (goal.plan.shots[index]?.durationSeconds ?? 0) / seconds
+  const shots = planShots(goal.plan)
+  const count = Math.max(1, shots.length)
+  if (stage === 'videos' && shots.length > 0) {
+    const seconds = shots.reduce((sum, shot) => sum + shot.durationSeconds, 0)
+    return total * (shots[index]?.durationSeconds ?? 0) / seconds
   }
   return total / (count * (goal.plan && 'frameContinuity' in goal.plan && goal.plan.frameContinuity ? 2 : 1))
 }
@@ -89,14 +95,18 @@ function revisionAttempt(goal: GoalSnapshot) {
 function revisionLabel(goal: GoalSnapshot): string | null {
   const attempt = revisionAttempt(goal)
   if (!attempt) return null
+  if (goal.planVersion === 3) {
+    if (attempt.stage === 'frame') return 'scene'
+    if (attempt.stage === 'videos') return 'video'
+  }
   if (attempt.stage === 'frame') return 'frame'
   if (attempt.stage === 'videos') return `video ${attempt.index + 1}`
-  const count = goal.plan?.shots.length ?? 1
+  const count = Math.max(1, planShots(goal.plan).length)
   return `${attempt.index >= count ? 'ending frame' : 'storyboard'} ${attempt.index % count + 1}`
 }
 
 export function goalCanRetry(goal: GoalSnapshot): boolean {
-  return goal.planVersion === 2 && (goal.status === 'failed' || goal.status === 'interrupted')
+  return (goal.planVersion === 2 || goal.planVersion === 3) && (goal.status === 'failed' || goal.status === 'interrupted')
 }
 
 export function goalStopLabel(goal: GoalSnapshot): string {
@@ -131,7 +141,8 @@ export function formatGoalClock(totalSeconds: number): string {
 }
 
 export function goalPlanSeconds(plan: GoalDisplayPlan | null): number {
-  return plan?.shots.reduce((sum, shot) => sum + shot.durationSeconds, 0) ?? 0
+  if (plan && 'version' in plan && plan.version === 3) return plan.video.durationSeconds
+  return planShots(plan).reduce((sum, shot) => sum + shot.durationSeconds, 0)
 }
 
 function shotState(goal: GoalSnapshot, step: GoalStep | undefined, completed: boolean): GoalShotState {
@@ -145,7 +156,7 @@ function shotState(goal: GoalSnapshot, step: GoalStep | undefined, completed: bo
 }
 
 function plannedShots(plan: GoalDisplayPlan | null): GoalShotView[] {
-  return (plan?.shots ?? []).map((shot, index) => ({
+  return planShots(plan).map((shot, index) => ({
     index, number: String(index + 1).padStart(2, '0'), title: shot.title,
     prompt: 'videoPrompt' in shot ? shot.videoPrompt : shot.prompt,
     seconds: shot.durationSeconds, state: 'planned', startedAt: null, cellId: null, address: null, artifactId: null, error: null,
@@ -154,20 +165,23 @@ function plannedShots(plan: GoalDisplayPlan | null): GoalShotView[] {
 
 function goalShots(goal: GoalSnapshot, stage: GoalGenerationStage): GoalShotView[] {
   const plan = goal.plan
-  const firstRows = stage === 'frame' && isStagedGoalPlan(plan)
+  const v3 = plan && 'version' in plan && plan.version === 3 ? plan : null
+  const firstRows = v3
+    ? [{ index: 0, number: '01', title: stage === 'videos' ? 'Video' : 'Scene', prompt: stage === 'videos' ? v3.video.prompt : v3.scene.prompt, seconds: stage === 'videos' ? v3.video.durationSeconds : 0 }]
+    : stage === 'frame' && isStagedGoalPlan(plan)
     ? [{ index: 0, number: '01', title: 'Full frame', prompt: plan.frame.prompt, seconds: 0 }]
-    : (plan?.shots ?? []).map((shot, index) => ({
+    : planShots(plan).map((shot, index) => ({
         index, number: String(index + 1).padStart(2, '0'), title: shot.title,
         prompt: 'videoPrompt' in shot ? stage === 'storyboards' ? shot.storyboardPrompt : shot.videoPrompt : shot.prompt,
         seconds: stage === 'videos' ? shot.durationSeconds : 0,
       }))
-  const rows = stage === 'storyboards' && isStagedGoalPlan(plan) && plan.frameContinuity
+  const rows = !v3 && stage === 'storyboards' && isStagedGoalPlan(plan) && plan.frameContinuity
     ? [...firstRows, ...plan.shots.map((shot, index) => ({ index: index + plan.shots.length, number: `${String(index + 1).padStart(2, '0')} end`, title: `${shot.title} · Ending`, prompt: shot.endingPrompt ?? shot.videoPrompt, seconds: 0 }))]
     : firstRows
   const run = goal.stages[stage]
   const steps = new Map((run?.steps ?? (goal.planVersion === 1 ? goal.steps : [])).map(step => [step.id, step]))
   return rows.map(row => {
-    const id = stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${row.index + 1}`
+    const id = v3 ? stage === 'videos' ? 'video' : 'scene' : stage === 'frame' ? 'frame' : `${stage === 'storyboards' ? 'storyboard' : 'shot'}${row.index + 1}`
     const step = steps.get(id)
     const output = run?.outputs.find(item => item.index === row.index)
     return {
@@ -215,7 +229,41 @@ function failureText(progress: GoalProgress, word: string): string {
   return `${progress.stage === 'storyboards' ? 'Storyboard' : 'Shot'} ${(progress.active?.index ?? 0) + 1} ${word}`
 }
 
+function statusLine(text: string, short: string, action: string | null, tone: GoalStatusTone, busy: boolean): GoalStatusLine {
+  return { text, short, announce: `Goal: ${text}`, action, tone, busy }
+}
+
+function v3StatusLine(goal: GoalSnapshot, elapsedSeconds: number | null): GoalStatusLine | null {
+  if (goal.planVersion !== 3) return null
+  const progress = goalProgress(goal)
+  const finish = goal.finish
+  if (finish?.status === 'running') return statusLine('Finishing the cold open and watermark', 'Finishing', null, 'live', true)
+  if (finish?.status === 'failed') return statusLine('Finishing failed', 'Finishing failed', 'Finish', 'attention', false)
+  if (progress.phase === 'review') {
+    if (finish) {
+      const analysis = goal.coldOpen ? ` · analysis $${goal.coldOpen.analysisUsd.toFixed(2)}` : ''
+      return statusLine(`Review finish${analysis}`, 'Review', 'Review', 'review', false)
+    }
+    if (goal.stage === 'videos') return statusLine(`Review video${estimateText(goal, 'videos')}`, 'Review', 'Review', 'review', false)
+    return statusLine(`Review scene${estimateText(goal, 'frame')}`, 'Review', 'Review', 'review', false)
+  }
+  if (progress.phase === 'frame' || progress.phase === 'videos') {
+    const activity = progress.active?.state === 'generating' ? `Generating${elapsedSeconds === null ? '' : ` ${formatGoalClock(elapsedSeconds)}`}` : 'Submitting'
+    const revised = revisionLabel(goal)
+    const name = progress.phase === 'frame' ? 'Scene' : 'Video'
+    return statusLine(`${revised ? `Revising ${revised}` : name} · ${activity}`, name, null, 'live', true)
+  }
+  if (progress.phase === 'failed' || progress.phase === 'interrupted') {
+    const word = progress.phase === 'failed' ? 'failed' : 'interrupted'
+    const text = goal.chainId ? `${progress.stage === 'videos' ? 'Video' : 'Scene'} ${word}` : `Planning ${word}`
+    return statusLine(text, progress.phase === 'failed' ? 'Failed' : 'Interrupted', 'Retry', 'attention', false)
+  }
+  return null
+}
+
 export function goalStatusLine(goal: GoalSnapshot, elapsedSeconds: number | null = null): GoalStatusLine {
+  const modern = v3StatusLine(goal, elapsedSeconds)
+  if (modern) return modern
   const progress = goalProgress(goal)
   const simple = isStagedGoalPlan(goal.plan) && goal.plan.storyboardLayout === 'six-panel'
   let text = 'Stopped'
@@ -275,6 +323,8 @@ export function goalWake(previous: GoalSnapshot, current: GoalSnapshot): GoalWak
   else if (before.phase === 'planning' && after.phase === 'review') from = 'Plan ready'
   else if (stopped) from = stopped
   else if (after.phase === 'review' && revised) from = `${revised[0]!.toUpperCase()}${revised.slice(1)} revised`
+  else if (after.phase === 'review' && current.planVersion === 3 && current.finish) from = 'Video ready'
+  else if (after.phase === 'review' && current.planVersion === 3 && after.stage === 'videos') from = 'Scene ready'
   else if (after.phase === 'review' && after.stage === 'storyboards') from = 'Full frame ready'
   else if (after.phase === 'review' && after.stage === 'videos') from = 'Storyboards ready'
   else if (before.phase === 'review') {
@@ -295,7 +345,7 @@ export function goalGenerationMarks(goals: readonly GoalSnapshot[]): ReadonlyMap
   const marks = new Map<string, string>()
   for (const goal of goals) {
     if (goal.combined) marks.set(goal.combined.cellId, `Combined${goal.address ? ` · ${goal.address}` : ''}`)
-    const total = goal.plan?.shots.length ?? 0
+    const total = planShots(goal.plan).length
     const steps = goal.planVersion === 1 ? goal.steps : Object.values(goal.stages).flatMap(run => run.allSteps)
     for (const step of steps) {
       const match = /^(frame|storyboard|shot)(\d+)?$/.exec(step.id)
@@ -367,8 +417,12 @@ function tileNote(goal: GoalSnapshot | null, progress: GoalProgress | null): str
 
 function overallProgress(goal: GoalSnapshot, progress: GoalProgress): number {
   if (goal.status === 'completed') return 100
+  if (goal.planVersion === 3) {
+    const done = (goal.stages.frame?.outputs.length ? 1 : 0) + (goal.stages.videos?.outputs.length ? 1 : 0)
+    return Math.round(done / 2 * 100)
+  }
   if (goal.planVersion === 1) return progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 0
-  const total = 1 + (isStagedGoalPlan(goal.plan) && goal.plan.frameContinuity ? 3 : 2) * (goal.plan?.shots.length ?? 0)
+  const total = 1 + (isStagedGoalPlan(goal.plan) && goal.plan.frameContinuity ? 3 : 2) * planShots(goal.plan).length
   const done = Object.values(goal.stages).reduce((sum, run) => sum + run.outputs.length, 0)
   return Math.round(done / total * 100)
 }
@@ -379,11 +433,13 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
   const phase = progress?.phase ?? null
   const shots = progress && progress.shots.length > 0 ? progress.shots : plannedShots(plan)
   const visible = shots.length > TILE_ROW_LIMIT ? shots.slice(0, TILE_ROW_LIMIT - 1) : shots
-  const firstDuration = plan?.shots[0]?.durationSeconds ?? null
-  const duration = plan?.shots.every(shot => shot.durationSeconds === firstDuration) ? firstDuration : null
+  const planRows = planShots(plan)
+  const v3Plan = plan && 'version' in plan && plan.version === 3 ? plan : null
+  const firstDuration = v3Plan ? v3Plan.video.durationSeconds : planRows[0]?.durationSeconds ?? null
+  const duration = v3Plan || (planRows.length > 0 && planRows.every(shot => shot.durationSeconds === firstDuration)) ? firstDuration : null
   const thumbnails = goal ? [
-    ...(goal.stages.frame?.outputs ?? []).map(output => ({ ...output, label: 'Full frame' })),
-    ...(goal.stages.storyboards?.outputs ?? []).map(output => ({ ...output, label: output.index >= (plan?.shots.length ?? 0) ? `Ending ${output.index + 1 - (plan?.shots.length ?? 0)}` : `Storyboard ${output.index + 1}` })),
+    ...(goal.stages.frame?.outputs ?? []).map(output => ({ ...output, label: v3Plan ? 'Scene' : 'Full frame' })),
+    ...(goal.stages.storyboards?.outputs ?? []).map(output => ({ ...output, label: output.index >= planRows.length ? `Ending ${output.index + 1 - planRows.length}` : `Storyboard ${output.index + 1}` })),
   ] : []
   return {
     title: plan?.title ?? (phase === 'planning' ? 'Building your shot plan' : label ?? 'Video goal'), planning: phase === 'planning',
@@ -394,9 +450,9 @@ export function goalTileView(goal: GoalSnapshot | null, fallbackPlan: GoalDispla
       startedAt: shot.state === 'generating' ? shot.startedAt : null,
     })),
     hiddenRows: shots.length - visible.length, note: tileNote(goal, progress), noteTone: phase ? tileChips[phase].tone : 'quiet',
-    chip: phase ? tileChips[phase] : { label: 'Goal', tone: 'quiet' },
+    chip: goal?.finish?.status === 'running' ? { label: 'Finishing', tone: 'live' } : phase ? tileChips[phase] : { label: 'Goal', tone: 'quiet' },
     progressPercent: goal && progress ? overallProgress(goal, progress) : 0,
-    shotsLabel: plan ? duration === null ? `${plan.shots.length} clips` : `${plan.shots.length} × ${duration}s` : null,
+    shotsLabel: plan ? duration === null ? `${planRows.length} clips` : v3Plan ? `1 × ${duration}s` : `${planRows.length} × ${duration}s` : null,
     aspectRatio: plan?.aspectRatio ?? null, thumbnails,
     styleLabel: isStagedGoalPlan(plan) ? goalStyle(plan.style?.id ?? 'cinematic').label
       : goal?.requestedStyle ? goalStyle(goal.requestedStyle.id).label : null,

@@ -3,11 +3,27 @@ import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { getChainRun } from "./chain-executor.js";
 import type { ChainStep } from "./chain-plan.js";
 import { compileFrameSteps, compileStoryboardSteps, goalStillPrompt, type GoalCharacter, type GoalPlan, type GoalStillStage, type GoalGenerationStage } from "./goal-plan.js";
+import type { GoalPlanV3 } from "./goal-plan-v3.js";
 import type { GoalRecord, GoalStageOutput, GoalStillAttempt } from "./goal-store.js";
 import { goalReferenceHashes } from "./goal-reference-images.js";
 
 function goalStepIndex(stage: GoalGenerationStage, stepId: string): number {
-  return stage === "frame" ? 0 : Number(/\d+$/u.exec(stepId)?.[0]) - 1;
+  if (stage === "frame" || stepId === "frame" || stepId === "scene" || stepId === "video") return 0;
+  return Number(/\d+$/u.exec(stepId)?.[0]) - 1;
+}
+
+export async function goalV3Fingerprint(engine: Engine, plan: GoalPlanV3, stage: "frame" | "videos", sceneArtifactId: string | null): Promise<string> {
+  const ids = stage === "frame"
+    ? plan.scene.imageRefs.map(reference => reference.artifactId)
+    : [...plan.video.imageRefs, ...plan.video.videoRefs].map(reference => reference.artifactId);
+  return JSON.stringify({
+    prompt: stage === "frame" ? plan.scene.prompt : plan.video.prompt,
+    settings: stage === "frame"
+      ? { model: plan.scene.model, aspectRatio: plan.scene.aspectRatio, resolution: plan.scene.resolution, outputFormat: plan.scene.outputFormat }
+      : { aspectRatio: plan.video.aspectRatio, resolution: plan.video.resolution, duration: plan.video.durationSeconds, audio: plan.video.generateAudio, outputFormat: plan.video.outputFormat },
+    references: await goalReferenceHashes(engine, ids),
+    ...(stage === "videos" ? { sceneArtifactId } : {}),
+  });
 }
 
 export async function goalStageFingerprint(engine: Engine, goal: GoalRecord, plan: GoalPlan, characters: readonly GoalCharacter[], stage: GoalGenerationStage, index: number): Promise<string> {

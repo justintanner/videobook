@@ -2,10 +2,11 @@ import { useRef, useState, type KeyboardEvent } from 'react'
 import { Flag } from 'lucide-react'
 import type { GoalPlan, GoalGenerationStage } from '../../../server/src/goal-plan'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { formatGoalClock, goalCanRetry, goalOutputEstimate, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalStopLabel, goalTileView, isStagedGoalPlan, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
+import { formatGoalClock, goalCanRetry, goalOutputEstimate, goalPlansEqual, goalProgress, goalShotStateLabel, goalStageLabel, goalStatusLine, goalStopLabel, goalTileView, isStagedGoalPlan, planShots, type GoalShotView, type GoalSnapshot } from '@/videobook/goals'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import { ComposerDockClose } from '@/components/videobook/ComposerDockClose'
 import { GoalReview } from './GoalReview'
+import { GoalV3Review } from './GoalV3Review'
 import { SimpleGoalReview } from './SimpleGoalReview'
 import './GoalPanel.css'
 
@@ -39,7 +40,7 @@ function GoalShotRow({ shot, onSelectCell }: { shot: GoalShotView, onSelectCell:
 function GoalStepper({ goal }: { goal: GoalSnapshot }) {
   const simple = isStagedGoalPlan(goal.plan) && goal.plan.storyboardLayout === 'six-panel'
   const current = simple ? goal.stage === 'frame' ? 0 : goal.stage === 'storyboards' ? 1 : 2 : goal.status === 'planning' ? 0 : goal.stage === 'frame' ? 1 : goal.stage === 'storyboards' ? 2 : goal.stage === 'videos' ? 3 : 4
-  const labels = simple ? ['Scene', 'Storyboard', 'Video'] : ['Plan', 'Full frame', 'Storyboards', 'Videos', ...(goal.plan?.shots.length === 1 ? [] : ['Combine'])]
+  const labels = simple ? ['Scene', 'Storyboard', 'Video'] : ['Plan', 'Full frame', 'Storyboards', 'Videos', ...(planShots(goal.plan).length === 1 ? [] : ['Combine'])]
   return <ol className="goal-stepper" aria-label="Goal stages">{labels.map((label, index) => <li key={label} data-state={goal.status === 'completed' || index < current ? 'done' : index === current ? 'current' : 'pending'} aria-current={index === current ? 'step' : undefined}>{label}</li>)}</ol>
 }
 
@@ -50,6 +51,7 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
   const progress = goalProgress(goal)
   const line = goalStatusLine(goal)
   const view = goalTileView(goal, goal.plan, undefined)
+  const v3Plan = goal.plan && 'version' in goal.plan && goal.plan.version === 3 ? goal.plan : null
   const disabled = pending || !connected
   const simpleReview = isStagedGoalPlan(goal.plan) && (goal.plan.storyboardLayout === 'six-panel' || goal.status === 'completed') && ['review', 'completed', 'failed', 'interrupted'].includes(goal.status)
   const perform = async (work: () => Promise<unknown>) => {
@@ -95,13 +97,14 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
     <header>
       <span className="inspector-cell-title goal-panel-title"><Flag size={14} className="goal-panel-flag" /><strong>GOAL</strong>{goal.address && <code className="inspector-cell-address">{goal.address}</code>}<span className="goal-panel-name" title={view.title}>{view.title}</span><span className="goal-tile-chip" data-tone={view.chip.tone}>{view.chip.label}</span></span>
       <div className="inspector-header-actions"><div className="inspector-generation-header-actions">
-        {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>Discard goal</button>}
+        {progress.phase === 'review' && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{v3Plan && goal.finish?.status === 'running' ? 'Stop finishing' : 'Discard goal'}</button>}
         {active && <button type="button" disabled={disabled} onClick={() => act({ action: 'cancel' })}>{goalStopLabel(goal)}</button>}
         {finished && <button type="button" disabled={disabled || Boolean(goal.dismissedAt)} onClick={() => act({ action: 'dismiss' })}>Dismiss</button>}
       </div><ComposerDockClose /></div>
     </header>
     <div className="goal-panel-body">
       {goal.planVersion === 2 && !simpleReview && <GoalStepper goal={goal} />}
+      {v3Plan && goal.status !== 'planning' && <GoalV3Review key={`${goal.goalId}:${goal.revision}`} goal={goal} plan={v3Plan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onRun={work => { void perform(work) }} onAction={args => onAction({ ...args, goal_id: goal.goalId })} />}
       {!connected && <p role="status" className="goal-panel-muted">Reconnecting. Your goal is saved; generation continues on the server.</p>}
       {error && <p role="alert" className="goal-panel-error">{error}</p>}
       {goal.error && (progress.phase === 'failed' || progress.phase === 'interrupted') && <p role="alert" className="goal-panel-error">{goal.error}</p>}
@@ -109,7 +112,7 @@ export function GoalPanel({ goal, connected, onAction, onPreview, onSelectCell, 
       {progress.phase === 'planning' && <div className="goal-panel-planning"><p className="goal-panel-brief">{goal.brief}</p><p className="goal-panel-muted">{view.styleLabel === 'Match source' ? 'Planning the scene, storyboard and video from your references…' : view.styleLabel ? `Planning ${view.styleLabel === 'IG Influencer' ? 'an' : 'a'} ${view.styleLabel} sequence…` : 'Planning the scene, storyboard and video from your reference images…'}</p><span className="goal-tile-placeholder" aria-hidden="true"><i /><i /><i /></span></div>}
       {simpleReview && isStagedGoalPlan(goal.plan) && <SimpleGoalReview key={`${goal.goalId}:${goal.revision}:${goal.stage}`} goal={goal} plan={goal.plan} disabled={disabled} resolveAsset={resolveAsset} onPreviewCell={onPreviewCell} onSave={plan => reviewAction('update', plan)} onApprove={plan => reviewAction('approve', plan)} onRegenerate={(plan, stage, index) => reviewAction('regenerate', plan, stage, index)} onRevise={(plan, stage, index, feedback) => reviewAction('revise', plan, stage, index, feedback)} onSelect={(stage, index, artifactId) => act({ action: 'select', revision: goal.revision, stage, index, artifact_id: artifactId })} />}
       {!simpleReview && progress.phase === 'review' && isStagedGoalPlan(goal.plan) && <GoalReview key={`${goal.goalId}:${goal.revision}:${goal.stage}`} goal={goal} plan={goal.plan} disabled={disabled} resolveAsset={resolveAsset} onSelectCell={onSelectCell} onPreviewCell={onPreviewCell} onSave={plan => reviewAction('update', plan)} onApprove={plan => reviewAction('approve', plan)} onRegenerate={(plan, stage, index) => reviewAction('regenerate', plan, stage, index)} onRevise={(plan, stage, index, feedback) => reviewAction('revise', plan, stage, index, feedback)} onSelect={(stage, index, artifactId) => act({ action: 'select', stage, index, artifact_id: artifactId })} />}
-      {progress.phase !== 'planning' && progress.phase !== 'review' && (!simpleReview || retry) && <div onKeyDown={event => runWithShortcut(event, primary)}>
+      {!v3Plan && progress.phase !== 'planning' && progress.phase !== 'review' && (!simpleReview || retry) && <div onKeyDown={event => runWithShortcut(event, primary)}>
         <div className="goal-progress-summary"><progress max={Math.max(1, progress.total)} value={complete ? progress.total : progress.done} aria-label="Completed stage outputs" /><span>{progress.done} of {progress.total} ready · {goalStageLabel(progress.stage)}</span></div>
         <ol className="goal-progress-list">{progress.shots.map(shot => <GoalShotRow key={shot.index} shot={shot} onSelectCell={onSelectCell} />)}</ol>
         <div className="goal-panel-bar"><div className="goal-panel-bar-copy"><span>{complete ? goal.assembly ? 'Clips were appended in order to the timeline.' : 'Your clip is ready in the notebook.' : goal.status === 'cancelled' ? 'Remaining work is stopped. Requests already submitted may still finish.' : 'Outputs appear in the notebook as they finish. You can collapse this panel.'}</span></div>{primaryLabel && <button type="button" className="goal-panel-primary" disabled={disabled} onClick={primary}>{primaryLabel}</button>}</div>

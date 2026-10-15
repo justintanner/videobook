@@ -12,14 +12,17 @@
 
 import type { Engine } from "videobook-engine";
 import { getActiveEngine } from "./queue.js";
+import type { LightningWatermarkProfile, StoredWatermarkProfile } from "./lightning-defaults.js";
+import { watermarkProfileFor } from "./lightning-defaults.js";
 import type { WatermarkPlatform } from "./watermark-platform.js";
 
 const RECENT_LIMIT = 8;
 
-interface WatermarkConfig {
+export interface WatermarkConfig {
   savedHandle: string | null;
   recent: string[];
   authenticatedHandle: string | null;
+  profile?: StoredWatermarkProfile;
 }
 
 const EMPTY_CONFIG: WatermarkConfig = { savedHandle: null, recent: [], authenticatedHandle: null };
@@ -50,7 +53,20 @@ function readConfig(engine: Engine, platform: WatermarkPlatform = "x"): Watermar
     : [];
   const savedHandle = typeof parsed.savedHandle === "string" ? parsed.savedHandle : null;
   const authenticatedHandle = typeof parsed.authenticatedHandle === "string" ? parsed.authenticatedHandle : null;
-  return { savedHandle, recent, authenticatedHandle };
+  const profile = parsed.profile && typeof parsed.profile === "object" && !Array.isArray(parsed.profile)
+    ? parsed.profile as StoredWatermarkProfile
+    : undefined;
+  return { savedHandle, recent, authenticatedHandle, ...(profile ? { profile } : {}) };
+}
+
+export function effectiveWatermarkProfile(
+  config: WatermarkConfig,
+  platform: WatermarkPlatform,
+): LightningWatermarkProfile {
+  return watermarkProfileFor(platform, {
+    ...config.profile,
+    ...(config.savedHandle ? { handle: config.savedHandle } : {}),
+  });
 }
 
 export async function readWatermarkConfig(
@@ -88,6 +104,7 @@ export async function recordHandle(
       savedHandle: opts.saveDefault ? normalized : current.savedHandle,
       recent: [normalized, ...deduped].slice(0, RECENT_LIMIT),
       authenticatedHandle: current.authenticatedHandle,
+      ...(current.profile ? { profile: current.profile } : {}),
     };
     writeWatermarkConfig(engine, next, platform);
     return next;
@@ -108,8 +125,28 @@ export async function setAuthenticatedHandle(
       savedHandle: current.savedHandle,
       recent: current.recent,
       authenticatedHandle: normalized,
+      ...(current.profile ? { profile: current.profile } : {}),
     };
     writeWatermarkConfig(engine, next);
+    return next;
+  });
+}
+
+export async function saveWatermarkProfile(
+  profile: StoredWatermarkProfile,
+  platform: WatermarkPlatform = "tiktok",
+  engine: Engine = getActiveEngine(),
+): Promise<WatermarkConfig> {
+  return serialize(async () => {
+    const current = readConfig(engine, platform);
+    const handle = typeof profile.handle === "string" ? normalizeHandle(profile.handle) : null;
+    const next: WatermarkConfig = {
+      savedHandle: handle ?? current.savedHandle,
+      recent: current.recent,
+      authenticatedHandle: current.authenticatedHandle,
+      profile: { ...current.profile, ...profile, ...(handle ? { handle } : {}) },
+    };
+    writeWatermarkConfig(engine, next, platform);
     return next;
   });
 }

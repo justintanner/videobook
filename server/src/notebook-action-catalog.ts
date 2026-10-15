@@ -1,4 +1,5 @@
-import { DEFAULT_GPT_IMAGE_MODEL } from "./gpt-image-2-5.js";
+import { NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
+import { LIGHTNING_VIDEO_TOOL } from "./lightning-defaults.js";
 import type {
   Generation,
   NotebookCell,
@@ -316,8 +317,8 @@ const LOCAL_ACTIONS: NotebookAction[] = [
 ];
 
 const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_5_video";
-const DEFAULT_VIDEO_TOOL = "generate_kie_gemini_omni_video";
-const DEFAULT_IMAGE_TOOL = DEFAULT_GPT_IMAGE_MODEL.tool;
+const DEFAULT_VIDEO_TOOL = LIGHTNING_VIDEO_TOOL;
+const DEFAULT_IMAGE_TOOL = NANO_BANANA_2_1_TOOL;
 const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
 
 const generationTitleOverrides: Record<string, string> = {

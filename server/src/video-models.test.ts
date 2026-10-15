@@ -306,9 +306,9 @@ describe("getVideoToolSchema", () => {
     expect(schema!.defaults).toMatchObject({
       return_last_frame: false,
       generate_audio: true,
-      resolution: "720p",
-      aspect_ratio: "adaptive",
-      duration: "5",
+      resolution: "1080p",
+      aspect_ratio: "16:9",
+      duration: "13",
       output_format: "mp4",
       nsfw_checker: false,
     });

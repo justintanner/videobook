@@ -28,7 +28,7 @@ import {
 } from "@apicity/kie/zod";
 import { apicityField, apicityStringArrayField } from "./tools/schema-from-apicity.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, NANO_BANANA_2_1_KEY, NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
-import { buildNanoBanana21Payload } from "./nano-banana-2-1.js";
+import { buildNanoBanana21Payload, withLightningSceneDefaults } from "./nano-banana-2-1.js";
 import {
   zodEnumOptionsOrNull,
   zodNumberRange,
@@ -381,7 +381,7 @@ const ACTIONS: Apicity014Action[] = [
       output_format: NanoBanana21RequestSchema.shape.input.shape.output_format,
     },
     videoParams: [], videoZod: {}, videoImageField: null,
-    build: args => buildNanoBanana21Payload(args, strings(args.image_refs)),
+    build: args => buildNanoBanana21Payload(withLightningSceneDefaults(args), strings(args.image_refs)),
   },
   {
     canonicalName: "generate_fal_bria_fibo_edit_1_5_product_holding",

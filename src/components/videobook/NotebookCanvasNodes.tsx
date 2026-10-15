@@ -407,7 +407,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const visibleTypeLabel = denseGenerationHeader
     ? compactCellTypeLabel(data.kind)
     : typeLabel
-  const resolvedPrompt = asString(data.inputs?.resolvedPrompt) ?? data.prompt
+  const resolvedPrompt = asString(data.prompt) || asString(data.inputs?.resolvedPrompt)
   const imagePrompt = imageMediaCell
     ? resolvedPrompt ?? data.asset?.prompt ?? null
     : null

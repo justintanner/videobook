@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngine } from "videobook-engine";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { createPost } from "../posts/post-store.js";
-import { draftPostCopy, postAnalysisTarget, postCopyResponses, readPostCopyContext } from "../posts/post-copy.js";
+import { buildPostCopyPrompt, draftPostCopy, postAnalysisTarget, postCopyResponses, readPostCopyContext } from "../posts/post-copy.js";
 import { joinCaptionTags, normalizePostTags, splitCaptionTags } from "../posts/post-copy-format.js";
 import { VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
 
@@ -93,6 +93,7 @@ describe("draft_post_copy with Astra", () => {
 
   it("reports a clip that still needs analysis", async () => {
     const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, platform: "tiktok" });
+    expect(post.definition).toMatchObject({ platform: "tiktok", delivery: "icloud" });
     expect(await postAnalysisTarget(engine, post)).toEqual({ assetId: artifactId, analyzable: true, analyzed: false });
   });
 
@@ -110,7 +111,7 @@ describe("draft_post_copy with Astra", () => {
     const context = await readPostCopyContext(engine, post);
     const draft = await draftPostCopy(postCopyResponses("local-test-key", { baseURL, retries: 0 }), context, { platform: "tiktok", language: "th", instruction: "mention the storm" });
 
-    expect(draft).toEqual({ caption: "ฝ่าพายุไปกับร่มสีชมพู", tags: ["ฝนตก", "lightning", "rain", "storm", "city"], platform: "tiktok", language: "th", model: "gpt-6-astra", analyzed: true });
+    expect(draft).toEqual({ caption: "ฝ่าพายุไปกับร่มสีชมพู", tags: ["fyp", "bkk", "ฝนตก", "lightning", "rain"], platform: "tiktok", language: "th", model: "gpt-6-astra", analyzed: true });
     expect(captured).toHaveLength(1);
     expect(captured[0].model).toBe("gpt-6-astra");
     expect(captured[0].text.format).toMatchObject({ type: "json_schema", name: "post_copy" });
@@ -122,10 +123,35 @@ describe("draft_post_copy with Astra", () => {
     expect(prompt).toContain("A man rides a scooter in heavy rain holding a pink umbrella");
     expect(prompt).toContain("under 2200 characters");
     expect(prompt).toContain("one or two words plus one or two emoji");
+    expect(prompt).toContain("describes this clip");
+    expect(prompt).not.toContain("Mr Bean");
+  });
+
+  it("asks for a title of this clip and does not copy another video's caption", () => {
+    const prompt = buildPostCopyPrompt({
+      label: "Rain clip",
+      analysis: {
+        summary: "A rider under a pink umbrella.",
+        mood: "defiant",
+        setting: "city street",
+        subjects: ["rider"],
+        actions: ["riding"],
+        tags: ["rain"],
+        scenes: ["Rider enters"],
+        textOnScreen: [],
+      },
+      transcript: null,
+      prompts: ["scooter in rain"],
+    }, { platform: "tiktok", language: "th" });
+    expect(prompt).toContain("pink umbrella");
+    expect(prompt).toContain("one or two words plus one or two emoji");
+    expect(prompt).toContain("The title describes this clip");
+    expect(prompt).not.toContain("Mr Bean");
   });
 
   it("rewrites the current draft and rejects an empty caption", async () => {
     const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, platform: "x" });
+    expect(post.definition.delivery).toBeUndefined();
     const captured: CapturedRequest[] = [];
     const baseURL = await astraServer(JSON.stringify({ caption: "  ", tags: [] }), captured);
     const context = await readPostCopyContext(engine, post);

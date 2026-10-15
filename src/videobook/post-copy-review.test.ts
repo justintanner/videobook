@@ -35,11 +35,13 @@ function postView(caption: string): PostView {
 describe('post copy review', () => {
   it('starts empty and asks Astra for a first draft when the Post has no caption', () => {
     const copy = initialCopyState(postView(''))
-    expect(copy).toMatchObject({ language: 'en', platform: 'tiktok', tracks: {}, prompt: '' })
+    expect(copy).toMatchObject({ language: 'th', platform: 'tiktok', prompt: '' })
+    expect(currentCopyVersion(copy)).toEqual({ body: '', tags: ['fyp', 'bkk'], origin: 'auto', instruction: null })
+    expect(copyNeedsDraft(copy, 'th', false)).toBe(true)
+    expect(copyNeedsDraft(copy, 'th', true)).toBe(false)
     expect(copyNeedsDraft(copy, 'en', false)).toBe(true)
-    expect(copyNeedsDraft(copy, 'en', true)).toBe(false)
-    expect(copyProvenance(copy)).toBe('No English caption yet')
-    expect(copyDraftArgs('book', 'post-1', copy, 'en', null)).toEqual({ book_id: 'book', post_cell_id: 'post-1', language: 'en', platform: 'tiktok' })
+    expect(copyProvenance(copy)).toBe('No Thai caption yet')
+    expect(copyDraftArgs('book', 'post-1', copy, 'th', null)).toEqual({ book_id: 'book', post_cell_id: 'post-1', language: 'th', platform: 'tiktok' })
   })
 
   it('reads a saved Thai caption with its tag line', () => {

@@ -76,8 +76,8 @@ describe("preview_image tool", () => {
 
     expect(parsed.category).toBe("image");
     expect(parsed.resolved_assets).toEqual([]);
-    expect(parsed.selected_model).toBe("gpt_image_sunburst");
-    expect(parsed.tool_name).toBe("generate_kie_gpt_image_2_5_sunburst_image");
+    expect(parsed.selected_model).toBe("nano_banana_2_1");
+    expect(parsed.tool_name).toBe("generate_kie_nano_banana_2_1_image");
     expect(parsed.model_options.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -108,21 +108,21 @@ describe("selectPreviewImageModel", () => {
     { key: "grok_imagine_text", image_slots: null },
   ];
 
-  it("defaults to Nano Banana 2.1 for edits and Sunburst for text-only generation", () => {
-    expect(selectPreviewImageModel(undefined, null, 0, modelOptions)).toBe("gpt_image_sunburst");
+  it("defaults to Nano Banana 2.1 for fresh text and edits", () => {
+    expect(selectPreviewImageModel(undefined, null, 0, modelOptions)).toBe("nano_banana_2_1");
     expect(selectPreviewImageModel(undefined, null, 1, modelOptions)).toBe("nano_banana_2_1");
   });
 
-  it("does not restore the older Nano Banana from history", () => {
-    expect(selectPreviewImageModel(undefined, "nano_banana", 0, modelOptions)).toBe("gpt_image_sunburst");
+  it("maps the retired Nano Banana key onto Nano Banana 2.1", () => {
+    expect(selectPreviewImageModel(undefined, "nano_banana", 0, modelOptions)).toBe("nano_banana_2_1");
     expect(selectPreviewImageModel(undefined, "nano_banana", 1, modelOptions)).toBe("nano_banana_2_1");
   });
 
-  it("uses the edit default regardless of history and preserves text-only history", () => {
+  it("keeps a historical model when it supports the connected media", () => {
     expect(selectPreviewImageModel(undefined, "grok_imagine_text", 0, modelOptions)).toBe("grok_imagine_text");
     expect(selectPreviewImageModel(undefined, "grok_imagine_text", 1, modelOptions)).toBe("nano_banana_2_1");
-    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 1, modelOptions)).toBe("nano_banana_2_1");
-    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 0, modelOptions)).toBe("gpt_image_sunburst");
+    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 1, modelOptions)).toBe("grok_imagine_image");
+    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 0, modelOptions)).toBe("nano_banana_2_1");
   });
 
   it("keeps an explicit Nano Banana selection", () => {

@@ -1,8 +1,12 @@
 import { z } from "zod";
 import type { ChainStep } from "./chain-plan.js";
+import type { GoalPlanV3 } from "./goal-plan-v3.js";
 import { NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
 import { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 import { GOAL_STYLE_IDS, goalStyleFragment, resolveGoalStyleOptions, type GoalStyleStage } from "./goal-styles.js";
+
+export type { GoalMediaRef, GoalPlanV3 } from "./goal-plan-v3.js";
+export { buildGoalPlanV3, compileGoalV3Approval, compileGoalV3Steps, goalMediaRefSchema, goalPlanV3Schema, goalV3Timing, isGoalPlanV3, refreshGoalPlanV3 } from "./goal-plan-v3.js";
 
 export { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 
@@ -71,7 +75,7 @@ export const goalPlannerResponseSchema = goalPlanSchema.extend({
 
 export type GoalPlan = z.infer<typeof goalPlanSchema>;
 export type LegacyGoalPlan = z.infer<typeof legacyGoalPlanSchema>;
-export type GoalDisplayPlan = GoalPlan | LegacyGoalPlan;
+export type GoalDisplayPlan = GoalPlan | LegacyGoalPlan | GoalPlanV3;
 export type GoalStage = "frame" | "storyboards" | "videos" | "assembly";
 export type GoalGenerationStage = Exclude<GoalStage, "assembly">;
 export type GoalStillStage = Extract<GoalGenerationStage, "frame" | "storyboards">;

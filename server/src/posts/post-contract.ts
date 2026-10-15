@@ -4,9 +4,12 @@ export const POST_METRIC_NAMES = ["views", "impressions", "likes", "replies", "r
 export type PostMetricName = typeof POST_METRIC_NAMES[number];
 export type PostMetrics = Partial<Record<PostMetricName, number | null>>;
 
+export type PostDelivery = "icloud" | "dropbox";
+
 export interface PostDefinition {
   version: 1;
   platform: PostPlatform;
+  delivery?: PostDelivery;
   account: string;
   caption: string;
   credits: string;

@@ -77,8 +77,8 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
     {!post.runtime.url && <div className="post-delivery">
       <h3>Deliver</h3>
       <p>Review the clip and caption, then save them where you will publish.</p>
-      <button type="button" onClick={() => onDeliver('icloud')}>Save to iPhone</button>
-      <button type="button" onClick={() => onDeliver('dropbox')}>Upload to Dropbox</button>
+      <button type="button" aria-pressed={post.definition.delivery === 'icloud'} onClick={() => onDeliver('icloud')}>Save to iPhone</button>
+      <button type="button" aria-pressed={post.definition.delivery === 'dropbox'} onClick={() => onDeliver('dropbox')}>Upload to Dropbox</button>
       {post.definition.platform === 'x' && !post.runtime.xRequest && !['scheduled', 'needs_reconciliation', 'posting'].includes(post.runtime.status) && <button type="button" disabled={actions.busy || !post.definition.source?.snapshotArtifactId || !caption.trim() || dirty} onClick={() => void onReviewX(post)}>Review X post…</button>}
       {post.definition.platform === 'x' && post.runtime.xRequest && post.runtime.status === 'failed' && <button type="button" disabled={actions.busy} onClick={() => void run('post')}>Retry saved X post</button>}
       {dirty && <small>Save your draft before delivering.</small>}

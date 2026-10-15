@@ -1,8 +1,10 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cancelChainRun, getChainRun, type ChainRunRecord } from "./chain-executor.js";
+import { coldOpenSource } from "./cold-open.js";
 import { emptyGoalEstimates, findGoalCell, goalContent, requireGoalContent, saveGoal, writeGoalContent, type GoalRecord, type GoalStageOutput } from "./goal-store.js";
-import { GOAL_VIDEO_TOOL, type GoalGenerationStage } from "./goal-plan.js";
+import { GOAL_VIDEO_TOOL, refreshGoalPlanV3, type GoalGenerationStage } from "./goal-plan.js";
+import { suggestedColdOpen } from "./lightning-defaults.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { goalStageAttempts, goalStillStaleReason } from "./goal-stills.js";
 
@@ -38,10 +40,15 @@ function goalChainSteps(engine: Engine, document: NotebookDocument, chainId: str
   }) ?? [];
 }
 
+function stageOutputIndex(stepId: string): number {
+  if (stepId === "frame" || stepId === "scene" || stepId === "video") return 0;
+  return Number(/\d+$/u.exec(stepId)?.[0]) - 1;
+}
+
 function completedStageOutputs(engine: Engine, goal: GoalRecord, document: NotebookDocument): GoalStageOutput[] {
   return goalChainSteps(engine, document, goal.chainId).flatMap(step => {
     if (step.status !== "completed" || !step.artifactId || step.id === "assemble") return [];
-    const index = step.id === "frame" ? 0 : Number(/\d+$/u.exec(step.id)?.[0]) - 1;
+    const index = stageOutputIndex(step.id);
     if (!Number.isInteger(index) || index < 0) return [];
     const cell = document.cells.find(candidate => candidate.id === step.outputCellId);
     return [{ index, artifactId: step.artifactId, cellId: step.outputCellId, producerCellId: step.cellId, address: cell ? notebookGridTag(cell.slot) : null }];
@@ -66,6 +73,36 @@ export async function writeGoalCombinationState(engine: Engine, goal: GoalRecord
   }));
   if (!updated.ok) throw new Error(updated.error.message);
   return saveGoal(engine, { ...goal, combined: { ...goal.combined, status: error ? "failed" : "completed", error } });
+}
+
+export function reconcileFinish(engine: Engine, goal: GoalRecord): GoalRecord {
+  const finish = goal.finish;
+  if (goal.planVersion !== 3 || !finish || finish.status !== "running") return goal;
+  const job = finish.jobId ? engine.jobs.queue.get(finish.jobId) : null;
+  if (job && ["queued", "running", "completing"].includes(job.state)) return goal;
+  if (job?.state === "done") {
+    const result = job.result && typeof job.result === "object" ? job.result as { finalArtifactId?: unknown; coldOpenArtifactId?: unknown } : null;
+    const finalArtifactId = finish.finalArtifactId ?? (typeof result?.finalArtifactId === "string" && result.finalArtifactId ? result.finalArtifactId : null);
+    if (finalArtifactId && engine.artifacts.get(finalArtifactId).ok) {
+      const coldOpenArtifactId = finish.coldOpenArtifactId ?? (typeof result?.coldOpenArtifactId === "string" ? result.coldOpenArtifactId : null);
+      return saveGoal(engine, { ...goal, status: "completed", error: null, finish: { ...finish, status: "completed", finalArtifactId, coldOpenArtifactId, error: null } });
+    }
+  }
+  return saveGoal(engine, { ...goal, status: "review", finish: { ...finish, status: "failed", error: job?.error?.message ?? "Finishing was interrupted. Retry the cold open." } });
+}
+
+async function coldOpenReview(engine: Engine, goal: GoalRecord) {
+  if (goal.planVersion !== 3 || !goal.finish?.sourceArtifactId) return null;
+  try {
+    const source = await coldOpenSource(engine, goal.finish.sourceArtifactId, goal.finish.sourceObjectHash ?? undefined);
+    const approved = goal.finish.status !== "review" && goal.finish.startSeconds != null && goal.finish.endSeconds != null;
+    const range = approved
+      ? { startSeconds: goal.finish.startSeconds!, endSeconds: goal.finish.endSeconds! }
+      : suggestedColdOpen(source.durationSeconds);
+    return { ...range, durationSeconds: source.durationSeconds, sourceObjectHash: source.file.objectHash, analysisUsd: 0 };
+  } catch {
+    return null;
+  }
 }
 
 export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: NotebookDocument): Promise<GoalRecord> {
@@ -101,8 +138,27 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
   const assembled = stage === "videos" && goal.assembly?.artifactIds && JSON.stringify(goal.assembly.artifactIds) === JSON.stringify(outputs.map(output => output.artifactId));
   if (chain.status === "completed" || assembled && !goal.resumeStage) {
     const content = requireGoalContent(engine, goal);
-    const shotCount = content.plan?.shots.length ?? 0;
-    const expected = stage === "frame" ? 1 : stage === "storyboards" && content.plan && "frameContinuity" in content.plan && content.plan.frameContinuity ? 2 * shotCount : shotCount;
+    if (goal.planVersion === 3) {
+      const cleared = { resumeStage: null, resumeStatus: null, resumeOutputs: null, resumeFinish: null };
+      if (outputs.length !== 1) next = { ...next, status: "failed", error: "The stage finished without all of its media outputs. Retry the stage.", ...cleared };
+      else if (stage === "videos") {
+        next = {
+          ...next, status: "review", error: null, ...cleared,
+          finish: { status: "review", sourceArtifactId: outputs[0]!.artifactId, finalArtifactId: null, error: null },
+        };
+      } else {
+        const previousScene = run.outputs[0]?.artifactId ?? null;
+        await writeGoalContent(engine, goal, { ...content, revision: content.revision + 1 });
+        const sceneChanged = previousScene !== null && previousScene !== outputs[0]!.artifactId;
+        next = {
+          ...next, stage: goal.resumeStage ?? "videos", status: goal.resumeStatus ?? "review", error: null, ...cleared,
+          ...(sceneChanged ? { finish: null } : {}),
+        };
+      }
+    } else {
+    const stagedPlan = content.plan && "shots" in content.plan ? content.plan : null;
+    const shotCount = stagedPlan?.shots.length ?? 0;
+    const expected = stage === "frame" ? 1 : stage === "storyboards" && stagedPlan && "frameContinuity" in stagedPlan && stagedPlan.frameContinuity ? 2 * shotCount : shotCount;
     if (outputs.length !== expected) next = { ...next, status: "failed", error: "The stage finished without all of its media outputs. Retry the stage." };
     else if (stage === "videos") {
       next = { ...next, status: goal.assembly || expected === 1 || goal.resumeStage ? "completed" : "failed", error: goal.assembly || expected === 1 || goal.resumeStage ? null : "The finished clips still need to be assembled" };
@@ -113,6 +169,7 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
       next = { ...next, stage: goal.resumeStage ?? (stage === "frame" ? "storyboards" : "videos"), status: goal.resumeStatus ?? "review", error: null };
     }
     next = { ...next, resumeStage: null, resumeStatus: null, resumeOutputs: null };
+    }
   } else if (["failed", "interrupted", "cancelled"].includes(chain.status)) {
     next = { ...next, status: chain.status as "failed" | "interrupted" | "cancelled", error: chain.error,
       ...(goal.resumeOutputs ? { stages: { ...next.stages, [stage]: { ...next.stages[stage]!, outputs: goal.resumeOutputs } } } : {}),
@@ -139,19 +196,28 @@ export async function publicGoal(engine: Engine, goal: GoalRecord, document: Not
           status: step?.status ?? "interrupted" as const, current: attempt.artifactId === output.artifactId,
         };
       });
-      const stale = content.plan && "version" in content.plan && (stage === "frame" || stage === "storyboards" || stage === "videos")
-        ? await goalStillStaleReason(engine, goal, document, content.plan, content.characters, stage, output) : null;
+      const stagedPlan = content.plan && "version" in content.plan && content.plan.version === 2 ? content.plan : null;
+      const stale = stagedPlan && (stage === "frame" || stage === "storyboards" || stage === "videos")
+        ? await goalStillStaleReason(engine, goal, document, stagedPlan, content.characters, stage, output) : null;
       return { ...output, address: outputCell ? notebookGridTag(outputCell.slot) : null, versions, stale };
     })),
     steps: goalChainSteps(engine, document, run.chainId),
     allSteps: [...run.previousChainIds, run.chainId].flatMap(chainId => allGoalChainSteps(engine, document, chainId)),
   }] satisfies [string, unknown])));
-  const stillCount = content.plan ? content.plan.shots.length * ("frameContinuity" in content.plan && content.plan.frameContinuity ? 2 : 1) : 1;
-  const still = goal.stage === "videos"
-    ? { ...content.estimate.storyboards, usd: content.estimate.storyboards.usd === null ? null : content.estimate.storyboards.usd / stillCount }
-    : content.estimate.frame;
+  const shotPlan = content.plan && "shots" in content.plan ? content.plan : null;
+  const stillCount = shotPlan ? shotPlan.shots.length * ("frameContinuity" in shotPlan && shotPlan.frameContinuity ? 2 : 1) : 1;
+  const displayedPlan = content.plan && "version" in content.plan && content.plan.version === 3 ? refreshGoalPlanV3(content.plan, document) : content.plan;
+  const v3Plan = displayedPlan && "version" in displayedPlan && displayedPlan.version === 3;
+  const still = v3Plan
+    ? goal.stage === "videos" || goal.stage === "assembly" ? content.estimate.videos : content.estimate.frame
+    : goal.stage === "videos"
+      ? { ...content.estimate.storyboards, usd: content.estimate.storyboards.usd === null ? null : content.estimate.storyboards.usd / stillCount }
+      : content.estimate.frame;
   return {
-    kind: "video-goal" as const, ...goal, ...content,
+    kind: "video-goal" as const, ...goal, ...content, plan: displayedPlan,
+    finish: goal.finish ?? null,
+    finalArtifactId: goal.finish?.finalArtifactId ?? null,
+    coldOpen: await coldOpenReview(engine, goal),
     estimate: { ...content.estimate, still },
     address: cell ? notebookGridTag(cell.slot) : null,
     assemblyStale: goalAssemblyStale(engine, goal),
@@ -174,7 +240,8 @@ export function completedGoalVideos(engine: Engine, goal: GoalRecord): string[] 
   if (goal.status === "running" || selected.size === 0) {
     for (const step of chainId ? getChainRun(engine, chainId)?.steps ?? [] : []) {
       const id = outputString(step.outputs, "asset_id") ?? outputString(step.outputs, "vid_asset_id");
-      if (step.tool === GOAL_VIDEO_TOOL && step.status === "completed" && id) selected.set(Number(/\d+$/u.exec(step.id)?.[0]) - 1, id);
+      const index = stageOutputIndex(step.id);
+      if (step.tool === GOAL_VIDEO_TOOL && step.status === "completed" && id && Number.isInteger(index) && index >= 0) selected.set(index, id);
     }
   }
   return [...selected.entries()].sort(([left], [right]) => left - right).map(([, id]) => id);

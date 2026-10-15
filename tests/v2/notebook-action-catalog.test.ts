@@ -347,11 +347,10 @@ describe("notebook action catalog", () => {
       }>;
     };
     const geminiCatalogAction = generationCatalog.actions.find((action) =>
-      action.tool === DEFAULT_VIDEO_TOOL);
+      action.tool === "generate_kie_gemini_omni_video");
     expect(geminiCatalogAction).toMatchObject({
       title: "Gemini Omni Video",
       providerLabel: "Kie",
-      defaultPriority: 0,
     });
     expect(geminiCatalogAction?.inputContract?.modes.map((mode) => mode.id))
       .toEqual(["t2v", "r2v", "v2v"]);
@@ -369,6 +368,7 @@ describe("notebook action catalog", () => {
     expect(seedance25Action).toMatchObject({
       title: "Seedance 2.5",
       providerLabel: "Kie",
+      defaultPriority: 0,
     });
     expect(seedance25Action?.inputContract?.modes.map((mode) => mode.id))
       .toEqual(["t2v", "i2v", "r2v"]);
@@ -394,7 +394,7 @@ describe("notebook action catalog", () => {
     ]);
     expect(seedance25Action?.controls?.find((control) =>
       control.name === "duration")).toMatchObject({
-      defaultValue: "5",
+      defaultValue: "13",
       options: ["-1", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30"],
     });
     expect(seedance25Action?.controls?.find((control) =>
@@ -404,7 +404,7 @@ describe("notebook action catalog", () => {
     });
     expect(seedance25Action?.controls?.find((control) =>
       control.name === "resolution")).toMatchObject({
-      defaultValue: "720p",
+      defaultValue: "1080p",
       options: ["480p", "720p", "1080p"],
     });
     const wan30PrimeAction = generationCatalog.actions.find((action) =>
@@ -542,15 +542,20 @@ describe("notebook action catalog", () => {
       tool: string;
     };
     expect(generation.tool).toBe(DEFAULT_IMAGE_TOOL);
-    expect(DEFAULT_IMAGE_TOOL).toBe("generate_kie_gpt_image_2_5_sunburst_image");
+    expect(DEFAULT_IMAGE_TOOL).toBe("generate_kie_nano_banana_2_1_image");
     expect(resultJson(await invoke("preview_notebook_generation", {
       notebook_id: notebookId,
       cell_id: generation.id,
     }))).toMatchObject({
       tool: DEFAULT_IMAGE_TOOL,
       payload: {
-        model: "gpt-image-2-5-sunburst-text-to-image",
-        input: { prompt: "persisted prompt", resolution: "2K" },
+        model: "nano-banana-2-1",
+        input: {
+          prompt: "persisted prompt",
+          resolution: "2K",
+          aspect_ratio: "16:9",
+          output_format: "jpg",
+        },
       },
     });
 
@@ -655,11 +660,14 @@ describe("notebook action catalog", () => {
       tool: DEFAULT_VIDEO_TOOL,
       provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
       payload: {
-        model: "gemini-omni-video",
+        model: "bytedance/seedance-2-5",
         input: {
           prompt: "A moonlit garden in motion",
-          duration: "6",
+          duration: 6,
           aspect_ratio: "9:16",
+          resolution: "1080p",
+          generate_audio: true,
+          output_format: "mp4",
         },
       },
     });

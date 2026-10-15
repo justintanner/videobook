@@ -6,7 +6,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { nextHorizontalSlotFrom, notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { slotRight } from "../notebook-placement.js";
-import type { PostDefinition, PostPlatform, PostRuntime, PostView } from "./post-contract.js";
+import type { PostDefinition, PostDelivery, PostPlatform, PostRuntime, PostView } from "./post-contract.js";
 
 const key = (id: string) => `application.post.v1.${id}`;
 
@@ -113,7 +113,7 @@ async function freezeSource(engine: Engine, source: NotebookCell): Promise<NonNu
 }
 
 export async function createPost(engine: Engine, args: {
-  notebookId: string; sourceCellId?: string; platform?: PostPlatform; caption?: string; credits?: string; account?: string; notes?: string;
+  notebookId: string; sourceCellId?: string; platform?: PostPlatform; delivery?: PostDelivery; caption?: string; credits?: string; account?: string; notes?: string;
 }): Promise<PostView> {
   let createdId = "";
   await withNotebookMutation(args.notebookId, async () => {
@@ -123,8 +123,10 @@ export async function createPost(engine: Engine, args: {
     const source = args.sourceCellId ? notebook.cells.find((cell) => cell.id === args.sourceCellId && cell.type !== "post") : undefined;
     if (args.sourceCellId && !source) throw new Error("Source cell not found");
     const frozen = source ? await freezeSource(engine, source) : null;
+    const platform = args.platform ?? "tiktok";
     const definition: PostDefinition = {
-      version: 1, platform: args.platform ?? "x", caption: args.caption ?? "", credits: args.credits ?? "", account: args.account ?? "", notes: args.notes ?? "",
+      version: 1, platform, caption: args.caption ?? "", credits: args.credits ?? "", account: args.account ?? "", notes: args.notes ?? "",
+      ...(platform === "tiktok" ? { delivery: args.delivery ?? "icloud" } : {}),
       createdAt: new Date().toISOString(), source: frozen, lineage: source ? captureLineage(notebook, source) : [],
     };
     const cell = engine.notebooks.createCell({

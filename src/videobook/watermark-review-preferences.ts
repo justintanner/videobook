@@ -1,3 +1,4 @@
+import { LIGHTNING_WATERMARK_PROFILE, watermarkWindowsFor } from '../../server/src/lightning-defaults'
 import { isWatermarkPlatform, WATERMARK_PLATFORMS } from '../../server/src/watermark-platform'
 import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { WatermarkReviewPatch } from '../components/videobook/confirm/bodies/WatermarkBody'
@@ -102,14 +103,50 @@ export function fitWatermarkReviewTiming(
   return fitted
 }
 
+function seedFreshTikTokReview(
+  preferences: WatermarkReviewPreferences,
+  initial: WatermarkReviewPatch,
+  duration: number | null,
+): WatermarkReviewPreferences {
+  const profile = LIGHTNING_WATERMARK_PROFILE
+  const windows = duration && duration > 0 ? watermarkWindowsFor(profile, duration) : null
+  const seeded: WatermarkReviewPreferences = { ...preferences }
+  const absent = (key: keyof WatermarkReviewPatch & keyof WatermarkReviewPreferences) =>
+    preferences[key] === undefined && initial[key] === undefined
+  if (absent('position')) seeded.position = 'bottom-right'
+  if (absent('handleVerticalPercent')) seeded.handleVerticalPercent = profile.handleVerticalPercent
+  if (absent('handlePadding')) seeded.handlePadding = profile.handlePaddingX
+  if (absent('handlePaddingY')) seeded.handlePaddingY = profile.handlePaddingY
+  if (absent('handleRounding')) seeded.handleRounding = profile.handleRounding
+  if (absent('qrOpacity')) seeded.qrOpacity = profile.qrOpacity
+  if (absent('handleOpacity')) seeded.handleOpacity = profile.handleOpacity
+  if (absent('fadeSeconds')) seeded.fadeSeconds = profile.fadeSeconds
+  if (absent('includePlatformIcon')) seeded.includePlatformIcon = profile.includePlatformIcon
+  if (absent('includeHandleBorder')) seeded.includeHandleBorder = profile.includeHandleBorder
+  if (absent('handlePlacement')) seeded.handlePlacement = profile.handlePlacement
+  if (absent('url')) seeded.url = profile.profileUrl
+  if (windows && absent('qrStartSeconds') && absent('qrEndSeconds')) {
+    seeded.qrStartSeconds = windows.qrStartSeconds
+    seeded.qrEndSeconds = windows.qrEndSeconds
+  }
+  if (windows && absent('handleStartSeconds') && absent('handleEndSeconds')) {
+    seeded.handleStartSeconds = windows.handleStartSeconds
+    seeded.handleEndSeconds = windows.handleEndSeconds
+  }
+  return seeded
+}
+
 export function resolveWatermarkReviewInputs(
   preferences: WatermarkReviewPreferences,
   initial: WatermarkReviewPatch,
   duration: number | null,
 ): WatermarkReviewPreferences & { platform: WatermarkPlatform } {
-  const platform = initial.platform ?? preferences.platform ?? 'x'
+  const platform = initial.platform ?? preferences.platform ?? 'tiktok'
+  const base = platform === 'tiktok'
+    ? seedFreshTikTokReview(preferences, initial, duration)
+    : preferences
   return {
-    ...fitWatermarkReviewTiming(preferences, duration),
+    ...fitWatermarkReviewTiming(base, duration),
     ...parsePreferences(initial),
     platform,
     handles: initial.handle === undefined

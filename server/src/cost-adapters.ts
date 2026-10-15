@@ -1,4 +1,10 @@
 import { GPT_IMAGE_2_5_MODELS } from "./gpt-image-2-5.js";
+import {
+  LIGHTNING_SCENE_RESOLUTION,
+  LIGHTNING_VIDEO_DURATION_SECONDS,
+  LIGHTNING_VIDEO_GENERATE_AUDIO,
+  LIGHTNING_VIDEO_RESOLUTION,
+} from "./lightning-defaults.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "./image-edit-models.js";
 import type { EstimateRequest } from "@apicity/cost";
 import {
@@ -17,7 +23,6 @@ import {
   Seedance2FastInputSchema,
   Seedance2InputSchema,
   Seedance2MiniInputSchema,
-  Seedance25InputSchema,
   ViduQ4ImageToVideoRequestSchema,
 } from "@apicity/kie/zod";
 
@@ -49,9 +54,6 @@ const SEEDANCE2_DURATION = apicityDefault<number>(Seedance2InputSchema.shape.dur
 const SEEDANCE2_FAST_DURATION = apicityDefault<number>(Seedance2FastInputSchema.shape.duration, "Seedance 2 Fast duration");
 const SEEDANCE2_MINI_DURATION = apicityDefault<number>(Seedance2MiniInputSchema.shape.duration, "Seedance 2 Mini duration");
 const SEEDANCE2_MINI_RESOLUTION = apicityDefault<string>(Seedance2MiniInputSchema.shape.resolution, "Seedance 2 Mini resolution");
-const SEEDANCE25_DURATION = apicityDefault<number>(Seedance25InputSchema.shape.duration, "Seedance 2.5 duration");
-const SEEDANCE25_RESOLUTION = apicityDefault<string>(Seedance25InputSchema.shape.resolution, "Seedance 2.5 resolution");
-const SEEDANCE25_GENERATE_AUDIO = apicityDefault<boolean>(Seedance25InputSchema.shape.generate_audio, "Seedance 2.5 generate_audio");
 const GROK_I2V_DURATION = apicityDefault<number>(GrokImageToVideoRequestSchema.shape.input.shape.duration, "Grok image-to-video duration");
 const GROK_I2V_RESOLUTION = apicityDefault<string>(GrokImageToVideoRequestSchema.shape.input.shape.resolution, "Grok image-to-video resolution");
 const KLING_TURBO_DURATION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration, "Kling Turbo duration");
@@ -115,7 +117,8 @@ const kieSeedance = (
 
 function seedance25Duration(input: Record<string, unknown>): number {
   const value = num(input.duration) ?? num(input.seconds);
-  return value !== undefined && value > 0 ? value : SEEDANCE25_DURATION;
+  if (value === undefined) return LIGHTNING_VIDEO_DURATION_SECONDS;
+  return value > 0 ? value : 5;
 }
 
 const kieSeedance25: CostAdapter = (input) => ({
@@ -123,11 +126,11 @@ const kieSeedance25: CostAdapter = (input) => ({
   payload: {
     model: "bytedance/seedance-2-5",
     input: {
-      resolution: str(input.resolution) || SEEDANCE25_RESOLUTION,
+      resolution: str(input.resolution) || LIGHTNING_VIDEO_RESOLUTION,
       duration: seedance25Duration(input),
       generate_audio: typeof input.generate_audio === "boolean"
         ? input.generate_audio
-        : SEEDANCE25_GENERATE_AUDIO,
+        : LIGHTNING_VIDEO_GENERATE_AUDIO,
     },
   },
 });
@@ -444,7 +447,7 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
 
   // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
   generate_kie_nano_banana_pro_text_to_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
-  generate_kie_nano_banana_2_1_image: kieTieredImage("nano-banana-2-1", "1K"),
+  generate_kie_nano_banana_2_1_image: kieTieredImage("nano-banana-2-1", LIGHTNING_SCENE_RESOLUTION),
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),

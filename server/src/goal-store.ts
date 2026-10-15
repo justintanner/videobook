@@ -1,6 +1,7 @@
+import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
+import { goalMediaRefSchema, goalPlanSchema, goalPlanV3Schema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalMediaRef, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
 import type { GoalStyleSelection } from "./goal-styles.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
@@ -37,9 +38,22 @@ export type GoalStageRun = {
 
 export type GoalAssembly = { sequenceId: string; startFrame: number; durationFrames: number; clipSnapshot?: string; artifactIds?: string[] };
 export type GoalCombinedVideo = { artifactId: string; cellId: string; jobId: number | null; status: "running" | "completed" | "failed"; error: string | null; sourceArtifactIds?: string[] };
+export type GoalFinish = {
+  status: "review" | "running" | "completed" | "failed" | "cancelled";
+  sourceArtifactId: string;
+  finalArtifactId: string | null;
+  error: string | null;
+  sourceObjectHash?: string | null;
+  startSeconds?: number | null;
+  endSeconds?: number | null;
+  identity?: string | null;
+  coldOpenArtifactId?: string | null;
+  coldOpenRequestId?: string | null;
+  jobId?: number | null;
+};
 
 export type GoalRecord = {
-  planVersion: 1 | 2;
+  planVersion: 1 | 2 | 3;
   stage: GoalStage;
   stages: Partial<Record<GoalGenerationStage, GoalStageRun>>;
   goalId: string;
@@ -54,9 +68,11 @@ export type GoalRecord = {
   trackId: string | null;
   assembly: GoalAssembly | null;
   combined?: GoalCombinedVideo;
+  finish?: GoalFinish | null;
   resumeStage?: GoalStage | null;
   resumeStatus?: "review" | "completed" | null;
   resumeOutputs?: GoalStageOutput[] | null;
+  resumeFinish?: GoalFinish | null;
   error: string | null;
   dismissedAt: string | null;
   createdAt: string;
@@ -66,6 +82,7 @@ export type GoalRecord = {
 export type GoalContent = {
   brief: string;
   characters: GoalCharacter[];
+  media?: GoalMediaRef[];
   revision: number;
   plan: GoalDisplayPlan | null;
   requestedStyle?: GoalStyleSelection;
@@ -132,13 +149,24 @@ function charactersFrom(value: unknown): GoalCharacter[] {
     && ["artifactId", "cellId", "address", "label"].every(key => typeof (entry as Record<string, unknown>)[key] === "string"));
 }
 
+function mediaFrom(value: unknown): GoalMediaRef[] {
+  const parsed = z.array(z.unknown()).safeParse(value);
+  if (!parsed.success) return [];
+  return parsed.data.flatMap(entry => {
+    const media = goalMediaRefSchema.safeParse(entry);
+    return media.success ? [media.data] : [];
+  });
+}
+
 export function goalContent(cell: NotebookCell): GoalContent {
   const inputs = cell.inputs ?? {};
-  const plan = goalPlanSchema.or(legacyGoalPlanSchema).safeParse(inputs.plan);
+  const plan = z.union([goalPlanV3Schema, goalPlanSchema, legacyGoalPlanSchema]).safeParse(inputs.plan);
   const requestedStyle = goalStyleSchema.safeParse(inputs.requestedStyle);
+  const media = mediaFrom(inputs.media);
   return {
     brief: cell.prompt ?? "",
     characters: charactersFrom(inputs.characters),
+    ...(media.length > 0 ? { media } : {}),
     revision: typeof inputs.revision === "number" && Number.isInteger(inputs.revision) ? inputs.revision : 0,
     plan: plan.success ? plan.data : null,
     ...(!plan.success && requestedStyle.success ? { requestedStyle: requestedStyle.data } : {}),
@@ -148,6 +176,7 @@ export function goalContent(cell: NotebookCell): GoalContent {
 
 function goalCellInputs(goalId: string, content: GoalContent): Record<string, unknown> {
   return { goalId, revision: content.revision, plan: content.plan, characters: content.characters, estimate: content.estimate,
+    ...(content.media ? { media: content.media } : {}),
     ...(!content.plan && content.requestedStyle ? { requestedStyle: content.requestedStyle } : {}),
   };
 }

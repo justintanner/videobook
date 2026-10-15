@@ -147,22 +147,25 @@ describe('composition endpoints over HTTP MCP', () => {
   it('normalizes a padded handle before rendering and storing a watermark card', async () => {
     const card = await call<{ asset_id: string; handle: string; url: string }>('create_watermark_card', { handle: '  @cat_test  ', save_default: true })
     expect(card.handle).toBe('cat_test')
-    expect(card.url).toBe('https://x.com/cat_test')
+    expect(card.url).toBe('https://www.tiktok.com/@cat_test')
     expect(await sharp(await file(card.asset_id, 'original.png')).metadata()).toMatchObject({ format: 'png', hasAlpha: true })
   })
 
   it('reads the correct book watermark preferences after restarting the server', async () => {
-    await call('create_watermark_card', { handle: 'cat_test', save_default: true })
+    await call('create_watermark_card', { platform: 'x', handle: 'cat_test', save_default: true })
     await call('create_watermark_card', { platform: 'tiktok', handle: 'cat.tiktok', save_default: true })
-    expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
+    expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'] })
+    expect(await call('get_watermark_config', { platform: 'x' })).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
     expect(await call('get_watermark_config', { platform: 'tiktok' })).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'], authenticatedHandle: null })
     const other = (await callTool<{ bookId: string }>(client, 'create_book', { name: 'Other book' })).bookId
     expect(await call('get_watermark_config', { book_id: other })).toMatchObject({ savedHandle: null, recent: [] })
+    expect(await call('get_watermark_config', { book_id: other, platform: 'x' })).toMatchObject({ savedHandle: null, recent: [] })
     expect(await call('get_watermark_config', { book_id: other, platform: 'tiktok' })).toMatchObject({ savedHandle: null, recent: [] })
     await client.close()
     await stopServer(server)
     await connect()
-    expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
+    expect(await call('get_watermark_config')).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'] })
+    expect(await call('get_watermark_config', { platform: 'x' })).toMatchObject({ savedHandle: 'cat_test', recent: ['cat_test'] })
     expect(await call('get_watermark_config', { platform: 'tiktok' })).toMatchObject({ savedHandle: 'cat.tiktok', recent: ['cat.tiktok'], authenticatedHandle: null })
   })
 

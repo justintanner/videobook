@@ -1,5 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
+import { LIGHTNING_POST_TAGS } from "../lightning-defaults.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest, type ResponsesFn } from "../openai-intelligence.js";
 import { readAssetTranscript } from "../transcript-projection.js";
 import { isAnalyzableVideo, VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
@@ -191,9 +192,13 @@ export function buildPostCopyPrompt(context: PostCopyContext, request: PostCopyR
     `- Write the caption in ${language}${request.language === "th" ? ", natural and conversational, the way a Thai creator writes" : ""}.`,
     "- Ground every claim in the video analysis, transcript and prompts below. Never invent names, places, events or facts that are not there.",
     "- By default the caption is a short title of one or two words plus one or two emoji, like \"Golden hour 🌅✨\". Write longer copy only when the instruction asks for it.",
+    "- The title describes this clip. Do not reuse another video's caption.",
     "- Keep the voice human; no clichés like \"you won't believe\".",
     "- The caption holds no hashtags. Put hashtags in tags, without the # sign and without spaces.",
     `- Return at most ${maxTags} tags. Tags may be ${language}${request.language === "en" ? "" : " or English"} words that people on ${platform} search for.`,
+    request.platform === "tiktok" && request.tags === undefined
+      ? "- Include the tags fyp and bkk unless the creator already supplied tags."
+      : "",
     `- The caption plus its tags must stay under ${limit} characters.`,
     instruction ? `\nINSTRUCTION FROM THE CREATOR: ${instruction}` : "",
     rewriteSection(request),
@@ -214,7 +219,12 @@ export function parsePostCopy(raw: string, request: PostCopyRequest): Pick<PostC
   const record = parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
   const caption = text(record.caption);
   if (!caption) throw new Error("Astra returned an empty caption.");
-  return { caption, tags: normalizePostTags(texts(record.tags), PLATFORM_TAG_LIMITS[request.platform]) };
+  const limit = PLATFORM_TAG_LIMITS[request.platform];
+  const parsedTags = normalizePostTags(texts(record.tags), limit);
+  const tags = request.platform === "tiktok" && request.tags === undefined
+    ? normalizePostTags([...LIGHTNING_POST_TAGS, ...parsedTags], limit)
+    : parsedTags;
+  return { caption, tags };
 }
 
 export function postCopyResponses(apiKey: string | undefined, options: { baseURL?: string; retries?: number } = {}): ResponsesFn {

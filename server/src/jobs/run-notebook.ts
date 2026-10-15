@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import {
+  LIGHTNING_SCENE_SCHEMA_DEFAULTS,
+  LIGHTNING_SCENE_TOOL,
+  LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS,
+  LIGHTNING_VIDEO_TOOL,
+  payloadPrompt,
+  submittedGenerationPrompt,
+} from "../lightning-defaults.js";
 import { seedance25FrameAspectRatio } from "../seedance25.js";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import { z } from "zod";
@@ -1148,6 +1156,16 @@ function modelArgsWithMentions(
   }
   if ("driving_audio_ref" in definition.schema && audioReferences[0]) {
     args.driving_audio_ref = audioReferences[0];
+  }
+  const omittedDefaults = definition.name === LIGHTNING_VIDEO_TOOL
+    ? LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS
+    : definition.name === LIGHTNING_SCENE_TOOL
+      ? LIGHTNING_SCENE_SCHEMA_DEFAULTS
+      : null;
+  if (omittedDefaults) {
+    for (const [key, value] of Object.entries(omittedDefaults)) {
+      if (args[key] === undefined) args[key] = value;
+    }
   }
   const aspectRatio = seedance25FrameAspectRatio(definition.name, args);
   if (aspectRatio) args.aspect_ratio = aspectRatio;
@@ -2670,7 +2688,7 @@ export async function runNotebookCell(
                 delete nextInputs.providerArtifactId;
                 if (
                   typeof output.cellInputs?.resolvedPrompt === "string"
-                  && !nextInputs.resolvedPrompt
+                  && output.cellInputs.resolvedPrompt
                 ) {
                   nextInputs.resolvedPrompt = output.cellInputs.resolvedPrompt;
                 }
@@ -3381,19 +3399,11 @@ function dispatchedPromptFor(
   cell: NotebookCell,
   dispatchedPayload: Record<string, unknown> | null,
 ): string {
-  if (
-    typeof cell.inputs?.resolvedPrompt === "string"
-    && cell.inputs.resolvedPrompt
-  ) {
-    return cell.inputs.resolvedPrompt;
-  }
-  const payloadInput = dispatchedPayload?.input;
-  const payloadPrompt = payloadInput
-    && typeof payloadInput === "object"
-    && !Array.isArray(payloadInput)
-    ? (payloadInput as Record<string, unknown>).prompt
-    : dispatchedPayload?.prompt;
-  return typeof payloadPrompt === "string" ? payloadPrompt : "";
+  return submittedGenerationPrompt({
+    dispatchedPrompt: payloadPrompt(dispatchedPayload),
+    cellPrompt: cell.prompt,
+    resolvedPrompt: cell.inputs?.resolvedPrompt,
+  });
 }
 
 async function finishAwaitingNotebookCell(
@@ -3549,7 +3559,7 @@ async function finishAwaitingNotebookCell(
             else {
               delete nextInputs.state;
               delete nextInputs.providerArtifactId;
-              if (resolvedPrompt && !nextInputs.resolvedPrompt) {
+              if (resolvedPrompt) {
                 nextInputs.resolvedPrompt = resolvedPrompt;
               }
             }

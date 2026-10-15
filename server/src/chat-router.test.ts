@@ -160,7 +160,7 @@ describe("chat routing catalog", () => {
       expect.arrayContaining(["prompt", "duration", "aspect_ratio", "resolution"]),
     );
     expect(getRoutableTool(tools, "generate_image")).toMatchObject({
-      actualTool: "generate_kie_gpt_image_2_5_sunburst_image",
+      actualTool: "generate_kie_nano_banana_2_1_image",
       category: "generation",
       effect: "generation",
     });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { composerGoal, goalCanRetry, goalGenerationMarks, goalOutputEstimate, goalPlanFromInputs, goalPlansEqual, goalProgress, goalStatusLine, goalStillStale, goalStillVersions, goalStopLabel, goalTileView, goalWake, goalWakeKey, type GoalSnapshot } from '../../src/videobook/goals'
 import type { GoalGenerationStage, GoalPlan } from '../../server/src/goal-plan'
+import type { GoalPlanV3 } from '../../server/src/goal-plan-v3'
 import { goalBriefStyle } from '../../server/src/goal-styles'
 
 type Step = GoalSnapshot['steps'][number]
@@ -16,7 +17,8 @@ function goal(extra: Partial<GoalSnapshot> = {}): GoalSnapshot {
   return {
     kind: 'video-goal', assemblyStale: false, planVersion: 2, stage: 'frame', stages: {}, goalId: 'goal-1', bookId: 'book', notebookId: 'notebook', cellId: 'goal-tile', address: '@a3', requestId: 'request',
     brief: '@a1 @a2 ride through the rain, three 10s clips', characters: [], revision: 1, plan, estimate, status: 'review', error: null, chainId: null, planningJobId: null,
-    clipIds: [], trackId: null, assembly: null, dismissedAt: null, createdAt: '2026-10-07T10:00:00Z', updatedAt: '2026-10-07T10:00:00Z', steps: [], ...extra,
+    clipIds: [], trackId: null, assembly: null, dismissedAt: null, createdAt: '2026-10-07T10:00:00Z', updatedAt: '2026-10-07T10:00:00Z', steps: [],
+    finish: null, finalArtifactId: null, coldOpen: null, ...extra,
   }
 }
 function run(stage: GoalGenerationStage, statuses: Step['status'][]): Stage {
@@ -97,6 +99,41 @@ describe('staged goal model', () => {
     expect(goalStatusLine(goal({ status: 'failed', plan: null })).text).toBe('Planning failed')
     expect(goalStatusLine(goal({ status: 'failed', planVersion: 1 })).action).toBeNull()
     expect(goalStatusLine(goal({ status: 'cancelled' })).text).toBe('Stopped')
+  })
+
+  it('names scene, video and finish reviews for a scene and video goal', () => {
+    const ref = { kind: 'image' as const, artifactId: 'image-1', cellId: 'cell-1', address: '@a1', label: 'Skater', objectHash: 'hash-1', slot: '@image1' }
+    const modern: GoalPlanV3 = {
+      version: 3, title: 'Morning market', aspectRatio: '16:9',
+      scene: { prompt: 'Skate past the fruit stalls', tool: 'generate_kie_nano_banana_2_1_image', model: 'nano_banana_2_1', aspectRatio: '16:9', resolution: '2K', outputFormat: 'jpg', imageRefs: [ref] },
+      video: { prompt: 'The skater rolls through the stalls', tool: 'generate_kie_seedance_2_5_video', aspectRatio: '16:9', resolution: '1080p', durationSeconds: 13, generateAudio: true, outputFormat: 'mp4', imageRefs: [ref], videoRefs: [] },
+      references: [ref], sampledFrames: [],
+      finish: { suggestedColdOpenSeconds: 2.3, watermark: { platform: 'tiktok', handle: 'jtbkk', profileUrl: 'https://www.tiktok.com/@jtbkk', mode: 'burn', handleEndSeconds: 3, qrLeadSeconds: 2.3, handleOpacity: 0.28, qrOpacity: 0.37, fadeSeconds: 0.3 } },
+    }
+    const scene = goal({ planVersion: 3, plan: modern, estimate: { ...estimate, frame: { usd: 0.04, warnings: [] }, videos: { usd: 1.2, warnings: [] } } })
+    expect(goalStatusLine(scene).text).toBe('Review scene · est. $0.04')
+    expect(goalStatusLine({ ...scene, stage: 'videos' }).text).toBe('Review video · est. $1.20')
+    const finish = { status: 'review' as const, sourceArtifactId: 'video-1', finalArtifactId: null, error: null }
+    const coldOpen = { startSeconds: 0, endSeconds: 2.3, durationSeconds: 13, sourceObjectHash: 'video-hash', analysisUsd: 0 as const }
+    expect(goalStatusLine({ ...scene, stage: 'videos', finish, coldOpen }).text).toBe('Review finish · analysis $0.00')
+    expect(goalStatusLine({ ...scene, stage: 'videos', finish: { ...finish, status: 'running' }, coldOpen })).toMatchObject({ text: 'Finishing the cold open and watermark', short: 'Finishing', tone: 'live', busy: true })
+    expect(goalStatusLine({ ...scene, stage: 'videos', finish: { ...finish, status: 'failed', error: 'Watermark failed' }, coldOpen }).text).toBe('Finishing failed')
+    expect(goalTileView({ ...scene, finish: { ...finish, status: 'running' } }, null, undefined).chip).toEqual({ label: 'Finishing', tone: 'live' })
+    expect(goalCanRetry({ ...scene, status: 'failed', chainId: 'scene-chain' })).toBe(true)
+    expect(goalCanRetry(scene)).toBe(false)
+    expect(goalCanRetry(goal({ planVersion: 1, status: 'failed' }))).toBe(false)
+    const sceneStep: Step = { id: 'scene', chainId: 'scene-chain', status: 'running', error: null, artifactId: null, cellId: 'producer', address: '@c1', outputCellId: null, startedAt: '2026-10-07T10:01:00Z' }
+    const runningScene = goal({
+      ...scene, status: 'running', chainId: 'scene-chain', steps: [sceneStep],
+      stages: { frame: { chainId: 'scene-chain', revision: 1, approvedAt: '2026-10-07T10:00:00Z', previousChainIds: [], shotIndexes: [0], steps: [sceneStep], allSteps: [sceneStep], outputs: [] } },
+    })
+    expect(goalStatusLine(runningScene, 12).text).toBe('Scene · Generating 0:12')
+    const videoStep: Step = { id: 'video', chainId: 'video-chain', status: 'running', error: null, artifactId: null, cellId: null, address: null, outputCellId: null, startedAt: '2026-10-07T10:01:00Z' }
+    const revised = goal({
+      ...scene, status: 'running', stage: 'videos', chainId: 'video-chain', steps: [videoStep],
+      stages: { videos: { chainId: 'video-chain', revision: 1, approvedAt: '2026-10-07T10:00:00Z', previousChainIds: [], shotIndexes: [0], steps: [videoStep], allSteps: [videoStep], outputs: [], attempts: [{ stage: 'videos', index: 0, chainId: 'video-chain', stepId: 'video', artifactId: null, cellId: null, basePrompt: modern.video.prompt, feedback: 'Closer', parentArtifactId: null, frameArtifactId: null, createdAt: '2026-10-07T10:00:00Z' }] } },
+    })
+    expect(goalStatusLine(revised).text).toBe('Revising video · Submitting')
   })
 
   it('wakes only on stage and item progress, without waking on clocks or unchanged polls', () => {
