@@ -96,7 +96,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "cancel_legacy_migration", "list_jobs", "cancel_job", "retry_job",
     "storage_status", "storage_sync",
   ],
-  Publishing: ["create_post", "update_post", "get_post", "list_posts", "link_post", "upload_post_to_dropbox", "refresh_post_metrics", "record_post_metrics", "dropbox_connect_start", "dropbox_connect_status", "post", "verify_x_mentions", "x_connect_start", "x_connect_status"],
+  Publishing: ["create_post", "update_post", "get_post", "list_posts", "link_post", "upload_post_to_dropbox", "save_post_to_icloud", "refresh_post_metrics", "record_post_metrics", "dropbox_connect_start", "dropbox_connect_status", "icloud_status", "post", "verify_x_mentions", "x_connect_start", "x_connect_status"],
   Providers: [
     "check_kimi_coding_api", "list_chat_models", "provider_key_status", "set_env_secret",
     "list_elevenlabs_voices", "create_google_flow_voice", "list_google_flow_voices",

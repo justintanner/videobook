@@ -591,6 +591,7 @@ async function ensureBookReady(
 const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   "post_to_x",
   "post_dropbox",
+  "post_icloud",
   "post_prepare_x",
   "post_create",
   "post_update",

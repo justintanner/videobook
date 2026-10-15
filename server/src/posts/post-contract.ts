@@ -42,6 +42,12 @@ export interface PostUploadFile {
   rev?: string;
 }
 
+export interface PostICloudFile {
+  path: string;
+  sha256: string;
+  size: number;
+}
+
 export interface PostRuntime {
   status: "draft" | "uploading" | "ready" | "scheduled" | "posting" | "posted" | "partially_posted" | "failed" | "needs_reconciliation";
   url?: string;
@@ -60,6 +66,7 @@ export interface PostRuntime {
   };
   x?: { tweetId: string; mediaId: string; replies: Array<{ tweet_id: string; tweet_url: string; media_ids: string[]; text: string | null; posted_at: string }>; followupError?: { reply_number: number; message: string } | null };
   dropbox?: { folder: string; video: PostUploadFile; caption: PostUploadFile; completedAt?: string };
+  icloud?: { folder: string; video?: PostICloudFile; caption?: PostICloudFile; completedAt?: string };
   metrics: PostMetricSnapshot[];
   nextMetricAt?: string | null;
   metricsError?: string | null;

@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (350)
+## MCP endpoints (352)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -214,6 +214,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_sequence_rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read saved watermark alias preferences for X or TikTok: { savedHandle, recent, authenticatedHandle }. The authenticated handle is available only for X. Used to pre-fill the chat watermark review.
+- `icloud_status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
 - `insert_timeline_slot` — Typed timelines cannot contain empty slots; assign an asset directly with assign_slot
 - `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
@@ -312,6 +313,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
 - `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
 - `run_notebook_cell` — Run one selected notebook cell using saved upstream media
+- `save_post_to_icloud` — Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_library_moments` — Federate a moment search across every current-schema book
@@ -361,7 +363,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (420; 148 dedicated command routes)
+## Slash actions (422; 148 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -597,6 +599,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
+- `/icloud-status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.; MCP: `icloud_status`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
@@ -714,6 +717,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
 - `/run-notebook-cell` — Run one selected notebook cell using saved upstream media; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
+- `/save-post-to-icloud` — Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.; MCP: `save_post_to_icloud`
 - `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
 - `/scene-new` — Create a reusable scene entity; MCP: `create_scene_entity`

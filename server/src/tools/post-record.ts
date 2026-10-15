@@ -8,6 +8,7 @@ import { POST_METRIC_NAMES, POST_PLATFORMS } from "../posts/post-contract.js";
 import type { PostMetrics, PostPlatform, PostView } from "../posts/post-contract.js";
 import { recordPostMetrics } from "../posts/post-metrics.js";
 import { dropboxStatus, startDropboxConnect } from "../posts/dropbox-auth.js";
+import { icloudStatus } from "../posts/icloud-drive.js";
 
 const book = { book_id: z.string() };
 const target = { ...book, post_cell_id: z.string().uuid() };
@@ -38,12 +39,14 @@ export function postRecordDefs(engine: Engine): ToolDef[] {
       return post;
     }),
     define("upload_post_to_dropbox", "Upload the frozen Post media and caption.txt to a private Dropbox folder. A caption saves to the Post first and freezes with the first delivery. Interrupted uploads resume without replacing unrelated files.", { ...target, folder: z.string().optional(), caption: fields.caption }, async (args) => queue.enqueueAndWait(`post-dropbox-${args.post_cell_id}-${randomUUID()}`, { type: "post_dropbox", bookId: String(args.book_id), postCellId: String(args.post_cell_id), folder: args.folder, caption: args.caption })),
+    define("save_post_to_icloud", "Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.", { ...target, folder: z.string().max(500).optional(), caption: fields.caption }, async (args) => queue.enqueueAndWait(`post-icloud-${args.post_cell_id}-${randomUUID()}`, { type: "post_icloud", bookId: String(args.book_id), postCellId: String(args.post_cell_id), folder: args.folder, caption: args.caption })),
     define("refresh_post_metrics", "Fetch a current X metrics observation. Non-X publications use record_post_metrics. Unknown values remain unknown.", target, async (args) => queue.enqueueAndWait(`post-metrics-${args.post_cell_id}-${randomUUID()}`, { type: "post_metrics", bookId: String(args.book_id), postCellId: String(args.post_cell_id) })),
     define("record_post_metrics", "Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.", { ...target, observed_at: z.string().datetime(), values: z.partialRecord(z.enum(POST_METRIC_NAMES), z.number().int().nonnegative().nullable()).refine((value) => Object.keys(value).length > 0), note: z.string().optional() }, async (args) => {
       recordPostMetrics(engine, String(args.post_cell_id), { source: "manual", observedAt: String(args.observed_at), values: args.values as PostMetrics, note: args.note as string | undefined });
       return getPost(engine, String(args.post_cell_id));
     }),
     define("dropbox_connect_start", "Connect Dropbox with offline OAuth access; returns an authorization URL. Credentials stay in application state.", {}, () => startDropboxConnect(), "global"),
+    define("icloud_status", "Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.", {}, () => icloudStatus(), "global"),
     define("dropbox_connect_status", "Read Dropbox connection status without exposing credentials.", {}, () => dropboxStatus(), "global"),
   ];
 }

@@ -121,7 +121,7 @@ function scopeForSchema(schema: ActionInputSchema): WorkspaceAction["scope"] {
 
 function confirmationForTool(tool: ToolDef): WorkspaceAction["confirmation"] {
   if (toolSpendsMoney(tool.name)) return "generation";
-  if (["post", "storage_sync", "archive_clip"].includes(tool.name)) return "external";
+  if (["post", "storage_sync", "archive_clip", "save_post_to_icloud"].includes(tool.name)) return "external";
   if (tool.name === "enqueue_sequence_export" || tool.annotations?.destructiveHint || /^(?:delete_|forget_|remove_|clean_failed|restore_)/u.test(tool.name)) {
     return "destructive";
   }

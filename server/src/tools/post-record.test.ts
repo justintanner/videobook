@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -10,6 +11,8 @@ import { createDropbox } from "@apicity/dropbox";
 import { createX } from "@apicity/x";
 import { createPost, freezePostOutbound, getPost, linkPost, listPosts, migrateLegacyPosts, patchPostRuntime, readPostRuntime, updatePost } from "../posts/post-store.js";
 import { dropboxContentHash, uploadPostToDropbox } from "../posts/dropbox-upload.js";
+import { icloudStatus, savePostToICloud } from "../posts/icloud-drive.js";
+import { parseUbiquitousStates } from "../posts/icloud-status.js";
 import { nextPostMetricAt, recordPostMetrics, refreshPostMetrics } from "../posts/post-metrics.js";
 import { postRecordDefs } from "./post-record.js";
 import { z } from "zod";
@@ -225,6 +228,89 @@ describe("Post publication records", () => {
     await expect(uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Another caption" })).rejects.toThrow("frozen at its first delivery");
     await uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Edited in review" });
     expect(getPost(engine, post.id).runtime.dropbox?.completedAt).toBeTruthy();
+  });
+
+  describe("iCloud Drive delivery", () => {
+    let icloud: string;
+    let previous: string | undefined;
+
+    beforeEach(async () => {
+      icloud = await mkdtemp(join(tmpdir(), "post-icloud-"));
+      previous = process.env.VIDEOBOOK_ICLOUD_DIR;
+      process.env.VIDEOBOOK_ICLOUD_DIR = join(icloud, "Videobook");
+    });
+
+    afterEach(async () => {
+      if (previous === undefined) delete process.env.VIDEOBOOK_ICLOUD_DIR;
+      else process.env.VIDEOBOOK_ICLOUD_DIR = previous;
+      await rm(icloud, { recursive: true, force: true });
+    });
+
+    it("saves the clip and caption once, records them and never rewrites", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Caption", credits: "Credit" });
+      const saved = await savePostToICloud(engine, post.id);
+      const folder = `post-tests/post-${post.address.slice(1)}-${post.id.slice(-6)}`;
+      expect(saved.runtime.icloud?.folder).toBe(folder);
+      expect(saved.runtime.status).toBe("ready");
+      const clip = join(icloud, "Videobook", folder, "clip.mp4");
+      const caption = join(icloud, "Videobook", folder, "caption.txt");
+      expect((await readFile(clip)).toString()).toBe("original clip");
+      expect((await readFile(caption)).toString()).toBe("Caption\n\nCredit");
+      expect(saved.runtime.icloud).toMatchObject({ video: { path: `${folder}/clip.mp4`, size: 13, sha256: createHash("sha256").update("original clip").digest("hex") }, caption: { path: `${folder}/caption.txt`, size: 15 } });
+      expect(saved.runtime.icloud?.completedAt).toBeTruthy();
+      const before = [(await stat(clip)).mtimeMs, (await stat(caption)).mtimeMs];
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const repeated = await savePostToICloud(engine, post.id);
+      expect([(await stat(clip)).mtimeMs, (await stat(caption)).mtimeMs]).toEqual(before);
+      expect(repeated.runtime.icloud?.video).toEqual(saved.runtime.icloud?.video);
+    });
+
+    it("refuses to replace a different file already in the folder", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id });
+      await mkdir(join(icloud, "Videobook", "taken"), { recursive: true });
+      await writeFile(join(icloud, "Videobook", "taken", "clip.mp4"), "someone else's clip");
+      await expect(savePostToICloud(engine, post.id, { folder: "taken" })).rejects.toThrow("iCloud folder already has a different clip.mp4. Choose another folder.");
+      expect((await readFile(join(icloud, "Videobook", "taken", "clip.mp4"))).toString()).toBe("someone else's clip");
+      expect(getPost(engine, post.id).runtime.status).toBe("failed");
+      expect((await savePostToICloud(engine, post.id, { folder: "fresh/" })).runtime.icloud?.folder).toBe("fresh");
+    });
+
+    it("saves an edited caption before the first delivery and refuses to change it afterwards", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Draft caption" });
+      await savePostToICloud(engine, post.id, { folder: "skate", caption: "Edited in review" });
+      expect(getPost(engine, post.id).definition.caption).toBe("Edited in review");
+      expect((await readFile(join(icloud, "Videobook", "skate", "caption.txt"))).toString()).toBe("Edited in review");
+      await expect(savePostToICloud(engine, post.id, { folder: "skate", caption: "Another caption" })).rejects.toThrow("frozen at its first delivery");
+    });
+
+    it("rejects folders outside the Videobook root", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Draft" });
+      for (const folder of ["", "  ", "/Users/me", "../escape", "a/../b", "a//b", "bad\u0007name"]) {
+        await expect(savePostToICloud(engine, post.id, { folder, caption: "Changed" })).rejects.toThrow(/iCloud folder|inside iCloud Drive/u);
+      }
+      expect(getPost(engine, post.id).runtime.outbound).toBeUndefined();
+      expect(getPost(engine, post.id).definition.caption).toBe("Draft");
+    });
+
+    it("reports availability for the configured root without claiming it is shared", async () => {
+      expect(await icloudStatus()).toEqual({ available: true, root: join(icloud, "Videobook"), shared: null, role: null, reason: null });
+      process.env.VIDEOBOOK_ICLOUD_DIR = join(icloud, "missing", "Videobook");
+      expect(await icloudStatus()).toMatchObject({ available: false, shared: null });
+    });
+
+    it("parses JXA ubiquitous item output", () => {
+      const parsed = parseUbiquitousStates(JSON.stringify([
+        { path: "/a", exists: true, ubiquitous: true, shared: true, role: "NSURLUbiquitousSharedItemRoleOwner", uploaded: false, uploading: true, error: null },
+        { path: "/b", exists: true, ubiquitous: true, shared: null, role: null, uploaded: 1, uploading: 0, error: "Quota exceeded" },
+        { path: "/tmp", exists: true, ubiquitous: null, shared: null, role: null, uploaded: null, uploading: null, error: null },
+      ]));
+      expect(parsed).toEqual([
+        { path: "/a", exists: true, ubiquitous: true, shared: true, role: "owner", uploaded: false, uploading: true, error: null },
+        { path: "/b", exists: true, ubiquitous: true, shared: false, role: null, uploaded: true, uploading: false, error: "Quota exceeded" },
+        { path: "/tmp", exists: true, ubiquitous: null, shared: null, role: null, uploaded: null, uploading: null, error: null },
+      ]);
+      expect(() => parseUbiquitousStates("{}")).toThrow();
+    });
   });
 
   it("collects available X metrics and labels shared media views", async () => {
