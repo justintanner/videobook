@@ -26,7 +26,7 @@ export function patchPostRuntime(engine: Engine, id: string, patch: Partial<Post
   return next;
 }
 
-export function postDefinition(cell: NotebookCell): PostDefinition {
+function postDefinition(cell: NotebookCell): PostDefinition {
   const value = cell.inputs?.post as PostDefinition | undefined;
   if (!value || value.version !== 1) throw new Error("Post needs migration before editing");
   return value;
@@ -199,7 +199,7 @@ export async function freezePostOutbound(engine: Engine, id: string, media?: { b
   return outbound;
 }
 
-export function normalizePostUrl(value: string, platform: PostPlatform): string {
+function normalizePostUrl(value: string, platform: PostPlatform): string {
   const url = new URL(value.trim());
   if (url.protocol !== "https:" || url.username || url.password) throw new Error("Use a public HTTPS post link");
   const host = url.hostname.toLowerCase().replace(/^www\./, "");

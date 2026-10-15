@@ -7,7 +7,7 @@ import { z } from "zod";
 import { INTELLIGENCE_MODEL } from "./openai-intelligence.js";
 import { coldOpenRangeError } from "./cold-open-model.js";
 
-export const coldOpenSuggestionSchema = z.object({
+const coldOpenSuggestionSchema = z.object({
   sourceArtifactId: z.string().uuid(),
   sourceObjectHash: z.string().min(1),
   durationSeconds: z.number().finite().min(0.5),

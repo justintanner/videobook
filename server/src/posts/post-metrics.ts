@@ -86,7 +86,7 @@ export async function refreshPostMetrics(engine: Engine, id: string, options: { 
 let timer: NodeJS.Timeout | null = null;
 let polling = false;
 
-export async function collectDuePostMetrics(): Promise<void> {
+async function collectDuePostMetrics(): Promise<void> {
   if (polling) return;
   polling = true;
   try {

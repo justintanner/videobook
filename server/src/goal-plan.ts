@@ -129,7 +129,7 @@ function styledGoalPrompt(plan: GoalPlan, stage: GoalStyleStage, text: string): 
   return fragment ? `${text}\n\n${fragment}` : text;
 }
 
-export function goalReferenceName(plan: GoalPlan, index: number): string {
+function goalReferenceName(plan: GoalPlan, index: number): string {
   return plan.storyboardLayout === "six-panel" ? `Reference ${index + 1} (${plan.referenceRoles?.[index] ?? "reference"})` : `Character ${index + 1}`;
 }
 

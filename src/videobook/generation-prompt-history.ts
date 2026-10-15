@@ -19,7 +19,7 @@ export interface PromptHistoryQuery {
   surfaceFilter: PromptHistorySurfaceFilter
 }
 
-export const PROMPT_HISTORY_PAGE_SIZE = 200
+const PROMPT_HISTORY_PAGE_SIZE = 200
 
 const SURFACE_LABELS: Readonly<Record<string, string>> = {
   chat: 'chat',
