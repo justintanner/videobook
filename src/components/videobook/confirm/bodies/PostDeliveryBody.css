@@ -1,4 +1,4 @@
-.post-dropbox-body {
+.post-delivery-body {
   display: grid;
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(220px, 300px);
   gap: 14px;
@@ -6,7 +6,7 @@
   min-height: 0;
 }
 
-.post-dropbox-post {
+.post-delivery-post {
   display: grid;
   grid-template-columns: 90px minmax(0, 1fr);
   gap: 12px;
@@ -16,11 +16,11 @@
   background: rgba(2, 11, 7, 0.78);
 }
 
-.post-dropbox-post-blocked {
+.post-delivery-post-blocked {
   border-color: rgba(231, 201, 121, 0.4);
 }
 
-.post-dropbox-media {
+.post-delivery-media {
   display: grid;
   width: 90px;
   height: 160px;
@@ -29,52 +29,65 @@
   background: #0c1f15;
 }
 
-.post-dropbox-media img,
-.post-dropbox-media video {
+.post-delivery-media img,
+.post-delivery-media video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.post-dropbox-media-fallback {
+.post-delivery-media-fallback {
   color: var(--muted);
 }
 
-.post-dropbox-post-copy {
+.post-delivery-post-copy,
+.post-delivery-destination {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
+}
+
+.post-delivery-post-copy {
   color: #86ab95;
   font-size: 11px;
 }
 
-.post-dropbox-post-copy strong {
+.post-delivery-post-copy strong {
   color: #cdeedb;
   font-size: 12px;
   font-weight: 500;
   overflow-wrap: anywhere;
 }
 
-.post-dropbox-warning,
-.post-dropbox-done,
-.post-dropbox-account-ready {
+.post-delivery-warning,
+.post-delivery-done,
+.post-delivery-account-ready,
+.post-delivery-receipt,
+.post-delivery-progress {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin: 0;
 }
 
-.post-dropbox-warning {
+.post-delivery-warning {
   color: #e7c979;
 }
 
-.post-dropbox-done,
-.post-dropbox-account-ready {
+.post-delivery-done,
+.post-delivery-account-ready,
+.post-delivery-receipt {
   color: var(--green);
 }
 
-.post-dropbox-post-copy button,
-.post-dropbox-account button {
+.post-delivery-progress {
+  color: #cdeedb;
+}
+
+.post-delivery-post-copy button,
+.post-delivery-account button,
+.post-delivery-switch button {
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--control-border);
@@ -85,70 +98,81 @@
   cursor: pointer;
 }
 
-.post-dropbox-post-copy button {
+.post-delivery-post-copy button {
   align-self: flex-start;
   margin-top: auto;
 }
 
-.post-dropbox-post-copy button:hover:not(:disabled),
-.post-dropbox-account button:hover:not(:disabled) {
+.post-delivery-post-copy button:hover:not(:disabled),
+.post-delivery-account button:hover:not(:disabled),
+.post-delivery-switch button:hover:not(:disabled) {
   border-color: var(--control-border-hover);
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
 }
 
-.post-dropbox-account button:disabled {
+.post-delivery-account button:disabled,
+.post-delivery-switch button:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
 
-.post-dropbox-caption,
-.post-dropbox-destination {
+.post-delivery-caption {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
 }
 
-.post-dropbox-label-row {
+.post-delivery-label-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
 }
 
-.post-dropbox-label-row label,
-.post-dropbox-heading {
+.post-delivery-label-row label,
+.post-delivery-heading {
   color: #86ab95;
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.post-dropbox-caption small,
-.post-dropbox-destination > small,
-.post-dropbox-label-row small {
+.post-delivery-caption small,
+.post-delivery-destination > small,
+.post-delivery-label-row small {
   color: var(--muted);
   font-size: 9px;
 }
 
-.confirm-sheet .post-dropbox-caption textarea {
+.confirm-sheet .post-delivery-caption textarea {
   flex: 1;
   min-height: 120px;
   border-color: var(--control-border);
   font-size: 12px;
 }
 
-.confirm-sheet .post-dropbox-caption textarea:read-only {
+.confirm-sheet .post-delivery-caption textarea:read-only {
   border-color: var(--line);
   color: #86ab95;
 }
 
-.post-dropbox-destination > .confirm-field {
+.post-delivery-destination > .confirm-field {
   margin-top: 8px;
 }
 
-.post-dropbox-account {
+.post-delivery-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.post-delivery-switch button[aria-pressed="true"] {
+  border-color: var(--green);
+  color: #cdeedb;
+}
+
+.post-delivery-account {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -159,26 +183,26 @@
   font-size: 11px;
 }
 
-.post-dropbox-account-ready {
+.post-delivery-account-ready {
   flex-direction: row;
 }
 
-.post-dropbox-account-missing {
+.post-delivery-account-missing {
   border-color: rgba(231, 201, 121, 0.4);
 }
 
-.post-dropbox-account-missing > span {
+.post-delivery-account-missing > span {
   color: #e7c979;
 }
 
-.post-dropbox-account-missing > div {
+.post-delivery-account-missing > div {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
 @media (max-width: 900px) {
-  .post-dropbox-body {
+  .post-delivery-body {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
   }

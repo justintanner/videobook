@@ -268,6 +268,8 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("remaining/rest/remainder");
     expect(prompt).toContain("use extract_video_clip");
     expect(prompt).toContain("use prepare_cold_open");
+    expect(prompt).toContain("use save_post_to_icloud");
+    expect(prompt).toContain("Use upload_post_to_dropbox only when the user says Dropbox");
     expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
     expect(prompt).toContain("For splice_video:");
     expect(prompt).toContain('{"id","tool","params"}');

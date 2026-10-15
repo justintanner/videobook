@@ -95,7 +95,7 @@ export default defineConfig({
       'src/videobook/watermark-target.test.ts',
       'src/videobook/watermark-burn.test.ts',
       'src/videobook/watermark-review.test.ts',
-      'src/videobook/post-dropbox-review.test.ts',
+      'src/videobook/post-delivery-review.test.ts',
       'src/videobook/x-post-thread.test.ts',
       'server/src/app-state.test.ts',
       'server/src/engine-rename.test.ts',

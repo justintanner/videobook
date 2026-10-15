@@ -4,18 +4,23 @@ import { usePostsPanel } from '@/videobook/use-post-actions'
 import type { PostView } from '../server/src/posts/post-contract'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
-import { PostDropboxBody } from '@/components/videobook/confirm/bodies/PostDropboxBody'
+import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
 import {
   defaultDropboxFolder,
+  defaultIcloudFolder,
   fetchDropboxConnection,
-  postDropboxArgs,
-  postDropboxReceipt,
-  postDropboxValidation,
-  resolveDropboxPost,
+  fetchIcloudStatus,
+  postDeliveryArgs,
+  postDeliveryReceipt,
+  postDeliveryTool,
+  postDeliveryValidation,
+  resolveDeliveryPost,
+  reviewWithIcloudStatus,
   startDropboxConnection,
   waitForDropboxConnection,
-  type PostDropboxReview,
-} from '@/videobook/post-dropbox-review'
+  type DeliveryDestination,
+  type PostDeliveryReview,
+} from '@/videobook/post-delivery-review'
 import { coldOpenRangeError } from '../server/src/cold-open-model'
 import { prepareColdOpenReview, renderColdOpenReview, type ColdOpenReview } from '@/videobook/cold-open-review'
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../server/src/image-edit-default'
@@ -717,7 +722,7 @@ type PendingCommandPlan = {
 
 type PendingChatAction =
   | { kind: 'cold-open'; review: ColdOpenReview }
-  | { kind: 'post-dropbox'; review: PostDropboxReview }
+  | { kind: 'post-delivery'; review: PostDeliveryReview }
   | {
       kind: 'generation'
       draft: NotebookChatGenerationDraft
@@ -7911,60 +7916,86 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const notebookPosts = (notebook as NotebookSnapshot | null)?.posts ?? []
 
-  const dropboxStatusCall = (tool: string, args: Record<string, unknown>) => call(tool, args, { background: true })
+  const deliveryStatusCall = (tool: string, args: Record<string, unknown>) => call(tool, args, { background: true })
 
-  const updatePendingPostDropbox = (patch: Partial<PostDropboxReview>) => setPendingChatAction(current =>
-    current?.kind === 'post-dropbox' ? { ...current, review: { ...current.review, ...patch } } : current)
+  const updatePendingDelivery = (patch: Partial<PostDeliveryReview>) => setPendingChatAction(current =>
+    current?.kind === 'post-delivery' ? { ...current, review: { ...current.review, ...patch } } : current)
 
   const checkPostDropboxConnection = async () => {
     try {
-      updatePendingPostDropbox({ connection: await fetchDropboxConnection(dropboxStatusCall) })
+      updatePendingDelivery({ connection: await fetchDropboxConnection(deliveryStatusCall) })
     } catch (error) {
-      updatePendingPostDropbox({ connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
+      updatePendingDelivery({ connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
+    }
+  }
+
+  const checkPostIcloudStatus = async () => {
+    try {
+      const status = await fetchIcloudStatus(deliveryStatusCall)
+      setPendingChatAction(current => current?.kind === 'post-delivery'
+        ? { ...current, review: reviewWithIcloudStatus(current.review, status) }
+        : current)
+    } catch (error) {
+      updatePendingDelivery({ icloud: { available: false, root: '', shared: null, role: null, reason: error instanceof Error ? error.message : String(error) } })
     }
   }
 
   const connectPostDropbox = async () => {
     const popup = window.open('about:blank', '_blank')
-    updatePendingPostDropbox({ connecting: true })
+    updatePendingDelivery({ connecting: true })
     try {
       const authorizeUrl = await startDropboxConnection(call)
       if (popup) popup.location.href = authorizeUrl
       else window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
       const scope = watchScopeRef.current.bookId
-      const connection = await waitForDropboxConnection(dropboxStatusCall, delay, () => watchScopeRef.current.bookId === scope)
-      updatePendingPostDropbox({ connection, connecting: false })
+      const connection = await waitForDropboxConnection(deliveryStatusCall, delay, () => watchScopeRef.current.bookId === scope)
+      updatePendingDelivery({ connection, connecting: false })
     } catch (error) {
       popup?.close()
-      updatePendingPostDropbox({ connecting: false, connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
+      updatePendingDelivery({ connecting: false, connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
     }
   }
 
-  const openPostDropboxReview = (reference?: string, chat?: ChatExecution): ComposerOutcome => {
-    if (mcp.state !== 'ready' || !bookId || !notebook) return { ok: false, message: 'Open a connected notebook before uploading a Post.' }
-    const post = resolveDropboxPost(notebookPosts, notebook.cells, reference, selectedNotebookCell?.id ?? null)
+  const openPostDeliveryReview = (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution): ComposerOutcome => {
+    if (mcp.state !== 'ready' || !bookId || !notebook) return { ok: false, message: 'Open a connected notebook before delivering a Post.' }
+    const post = resolveDeliveryPost(notebookPosts, notebook.cells, reference, selectedNotebookCell?.id ?? null)
+    const hint = entry === 'dropbox' ? '/upload-post-to-dropbox @b1' : '/save-post-to-icloud @b1'
     if (!post) {
       return { ok: false, message: reference?.trim()
-        ? `${reference.trim()} is not a Post cell. Select a Post or use /upload-post-to-dropbox @b1.`
-        : 'Select a Post cell or use /upload-post-to-dropbox @b1.' }
+        ? `${reference.trim()} is not a Post cell. Select a Post or use ${hint}.`
+        : `Select a Post cell or use ${hint}.` }
     }
+    const bookName = activeBook?.name ?? 'book'
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction({
-      kind: 'post-dropbox',
+      kind: 'post-delivery',
       review: {
         bookId,
         notebookId: notebook.id,
         postId: post.id,
+        entry,
+        destination: entry,
+        pinnedDestination: false,
         caption: post.definition.caption,
-        folder: defaultDropboxFolder(post, activeBook?.name ?? 'book'),
+        icloudFolder: defaultIcloudFolder(post, bookName),
+        dropboxFolder: defaultDropboxFolder(post, bookName),
         connection: null,
         connecting: false,
+        icloud: null,
+        receipt: null,
+        sync: null,
       },
     }))
     setComposerDockOpen(true)
-    void checkPostDropboxConnection()
-    return applyReadyOutcome('Dropbox upload review opened')
+    void checkPostIcloudStatus()
+    if (entry === 'dropbox') void checkPostDropboxConnection()
+    return applyReadyOutcome(entry === 'dropbox' ? 'Dropbox upload review opened' : 'Save to iPhone review opened')
+  }
+
+  const chooseDeliveryDestination = (destination: DeliveryDestination) => {
+    updatePendingDelivery({ destination, pinnedDestination: true })
+    if (destination === 'dropbox') void checkPostDropboxConnection()
   }
 
   const previewRoutedChatAction = async (
@@ -7984,8 +8015,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.tool === 'prepare_cold_open' || plan.tool === 'edit_cold_open') {
       return openColdOpenReview(asString(plan.params.asset_id) ?? undefined, chat)
     }
-    if (plan.tool === 'upload_post_to_dropbox') {
-      return openPostDropboxReview(asString(plan.params.post_cell_id) ?? undefined, chat)
+    if (plan.tool === 'upload_post_to_dropbox' || plan.tool === 'save_post_to_icloud') {
+      return openPostDeliveryReview(asString(plan.params.post_cell_id) ?? undefined, plan.tool === 'upload_post_to_dropbox' ? 'dropbox' : 'icloud', chat)
     }
     if (plan.tool === 'show_media_fullscreen') {
       const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
@@ -8523,17 +8554,30 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       collapseComposerAfterCellCreation(chat)
       return { ok: true, message: `Cold-open copy created as ${output.address}` }
     }
-    if (pendingChatAction.kind === 'post-dropbox') {
+    if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
       const post = notebookPosts.find(item => item.id === review.postId) ?? null
-      const validation = postDropboxValidation(post, review)
+      const validation = postDeliveryValidation(post, review)
       if (!post || validation.blocking) return { ok: false, message: validation.blocking ?? 'This Post is no longer on the canvas.' }
       const current = () => watchScopeRef.current.bookId === review.bookId
         && watchScopeRef.current.notebookId === review.notebookId && (chat?.isCurrent() ?? true)
-      const uploaded = await call('upload_post_to_dropbox', postDropboxArgs(post, review), { chat }) as typeof post
+      const saved = await call(postDeliveryTool(review.destination), postDeliveryArgs(post, review), { chat }) as PostView
       await refreshBookData(review.bookId, review.notebookId, current, chat)
-      if (current()) reviewChat(chat, false, () => setPendingChatAction(null))
-      return { ok: true, message: postDropboxReceipt(uploaded) }
+      const message = postDeliveryReceipt(saved, review.destination)
+      if (current()) {
+        reviewChat(chat, true, () => setPendingChatAction({
+          kind: 'post-delivery',
+          review: {
+            ...review,
+            caption: saved.definition.caption,
+            icloudFolder: saved.runtime.icloud?.folder ?? review.icloudFolder,
+            dropboxFolder: saved.runtime.dropbox?.folder ?? review.dropboxFolder,
+            receipt: message,
+            sync: null,
+          },
+        }))
+      }
+      return { ok: true, message }
     }
     if (pendingChatAction.kind === 'generation') {
       return await applyPendingGenerationAction(pendingChatAction, promptOverride, chat)
@@ -9255,8 +9299,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const parsed = parseCommandArgs(resolvedRest, command.params)
         return openColdOpenReview(asString(parsed.asset_ref) ?? undefined, chat)
       }
-      if (command.uiAction === 'open_post_dropbox') {
-        return openPostDropboxReview(rest || undefined, chat)
+      if (command.uiAction === 'open_post_dropbox' || command.uiAction === 'open_post_icloud') {
+        return openPostDeliveryReview(rest || undefined, command.uiAction === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -9387,9 +9431,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (context?.action) {
       const action = workspaceActions.find(entry => entry.id === context.action?.id)
       if (!action) return { ok: false, message: 'Reload Actions and choose the command again.', nextInput: input }
-      if (action.handler.kind === 'ui' && action.handler.action === 'open_post_dropbox') {
+      if (action.handler.kind === 'ui' && (action.handler.action === 'open_post_dropbox' || action.handler.action === 'open_post_icloud')) {
         const reference = input.trim().slice(action.command.length).trim()
-        return openPostDropboxReview(reference || undefined, chat)
+        return openPostDeliveryReview(reference || undefined, action.handler.action === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
       }
       const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
       const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
@@ -10629,34 +10673,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         </ConfirmSheet>
       )
     }
-    if (pendingChatAction.kind === 'post-dropbox') {
+    if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
       const post = notebookPosts.find(item => item.id === review.postId) ?? null
       const postCell = notebook?.cells.find(cell => cell.id === review.postId)
       const postAsset = postCell?.outputArtifactId ? assetById.get(postCell.outputArtifactId) ?? null : null
+      const icloud = review.destination === 'icloud'
       return (
         <ConfirmSheet
-          kind="post-dropbox"
-          ariaLabel="Dropbox upload review"
+          kind="post-delivery"
+          ariaLabel="Post delivery"
           tag="DELIVER"
-          title="Upload to Dropbox"
+          title={icloud ? 'Save to iPhone' : 'Upload to Dropbox'}
           address={post?.address ?? null}
-          effect={{ label: 'Leaves workspace · private', tone: 'warning' }}
-          validation={postDropboxValidation(post, review)}
+          effect={{ label: icloud ? 'iCloud · shared folder' : 'Leaves workspace · private', tone: icloud ? 'default' : 'warning' }}
+          validation={postDeliveryValidation(post, review)}
           busy={busy}
-          busyLabel="Uploading to Dropbox…"
+          busyLabel={icloud ? 'Saving to iPhone…' : 'Uploading to Dropbox…'}
           applyLabel="Upload"
           applyFormId={COMMAND_COMPOSER_FORM_ID}
           onCancel={dismissPendingCommandPlan}
         >
           {post && (
-            <PostDropboxBody
+            <PostDeliveryBody
               post={post}
               asset={postAsset}
               review={review}
               busy={busy}
-              onCaptionChange={caption => updatePendingPostDropbox({ caption })}
-              onFolderChange={folder => updatePendingPostDropbox({ folder })}
+              onCaptionChange={caption => updatePendingDelivery({ caption })}
+              onFolderChange={folder => updatePendingDelivery(icloud ? { icloudFolder: folder } : { dropboxFolder: folder })}
+              onDestination={chooseDeliveryDestination}
               onConnect={() => void connectPostDropbox()}
               onCheckConnection={() => void checkPostDropboxConnection()}
               onOpenPost={() => openCellInspector(post.id)}

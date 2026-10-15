@@ -16,6 +16,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_alive_captions: { kind: 'existing' },
   open_cold_open: { kind: 'existing' },
   open_post_dropbox: { kind: 'existing' },
+  open_post_icloud: { kind: 'existing' },
   open_watermark: { kind: 'existing' },
   speak_preview: { kind: 'existing' },
   x_connect: { kind: 'existing' },

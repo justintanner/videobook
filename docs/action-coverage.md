@@ -80,6 +80,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.rough-cut` | `/rough-cut` |  | sequence | none | `/rough-cut` | slash, launcher | composer | none |
 | `command.run` | `/run` |  | book | none | `run_notebook` | slash, launcher | composer | none |
 | `command.save` | `/save` |  | book | none | `save_notebook` | slash, launcher | composer | none |
+| `command.save-post-to-icloud` | `/save-post-to-icloud` |  | book | none | `open_post_icloud` | slash, launcher | dialog | none |
 | `command.settings` | `/settings` |  | book | asset: asset_id | `viewer_show_settings` | slash, launcher | dialog | none |
 | `command.settings-landscape` | `/settings-landscape` |  | book | asset: asset_id | `settings_landscape` | slash, launcher | dialog | none |
 | `command.settings-portrait` | `/settings-portrait` |  | book | asset: asset_id | `settings_portrait` | slash, launcher | dialog | none |
@@ -396,7 +397,6 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.rewrite_script` | `/rewrite-script` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu, library-menu | dialog | generation |
 | `tool.run_notebook` | `/run-notebook` |  | notebook | cell selection: cell_ids | `run_notebook` | slash, launcher, cell-menu, selection-menu | dialog | generation |
 | `tool.run_notebook_cell` | `/run-notebook-cell` |  | notebook | cell: cell_id | `run_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | generation |
-| `tool.save_post_to_icloud` | `/save-post-to-icloud` |  | book | cell: post_cell_id | `save_post_to_icloud` | slash, launcher, cell-menu, selection-menu | dialog | external |
 | `tool.search_archive` | `/search-archive` |  | global | none | `search_archive` | slash, launcher | dialog | none |
 | `tool.search_library_assets` | `/search-library-assets` |  | global | none | `search_library_assets` | slash, launcher | dialog | none |
 | `tool.search_library_moments` | `/search-library-moments` |  | global | none | `search_library_moments` | slash, launcher | dialog | none |
@@ -455,5 +455,6 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `record_prompt` | `tool.chat` | Records text entered through the composer and generation editors; browsing history is a separate action. |
 | `slash_commands` | `command.actions` | Loads slash suggestions and dynamic project shortcuts in the Actions launcher. |
 | `upload_post_to_dropbox` | `command.upload-post-to-dropbox` | Uploads after the composer review shows the Post, its editable caption and the destination folder. |
+| `save_post_to_icloud` | `command.save-post-to-icloud` | Saves after the composer delivery sheet shows the Post, its caption and the iPhone folder. |
 | `check_duplicate_bytes` | `command.upload` | Checks existing immutable bytes during Import before uploading a file. |
 | `list_workspace_actions` | `command.actions` | Loads the Actions launcher and its typed forms. |

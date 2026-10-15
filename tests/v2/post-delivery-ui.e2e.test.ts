@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -15,9 +15,12 @@ import type { StartedProcess } from './e2e-harness.js'
 
 const exec = promisify(execFile)
 type PostWire = { id: string; address: string; definition: { caption: string } }
+const CAPTION = 'It only rains when you forget the umbrella.'
 
-describe('Dropbox upload review in the chat composer', () => {
+describe('Post delivery review in the chat composer', () => {
   let root = ''
+  let icloudRoot = ''
+  let fixture = ''
   let server: StartedProcess | undefined
   let vite: StartedProcess | undefined
   let browser: Browser | undefined
@@ -30,20 +33,24 @@ describe('Dropbox upload review in the chat composer', () => {
   const calls: string[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
-  const review = () => page.getByRole('dialog', { name: 'Dropbox upload review', exact: true })
+  const review = () => page.getByRole('dialog', { name: 'Post delivery', exact: true })
   const command = async (text: string) => {
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
     await input.fill(text)
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
   }
+  const uploads = () => calls.filter(name => name === 'save_post_to_icloud').length
 
   beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), 'videobook-post-dropbox-ui-'))
-    const fixture = join(root, 'source.mp4')
+    root = await mkdtemp(join(tmpdir(), 'videobook-post-delivery-ui-'))
+    fixture = join(root, 'source.mp4')
+    const icloudParent = join(root, 'icloud')
+    icloudRoot = join(icloudParent, 'Videobook')
+    await mkdir(icloudParent)
     await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=96x160:rate=24:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', fixture])
     const manager = new BookManager({ libraryDir: join(root, 'books') })
-    const created = await manager.create('dropbox-ui')
+    const created = await manager.create('delivery-ui')
     if (!created.ok) throw new Error(created.error.message)
     bookId = created.value.bookId
     const found = manager.get(bookId)
@@ -61,10 +68,18 @@ describe('Dropbox upload review in the chat composer', () => {
     await manager.close()
     const port = await availablePort()
     const origin = `http://127.0.0.1:${port}`
-    const env = { ...process.env, NODE_ENV: 'test', DROPBOX_CLIENT_ID: '', PORT: String(port), VIDEOBOOK_LIBRARY_DIR: join(root, 'books'), VIDEOBOOK_APP_STATE_PATH: join(root, 'app-state.json') }
+    const env = {
+      ...process.env,
+      NODE_ENV: 'test',
+      DROPBOX_CLIENT_ID: '',
+      PORT: String(port),
+      VIDEOBOOK_LIBRARY_DIR: join(root, 'books'),
+      VIDEOBOOK_APP_STATE_PATH: join(root, 'app-state.json'),
+      VIDEOBOOK_ICLOUD_DIR: icloudRoot,
+    }
     server = startProcess(['--import', 'tsx', 'server/src/index.ts'], env)
     await waitForHttp(`${origin}/healthz`, server, 200)
-    client = new Client({ name: 'post-dropbox-ui', version: '1' }, { capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } } })
+    client = new Client({ name: 'post-delivery-ui', version: '1' }, { capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } } })
     await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`)))
     post = await call<PostWire>('create_post', { notebook_id: notebookId, source_cell_id: sourceCellId, platform: 'tiktok', caption: 'Draft caption' })
     const vitePort = await availablePort()
@@ -90,21 +105,49 @@ describe('Dropbox upload review in the chat composer', () => {
     if (root) await rm(root, { recursive: true, force: true })
   }, 30_000)
 
-  it('opens a composer sheet for a Post address, edits the caption, explains the blocked upload and cancels without writing', async () => {
-    await command(`/upload-post-to-dropbox ${post.address}`)
+  it('saves a Post to the iPhone folder from the composer, treats a repeat as a no-op, and keeps Dropbox one click away', async () => {
+    await command(`/save-post-to-icloud ${post.address}`)
     await review().waitFor({ state: 'visible' })
     expect(await review().evaluate(element => Boolean(element.closest('.command-composer')))).toBe(true)
     await expect.poll(() => page.getByRole('dialog', { name: 'Actions', exact: true }).count()).toBe(0)
+    await expect.poll(() => review().getByRole('heading', { name: 'Save to iPhone', exact: true }).count()).toBe(1)
+    expect(await review().getByRole('button', { name: 'iCloud · iPhone', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await review().getByRole('button', { name: 'Dropbox', exact: true }).getAttribute('aria-pressed')).toBe('false')
     expect(await review().getByText(post.address, { exact: true }).first().isVisible()).toBe(true)
 
     const caption = review().getByLabel('Caption', { exact: true })
     expect(await caption.inputValue()).toBe('Draft caption')
-    await caption.fill('It only rains when you forget the umbrella.')
-    expect(await review().getByLabel('Folder', { exact: true }).inputValue()).toMatch(/^\/Videobook\/dropbox-ui\/post-/u)
+    await caption.fill(CAPTION)
+    const folder = await review().getByLabel('Folder', { exact: true }).inputValue()
+    expect(folder).toMatch(/^delivery-ui\/post-/u)
+    await expect.poll(() => review().getByRole('button', { name: /^Upload/ }).isEnabled(), { timeout: 15_000 }).toBe(true)
+    expect(calls).toContain('icloud_status')
+    expect(calls).not.toContain('save_post_to_icloud')
+    expect(await review().textContent()).not.toContain('Uploading to iCloud')
 
+    await review().getByRole('button', { name: /^Upload/ }).click()
+    await expect.poll(() => review().getByText(/Saved .+ to iCloud/).count(), { timeout: 20_000 }).toBeGreaterThan(0)
+    const clipPath = join(icloudRoot, folder, 'clip.mp4')
+    const captionPath = join(icloudRoot, folder, 'caption.txt')
+    expect(await readFile(clipPath)).toEqual(await readFile(fixture))
+    expect(await readFile(captionPath, 'utf8')).toBe(CAPTION)
+    expect((await call<PostWire>('get_post', { post_cell_id: post.id })).definition.caption).toBe(CAPTION)
+    const writtenAt = (await stat(clipPath)).mtimeNs
+
+    await expect.poll(() => review().getByRole('button', { name: /^Upload/ }).isEnabled()).toBe(true)
+    const beforeRepeat = uploads()
+    await review().getByRole('button', { name: /^Upload/ }).click()
+    await expect.poll(uploads, { timeout: 20_000 }).toBe(beforeRepeat + 1)
+    await expect.poll(() => review().getByRole('button', { name: /^Upload/ }).isEnabled()).toBe(true)
+    expect((await stat(clipPath)).mtimeNs).toBe(writtenAt)
+    expect(await readFile(captionPath, 'utf8')).toBe(CAPTION)
+
+    await review().getByRole('button', { name: 'Dropbox', exact: true }).click()
+    await expect.poll(() => review().getByRole('heading', { name: 'Upload to Dropbox', exact: true }).count()).toBe(1)
     await expect.poll(() => review().getByRole('alert').textContent(), { timeout: 15_000 }).toContain('DROPBOX_CLIENT_ID')
     expect(await review().getByRole('button', { name: /^Upload/ }).isDisabled()).toBe(true)
     expect(calls).toContain('dropbox_connect_status')
+    expect(calls).not.toContain('upload_post_to_dropbox')
 
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await review().evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
@@ -112,14 +155,21 @@ describe('Dropbox upload review in the chat composer', () => {
 
     await review().getByRole('button', { name: /Cancel/ }).click()
     await review().waitFor({ state: 'hidden' })
-    expect(calls).not.toContain('upload_post_to_dropbox')
-    expect((await call<PostWire>('get_post', { post_cell_id: post.id })).definition.caption).toBe('Draft caption')
 
-    await command('/upload-post-to-dropbox @a1')
+    await command(`/upload-post-to-dropbox ${post.address}`)
+    await review().waitFor({ state: 'visible' })
+    expect(await review().getByRole('button', { name: 'Dropbox', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await review().getByRole('button', { name: 'iCloud · iPhone', exact: true }).getAttribute('aria-pressed')).toBe('false')
+    await expect.poll(() => review().getByRole('alert').textContent(), { timeout: 15_000 }).toContain('DROPBOX_CLIENT_ID')
+    await review().getByRole('button', { name: /Cancel/ }).click()
+    await review().waitFor({ state: 'hidden' })
+
+    await command('/save-post-to-icloud @a1')
     await expect.poll(() => page.getByText('@a1 is not a Post cell', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThan(0)
     expect(await review().count()).toBe(0)
 
     const catalog = await call<{ actions: Array<{ command: string; handler: { kind: string; action?: string } }> }>('list_workspace_actions')
+    expect(catalog.actions.find(action => action.command === '/save-post-to-icloud')?.handler).toEqual({ kind: 'ui', action: 'open_post_icloud' })
     expect(catalog.actions.find(action => action.command === '/upload-post-to-dropbox')?.handler).toEqual({ kind: 'ui', action: 'open_post_dropbox' })
     expect(errors).toEqual([])
   }, 90_000)
