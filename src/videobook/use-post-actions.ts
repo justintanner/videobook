@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { PostView } from '../../server/src/posts/post-contract'
 
-export type PostToolCall = (tool: string, args: Record<string, unknown>) => Promise<unknown>
+export type PostToolCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean }) => Promise<unknown>
 
 export function usePostActions(call: PostToolCall | undefined, bookId: string, refresh: () => Promise<unknown>) {
   const [busy, setBusy] = useState(false)

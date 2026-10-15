@@ -25,6 +25,7 @@ const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
   upload_post_to_dropbox: { actionId: "command.upload-post-to-dropbox", reason: "Uploads after the composer review shows the Post, its editable caption and the destination folder." },
   save_post_to_icloud: { actionId: "command.save-post-to-icloud", reason: "Saves after the composer delivery sheet shows the Post, its caption and the iPhone folder." },
+  post_icloud_sync_status: { actionId: "command.save-post-to-icloud", reason: "Reports iCloud upload progress for a Post the delivery sheet already saved." },
   prepare_cold_open: { actionId: "command.edit-cold-open", reason: "Selects a highlight in the cold-open review." },
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {

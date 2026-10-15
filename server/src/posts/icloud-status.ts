@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
 
+export type ICloudSyncPhase = "uploaded" | "uploading" | "error" | "not-icloud";
+
+export interface ICloudSyncStatus {
+  phase: ICloudSyncPhase;
+  error: string | null;
+}
+
 export interface UbiquitousItemState {
   path: string;
   exists: boolean;
@@ -49,6 +56,15 @@ export function parseUbiquitousStates(output: string): UbiquitousItemState[] {
       error: typeof record.error === "string" && record.error ? record.error : null,
     };
   });
+}
+
+export function summarizeUbiquitousSync(states: readonly UbiquitousItemState[] | null): ICloudSyncStatus {
+  if (!states || states.length === 0 || states.some((state) => state.ubiquitous !== true)) return { phase: "not-icloud", error: null };
+  const error = states.find((state) => state.error)?.error ?? null;
+  if (error) return { phase: "error", error };
+  return states.every((state) => state.uploaded === true && state.uploading !== true)
+    ? { phase: "uploaded", error: null }
+    : { phase: "uploading", error: null };
 }
 
 export async function readUbiquitousStates(paths: string[]): Promise<UbiquitousItemState[] | null> {

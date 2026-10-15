@@ -3,7 +3,9 @@ import type { NotebookCell } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { POST_METRIC_NAMES, POST_PLATFORMS } from '../../../server/src/posts/post-contract'
 import type { PostDefinition, PostMetrics, PostPlatform, PostView } from '../../../server/src/posts/post-contract'
-import { icloudPhoneReceipt } from '@/videobook/post-delivery-review'
+import { icloudPhoneReceipt, icloudProgressLabel } from '@/videobook/post-delivery-review'
+import type { ICloudSyncView } from '@/videobook/post-delivery-review'
+import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import type { DeliveryDestination } from '@/videobook/post-delivery-review'
 import { usePostActions } from '@/videobook/use-post-actions'
 import type { PostToolCall } from '@/videobook/use-post-actions'
@@ -40,6 +42,9 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   const [postedAt, setPostedAt] = useState(xPostLocalDateTimeValue(post.runtime.postedAt ?? new Date().toISOString()))
   const [observedAt, setObservedAt] = useState(localObservationTime)
   const [metrics, setMetrics] = useState<Record<string, string>>({})
+  const [sync, setSync] = useState<ICloudSyncView | null>(null)
+  useIcloudSyncPoll(Boolean(post.runtime.icloud?.completedAt), call, bookId, post.id, setSync)
+  const icloudProgress = icloudProgressLabel(sync?.phase ?? null, sync?.error)
   const locked = Boolean(post.runtime.outbound || post.runtime.url || post.runtime.status === 'scheduled')
   const source = cells.find(cell => cell.id === post.definition.source?.cellId)
   const latest = post.runtime.metrics.at(-1)
@@ -75,7 +80,7 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
       {dirty && <small>Save your draft before delivering.</small>}
       {post.runtime.scheduledFor && <p>Scheduled for {new Date(post.runtime.scheduledFor).toLocaleString()}</p>}
     </div>}
-    {post.runtime.icloud?.completedAt && <div className="post-receipt"><strong>{icloudPhoneReceipt(post.runtime.icloud.folder)}</strong></div>}
+    {post.runtime.icloud?.completedAt && <div className="post-receipt"><strong>{icloudPhoneReceipt(post.runtime.icloud.folder)}</strong>{icloudProgress && <small>{icloudProgress}</small>}</div>}
     {post.runtime.dropbox && <div className="post-receipt"><strong>{post.runtime.dropbox.completedAt ? 'Dropbox files ready' : 'Dropbox upload saved'}</strong><span>{post.runtime.dropbox.folder}</span><small>Clip: {post.runtime.dropbox.video.rev ? 'uploaded' : `${post.runtime.dropbox.video.offset.toLocaleString()} bytes saved`} · Caption: {post.runtime.dropbox.caption.rev ? 'uploaded' : 'pending'}</small></div>}
     {post.runtime.url ? <div className="post-receipt"><a href={post.runtime.url} target="_blank" rel="noreferrer">Open published post ↗</a><span>{post.runtime.postedAt ? new Date(post.runtime.postedAt).toLocaleString() : 'Publication time unknown'}</span>{post.runtime.x?.replies.map(reply => <a key={reply.tweet_id} href={reply.tweet_url} target="_blank" rel="noreferrer">Open reply ↗</a>)}</div> : <form onSubmit={event => { event.preventDefault(); void run('link_post', { url, posted_at: new Date(postedAt).toISOString() }) }}><h3>Published manually?</h3><label>Post URL<input type="url" value={url} required placeholder="https://…" onChange={event => setUrl(event.target.value)} /></label><label>Published at<input type="datetime-local" required value={postedAt} onChange={event => setPostedAt(event.target.value)} /></label><button disabled={actions.busy || !post.definition.source || dirty}>Save published link</button></form>}
     {post.runtime.url && <div className="post-results"><h3>Results</h3>

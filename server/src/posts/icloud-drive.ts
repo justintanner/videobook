@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Engine } from "videobook-engine";
 import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime, updatePost } from "./post-store.js";
 import type { PostICloudFile, PostRuntime } from "./post-contract.js";
 import { defaultPostFolderName, icloudFolderError } from "./post-folder.js";
-import { readUbiquitousStates } from "./icloud-status.js";
+import { readUbiquitousStates, summarizeUbiquitousSync, type ICloudSyncStatus } from "./icloud-status.js";
 
 type ICloudRuntime = NonNullable<PostRuntime["icloud"]>;
 
@@ -32,6 +32,21 @@ async function icloudUnavailableReason(root = icloudRoot()): Promise<string | nu
   if (process.platform !== "darwin" && !process.env.VIDEOBOOK_ICLOUD_DIR) return "Saving to iCloud needs the Videobook server running on a Mac.";
   if (!await isDirectory(dirname(root))) return "iCloud Drive is not set up on this Mac. Turn on iCloud Drive in System Settings.";
   return null;
+}
+
+function insideIcloudRoot(root: string, relativePath: string): string {
+  const rootResolved = resolve(root);
+  const target = resolve(rootResolved, relativePath);
+  if (target !== rootResolved && !target.startsWith(`${rootResolved}${sep}`)) throw new Error("iCloud path is outside the Videobook folder.");
+  return target;
+}
+
+export async function postIcloudSyncStatus(engine: Engine, id: string): Promise<ICloudSyncStatus> {
+  const recorded = getPost(engine, id).runtime.icloud;
+  const relative = [recorded?.video?.path, recorded?.caption?.path].filter((path): path is string => Boolean(path));
+  if (relative.length === 0) return { phase: "not-icloud", error: null };
+  const root = icloudRoot();
+  return summarizeUbiquitousSync(await readUbiquitousStates(relative.map((path) => insideIcloudRoot(root, path))));
 }
 
 export async function icloudStatus() {

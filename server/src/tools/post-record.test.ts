@@ -11,8 +11,8 @@ import { createDropbox } from "@apicity/dropbox";
 import { createX } from "@apicity/x";
 import { createPost, freezePostOutbound, getPost, linkPost, listPosts, migrateLegacyPosts, patchPostRuntime, readPostRuntime, updatePost } from "../posts/post-store.js";
 import { dropboxContentHash, uploadPostToDropbox } from "../posts/dropbox-upload.js";
-import { icloudStatus, savePostToICloud } from "../posts/icloud-drive.js";
-import { parseUbiquitousStates } from "../posts/icloud-status.js";
+import { icloudStatus, postIcloudSyncStatus, savePostToICloud } from "../posts/icloud-drive.js";
+import { parseUbiquitousStates, summarizeUbiquitousSync } from "../posts/icloud-status.js";
 import { nextPostMetricAt, recordPostMetrics, refreshPostMetrics } from "../posts/post-metrics.js";
 import { postRecordDefs } from "./post-record.js";
 import { z } from "zod";
@@ -310,6 +310,21 @@ describe("Post publication records", () => {
         { path: "/tmp", exists: true, ubiquitous: null, shared: null, role: null, uploaded: null, uploading: null, error: null },
       ]);
       expect(() => parseUbiquitousStates("{}")).toThrow();
+      const phase = (output: unknown) => summarizeUbiquitousSync(parseUbiquitousStates(JSON.stringify(output)));
+      expect(phase([{ path: "/a", exists: true, ubiquitous: true, uploaded: false, uploading: true, error: null }])).toEqual({ phase: "uploading", error: null });
+      expect(phase([{ path: "/a", exists: true, ubiquitous: true, uploaded: 1, uploading: 0, error: null }])).toEqual({ phase: "uploaded", error: null });
+      expect(phase([{ path: "/a", exists: true, ubiquitous: true, uploaded: false, uploading: true, error: "Quota exceeded" }])).toEqual({ phase: "error", error: "Quota exceeded" });
+      expect(phase([{ path: "/tmp", exists: true, ubiquitous: false, uploaded: null, uploading: null, error: null }])).toEqual({ phase: "not-icloud", error: null });
+      expect(summarizeUbiquitousSync(null)).toEqual({ phase: "not-icloud", error: null });
+      expect(summarizeUbiquitousSync(parsed)).toEqual({ phase: "not-icloud", error: null });
+    });
+
+    it("reports a non-iCloud folder instead of upload progress", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Caption" });
+      const saved = await savePostToICloud(engine, post.id, { folder: "local-only" });
+      expect(saved.runtime.icloud?.completedAt).toBeTruthy();
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "not-icloud", error: null });
+      expect(await postIcloudSyncStatus(engine, (await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id })).id)).toEqual({ phase: "not-icloud", error: null });
     });
   });
 

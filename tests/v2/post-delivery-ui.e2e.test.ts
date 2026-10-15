@@ -127,6 +127,9 @@ describe('Post delivery review in the chat composer', () => {
 
     await review().getByRole('button', { name: /^Upload/ }).click()
     await expect.poll(() => review().getByText(/Saved .+ to iCloud/).count(), { timeout: 20_000 }).toBeGreaterThan(0)
+    await expect.poll(() => calls.includes('post_icloud_sync_status'), { timeout: 15_000 }).toBe(true)
+    expect(await review().textContent()).not.toContain('Uploading to iCloud')
+    expect(await review().textContent()).not.toContain('On iCloud')
     const clipPath = join(icloudRoot, folder, 'clip.mp4')
     const captionPath = join(icloudRoot, folder, 'caption.txt')
     expect(await readFile(clipPath)).toEqual(await readFile(fixture))
@@ -183,7 +186,11 @@ describe('Post delivery review in the chat composer', () => {
 
     const collapse = page.getByLabel('Collapse chat', { exact: true })
     if (await collapse.isVisible()) await collapse.click()
+    const clear = page.getByLabel('Clear selection', { exact: true })
+    if (await clear.isVisible()) await clear.click()
+    await expect.poll(() => page.getByRole('region', { name: 'Post details' }).count()).toBe(0)
     const cell = postNode().locator('.cell-node')
+    const beforeSelect = calls.filter(name => name === 'post_icloud_sync_status').length
     await cell.click({ button: 'right', timeout: 15_000 })
     const menuNames = await page.getByRole('menuitem').allTextContents()
     const iphoneIndex = menuNames.findIndex(name => name.includes('Save to iPhone'))
@@ -197,6 +204,9 @@ describe('Post delivery review in the chat composer', () => {
     expect(await inspector.getByText('On iPhone · iCloud Drive › Videobook ›', { exact: false }).count()).toBe(1)
     expect(await inspector.getByText('Dropbox folder', { exact: false }).count()).toBe(0)
     const beforeInspector = uploads()
+    await expect.poll(() => calls.filter(name => name === 'post_icloud_sync_status').length, { timeout: 15_000 }).toBeGreaterThan(beforeSelect)
+    expect(await inspector.textContent()).not.toContain('Uploading to iCloud')
+    expect(await inspector.textContent()).not.toContain('On iCloud')
     await inspector.getByRole('button', { name: 'Save to iPhone', exact: true }).click()
     await review().waitFor({ state: 'visible' })
     expect(await review().getByRole('button', { name: 'iCloud · iPhone', exact: true }).getAttribute('aria-pressed')).toBe('true')

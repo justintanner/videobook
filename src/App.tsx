@@ -5,6 +5,7 @@ import type { PostView } from '../server/src/posts/post-contract'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
+import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import {
   defaultDropboxFolder,
   defaultIcloudFolder,
@@ -1709,6 +1710,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       else mcpSettleTimersRef.current.set(sequence, window.setTimeout(settle, held))
     }
   }, [mcp])
+
+  const deliveryPoll = pendingChatAction?.kind === 'post-delivery' ? pendingChatAction.review : null
+  useIcloudSyncPoll(
+    Boolean(deliveryPoll?.receipt && deliveryPoll.destination === 'icloud'),
+    mcp.state === 'ready' ? call : undefined,
+    deliveryPoll?.bookId ?? '',
+    deliveryPoll?.postId ?? '',
+    sync => setPendingChatAction(current => current?.kind === 'post-delivery'
+      ? { ...current, review: { ...current.review, sync } }
+      : current),
+  )
 
   const goalScope = useMemo(
     () => bookId && notebook ? { bookId, notebookId: notebook.id } : null,

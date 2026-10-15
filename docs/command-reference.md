@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (352)
+## MCP endpoints (353)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -264,6 +264,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
+- `post_icloud_sync_status` — Read whether a saved Post's clip and caption.txt have finished uploading to iCloud. A folder outside iCloud Drive reports that it is not an iCloud folder.
 - `prepare_cold_open` — Select an exciting 2–5 second video highlight with AI for a cold-open copy. Start here when asked for a cold open: review and adjust the returned range before calling edit_cold_open. Returns a cached suggestion or an analysis job ID; read its result with list_jobs. Does not create a video copy.
 - `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
