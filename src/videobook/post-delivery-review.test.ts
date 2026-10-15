@@ -8,7 +8,10 @@ import {
   icloudPhoneReceipt,
   icloudProgressLabel,
   icloudShareHint,
+  postAwaitingLink,
   postDeliveryBadges,
+  postLinkPrompt,
+  postTileProgress,
   icloudSyncFromTool,
   icloudSyncShouldPoll,
   latestPostForSource,
@@ -181,5 +184,16 @@ describe('post delivery review', () => {
     expect(postDeliveryBadges(postView())).toEqual([])
     expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate', completedAt: '2026-10-15T00:00:00.000Z' }, dropbox: { folder: '/Clients/rain', video: { path: '/Clients/rain/clip.mp4', hash: 'a', offset: 0 }, caption: { path: '/Clients/rain/caption.txt', hash: 'b', offset: 0 }, completedAt: '2026-10-15T00:00:00.000Z' } }))).toEqual(['iPhone', 'Dropbox'])
     expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate' } }))).toEqual([])
+  })
+
+  it('asks for the published link once a Post is delivered and until it is linked', () => {
+    const delivered = postView({ status: 'ready', icloud: { folder: 'phones/skate', completedAt: '2026-10-15T00:00:00.000Z' } })
+    expect(postAwaitingLink(postView())).toBe(false)
+    expect(postAwaitingLink(postView({ icloud: { folder: 'phones/skate' } }))).toBe(false)
+    expect(postAwaitingLink(delivered)).toBe(true)
+    expect(postAwaitingLink(postView({ ...delivered.runtime, url: 'https://www.tiktok.com/@jtbkk/video/1', postedAt: '2026-10-15T01:00:00.000Z' }))).toBe(false)
+    expect(postLinkPrompt(delivered)).toBe('Posted on TikTok? Paste the link')
+    expect(postTileProgress(postView())).toBe('Saved clip → delivery → link → results')
+    expect(postTileProgress(delivered)).toBe('Posted on TikTok? Paste the link in the Post panel')
   })
 })

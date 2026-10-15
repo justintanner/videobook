@@ -9,6 +9,7 @@ import {
   icloudProgressLabel,
   icloudShareHint,
   POST_CAPTION_LIMIT,
+  postAwaitingLink,
   type DeliveryDestination,
   type PostDeliveryReview,
 } from '@/videobook/post-delivery-review'
@@ -31,6 +32,7 @@ import {
   stepCopyVersion,
   type PostCopyState,
 } from '@/videobook/post-copy-review'
+import { PostLinkField, type PostLinkArgs } from '../../PostLinkField'
 import './PostDeliveryBody.css'
 
 const LANGUAGE_LABELS: Readonly<Record<PostCopyLanguage, string>> = { en: 'EN', th: 'TH · ไทย' }
@@ -48,6 +50,7 @@ type PostDeliveryBodyProps = {
   onConnect: () => void
   onCheckConnection: () => void
   onOpenPost: () => void
+  onLink: (args: PostLinkArgs) => Promise<unknown>
 }
 
 function mediaFacts(asset: AssetRecord | null): string {
@@ -319,6 +322,7 @@ export function PostDeliveryBody(props: PostDeliveryBodyProps) {
         )}
         {props.review.receipt && <p className="post-delivery-receipt">{props.review.receipt}</p>}
         {progress && <p className="post-delivery-progress">{progress}</p>}
+        {postAwaitingLink(props.post) && <PostLinkField post={props.post} disabled={props.busy} className="post-delivery-link" onLink={props.onLink} />}
       </div>
     </div>
   )

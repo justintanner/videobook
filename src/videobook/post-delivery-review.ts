@@ -4,6 +4,7 @@ import type { PostView } from '../../server/src/posts/post-contract'
 import { defaultPostFolderName, icloudFolderError } from '../../server/src/posts/post-folder'
 import type { ConfirmValidation } from './confirm-validation'
 import { copyCaption, copyLimitNotice, type PostCopyState } from './post-copy-review'
+import { PLATFORM_NAMES } from '../../server/src/posts/post-copy-format'
 
 export type DeliveryDestination = 'icloud' | 'dropbox'
 
@@ -198,6 +199,21 @@ export function postDeliveryBadges(post: PostView): Array<'iPhone' | 'Dropbox'> 
   if (post.runtime.icloud?.completedAt) badges.push('iPhone')
   if (post.runtime.dropbox?.completedAt) badges.push('Dropbox')
   return badges
+}
+
+export function postAwaitingLink(post: PostView): boolean {
+  return !post.runtime.url && postDeliveryBadges(post).length > 0
+}
+
+export function postLinkPrompt(post: PostView): string {
+  const platform = post.definition.platform
+  return platform === 'other' ? 'Posted it? Paste the link' : `Posted on ${PLATFORM_NAMES[platform]}? Paste the link`
+}
+
+export function postTileProgress(post: PostView): string {
+  if (post.runtime.postedAt) return new Date(post.runtime.postedAt).toLocaleDateString()
+  if (postAwaitingLink(post)) return `${postLinkPrompt(post)} in the Post panel`
+  return 'Saved clip → delivery → link → results'
 }
 
 export function icloudPhoneReceipt(folder: string): string {

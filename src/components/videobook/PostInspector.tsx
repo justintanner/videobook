@@ -10,7 +10,8 @@ import type { DeliveryDestination } from '@/videobook/post-delivery-review'
 import { usePostActions } from '@/videobook/use-post-actions'
 import type { PostToolCall } from '@/videobook/use-post-actions'
 import type { AssetRecord } from '@/videobook/workspace-responses'
-import { xPostLocalDateTimeValue } from '@/videobook/x-post-review'
+import { PostLinkField } from './PostLinkField'
+import type { PostLinkArgs } from './PostLinkField'
 import './Posts.css'
 
 function localObservationTime() {
@@ -38,8 +39,6 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   const account = draft.account ?? post.definition.account
   const notes = draft.notes ?? post.definition.notes
   const [sourceId, setSourceId] = useState('')
-  const [url, setUrl] = useState(post.runtime.url ?? '')
-  const [postedAt, setPostedAt] = useState(xPostLocalDateTimeValue(post.runtime.postedAt ?? new Date().toISOString()))
   const [observedAt, setObservedAt] = useState(localObservationTime)
   const [metrics, setMetrics] = useState<Record<string, string>>({})
   const [sync, setSync] = useState<ICloudSyncView | null>(null)
@@ -50,6 +49,11 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   const latest = post.runtime.metrics.at(-1)
   const dirty = platform !== post.definition.platform || caption !== post.definition.caption || credits !== post.definition.credits || account !== post.definition.account
   const run = (tool: string, args: Record<string, unknown> = {}) => actions.run(tool, { post_cell_id: post.id, ...args })
+  const link = async (args: PostLinkArgs) => {
+    if (!call) return
+    await call('link_post', { book_id: bookId, post_cell_id: post.id, ...args })
+    await onRefresh()
+  }
   return <section className="post-inspector" aria-label="Post details">
     <div className="post-heading"><div><span className="post-eyebrow">{post.definition.platform} publication</span><h2>{post.address} · Post</h2></div><span className={`post-status post-status-${post.runtime.status}`}>{post.runtime.status.replaceAll('_', ' ')}</span></div>
     {asset?.mediaUrl && (asset.type === 'image' ? <img className="post-media" src={asset.mediaUrl} alt="Frozen publication media" /> : <video className="post-media" src={asset.mediaUrl} controls preload="metadata" poster={asset.thumbnailUrl ?? undefined} />)}
@@ -82,7 +86,7 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
     </div>}
     {post.runtime.icloud?.completedAt && <div className="post-receipt"><strong>{icloudPhoneReceipt(post.runtime.icloud.folder)}</strong>{icloudProgress && <small>{icloudProgress}</small>}</div>}
     {post.runtime.dropbox && <div className="post-receipt"><strong>{post.runtime.dropbox.completedAt ? 'Dropbox files ready' : 'Dropbox upload saved'}</strong><span>{post.runtime.dropbox.folder}</span><small>Clip: {post.runtime.dropbox.video.rev ? 'uploaded' : `${post.runtime.dropbox.video.offset.toLocaleString()} bytes saved`} · Caption: {post.runtime.dropbox.caption.rev ? 'uploaded' : 'pending'}</small></div>}
-    {post.runtime.url ? <div className="post-receipt"><a href={post.runtime.url} target="_blank" rel="noreferrer">Open published post ↗</a><span>{post.runtime.postedAt ? new Date(post.runtime.postedAt).toLocaleString() : 'Publication time unknown'}</span>{post.runtime.x?.replies.map(reply => <a key={reply.tweet_id} href={reply.tweet_url} target="_blank" rel="noreferrer">Open reply ↗</a>)}</div> : <form onSubmit={event => { event.preventDefault(); void run('link_post', { url, posted_at: new Date(postedAt).toISOString() }) }}><h3>Published manually?</h3><label>Post URL<input type="url" value={url} required placeholder="https://…" onChange={event => setUrl(event.target.value)} /></label><label>Published at<input type="datetime-local" required value={postedAt} onChange={event => setPostedAt(event.target.value)} /></label><button disabled={actions.busy || !post.definition.source || dirty}>Save published link</button></form>}
+    {post.runtime.url ? <div className="post-receipt"><a href={post.runtime.url} target="_blank" rel="noreferrer">Open published post ↗</a><span>{post.runtime.postedAt ? new Date(post.runtime.postedAt).toLocaleString() : 'Publication time unknown'}</span>{post.runtime.x?.replies.map(reply => <a key={reply.tweet_id} href={reply.tweet_url} target="_blank" rel="noreferrer">Open reply ↗</a>)}</div> : <PostLinkField post={post} disabled={actions.busy || !call || dirty} className="post-delivery post-link-field" onLink={link} />}
     {post.runtime.url && <div className="post-results"><h3>Results</h3>
       {latest ? <><div className="post-metric-grid">{POST_METRIC_NAMES.map(name => <div key={name}><strong>{latest.values[name]?.toLocaleString() ?? '—'}</strong><span>{name}</span></div>)}</div><small>Observed {new Date(latest.observedAt).toLocaleString()} · {latest.source}</small>{latest.mediaViews !== undefined && <p>{latest.mediaViews.toLocaleString()} X media views · shared across posts using this media</p>}</> : <p>No observations yet. Unknown metrics appear as —.</p>}
       {post.definition.platform === 'x' && <><button type="button" disabled={actions.busy} onClick={() => void run('refresh_post_metrics')}>Refresh now</button><small>{post.runtime.nextMetricAt ? `Next check ${new Date(post.runtime.nextMetricAt).toLocaleString()}` : post.runtime.metricsPaused ? 'Automatic checks paused; reconnect X and refresh.' : 'Scheduled observations complete.'}</small>{post.runtime.metricsError && <p className="post-error">{post.runtime.metricsError}</p>}</>}

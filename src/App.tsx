@@ -10802,6 +10802,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               onConnect={() => void connectPostDropbox()}
               onCheckConnection={() => void checkPostDropboxConnection()}
               onOpenPost={() => openCellInspector(post.id)}
+              onLink={async args => {
+                await call('link_post', { book_id: review.bookId, post_cell_id: post.id, ...args })
+                await refreshBookData(review.bookId, review.notebookId)
+                dismissPendingCommandPlan()
+              }}
             />
           )}
         </ConfirmSheet>
