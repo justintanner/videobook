@@ -1529,5 +1529,34 @@ describe("staged video goals through MCP", () => {
     expect(engine.sequences.getPrimary().clips).toHaveLength(0);
     expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+
+    const sceneBefore = combinedDone.stages.frame?.outputs[0]?.artifactId;
+    const finalBefore = combinedDone.finalArtifactId;
+    if (!sceneBefore || !finalBefore) throw new Error("missing the completed scene or final");
+    const finalBeforeHash = await mediaHash(finalBefore);
+    const regenerating = await invoke({
+      action: "regenerate", goal_id: goal.goalId, revision: combinedDone.revision, stage: "frame", index: 0,
+    });
+    expect(regenerating).toMatchObject({ status: "running", finish: null });
+    expect(readGoal(engine, goal.goalId).resumeStatus).toBe("completed");
+    const stopped = await invoke({ action: "cancel", goal_id: goal.goalId });
+    await waitForChainRun(engine, regenerating.chainId!);
+    expect(stopped).toMatchObject({ status: "completed", finalArtifactId: finalBefore });
+    expect(stopped.finish?.status).toBe("completed");
+    expect((await status(goal.goalId)).finalArtifactId).toBe(finalBefore);
+    const restarted = await invoke({
+      action: "revise", goal_id: goal.goalId, revision: stopped.revision, stage: "frame", index: 0, feedback: "Raise the board",
+    });
+    expect(restarted).toMatchObject({ status: "running", finish: null });
+    expect(readGoal(engine, goal.goalId).resumeStatus).toBe("completed");
+    const regeneratedScene = await settleChain(restarted.chainId!, "image");
+    expect(regeneratedScene).not.toBe(sceneBefore);
+    const reopened = await status(goal.goalId);
+    expect(reopened).toMatchObject({ status: "review", stage: "videos", finalArtifactId: null, finish: null });
+    expect(reopened.stages.frame?.outputs[0]?.artifactId).toBe(regeneratedScene);
+    expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
+    expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(await mediaHash(finalBefore)).toBe(finalBeforeHash);
   }, 300_000);
 });

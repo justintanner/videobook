@@ -150,9 +150,11 @@ export async function reconcileGoal(engine: Engine, goal: GoalRecord, document: 
         const previousScene = run.outputs[0]?.artifactId ?? null;
         await writeGoalContent(engine, goal, { ...content, revision: content.revision + 1 });
         const sceneChanged = previousScene !== null && previousScene !== outputs[0]!.artifactId;
+        const finish = sceneChanged ? null : goal.finish ?? goal.resumeFinish ?? null;
+        const keepCompleted = finish?.status === "completed" && Boolean(finish.finalArtifactId);
         next = {
-          ...next, stage: goal.resumeStage ?? "videos", status: goal.resumeStatus ?? "review", error: null, ...cleared,
-          ...(sceneChanged ? { finish: null } : {}),
+          ...next, stage: goal.resumeStage ?? "videos", status: keepCompleted ? "completed" : "review", error: null, ...cleared,
+          finish,
         };
       }
     } else {
