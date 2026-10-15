@@ -79,7 +79,7 @@
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.7.0-ad8894e.tgz",
+    "videobook-engine": "file:vendor/videobook-engine-5.7.0-2caea7a.tgz",
     "ws": "^8.21.0",
     "@apicity/dropbox": "file:vendor/apicity-dropbox-0.14.2-feaaf9d.tgz"
   },
@@ -136,6 +136,6 @@
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
     "ytdlp-nodejs@3.4.5": true,
-    "file:vendor/videobook-engine-5.7.0-ad8894e.tgz": false
+    "file:vendor/videobook-engine-5.7.0-2caea7a.tgz": false
   }
 }
