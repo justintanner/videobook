@@ -210,10 +210,38 @@ export function postLinkPrompt(post: PostView): string {
   return platform === 'other' ? 'Posted it? Paste the link' : `Posted on ${PLATFORM_NAMES[platform]}? Paste the link`
 }
 
-export function postTileProgress(post: PostView): string {
-  if (post.runtime.postedAt) return new Date(post.runtime.postedAt).toLocaleDateString()
-  if (postAwaitingLink(post)) return `${postLinkPrompt(post)} in the Post panel`
-  return 'Saved clip → delivery → link → results'
+export type PostTileMetric = { label: 'views' | 'impressions' | 'likes'; value: string }
+
+export function postPlatformName(post: PostView): string {
+  return PLATFORM_NAMES[post.definition.platform]
+}
+
+export function postTileStatus(post: PostView): string {
+  return postAwaitingLink(post) ? 'needs_link' : post.runtime.status
+}
+
+export function postTileNextStep(post: PostView): string | null {
+  if (post.runtime.postedAt || post.runtime.url) return null
+  if (postAwaitingLink(post)) return post.definition.platform === 'other' ? 'Paste the published link' : `Paste ${postPlatformName(post)} link`
+  return 'Save to iPhone next'
+}
+
+export function postTilePostedOn(post: PostView): string | null {
+  if (!post.runtime.postedAt) return null
+  return new Date(post.runtime.postedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+export function postTileMetrics(post: PostView): PostTileMetric[] {
+  const values = post.runtime.metrics.at(-1)?.values
+  if (!values) return []
+  const reach: PostTileMetric['label'] = values.views != null ? 'views' : 'impressions'
+  return ([reach, 'likes'] as const)
+    .filter(label => values[label] != null)
+    .map(label => ({ label, value: compactCount(values[label]!) }))
+}
+
+function compactCount(value: number): string {
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
 export function icloudPhoneReceipt(folder: string): string {

@@ -9,12 +9,14 @@ import type { AssetRecord, JobRecord } from '@/videobook/workspace-responses'
 import type { Node } from '@xyflow/react'
 import type { NotebookDocument } from 'videobook-engine'
 import { recordValue, asString } from '@/videobook/value-decoders'
+import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { formatMediaAspectRatio, notebookSplitFrameIds } from '@/videobook/notebook-cell-presentation'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import { seedance25FrameAspectRatio } from '../../server/src/seedance25'
 
 export interface CanvasCellData extends NotebookCellData {
   post?: PostView
+  postSource?: PostSourcePreview
   asset?: AssetRecord
   deleting?: boolean
   revealing?: boolean
@@ -27,7 +29,27 @@ export interface CanvasCellData extends NotebookCellData {
   }
 }
 
+export type PostSourcePreview = {
+  address: string | null
+  asset?: AssetRecord
+}
+
 export type CanvasNode = Node<CanvasCellData>
+
+function postSourcePreview(
+  post: PostView,
+  cells: NotebookDocument['cells'],
+  byArtifactId: ReadonlyMap<string, AssetRecord>,
+): PostSourcePreview | null {
+  const source = post.definition.source
+  if (!source) return null
+  const cell = cells.find((candidate) => candidate.id === source.cellId)
+  const asset = byArtifactId.get(source.snapshotArtifactId ?? '') ?? byArtifactId.get(source.artifactId)
+  return {
+    address: cell ? notebookGridTag(cell.slot) : null,
+    ...(asset ? { asset } : {}),
+  }
+}
 
 export function artifactForCell(
   assets: ReadonlyMap<string, AssetRecord>,
@@ -125,6 +147,7 @@ export function canvasNodes(
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
   return notebookNodes(document).map((node) => {
     const post = (document as NotebookSnapshot).posts?.find(item => item.id === node.id)
+    const postSource = post ? postSourcePreview(post, document.cells, byArtifactId) : null
     const frameIds = notebookSplitFrameIds(node.data.inputs)
     const asset = artifactForCell(byArtifactId, node.data.outputArtifactId)
     const videoMetadata = node.data.kind === 'video'
@@ -148,6 +171,7 @@ export function canvasNodes(
         ...node.data,
         status: post?.runtime.status ?? work.status,
         ...(post ? { post } : {}),
+        ...(postSource ? { postSource } : {}),
         ...(work.startedAt ? { statusStartedAt: work.startedAt } : {}),
         ...(work.error ? { statusError: work.error } : {}),
         asset,

@@ -28,7 +28,8 @@ import {
   notebookOutputVersionArtifactIds,
   isImageVideoGenerationResultCell,
 } from '@/videobook/notebook-cell-presentation'
-import { postDeliveryBadges, postTileProgress } from '@/videobook/post-delivery-review'
+import { postPlatformName, postTileStatus } from '@/videobook/post-delivery-review'
+import { PostTile } from '@/components/videobook/PostTile'
 import type { CanvasCellData, CanvasNode } from '@/videobook/notebook-canvas'
 import { isNotebookGenerationCellType, notebookCellFamily } from '@/videobook/notebook-cell-types'
 import { notebookGridTag, notebookGridAddress } from '@/videobook/notebook-grid'
@@ -363,7 +364,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     outputArtifactId: data.outputArtifactId,
     tool: data.tool,
   }, data.status)
-  const statusLabel = notebookCellStatusLabel(data.kind, data.status)
+  const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
   const generationCell = isNotebookGenerationCellType(data.kind)
   const toolTitle = generationCell && data.tool
     ? generationTitles.get(data.tool) ?? null
@@ -581,6 +582,11 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {visibleTypeLabel}
             </span>
           </span>
+          {data.post && (
+            <span className="cell-generation-chips">
+              <span className="cell-aspect-ratio" title="Platform">{postPlatformName(data.post)}</span>
+            </span>
+          )}
           {(generationCell || goalMark) && (
             <span className="cell-generation-chips">
               {generationDuration && (
@@ -627,13 +633,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           )}
         </header>
         {data.kind === 'post' ? (
-          <div className="post-tile">
-            <strong>{data.post?.definition.platform ?? 'Publication'} · {(data.post?.runtime.status ?? 'draft').replaceAll('_', ' ')}</strong>
-            <p>{data.post?.definition.caption || 'Track a clip from idea to published results'}</p>
-            <small>{data.post ? postTileProgress(data.post) : 'Saved clip → delivery → link → results'}</small>
-            {data.post && postDeliveryBadges(data.post).length > 0 && <div className="post-tile-badges">{postDeliveryBadges(data.post).map(badge => <span key={badge} className="post-badge">{badge}</span>)}</div>}
-            <div className="post-tile-stats"><span>{data.post?.runtime.metrics.at(-1)?.values.impressions?.toLocaleString() ?? '—'} impressions</span><span>{data.post?.runtime.metrics.at(-1)?.values.likes?.toLocaleString() ?? '—'} likes</span></div>
-          </div>
+          <PostTile post={data.post} source={data.postSource} />
         ) : emptyMediaSlot && slotKind ? (
           <MediaSlotTile
             cellId={id}

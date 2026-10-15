@@ -11,7 +11,10 @@ import {
   postAwaitingLink,
   postDeliveryBadges,
   postLinkPrompt,
-  postTileProgress,
+  postTileMetrics,
+  postTileNextStep,
+  postTilePostedOn,
+  postTileStatus,
   icloudSyncFromTool,
   icloudSyncShouldPoll,
   latestPostForSource,
@@ -193,7 +196,21 @@ describe('post delivery review', () => {
     expect(postAwaitingLink(delivered)).toBe(true)
     expect(postAwaitingLink(postView({ ...delivered.runtime, url: 'https://www.tiktok.com/@jtbkk/video/1', postedAt: '2026-10-15T01:00:00.000Z' }))).toBe(false)
     expect(postLinkPrompt(delivered)).toBe('Posted on TikTok? Paste the link')
-    expect(postTileProgress(postView())).toBe('Saved clip → delivery → link → results')
-    expect(postTileProgress(delivered)).toBe('Posted on TikTok? Paste the link in the Post panel')
+    expect(postTileNextStep(postView())).toBe('Save to iPhone next')
+    expect(postTileNextStep(delivered)).toBe('Paste TikTok link')
+    expect(postTileStatus(postView())).toBe('draft')
+    expect(postTileStatus(delivered)).toBe('needs_link')
+  })
+
+  it('shows a posted tile with its date and latest results', () => {
+    const posted = postView({ status: 'posted', url: 'https://www.tiktok.com/@jtbkk/video/1', postedAt: '2026-10-15T12:00:00.000Z' })
+    expect(postTileNextStep(posted)).toBeNull()
+    expect(postTileStatus(posted)).toBe('posted')
+    expect(postTilePostedOn(posted)).toBe(new Date('2026-10-15T12:00:00.000Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+    expect(postTileMetrics(posted)).toEqual([])
+    const measured = postView({ ...posted.runtime, metrics: [{ observedAt: '2026-10-16T00:00:00.000Z', source: 'manual', values: { views: 12400, likes: 860, impressions: 99 } }] })
+    expect(postTileMetrics(measured).map(metric => metric.label)).toEqual(['views', 'likes'])
+    const impressionsOnly = postView({ ...posted.runtime, metrics: [{ observedAt: '2026-10-16T00:00:00.000Z', source: 'x', values: { impressions: 50, likes: null } }] })
+    expect(postTileMetrics(impressionsOnly).map(metric => metric.label)).toEqual(['impressions'])
   })
 })
