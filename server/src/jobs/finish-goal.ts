@@ -193,12 +193,15 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord, args: Re
   if (typeof start !== "number" || typeof end !== "number") throw new Error("Approve both the cold-open start and end");
   const rangeError = coldOpenRangeError(start, end, source.durationSeconds);
   if (rangeError) throw new Error(rangeError);
-  const profile = effectiveWatermarkProfile(await readWatermarkConfig(engine, "tiktok"), "tiktok");
+  const config = await readWatermarkConfig(engine, "tiktok");
+  const profile = effectiveWatermarkProfile(config, "tiktok");
   const identity = finishingIdentityKey({
     sourceObjectHash: source.file.objectHash,
     startSeconds: start,
     endSeconds: end,
     profile: watermarkProfileFor(profile.platform, profile),
+    qrStartSeconds: config.profile?.qrStartSeconds,
+    qrEndSeconds: config.profile?.qrEndSeconds,
   });
   const same = goal.finish?.identity === identity;
   if (same && goal.finish?.status === "completed" && goal.finish.finalArtifactId && engine.artifacts.get(goal.finish.finalArtifactId).ok) {

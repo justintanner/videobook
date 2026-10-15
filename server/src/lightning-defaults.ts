@@ -219,18 +219,27 @@ export function suggestedColdOpen(durationSeconds: number): { startSeconds: numb
   return { startSeconds: 0, endSeconds };
 }
 
+function finiteSeconds(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value * 1000) / 1000 : null;
+}
+
 export function finishingIdentityKey(input: {
   sourceObjectHash: string;
   startSeconds: number;
   endSeconds: number;
-  profile: LightningWatermarkProfile;
+  profile: LightningWatermarkProfile & { qrStartSeconds?: number | null; qrEndSeconds?: number | null };
+  qrStartSeconds?: number | null;
+  qrEndSeconds?: number | null;
 }): string {
   const round = (value: number) => Math.round(value * 1000) / 1000;
+  const qrStart = finiteSeconds(input.qrStartSeconds !== undefined ? input.qrStartSeconds : input.profile.qrStartSeconds);
+  const qrEnd = finiteSeconds(input.qrEndSeconds !== undefined ? input.qrEndSeconds : input.profile.qrEndSeconds);
   return JSON.stringify({
     sourceObjectHash: input.sourceObjectHash,
     startSeconds: round(input.startSeconds),
     endSeconds: round(input.endSeconds),
     profile: canonicalWatermarkProfile(input.profile),
+    ...(qrStart === null && qrEnd === null ? {} : { qrStartSeconds: qrStart, qrEndSeconds: qrEnd }),
   });
 }
 

@@ -138,6 +138,44 @@ describe("lightning defaults", () => {
       endSeconds: 2.3,
       profile: { ...profile, handleOpacity: 0.9 },
     })).not.toBe(base);
+    expect(base).not.toContain("qrStartSeconds");
+    expect(finishingIdentityKey({
+      sourceObjectHash: "abc",
+      startSeconds: 0,
+      endSeconds: 2.3,
+      profile,
+      qrStartSeconds: null,
+      qrEndSeconds: null,
+    })).toBe(base);
+    expect(finishingIdentityKey({
+      sourceObjectHash: "abc",
+      startSeconds: 0,
+      endSeconds: 2.3,
+      profile: { ...profile, qrStartSeconds: null, qrEndSeconds: null },
+    })).toBe(base);
+    const qrWindow = finishingIdentityKey({
+      sourceObjectHash: "abc",
+      startSeconds: 0,
+      endSeconds: 2.3,
+      profile,
+      qrStartSeconds: 1.2,
+      qrEndSeconds: 3.5,
+    });
+    expect(qrWindow).not.toBe(base);
+    expect(finishingIdentityKey({
+      sourceObjectHash: "abc",
+      startSeconds: 0,
+      endSeconds: 2.3,
+      profile: { ...profile, qrStartSeconds: 1.2, qrEndSeconds: 3.5 },
+    })).toBe(qrWindow);
+    expect(finishingIdentityKey({
+      sourceObjectHash: "abc",
+      startSeconds: 0,
+      endSeconds: 2.3,
+      profile,
+      qrStartSeconds: 1.2,
+      qrEndSeconds: 4,
+    })).not.toBe(qrWindow);
   });
 
   it("uses Thai and the lightning tags only for a fresh TikTok post", () => {

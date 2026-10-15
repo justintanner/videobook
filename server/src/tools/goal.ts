@@ -268,12 +268,18 @@ function selectV3Version(engine: Engine, goal: GoalRecord, args: GoalArgs): Goal
   const address = outputReference(document, output);
   const videoChanged = stage === "videos" && run.outputs.find(item => item.index === index)?.artifactId !== artifactId;
   const sceneChanged = stage === "frame" && run.outputs[0]?.artifactId !== artifactId;
+  const invalidated = videoChanged || sceneChanged;
   const finish = videoChanged
     ? { status: "review" as const, sourceArtifactId: artifactId, finalArtifactId: null, error: null }
     : sceneChanged ? null : goal.finish ?? null;
-  return saveGoal(engine, { ...goal, finish, stages: { ...goal.stages, [stage]: {
-    ...run, attempts, outputs: [...run.outputs.filter(item => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index),
-  } } });
+  return saveGoal(engine, {
+    ...goal,
+    ...(invalidated ? { status: "review" as const, error: null } : {}),
+    finish,
+    stages: { ...goal.stages, [stage]: {
+      ...run, attempts, outputs: [...run.outputs.filter(item => item.index !== index), { ...output, address }].sort((a, b) => a.index - b.index),
+    } },
+  });
 }
 
 function selectStill(engine: Engine, goal: GoalRecord, args: GoalArgs): GoalRecord {
@@ -397,7 +403,10 @@ async function updateV3Goal(engine: Engine, goal: GoalRecord, args: GoalArgs): P
   if (JSON.stringify(previous) === JSON.stringify(plan)) return goal;
   const promptChanged = previous.scene.prompt !== plan.scene.prompt || previous.video.prompt !== plan.video.prompt;
   await writeGoalContent(engine, goal, { ...content, plan, revision: content.revision + 1 });
-  return saveGoal(engine, { ...goal, ...(promptChanged ? { finish: null } : {}) });
+  return saveGoal(engine, {
+    ...goal,
+    ...(promptChanged ? { status: "review" as const, error: null, finish: null } : {}),
+  });
 }
 
 async function updateGoal(engine: Engine, goal: GoalRecord, args: GoalArgs): Promise<GoalRecord> {

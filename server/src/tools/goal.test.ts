@@ -1164,9 +1164,17 @@ describe("staged video goals through MCP", () => {
     const replacement = await settleChain(again.chainId!, "video");
     const replaced = await status(goal.goalId);
     expect(replaced.finish).toMatchObject({ status: "review", sourceArtifactId: replacement, finalArtifactId: null });
+    saveGoal(engine, {
+      ...readGoal(engine, goal.goalId),
+      status: "completed",
+      finish: { status: "completed", sourceArtifactId: replacement, finalArtifactId: replacement, error: null },
+    });
+    expect(await status(goal.goalId)).toMatchObject({ status: "completed", finalArtifactId: replacement });
     const selected = await invoke({ action: "select", goal_id: goal.goalId, revision: replaced.revision, stage: "videos", index: 0, artifact_id: videoArtifactId });
     expect(selected.stages.videos?.outputs[0]?.artifactId).toBe(videoArtifactId);
-    expect(selected.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null });
+    expect(selected.status).toBe("review");
+    expect(selected.finalArtifactId).toBeNull();
+    expect(selected.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null, error: null });
     const revising = await invoke({ action: "revise", goal_id: goal.goalId, revision: selected.revision, stage: "frame", index: 0, feedback: "Raise the board" });
     expect(revising.finish).toBeNull();
     expect(revising.status).toBe("running");
@@ -1206,6 +1214,32 @@ describe("staged video goals through MCP", () => {
     });
     expect(textOf(rejected)).toContain("settings stay with this goal");
     expect((await status(goal.goalId)).revision).toBe(prompted.revision);
+    saveGoal(engine, {
+      ...readGoal(engine, goal.goalId),
+      status: "completed",
+      finish: { status: "completed", sourceArtifactId: videoId, finalArtifactId: videoId, error: null },
+    });
+    const completed = await status(goal.goalId);
+    expect(completed).toMatchObject({ status: "completed", finalArtifactId: videoId });
+    if (!completed.plan || !("scene" in completed.plan) || !("video" in completed.plan)) throw new Error("expected the completed v3 plan");
+    const retitled = await invoke({
+      action: "update", goal_id: goal.goalId, revision: completed.revision,
+      plan: { ...completed.plan, title: "Still the finished cut" },
+    });
+    expect(retitled).toMatchObject({ status: "completed", finalArtifactId: videoId });
+    expect(retitled.finish?.status).toBe("completed");
+    if (!retitled.plan || !("scene" in retitled.plan) || !("video" in retitled.plan)) throw new Error("expected the titled plan");
+    const reopened = await invoke({
+      action: "update", goal_id: goal.goalId, revision: retitled.revision,
+      plan: {
+        ...retitled.plan,
+        scene: { ...retitled.plan.scene, prompt: `${retitled.plan.scene.prompt} once more` },
+        video: { ...retitled.plan.video, prompt: `${retitled.plan.video.prompt} once more` },
+      },
+    });
+    expect(reopened.status).toBe("review");
+    expect(reopened.finalArtifactId).toBeNull();
+    expect(reopened.finish).toBeNull();
   }, 60_000);
 
   it("retries an interrupted v3 scene unless the reference changed, including a video-only goal", async () => {
@@ -1438,6 +1472,20 @@ describe("staged video goals through MCP", () => {
     expect(coldOpens()).toBe(3);
     const thirdFinal = rewatermarked.finalArtifactId!;
     const thirdHash = await mediaHash(thirdFinal);
+    const burnsBeforeQr = burns();
+    const coldOpensBeforeQr = coldOpens();
+
+    await saveWatermarkProfile({ qrStartSeconds: 0.4, qrEndSeconds: 1.1 }, "tiktok", engine);
+    const qrRewatermarked = await awaitFinish((await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1 })).goalId);
+    expect(qrRewatermarked.finalArtifactId).not.toBe(thirdFinal);
+    expect(qrRewatermarked.finish?.coldOpenArtifactId).not.toBe(rewatermarked.finish?.coldOpenArtifactId);
+    const fourthFinal = qrRewatermarked.finalArtifactId!;
+    const fourthHash = await mediaHash(fourthFinal);
+    expect(fourthHash).not.toBe(thirdHash);
+    expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
+    expect(await mediaHash(thirdFinal)).toBe(thirdHash);
+    expect(coldOpens()).toBe(coldOpensBeforeQr + 1);
+    expect(burns()).toBe(burnsBeforeQr + 1);
 
     const cancelling = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1.5 });
     expect(cancelling.finish?.status).toBe("running");
@@ -1448,8 +1496,10 @@ describe("staged video goals through MCP", () => {
     expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
     expect(engine.jobs.queue.list().some(job => job.type.startsWith("generate_") && ["queued", "running", "completing"].includes(job.state))).toBe(false);
-    expect(coldOpens()).toBe(3);
+    expect(coldOpens()).toBe(coldOpensBeforeQr + 1);
+    expect(burns()).toBe(burnsBeforeQr + 1);
     expect(await mediaHash(thirdFinal)).toBe(thirdHash);
+    expect(await mediaHash(fourthFinal)).toBe(fourthHash);
     expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
 
     saveGoal(engine, {
@@ -1475,6 +1525,7 @@ describe("staged video goals through MCP", () => {
     expect(await mediaHash(combinedId)).toBe(combinedHash);
     expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
     expect(await mediaHash(thirdFinal)).toBe(thirdHash);
+    expect(await mediaHash(fourthFinal)).toBe(fourthHash);
     expect(engine.sequences.getPrimary().clips).toHaveLength(0);
     expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
