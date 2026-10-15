@@ -11,11 +11,13 @@ import {
   defaultIcloudFolder,
   fetchDropboxConnection,
   fetchIcloudStatus,
+  latestPostForSource,
   postDeliveryArgs,
   postDeliveryReceipt,
   postDeliveryTool,
   postDeliveryValidation,
   resolveDeliveryPost,
+  resolveDeliverySource,
   reviewWithIcloudStatus,
   startDropboxConnection,
   waitForDropboxConnection,
@@ -7974,9 +7976,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const hint = entry === 'dropbox' ? '/upload-post-to-dropbox @b1' : '/save-post-to-icloud @b1'
     if (!post) {
       return { ok: false, message: reference?.trim()
-        ? `${reference.trim()} is not a Post cell. Select a Post or use ${hint}.`
+        ? `${reference.trim()} is not a Post or a clip. Select one or use ${hint}.`
         : `Select a Post cell or use ${hint}.` }
     }
+    return openDeliveryReviewForPost(post, entry, chat)
+  }
+
+  const openSourceDeliveryReview = async (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution): Promise<ComposerOutcome> => {
+    const trimmed = reference?.trim()
+    const source = trimmed && mcp.state === 'ready' && bookId && notebook
+      && !resolveDeliveryPost(notebookPosts, notebook.cells, trimmed, null)
+      ? resolveDeliverySource(notebook.cells, trimmed)
+      : null
+    if (!source || !bookId || !notebook) return openPostDeliveryReview(reference, entry, chat)
+    const existing = latestPostForSource(notebookPosts, source.id)
+    if (existing) return openDeliveryReviewForPost(existing, entry, chat)
+    try {
+      const created = await call('create_post', { book_id: bookId, notebook_id: notebook.id, source_cell_id: source.id }) as PostView
+      await refreshBookData(bookId, notebook.id)
+      return openDeliveryReviewForPost(created, entry, chat)
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  const openDeliveryReviewForPost = (post: PostView, entry: DeliveryDestination, chat?: ChatExecution): ComposerOutcome => {
+    if (!bookId || !notebook) return { ok: false, message: 'Open a connected notebook before delivering a Post.' }
     const bookName = activeBook?.name ?? 'book'
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, false, () => setPendingWatermarkReview(null))
@@ -8028,7 +8053,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return openColdOpenReview(asString(plan.params.asset_id) ?? undefined, chat)
     }
     if (plan.tool === 'upload_post_to_dropbox' || plan.tool === 'save_post_to_icloud') {
-      return openPostDeliveryReview(asString(plan.params.post_cell_id) ?? undefined, plan.tool === 'upload_post_to_dropbox' ? 'dropbox' : 'icloud', chat)
+      return openSourceDeliveryReview(asString(plan.params.post_cell_id) ?? undefined, plan.tool === 'upload_post_to_dropbox' ? 'dropbox' : 'icloud', chat)
     }
     if (plan.tool === 'show_media_fullscreen') {
       const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
@@ -9312,7 +9337,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return openColdOpenReview(asString(parsed.asset_ref) ?? undefined, chat)
       }
       if (command.uiAction === 'open_post_dropbox' || command.uiAction === 'open_post_icloud') {
-        return openPostDeliveryReview(rest || undefined, command.uiAction === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
+        return openSourceDeliveryReview(rest || undefined, command.uiAction === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -9445,7 +9470,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!action) return { ok: false, message: 'Reload Actions and choose the command again.', nextInput: input }
       if (action.handler.kind === 'ui' && (action.handler.action === 'open_post_dropbox' || action.handler.action === 'open_post_icloud')) {
         const reference = input.trim().slice(action.command.length).trim()
-        return openPostDeliveryReview(reference || undefined, action.handler.action === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
+        return openSourceDeliveryReview(reference || undefined, action.handler.action === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
       }
       const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
       const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)

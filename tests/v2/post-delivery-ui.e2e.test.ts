@@ -65,6 +65,11 @@ describe('Post delivery review in the chat composer', () => {
     const cell = engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 0 }, outputArtifactId: source.value.artifactId })
     sourceCellId = cell.id
     await engine.notebooks.insertCell(notebook.id, cell)
+    const loose = await engine.artifacts.create({ kind: 'video', label: 'Unposted rain clip' })
+    if (!loose.ok) throw new Error(loose.error.message)
+    await engine.files.writeFromPath(loose.value.artifactId, 'original.mp4', fixture)
+    await registerMediaProbe(engine, loose.value.artifactId, 'original.mp4', await probeVideo(fixture))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 1 }, outputArtifactId: loose.value.artifactId }))
     await manager.close()
     const port = await availablePort()
     const origin = `http://127.0.0.1:${port}`
@@ -225,8 +230,25 @@ describe('Post delivery review in the chat composer', () => {
     await review().getByRole('button', { name: /Cancel/ }).click()
     await review().waitFor({ state: 'hidden' })
 
+    const beforeCreates = calls.filter(name => name === 'create_post').length
     await command('/save-post-to-icloud @a1')
-    await expect.poll(() => page.getByText('@a1 is not a Post cell', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThan(0)
+    await review().waitFor({ state: 'visible' })
+    expect(await review().getByText(post.address, { exact: true }).first().isVisible()).toBe(true)
+    expect(calls.filter(name => name === 'create_post').length).toBe(beforeCreates)
+    await review().getByRole('button', { name: /Cancel/ }).click()
+    await review().waitFor({ state: 'hidden' })
+
+    await command('/save-post-to-icloud @d2')
+    await review().waitFor({ state: 'visible', timeout: 15_000 })
+    expect(calls.filter(name => name === 'create_post').length).toBe(beforeCreates + 1)
+    const created = (await call<{ posts: PostWire[] }>('list_posts')).posts.filter(item => item.id !== post.id)
+    expect(created).toHaveLength(1)
+    expect(await review().getByText(created[0]!.address, { exact: true }).first().isVisible()).toBe(true)
+    await review().getByRole('button', { name: /Cancel/ }).click()
+    await review().waitFor({ state: 'hidden' })
+
+    await command('/save-post-to-icloud @h8')
+    await expect.poll(() => page.getByText('@h8 is not a Post or a clip', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThan(0)
     expect(await review().count()).toBe(0)
 
     const catalog = await call<{ actions: Array<{ command: string; handler: { kind: string; action?: string } }> }>('list_workspace_actions')

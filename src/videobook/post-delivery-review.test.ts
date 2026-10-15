@@ -11,10 +11,12 @@ import {
   postDeliveryBadges,
   icloudSyncFromTool,
   icloudSyncShouldPoll,
+  latestPostForSource,
   postDeliveryArgs,
   postDeliveryReceipt,
   postDeliveryValidation,
   resolveDeliveryPost,
+  resolveDeliverySource,
   reviewWithIcloudStatus,
   type ICloudStatus,
   type PostDeliveryReview,
@@ -78,6 +80,23 @@ describe('post delivery review', () => {
     expect(resolveDeliveryPost(posts, cells, undefined, posts[0]!.id)?.id).toBe(posts[0]!.id)
     expect(resolveDeliveryPost(posts, cells, '@a3', posts[0]!.id)).toBeNull()
     expect(resolveDeliveryPost(posts, cells, undefined, 'other-cell')).toBeNull()
+  })
+
+  it('resolves a clip cell by address, cell id or artifact id and finds its newest Post', () => {
+    const clips = [
+      ...cells,
+      { id: 'source-cell', type: 'video', outputArtifactId: 'source-artifact', slot: { row: 3, column: 1 } },
+      { id: 'empty-cell', type: 'video', outputArtifactId: null, slot: { row: 3, column: 2 } },
+    ] as unknown as NotebookCell[]
+    expect(resolveDeliverySource(clips, '@D2')?.id).toBe('source-cell')
+    expect(resolveDeliverySource(clips, 'source-cell')?.id).toBe('source-cell')
+    expect(resolveDeliverySource(clips, 'source-artifact')?.id).toBe('source-cell')
+    expect(resolveDeliverySource(clips, '@d3')).toBeNull()
+    expect(resolveDeliverySource(clips, '@b1')).toBeNull()
+    const older = postView()
+    const newer = { ...postView(), id: 'newer-post', definition: { ...postView().definition, createdAt: '2026-10-15T09:42:00.000Z' } }
+    expect(latestPostForSource([older, newer], 'source-cell')?.id).toBe('newer-post')
+    expect(latestPostForSource([older, newer], 'other-cell')).toBeNull()
   })
 
   it('starts on iCloud unless the entry is Dropbox or iCloud Drive is unavailable', () => {

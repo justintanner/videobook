@@ -1,4 +1,5 @@
 import type { NotebookCell } from 'videobook-engine'
+import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import type { PostView } from '../../server/src/posts/post-contract'
 import { defaultPostFolderName, icloudFolderError } from '../../server/src/posts/post-folder'
 import type { ConfirmValidation } from './confirm-validation'
@@ -68,6 +69,22 @@ export function resolveDeliveryPost(
   const trimmed = reference?.trim()
   if (trimmed) return posts.find(post => matchesPost(post, cells, trimmed)) ?? null
   return posts.find(post => post.id === selectedCellId) ?? null
+}
+
+const DELIVERABLE_SOURCE_TYPES: ReadonlySet<string> = new Set(['image', 'video', 'generate_image', 'generate_video', 'concat', 'splice', 'split_video'])
+
+export function resolveDeliverySource(cells: readonly NotebookCell[], reference: string): NotebookCell | null {
+  const normalized = reference.trim().replace(/^@/u, '').toLowerCase()
+  return cells.find(cell => cell.type !== 'post'
+    && Boolean(cell.outputArtifactId)
+    && DELIVERABLE_SOURCE_TYPES.has(cell.type)
+    && [cell.id, cell.outputArtifactId, notebookGridAddress(cell.slot)].some(id => id?.toLowerCase() === normalized)) ?? null
+}
+
+export function latestPostForSource(posts: readonly PostView[], sourceCellId: string): PostView | null {
+  return posts
+    .filter(post => post.definition.source?.cellId === sourceCellId)
+    .reduce<PostView | null>((latest, post) => !latest || post.definition.createdAt > latest.definition.createdAt ? post : latest, null)
 }
 
 export function defaultIcloudFolder(post: PostView, bookName: string): string {
