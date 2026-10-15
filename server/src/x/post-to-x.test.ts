@@ -1,3 +1,4 @@
+import { readPostRuntime } from "../posts/post-store.js";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -362,7 +363,7 @@ describe("postToX helper", () => {
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
       postToX({ engine: fs, assetId: created.value.artifactId, bookId, x, text: "song" }),
-    ).rejects.toThrow(/unsupported media file/i);
+    ).rejects.toThrow(/image or video/i);
   });
 
   it("requires a title before touching media or the network", async () => {
@@ -572,20 +573,11 @@ describe("postToX helper", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     const published = notebook.value.cells.find((cell) => cell.id === result.cell_id);
     expect(published).toMatchObject({
-      type: "video",
-      slot: { row: 0, column: 1 },
-      outputArtifactId: assetId,
-      inputs: {
-        sourceOperation: "post_to_x",
-        platform: "x",
-        tweetId: "TWEET_CELL",
-        tweetUrl: "https://x.com/i/web/status/TWEET_CELL",
-        postedAt: result.posted_at,
-        status: "posted",
-        replies: [],
-        sourceCellId: seeded.sourceCell.id,
-      },
+      type: "post", slot: { row: 0, column: 1 },
+      inputs: { post: { platform: "x", source: { artifactId: assetId, cellId: seeded.sourceCell.id } } },
     });
+    expect(published?.outputArtifactId).not.toBe(assetId);
+    expect(readPostRuntime(fs, result.cell_id!)).toMatchObject({ status: "posted", url: "https://x.com/i/web/status/TWEET_CELL", postedAt: result.posted_at, x: { tweetId: "TWEET_CELL", replies: [] } });
     expect(isPublishedPostCell(published!)).toBe(true);
     expect(notebook.value.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -671,20 +663,17 @@ describe("postToX helper", () => {
     const notebook = fs.notebooks.read(seeded.notebookId);
     if (!notebook.ok) throw new Error(notebook.error.message);
     const published = notebook.value.cells.find((cell) => cell.id === result.cell_id);
-    expect(published?.inputs).toMatchObject({
+    expect(published?.type).toBe("post");
+    expect(readPostRuntime(fs, result.cell_id!)).toMatchObject({
       status: "partially_posted",
-      replies: [{
-        tweetId: "REPLY_OK",
-        tweetUrl: "https://x.com/i/web/status/REPLY_OK",
-      }],
-      followupError: {
-        replyNumber: 2,
-        message: expect.stringContaining("Temporary X error"),
-      },
+      x: { replies: [{ tweet_id: "REPLY_OK", tweet_url: "https://x.com/i/web/status/REPLY_OK" }],
+        followupError: { reply_number: 2, message: expect.stringContaining("Temporary X error") } },
     });
+    const replay = await postToX({ engine: fs, assetId, bookId, postCellId: result.cell_id, x });
+    expect(replay.tweet_id).toBe(result.tweet_id);
   });
 
-  it("does not create a cell or change asset status when the post fails", async () => {
+  it("retains a failed Post draft without changing source asset status", async () => {
     const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
     const seeded = await seedSourceCell(fs, assetId);
     const before = await fs.status.get(assetId);
@@ -701,11 +690,12 @@ describe("postToX helper", () => {
     expect(after).toEqual(before);
     const notebook = fs.notebooks.read(seeded.notebookId);
     if (!notebook.ok) throw new Error(notebook.error.message);
-    expect(notebook.value.cells).toHaveLength(1);
+    expect(notebook.value.cells).toHaveLength(2);
+    expect(readPostRuntime(fs, notebook.value.cells.find(cell => cell.type === "post")!.id).status).toBe("failed");
     expect(notebook.value.cells[0]?.id).toBe(seeded.sourceCell.id);
   });
 
-  it("keeps a successful post when notebook cell creation fails", async () => {
+  it("refuses to publish when the Post cell cannot be saved", async () => {
     const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
     await seedSourceCell(fs, assetId, "image");
     const originalWrite = fs.notebooks.write.bind(fs.notebooks);
@@ -718,13 +708,7 @@ describe("postToX helper", () => {
         accessToken: "tok",
         fetch: makeStubFetch(imagePostPlan("MFAIL", "TFAIL")).fetch,
       });
-      const result = await postToX({
-        engine: fs, assetId, bookId, text: "still posted", x,
-      });
-      expect(result.status).toBe("posted");
-      expect(result.tweet_id).toBe("TFAIL");
-      expect(result.cell_id).toBeUndefined();
-      expect(result.cell_error).toMatch(/notebook write failed/);
+      await expect(postToX({ engine: fs, assetId, bookId, text: "still posted", x })).rejects.toThrow("notebook write failed");
     } finally {
       fs.notebooks.write = originalWrite;
     }

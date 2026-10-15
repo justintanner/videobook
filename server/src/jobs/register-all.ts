@@ -1,3 +1,4 @@
+import { registerPostRecordJobs } from "./post-record.js";
 import { registerColdOpenJobs } from "./cold-open.js";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
@@ -310,6 +311,7 @@ export function registerAllJobHandlers(
   registerExtendAudioJob(engine);
   registerRemoveSoundJob(engine);
   registerPostToXJob(engine);
+  registerPostRecordJobs(engine);
   registerRunNotebookJob(engine);
   registerRelayoutNotebookJob(engine);
   registerSemanticIndexJob(engine);

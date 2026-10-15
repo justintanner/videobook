@@ -19,6 +19,7 @@ import {
 } from '@/videobook/notebook-cell-add-menu'
 
 const cellPaletteIcons: Record<NotebookCellAddType, LucideIcon> = {
+  post: Film,
   audio: AudioWaveform,
   image: Image,
   video: Video,

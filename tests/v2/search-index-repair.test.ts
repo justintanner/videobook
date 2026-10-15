@@ -185,6 +185,7 @@ it('honors cancellation before changing index coverage or media', async () => {
   const abort = new AbortController()
   abort.abort(new Error('Cancelled indexing'))
   await expect(runRepair(engine, ['image'], {
+    jobId: 1,
     signal: abort.signal, setLease: () => undefined, getOwnerId: () => '', markAssetFailureHandled: () => undefined,
   })).rejects.toThrow('Cancelled indexing')
   expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(1)

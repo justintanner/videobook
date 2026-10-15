@@ -55,6 +55,7 @@ const cellFamilyByType: Record<NotebookCellType, NotebookCellFamily> = {
   generate_video: 'gen',
   goal: 'goal',
   image: 'image',
+  post: 'data',
   prompt: 'gen',
   splice: 'video',
   timeline: 'data',

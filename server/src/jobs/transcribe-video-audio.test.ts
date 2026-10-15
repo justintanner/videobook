@@ -11,6 +11,7 @@ import { registerTranscribeVideoAudioJob, runTranscribeVideoAudio } from "./tran
 function makeContext(): JobHandlerContext {
   let lease: LeaseToken | null = null;
   return {
+    jobId: 1,
     signal: new AbortController().signal,
     setLease(token: LeaseToken): void {
       lease = token;

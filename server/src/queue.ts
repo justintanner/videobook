@@ -24,6 +24,7 @@ export type LeaseToken =
   | { kind: "task"; taskId: string };
 
 export interface JobHandlerContext {
+  jobId: number;
   signal: AbortSignal;
   setLease(token: LeaseToken): void;
   getOwnerId(): string;
@@ -365,6 +366,7 @@ function makeWrappedResolver(
         let assetFailureHandled = false;
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         const context: JobHandlerContext = {
+          jobId: job.id,
           signal: jobSignal,
           setLease(next) {
             const current = lease.current;
@@ -588,6 +590,12 @@ async function ensureBookReady(
  */
 const ARTIFACT_DETACHED_JOB_TYPES: ReadonlySet<string> = new Set([
   "post_to_x",
+  "post_dropbox",
+  "post_prepare_x",
+  "post_create",
+  "post_update",
+  "post_link",
+  "post_metrics",
   "semantic_index",
   "tag_asset",
   "backfill_asset_tags",

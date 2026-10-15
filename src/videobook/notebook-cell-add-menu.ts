@@ -19,6 +19,7 @@ const notebookCellAddItems = [
   { type: 'audio', label: 'Audio', group: 'Media' },
   { type: 'image', label: 'Image', group: 'Media' },
   { type: 'video', label: 'Video', group: 'Media' },
+  { type: 'post', label: 'Post', group: 'Media' },
   { type: 'character', label: 'Character', group: 'Media' },
   { type: 'prompt', label: 'Prompt', group: 'Text & analysis' },
   { type: 'analyze', label: 'Analyze', group: 'Text & analysis' },

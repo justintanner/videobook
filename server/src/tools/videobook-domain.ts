@@ -1,3 +1,4 @@
+import { migrateLegacyPosts, notebookPosts } from "../posts/post-store.js";
 import { notebookCellOccupiedSlots, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
@@ -102,6 +103,7 @@ function notebookConnectionError(
   const target = notebook.cells.find((cell) => cell.id === targetId);
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
+  if (source.type === "post" || target.type === "post") return "Post connections are frozen; use create_post or update_post to choose a source";
   if (notebookConnectionWouldCreateCycle(notebook.edges, sourceId, targetId)) {
     return `Connecting ${notebookGridTag(source.slot)} to ${notebookGridTag(target.slot)} would create a cycle`;
   }
@@ -702,6 +704,7 @@ function notebookPayload(
     generationPlans: normalized.generationPlans ?? [],
     notebookRunPlans: normalized.notebookRunPlans ?? [],
     cells: normalized.cells.map(cellPayload),
+    posts: notebookPosts(engine, normalized),
     edges: normalized.edges,
   };
 }
@@ -1291,6 +1294,7 @@ export function videobookDomainDefs(
       scope: "book",
       schema: { ...bookSchema, notebook_id: z.string().uuid() },
       handler: async (args) => {
+        await migrateLegacyPosts(engine);
         const result = engine.notebooks.read(String(args.notebook_id));
         return result.ok ? json(notebookPayload(engine, result.value)) : failure(result.error.message);
       },
@@ -1357,6 +1361,7 @@ export function videobookDomainDefs(
         cell_id: z.string().uuid(),
       },
       handler: async (args) => {
+        await migrateLegacyPosts(engine);
         const result = engine.notebooks.read(String(args.notebook_id));
         if (!result.ok) return failure(result.error.message);
         try {
@@ -1445,6 +1450,7 @@ export function videobookDomainDefs(
         expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
+        if ((args.cell as CellInput).type === "post") return failure("Use create_post to freeze source media and create a Post cell");
         if ((args.cell as CellInput).type === "goal") return failure(GOAL_TILE_CREATE_ERROR);
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
         let outputCell: NotebookCell | null = null;
@@ -1564,6 +1570,11 @@ export function videobookDomainDefs(
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
                 found = true;
+                if (patch.type === "post" && cell.type !== "post") throw new Error("Use create_post to freeze source media and create a Post cell");
+                if (cell.type === "post") {
+                  if (Object.keys(patch).some((key) => key !== "slot" && key !== "label")) throw new Error("Use update_post to edit publication details");
+                  return { ...cell, ...(patch.slot ? { slot: patch.slot } : {}), ...(patch.label !== undefined ? { label: patch.label } : {}) };
+                }
                 if (cell.type === "goal") return moveGoalTile(cell, patch);
                 if (patch.type && patch.type !== cell.type) {
                   const isUnconnected = !notebook.edges.some((edge) =>
@@ -1881,6 +1892,7 @@ export function videobookDomainDefs(
           "disconnect_notebook_cells",
           (notebook) => {
             const removed = notebook.edges.find((edge) => edge.id === edgeId);
+            if (removed && notebook.cells.some((cell) => cell.id === removed.target && cell.type === "post")) throw new Error("A Post keeps its frozen source connection");
             const disconnected = {
               ...notebook,
               edges: notebook.edges.filter((edge) => edge.id !== edgeId),
@@ -1936,6 +1948,7 @@ export function videobookDomainDefs(
               if (!target) {
                 throw new Error(`Target cell not found: ${targetCellId}`);
               }
+              if (target.type === "post") throw new Error("Use update_post to choose a Post source");
               const existing = notebook.edges.filter((edge) =>
                 edge.target === targetCellId
                 && edge.targetInput === targetInput);

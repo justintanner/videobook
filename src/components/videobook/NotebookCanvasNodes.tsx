@@ -1,3 +1,4 @@
+import './Posts.css'
 import type { NotebookCellType } from 'videobook-engine'
 import { seedance25FrameAspectRatio } from '../../../server/src/seedance25'
 import {
@@ -102,6 +103,7 @@ export function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'analyze') return <Activity size={14} />
   if (kind === 'analysis') return <Braces size={14} />
   if (kind === 'character') return <CircleDot size={14} />
+  if (kind === 'post') return <Flag size={14} />
   if (kind === 'goal') return <Flag size={14} />
   return <Film size={14} />
 }
@@ -623,7 +625,14 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             </span>
           )}
         </header>
-        {emptyMediaSlot && slotKind ? (
+        {data.kind === 'post' ? (
+          <div className="post-tile">
+            <strong>{data.post?.definition.platform ?? 'Publication'} · {(data.post?.runtime.status ?? 'draft').replaceAll('_', ' ')}</strong>
+            <p>{data.post?.definition.caption || 'Track a clip from idea to published results'}</p>
+            <small>{data.post?.runtime.postedAt ? new Date(data.post.runtime.postedAt).toLocaleDateString() : data.post?.runtime.dropbox?.completedAt ? 'Dropbox files ready · paste the post link' : 'Saved clip → delivery → results'}</small>
+            <div className="post-tile-stats"><span>{data.post?.runtime.metrics.at(-1)?.values.impressions?.toLocaleString() ?? '—'} impressions</span><span>{data.post?.runtime.metrics.at(-1)?.values.likes?.toLocaleString() ?? '—'} likes</span></div>
+          </div>
+        ) : emptyMediaSlot && slotKind ? (
           <MediaSlotTile
             cellId={id}
             kind={slotKind}

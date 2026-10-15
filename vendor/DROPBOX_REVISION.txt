@@ -1,0 +1,7 @@
+version: 0.14.2
+base: https://registry.npmjs.org/@apicity/dropbox/-/dropbox-0.14.2.tgz
+git: https://github.com/justintanner/apicity.git
+posts-patch-revision: bb63a2e93736fc25d2322fe8313354cf171d8028
+patch: vendor/apicity-dropbox-posts.patch
+tarball: vendor/apicity-dropbox-0.14.2-feaaf9d.tgz
+sha256: feaaf9dec65d7a2d31a62185d95a98cb3e9f4c8703bf38fd4b0acdea734ab02b

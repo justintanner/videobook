@@ -1,4 +1,5 @@
 import "./load-env.js";
+import { startPostMetricsScheduler, stopPostMetricsScheduler } from "./posts/post-metrics.js";
 import cors from "cors";
 import express from "express";
 import { createHash } from "node:crypto";
@@ -264,6 +265,7 @@ async function hydrateLibrary(): Promise<void> {
     );
   }
   await loadAndArmAll();
+  startPostMetricsScheduler();
 }
 
 async function start(): Promise<void> {
@@ -280,6 +282,7 @@ async function shutdown(): Promise<void> {
   let exitCode = 0;
   try {
     stopScheduler();
+    stopPostMetricsScheduler();
     await voiceSessions.close();
     await mcpHandler.close();
     await bookManager.stopMigrations();

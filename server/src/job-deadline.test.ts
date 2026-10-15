@@ -40,6 +40,7 @@ describe("job deadlines", () => {
           async (signal) => {
             let lease: LeaseToken | null = null;
             const ctx: JobHandlerContext = {
+              jobId: 1,
               signal,
               setLease: (token) => {
                 lease = token;

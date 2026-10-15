@@ -10,11 +10,11 @@ describe('notebook cell add menu', () => {
     expect(filterNotebookCellAddItems('generate_audio').map((item) => item.type))
       .toEqual(['generate_audio'])
     expect(filterNotebookCellAddItems('media').map((item) => item.type))
-      .toEqual(['audio', 'image', 'video', 'character'])
+      .toEqual(['audio', 'image', 'video', 'post', 'character'])
   })
 
   it('returns every option for a blank search and none for an unknown search', () => {
-    expect(filterNotebookCellAddItems('')).toHaveLength(14)
+    expect(filterNotebookCellAddItems('')).toHaveLength(15)
     expect(filterNotebookCellAddItems('missing cell type')).toEqual([])
   })
 

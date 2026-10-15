@@ -155,6 +155,7 @@ export function initialActionValues(action: WorkspaceAction, context: WorkspaceA
     }
   }
   if (action.target.kind === 'cell' && action.target.multiple && action.target.argument && context.cellIds?.length) values[action.target.argument] = context.cellIds
+  if (action.target.kind === 'cell' && !action.target.multiple && action.target.argument && context.cellId) values[action.target.argument] = context.cellId
   if (fields.object_hash && context.assetId && context.media?.[context.assetId]?.objectHash) values.object_hash = context.media[context.assetId]!.objectHash
   return values
 }

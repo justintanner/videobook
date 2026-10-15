@@ -22,6 +22,8 @@ export type SettingsStorageSnapshot =
   | { bookId: string; status: 'error'; error: string }
 
 const settingLabels: Readonly<Record<string, string>> = {
+  DROPBOX_CLIENT_ID: 'Dropbox app key',
+  DROPBOX_CLIENT_SECRET: 'Dropbox app secret (optional)',
   X_CLIENT_ID: 'X client ID',
   X_CLIENT_SECRET: 'X client secret',
   B2_ACCESS_KEY_ID: 'Access key ID',

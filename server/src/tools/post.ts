@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PostView } from "../posts/post-contract.js";
 import { queue } from "../queue.js";
 import { schedulePost } from "../scheduled-posts.js";
 import type { PostToXResult, XPostFollowup } from "../x/post-contract.js";
@@ -53,7 +54,8 @@ export function postDef(): ToolDef {
     description:
       "Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.",
     schema: {
-      asset_id: z.string().describe("Asset to post (e.g. vid-clip-name, img-photo-name)"),
+      post_cell_id: z.string().uuid().optional().describe("Existing Post cell to publish; uses its frozen media and caption"),
+      asset_id: z.string().optional().describe("Asset to post (e.g. vid-clip-name, img-photo-name)"),
       book_id: z.string().describe("Book id containing the asset"),
       platform: z.enum(["x"]).default("x").describe("Target platform; defaults to 'x'"),
       text: z
@@ -84,6 +86,7 @@ export function postDef(): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
+        post_cell_id,
         book_id,
         platform = "x",
         text,
@@ -92,7 +95,8 @@ export function postDef(): ToolDef {
         followups,
       } =
         args as {
-          asset_id: string;
+          asset_id?: string;
+          post_cell_id?: string;
           book_id: string;
           platform?: "x";
           text?: string;
@@ -110,7 +114,7 @@ export function postDef(): ToolDef {
         };
       }
 
-      if (!text?.trim()) {
+      if (!text?.trim() && !post_cell_id) {
         return {
           isError: true as const,
           content: [
@@ -119,6 +123,13 @@ export function postDef(): ToolDef {
         };
       }
 
+      let prepared: PostView;
+      try {
+        prepared = await queue.enqueueAndWait<PostView>(`post-prepare-${post_cell_id ?? asset_id}-${Date.now()}`, { type: "post_prepare_x", bookId: book_id, assetId: asset_id, postCellId: post_cell_id, text, orientation, followups });
+      } catch (error) {
+        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
+      }
+      const frozenAssetId = prepared.definition.source!.snapshotArtifactId!;
       if (scheduled_for) {
         const when = new Date(scheduled_for).getTime();
         if (Number.isNaN(when)) {
@@ -132,7 +143,7 @@ export function postDef(): ToolDef {
         if (when - Date.now() > SCHEDULE_LEAD_MS) {
           try {
             const result = await schedulePost(
-              { asset_id, book_id, platform, text, orientation, followups },
+              { asset_id: frozenAssetId, book_id, platform, text, post_cell_id: prepared.id },
               scheduled_for,
             );
             return {
@@ -144,6 +155,8 @@ export function postDef(): ToolDef {
                     schedule_id: result.schedule_id,
                     scheduled_for: result.scheduled_for,
                     platform,
+                    cell_id: prepared.id,
+                    cell_address: prepared.address,
                   }),
                 },
               ],
@@ -162,11 +175,12 @@ export function postDef(): ToolDef {
         }
       }
 
-      const jobId = `post-x-${asset_id}-${Date.now()}`;
+      const jobId = `post-x-${prepared.id}`;
       try {
         const result = await queue.enqueueAndWait<PostToXResult>(jobId, {
           type: "post_to_x",
-          assetId: asset_id,
+          assetId: frozenAssetId,
+          postCellId: prepared.id,
           bookId: book_id,
           text,
           orientation,

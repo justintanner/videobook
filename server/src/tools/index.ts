@@ -222,6 +222,7 @@ import { applySfxDef } from "./apply-sfx.js";
 import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { bookUsageDef } from "./book-usage.js";
+import { postRecordDefs } from "./post-record.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { createWatermarkCardDef } from "./create-watermark.js";
@@ -509,6 +510,7 @@ export function getAllToolDefs(
 
     generateElevenlabsT2aDef(engine),
     postDef(),
+    ...postRecordDefs(engine),
     xConnectStartDef(),
     xConnectStatusDef(),
     createQrOutroDef(engine),

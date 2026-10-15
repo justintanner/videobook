@@ -92,6 +92,8 @@ function targetForSchema(schema: ActionInputSchema, group: ActionGroup): ActionT
   const fields = schema.properties ?? {};
   if (fields.cell_id) return { kind: "cell", argument: "cell_id" };
   if (fields.cell_ids) return { kind: "cell", argument: "cell_ids", multiple: true };
+  if (fields.post_cell_id && schema.required?.includes("post_cell_id")) return { kind: "cell", argument: "post_cell_id" };
+  if (fields.source_cell_id) return { kind: "cell", argument: "source_cell_id" };
   if (fields.clip_id) return { kind: "clip", argument: "clip_id" };
   if (fields.track_id) return { kind: "track", argument: "track_id" };
   const asset = ["asset_id", "asset_ref", "artifact_id", "artifact_ref", "audio_ref", "video_ref", "image_ref", "artifact_ids", "image_refs", "video_refs", "audio_refs", "qr_image_refs"]
@@ -118,7 +120,7 @@ function scopeForSchema(schema: ActionInputSchema): WorkspaceAction["scope"] {
 
 function confirmationForTool(tool: ToolDef): WorkspaceAction["confirmation"] {
   if (toolSpendsMoney(tool.name)) return "generation";
-  if (["post", "storage_sync", "archive_clip"].includes(tool.name)) return "external";
+  if (["post", "upload_post_to_dropbox", "storage_sync", "archive_clip"].includes(tool.name)) return "external";
   if (tool.name === "enqueue_sequence_export" || tool.annotations?.destructiveHint || /^(?:delete_|forget_|remove_|clean_failed|restore_)/u.test(tool.name)) {
     return "destructive";
   }

@@ -1,3 +1,4 @@
+import type { PostView } from '../../server/src/posts/post-contract'
 import type { NotebookAudioInfo, NotebookAnalysisInfo } from '@/videobook/notebook-cell-presentation'
 import {
   type MediaTranscriptSources,
@@ -154,6 +155,7 @@ const notebookCellTypes = new Set<string>([
   'splice',
   'timeline',
   'goal',
+  'post',
 ] satisfies NotebookCellType[])
 
 export function asCellAssetRevisions(value: unknown): CellAssetRevision[] {
@@ -384,7 +386,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   }
 }
 
-export type NotebookSnapshot = NotebookDocument & { revision?: string }
+export type NotebookSnapshot = NotebookDocument & { revision?: string; posts?: PostView[] }
 
 export function asNotebook(value: unknown): NotebookSnapshot | null {
   const item = recordValue(value)
@@ -445,6 +447,7 @@ export function asNotebook(value: unknown): NotebookSnapshot | null {
           ) as NonNullable<NotebookDocument['notebookRunPlans']>,
         }
       : {}),
+    ...(Array.isArray(item.posts) ? { posts: item.posts as PostView[] } : {}),
     cells,
     edges,
   }

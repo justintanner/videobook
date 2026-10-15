@@ -13,6 +13,7 @@ type NotebookToolbarProps = {
   onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
   onSelectionActions?: () => void
+  onOpenPosts?: () => void
 }
 
 export function NotebookToolbar({
@@ -26,6 +27,7 @@ export function NotebookToolbar({
   onDeleteSelection,
   onClearSelection,
   onSelectionActions,
+  onOpenPosts,
 }: NotebookToolbarProps) {
   const deleteLabel = `Delete ${selectedCount} selected ${selectedCount === 1 ? 'cell' : 'cells'}`
 
@@ -66,6 +68,7 @@ export function NotebookToolbar({
           <LayoutGrid size={15} />
           <span>Arrange</span>
         </button>
+        {onOpenPosts && <button type="button" className="canvas-auto-arrange" disabled={busy} onClick={onOpenPosts}>Posts</button>}
       </div>
       {selectedCount > 0 && (
         <div className="canvas-selection-actions" role="group" aria-label="Notebook selection actions">

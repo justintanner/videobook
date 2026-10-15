@@ -1,3 +1,5 @@
+import { DropboxConnectionCard } from './DropboxConnectionCard'
+import type { PostToolCall } from '@/videobook/use-post-actions'
 import { RefreshCw } from 'lucide-react'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
 import enginePackage from 'videobook-engine/package.json'
@@ -8,6 +10,7 @@ import { XConnectionCard } from './XConnectionCard'
 import './SettingsScreen.css'
 
 interface SettingsScreenProps {
+  call?: PostToolCall
   providers: readonly SettingsProvider[]
   loading: boolean
   error: string | null
@@ -82,10 +85,11 @@ function configurationSummary(providers: readonly SettingsProvider[]): string {
   return `${configured} of ${providers.length} configured`
 }
 
-export function SettingsScreen({ providers, loading, error, refreshed, storage, bookId, bookName,
+export function SettingsScreen({ call, providers, loading, error, refreshed, storage, bookId, bookName,
   connection, busy, onRefresh, onSave, onConnect }: SettingsScreenProps) {
   const editor = useSettingsEditor(onSave)
-  const mainProviders = providers.filter(provider => provider.provider !== 'x' && provider.provider !== 'b2')
+  const mainProviders = providers.filter(provider => !['x', 'b2', 'dropbox'].includes(provider.provider))
+  const dropboxCredentials = providers.filter(provider => provider.provider === 'dropbox')
   const xCredentials = providers.filter(provider => provider.provider === 'x')
   const storageCredentials = providers.filter(provider => provider.provider === 'b2')
   const currentStorage = storage?.bookId === bookId ? storage : null
@@ -116,6 +120,11 @@ export function SettingsScreen({ providers, loading, error, refreshed, storage, 
             <summary>X credentials <span>{configurationSummary(xCredentials)}</span></summary>
             <CredentialRows providers={xCredentials} editor={editor} busy={busy} />
           </details>
+        </section>
+        <section className="settings-panel" aria-labelledby="settings-dropbox-heading">
+          <div className="settings-panel-heading"><h2 id="settings-dropbox-heading">Dropbox</h2><span>Application</span></div>
+          <DropboxConnectionCard call={call} />
+          <details className="settings-details"><summary>Dropbox credentials</summary><CredentialRows providers={dropboxCredentials} editor={editor} busy={busy} /></details>
         </section>
         <section className="settings-panel" aria-labelledby="settings-storage-heading">
           <div className="settings-panel-heading"><h2 id="settings-storage-heading">Storage</h2><span>Selected project</span></div>

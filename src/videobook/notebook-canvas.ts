@@ -1,3 +1,5 @@
+import type { PostView } from '../../server/src/posts/post-contract'
+import type { NotebookSnapshot } from './workspace-responses'
 import {
   type NotebookCellData,
   notebookNodes,
@@ -12,6 +14,7 @@ import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import { seedance25FrameAspectRatio } from '../../server/src/seedance25'
 
 export interface CanvasCellData extends NotebookCellData {
+  post?: PostView
   asset?: AssetRecord
   deleting?: boolean
   revealing?: boolean
@@ -121,6 +124,7 @@ export function canvasNodes(
 ): CanvasNode[] {
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
   return notebookNodes(document).map((node) => {
+    const post = (document as NotebookSnapshot).posts?.find(item => item.id === node.id)
     const frameIds = notebookSplitFrameIds(node.data.inputs)
     const asset = artifactForCell(byArtifactId, node.data.outputArtifactId)
     const videoMetadata = node.data.kind === 'video'
@@ -142,7 +146,8 @@ export function canvasNodes(
       ...node,
       data: {
         ...node.data,
-        status: work.status,
+        status: post?.runtime.status ?? work.status,
+        ...(post ? { post } : {}),
         ...(work.startedAt ? { statusStartedAt: work.startedAt } : {}),
         ...(work.error ? { statusError: work.error } : {}),
         asset,

@@ -1,3 +1,4 @@
+import { patchPostRuntime, readPostRuntime } from "./posts/post-store.js";
 import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { logger } from "./logger.js";
@@ -15,6 +16,7 @@ import {
 
 interface ScheduledPostPayload {
   asset_id: string;
+  post_cell_id?: string;
   book_id: string;
   platform: "x";
   text?: string;
@@ -116,6 +118,7 @@ async function firePost(bookId: string, scheduleId: string): Promise<void> {
       {
         type: "post_to_x",
         assetId: entry.payload.asset_id,
+        postCellId: entry.payload.post_cell_id,
         bookId: entry.payload.book_id,
         text: entry.payload.text,
         orientation: entry.payload.orientation,
@@ -152,6 +155,14 @@ export async function schedulePost(
     throw new Error(`Invalid scheduled_for: ${scheduledFor}`);
   }
   const engine = await resolveBookEngine(payload.book_id);
+  if (payload.post_cell_id) {
+    const current = readPostRuntime(engine, payload.post_cell_id);
+    if (current.url || ["posting", "needs_reconciliation"].includes(current.status)) throw new Error("This Post is already published or needs reconciliation");
+    if (current.status === "scheduled" && current.scheduleId) {
+      if (current.scheduledFor === when.toISOString()) return { schedule_id: current.scheduleId, scheduled_for: current.scheduledFor };
+      await cancelScheduledPost(current.scheduleId);
+    }
+  }
   const entry: ScheduledPostEntry = {
     schedule_id: randomUUID(),
     payload,
@@ -164,6 +175,7 @@ export async function schedulePost(
     entries.push(entry);
     writeState(engine, entries);
   });
+  if (payload.post_cell_id) patchPostRuntime(engine, payload.post_cell_id, { status: "scheduled", scheduledFor: entry.scheduled_for, scheduleId: entry.schedule_id });
   armTimer(payload.book_id, entry);
   return { schedule_id: entry.schedule_id, scheduled_for: entry.scheduled_for };
 }
@@ -181,6 +193,7 @@ export async function cancelScheduledPost(scheduleId: string): Promise<boolean> 
           return entry;
         }
         found = true;
+        if (entry.payload.post_cell_id) patchPostRuntime(engine, entry.payload.post_cell_id, { status: "draft", scheduledFor: undefined, scheduleId: undefined });
         changed = true;
         return { ...entry, status: "cancelled" as const };
       });

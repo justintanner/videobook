@@ -8,9 +8,9 @@ export const PUBLISHED_POST_SOURCE_OPERATION = "post_to_x";
 export const PUBLISHED_POST_TARGET_INPUT = "post";
 
 export function isPublishedPostCell(
-  cell: Pick<NotebookCell, "inputs">,
+  cell: Pick<NotebookCell, "inputs"> & { type?: string },
 ): boolean {
-  return cell.inputs?.sourceOperation === PUBLISHED_POST_SOURCE_OPERATION;
+  return cell.type === "post" || cell.inputs?.sourceOperation === PUBLISHED_POST_SOURCE_OPERATION;
 }
 
 export function sourceCellForPostedArtifact(
@@ -34,7 +34,7 @@ export function resolvePublishedPostSourceCell(
   cell: NotebookCell,
 ): NotebookCell {
   if (!isPublishedPostCell(cell)) return cell;
-  const sourceId = typeof cell.inputs?.sourceCellId === "string"
+  const sourceId = cell.type === "post" ? (cell.inputs?.post as { source?: { cellId?: string } } | undefined)?.source?.cellId : typeof cell.inputs?.sourceCellId === "string"
     ? cell.inputs.sourceCellId
     : null;
   if (!sourceId) return cell;

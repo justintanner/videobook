@@ -359,6 +359,7 @@ describe('progressive semantic index job', () => {
     let failureHandled = false
     const leases: unknown[] = []
     const context: JobHandlerContext = {
+      jobId: 1,
       signal: new AbortController().signal,
       setLease: (lease) => {
         leases.push(lease)

@@ -1,3 +1,7 @@
+import { PostInspector } from '@/components/videobook/PostInspector'
+import { PostsPanel } from '@/components/videobook/PostsPanel'
+import { usePostsPanel } from '@/videobook/use-post-actions'
+import type { PostView } from '../server/src/posts/post-contract'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { coldOpenRangeError } from '../server/src/cold-open-model'
@@ -4405,8 +4409,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     showScreen,
   ])
 
+  const postsPanel = usePostsPanel(call, bookId)
+  const selectedPost = (notebook as NotebookSnapshot | null)?.posts?.find(post => post.id === selectedCellId)
+
+  const createPublication = async (sourceCellId?: string) => {
+    if (!bookId || !notebook || mcp.state !== 'ready') return
+    setBusy(true)
+    try {
+      const post = await call('create_post', { book_id: bookId, notebook_id: notebook.id, ...(sourceCellId ? { source_cell_id: sourceCellId } : {}) }) as PostView
+      await refreshBookData(bookId, notebook.id)
+      openCellInspector(post.id)
+      setNotice(`Created Post ${post.address}`)
+    } catch (error) { setNotice(error instanceof Error ? error.message : String(error), 'error') }
+    finally { setBusy(false) }
+  }
+
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
+    if (type === 'post') {
+      const source = notebook.cells.find(cell => cell.id === selectedCellId && cell.type !== 'post' && cell.outputArtifactId && ['image', 'video', 'generate_image', 'generate_video', 'concat', 'splice', 'split_video'].includes(cell.type))
+      await createPublication(source?.id)
+      return
+    }
     const existing = type === 'timeline' ? notebook.cells.find((cell) => cell.type === 'timeline') : null
     if (existing) {
       selectCanvasCell(existing.id)
@@ -7766,7 +7790,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return null
     }
 
-    const graph = discoverXPostThreadGraph(notebook, assetId)
+    const targetPost = (notebook as NotebookSnapshot).posts?.find(post => post.id === plan.params.post_cell_id)
+    const graph = discoverXPostThreadGraph(notebook, targetPost?.definition.source?.artifactId ?? assetId)
     const promptMentions: XPostPromptMention[] = [
       ...assets.map((asset) => ({ reference: asset.artifactId, type: asset.type })),
       ...commandMentionAssets.map((candidate) => ({
@@ -7836,6 +7861,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       creditValues.filter((value): value is XPostSourceCredit => value !== null),
     )
     return initialXPostThreadReview({ steps, credits }, maxCharacters)
+  }
+
+  const reviewPublicationOnX = async (post: PostView) => {
+    const assetId = post.definition.source?.snapshotArtifactId
+    if (!assetId) return
+    const plan: ChatActionPlan = {
+      kind: 'chat-action-plan', planId: uuidv7(), bookId, prompt: `Post ${post.address} to X`,
+      routedTool: 'post', tool: 'post', params: { book_id: bookId, asset_id: assetId, post_cell_id: post.id, platform: 'x', text: post.definition.caption },
+      message: 'Review your X publication', summary: 'Publish the saved clip to X', effect: 'mutation',
+      confirmation: { required: true, reason: 'Publishes this clip to X' },
+    }
+    await previewRoutedChatAction(plan, plan.prompt)
+    setComposerDockOpen(true)
   }
 
   const openColdOpenReview = (reference?: string, chat?: ChatExecution): ComposerOutcome => {
@@ -10004,6 +10042,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy,
       })
     }
+    if (contextMenuVisualAsset && contextMenuCell.type !== 'post' && ['video', 'image', 'final'].includes(contextMenuVisualAsset.type)) {
+      contextMenuActions.push({ id: 'create-post', label: 'Create Post', icon: 'inspect', disabled: busy || mcp.state !== 'ready' })
+    }
     if (contextMenuVisualAsset) {
       contextMenuActions.push({
         id: 'media',
@@ -10159,6 +10200,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
+    if (actionId === 'create-post') { void createPublication(contextMenuCell.id); return }
     if (actionId === 'inspect') {
       openCellInspector(contextMenuCell.id)
       return
@@ -10857,7 +10899,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <History size={15} />
             </button>
           )}
-          <button
+          {!selectedPost && <button
             type="button"
             className={[
               'inspector-source-toggle',
@@ -10889,7 +10931,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <span>Source</span>
                   </>
                 )}
-          </button>
+          </button>}
           {selectedNotebookCell.type.startsWith('generate_') && (
             <span className="composer-dock-close-divider" aria-hidden="true" />
           )}
@@ -10924,6 +10966,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onClearTagFilters={clearMediaLibraryTagFilters}
           onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
         />
+      ) : selectedPost ? (
+        <PostInspector key={selectedPost.id} post={selectedPost} cells={notebook?.cells ?? []}
+          asset={selectedCell.data.asset} bookId={bookId} call={mcp.state === 'ready' ? call : undefined}
+          onRefresh={() => refreshBookData(bookId, notebook?.id)} onSelectCell={openCellInspector}
+          onReviewX={reviewPublicationOnX} onDelete={() => void deleteNotebookCells([selectedNotebookCell])} />
       ) : (
         <NotebookCellInspector
           key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
@@ -11058,10 +11105,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         </div>
         {screen === 'notebook' && notebook && (
           <NotebookToolbar
-            busy={busy}
+            busy={busy || mcp.state !== 'ready'}
             arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
             selectedCount={selectedNotebookCells.length}
             activeAddress={selectedNotebookCell ? notebookGridTag(selectedNotebookCell.slot) : null}
+            onOpenPosts={() => void postsPanel.open()}
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
@@ -11431,6 +11479,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
           {screen === 'settings' && (
             <SettingsScreen
+              call={mcp.state === 'ready' ? call : undefined}
               providers={providers}
               loading={settingsLoading}
               error={settingsError}
@@ -11447,6 +11496,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
       </>
 
+      {postsPanel.posts && <PostsPanel posts={postsPanel.posts} loading={postsPanel.loading} error={postsPanel.error} onClose={postsPanel.close} onRefresh={postsPanel.open}
+        onSelect={post => { postsPanel.close(); void refreshBookData(bookId, post.notebookId).then(() => openCellInspector(post.id)) }} />}
       {cellContextMenu && contextMenuCell && (
         <NotebookCellContextMenu
           actions={contextMenuActions}

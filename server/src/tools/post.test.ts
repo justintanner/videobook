@@ -1,3 +1,4 @@
+import { readPostRuntime } from "../posts/post-store.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -154,11 +155,11 @@ describe("post tool published cell result", () => {
     expect(payload.cell_id).toBe(result.cell_id);
     expect(payload.message).toBe(`Posted to X as ${result.cell_address}`);
     expect(String(payload.message)).toContain("@a2");
+    expect(readPostRuntime(fs, result.cell_id!).x?.tweetId).toBe("TWEET");
     const after = fs.notebooks.read(notebook.value.id);
     if (!after.ok) throw new Error(after.error.message);
     expect(after.value.cells.find((cell) => cell.id === result.cell_id)?.inputs).toMatchObject({
-      sourceOperation: "post_to_x",
-      tweetId: "TWEET",
+      post: { platform: "x", source: { cellId: source.id } },
     });
   });
 

@@ -1,6 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
-import { createX } from "@apicity/x";
+import { createX, XError } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -13,7 +13,10 @@ import {
   xPostMaxCharacters,
 } from "./account.js";
 import type { ApplicationStateStore } from "../app-state.js";
-import { createPublishedPostCell } from "./published-post-cell.js";
+import { ensureXPost } from "../posts/x-post-target.js";
+import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime } from "../posts/post-store.js";
+import { withNotebookMutation } from "../notebook-mutations.js";
+import type { PostRuntime } from "../posts/post-contract.js";
 import { appendXPostMetadata } from "./post-metadata.js";
 import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
@@ -88,7 +91,9 @@ type PostOrientation = "portrait" | "landscape";
 
 interface PostToXArgs {
   engine: Engine;
-  assetId: string;
+  assetId?: string;
+  postCellId?: string;
+  publicationKey?: string;
   bookId: string;
   text?: string;
   orientation?: PostOrientation;
@@ -354,25 +359,115 @@ async function waitForProcessing(
   }
 }
 
-export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
-  const {
-    engine,
-    assetId,
-    text,
-    orientation,
-    scheduleId,
-    scheduledFor,
-    followups = [],
-    signal,
-  } = args;
-  if (!text?.trim()) throw new Error("A post title is required");
-  const maxCharacters = await postCharacterLimit(text, followups, args.store);
-  if (text.length > maxCharacters) {
-    throw characterLimitError("Post title", maxCharacters);
+export async function prepareXPublication(args: PostToXArgs) {
+  if (args.postCellId) return withNotebookMutation(`post:${args.postCellId}`, () => prepareXPublicationMedia(args));
+  if (!args.publicationKey) return prepareXPublicationMedia(args);
+  const key = `application.post-job.v1.${args.publicationKey}`;
+  return withNotebookMutation(`publication:${args.bookId}:${args.publicationKey}`, async () => {
+    const existing = args.engine.settings.get<string>(key);
+    if (existing) return withNotebookMutation(`post:${existing}`, () => prepareXPublicationMedia({ ...args, postCellId: existing }));
+    const post = await prepareXPublicationMedia(args);
+    const saved = args.engine.settings.set(key, post.id);
+    if (!saved.ok) throw new Error(saved.error.message);
+    return post;
+  });
+}
+
+async function prepareXPublicationMedia(args: PostToXArgs) {
+  if (!args.postCellId && !args.text?.trim()) throw new Error("A post title is required");
+  if (args.text) {
+    const limit = await postCharacterLimit(args.text, args.followups ?? [], args.store);
+    if (args.text.length > limit) throw characterLimitError("Post title", limit);
+    for (const [index, reply] of (args.followups ?? []).entries()) if ((reply.text?.length ?? 0) > limit) throw characterLimitError(`Follow-up ${index + 1}`, limit);
   }
-  const rootMedia = await prepareMedia(engine, assetId, orientation);
+  const post = await ensureXPost(args.engine, args.assetId, args.text, args.postCellId);
+  if (post.runtime.xRequest) {
+    const normalize = (replies: XPostFollowup[]) => JSON.stringify(replies.map(reply => ({ text: reply.text?.trim() ? reply.text : undefined, image_asset_ids: reply.image_asset_ids ?? [] })));
+    if (args.orientation && args.orientation !== post.runtime.xRequest.orientation
+      || args.followups && normalize(args.followups) !== normalize(post.runtime.xRequest.sourceFollowups ?? [])) throw new Error("This Post has a frozen X request. Create another Post to change its orientation or replies.");
+    return post;
+  }
+  if (post.runtime.url) return post;
+  if (post.runtime.outbound && args.orientation) throw new Error("This Post already has delivered media. Create another Post to change orientation.");
+  const caption = post.runtime.outbound?.caption ?? [post.definition.caption, post.definition.credits].filter(Boolean).join("\n\n");
+  if (!caption.trim()) throw new Error("A post title is required");
+  const limit = await postCharacterLimit(caption, args.followups ?? [], args.store);
+  if (caption.length > limit) throw characterLimitError("Post title", limit);
+  const prepared = await prepareFollowups(args.engine, args.followups ?? [], limit);
+  const source = post.definition.source!;
+  const media = await prepareMedia(args.engine, source.snapshotArtifactId!, args.orientation);
   try {
-    const preparedFollowups = await prepareFollowups(engine, followups, maxCharacters);
+    const outbound = await freezePostOutbound(args.engine, post.id, { bytes: media.buffer, filename: media.tempPath ? "original.mp4" : source.filename! });
+    const frozen: XPostFollowup[] = [];
+    const attachments: NonNullable<NonNullable<PostRuntime["xRequest"]>["attachments"]> = [];
+    for (const [index, followup] of prepared.entries()) {
+      const ids: string[] = [];
+      for (const [imageIndex, image] of followup.media.entries()) {
+        const created = await args.engine.artifacts.create("image", `Post reply ${index + 1} image ${imageIndex + 1}`);
+        if (!created.ok) throw new Error(created.error.message);
+        const extension = image.info.mediaType.split("/")[1];
+        const filename = `original.${extension}`;
+        const written = await args.engine.files.write(created.value.artifactId, filename, image.buffer);
+        if (!written.ok) throw new Error(written.error.message);
+        const manifest = await args.engine.files.manifest(created.value.artifactId);
+        if (!manifest.ok) throw new Error(manifest.error.message);
+        attachments.push({ artifactId: created.value.artifactId, filename, revision: args.engine.head, objectHash: manifest.value.files.find(file => file.name === filename)!.objectHash });
+        ids.push(created.value.artifactId);
+      }
+      frozen.push({ text: followup.text, image_asset_ids: ids });
+    }
+    const request = { text: outbound.caption, followups: frozen, sourceFollowups: args.followups ?? [], orientation: args.orientation, attachments };
+    const receipt = await args.engine.files.write(outbound.artifactId, "x-request.json", JSON.stringify(request));
+    if (!receipt.ok) throw new Error(receipt.error.message);
+    patchPostRuntime(args.engine, post.id, { xRequest: request });
+    return getPost(args.engine, post.id);
+  } finally {
+    if (media.tempPath) await unlink(media.tempPath).catch(() => undefined);
+  }
+}
+
+async function prepareFrozenFollowups(engine: Engine, request: NonNullable<PostRuntime["xRequest"]>, limit: number): Promise<PreparedFollowup[]> {
+  if (!request.attachments) return prepareFollowups(engine, request.followups, limit);
+  return Promise.all(request.followups.map(async (followup) => ({
+    text: followup.text,
+    media: await Promise.all((followup.image_asset_ids ?? []).map(async (assetId) => {
+      const attachment = request.attachments!.find(item => item.artifactId === assetId);
+      if (!attachment) throw new Error("Frozen reply attachment is missing");
+      const bytes = await engine.files.readAtRevision(assetId, attachment.filename, attachment.revision);
+      if (!bytes.ok) throw new Error(bytes.error.message);
+      const info = inferMediaType(attachment.filename);
+      if (!info) throw new Error("Frozen reply attachment has an unsupported media type");
+      return { assetId, buffer: bytes.value, info, tempPath: null };
+    })),
+  })));
+}
+
+export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
+  const post = await prepareXPublication(args);
+  return withNotebookMutation(`post:${post.id}`, () => publishPreparedPost({ ...args, postCellId: post.id }));
+}
+
+async function publishPreparedPost(args: PostToXArgs & { postCellId: string }): Promise<PostToXResult> {
+  const { engine, scheduleId, scheduledFor, signal, postCellId } = args;
+  const post = getPost(engine, postCellId);
+  const runtime = readPostRuntime(engine, postCellId);
+  if (runtime.x && runtime.url && runtime.postedAt) return {
+    status: runtime.status === "partially_posted" || runtime.status === "posting" ? "partially_posted" : "posted",
+    tweet_id: runtime.x.tweetId, tweet_url: runtime.url, media_id: runtime.x.mediaId, posted_at: runtime.postedAt,
+    replies: runtime.x.replies, followup_error: runtime.x.followupError ?? null, cell_id: postCellId, cell_address: post.address,
+  };
+  if (runtime.url) throw new Error("This Post already has a published URL");
+  if (["posting", "needs_reconciliation"].includes(runtime.status)) throw new Error("Publication outcome is uncertain. Check X and paste the existing post link. If nothing was published, create a new Post.");
+  const assetId = post.definition.source!.artifactId;
+  const text = runtime.xRequest!.text;
+  const followups = runtime.xRequest!.followups;
+  const maxCharacters = await postCharacterLimit(text, followups, args.store);
+  const outbound = runtime.outbound!;
+  const frozenBytes = await engine.files.readAtRevision(outbound.artifactId, outbound.filename, outbound.revision);
+  if (!frozenBytes.ok) throw new Error(frozenBytes.error.message);
+  const rootMedia: PreparedMedia = { assetId: outbound.artifactId, buffer: frozenBytes.value, info: inferMediaType(outbound.filename)!, tempPath: null };
+  try {
+    const preparedFollowups = await prepareFrozenFollowups(engine, runtime.xRequest!, maxCharacters);
     const x = await getXClient(engine, args.x);
     const mediaId = await uploadMedia(
       x,
@@ -395,6 +490,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       });
     }
 
+    patchPostRuntime(engine, postCellId, { status: "needs_reconciliation", error: "Publication request is in flight. Check X before retrying after an interruption." });
     const tweetRes = await x.post.v2.tweets(
       { text, media: { media_ids: [mediaId] } },
       signal,
@@ -402,6 +498,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
 
     const tweetId = tweetRes.data.id;
     const postedAt = new Date().toISOString();
+    patchPostRuntime(engine, postCellId, { status: uploadedFollowups.length ? "partially_posted" : "posted", url: tweetUrl(tweetId), postedAt, error: null, nextMetricAt: postedAt, x: { tweetId, mediaId, replies: [], followupError: uploadedFollowups.length ? { reply_number: 1, message: "Thread interrupted; root post was published" } : null } });
     const replies: XPostReplyResult[] = [];
     let parentTweetId = tweetId;
     let followupError: XPostFollowupError | null = null;
@@ -427,6 +524,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
         };
         replies.push(replyResult);
         parentTweetId = replyId;
+        patchPostRuntime(engine, postCellId, { x: { tweetId, mediaId, replies: [...replies], followupError: index + 1 < uploadedFollowups.length ? { reply_number: index + 2, message: "Thread interrupted after this reply" } : null } });
       } catch (cause) {
         followupError = {
           reply_number: index + 1,
@@ -436,6 +534,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       }
     }
     const status = followupError ? "partially_posted" : "posted";
+    patchPostRuntime(engine, postCellId, { status, x: { tweetId, mediaId, replies, followupError }, error: followupError?.message ?? null });
 
     try {
       await appendXPostMetadata({
@@ -467,22 +566,14 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       replies,
       followup_error: followupError,
     };
-    try {
-      const created = await createPublishedPostCell({
-        engine,
-        assetId,
-        posted,
-      });
-      if (created) {
-        posted.cell_id = created.cellId;
-        posted.cell_address = created.cellAddress;
-      }
-    } catch (err) {
-      posted.cell_error = err instanceof Error ? err.message : String(err);
-      logger.error("post-cell-failed", { error: err });
-    }
+    posted.cell_id = postCellId;
+    posted.cell_address = post.address;
 
     return posted;
+  } catch (error) {
+    const current = readPostRuntime(engine, postCellId);
+    if (!current.url && (current.status !== "needs_reconciliation" || (error instanceof XError && [400, 401, 403, 404, 422, 429].includes(error.status)))) patchPostRuntime(engine, postCellId, { status: "failed", error: error instanceof Error ? error.message : "Publication failed" });
+    throw error;
   } finally {
     if (rootMedia.tempPath) {
       await unlink(rootMedia.tempPath).catch(() => undefined);

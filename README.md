@@ -110,9 +110,43 @@ aspect ratio. Reference-to-video accepts 1–15 images and up to three MP3 audio
 references, each 3–12 seconds and at most 50 MB. Cost previews use the selected
 duration and resolution from Apicity's published rates.
 
+## Posts and results
+
+Select a finished image or video cell and choose **Create Post** from its menu,
+(or use **Add cell → Post**). Each Post represents one publication on X,
+Instagram, TikTok, YouTube or another platform. It preserves the source clip
+version and upstream idea/prompt lineage even when the original cells move or
+change. Use a separate Post for each platform or repost.
+
+Save the caption and credits, then upload the frozen media and `caption.txt` to
+Dropbox for manual publication. The default folder is
+`/Videobook/<book-name>/<post-cell-id>/`; a custom folder is optional. Uploads
+remain private and resume from saved checkpoints. After publishing, paste the
+actual post URL and publication time into the Post. X also supports the existing
+review, thread and scheduling workflow, targeting the same Post cell.
+
+Connect Dropbox in Settings. Configure the Dropbox app key (`DROPBOX_CLIENT_ID`)
+and optional app secret (`DROPBOX_CLIENT_SECRET`), register the redirect URI
+`http://127.0.0.1:8766/callback`, and enable `files.content.write` and
+`files.metadata.read` permissions in the Dropbox app. OAuth requests offline
+access; refreshable credentials stay in application state outside the book.
+
+The **Posts** table compares publications within a book, including observations
+at similar ages. X metrics are collected after publication/linking, then at 1h,
+24h, 72h, 7d and 28d; **Refresh now** adds a current observation. Other platforms
+accept manual observations. Missed checks record their actual observation time.
+Missing values remain unknown, and X media views are labeled separately because
+they may include multiple posts using the same media. Private X metrics depend
+on ownership/access and expire after 30 days.
+
+Publication receipts and metric history survive notebook undo. If an X request
+has an uncertain outcome, check X and attach the existing post link. Create a
+new Post only after verifying that nothing was published. Legacy X tiles migrate in place, with historical media versions marked
+unknown when they cannot be established.
+
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.6.1 schema-v27 root under
+Each book owns an isolated `videobook-engine` v5.7.0 schema-v28 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable

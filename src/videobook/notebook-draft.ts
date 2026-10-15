@@ -177,7 +177,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
       id: cell.id,
       type: cell.type === 'timeline' || cell.type === 'goal' ? cell.type : 'cell',
       ...(cell.type === 'timeline' ? { dragHandle: '.notebook-timeline-header', connectable: false } : {}),
-      ...(cell.type === 'goal' ? { connectable: false } : {}),
+      ...(['goal', 'post'].includes(cell.type) ? { connectable: false } : {}),
       position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
