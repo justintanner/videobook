@@ -707,22 +707,24 @@ function notebookPayload(
   };
 }
 
-function entityDefs(engine: Engine, type: EntityType): ToolDef[] {
-  const plural = type === "character" ? "characters" : `${type}s`;
+const entityKindSchema = z.enum(["prompt", "scene", "character"]);
+
+function entityDefs(engine: Engine): ToolDef[] {
   return [
     {
-      name: `create_${type}_entity`,
-      description: `Create a reusable ${type}`,
+      name: "create_entity",
+      description: "Create a reusable prompt, scene or character",
       scope: "book",
       schema: {
         ...bookSchema,
+        kind: entityKindSchema,
         name: z.string().min(1),
         description: z.string().optional(),
         prompt: z.string().optional(),
         data: z.record(z.string(), z.unknown()).optional(),
       },
       handler: async (args) => {
-        const result = await engine.entities.create(type, String(args.name), {
+        const result = await engine.entities.create(args.kind as EntityType, String(args.name), {
           ...(typeof args.description === "string" ? { description: args.description } : {}),
           ...(typeof args.prompt === "string" ? { prompt: args.prompt } : {}),
           data: args.data as Record<string, unknown> | undefined,
@@ -731,15 +733,15 @@ function entityDefs(engine: Engine, type: EntityType): ToolDef[] {
       },
     },
     {
-      name: `list_${plural}`,
-      description: `List reusable ${plural}`,
+      name: "list_entities",
+      description: "List reusable prompts, scenes and characters, optionally of one kind",
       scope: "book",
-      schema: bookSchema,
-      handler: async () => json(engine.entities.list(type)),
+      schema: { ...bookSchema, kind: entityKindSchema.optional() },
+      handler: async (args) => json(engine.entities.list(args.kind as EntityType | undefined)),
     },
     {
-      name: `get_${type}_entity`,
-      description: `Read a reusable ${type}`,
+      name: "get_entity",
+      description: "Read a reusable prompt, scene or character",
       scope: "book",
       schema: { ...bookSchema, entity_id: z.string().uuid() },
       handler: async (args) => {
@@ -748,8 +750,8 @@ function entityDefs(engine: Engine, type: EntityType): ToolDef[] {
       },
     },
     {
-      name: `update_${type}_entity`,
-      description: `Update a reusable ${type}`,
+      name: "update_entity",
+      description: "Replace a reusable prompt, scene or character with an edited copy from get_entity",
       scope: "book",
       schema: { ...bookSchema, entity: z.record(z.string(), z.unknown()) },
       handler: async (args) => {
@@ -758,8 +760,8 @@ function entityDefs(engine: Engine, type: EntityType): ToolDef[] {
       },
     },
     {
-      name: `delete_${type}_entity`,
-      description: `Delete a reusable ${type}`,
+      name: "delete_entity",
+      description: "Delete a reusable prompt, scene or character",
       scope: "book",
       schema: { ...bookSchema, entity_id: z.string().uuid() },
       handler: async (args) => {
@@ -2413,8 +2415,6 @@ export function videobookDomainDefs(
       schema: bookSchema,
       handler: async () => json(await engine.storage.backup()),
     },
-    ...entityDefs(engine, "prompt"),
-    ...entityDefs(engine, "scene"),
-    ...entityDefs(engine, "character"),
+    ...entityDefs(engine),
   ];
 }

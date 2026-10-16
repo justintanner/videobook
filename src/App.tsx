@@ -4184,7 +4184,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         const resources = await loadWorkspaceActionResources(action, seededValues, (name, args) => call(name, { book_id: seededValues.book_id ?? bookId, ...args }, { chat }))
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
-        const browse = action.handler.kind === 'tool' && ['list_notebooks', 'list_prompts', 'list_scenes', 'list_characters', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
+        const browse = action.handler.kind === 'tool' && ['list_notebooks', 'list_entities', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
         const result = browse && action.handler.kind === 'tool' ? {
           message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues, { chat }),
         } : undefined

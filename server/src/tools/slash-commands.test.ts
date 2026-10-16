@@ -324,12 +324,10 @@ describe("slash_commands tool", () => {
     const run = commands.find((c) => c.command === "/run")!;
     expect(run.uiAction).toBe("run_notebook");
 
-    expect(commands.find((c) => c.command === "/prompt-new")?.mcpTool?.tool)
-      .toBe("create_prompt_entity");
-    expect(commands.find((c) => c.command === "/character-new")?.mcpTool?.tool)
-      .toBe("create_character_entity");
-    expect(commands.find((c) => c.command === "/scene-new")?.mcpTool?.tool)
-      .toBe("create_scene_entity");
+    for (const kind of ["prompt", "character", "scene"]) {
+      expect(commands.find((c) => c.command === `/${kind}-new`)?.mcpTool)
+        .toMatchObject({ tool: "create_entity", injectParams: { kind } });
+    }
 
     const archive = commands.find((c) => c.command === "/archive")!;
     expect(archive.category).toBe("context_menu");

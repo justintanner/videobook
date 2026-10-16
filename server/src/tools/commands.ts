@@ -401,7 +401,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Prompt entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable prompt text" },
     ],
-    mcpTool: { tool: "create_prompt_entity", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_entity", autoInject: ["book_id"], injectParams: { kind: "prompt" } },
   },
   {
     command: "/character-new",
@@ -416,7 +416,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Character entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable character prompt" },
     ],
-    mcpTool: { tool: "create_character_entity", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_entity", autoInject: ["book_id"], injectParams: { kind: "character" } },
   },
   {
     command: "/scene-new",
@@ -431,7 +431,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Scene entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable scene prompt" },
     ],
-    mcpTool: { tool: "create_scene_entity", autoInject: ["book_id"] },
+    mcpTool: { tool: "create_entity", autoInject: ["book_id"], injectParams: { kind: "scene" } },
   },
   {
     command: "/entities",

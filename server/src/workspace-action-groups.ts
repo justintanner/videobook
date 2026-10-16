@@ -77,11 +77,8 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   ],
   Entities: [
     "create_character", "set_character_metadata", "reorder_character_images",
-    "update_script", "create_prompt_entity", "list_prompts", "get_prompt_entity",
-    "update_prompt_entity", "delete_prompt_entity", "create_scene_entity",
-    "list_scenes", "get_scene_entity", "update_scene_entity", "delete_scene_entity",
-    "create_character_entity", "list_characters", "get_character_entity",
-    "update_character_entity", "delete_character_entity",
+    "update_script", "create_entity", "list_entities", "get_entity",
+    "update_entity", "delete_entity",
   ],
   History: [
     "asset_history", "restore_asset_version", "read_file_at_commit",

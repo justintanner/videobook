@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(261);
-    expect(new Set(names).size).toBe(261);
+    expect(names).toHaveLength(251);
+    expect(new Set(names).size).toBe(251);
     expect(names).toEqual(
       expect.arrayContaining([
         "save_post_to_icloud",
@@ -69,15 +69,11 @@ describe("Videobook MCP parity", () => {
         "chain",
         "video_goal",
         "assemble_goal",
-        "create_prompt_entity",
-        "list_prompts",
-        "get_prompt_entity",
-        "create_scene_entity",
-        "list_scenes",
-        "get_scene_entity",
-        "create_character_entity",
-        "list_characters",
-        "get_character_entity",
+        "create_entity",
+        "list_entities",
+        "get_entity",
+        "update_entity",
+        "delete_entity",
         "storage_status",
         "storage_sync",
         "list_book_actions",

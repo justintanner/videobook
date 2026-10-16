@@ -87,7 +87,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
   const hidden = new Set(['book_id', 'actor', 'source_surface'])
   if (action.generation) hidden.add('_provider')
   const fields = Object.entries(action.inputSchema.properties ?? {}).filter(([name]) => !hidden.has(name))
-  const entityEditor = action.handler.kind === 'tool' && /^update_(?:prompt|scene|character)_entity$/u.test(action.handler.tool)
+  const entityEditor = action.handler.kind === 'tool' && action.handler.tool === 'update_entity'
   const entityId = values.entity && typeof values.entity === 'object' && 'id' in values.entity ? String(values.entity.id) : ''
   const unavailable = actionUnavailableReason(action, context)
   const hasDependentChoices = ['commit_hash', 'filename', 'subject_id', 'subject_ids'].some((name) => name in (action.inputSchema.properties ?? {}))

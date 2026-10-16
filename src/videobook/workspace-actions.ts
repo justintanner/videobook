@@ -17,7 +17,7 @@ export function workspaceCropPreset(ratio: string, sourceWidth: number | null, s
 }
 
 export function hasWorkspaceActionResultLinks(action: WorkspaceAction): boolean {
-  return action.handler.kind === 'tool' && ['list_prompts', 'list_scenes', 'list_characters', 'list_notebooks', 'asset_history', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
+  return action.handler.kind === 'tool' && ['list_entities', 'list_notebooks', 'asset_history', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
 }
 
 export type WorkspaceActionContext = {

@@ -39,9 +39,8 @@ export async function loadWorkspaceActionResources(
   if (fields.notebook_id) requests.push((async () => {
     result.choices.notebook_id = choices(rows(await call('list_notebooks', {}), 'notebooks'), ['id'], ['name'])
   })())
-  const entityType = /^(?:get|update|delete)_(prompt|scene|character)_entity$/u.exec(tool)?.[1]
-  if (entityType) requests.push((async () => {
-    const entries = rows(await call(`list_${entityType}s`, {}), 'entities')
+  if (/^(?:get|update|delete)_entity$/u.test(tool)) requests.push((async () => {
+    const entries = rows(await call('list_entities', {}), 'entities')
     result.choices.entity_id = choices(entries, ['id'], ['name'])
     result.entities = Object.fromEntries(entries.filter((entry) => typeof entry.id === 'string').map((entry) => [String(entry.id), entry]))
     if (tool.startsWith('update_') && typeof values.entity_id === 'string' && result.entities[values.entity_id]) result.values.entity = result.entities[values.entity_id]

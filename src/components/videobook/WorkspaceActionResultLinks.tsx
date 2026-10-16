@@ -19,11 +19,10 @@ export function WorkspaceActionResultLinks({ action, value, values, onOpen }: {
 }) {
   if (action.handler.kind !== 'tool') return null
   const tool = action.handler.tool
-  const entityType = /^list_(prompts|scenes|characters)$/u.exec(tool)?.[1]?.slice(0, -1)
-  if (entityType) return <ul className="workspace-action-linked-results">{entries(value, 'entities').map((entity) => <li key={String(entity.id)}>
+  if (tool === 'list_entities') return <ul className="workspace-action-linked-results">{entries(value, 'entities').map((entity) => <li key={String(entity.id)}>
     <strong>{String(entity.name)}</strong><span>{String(entity.prompt ?? entity.description ?? '')}</span>
-    <div><button type="button" onClick={() => onOpen(`tool.update_${entityType}_entity`, { entity_id: entity.id })}>Edit</button>
-      <button type="button" onClick={() => onOpen(`tool.delete_${entityType}_entity`, { entity_id: entity.id })}>Delete saved item</button></div>
+    <div><button type="button" onClick={() => onOpen('tool.update_entity', { entity_id: entity.id })}>Edit</button>
+      <button type="button" onClick={() => onOpen('tool.delete_entity', { entity_id: entity.id })}>Delete saved item</button></div>
   </li>)}</ul>
   if (tool === 'list_notebooks') return <ul className="workspace-action-linked-results">{entries(value, 'notebooks').map((notebook) => <li key={String(notebook.id)}>
     <strong>{String(notebook.name)}</strong><div>

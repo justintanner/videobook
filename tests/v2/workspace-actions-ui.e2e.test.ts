@@ -188,14 +188,14 @@ describe('workspace action launcher with real endpoints', () => {
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
     await expect.poll(() => page.getByLabel('Action result', { exact: true }).textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('action-ui-project')
     await page.getByRole('button', { name: 'All actions', exact: true }).click()
-    const createPrompt = catalog.actions.find(action => action.handler.kind === 'tool' && action.handler.tool === 'create_prompt_entity')!
+    const createPrompt = catalog.actions.find(action => action.command === '/prompt-new')!
     await page.getByLabel('Videobook command input', { exact: true }).fill(createPrompt.command)
     await page.locator(`[data-action-id="${createPrompt.id}"]`).click()
     await page.getByRole('button', { name: 'Send command', exact: true }).click()
     await page.getByLabel('Name', { exact: false }).fill('A reusable shot')
     await page.getByLabel('Prompt', { exact: true }).fill('A slow pan across a quiet lake')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_prompts')), { timeout: MCP_ROUNDTRIP_MS }).toContain('A slow pan across a quiet lake')
+    await expect.poll(async () => JSON.stringify(await call('list_entities', { kind: 'prompt' })), { timeout: MCP_ROUNDTRIP_MS }).toContain('A slow pan across a quiet lake')
     await page.getByLabel('Action result', { exact: true }).waitFor()
     await page.screenshot({ path: '/tmp/videobook-actions-prompt.png' })
   })
@@ -300,20 +300,20 @@ describe('workspace action launcher with real endpoints', () => {
   })
 
   it('edits and deletes a saved prompt using its name while preserving its identity', async () => {
-    const entity = record(await call('create_prompt_entity', { name: 'Editable prompt', prompt: 'Before edit', description: 'Keep this description' }))!
-    await openActions('/update-prompt-entity')
+    const entity = record(await call('create_entity', { kind: 'prompt', name: 'Editable prompt', prompt: 'Before edit', description: 'Keep this description' }))!
+    await openActions('/update-entity')
     await page.getByLabel('Saved item', { exact: true }).selectOption(String(entity.id))
     await page.getByLabel('Prompt', { exact: true }).fill('After edit')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: entity.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('After edit')
-    expect(record(await call('get_prompt_entity', { entity_id: entity.id }))?.description).toBe('Keep this description')
+    await expect.poll(async () => record(await call('get_entity', { entity_id: entity.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('After edit')
+    expect(record(await call('get_entity', { entity_id: entity.id }))?.description).toBe('Keep this description')
     await page.keyboard.press('Escape')
-    await openActions('/delete-prompt-entity')
+    await openActions('/delete-entity')
     await page.getByRole('combobox', { name: /^Entity\b/u }).selectOption(String(entity.id))
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
-    expect(JSON.stringify(await call('list_prompts'))).toContain('Editable prompt')
+    expect(JSON.stringify(await call('list_entities', { kind: 'prompt' }))).toContain('Editable prompt')
     await page.getByRole('button', { name: 'Confirm and run', exact: true }).click()
-    await expect.poll(async () => JSON.stringify(await call('list_prompts')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Editable prompt')
+    await expect.poll(async () => JSON.stringify(await call('list_entities', { kind: 'prompt' })), { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Editable prompt')
   })
 
   it('exports an asset to isolated Downloads without entering the sequence export flow', async () => {
@@ -470,9 +470,9 @@ describe('workspace action launcher with real endpoints', () => {
   })
 
   it('updates advanced fields when switching between saved items', async () => {
-    const first = record(await call('create_prompt_entity', { name: 'First structured prompt', prompt: 'First prompt', data: { lens: '35mm' } }))!
-    const second = record(await call('create_prompt_entity', { name: 'Second structured prompt', prompt: 'Second prompt', data: { lens: '85mm' } }))!
-    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'update_prompt_entity')!
+    const first = record(await call('create_entity', { kind: 'prompt', name: 'First structured prompt', prompt: 'First prompt', data: { lens: '35mm' } }))!
+    const second = record(await call('create_entity', { kind: 'prompt', name: 'Second structured prompt', prompt: 'Second prompt', data: { lens: '85mm' } }))!
+    const action = catalog.actions.find(entry => entry.handler.kind === 'tool' && entry.handler.tool === 'update_entity')!
     await openActions(action.command)
     const picker = page.getByLabel('Saved item', { exact: true })
     await picker.selectOption(String(first.id))
@@ -487,9 +487,9 @@ describe('workspace action launcher with real endpoints', () => {
     expect(await data.evaluate(element => (element as HTMLTextAreaElement).validity.valid)).toBe(true)
     await page.getByLabel('Prompt', { exact: true }).fill('Second prompt revised')
     await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => record(await call('get_prompt_entity', { entity_id: second.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('Second prompt revised')
-    expect(record(await call('get_prompt_entity', { entity_id: first.id }))?.data).toEqual({ lens: '35mm' })
-    expect(record(await call('get_prompt_entity', { entity_id: second.id }))?.data).toEqual({ lens: '85mm' })
+    await expect.poll(async () => record(await call('get_entity', { entity_id: second.id }))?.prompt, { timeout: MCP_ROUNDTRIP_MS }).toBe('Second prompt revised')
+    expect(record(await call('get_entity', { entity_id: first.id }))?.data).toEqual({ lens: '35mm' })
+    expect(record(await call('get_entity', { entity_id: second.id }))?.data).toEqual({ lens: '85mm' })
   })
 
   it('previews and restores a script revision from its history controls', async () => {
