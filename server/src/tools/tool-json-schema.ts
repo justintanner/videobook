@@ -109,16 +109,23 @@ export function toolInputSchema(
   shape: ZodRawShape,
 ): StandardSchemaWithJSON<Record<string, unknown>> {
   const standard = z.object(shape)["~standard"];
+  const advertisedInputs = new Map<string, JsonSchema>();
   return {
     "~standard": {
       version: standard.version,
       vendor: standard.vendor,
       validate: standard.validate,
       jsonSchema: {
-        input: (options) => compactJsonSchema(standard.jsonSchema.input({
-          ...options,
-          libraryOptions: { ...options.libraryOptions, override: advertise },
-        })),
+        input: (options) => {
+          const cached = options.libraryOptions ? undefined : advertisedInputs.get(options.target);
+          if (cached) return cached;
+          const advertised = compactJsonSchema(standard.jsonSchema.input({
+            ...options,
+            libraryOptions: { ...options.libraryOptions, override: advertise },
+          }));
+          if (!options.libraryOptions) advertisedInputs.set(options.target, advertised);
+          return advertised;
+        },
         output: (options) => compactJsonSchema(standard.jsonSchema.output(options)),
       },
     },

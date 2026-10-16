@@ -1,5 +1,5 @@
 import { coldOpenDefs } from "./cold-open.js";
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { withBookContext } from "../book-context.js";
@@ -214,6 +214,14 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
   ];
 }
 
+function injectedBookIdOf(engine: Engine): string | null {
+  try {
+    return engine.book.get().bookId;
+  } catch {
+    return null;
+  }
+}
+
 function scopeTool(
   def: ToolDef,
   books: BookManager,
@@ -221,12 +229,6 @@ function scopeTool(
 ): ToolDef {
   const scope = def.scope ?? ("book_id" in def.schema ? "book" : "global");
   if (scope === "global") return def;
-  let injectedBookId: string | null = null;
-  try {
-    injectedBookId = injectedEngine.book.get().bookId;
-  } catch {
-    injectedBookId = null;
-  }
   return {
     ...def,
     scope,
@@ -238,7 +240,7 @@ function scopeTool(
           content: [{ type: "text", text: "book_id is required" }],
         };
       }
-      if (bookId === injectedBookId) {
+      if (bookId === injectedBookIdOf(injectedEngine)) {
         return withBookContext(
           { bookId, engine: injectedEngine, operation: def.name },
           () => def.handler(args),
@@ -259,18 +261,36 @@ function scopeTool(
   };
 }
 
+type PreparedTool = {
+  def: ToolDef;
+  inputSchema: StandardSchemaWithJSON<Record<string, unknown>>;
+};
+
+const preparedTools = new WeakMap<Engine, WeakMap<BookManager, readonly PreparedTool[]>>();
+
+function prepareTools(engine: Engine, books: BookManager): readonly PreparedTool[] {
+  return getAllToolDefs(engine, books)
+    .map((def) => scopeTool(withLogging(def, engine), books, engine))
+    .map((def) => ({ def, inputSchema: toolInputSchema(def.schema) }));
+}
+
+export function preparedToolsFor(engine: Engine, books: BookManager): readonly PreparedTool[] {
+  const byBooks = preparedTools.get(engine) ?? new WeakMap<BookManager, readonly PreparedTool[]>();
+  preparedTools.set(engine, byBooks);
+  const prepared = byBooks.get(books) ?? prepareTools(engine, books);
+  byBooks.set(books, prepared);
+  return prepared;
+}
+
 export function registerAllTools(
   server: McpServer,
   engine: Engine,
   books: BookManager = bookManager,
 ): void {
-  const defs = getAllToolDefs(engine, books)
-    .map((def) => withLogging(def, engine))
-    .map((def) => scopeTool(def, books, engine));
-  for (const def of defs) {
+  for (const { def, inputSchema } of preparedToolsFor(engine, books)) {
     server.registerTool(def.name, {
       description: def.description,
-      inputSchema: toolInputSchema(def.schema),
+      inputSchema,
       ...(def.annotations ? { annotations: def.annotations } : {}),
     }, def.handler);
   }

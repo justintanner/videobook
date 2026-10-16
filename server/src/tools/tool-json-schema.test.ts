@@ -133,4 +133,11 @@ describe("compact tool JSON Schemas", () => {
     const search = tools.find((tool) => tool.name === "search_moments");
     expect(JSON.stringify(search?.inputSchema.properties?.query)).toContain("modalities");
   });
+
+  it("converts each tool's advertised schema once and reuses it", () => {
+    const standard = toolInputSchema({ notebook_id: z.uuid() })["~standard"];
+    const first = standard.jsonSchema.input({ target: "draft-2020-12" });
+    expect(standard.jsonSchema.input({ target: "draft-2020-12" })).toBe(first);
+    expect(standard.jsonSchema.input({ target: "draft-07" })).not.toBe(first);
+  });
 });
