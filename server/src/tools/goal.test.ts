@@ -1314,8 +1314,9 @@ describe("staged video goals through MCP", () => {
     expect(notebook().edges.filter(edge => edge.target === videoOnly.cellId)).toHaveLength(0);
     const scene = await approve(videoOnly);
     if (!videoOnly.plan || !("version" in videoOnly.plan) || videoOnly.plan.version !== 3) throw new Error("expected a v3 plan");
-    expect(videoOnly.plan.scene.prompt).toMatch(/^Edit @image1, keeping its framing/u);
-    expect(getChainRun(engine, scene.chainId!)?.steps[0]?.params.refs).toEqual({ image: [notebookGridTag(notebook().cells.find(cell => cell.id === videoOnly.plan!.scene.imageRefs[0]!.cellId)!.slot)] });
+    const videoOnlyPlan = videoOnly.plan;
+    expect(videoOnlyPlan.scene.prompt).toMatch(/^Edit @image1, keeping its framing/u);
+    expect(getChainRun(engine, scene.chainId!)?.steps[0]?.params.refs).toEqual({ image: [notebookGridTag(notebook().cells.find(cell => cell.id === videoOnlyPlan.scene.imageRefs[0]!.cellId)!.slot)] });
     const sceneArtifactId = await settleChain(scene.chainId!, "image");
     const ready = await status(videoOnly.goalId);
     expect(ready).toMatchObject({ status: "review", stage: "videos" });

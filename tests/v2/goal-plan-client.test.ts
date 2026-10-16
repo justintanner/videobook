@@ -105,8 +105,8 @@ describe('staged goal model', () => {
     const ref = { kind: 'image' as const, artifactId: 'image-1', cellId: 'cell-1', address: '@a1', label: 'Skater', objectHash: 'hash-1', slot: '@image1' }
     const modern: GoalPlanV3 = {
       version: 3, title: 'Morning market', aspectRatio: '16:9',
-      scene: { prompt: 'Skate past the fruit stalls', tool: 'generate_kie_nano_banana_2_1_image', model: 'nano_banana_2_1', aspectRatio: '16:9', resolution: '2K', outputFormat: 'jpg', imageRefs: [ref] },
-      video: { prompt: 'The skater rolls through the stalls', tool: 'generate_kie_seedance_2_5_video', aspectRatio: '16:9', resolution: '1080p', durationSeconds: 13, generateAudio: true, outputFormat: 'mp4', imageRefs: [ref], videoRefs: [] },
+      scene: { prompt: 'Skate past the fruit stalls', tool: 'generate_image', model: 'kie:nano-banana-2-1', aspectRatio: '16:9', resolution: '2K', outputFormat: 'jpg', imageRefs: [ref] },
+      video: { prompt: 'The skater rolls through the stalls', tool: 'generate_video', model: 'kie:bytedance/seedance-2-5', aspectRatio: '16:9', resolution: '1080p', durationSeconds: 13, generateAudio: true, outputFormat: 'mp4', imageRefs: [ref], videoRefs: [] },
       references: [ref], sampledFrames: [],
       finish: { suggestedColdOpenSeconds: 2.3, watermark: { platform: 'tiktok', handle: 'jtbkk', profileUrl: 'https://www.tiktok.com/@jtbkk', mode: 'burn', handleEndSeconds: 3, qrLeadSeconds: 2.3, handleOpacity: 0.28, qrOpacity: 0.37, fadeSeconds: 0.3 } },
     }

@@ -50,6 +50,16 @@ export function downloadVideoCellInput(
   }
 }
 
+const MEDIA_FAILURE_JOB_TYPES: ReadonlySet<string> = new Set([
+  'download_video',
+  'process_image',
+  'process_video',
+  'process_audio',
+  'process_upload',
+  'complete_kie_task',
+  'generate_media',
+])
+
 export function downloadWatchStep(
   artifactId: string,
   asset: DownloadWatchAsset | undefined,
@@ -58,11 +68,12 @@ export function downloadWatchStep(
   return mediaAssetWatchStep(artifactId, asset, jobs)
 }
 
-/** Watch step for board media that is still downloading or process_*'ing. */
+/** Watch step for board media that is still downloading, completing or process_*'ing. */
 export function mediaAssetWatchStep(
   artifactId: string,
   asset: DownloadWatchAsset | undefined,
   jobs: readonly DownloadWatchJob[],
+  recordedError?: string | null,
 ): DownloadWatchStep {
   const completedDownload = jobs.find((job) =>
     job.artifactId === artifactId
@@ -79,17 +90,13 @@ export function mediaAssetWatchStep(
   const failed = jobs.find((job) =>
     job.artifactId === artifactId
     && (job.state === 'failed' || job.state === 'aborted')
-    && (
-      job.type === 'download_video'
-      || job.type === 'process_image'
-      || job.type === 'process_video'
-      || job.type === 'process_audio'
-      || job.type === 'process_upload'
-    ))
+    && MEDIA_FAILURE_JOB_TYPES.has(job.type))
   if (asset?.status === 'error' || failed) {
     return {
       kind: 'failed',
-      message: failed?.error?.message ?? 'Media processing failed',
+      message: failed?.error?.message
+        ?? nonBlankStringValue(recordedError)
+        ?? 'Media processing failed',
     }
   }
   return { kind: 'continue' }

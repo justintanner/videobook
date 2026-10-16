@@ -92,6 +92,15 @@ describe("analyze_video tool", () => {
     expect(result.text).toContain("only accepts video artifacts");
   }, 30_000);
 
+  it("refuses a video artifact that has no video file yet", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const created = await engine.artifacts.create("video", "pending clip");
+    if (!created.ok) throw new Error(created.error.message);
+    const result = await callAnalyze({ asset_id: created.value.artifactId });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain("has no video file yet");
+  }, 30_000);
+
   it("enqueues an analysis job for a video artifact", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     const assetId = await createVideoAsset("fresh");

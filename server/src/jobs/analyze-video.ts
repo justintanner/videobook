@@ -183,6 +183,9 @@ export function registerAnalyzeVideoJob(engine: Engine): void {
       : [];
 
     const sampled = sampleFrames(frameFiles);
+    if (sampled.length === 0) {
+      throw new Error(`No frames to analyze for ${assetId}; process the video before analyzing it`);
+    }
     const frameParts: OpenAiResponseInputContent[] = [];
     for (const file of sampled) {
       const frameRead = await engine.files.read(assetId, `original_frames/${file}`);

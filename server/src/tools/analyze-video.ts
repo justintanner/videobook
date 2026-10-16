@@ -1,4 +1,5 @@
 import type { Engine } from "videobook-engine";
+import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import {
@@ -66,6 +67,11 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
 
       const manifestResult = await engine.files.manifest(asset_id);
       if (!manifestResult.ok) return error(manifestResult.error.message);
+      if (!findVideoFile(manifestResult.value.files)) {
+        return error(
+          `${asset_id} has no video file yet; wait for its generation or processing to finish before analyzing it`,
+        );
+      }
 
       if (!force && (await engine.files.read(asset_id, VIDEO_ANALYSIS_FILE)).ok) {
         return ok({ asset_id, status: "already_analyzed" });

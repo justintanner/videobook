@@ -108,7 +108,7 @@ describe('notebook chat generation', () => {
       },
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
-      preferredModel: params.model,
+      preferredModel: typeof params.model === 'string' ? params.model : undefined,
       routedParams: params,
     })
     expect(draft.cell.tool).toBe('generate_video')

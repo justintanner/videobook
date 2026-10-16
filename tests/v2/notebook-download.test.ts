@@ -128,6 +128,42 @@ describe('notebook download placement', () => {
     })
   })
 
+  it('surfaces a failed provider completion on the board', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Unhandled provider task type: seedance2_video' },
+      result: null,
+      state: 'failed',
+      type: 'complete_kie_task',
+    }])).toEqual({
+      kind: 'failed',
+      message: 'Unhandled provider task type: seedance2_video',
+    })
+  })
+
+  it('falls back to the cell\'s recorded error when no job explains the failure', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [], 'Kie failed: provider rejected the request')).toEqual({
+      kind: 'failed',
+      message: 'Kie failed: provider rejected the request',
+    })
+  })
+
+  it('reports the generic failure when nothing recorded a reason', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [], null)).toEqual({
+      kind: 'failed',
+      message: 'Media processing failed',
+    })
+  })
+
   it('ignores unrelated failed jobs while media is still processing', () => {
     expect(mediaAssetWatchStep('artifact-01', {
       artifactId: 'artifact-01',

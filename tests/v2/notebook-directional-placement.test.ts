@@ -36,7 +36,6 @@ import {
   registerRunNotebookJob,
   runNotebookCell,
 } from '../../server/src/jobs/run-notebook.js'
-import { DEFAULT_VIDEO_TOOL } from '../../server/src/notebook-action-catalog.js'
 import {
   queue,
   setEngineRoot,
@@ -495,7 +494,7 @@ describe('directional canvas placement', () => {
       type: 'generate_video',
       slot: { row: 0, column: 0 },
       prompt: 'a cat walks',
-      tool: DEFAULT_VIDEO_TOOL,
+      tool: 'generate_video',
       provider: 'kie',
       model: 'GeminiOmniVideoRequestSchema',
       operation: 'image_to_video',
@@ -531,7 +530,7 @@ describe('directional canvas placement', () => {
           outputArtifactId: artifact.artifactId,
           completedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          tool: DEFAULT_VIDEO_TOOL,
+          tool: 'generate_video',
         },
       },
     }

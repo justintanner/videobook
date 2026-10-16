@@ -84,7 +84,7 @@ function cellExecutionStartedAt(
   return asString(item?.startedAt) ?? asString(item?.updatedAt) ?? undefined
 }
 
-function cellExecutionError(
+export function cellExecutionError(
   document: NotebookDocument,
   cellId: string,
 ): string | undefined {

@@ -43,7 +43,7 @@ describe.skipIf(!LIVE)("chat prompt rewrite — live", () => {
   it("keeps the references and drops the spoken model name", async () => {
     const rewritten = await rewriteChatGenerationPrompt(engine, {
       bookId: "test-book",
-      tool: "generate_kie_seedance_2_5_video",
+      model: "kie:bytedance/seedance-2-5",
       prompt: SPOKEN_PROMPT,
     });
     expect(rewritten).not.toBe(SPOKEN_PROMPT);

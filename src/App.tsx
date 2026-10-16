@@ -630,6 +630,7 @@ import {
 import {
   artifactForCell,
   canvasNodes,
+  cellExecutionError,
   jsonEqual,
   reconcileCanvasNodes,
   reconcileFlowEdges,
@@ -2439,6 +2440,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             watchedArtifactId,
             nextAssets.find((asset) => asset.artifactId === watchedArtifactId),
             nextJobs,
+            cellExecutionError(nextNotebook, params.cellId),
           )
           if (step.kind === 'redirected') {
             const replacement = nextAssets.find((asset) =>
