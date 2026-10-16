@@ -822,49 +822,28 @@ export function videobookDomainDefs(
       },
     },
     {
-      name: "list_legacy_books",
-      description: "List schema-v4 books awaiting an explicit copy-forward migration",
-      scope: "global",
-      schema: {},
-      handler: async () => {
-        await books.ready();
-        return json(books.listLegacy());
-      },
-    },
-    {
-      name: "migrate_legacy_book",
-      description: "Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing",
+      name: "legacy_migration",
+      description: "Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch",
       scope: "global",
       schema: {
-        book_id: z.string().uuid(),
-        expected_source_head: z.string().min(1),
-        expected_migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        action: z.enum(["list", "start", "status", "cancel"]),
+        book_id: z.string().uuid().optional(),
+        migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+        expected_source_head: z.string().min(1).optional().describe("Required to start"),
       },
       handler: async (args) => {
         try {
-          return json(await books.enqueueLegacyMigration(String(args.book_id),
-            String(args.expected_source_head), String(args.expected_migration_key)));
+          await books.ready();
+          if (args.action === "list") return json(books.listLegacy());
+          const bookId = z.string().uuid().parse(args.book_id);
+          const migrationKey = z.string().parse(args.migration_key);
+          if (args.action === "start") {
+            return json(await books.enqueueLegacyMigration(bookId, z.string().min(1).parse(args.expected_source_head), migrationKey));
+          }
+          return json(args.action === "cancel"
+            ? await books.cancelLegacyMigration(bookId, migrationKey)
+            : await books.legacyMigrationStatus(bookId, migrationKey));
         } catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
-      },
-    },
-    {
-      name: "get_legacy_migration",
-      description: "Read durable migration progress, job state, and the completed source archive link",
-      scope: "global",
-      schema: { ...bookSchema, migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/) },
-      handler: async (args) => {
-        try { return json(await books.legacyMigrationStatus(String(args.book_id), String(args.migration_key))); }
-        catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
-      },
-    },
-    {
-      name: "cancel_legacy_migration",
-      description: "Cancel queued or copying migration work before its final archive switch starts",
-      scope: "global",
-      schema: { ...bookSchema, migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/) },
-      handler: async (args) => {
-        try { return json(await books.cancelLegacyMigration(String(args.book_id), String(args.migration_key))); }
-        catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
       },
     },
     {

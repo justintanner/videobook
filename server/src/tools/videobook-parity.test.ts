@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(246);
-    expect(new Set(names).size).toBe(246);
+    expect(names).toHaveLength(243);
+    expect(new Set(names).size).toBe(243);
     expect(names).toEqual(
       expect.arrayContaining([
         "save_post_to_icloud",
@@ -49,8 +49,7 @@ describe("Videobook MCP parity", () => {
         "retag_asset",
         "configure_asset_tagging",
         "create_book",
-        "get_legacy_migration",
-        "cancel_legacy_migration",
+        "legacy_migration",
         "get_book",
         "get_book_usage",
         "list_notebooks",

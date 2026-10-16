@@ -280,8 +280,10 @@ describe('legacy book discovery and migration', () => {
     await books.ready()
     const preview = books.listLegacy()[0]!
     const defs = videobookDomainDefs(scopedBookEngine, books)
-    const tool = defs.find((def) => def.name === 'migrate_legacy_book')!
-    const args = { book_id: legacy.bookId, expected_source_head: preview.sourceHeadRevision, expected_migration_key: preview.migrationKey }
+    const tool = defs.find((def) => def.name === 'legacy_migration')!
+    const listed = JSON.parse((await tool.handler({ action: 'list' })).content[0]!.text) as Array<{ sourceBookId: string }>
+    expect(listed.map((entry) => entry.sourceBookId)).toEqual([legacy.bookId])
+    const args = { action: 'start', book_id: legacy.bookId, expected_source_head: preview.sourceHeadRevision, migration_key: preview.migrationKey }
     const queued = await tool.handler(args)
     expect(queued.isError).not.toBe(true)
     const submitted = JSON.parse(queued.content[0]!.text)
@@ -291,6 +293,7 @@ describe('legacy book discovery and migration', () => {
     const complete = await waitForMigration(legacy.bookId, preview.migrationKey, (status) => status.phase === 'complete' && status.job?.state === 'done')
     expect(complete.progress).not.toBeNull()
     expect(published).toEqual([legacy.bookId])
+    expect(JSON.parse((await tool.handler({ action: 'status', book_id: legacy.bookId, migration_key: preview.migrationKey })).content[0]!.text)).toMatchObject({ phase: 'complete' })
     expect(books.list()).toHaveLength(1)
     const result = complete.result!
     const managed = books.get(legacy.bookId)
@@ -332,7 +335,7 @@ describe('legacy book discovery and migration', () => {
       expect(duplicate.job?.id).toBe(first.job?.id)
       await waitForMigration(legacy.bookId, preview.migrationKey, () => reached)
       const defs = videobookDomainDefs(scopedBookEngine, books)
-      const cancel = await defs.find((def) => def.name === 'cancel_legacy_migration')!.handler({ book_id: legacy.bookId, migration_key: preview.migrationKey })
+      const cancel = await defs.find((def) => def.name === 'legacy_migration')!.handler({ action: 'cancel', book_id: legacy.bookId, migration_key: preview.migrationKey })
       expect(cancel.isError).not.toBe(true)
       expect(JSON.parse(cancel.content[0]!.text).job.state).toBe('aborted')
       release()

@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (246)
+## MCP endpoints (243)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -33,7 +33,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
 - `cancel_job` — Cancel a queued or running persistent job
-- `cancel_legacy_migration` — Cancel queued or copying migration work before its final archive switch starts
 - `chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
 - `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
@@ -106,7 +105,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
-- `get_legacy_migration` — Read durable migration progress, job state, and the completed source archive link
 - `get_music_analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
@@ -123,6 +121,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
+- `legacy_migration` — Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch
 - `link_post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.
 - `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.
 - `list_book_actions` — List authored semantic revisions for a book
@@ -137,7 +136,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_image_edit_models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model
 - `list_ingest_status` — List independent ingest and search-index phase states
 - `list_jobs` — List persistent jobs for a book
-- `list_legacy_books` — List schema-v4 books awaiting an explicit copy-forward migration
 - `list_media_streams` — List typed media streams for a source artifact
 - `list_notebook_actions` — List the deterministic notebook action catalog for runnable cells
 - `list_notebook_generation_plans` — List durable generation plans and their retryable lifecycle state
@@ -149,7 +147,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_workspace_actions` — List discoverable workspace actions, typed inputs, supported surfaces, and the visible workflow for each endpoint.
 - `make_cover_song` — Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
-- `migrate_legacy_book` — Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing
 - `move_notebook_cells` — Persist notebook cell grid slots
 - `move_timeline_audio` — Move an audio overlay to a frame offset
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
@@ -257,7 +254,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (319; 146 dedicated command routes)
+## Slash actions (316; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -294,7 +291,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/bg` — Background mode; UI: `settings_bg`
 - `/books` — Open the book selector dropdown; UI: `open_projects`
 - `/cancel-job` — Cancel a queued or running persistent job; MCP: `cancel_job`
-- `/cancel-legacy-migration` — Cancel queued or copying migration work before its final archive switch starts; MCP: `cancel_legacy_migration`
 - `/caption` — Preview a sequence caption with timing and style; preview or workspace operation
 - `/chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.; MCP: `chain`
 - `/character` — Create a character folder; MCP: `create_character`
@@ -383,7 +379,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-google-flow-character` — Retrieve normalized details for a single Google Flow character by ref.; MCP: `get_google_flow_character`
 - `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
 - `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
-- `/get-legacy-migration` — Read durable migration progress, job state, and the completed source archive link; MCP: `get_legacy_migration`
 - `/get-music-analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio; MCP: `get_music_analysis`
 - `/get-notebook` — Read a notebook graph; MCP: `get_notebook`
 - `/get-notebook-cell-details` — Return selected-cell details including raw Dolt row, edges, and action validation; MCP: `get_notebook_cell_details`
@@ -410,6 +405,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
+- `/legacy-migration` — Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch; MCP: `legacy_migration`
 - `/link-post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.; MCP: `link_post`
 - `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.; MCP: `list_assets`
 - `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`
@@ -424,7 +420,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-image-edit-models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model; MCP: `list_image_edit_models`
 - `/list-ingest-status` — List independent ingest and search-index phase states; MCP: `list_ingest_status`
 - `/list-jobs` — List persistent jobs for a book; MCP: `list_jobs`
-- `/list-legacy-books` — List schema-v4 books awaiting an explicit copy-forward migration; MCP: `list_legacy_books`
 - `/list-media-streams` — List typed media streams for a source artifact; MCP: `list_media_streams`
 - `/list-notebook-actions` — List the deterministic notebook action catalog for runnable cells; MCP: `list_notebook_actions`
 - `/list-notebook-generation-plans` — List durable generation plans and their retryable lifecycle state; MCP: `list_notebook_generation_plans`
@@ -434,7 +429,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-sequence-replace-targets` — List clips that a search moment can explicitly replace; MCP: `list_sequence_replace_targets`
 - `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
 - `/mark-asset-seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.; MCP: `mark_asset_seen`
-- `/migrate-legacy-book` — Queue a confirmed schema-v4 migration, preserve the legacy archive, and schedule current search indexing; MCP: `migrate_legacy_book`
 - `/move` — Preview moving a sequence clip to a track and frame; preview or workspace operation
 - `/move-notebook-cells` — Persist notebook cell grid slots; MCP: `move_notebook_cells`
 - `/move-timeline-audio` — Move an audio overlay to a frame offset; MCP: `move_timeline_audio`
