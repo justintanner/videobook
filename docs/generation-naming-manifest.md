@@ -4,8 +4,8 @@ This is the authoritative registry-derived list of canonical generation and work
 
 ## Summary
 
-- Total actions: 100
-- Provider actions: 91
+- Total actions: 121
+- Provider actions: 112
 - Workflow and support actions: 9
 
 ## Naming grammar
@@ -114,3 +114,24 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `generate_fal_minimax_h3_max_recast` | fal | `minimax/h3-max/recast` | video | recast_video | visible |  |
 | `generate_fal_grok_imagine_video_v1_5_lite_text_to_video` | fal | `xai/grok-imagine-video/v1.5/lite/text-to-video` | video | text_to_video | visible |  |
 | `extend_fal_minimax_h3_max_turbo_video` | fal | `minimax/h3-max-turbo/extend-video` | video | extend_video | visible |  |
+| `generate_elevenlabs_sound_effect` | elevenlabs | `ElevenLabsSoundGenerationRequestSchema` | audio | text_to_sound_effect | visible |  |
+| `generate_elevenlabs_music` | elevenlabs | `ElevenLabsComposeMusicRequestSchema` | audio | text_to_music | visible |  |
+| `generate_elevenlabs_video_to_music` | elevenlabs | `ElevenLabsVideoToMusicRequestSchema` | audio | video_to_music | visible |  |
+| `generate_kie_elevenlabs_sound_effect_v2` | kie | `ElevenLabsSoundEffectV2RequestSchema` | audio | text_to_sound_effect | visible |  |
+| `generate_kie_elevenlabs_text_to_speech_multilingual_v2` | kie | `ElevenLabsTextToSpeechMultilingualV2RequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_elevenlabs_text_to_speech_turbo_2_5` | kie | `ElevenLabsTextToSpeechTurbo25RequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_elevenlabs_text_to_dialogue_v3` | kie | `ElevenLabsTextToDialogueV3RequestSchema` | audio | text_to_dialogue | visible |  |
+| `generate_kie_gemini_2_5_pro_tts` | kie | `GoogleGemini25ProTtsRequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_gemini_3_1_flash_tts` | kie | `GoogleGemini31FlashTtsRequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_gemini_3_8_flash_tts` | kie | `GoogleGemini38FlashTtsRequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_gemini_3_8_flash_lite_tts` | kie | `GoogleGemini38FlashLiteTtsRequestSchema` | audio | text_to_speech | visible |  |
+| `generate_kie_suno_music` | kie | `SunoGenerateRequestSchema` | audio | text_to_music | visible |  |
+| `generate_kie_suno_sounds` | kie | `SunoSoundsRequestSchema` | audio | text_to_sound_effect | visible |  |
+| `generate_fal_elevenlabs_music_2_5` | fal | `elevenlabs/music/v2.5` | audio | text_to_music | visible |  |
+| `generate_fal_minimax_music_3` | fal | `minimax/music-3` | audio | text_to_music | visible |  |
+| `generate_fal_elevenlabs_tts_eleven_v4` | fal | `elevenlabs/tts/eleven-v4` | audio | text_to_speech | visible |  |
+| `generate_fal_elevenlabs_tts_eleven_v4_turbo` | fal | `elevenlabs/tts/eleven-v4-turbo` | audio | text_to_speech | visible |  |
+| `generate_fal_gemini_3_8_flash_tts` | fal | `google/gemini-3.8-flash-tts` | audio | text_to_speech | visible |  |
+| `generate_fal_gemini_3_8_flash_lite_tts` | fal | `google/gemini-3.8-flash-lite-tts` | audio | text_to_speech | visible |  |
+| `generate_fal_qwen_audio_3_tts` | fal | `alibaba/qwen-audio-3-tts` | audio | text_to_speech | visible |  |
+| `generate_fal_seed_speech_tts_v2` | fal | `fal-ai/bytedance/seed-speech/tts/v2` | audio | text_to_speech | visible |  |

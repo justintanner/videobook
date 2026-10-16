@@ -1,4 +1,5 @@
 import { APICITY_014_GENERATION_ACTIONS } from "./apicity-014-media.js";
+import { AUDIO_GENERATION_ACTIONS } from "./audio-generation-models.js";
 
 /**
  * Canonical Generation Action Registry & Compatibility Layer
@@ -995,6 +996,7 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     persisted_history_consumers: ["project_activity"],
   },
   ...APICITY_014_GENERATION_ACTIONS,
+  ...AUDIO_GENERATION_ACTIONS,
 ];
 
 // Retired Kling / Seedance names remain readable for persisted history and

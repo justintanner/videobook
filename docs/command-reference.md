@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (354)
+## MCP endpoints (375)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -107,11 +107,19 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
 - `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
+- `generate_elevenlabs_music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music
+- `generate_elevenlabs_sound_effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs
 - `generate_elevenlabs_text_to_audio` (historical names, not exposed: `generate_elevenlabs_t2a`) — Generate an aud-* text-to-audio asset using an ElevenLabs voice.
+- `generate_elevenlabs_video_to_music` — Score a connected video with a music track timed to its picture using ElevenLabs Music
 - `generate_fal_bria_fibo_edit_1_5_product_holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal
 - `generate_fal_bria_fibo_edit_1_5_virtual_try_on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal
+- `generate_fal_elevenlabs_music_2_5` — Compose music or an instrumental background bed with ElevenLabs Music 2.5 on fal
+- `generate_fal_elevenlabs_tts_eleven_v4` — Speak text with ElevenLabs Eleven v4 on fal; supports audio tags such as [whispering]
+- `generate_fal_elevenlabs_tts_eleven_v4_turbo` — Speak text quickly with ElevenLabs Eleven v4 Turbo on fal
 - `generate_fal_flux_3_edit_image` — Edit 1-10 images with FLUX 3 on fal
 - `generate_fal_flux_3_text_to_image` — Text-to-image with FLUX 3 on fal
+- `generate_fal_gemini_3_8_flash_lite_tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on fal
+- `generate_fal_gemini_3_8_flash_tts` — Speak text with Gemini 3.8 Flash TTS on fal, with separate style instructions
 - `generate_fal_grok_imagine_edit_image` (historical names, not exposed: `generate_grok_imagine_image_edit_fal`) — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_image_fal`) — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_grok_imagine_video_edit_video` (historical names, not exposed: `generate_grok_imagine_video_edit_fal`) — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.
@@ -123,6 +131,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_fal_ideogram_v4_5_text_to_image` — Text-to-image with Ideogram 4.5 on fal
 - `generate_fal_minimax_h3_max_insert_video` — Insert a generated span into a source video with MiniMax H3 Max on fal
 - `generate_fal_minimax_h3_max_recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal
+- `generate_fal_minimax_music_3` — Generate music up to 5 minutes with MiniMax Music 3 on fal; omit lyrics for an instrumental
 - `generate_fal_nano_banana_2_edit_image` (historical names, not exposed: `generate_nano_banana_2_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_nano_banana_2_lite_edit_image` (historical names, not exposed: `generate_nano_banana_2_lite_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_fal_nano_banana_2_lite_text_to_image` (historical names, not exposed: `generate_nano_banana_2_lite_fal`) — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
@@ -134,7 +143,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_fal_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen_image_edit_fal`) — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.
 - `generate_fal_qwen_3_0_edit_image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
+- `generate_fal_qwen_audio_3_tts` — Speak text with Qwen Audio 3 TTS on fal in ten languages
 - `generate_fal_recraft_v4_1_flash_text_to_image` — Text-to-image with Recraft 4.1 Flash on fal
+- `generate_fal_seed_speech_tts_v2` — Speak text with ByteDance Seed Speech TTS v2 on fal, with speed, pitch and voice instructions
 - `generate_fal_seedream_v5_flash_edit_image` — Edit images with ByteDance Seedream 5 Flash on fal
 - `generate_fal_seedream_v5_flash_layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal
 - `generate_fal_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on fal
@@ -153,6 +164,14 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_google_flow_veo_3_1_lite_video` (historical names, not exposed: `generate_veo31_lite_video`) — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.
 - `generate_google_flow_veo_3_1_quality_video` (historical names, not exposed: `generate_veo31_video`) — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.
 - `generate_image_model_comparison` (historical names, not exposed: `gen_images_all_models`) — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.
+- `generate_kie_elevenlabs_sound_effect_v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie
+- `generate_kie_elevenlabs_text_to_dialogue_v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]
+- `generate_kie_elevenlabs_text_to_speech_multilingual_v2` — Speak text with ElevenLabs Multilingual v2 on Kie
+- `generate_kie_elevenlabs_text_to_speech_turbo_2_5` — Speak text quickly and cheaply with ElevenLabs Turbo 2.5 on Kie
+- `generate_kie_gemini_2_5_pro_tts` — Speak text with Gemini 2.5 Pro TTS on Kie, with accent, style and pace controls
+- `generate_kie_gemini_3_1_flash_tts` — Speak text with Gemini 3.1 Flash TTS on Kie, with accent, style and pace controls
+- `generate_kie_gemini_3_8_flash_lite_tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on Kie
+- `generate_kie_gemini_3_8_flash_tts` — Speak text with Gemini 3.8 Flash TTS on Kie
 - `generate_kie_gemini_omni_video` (historical names, not exposed: `generate_gemini_omni_video`) — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.
 - `generate_kie_gpt_image_2_5_flare_image` — Generate or edit an image using GPT Image 2.5 Flare with up to 16 optional reference images. Creates an image artifact and enqueues a background job.
 - `generate_kie_gpt_image_2_5_sunburst_image` — Generate or edit an image using GPT Image 2.5 Sunburst with up to 16 optional reference images. Creates an image artifact and enqueues a background job.
@@ -185,6 +204,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_kie_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on kie
 - `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
 - `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.
+- `generate_kie_suno_music` — Generate a song or instrumental background track with Suno on Kie; set a style to use custom mode
+- `generate_kie_suno_sounds` — Generate a sound effect, ambience or loop with Suno Sounds on Kie, with optional tempo and key
 - `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.
 - `generate_kie_veo_3_0_video` (historical names, not exposed: `generate_veo3_video`) — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.
 - `generate_kie_vidu_q4_image_to_video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image
@@ -365,7 +386,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (422; 149 dedicated command routes)
+## Slash actions (443; 149 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -489,10 +510,18 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
 - `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
+- `/generate-elevenlabs-music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music; MCP: `generate_elevenlabs_music`
+- `/generate-elevenlabs-sound-effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs; MCP: `generate_elevenlabs_sound_effect`
+- `/generate-elevenlabs-video-to-music` — Score a connected video with a music track timed to its picture using ElevenLabs Music; MCP: `generate_elevenlabs_video_to_music`
 - `/generate-fal-bria-fibo-edit-1-5-product-holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_product_holding`
 - `/generate-fal-bria-fibo-edit-1-5-virtual-try-on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_virtual_try_on`
+- `/generate-fal-elevenlabs-music-2-5` — Compose music or an instrumental background bed with ElevenLabs Music 2.5 on fal; MCP: `generate_fal_elevenlabs_music_2_5`
+- `/generate-fal-elevenlabs-tts-eleven-v4` — Speak text with ElevenLabs Eleven v4 on fal; supports audio tags such as [whispering]; MCP: `generate_fal_elevenlabs_tts_eleven_v4`
+- `/generate-fal-elevenlabs-tts-eleven-v4-turbo` — Speak text quickly with ElevenLabs Eleven v4 Turbo on fal; MCP: `generate_fal_elevenlabs_tts_eleven_v4_turbo`
 - `/generate-fal-flux-3-edit-image` — Edit 1-10 images with FLUX 3 on fal; MCP: `generate_fal_flux_3_edit_image`
 - `/generate-fal-flux-3-text-to-image` — Text-to-image with FLUX 3 on fal; MCP: `generate_fal_flux_3_text_to_image`
+- `/generate-fal-gemini-3-8-flash-lite-tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on fal; MCP: `generate_fal_gemini_3_8_flash_lite_tts`
+- `/generate-fal-gemini-3-8-flash-tts` — Speak text with Gemini 3.8 Flash TTS on fal, with separate style instructions; MCP: `generate_fal_gemini_3_8_flash_tts`
 - `/generate-fal-grok-imagine-edit-image` — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_edit_image`
 - `/generate-fal-grok-imagine-text-to-image` — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_text_to_image`
 - `/generate-fal-grok-imagine-video-edit-video` — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_edit_video`
@@ -504,6 +533,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-fal-ideogram-v4-5-text-to-image` — Text-to-image with Ideogram 4.5 on fal; MCP: `generate_fal_ideogram_v4_5_text_to_image`
 - `/generate-fal-minimax-h3-max-insert-video` — Insert a generated span into a source video with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_insert_video`
 - `/generate-fal-minimax-h3-max-recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_recast`
+- `/generate-fal-minimax-music-3` — Generate music up to 5 minutes with MiniMax Music 3 on fal; omit lyrics for an instrumental; MCP: `generate_fal_minimax_music_3`
 - `/generate-fal-nano-banana-2-edit-image` — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_edit_image`
 - `/generate-fal-nano-banana-2-lite-edit-image` — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_edit_image`
 - `/generate-fal-nano-banana-2-lite-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_text_to_image`
@@ -515,7 +545,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-fal-qwen-2-0-edit-image` — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_edit_image`
 - `/generate-fal-qwen-2-0-text-to-image` — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_text_to_image`
 - `/generate-fal-qwen-3-0-edit-image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_3_0_edit_image`
+- `/generate-fal-qwen-audio-3-tts` — Speak text with Qwen Audio 3 TTS on fal in ten languages; MCP: `generate_fal_qwen_audio_3_tts`
 - `/generate-fal-recraft-v4-1-flash-text-to-image` — Text-to-image with Recraft 4.1 Flash on fal; MCP: `generate_fal_recraft_v4_1_flash_text_to_image`
+- `/generate-fal-seed-speech-tts-v2` — Speak text with ByteDance Seed Speech TTS v2 on fal, with speed, pitch and voice instructions; MCP: `generate_fal_seed_speech_tts_v2`
 - `/generate-fal-seedream-v5-flash-edit-image` — Edit images with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_edit_image`
 - `/generate-fal-seedream-v5-flash-layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_layerize`
 - `/generate-fal-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_text_to_image`
@@ -534,6 +566,14 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-google-flow-veo-3-1-lite-video` — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_video`
 - `/generate-google-flow-veo-3-1-quality-video` — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_quality_video`
 - `/generate-image-model-comparison` — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.; MCP: `generate_image_model_comparison`
+- `/generate-kie-elevenlabs-sound-effect-v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie; MCP: `generate_kie_elevenlabs_sound_effect_v2`
+- `/generate-kie-elevenlabs-text-to-dialogue-v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]; MCP: `generate_kie_elevenlabs_text_to_dialogue_v3`
+- `/generate-kie-elevenlabs-text-to-speech-multilingual-v2` — Speak text with ElevenLabs Multilingual v2 on Kie; MCP: `generate_kie_elevenlabs_text_to_speech_multilingual_v2`
+- `/generate-kie-elevenlabs-text-to-speech-turbo-2-5` — Speak text quickly and cheaply with ElevenLabs Turbo 2.5 on Kie; MCP: `generate_kie_elevenlabs_text_to_speech_turbo_2_5`
+- `/generate-kie-gemini-2-5-pro-tts` — Speak text with Gemini 2.5 Pro TTS on Kie, with accent, style and pace controls; MCP: `generate_kie_gemini_2_5_pro_tts`
+- `/generate-kie-gemini-3-1-flash-tts` — Speak text with Gemini 3.1 Flash TTS on Kie, with accent, style and pace controls; MCP: `generate_kie_gemini_3_1_flash_tts`
+- `/generate-kie-gemini-3-8-flash-lite-tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on Kie; MCP: `generate_kie_gemini_3_8_flash_lite_tts`
+- `/generate-kie-gemini-3-8-flash-tts` — Speak text with Gemini 3.8 Flash TTS on Kie; MCP: `generate_kie_gemini_3_8_flash_tts`
 - `/generate-kie-gemini-omni-video` — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_gemini_omni_video`
 - `/generate-kie-gpt-image-2-5-flare-image` — Generate or edit an image using GPT Image 2.5 Flare with up to 16 optional reference images. Creates an image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_5_flare_image`
 - `/generate-kie-gpt-image-2-5-sunburst-image` — Generate or edit an image using GPT Image 2.5 Sunburst with up to 16 optional reference images. Creates an image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_5_sunburst_image`
@@ -566,6 +606,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-kie-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_text_to_image`
 - `/generate-kie-seedream-v5-lite-image-to-image` — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_image_to_image`
 - `/generate-kie-seedream-v5-lite-text-to-image` — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_text_to_image`
+- `/generate-kie-suno-music` — Generate a song or instrumental background track with Suno on Kie; set a style to use custom mode; MCP: `generate_kie_suno_music`
+- `/generate-kie-suno-sounds` — Generate a sound effect, ambience or loop with Suno Sounds on Kie, with optional tempo and key; MCP: `generate_kie_suno_sounds`
 - `/generate-kie-veo-3-0-fast-video` — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_fast_video`
 - `/generate-kie-veo-3-0-video` — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_video`
 - `/generate-kie-vidu-q4-image-to-video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image; MCP: `generate_kie_vidu_q4_image_to_video`

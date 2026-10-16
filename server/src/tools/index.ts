@@ -220,6 +220,7 @@ import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 
 import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
+import { generateAudioModelDefs } from "./generate-audio-models.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { bookUsageDef } from "./book-usage.js";
 import { postRecordDefs } from "./post-record.js";
@@ -509,6 +510,7 @@ export function getAllToolDefs(
     ...imageSubjectDefs(engine),
 
     generateElevenlabsT2aDef(engine),
+    ...generateAudioModelDefs(engine),
     postDef(),
     ...postRecordDefs(engine),
     xConnectStartDef(),

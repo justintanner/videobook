@@ -147,6 +147,7 @@ import {
 } from "./generate-wan30-video.js";
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
+import { registerAudioGenerationJobs } from "./generate-audio-models.js";
 import { registerAcestepCoverJob } from "./generate-acestep-cover.js";
 import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
@@ -309,6 +310,7 @@ export function registerAllJobHandlers(
   registerGenerateWan30PrimeVideoJob(engine);
   registerApicity014Jobs(engine);
   registerGenerateElevenlabsT2aJob(engine);
+  registerAudioGenerationJobs(engine);
   registerAcestepCoverJob(engine);
   registerExtendAudioJob(engine);
   registerRemoveSoundJob(engine);

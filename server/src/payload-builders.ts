@@ -1675,6 +1675,7 @@ function isXaiProvider(provider?: string): boolean {
 
 import { getCanonicalName } from "./generation-registry.js";
 import { buildApicity014TranslateResult } from "./apicity-014-media.js";
+import { buildAudioGenerationTranslateResult } from "./audio-generation-models.js";
 
 function translateToolPayloadUnchecked(
   rawToolName: string,
@@ -1688,6 +1689,8 @@ function translateToolPayloadUnchecked(
     : { ...rawArgs, prompt: transformedPrompt };
   const apicity014 = buildApicity014TranslateResult(toolName, args);
   if (apicity014) return apicity014;
+  const audio = buildAudioGenerationTranslateResult(toolName, args);
+  if (audio) return audio;
   const imageRefs = (args.image_refs as string[] | undefined) ?? [];
 
   switch (toolName) {

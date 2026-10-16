@@ -6,6 +6,7 @@ import {
   LIGHTNING_VIDEO_RESOLUTION,
 } from "./lightning-defaults.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "./image-edit-models.js";
+import { audioGenerationModel, buildAudioGenerationRequest } from "./audio-generation-models.js";
 import type { EstimateRequest } from "@apicity/cost";
 import {
   GeminiOmniVideoRequestSchema,
@@ -653,6 +654,33 @@ const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
   generate_alibaba_qwen_2_0_edit_image: alibabaImage("qwen-image-edit"),
 };
 
+const audioModelCost = (
+  toolName: string,
+  provider: "kie" | "fal",
+  endpoint?: string,
+): CostAdapter => (input) => {
+  const model = audioGenerationModel(toolName);
+  if (!model) return null;
+  const built = buildAudioGenerationRequest(model, input);
+  if (!built.ok) return null;
+  return { provider, ...(endpoint ? { endpoint } : {}), payload: built.request };
+};
+
+const AUDIO_ADAPTERS: Record<string, CostAdapter> = {
+  generate_kie_elevenlabs_text_to_speech_multilingual_v2: audioModelCost("generate_kie_elevenlabs_text_to_speech_multilingual_v2", "kie"),
+  generate_kie_elevenlabs_text_to_speech_turbo_2_5: audioModelCost("generate_kie_elevenlabs_text_to_speech_turbo_2_5", "kie"),
+  generate_kie_elevenlabs_text_to_dialogue_v3: audioModelCost("generate_kie_elevenlabs_text_to_dialogue_v3", "kie"),
+  generate_kie_suno_music: audioModelCost("generate_kie_suno_music", "kie", "suno/generate"),
+  generate_kie_suno_sounds: audioModelCost("generate_kie_suno_sounds", "kie", "suno/sounds-generate"),
+  generate_fal_elevenlabs_music_2_5: audioModelCost("generate_fal_elevenlabs_music_2_5", "fal", "elevenlabs/music/v2.5"),
+  generate_fal_elevenlabs_tts_eleven_v4: audioModelCost("generate_fal_elevenlabs_tts_eleven_v4", "fal", "elevenlabs/tts/eleven-v4"),
+  generate_fal_elevenlabs_tts_eleven_v4_turbo: audioModelCost("generate_fal_elevenlabs_tts_eleven_v4_turbo", "fal", "elevenlabs/tts/eleven-v4-turbo"),
+  generate_fal_gemini_3_8_flash_tts: audioModelCost("generate_fal_gemini_3_8_flash_tts", "fal", "google/gemini-3.8-flash-tts"),
+  generate_fal_gemini_3_8_flash_lite_tts: audioModelCost("generate_fal_gemini_3_8_flash_lite_tts", "fal", "google/gemini-3.8-flash-lite-tts"),
+  generate_fal_qwen_audio_3_tts: audioModelCost("generate_fal_qwen_audio_3_tts", "fal", "alibaba/qwen-audio-3-tts"),
+  generate_fal_seed_speech_tts_v2: audioModelCost("generate_fal_seed_speech_tts_v2", "fal", "fal-ai/bytedance/seed-speech/tts/v2"),
+};
+
 // edit_image_subjects prices the model chosen in input.model through the
 // catalog entry's shadowed GENERATION_ACTIONS adapter; the seedream pro i2i
 // default has no registry action and prices via @apicity/cost directly. fal
@@ -693,6 +721,7 @@ const ADAPTERS: Record<string, CostAdapter> = {
   ...KIE_ADAPTERS,
   ...FAL_ADAPTERS,
   ...ALIBABA_ADAPTERS,
+  ...AUDIO_ADAPTERS,
 };
 
 import { getActionSpec, getCanonicalName } from "./generation-registry.js";
