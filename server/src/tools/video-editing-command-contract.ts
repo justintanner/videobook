@@ -298,8 +298,6 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "get_timeline", exposure: "internal", purpose: "Read raw timeline state" },
   { tool: "set_timeline", exposure: "internal", purpose: "Replace raw timeline state" },
   { tool: "assign_slot", exposure: "direct", command: "/assign", purpose: "Assign an asset to a timeline slot" },
-  { tool: "unassign_slot", exposure: "direct", command: "/unassign", purpose: "Clear a timeline slot" },
-  { tool: "insert_timeline_slot", exposure: "direct", command: "/insert-slot", purpose: "Insert a timeline slot" },
   { tool: "remove_timeline_slot", exposure: "direct", command: "/remove-slot", purpose: "Remove a timeline slot" },
   { tool: "add_timeline_audio", exposure: "ui", command: "/audio-add", purpose: "Add timeline audio" },
   { tool: "move_timeline_audio", exposure: "ui", command: "/audio-move", purpose: "Move timeline audio" },

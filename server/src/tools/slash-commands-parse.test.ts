@@ -283,7 +283,7 @@ describe("slash command parse/normalize/dispatch", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. /unassign — unassign_slot
+  // 7. /unassign — remove_timeline_slot
   // -----------------------------------------------------------------------
   describe("/unassign", () => {
     it("parses '/unassign @s02'", () => {

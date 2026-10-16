@@ -436,7 +436,7 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. /unassign — unassign_slot
+  // 7. /unassign — remove_timeline_slot
   // -----------------------------------------------------------------------
   describe("/unassign", () => {
 
@@ -460,7 +460,7 @@ describe("slash commands e2e", () => {
 
       // Clear
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -471,7 +471,7 @@ describe("slash commands e2e", () => {
 
     it("errors for invalid slot format", async () => {
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "xyz" },
       });
       expect(result.isError).toBe(true);
@@ -479,7 +479,7 @@ describe("slash commands e2e", () => {
 
     it("errors for slot s00", async () => {
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s00" },
       });
       expect(result.isError).toBe(true);
@@ -487,7 +487,7 @@ describe("slash commands e2e", () => {
 
     it("errors for no timeline", async () => {
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBe(true);
@@ -1114,7 +1114,7 @@ describe("slash commands e2e", () => {
       }
 
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s02" },
       });
       expect(result.isError).toBeFalsy();
@@ -1138,7 +1138,7 @@ describe("slash commands e2e", () => {
 
       // Clear s05 which doesn't exist
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s05" },
       });
       expect(result.isError).toBe(true);
@@ -1754,7 +1754,7 @@ describe("slash commands e2e", () => {
 
       // Clear s01
       const clearResult = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s01" },
       });
       expect(clearResult.isError).toBeFalsy();
@@ -2323,7 +2323,7 @@ describe("slash commands e2e", () => {
       });
 
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -2359,7 +2359,7 @@ describe("slash commands e2e", () => {
       expect(seeded.isError).toBeFalsy();
 
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s01" },
       });
       expect(result.isError).toBeFalsy();
@@ -2666,7 +2666,7 @@ describe("slash commands e2e", () => {
 
       // Clear middle slot
       const clearResult = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "test-proj", slot: "s02" },
       });
       expect(clearResult.isError).toBeFalsy();
@@ -2892,7 +2892,7 @@ describe("slash commands e2e", () => {
   describe("/unassign", () => {
     it("errors for nonexistent project (no timeline)", async () => {
       const result = await client.callTool({
-        name: "unassign_slot",
+        name: "remove_timeline_slot",
         arguments: { book_id: "no-such-project", slot: "s01" },
       });
       expect(result.isError).toBe(true);

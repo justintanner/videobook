@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (263)
+## MCP endpoints (261)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -128,7 +128,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_watermark_config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.
 - `icloud_status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
-- `insert_timeline_slot` — Typed timelines cannot contain empty slots; assign an asset directly with assign_slot
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
@@ -256,7 +255,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `translate_subtitles` — Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.
-- `unassign_slot` — Remove a typed timeline slot and shift later slots left
 - `update_character_entity` — Update a reusable character
 - `update_notebook_cell` — Update one notebook cell
 - `update_post` — Edit a Post draft or its notes. Delivered media, caption and source versions are immutable; create another Post for a repost.
@@ -274,7 +272,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (331; 148 dedicated command routes)
+## Slash actions (329; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -425,7 +423,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/insert` — Preview inserting media into the sequence; preview or workspace operation
-- `/insert-slot` — Insert an empty timeline slot before or after another slot; MCP: `insert_timeline_slot`
 - `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
@@ -506,7 +503,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
 - `/remove-asset-tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.; MCP: `remove_asset_tag`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
-- `/remove-slot` — Remove a timeline slot, shift later slots left, and clean up trailing empty slots; MCP: `remove_timeline_slot`
+- `/remove-slot` (aliases: `/unassign`) — Remove a timeline slot and shift later slots left; MCP: `remove_timeline_slot`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
 - `/remove-timeline-audio` — Remove an audio overlay by its UUIDv7 id; MCP: `remove_timeline_audio`
 - `/rename` — Rename an asset; MCP: `rename_asset`
@@ -587,7 +584,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
 - `/trim-audio` — Trim audio clip; MCP: `trim_audio`
 - `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
-- `/unassign` — Clear asset from timeline slot; MCP: `unassign_slot`
 - `/update-character-entity` — Update a reusable character; MCP: `update_character_entity`
 - `/update-notebook-cell` — Update one notebook cell; MCP: `update_notebook_cell`
 - `/update-post` — Edit a Post draft or its notes. Delivered media, caption and source versions are immutable; create another Post for a repost.; MCP: `update_post`

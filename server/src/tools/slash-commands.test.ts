@@ -91,8 +91,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/delete");
     expect(commandNames).toContain("/rename");
     expect(commandNames).toContain("/assign");
-    expect(commandNames).toContain("/unassign");
-    expect(commandNames).toContain("/insert-slot");
+    expect(commandNames).not.toContain("/insert-slot");
     expect(commandNames).toContain("/remove-slot");
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
@@ -182,13 +181,9 @@ describe("slash_commands tool", () => {
     expect(timewarp.mcpTool?.autoInject).toContain("book_id");
     expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
 
-    const insertSlot = commands.find((c) => c.command === "/insert-slot")!;
-    expect(insertSlot.mcpTool?.tool).toBe("insert_timeline_slot");
-    expect(insertSlot.mcpTool?.autoInject).toContain("book_id");
-    expect(insertSlot.params.map((p) => p.name)).toEqual(["slot", "position"]);
-
     const removeSlot = commands.find((c) => c.command === "/remove-slot")!;
     expect(removeSlot.mcpTool?.tool).toBe("remove_timeline_slot");
+    expect(removeSlot.aliases).toEqual(["/unassign"]);
     expect(removeSlot.mcpTool?.autoInject).toContain("book_id");
     expect(removeSlot.params.map((p) => p.name)).toEqual(["slot"]);
 

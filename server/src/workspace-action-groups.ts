@@ -53,8 +53,8 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "generate_image", "generate_video", "generate_audio", "list_generation_models",
   ],
   Sequence: [
-    "get_timeline", "set_timeline", "render_timeline", "assign_slot", "unassign_slot",
-    "insert_timeline_slot", "remove_timeline_slot", "add_timeline_audio",
+    "get_timeline", "set_timeline", "render_timeline", "assign_slot",
+    "remove_timeline_slot", "add_timeline_audio",
     "remove_timeline_audio", "move_timeline_audio", "update_timeline_audio",
     "plan_sequence_edit", "plan_chat_command", "plan_generation_insert",
     "continue_queued_insert", "preview_edit_intent", "commit_edit_intent",
