@@ -31,7 +31,7 @@ describe("video editing command contract", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-command-contract-"));
     const fs = createEngineForTest(tempDir);
     toolDefs = getVideoEditingToolDefs(fs);
-    const result = await commandsDef().handler({});
+    const result = await commandsDef().handler({ detail: "full" });
     commands = JSON.parse((result.content as TextContent)[0].text) as ServerCommand[];
   });
 

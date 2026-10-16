@@ -222,7 +222,7 @@ describe("animate_keywords tool", () => {
   });
 
   it("exposes the /keywords slash command through the MCP registry", async () => {
-    const result = await client.callTool({ name: "slash_commands", arguments: {} });
+    const result = await client.callTool({ name: "slash_commands", arguments: { detail: "full" } });
     const commands = JSON.parse((result.content as TextContent)[0].text) as Array<{
       command: string;
       mcpTool?: { tool: string; autoInject?: string[] };

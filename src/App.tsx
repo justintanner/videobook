@@ -4148,7 +4148,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
 
   const refreshBookCommands = useCallback(async () => {
-    const [value, catalogValue] = await Promise.all([call('slash_commands', {}), call('list_workspace_actions', { detail: 'full' })])
+    const [value, catalogValue] = await Promise.all([call('slash_commands', { detail: 'full' }), call('list_workspace_actions', { detail: 'full' })])
     const catalog = asWorkspaceActionCatalog(catalogValue)
     setWorkspaceActions(catalog.actions)
     setCommands(workspaceActionCommands(catalog.actions, asCommands(value)))

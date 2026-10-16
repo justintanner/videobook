@@ -58,7 +58,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -340,6 +340,25 @@ describe("slash_commands tool", () => {
     expect(commands.find((c) => c.command === "/copy-media")?.aliases).toContain("/copy-video");
   });
 
+  it("lists a compact summary unless detail is full", async () => {
+    const result = await client.callTool({ name: "slash_commands", arguments: {} });
+    expect(result.isError).toBeFalsy();
+    const summaries = JSON.parse((result.content as TextContent)[0].text) as Array<Record<string, unknown>>;
+    expect(summaries.find((entry) => entry.command === "/trim-video")).toEqual({
+      command: "/trim-video",
+      description: "Trim video clip",
+      aliases: ["/trim"],
+      runs: "tool:trim_video",
+    });
+    expect(summaries.find((entry) => entry.command === "/play")).toMatchObject({ runs: "ui:open_slot_player" });
+    expect(summaries.some((entry) => "icon" in entry || "params" in entry || "example" in entry)).toBe(false);
+
+    const full = await client.callTool({ name: "slash_commands", arguments: { detail: "full" } });
+    const commands = JSON.parse((full.content as TextContent)[0].text) as Command[];
+    expect(commands.map((command) => command.command)).toEqual(summaries.map((entry) => entry.command));
+    expect((full.content as TextContent)[0].text.length).toBeGreaterThan(3 * (result.content as TextContent)[0].text.length);
+  });
+
   it("adapts duplicate destinations while preserving optional names", async () => {
     await client.callTool({
       name: "create_project",
@@ -347,7 +366,7 @@ describe("slash_commands tool", () => {
     });
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
     const command = (JSON.parse(
       (result.content as TextContent)[0].text,
@@ -379,7 +398,7 @@ describe("slash_commands tool", () => {
     });
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
     const command = (JSON.parse(
       (result.content as TextContent)[0].text,
@@ -403,7 +422,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -422,7 +441,7 @@ describe("slash_commands tool", () => {
     await books.ready();
     await books.create("alpha");
     await books.create("beta");
-    const result = await commandsDef(books).handler({});
+    const result = await commandsDef(books).handler({ detail: "full" });
 
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,
@@ -445,7 +464,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -471,7 +490,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -506,7 +525,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -533,7 +552,7 @@ describe("slash_commands tool", () => {
 
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -550,7 +569,7 @@ describe("slash_commands tool", () => {
   it("returns no switch-book commands when no books exist", async () => {
     const result = await client.callTool({
       name: "slash_commands",
-      arguments: {},
+      arguments: { detail: "full" },
     });
 
     const commands: Command[] = JSON.parse(
@@ -568,7 +587,7 @@ describe("slash_commands tool", () => {
     });
     await books.ready();
     await books.create("play");
-    const result = await commandsDef(books).handler({});
+    const result = await commandsDef(books).handler({ detail: "full" });
 
     const commands: Command[] = JSON.parse(
       (result.content as TextContent)[0].text,

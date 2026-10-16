@@ -865,7 +865,7 @@ describe("slash commands e2e", () => {
     async function bookCommands(): Promise<ServerCommand[]> {
       const cmdResult = await client.callTool({
         name: "slash_commands",
-        arguments: {},
+        arguments: { detail: "full" },
       });
       const updated: ServerCommand[] = JSON.parse(
         (cmdResult.content as TextContent)[0].text,

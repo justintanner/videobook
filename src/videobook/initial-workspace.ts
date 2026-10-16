@@ -66,7 +66,7 @@ async function loadInitialWorkspaceFromClient(
 ): Promise<InitialWorkspacePayload | null> {
   const [bookValue, commandValue, chatModelValue] = await Promise.all([
     callTool(client, 'list_books', { sort: 'newest' }),
-    callTool(client, 'slash_commands', {}),
+    callTool(client, 'slash_commands', { detail: 'full' }),
     callTool(client, 'list_chat_models', {}),
   ])
   const books = Array.isArray(bookValue) ? bookValue : []

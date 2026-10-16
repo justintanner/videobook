@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { bookManager } from "../engine.js";
 import type { BookManager } from "../book-manager.js";
 import type { ToolDef } from "./tool-def.js";
@@ -1644,13 +1645,24 @@ export function getCanonicalCommands(): Command[] {
   return canonicalizeCommands([...CANONICAL_COMMANDS, ...APPLICATION_COMMANDS]);
 }
 
+function commandSummary(command: Command) {
+  return {
+    command: command.command,
+    description: command.description,
+    ...(command.aliases?.length ? { aliases: command.aliases } : {}),
+    ...(command.mcpTool ? { runs: `tool:${command.mcpTool.tool}` } : command.uiAction ? { runs: `ui:${command.uiAction}` } : {}),
+  };
+}
+
 export function commandsDef(books: BookManager = bookManager, reservedActionNames: () => readonly string[] = () => []): ToolDef {
   return {
     name: "slash_commands",
-    description: "List all available UI commands with scope metadata",
+    description: "List the UI slash commands as command, description, aliases and the tool or UI action each runs; detail full returns the complete records the app renders (params, examples, icons).",
     scope: "global",
-    schema: {},
-    handler: async () => {
+    schema: {
+      detail: z.enum(["summary", "full"]).optional(),
+    },
+    handler: async (args) => {
       const commands: Command[] = [...CANONICAL_COMMANDS, ...APPLICATION_COMMANDS];
       const reserved = new Set(
         [...commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]), ...reservedActionNames()]
@@ -1672,8 +1684,10 @@ export function commandsDef(books: BookManager = bookManager, reservedActionName
         });
       }
 
+      const canonical = canonicalizeCommands(commands);
+      const payload = args.detail === "full" ? canonical : canonical.map(commandSummary);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(canonicalizeCommands(commands)) }],
+        content: [{ type: "text" as const, text: JSON.stringify(payload) }],
       };
     },
   };
