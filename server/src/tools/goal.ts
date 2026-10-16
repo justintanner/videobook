@@ -22,6 +22,7 @@ import { queueGoalFinish } from "../jobs/finish-goal.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
 import { arrangeGoalNotebook } from "../notebook-goal-layout.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { advertisedAs } from "./tool-json-schema.js";
 
 const json = (value: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(value) }] });
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
@@ -536,7 +537,10 @@ export function goalDefs(engine: Engine): ToolDef[] {
       action: z.enum(["create", "list", "status", "update", "approve", "regenerate", "select", "revise", "cancel", "assemble", "retry", "dismiss", "combine", "finish"]),
       start_seconds: z.number().min(0).optional(), end_seconds: z.number().min(0).optional(),
       goal_id: z.string().uuid().optional(), request_id: z.string().min(1).max(200).optional(),
-      brief: z.string().trim().min(1).max(6000).optional(), plan: z.union([goalPlanV3Schema, goalPlanSchema]).optional(),
+      brief: z.string().trim().min(1).max(6000).optional(), plan: advertisedAs(z.union([goalPlanV3Schema, goalPlanSchema]), {
+        type: "object",
+        description: "A goal plan, usually the plan from a video_goal status result with fields edited in place",
+      }).optional(),
       revision: z.number().int().nonnegative().optional(), shot_indexes: z.array(z.number().int().min(0).max(7)).min(1).max(8).optional(),
       stage: stageSchema.optional(), index: z.number().int().min(0).max(15).optional(), artifact_id: z.string().uuid().optional(), feedback: feedbackSchema.optional(),
     },
