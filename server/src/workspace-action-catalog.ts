@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { WORKSPACE_TOOL_GROUPS } from "./workspace-action-groups.js";
 import { toolSpendsMoney } from "./paid-tools.js";
 import { WORKSPACE_ACTION_SURFACES } from "./workspace-action-surfaces.js";
@@ -14,6 +13,7 @@ import type {
 } from "./workspace-action-contract.js";
 import type { Command } from "./tools/video-editing-command-contract.js";
 import type { ToolDef } from "./tools/tool-def.js";
+import { toolInputJsonSchema } from "./tools/tool-json-schema.js";
 
 const GENERATION_MEDIA: Readonly<Record<string, string>> = {
   generate_image: "image",
@@ -213,7 +213,7 @@ function applicationCommandAction(command: Command): WorkspaceAction {
 
 function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<string>): WorkspaceAction {
   const group = groupForTool(tool.name);
-  const schema = z.toJSONSchema(z.object(tool.schema), { io: "input" }) as ActionInputSchema;
+  const schema = toolInputJsonSchema(tool.schema) as ActionInputSchema;
   if (tool.name === "set_env_secret" && schema.properties?.value) schema.properties.value.format = "password";
   const preferredCommand = `/${tool.name.replaceAll("_", "-")}`;
   const name = command?.command ?? (reserved.has(preferredCommand) ? `/tool-${preferredCommand.slice(1)}` : preferredCommand);

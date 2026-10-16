@@ -1,9 +1,9 @@
-import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import { notebookGridAddress } from "videobook-engine/notebook-grid";
 import { buildRoutableTools } from "./chat-router.js";
 import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import { getAllToolDefs } from "./tools/index.js";
+import { toolInputJsonSchema } from "./tools/tool-json-schema.js";
 
 // Spoken verbs that no action is named after, mapped to the one that is.
 const VOICE_OPERATION_ALIASES: Readonly<Record<string, string>> = {
@@ -43,7 +43,7 @@ export function discoverVoiceActions(engine: Engine, query: string) {
         description: action.description,
         effect: action.effect,
         requiresReview: action.effect !== "read" && !action.autoApply,
-        parameters: z.toJSONSchema(z.object(shape), { unrepresentable: "any" }),
+        parameters: toolInputJsonSchema(shape, "any"),
       };
     });
 }

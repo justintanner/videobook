@@ -1,6 +1,5 @@
 import { coldOpenDefs } from "./cold-open.js";
 import type { McpServer } from "@modelcontextprotocol/server";
-import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { withBookContext } from "../book-context.js";
@@ -154,6 +153,7 @@ import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
 import { getWatermarkConfigDef } from "./get-watermark-config.js";
 import { withLogging } from "./log-wrapper.js";
+import { toolInputSchema } from "./tool-json-schema.js";
 import { listChatModelsDef } from "../chat-models.js";
 
 export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
@@ -275,7 +275,7 @@ export function registerAllTools(
   for (const def of defs) {
     server.registerTool(def.name, {
       description: def.description,
-      inputSchema: z.object(def.schema),
+      inputSchema: toolInputSchema(def.schema),
       ...(def.annotations ? { annotations: def.annotations } : {}),
     }, def.handler);
   }
