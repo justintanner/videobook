@@ -173,7 +173,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
 - `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
 - `plan_notebook_subgraph` — Plan the selected cell plus required stale ancestors, with paid-stage fingerprints, cost, and confirmation
-- `plan_sequence_edit` — Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan
+- `plan_sequence_edit` — Compile one or more sequence edits (insert, trim, move, volume, captions, ...) into one reviewable CommandPlan
 - `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
@@ -480,7 +480,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/plan-notebook-rough-cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan; MCP: `plan_notebook_rough_cut`
 - `/plan-notebook-run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure; MCP: `plan_notebook_run`
 - `/plan-notebook-subgraph` — Plan the selected cell plus required stale ancestors, with paid-stage fingerprints, cost, and confirmation; MCP: `plan_notebook_subgraph`
-- `/plan-sequence-edit` — Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan; MCP: `plan_sequence_edit`
+- `/plan-sequence-edit` — Compile one or more sequence edits (insert, trim, move, volume, captions, ...) into one reviewable CommandPlan; MCP: `plan_sequence_edit`
 - `/plan-sequence-export` — Create a queued export CommandPlan for a validated canonical sequence revision; MCP: `plan_sequence_export`
 - `/plan-sequence-sound-effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan; MCP: `plan_sequence_sound_effects`
 - `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`

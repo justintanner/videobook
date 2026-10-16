@@ -90,7 +90,7 @@ async function plan(
     source_surface: 'ui',
     actor: 'music-video-test',
     expected_revision: expectedRevision,
-    request,
+    edits: Array.isArray(request) ? request : [request],
   })) as {
     summary: string
     stages: Array<{ intent: EditIntent }>

@@ -90,7 +90,7 @@ describe('music analysis and rhythm persistence', () => {
     const tools = commandPlanDefs(engine)
     const plan = decode<{ stages: Array<{ intent: EditIntent }> }>(await tools.find((tool) => tool.name === 'plan_sequence_edit')!.handler({
       book_id: engine.book.get().bookId, source_surface: 'ui', actor: 'rhythm-test',
-      request: { kind: 'append', artifact_id: id, track_id: track.trackId },
+      edits: [{ kind: 'append', artifact_id: id, track_id: track.trackId }],
     }))
     const intent = plan.stages[0]!.intent
     const preview = engine.edits.preview(intent)

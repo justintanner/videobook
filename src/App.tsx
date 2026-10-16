@@ -6277,7 +6277,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         source_surface: sourceSurface,
         actor: 'videobook-user',
-        request,
+        edits: Array.isArray(request) ? request : [request],
       }, { chat }))
       return await previewCommandPlan(plan, chat)
     } catch (error) {
@@ -6714,11 +6714,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_surface: 'ui',
         actor: 'videobook-user',
         expected_revision: await sequenceContentRevision(targetSequence),
-        request: {
+        edits: [{
           kind: 'music_video_setup',
           audio_artifact_id: audioArtifactId,
           audio_track_id: audioTrack.trackId,
-        },
+        }],
       }, { chat }))
       const stage = plan.stages.find(
         (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
@@ -6845,7 +6845,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       source_surface: 'ui',
       actor: 'videobook-user',
       expected_revision: await sequenceContentRevision(expectedSequence),
-      request,
+      edits: [request],
     }))
     const stage = plan.stages.find(
       (candidate): candidate is EditCommandStage => candidate.kind === 'edit',

@@ -56,7 +56,7 @@ it('renders fitted beat cuts at the reviewed frames with trimmed and offset soun
   const audioTrack = sequence.tracks.find((track) => track.kind === 'audio')!
   const videoTrack = sequence.tracks.find((track) => track.kind === 'video')!
   const planner = commandPlanDefs(engine).find((tool) => tool.name === 'plan_sequence_edit')!
-  const append = await planner.handler({ book_id: engine.book.get().bookId, actor: 'export-test', source_surface: 'ui', request: { kind: 'append', artifact_id: artifacts[2]!.id, track_id: audioTrack.trackId } })
+  const append = await planner.handler({ book_id: engine.book.get().bookId, actor: 'export-test', source_surface: 'ui', edits: [{ kind: 'append', artifact_id: artifacts[2]!.id, track_id: audioTrack.trackId }] })
   if (append.isError) throw new Error(append.content[0]!.text)
   const intent = (JSON.parse(append.content[0]!.text) as { stages: Array<{ intent: EditIntent }> }).stages[0]!.intent
   const placement = intent.operations[0]

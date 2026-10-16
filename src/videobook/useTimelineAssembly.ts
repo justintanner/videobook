@@ -102,7 +102,7 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
       if (!sequence) throw new Error('The timeline is not ready')
       const plan = await call('plan_sequence_edit', {
         book_id: bookId, source_surface: 'ui', actor: 'videobook-user',
-        expected_revision: await sequenceContentRevision(sequence), request,
+        expected_revision: await sequenceContentRevision(sequence), edits: [request],
       }) as CommandPlan
       validateCommandPlan(plan)
       if (!isCurrent()) return

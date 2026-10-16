@@ -142,12 +142,12 @@ describe('CommandPlan edit tools', () => {
           book_id: engine.book.get().bookId,
           source_surface: sourceSurface,
           actor: 'parity-fixture',
-          request: {
+          edits: [{
             kind: 'insert',
             artifact_id: artifact.value.artifactId,
             timeline_start_frame: 0,
             duration_frames: 90,
-          },
+          }],
         })) as {
           stages: Array<{ intent: EditIntent }>
         }),
@@ -180,12 +180,12 @@ describe('CommandPlan edit tools', () => {
           book_id: engine.book.get().bookId,
           source_surface: sourceSurface,
           actor: 'parity-fixture',
-          request: {
+          edits: [{
             kind: 'trim',
             clip_id: imageClipId,
             timeline_start_frame: 15,
             duration_frames: 60,
-          },
+          }],
         })) as { stages: Array<{ intent: EditIntent }> }),
     )
     expect(trimPlans.map((plan) => plan.stages[0]!.intent.operations)).toEqual([
@@ -228,11 +228,11 @@ describe('CommandPlan edit tools', () => {
         book_id: engine.book.get().bookId,
         source_surface: 'ui',
         actor: 'parity-fixture',
-        request: {
+        edits: [{
           kind: 'insert',
           artifact_id: audio.value.artifactId,
           timeline_start_frame: 0,
-        },
+        }],
       }),
     ) as { stages: Array<{ intent: EditIntent }> }
     const audioIntent = audioPlan.stages[0]!.intent
@@ -264,12 +264,12 @@ describe('CommandPlan edit tools', () => {
         book_id: engine.book.get().bookId,
         source_surface: 'ui',
         actor: 'parity-fixture',
-        request: {
+        edits: [{
           kind: 'insert',
           artifact_id: audio.value.artifactId,
           track_id: secondAudioTrack.trackId,
           timeline_start_frame: 0,
-        },
+        }],
       }),
     ) as { stages: Array<{ intent: EditIntent }> }
     const musicPreview = resultJson(
@@ -295,13 +295,13 @@ describe('CommandPlan edit tools', () => {
           book_id: engine.book.get().bookId,
           source_surface: sourceSurface,
           actor: 'parity-fixture',
-          request: {
+          edits: [{
             kind: 'volume',
             clip_id: audioClipId,
             gain_db: -6,
             fade_in_frames: 12,
             fade_out_frames: 18,
-          },
+          }],
         })) as { stages: Array<{ intent: EditIntent }> }),
     )
     expect(volumePlans.map((plan) => plan.stages[0]!.intent.operations)).toEqual([
@@ -315,11 +315,11 @@ describe('CommandPlan edit tools', () => {
           book_id: engine.book.get().bookId,
           source_surface: sourceSurface,
           actor: 'parity-fixture',
-          request: {
+          edits: [{
             kind: 'duck',
             narration_clip_id: audioClipId,
             reduction_db: -12,
-          },
+          }],
         })) as { stages: Array<{ intent: EditIntent }> }),
     )
     expect(duckPlans.map((plan) => plan.stages[0]!.intent.operations)).toEqual([
@@ -465,12 +465,12 @@ describe('CommandPlan edit tools', () => {
         book_id: engine.book.get().bookId,
         source_surface: 'ui',
         actor: 'parity-fixture',
-        request: {
+        edits: [{
           kind: 'insert',
           artifact_id: artifact.value.artifactId,
           timeline_start_frame: 90,
           duration_frames: 90,
-        },
+        }],
       }),
     ) as { stages: Array<{ intent: EditIntent }> }
     const adjacentIntent = adjacentPlan.stages[0]!.intent
@@ -584,7 +584,7 @@ describe('CommandPlan edit tools', () => {
           book_id: engine.book.get().bookId,
           source_surface: 'ui',
           actor: 'parity-fixture',
-          request: editCase.request,
+          edits: [editCase.request],
         }),
       ) as { stages: Array<{ intent: EditIntent }> }
       expect(plan.stages[0]!.intent.operations[0]?.kind).toBe(editCase.operation)

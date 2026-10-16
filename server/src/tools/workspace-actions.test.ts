@@ -60,7 +60,7 @@ describe("workspace action exposure contract", () => {
     expect(first.actions.find((action) => action.command === "/clip-audio")?.inputSchema.properties?.field?.enum)
       .toEqual(["gain", "mute", "fade-in", "fade-out"]);
     const edit = first.actions.find((action) => action.id === "tool.plan_sequence_edit")!;
-    expect(edit.inputSchema.properties?.request?.anyOf).toBeDefined();
+    expect(edit.inputSchema.properties?.edits?.items?.oneOf).toBeDefined();
   });
 
   it("rejects new unmapped capabilities, missing handlers and alias collisions", () => {

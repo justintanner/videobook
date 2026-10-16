@@ -253,7 +253,7 @@ describe('timeline endpoints over HTTP MCP', () => {
     ]) {
       const planned = await call<{ stages: Array<{ intent: EditIntent }> }>('plan_sequence_edit', {
         source_surface: 'ui', actor: 'timeline-test', expected_revision: (await sequence()).revision,
-        request: { kind: 'append', track_id: trackId, artifact_id: artifactId },
+        edits: [{ kind: 'append', track_id: trackId, artifact_id: artifactId }],
       })
       const intent = planned.stages[0]!.intent
       const preview = await call<{ valid: boolean; previewHash: string }>('preview_edit_intent', { intent })

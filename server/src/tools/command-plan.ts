@@ -1830,23 +1830,20 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
   return [
     {
       name: "plan_sequence_edit",
-      description: "Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan",
+      description: "Compile one or more sequence edits (insert, trim, move, volume, captions, ...) into one reviewable CommandPlan",
       scope: "book",
       schema: {
         ...bookSchema,
         source_surface: z.enum(["ui", "slash", "chat"]),
         actor: z.string().min(1),
         expected_revision: z.string().min(1).optional(),
-        request: z.union([
-          editRequestSchema,
-          z.array(editRequestSchema).min(1).max(20),
-        ]),
+        edits: z.array(editRequestSchema).min(1).max(20),
       },
       handler: async (args) => {
         try {
           return json(await buildSequenceEditPlan(
             engine,
-            args.request as EditRequest,
+            args.edits as EditRequest[],
             args.source_surface as SourceSurface,
             String(args.actor),
             typeof args.expected_revision === "string"

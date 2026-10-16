@@ -32,7 +32,7 @@ describe('canonical edit and recovery endpoints over HTTP MCP', () => {
   const call = <T>(name: string, args: Record<string, unknown> = {}) => callTool<T>(client, name, { book_id: bookId, ...args })
   const sequence = () => call<Sequence>('get_primary_sequence')
   const plan = (request: Record<string, unknown> | Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) =>
-    call<Plan>('plan_sequence_edit', { source_surface: 'ui', actor: 'edit-recovery-e2e', request, ...extra })
+    call<Plan>('plan_sequence_edit', { source_surface: 'ui', actor: 'edit-recovery-e2e', edits: Array.isArray(request) ? request : [request], ...extra })
   const insert = (timeline_start_frame = 0) => ({ kind: 'insert', artifact_id: artifactId, timeline_start_frame, duration_frames: 90 })
   const preview = (intent: EditIntent) => call<Preview>('preview_edit_intent', { intent })
   const commit = async (planned: Plan) => {
@@ -111,7 +111,7 @@ describe('canonical edit and recovery endpoints over HTTP MCP', () => {
     const after = await sequence()
     expect(after.clips).toHaveLength(1)
     expect(after.clips[0]!.durationFrames).toBe(45)
-    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'stale', expected_revision: intents[0]!.baseRevision, request: insert(180) })
+    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'stale', expected_revision: intents[0]!.baseRevision, edits: [insert(180)] })
     expect(await sequence()).toEqual(after)
   })
 
@@ -151,13 +151,13 @@ describe('canonical edit and recovery endpoints over HTTP MCP', () => {
 
   it('rejects invalid and cross-book inputs without partial sequence mutations', async () => {
     const before = await sequence()
-    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'invalid', request: [insert(), { ...insert(90), artifact_id: uuidv7() }] })
+    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'invalid', edits: [insert(), { ...insert(90), artifact_id: uuidv7() }] })
     for (const intent of [{}, { operations: [] }, { operations: [{ kind: 'unknown' }] }]) {
       await reject('preview_edit_intent', { intent })
       await reject('commit_edit_intent', { intent, preview_hash: 'missing' })
     }
     const foreign = (await callTool<{ bookId: string }>(client, 'create_book', { name: 'Other edit book' })).bookId
-    await reject('plan_sequence_edit', { book_id: foreign, source_surface: 'ui', actor: 'foreign', request: insert() })
+    await reject('plan_sequence_edit', { book_id: foreign, source_surface: 'ui', actor: 'foreign', edits: [insert()] })
     expect(await sequence()).toEqual(before)
   })
 
@@ -180,7 +180,7 @@ describe('canonical edit and recovery endpoints over HTTP MCP', () => {
     expect((await preview(planned.stages[0]!.intent)).valid).toBe(true)
     const timeline = await call<{ slots: unknown[] }>('get_timeline')
     await call('set_timeline', { render: 'portrait', slots: timeline.slots })
-    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'browser-stale', expected_revision, request: insert(90) })
+    await reject('plan_sequence_edit', { source_surface: 'ui', actor: 'browser-stale', expected_revision, edits: [insert(90)] })
     const refreshed = await plan(insert(90), { expected_revision: await sequenceContentRevision(await sequence()) })
     expect((await preview(refreshed.stages[0]!.intent)).valid).toBe(true)
   })
