@@ -165,6 +165,7 @@ export default defineConfig({
       'server/src/time-parse.test.ts',
       'server/src/timewarp.test.ts',
       'server/src/tools/**/*.test.ts',
+      'server/src/media/**/*.test.ts',
       'server/src/scheduled-posts.test.ts',
       'server/src/screenshot.test.ts',
       'server/src/payload-builders.test.ts',

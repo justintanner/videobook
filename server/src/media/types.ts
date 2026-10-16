@@ -1,0 +1,139 @@
+import type { ZodObject, ZodRawShape, ZodType } from "zod";
+
+export type ProviderId = "kie" | "fal" | "xai" | "googleflow" | "alibaba" | "elevenlabs";
+
+export type Media = "image" | "video" | "audio";
+
+export type Operation =
+  | "text_to_image"
+  | "edit_image"
+  | "layer_image"
+  | "text_to_video"
+  | "image_to_video"
+  | "reference_to_video"
+  | "edit_video"
+  | "extend_video"
+  | "upscale_video"
+  | "lip_sync"
+  | "motion_control"
+  | "speech"
+  | "dialogue"
+  | "music"
+  | "sfx"
+  | "video_to_music";
+
+export type RefRole = "image" | "video" | "audio" | "first_frame" | "last_frame";
+
+export const REF_ROLES: readonly RefRole[] = ["first_frame", "last_frame", "image", "video", "audio"];
+
+export type PromptDialect =
+  | "plain"
+  | "natural"
+  | "natural_numbered"
+  | "natural_kinds"
+  | "natural_source_video"
+  | "seedance"
+  | "seedance_keep_frames"
+  | "image_ref"
+  | "image_ref_reference"
+  | "strip_frames"
+  | "brackets"
+  | "happyhorse_edit";
+
+export interface ModeSpec {
+  id: string;
+  label: string;
+  roles: readonly RefRole[];
+  requireAny?: readonly RefRole[];
+}
+
+export interface InputRules {
+  maxPromptChars?: number;
+}
+
+export interface ModelEntry {
+  id: string;
+  media: Media;
+  operations: readonly Operation[];
+  title?: string;
+  description?: string;
+  prompt?: string | null;
+  refs?: Partial<Record<RefRole, string | readonly string[] | null>>;
+  aliases?: Record<string, string>;
+  defaults?: Record<string, unknown>;
+  refItem?: Partial<Record<RefRole, Record<string, unknown>>>;
+  dialect?: PromptDialect;
+  modes?: readonly ModeSpec[];
+  frameOptions?: Record<string, unknown>;
+  rules?: InputRules;
+  hidden?: boolean;
+}
+
+export interface ParsedModelId {
+  id: string;
+  provider: ProviderId;
+  apiId: string;
+}
+
+export interface WireSpec {
+  input: ZodObject<ZodRawShape>;
+  fixed: Record<string, unknown>;
+  wrap: (input: Record<string, unknown>) => Record<string, unknown>;
+  request: ZodType;
+}
+
+export interface SlotField {
+  path: string;
+  multi: boolean;
+  max: number | null;
+  urlObject: boolean;
+}
+
+export interface SlotSpec {
+  role: RefRole;
+  field: string;
+  fields: SlotField[];
+  multi: boolean;
+  min: number;
+  max: number | null;
+}
+
+export type OptionValueType = "string" | "number" | "integer" | "boolean" | "json";
+
+export interface OptionSpec {
+  name: string;
+  path: string;
+  valueType: OptionValueType;
+  required: boolean;
+  enumValues: Array<string | number>;
+  minimum?: number;
+  maximum?: number;
+  maxLength?: number;
+  defaultValue?: unknown;
+  description: string;
+}
+
+export interface ResolvedModel {
+  entry: ModelEntry;
+  id: string;
+  provider: ProviderId;
+  apiId: string;
+  media: Media;
+  title: string;
+  wire: WireSpec;
+  promptField: string | null;
+  promptRequired: boolean;
+  slots: SlotSpec[];
+  options: OptionSpec[];
+  modes: ModeSpec[];
+}
+
+export type MediaRefs = Partial<Record<RefRole, string[]>>;
+
+export interface GenerationCall {
+  model: string;
+  prompt?: string;
+  refs?: MediaRefs;
+  options?: Record<string, unknown>;
+  mode?: string;
+}

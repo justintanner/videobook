@@ -1,0 +1,201 @@
+import type { ModeSpec, ModelEntry } from "./types.js";
+
+const SEEDANCE_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame", "image"] },
+  { id: "r2v", label: "References", roles: ["image", "video", "audio"] },
+];
+
+const OMNI_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Image to video", roles: ["first_frame", "image"] },
+  { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] },
+];
+
+const VEO_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
+  { id: "r2v", label: "References", roles: ["image", "audio"] },
+];
+
+const XAI_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Image to video", roles: ["first_frame"] },
+  { id: "r2v", label: "References", roles: ["image"] },
+  { id: "v2v", label: "Edit video", roles: ["video"], requireAny: ["video"] },
+];
+
+const SPEAKER = "Speaker 1";
+
+function kieGeminiClassicTts(id: string, title: string): ModelEntry {
+  return {
+    id,
+    media: "audio",
+    operations: ["speech"],
+    title,
+    prompt: "dialogue_turns.0.text",
+    aliases: {
+      voice: "speakers.0.voice_name",
+      accent: "speakers.0.accent",
+      style: "speakers.0.style",
+      pace: "speakers.0.pace",
+    },
+    defaults: {
+      speakers: [{ speaker_id: SPEAKER, voice_name: "Kore", accent: "Neutral" }],
+      dialogue_turns: [{ speaker_id: SPEAKER }],
+    },
+  };
+}
+
+function kieGemini38Tts(id: string, title: string): ModelEntry {
+  return {
+    id,
+    media: "audio",
+    operations: ["speech"],
+    title,
+    prompt: "dialogue_turns.0.text",
+    aliases: { voice: "speakers.0.voice_name", style: "dialogue_turns.0.style" },
+    defaults: {
+      speakers: [{ speaker_id: SPEAKER, voice_name: "Fola" }],
+      dialogue_turns: [{ speaker_id: SPEAKER }],
+    },
+  };
+}
+
+function kieElevenLabsTts(id: string, title: string): ModelEntry {
+  return { id, media: "audio", operations: ["speech"], title, defaults: { voice: "Rachel" } };
+}
+
+export const MODEL_ENTRIES: readonly ModelEntry[] = [
+  { id: "kie:nano-banana-2-1", media: "image", operations: ["text_to_image", "edit_image"], dialect: "natural_numbered" },
+  { id: "kie:nano-banana-pro", media: "image", operations: ["text_to_image", "edit_image"], dialect: "natural" },
+  { id: "kie:gpt-image-2-5-flare-text-to-image", media: "image", operations: ["text_to_image", "edit_image"], title: "GPT Image 2.5 Flare", dialect: "natural" },
+  { id: "kie:gpt-image-2-5-sunburst-text-to-image", media: "image", operations: ["text_to_image", "edit_image"], title: "GPT Image 2.5 Sunburst", dialect: "natural" },
+  { id: "kie:grok-imagine/text-to-image", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "kie:grok-imagine/image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:qwen2/image-edit", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:qwen3/image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:qwen2-1/text-to-image", media: "image", operations: ["text_to_image"], dialect: "natural" },
+  { id: "kie:qwen2-1/image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:seedream/5-lite-text-to-image", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "kie:seedream/5-lite-image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
+  { id: "kie:seedream/5-flash-text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "kie:seedream/5-flash-image-to-image", media: "image", operations: ["edit_image"] },
+  { id: "kie:seedream/5-flash-layer-decomposition", media: "image", operations: ["layer_image"] },
+  { id: "googleflow:nano-banana-pro", media: "image", operations: ["text_to_image", "edit_image"], title: "Nano Banana Pro (Google Flow)", dialect: "image_ref_reference" },
+  { id: "alibaba:qwen-image-2.0-pro", media: "image", operations: ["text_to_image"], title: "Qwen Image 2.0 Pro (Alibaba)" },
+  { id: "alibaba:qwen-image-edit-plus", media: "image", operations: ["edit_image"], title: "Qwen Image Edit Plus (Alibaba)" },
+  { id: "fal:fal-ai/nano-banana", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:fal-ai/nano-banana/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:fal-ai/nano-banana-2", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:fal-ai/nano-banana-2/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:google/nano-banana-2-lite", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:google/nano-banana-lite/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:fal-ai/nano-banana-pro", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:fal-ai/nano-banana-pro/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:fal-ai/bytedance/seedream/v5/lite/text-to-image", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:fal-ai/bytedance/seedream/v5/lite/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:xai/grok-imagine-image", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:xai/grok-imagine-image/edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:fal-ai/qwen-image", media: "image", operations: ["text_to_image"], hidden: true },
+  { id: "fal:fal-ai/qwen-image-edit", media: "image", operations: ["edit_image"], hidden: true },
+  { id: "fal:alibaba/qwen-image-3/edit", media: "image", operations: ["edit_image"] },
+  { id: "fal:bria/fibo-edit-1.5/product-holding", media: "image", operations: ["edit_image"], prompt: "instruction", refs: { image: ["person_image_url", "product_image_urls"] } },
+  { id: "fal:bria/fibo-edit-1.5/virtual-try-on", media: "image", operations: ["edit_image"], prompt: "instruction", refs: { image: ["person_image_url", "garment_image_urls"] } },
+  { id: "fal:recraft/v4.1/flash/text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "fal:bytedance/seedream/v5/flash/text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "fal:bytedance/seedream/v5/flash/edit", media: "image", operations: ["edit_image"] },
+  { id: "fal:bytedance/seedream/v5/flash/layerize", media: "image", operations: ["layer_image"] },
+  { id: "fal:ideogram/v4.5", media: "image", operations: ["text_to_image"] },
+  { id: "fal:ideogram/v4.5/edit", media: "image", operations: ["edit_image"], refs: { image: ["image_url", "reference_image_urls"] } },
+  { id: "fal:blackforestlabs/flux-3/text-to-image", media: "image", operations: ["text_to_image"] },
+  { id: "fal:blackforestlabs/flux-3/edit-image", media: "image", operations: ["edit_image"] },
+
+  {
+    id: "kie:bytedance/seedance-2-5",
+    media: "video",
+    operations: ["text_to_video", "image_to_video", "reference_to_video"],
+    dialect: "seedance",
+    modes: SEEDANCE_MODES,
+    frameOptions: { aspect_ratio: "adaptive" },
+  },
+  { id: "kie:grok-imagine/image-to-video", media: "video", operations: ["image_to_video"] },
+  { id: "kie:grok-imagine/text-to-video", media: "video", operations: ["text_to_video"], hidden: true },
+  { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
+  { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
+  { id: "kie:kling-3.0-omni/text-to-video", media: "video", operations: ["text_to_video"], dialect: "natural", defaults: { customize_multi_shots: false } },
+  { id: "kie:kling-3.0-omni/image-to-video", media: "video", operations: ["image_to_video"], dialect: "natural" },
+  { id: "kie:kling-3.0-omni/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", defaults: { audio: false } },
+  { id: "kie:kling-3.0-omni/transformation", media: "video", operations: ["edit_video"], dialect: "natural", defaults: { aspect_ratio: "auto" } },
+  { id: "kie:kling-3.0/motion-control", media: "video", operations: ["motion_control"], dialect: "natural" },
+  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, OMNI_MODES[1]!], refItem: { video: { start: 0, ends: 8 } }, aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
+  { id: "kie:wan/3-0-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
+  { id: "kie:wan/3-0-video-prime", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
+  { id: "kie:happyhorse-1-1/text-to-video", media: "video", operations: ["text_to_video"], hidden: true },
+  { id: "kie:happyhorse-1-1/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
+  { id: "kie:happyhorse-1-1/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "brackets", hidden: true },
+  { id: "kie:happyhorse/video-edit", media: "video", operations: ["edit_video"], dialect: "happyhorse_edit", hidden: true },
+  { id: "kie:minimax-h3/text-to-video", media: "video", operations: ["text_to_video"] },
+  { id: "kie:minimax-h3/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
+  { id: "kie:minimax-h3/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural" },
+  { id: "kie:volcengine/video-to-video-lip-sync", media: "video", operations: ["lip_sync"], hidden: true },
+  { id: "kie:omnihuman-1-5", media: "video", operations: ["image_to_video", "lip_sync"], dialect: "natural" },
+  { id: "kie:vidu-q4/image-to-video", media: "video", operations: ["image_to_video"], dialect: "natural_kinds" },
+  { id: "kie:vidu-q4/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural_kinds" },
+  { id: "kie:veo3", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 (Kie)" },
+  { id: "kie:veo3_fast", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 Fast (Kie)" },
+  { id: "xai:grok-imagine-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], title: "Grok Imagine Video (xAI)", dialect: "natural", refs: { first_frame: "image", audio: null }, modes: XAI_MODES },
+  { id: "googleflow:veo-3.1-quality", media: "video", operations: ["text_to_video", "image_to_video"], dialect: "image_ref" },
+  { id: "googleflow:veo-3.1-fast", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES },
+  { id: "googleflow:veo-3.1-lite", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES },
+  { id: "googleflow:veo-3.1-lite-low-priority", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES },
+  { id: "googleflow:omni-flash", media: "video", operations: ["image_to_video", "edit_video"], dialect: "image_ref", modes: OMNI_MODES },
+  { id: "fal:xai/grok-imagine-video/image-to-video", media: "video", operations: ["image_to_video"], hidden: true },
+  { id: "fal:xai/grok-imagine-video/reference-to-video", media: "video", operations: ["reference_to_video"], hidden: true },
+  { id: "fal:xai/grok-imagine-video/extend-video", media: "video", operations: ["extend_video"], hidden: true },
+  { id: "fal:xai/grok-imagine-video/edit-video", media: "video", operations: ["edit_video"], hidden: true },
+  { id: "fal:xai/grok-imagine-video/v1.5/lite/image-to-video", media: "video", operations: ["image_to_video"] },
+  { id: "fal:xai/grok-imagine-video/v1.5/lite/text-to-video", media: "video", operations: ["text_to_video"] },
+  { id: "fal:alibaba/wan-3.0/text-to-video", media: "video", operations: ["text_to_video"], hidden: true },
+  { id: "fal:alibaba/wan-3.0/image-to-video", media: "video", operations: ["image_to_video"], hidden: true },
+  { id: "fal:alibaba/wan-3.0/reference-to-video", media: "video", operations: ["reference_to_video"], hidden: true },
+  { id: "fal:alibaba/wan-3.0-prime/text-to-video", media: "video", operations: ["text_to_video"], hidden: true },
+  { id: "fal:alibaba/wan-3.0-prime/image-to-video", media: "video", operations: ["image_to_video"], hidden: true },
+  { id: "fal:alibaba/wan-3.0-prime/reference-to-video", media: "video", operations: ["reference_to_video"], hidden: true },
+  { id: "fal:minimax/h3-max/insert-video", media: "video", operations: ["edit_video"], refs: { video: ["video_url", "reference_video_urls"] } },
+  { id: "fal:minimax/h3-max/recast", media: "video", operations: ["edit_video"] },
+  { id: "fal:minimax/h3-max-turbo/extend-video", media: "video", operations: ["extend_video"] },
+
+  { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
+  { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },
+  { id: "elevenlabs:music", media: "audio", operations: ["music"], title: "ElevenLabs Music", defaults: { force_instrumental: true } },
+  { id: "elevenlabs:video-to-music", media: "audio", operations: ["video_to_music"], title: "ElevenLabs Video to Music" },
+  { id: "kie:elevenlabs/sound-effect-v2", media: "audio", operations: ["sfx"] },
+  kieElevenLabsTts("kie:elevenlabs/text-to-speech-multilingual-v2", "ElevenLabs Multilingual v2 (Kie)"),
+  kieElevenLabsTts("kie:elevenlabs/text-to-speech-turbo-2-5", "ElevenLabs Turbo 2.5 (Kie)"),
+  {
+    id: "kie:elevenlabs/text-to-dialogue-v3",
+    media: "audio",
+    operations: ["dialogue"],
+    title: "ElevenLabs v3 Dialogue (Kie)",
+    prompt: "dialogue.0.text",
+    aliases: { voice: "dialogue.0.voice" },
+    defaults: { dialogue: [{ voice: "Rachel" }] },
+  },
+  kieGeminiClassicTts("kie:google/gemini-2-5-pro-tts", "Gemini 2.5 Pro TTS (Kie)"),
+  kieGeminiClassicTts("kie:google/gemini-3-1-flash-tts", "Gemini 3.1 Flash TTS (Kie)"),
+  kieGemini38Tts("kie:google/gemini-3-8-flash-tts", "Gemini 3.8 Flash TTS (Kie)"),
+  kieGemini38Tts("kie:google/gemini-3-8-flash-lite-tts", "Gemini 3.8 Flash Lite TTS (Kie)"),
+  { id: "kie:suno/generate", media: "audio", operations: ["music"], title: "Suno (Kie)", defaults: { model: "V5_5", instrumental: true, customMode: false } },
+  { id: "kie:suno/sounds-generate", media: "audio", operations: ["sfx"], title: "Suno Sounds (Kie)", defaults: { model: "V5_5" } },
+  { id: "fal:elevenlabs/music/v2.5", media: "audio", operations: ["music"], defaults: { force_instrumental: true, output_format: "mp3_48000_192" } },
+  { id: "fal:minimax/music-3", media: "audio", operations: ["music"], defaults: { lyrics: "[Instrumental]" } },
+  { id: "fal:elevenlabs/tts/eleven-v4", media: "audio", operations: ["speech"], defaults: { voice: "Rachel", output_format: "mp3_44100_128" } },
+  { id: "fal:elevenlabs/tts/eleven-v4-turbo", media: "audio", operations: ["speech"], defaults: { voice: "Rachel", output_format: "mp3_44100_128" } },
+  { id: "fal:google/gemini-3.8-flash-tts", media: "audio", operations: ["speech"], defaults: { voice: "Kore" } },
+  { id: "fal:google/gemini-3.8-flash-lite-tts", media: "audio", operations: ["speech"], defaults: { voice: "Kore" } },
+  { id: "fal:alibaba/qwen-audio-3-tts", media: "audio", operations: ["speech"], defaults: { voice: "Cherry", language: "Auto" } },
+  { id: "fal:fal-ai/bytedance/seed-speech/tts/v2", media: "audio", operations: ["speech"], defaults: { output_format: "mp3" } },
+];
+
+const ENTRIES_BY_ID = new Map(MODEL_ENTRIES.map((entry) => [entry.id, entry]));
+
+export function modelEntry(id: string): ModelEntry | undefined {
+  return ENTRIES_BY_ID.get(id);
+}
