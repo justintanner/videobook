@@ -92,7 +92,7 @@ describe("crop_image tool", () => {
     const y = 0;
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: uploaded.assetId,
         book_id: "crop-img-proj",
@@ -126,7 +126,7 @@ describe("crop_image tool", () => {
     const y = 0;
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: uploaded.assetId,
         book_id: "crop-img-proj",
@@ -147,7 +147,7 @@ describe("crop_image tool", () => {
     await waitForProcessImage(uploaded.path);
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: uploaded.assetId,
         book_id: "crop-img-proj",
@@ -171,7 +171,7 @@ describe("crop_image tool", () => {
     await waitForProcessImage(uploaded.path);
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: uploaded.assetId,
         book_id: "crop-img-proj",
@@ -193,7 +193,7 @@ describe("crop_image tool", () => {
     await waitForProcessImage(uploaded.path);
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: uploaded.assetId,
         book_id: "crop-img-proj",
@@ -212,7 +212,7 @@ describe("crop_image tool", () => {
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: "img-does-not-exist",
         book_id: "crop-img-proj",
@@ -246,7 +246,7 @@ describe("crop_image tool", () => {
     }
 
     const result = await client.callTool({
-      name: "crop_image",
+      name: "crop_asset",
       arguments: {
         asset_id: assetId,
         book_id: "crop-img-proj",

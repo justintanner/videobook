@@ -30,7 +30,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_gf_characters: { kind: 'search', query: 'google flow character' },
   open_archive: { kind: 'form', tool: 'search_archive' },
   open_rename_all: { kind: 'form', tool: 'rename_all' },
-  open_crop: { kind: 'form', tool: 'crop_video' },
+  open_crop: { kind: 'form', tool: 'crop_asset' },
   open_osg: { kind: 'form', tool: 'set_video_overlay' },
   settings_osg: { kind: 'form', tool: 'set_video_overlay' },
   settings_audio: { kind: 'form', tool: 'render_video' },

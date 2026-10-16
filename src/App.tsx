@@ -8964,8 +8964,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: 'Actions opened' }
     }
     if (route.kind === 'form') {
-      const tool = uiAction === 'open_crop' && asset?.type === 'image' ? 'crop_image'
-        : action.command === '/storage' ? 'storage_status' : route.tool
+      const tool = action.command === '/storage' ? 'storage_status' : route.tool
       const frameRate = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
       const formValues = workspaceUiFormValues(uiAction, values, frameRate)
       if (asset) formValues.asset_id = asset.artifactId

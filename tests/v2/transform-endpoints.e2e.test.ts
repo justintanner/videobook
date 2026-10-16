@@ -152,7 +152,7 @@ describe('transformation endpoints over HTTP MCP', () => {
     await idle()
     expect((await probe(id, 'original.mp4')).videoDuration).toBeCloseTo(3, 1)
     expect(await frameCount(id)).toBe(72)
-    await call('crop_video', { asset_id: id, ratio: '1:1', x: 0.2, y: 0, w: 0.6, h: 1 })
+    await call('crop_asset', { asset_id: id, ratio: '1:1', x: 0.2, y: 0, w: 0.6, h: 1 })
     await idle()
     expect(await probe(id, 'original.mp4')).toMatchObject({ width: 1080, height: 1080, hasAudio: true })
     const after = await asset(id)
@@ -172,8 +172,8 @@ describe('transformation endpoints over HTTP MCP', () => {
 
   it('crops a PNG to the selected region and rejects incompatible crop geometry without changing status', async () => {
     const id = await picture()
-    await rejectWithoutChanges('crop_image', id, 'original.png', { ratio: '1:1', x: 0, y: 0, w: 1, h: 1 })
-    await call('crop_image', { asset_id: id, ratio: '1:1', x: 0.5, y: 0, w: 0.5, h: 80 / 96 })
+    await rejectWithoutChanges('crop_asset', id, 'original.png', { ratio: '1:1', x: 0, y: 0, w: 1, h: 1 })
+    await call('crop_asset', { asset_id: id, ratio: '1:1', x: 0.5, y: 0, w: 0.5, h: 80 / 96 })
     await idle()
     const cropped = sharp(await file(id, 'original.jpg'))
     expect(await cropped.metadata()).toMatchObject({ width: 1080, height: 1080 })
@@ -184,7 +184,7 @@ describe('transformation endpoints over HTTP MCP', () => {
 
   it('rejects incompatible video crops before creating a failed job', async () => {
     const id = await video()
-    await rejectWithoutChanges('crop_video', id, 'original.mp4', { ratio: '1:1', x: 0, y: 0, w: 1, h: 1 })
+    await rejectWithoutChanges('crop_asset', id, 'original.mp4', { ratio: '1:1', x: 0, y: 0, w: 1, h: 1 })
   })
 
   it('replaces audio with a shorter source without truncating picture', async () => {

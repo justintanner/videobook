@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (240)
+## MCP endpoints (239)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -61,8 +61,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
 - `create_watermark_card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.
-- `crop_image` — Crop an image in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.
-- `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
+- `crop_asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.
 - `delete_asset` — Delete an artifact and its owned media records after removing timeline references
 - `delete_book` — Permanently delete a book after typed name confirmation
 - `delete_entity` — Delete a reusable prompt, scene or character
@@ -251,7 +250,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (313; 146 dedicated command routes)
+## Slash actions (312; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -321,8 +320,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/create-post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.; MCP: `create_post`
 - `/create-watermark-card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.; MCP: `create_watermark_card`
 - `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
-- `/crop-image` — Crop an image in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_image`
-- `/crop-video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.; MCP: `crop_video`
+- `/crop-asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_asset`
 - `/delete` — Delete an asset; MCP: `delete_asset`
 - `/delete-book` — Permanently delete a book after typed name confirmation; MCP: `delete_book`
 - `/delete-entity` — Delete a reusable prompt, scene or character; MCP: `delete_entity`

@@ -132,7 +132,7 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain('media="image"|"video"|"audio"');
     expect(prompt).toContain("- splice_video: ");
     expect(prompt).toMatch(/- splice_video: [^\n]*\(first_asset_id\*, second_asset_id\*, additional_asset_ids, overlap\)/u);
-    expect(prompt).toMatch(/- crop_image: [^\n]*ratio\*="16:9"\|"9:16"\|"1:1"/u);
+    expect(prompt).toMatch(/- crop_asset: [^\n]*ratio\*="16:9"\|"9:16"\|"1:1"/u);
     expect(prompt).toContain("Omit optional parameters");
     const mediaSlot = getRoutableTool(tools, "set_notebook_media_slot");
     expect(mediaSlot?.requiredParams).toContain("artifact_ref");

@@ -18,7 +18,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "revise_notebook_generation_plan", "continue_notebook_generation",
   ],
   Media: [
-    "upload_file", "asset_manifest", "delete_asset", "rename_asset", "rename_all",
+    "upload_file", "asset_manifest", "crop_asset", "delete_asset", "rename_asset", "rename_all",
     "mark_asset_seen", "duplicate_asset", "export_asset_to_project",
     "read_asset_metadata", "download_video", "list_assets", "show_folder",
     "copy_file_to_clipboard", "export_to_downloads", "check_duplicate_bytes",
@@ -26,7 +26,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   ],
   Video: [
     "prepare_cold_open", "edit_cold_open", "trim_video", "split_video", "extract_video_clip", "split_video_by_durations",
-    "pad_video", "crop_video", "set_video_overlay", "animate_keywords", "alive_captions", "set_alive_captions",
+    "pad_video", "set_video_overlay", "animate_keywords", "alive_captions", "set_alive_captions",
     "detect_scenes", "suggest_cuts", "analyze_jokes", "apply_cuts",
     "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
     "extract_frame",
@@ -42,7 +42,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "export_transcript_srt", "analyze_music", "get_music_analysis",
   ],
   Images: [
-    "crop_image", "invert_image", "concat_images", "describe_image",
+    "invert_image", "concat_images", "describe_image",
     "get_image_subject_map", "analyze_image_subjects", "edit_image_subjects",
     "list_image_edit_models",
     "create_qr_outro", "create_qart", "create_qrbtf",

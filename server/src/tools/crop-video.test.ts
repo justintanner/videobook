@@ -96,7 +96,7 @@ describe("crop_video tool", () => {
     const y = 0;
 
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "9:16", x, y, w, h },
     });
 
@@ -121,7 +121,7 @@ describe("crop_video tool", () => {
     const y = 0;
 
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x, y, w, h },
     });
 
@@ -141,7 +141,7 @@ describe("crop_video tool", () => {
     const y = 0.1;
 
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "16:9", x, y, w, h },
     });
 
@@ -155,7 +155,7 @@ describe("crop_video tool", () => {
     const uploaded = await uploadVideo(client, "crop-proj", videoPath);
 
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x: 0.5, y: 0, w: 0.7, h: 1.0 },
     });
 
@@ -170,7 +170,7 @@ describe("crop_video tool", () => {
     // Source is 1920x1080 (16:9), so equal-fraction rects are also 16:9.
     // Use a non-16:9 fraction (0.3 x 0.5 → 576x540 ≈ 1.067) against ratio "16:9".
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "16:9", x: 0.1, y: 0.1, w: 0.3, h: 0.5 },
     });
 
@@ -181,14 +181,14 @@ describe("crop_video tool", () => {
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: "vid-does-not-exist", book_id: "crop-proj", ratio: "1:1", x: 0, y: 0, w: 0.5, h: 0.5 },
     });
 
     expect(result.isError).toBe(true);
   });
 
-  it("returns error when asset has no video file", async () => {
+  it("crops image assets through the image path", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
@@ -197,12 +197,13 @@ describe("crop_video tool", () => {
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
     const result = await client.callTool({
-      name: "crop_video",
+      name: "crop_asset",
       arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x: 0.1, y: 0.1, w: 0.5, h: 0.5 },
     });
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("No video file");
+    expect(content[0].text).not.toContain("No video file");
+    expect(content[0].text).toMatch(/unsupported image format/u);
   });
 });

@@ -51,10 +51,10 @@ describe("workspace action exposure contract", () => {
     const second = buildWorkspaceActionCatalog(tools, commands);
     expect(first).toEqual(second);
     expect(commands).toEqual(original);
-    const crop = first.actions.find((action) => action.id === "tool.crop_image")!;
+    const crop = first.actions.find((action) => action.id === "tool.crop_asset")!;
     expect(crop.inputSchema.properties?.ratio?.enum).toEqual(["16:9", "9:16", "1:1"]);
     expect(crop.inputSchema.properties?.x).toMatchObject({ type: "number", minimum: 0, maximum: 1 });
-    expect(crop.target).toEqual({ kind: "asset", argument: "asset_id", mediaKinds: ["image"] });
+    expect(crop.target).toEqual({ kind: "asset", argument: "asset_id" });
     expect(first.actions.find((action) => action.command === "/rewrite-script")?.initialArgs).toEqual({ variant: "full" });
     expect(first.actions.find((action) => action.command === "/tldr")?.initialArgs).toEqual({ variant: "tldr" });
     expect(first.actions.find((action) => action.command === "/clip-audio")?.inputSchema.properties?.field?.enum)

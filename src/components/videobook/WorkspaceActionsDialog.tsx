@@ -91,7 +91,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
   const entityId = values.entity && typeof values.entity === 'object' && 'id' in values.entity ? String(values.entity.id) : ''
   const unavailable = actionUnavailableReason(action, context)
   const hasDependentChoices = ['commit_hash', 'filename', 'subject_id', 'subject_ids'].some((name) => name in (action.inputSchema.properties ?? {}))
-  const cropMedia = action.handler.kind === 'tool' && ['crop_image', 'crop_video'].includes(action.handler.tool) && typeof values.asset_id === 'string' ? context.media?.[values.asset_id] : undefined
+  const cropMedia = action.handler.kind === 'tool' && action.handler.tool === 'crop_asset' && typeof values.asset_id === 'string' ? context.media?.[values.asset_id] : undefined
   const choices = action.target.argument && action.target.mediaKinds
     ? { ...context.choices, [action.target.argument]: (context.choices[action.target.argument] ?? context.choices.asset_id ?? []).filter((choice) => action.target.mediaKinds?.some((kind) => kind === choice.detail)) }
     : context.choices

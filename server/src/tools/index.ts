@@ -56,8 +56,7 @@ import { splitVideoDef } from "./split-video.js";
 import { extractVideoClipDef } from "./extract-video-clip.js";
 import { splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
-import { cropVideoDef } from "./crop-video.js";
-import { cropImageDef } from "./crop-image.js";
+import { cropAssetDef } from "./crop-asset.js";
 import { invertImageDef } from "./invert-image.js";
 import { setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
@@ -162,8 +161,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     extractVideoClipDef(engine),
     splitVideoByDurationsDef(engine),
     padVideoDef(engine),
-    cropVideoDef(engine),
-    cropImageDef(engine),
+    cropAssetDef(engine),
     invertImageDef(engine),
     setVideoOverlayDef(engine),
     animateKeywordsDef(engine),
