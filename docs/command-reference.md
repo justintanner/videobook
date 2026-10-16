@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (248)
+## MCP endpoints (246)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -128,7 +128,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_book_actions` — List authored semantic revisions for a book
 - `list_books` — List all Videobook books
 - `list_cell_generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.
-- `list_chat_history` — List recent chat input history entries.
 - `list_chat_models` — List supported chat routing models and the default selection
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_entities` — List reusable prompts, scenes and characters, optionally of one kind
@@ -172,7 +171,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
 - `preview_notebook_generation` — Preview the exact provider payload a generation cell would submit, without running it
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
-- `push_chat_history` — Append a message to the chat input history log.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
 - `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists. Pass raw=true to return the untouched sidecar text instead of the parsed projection.
@@ -259,7 +257,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (320; 146 dedicated command routes)
+## Slash actions (319; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -417,7 +415,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`
 - `/list-books` — List all Videobook books; MCP: `list_books`
 - `/list-cell-generations` — List recorded generation attempts for a notebook cell: one attempt per dispatch, each with its per-attempt transition timeline.; MCP: `list_cell_generations`
-- `/list-chat-history` — List recent chat input history entries.; MCP: `list_chat_history`
 - `/list-chat-models` — List supported chat routing models and the default selection; MCP: `list_chat_models`
 - `/list-elevenlabs-voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them; MCP: `list_elevenlabs_voices`
 - `/list-entities` — List reusable prompts, scenes and characters, optionally of one kind; MCP: `list_entities`

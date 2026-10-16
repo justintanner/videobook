@@ -82,8 +82,8 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   ],
   History: [
     "asset_history", "restore_asset_version", "read_file_at_commit",
-    "list_cell_generations", "inspect_generation_request", "push_chat_history",
-    "list_chat_history", "record_prompt", "list_prompt_history", "list_book_actions",
+    "list_cell_generations", "inspect_generation_request",
+    "record_prompt", "list_prompt_history", "list_book_actions",
     "get_history_action",
   ],
   Recovery: [

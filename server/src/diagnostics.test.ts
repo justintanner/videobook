@@ -11,7 +11,7 @@ import { BookManager } from "./book-manager.js";
 import { queue, registerJobHandler, setEngineRoot } from "./queue.js";
 import { failPendingTaskAndLog } from "./jobs/task-failure.js";
 import { withLogging } from "./tools/log-wrapper.js";
-import { pushChatHistoryDef, listChatHistoryDef } from "./tools/chat-history.js";
+import { listPromptHistoryDef, recordPromptDef } from "./tools/prompt-history.js";
 
 const PRIVATE = "Confidential transcript and prompt /private/media.mov https://media.example/video?token=plaincredential";
 const ID = "01900000-0000-7000-8000-000000000001";
@@ -117,8 +117,8 @@ describe("private runtime diagnostics", () => {
     expect(JSON.stringify(current.logs.read("job-error"))).not.toContain(PRIVATE);
     const lines = capture();
     const bookId = current.book.get().bookId;
-    await withLogging(pushChatHistoryDef(current), current).handler({ book_id: bookId, message: PRIVATE });
-    const result = await withLogging(listChatHistoryDef(current), current).handler({ book_id: bookId });
+    await withLogging(recordPromptDef(current), current).handler({ book_id: bookId, surface: "chat", prompt: PRIVATE });
+    const result = await withLogging(listPromptHistoryDef(current), current).handler({ book_id: bookId, surface: "chat" });
     expect(result.content[0]?.text).toContain(PRIVATE);
     expect(lines.join("\n")).not.toContain(PRIVATE);
   });

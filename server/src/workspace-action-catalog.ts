@@ -52,10 +52,6 @@ const workflowTools: Readonly<Record<string, { actionId: string; reason: string 
     actionId: "tool.chat",
     reason: "Records text entered through the composer and generation editors; browsing history is a separate action.",
   },
-  push_chat_history: {
-    actionId: "tool.chat",
-    reason: "Compatibility write for composer history; users enter messages through chat.",
-  },
   check_duplicate_bytes: {
     actionId: "command.upload",
     reason: "Checks existing immutable bytes during Import before uploading a file.",
