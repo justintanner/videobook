@@ -591,20 +591,23 @@ function applyVideoJoinRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
   };
 }
 
+function routingArgument(tool: RoutableToolInfo, param: string): string {
+  const required = tool.requiredParams.includes(param) ? "*" : "";
+  const allowed = tool.constraints.find((constraint) => constraint.startsWith(`${param}=`));
+  return allowed ? `${allowed.replace("=", `${required}=`)}` : `${param}${required}`;
+}
+
+function routingToolLine(tool: RoutableToolInfo): string {
+  const args = tool.params.map((param) => routingArgument(tool, param)).join(", ");
+  return `- ${tool.name}: ${tool.description}${args ? ` (${args})` : ""}`;
+}
+
 function buildChatRoutingPrompt(
   bookName: string,
   tools: RoutableToolInfo[],
   historyContext?: string,
 ): string {
-  const toolLines = tools.map((tool) => {
-    const required = tool.requiredParams.length > 0
-      ? `; required: ${tool.requiredParams.join(", ")}`
-      : "";
-    const constraints = tool.constraints.length > 0
-      ? `; allowed: ${tool.constraints.join(", ")}`
-      : "";
-    return `- ${tool.name}: ${tool.description} (params: ${tool.params.join(", ")}${required}${constraints})`;
-  }).join("\n");
+  const toolLines = tools.map(routingToolLine).join("\n");
 
   const historyBlock = historyContext
     ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
@@ -612,7 +615,7 @@ function buildChatRoutingPrompt(
 
   return `You are a routing assistant for the Videobook media system.
 
-Available tools:
+Available tools (arguments in parentheses; * marks a required argument and name="a"|"b" lists its allowed values):
 ${toolLines}
 
 Current book: ${bookName}

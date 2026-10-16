@@ -129,12 +129,15 @@ describe("chat routing catalog", () => {
     const listing = getRoutableTool(tools, "list_generation_models");
     expect(listing?.constraints).toContainEqual('media="image"|"video"|"audio"');
     const prompt = buildChatRoutingPrompt("my-book", tools);
-    expect(prompt).toContain('allowed: media="image"|"video"|"audio"');
+    expect(prompt).toContain('media="image"|"video"|"audio"');
+    expect(prompt).toContain("- splice_video: ");
+    expect(prompt).toMatch(/- splice_video: [^\n]*\(first_asset_id\*, second_asset_id\*, additional_asset_ids, overlap\)/u);
+    expect(prompt).toMatch(/- crop_image: [^\n]*ratio\*="16:9"\|"9:16"\|"1:1"/u);
     expect(prompt).toContain("Omit optional parameters");
     const mediaSlot = getRoutableTool(tools, "set_notebook_media_slot");
     expect(mediaSlot?.requiredParams).toContain("artifact_ref");
     expect(mediaSlot?.params).toContain("artifact_ref");
-    expect(prompt).toMatch(/set_notebook_media_slot[^\n]*required:[^\n]*artifact_ref/);
+    expect(prompt).toMatch(/set_notebook_media_slot[^\n]*artifact_ref\*/);
   });
 
   it("routes generation through the generic media tools", () => {
@@ -243,7 +246,7 @@ describe("chat routing catalog", () => {
       "Recent conversation:\nUser: download the clip",
     );
     expect(prompt).toContain("Current book: my-book");
-    expect(prompt).toContain("Available tools:");
+    expect(prompt).toContain("Available tools (arguments in parentheses;");
     expect(prompt).toContain("- download_video:");
     expect(prompt).toContain("- delete_notebook:");
     expect(prompt).toContain("Recent conversation:");
