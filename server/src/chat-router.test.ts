@@ -172,17 +172,7 @@ describe("chat routing catalog", () => {
     const tools = buildRoutableTools(definitions);
     expect(AUTO_APPLY_TOOL_NAMES.has("duplicate_asset")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_audio")).toBe(true);
-    expect(AUTO_APPLY_TOOL_NAMES.has("extract_first_frame")).toBe(true);
-    expect(AUTO_APPLY_TOOL_NAMES.has("extract_last_frame")).toBe(true);
     expect(AUTO_APPLY_TOOL_NAMES.has("extract_frame")).toBe(true);
-    expect(getRoutableTool(tools, "extract_first_frame")).toMatchObject({
-      effect: "mutation",
-      autoApply: true,
-    });
-    expect(getRoutableTool(tools, "extract_last_frame")).toMatchObject({
-      effect: "mutation",
-      autoApply: true,
-    });
     expect(getRoutableTool(tools, "extract_frame")).toMatchObject({
       effect: "mutation",
       autoApply: true,

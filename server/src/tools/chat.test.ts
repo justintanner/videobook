@@ -347,9 +347,9 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
       planId: uuidv7(),
       bookId: uuidv7(),
       prompt: "extract the first frame of @a1",
-      routedTool: "extract_first_frame",
-      tool: "extract_first_frame",
-      params: { asset_id: uuidv7() },
+      routedTool: "extract_frame",
+      tool: "extract_frame",
+      params: { asset_id: uuidv7(), frame: "first" },
       message: "Extracting frame.",
       summary: "Extract first frame",
       effect: "mutation" as const,
@@ -374,7 +374,7 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
     }).success).toBe(false);
   });
 
-  it("applies extract_first_frame action plans against a real engine", async () => {
+  it("applies first-frame extract_frame action plans against a real engine", async () => {
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const { createRequire } = await import("node:module");
@@ -408,9 +408,9 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
       planId: uuidv7(),
       bookId,
       prompt: "extract the first frame",
-      routedTool: "extract_first_frame",
-      tool: "extract_first_frame",
-      params: { asset_id: upload.assetId, book_id: bookId },
+      routedTool: "extract_frame",
+      tool: "extract_frame",
+      params: { asset_id: upload.assetId, book_id: bookId, frame: "first" },
       message: "Extracting frame.",
       summary: "Extract first frame",
       effect: "mutation",

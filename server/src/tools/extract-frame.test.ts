@@ -62,7 +62,7 @@ async function uploadVideo(
 // parallel test load was timing out the 60s hook budget; pinning everything
 // to `beforeAll` removes the per-test stamping of the queue's global
 // projectsDir and the per-test MCP transport churn.
-describe("extract_first_frame / extract_last_frame tools", () => {
+describe("extract_frame first and last frames", () => {
   let client: Client;
   let tempDir: string;
   let videoPath: string;
@@ -91,8 +91,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   it("extracts first frame as a new image asset", async () => {
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: sharedUpload.assetId,
         book_id: "frame-proj",
       },
@@ -121,8 +122,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   it("extracts last frame as a new image asset", async () => {
     const result = await client.callTool({
-      name: "extract_last_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "last",
         asset_id: sharedUpload.assetId,
         book_id: "frame-proj",
       },
@@ -146,10 +148,21 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(jpgFile).toBeDefined();
   });
 
+  it("requires a timestamp unless the first or last frame is requested", async () => {
+    const result = await client.callTool({
+      name: "extract_frame",
+      arguments: { asset_id: sharedUpload.assetId, book_id: "frame-proj" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toBe("timestamp is required unless frame is first or last");
+  });
+
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: "vid-does-not-exist",
         book_id: "frame-proj",
       },
@@ -167,8 +180,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: uploaded.assetId,
         book_id: "frame-proj",
       },
@@ -185,8 +199,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const uploaded = await uploadVideo(client, "frame-proj", skewedPath, "skewed.mp4");
 
     const result = await client.callTool({
-      name: "extract_last_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "last",
         asset_id: uploaded.assetId,
         book_id: "frame-proj",
       },
@@ -208,8 +223,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   it("records original.jpg in immutable revision history", async () => {
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: sharedUpload.assetId,
         book_id: "frame-proj",
       },
@@ -244,8 +260,9 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
   it("writes native original metadata", async () => {
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: sharedUpload.assetId,
         book_id: "frame-proj",
       },

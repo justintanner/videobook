@@ -494,8 +494,9 @@ describe("MCP tools e2e", () => {
 
   it("extracts first frame", async () => {
     const result = await client.callTool({
-      name: "extract_first_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "first",
         asset_id: vidAssetId,
         book_id: PROJECT,
       },
@@ -533,8 +534,9 @@ describe("MCP tools e2e", () => {
 
   it("extracts last frame", async () => {
     const result = await client.callTool({
-      name: "extract_last_frame",
+      name: "extract_frame",
       arguments: {
+        frame: "last",
         asset_id: vidAssetId,
         book_id: PROJECT,
       },

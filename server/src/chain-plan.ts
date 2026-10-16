@@ -123,28 +123,6 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     gridFields: ["asset_id"],
     inputTypes: { asset_id: "artifact" },
   },
-  extract_first_frame: {
-    outputs: {
-      image_asset_id: "artifact",
-      source_video: "artifact",
-      job_id: "string",
-      status: "string",
-    },
-    completion: "extract_frame",
-    gridFields: ["asset_id"],
-    inputTypes: { asset_id: "artifact" },
-  },
-  extract_last_frame: {
-    outputs: {
-      image_asset_id: "artifact",
-      source_video: "artifact",
-      job_id: "string",
-      status: "string",
-    },
-    completion: "extract_frame",
-    gridFields: ["asset_id"],
-    inputTypes: { asset_id: "artifact" },
-  },
   extract_frame: {
     outputs: {
       image_asset_id: "artifact",
@@ -154,7 +132,7 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     },
     completion: "extract_frame",
     gridFields: ["asset_id"],
-    inputTypes: { asset_id: "artifact", timestamp: "number" },
+    inputTypes: { asset_id: "artifact", frame: "string", timestamp: "number" },
   },
   asset_manifest: {
     outputs: {

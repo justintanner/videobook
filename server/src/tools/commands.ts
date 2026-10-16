@@ -862,7 +862,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
     ],
-    mcpTool: { tool: "extract_first_frame", autoInject: ["book_id"] },
+    mcpTool: { tool: "extract_frame", autoInject: ["book_id"], injectParams: { frame: "first" } },
   },
   {
     command: "/extract-last-frame",
@@ -876,7 +876,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
     ],
-    mcpTool: { tool: "extract_last_frame", autoInject: ["book_id"] },
+    mcpTool: { tool: "extract_frame", autoInject: ["book_id"], injectParams: { frame: "last" } },
   },
   {
     command: "/extract-audio",

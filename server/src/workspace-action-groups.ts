@@ -29,7 +29,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "pad_video", "crop_video", "set_video_overlay", "animate_keywords", "alive_captions", "set_alive_captions",
     "detect_scenes", "suggest_cuts", "analyze_jokes", "apply_cuts",
     "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
-    "extract_first_frame", "extract_last_frame", "extract_frame",
+    "extract_frame",
     "extract_notebook_frame", "splice_video", "smooth_scene_concat",
     "analyze_video", "analyze_editing_moments", "get_editing_moments", "render_video", "get_render_settings", "create_watermark_card",
     "apply_watermark", "get_watermark_config",

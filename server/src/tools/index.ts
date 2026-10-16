@@ -73,7 +73,7 @@ import { audioBoostDef } from "./audio-boost.js";
 import { audioMixDef } from "./audio-mix.js";
 import { reverseVideoDef } from "./reverse-video.js";
 import { injectFirstFrameDef } from "./inject-first-frame.js";
-import { extractFrameDefs } from "./extract-frame.js";
+import { extractFrameDef } from "./extract-frame.js";
 import { extractNotebookFrameDef } from "./extract-notebook-frame.js";
 import { extractNotebookAudioDef } from "./extract-notebook-audio.js";
 import { extractAudioDef } from "./extract-audio.js";
@@ -183,7 +183,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     audioMixDef(engine),
     reverseVideoDef(engine),
     injectFirstFrameDef(engine),
-    ...extractFrameDefs(engine),
+    extractFrameDef(engine),
     extractNotebookFrameDef(engine),
     extractNotebookAudioDef(engine),
     extractAudioDef(engine),

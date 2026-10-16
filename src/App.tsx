@@ -8232,13 +8232,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       return await runNotebookAudioCommandNow({ sourceReference }, isCurrent, chat)
     }
-    if (plan.tool === 'extract_first_frame' || plan.tool === 'extract_last_frame') {
+    if (plan.tool === 'extract_frame' && (plan.params.frame === 'first' || plan.params.frame === 'last')) {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
         return { ok: false, message: 'The chat model did not select a video source.' }
       }
       const command: NotebookFrameCommand = {
-        frameMode: plan.tool === 'extract_last_frame' ? 'last' : 'first',
+        frameMode: plan.params.frame,
         sourceReference,
       }
       if (plan.confirmation.required === false) {

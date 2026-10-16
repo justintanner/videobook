@@ -101,47 +101,31 @@ async function extractFrame(
   };
 }
 
-const extractFrameSchema = {
-  asset_id: z.string().describe("Video artifact id"),
-  book_id: z.string().describe("Book UUID"),
-};
-
-export function extractFrameDefs(engine: Engine): ToolDef[] {
-  return [
-    {
-      name: "extract_first_frame",
-      description: "Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.",
-      schema: extractFrameSchema,
-      handler: async (args) => {
-        const { asset_id, book_id } = args as { asset_id: string; book_id: string };
-        return extractFrame(asset_id, book_id, "first", engine);
-      },
+export function extractFrameDef(engine: Engine): ToolDef {
+  return {
+    name: "extract_frame",
+    description: "Save one video frame as a new image asset (JPEG): the first frame, the last frame, or the frame at timestamp seconds.",
+    schema: {
+      book_id: z.string().describe("Book UUID"),
+      asset_id: z.string().describe("Video artifact id"),
+      frame: z.enum(["first", "last"]).optional().describe("Take the first or last frame instead of the frame at timestamp"),
+      timestamp: z.number().min(0).optional().describe("Seconds into the video; required unless frame is set"),
     },
-    {
-      name: "extract_last_frame",
-      description: "Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.",
-      schema: extractFrameSchema,
-      handler: async (args) => {
-        const { asset_id, book_id } = args as { asset_id: string; book_id: string };
-        return extractFrame(asset_id, book_id, "last", engine);
-      },
-    },
-    {
-      name: "extract_frame",
-      description: "Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).",
-      schema: {
-        asset_id: z.string().describe("Video artifact id"),
-        book_id: z.string().describe("Book UUID"),
-        timestamp: z.number().describe("Timestamp in seconds to extract the frame from"),
-      },
-      handler: async (args) => {
-        const { asset_id, book_id, timestamp } = args as {
-          asset_id: string;
-          book_id: string;
-          timestamp: number;
+    handler: async (args) => {
+      const { asset_id, book_id, frame, timestamp } = args as {
+        asset_id: string;
+        book_id: string;
+        frame?: "first" | "last";
+        timestamp?: number;
+      };
+      if (frame) return extractFrame(asset_id, book_id, frame, engine);
+      if (typeof timestamp !== "number") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "timestamp is required unless frame is first or last" }],
         };
-        return extractFrame(asset_id, book_id, "custom", engine, timestamp);
-      },
+      }
+      return extractFrame(asset_id, book_id, "custom", engine, timestamp);
     },
-  ];
+  };
 }

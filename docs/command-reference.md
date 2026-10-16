@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (250)
+## MCP endpoints (248)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -90,9 +90,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
 - `extend_audio_asset` — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
 - `extract_audio` — Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).
-- `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
-- `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
-- `extract_last_frame` — Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.
+- `extract_frame` — Save one video frame as a new image asset (JPEG): the first frame, the last frame, or the frame at timestamp seconds.
 - `extract_notebook_audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
 - `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
@@ -364,9 +362,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
 - `/extend-audio` — Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset; MCP: `extend_audio_asset`
 - `/extract-audio` — Extract audio track from video as audio asset (MP3); MCP: `extract_audio`
-- `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_first_frame`
+- `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_frame`
 - `/extract-frame` — Extract a frame at a specific timestamp from a video as an image asset; MCP: `extract_frame`
-- `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_last_frame`
+- `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_frame`
 - `/extract-notebook-audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range; MCP: `extract_notebook_audio`
 - `/extract-notebook-frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp; MCP: `extract_notebook_frame`
 - `/extract-video-clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.; MCP: `extract_video_clip`

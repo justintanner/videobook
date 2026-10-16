@@ -92,7 +92,7 @@ describe('media endpoints over HTTP MCP', () => {
   it('extracts decodable frames at the start, middle, end and clamped timestamps', async () => {
     const source = await uploadVideo()
     for (const [name, args] of [
-      ['extract_first_frame', {}], ['extract_last_frame', {}],
+      ['extract_frame', { frame: 'first' }], ['extract_frame', { frame: 'last' }],
       ['extract_frame', { timestamp: 1.25 }], ['extract_frame', { timestamp: 3 }],
       ['extract_frame', { timestamp: 99 }],
     ] as const) {
@@ -106,7 +106,7 @@ describe('media endpoints over HTTP MCP', () => {
 
   it('extracts the first frame from a video shorter than the usual first-frame offset', async () => {
     const source = await uploadVideo(1 / 24, false)
-    const extracted = await call<{ image_asset_id: string; job_id: string }>('extract_first_frame', { asset_id: source.assetId })
+    const extracted = await call<{ image_asset_id: string; job_id: string }>('extract_frame', { asset_id: source.assetId, frame: 'first' })
     await waitForJob('extract_frame', extracted.image_asset_id)
     expect(await sharp(await file(extracted.image_asset_id, 'original.jpg')).metadata()).toMatchObject({ width: 160, height: 96 })
   })

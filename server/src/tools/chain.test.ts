@@ -237,7 +237,7 @@ describe("chain MCP tool", () => {
   /** A free local step, then a paid generation the chain must stop before running. */
   function extractThenGenerate(): unknown[] {
     return [
-      { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
+      { id: "frame", tool: "extract_frame", params: { asset_id: "@b2", frame: "first" } },
       {
         id: "animate",
         tool: "generate_video",

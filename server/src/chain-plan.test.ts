@@ -289,7 +289,7 @@ describe("preflightChainPlan", () => {
       book_id: ctx.bookId,
       notebook_id: ctx.notebookId,
       steps: [
-        { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
+        { id: "frame", tool: "extract_frame", params: { asset_id: "@b2", frame: "first" } },
         {
           id: "animate",
           tool: "generate_video",
