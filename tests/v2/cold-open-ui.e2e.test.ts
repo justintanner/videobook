@@ -152,7 +152,7 @@ describe('cold-open review and copy in the browser', () => {
     expect(playback.time).toBeGreaterThan(0)
     expect(playback.width).toBe(160)
     expect(errors).toEqual([])
-    const catalog = await call<{ actions: Array<{ command: string; target: { mediaKinds?: string[] } }> }>('list_workspace_actions')
+    const catalog = await call<{ actions: Array<{ command: string; target: { mediaKinds?: string[] } }> }>('list_workspace_actions', { detail: 'full' })
     expect(catalog.actions.find(action => action.command === '/edit-cold-open')?.target.mediaKinds).toEqual(['video', 'final'])
   }, 90_000)
 })

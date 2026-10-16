@@ -142,7 +142,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_posts` — List this book's publications and performance observations for comparison.
 - `list_prompt_history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
-- `list_workspace_actions` — List discoverable workspace actions, typed inputs, supported surfaces, and the visible workflow for each endpoint.
+- `list_workspace_actions` — List workspace actions (tools, app screens and composite commands) as id, command, title, group and what each runs. Filter with query, group or ids; detail full adds typed inputs, surfaces, confirmation policy and tool coverage.
 - `make_cover_song` — Make a new drums-and-strings instrumental cover of 10-240 seconds of a video or audio asset's sound, generated locally with ACE-Step. The duration matches exactly; style matching is best-effort.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `move_notebook_cells` — Persist notebook cell grid slots

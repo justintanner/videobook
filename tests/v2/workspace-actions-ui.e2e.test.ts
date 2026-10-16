@@ -108,7 +108,7 @@ describe('workspace action launcher with real endpoints', () => {
     imageId = String(record(await call('upload_file', { filename: 'action-image.png', data: (await readFile(imagePath)).toString('base64') }))?.assetId)
     await call('create_notebook_cell', { notebook_id: notebookId, cell: { type: 'video', slot: { row: 0, column: 0 }, output_artifact_id: videoId } })
     await call('create_notebook_cell', { notebook_id: notebookId, cell: { type: 'image', slot: { row: 0, column: 1 }, output_artifact_id: imageId } })
-    catalog = await call('list_workspace_actions') as WorkspaceActionCatalog
+    catalog = await call('list_workspace_actions', { detail: 'full' }) as WorkspaceActionCatalog
     vite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], {
       ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(rootDir, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0',
     })

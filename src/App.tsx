@@ -4146,7 +4146,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
 
   const refreshBookCommands = useCallback(async () => {
-    const [value, catalogValue] = await Promise.all([call('slash_commands', {}), call('list_workspace_actions', {})])
+    const [value, catalogValue] = await Promise.all([call('slash_commands', {}), call('list_workspace_actions', { detail: 'full' })])
     const catalog = asWorkspaceActionCatalog(catalogValue)
     setWorkspaceActions(catalog.actions)
     setCommands(workspaceActionCommands(catalog.actions, asCommands(value)))
@@ -4172,7 +4172,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setActionCatalogStatus({ loading: true, error: null })
     try {
       const catalog = actionId && workspaceActions.length ? { actions: workspaceActions }
-        : asWorkspaceActionCatalog(await call('list_workspace_actions', {}, { chat }))
+        : asWorkspaceActionCatalog(await call('list_workspace_actions', { detail: 'full' }, { chat }))
       if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
       setWorkspaceActions(catalog.actions)
       const action = catalog.actions.find((entry) => entry.id === actionId)
@@ -9145,7 +9145,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             rest,
             gridMentionAssets,
           )
-      const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', {}, { chat })).actions
+      const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', { detail: 'full' }, { chat })).actions
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
       const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))

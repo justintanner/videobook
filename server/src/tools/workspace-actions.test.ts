@@ -17,7 +17,7 @@ describe("workspace action exposure contract", () => {
 
   it("accounts for every endpoint and every canonical command through its registered catalog handler", async () => {
     const definition = tools.find((tool) => tool.name === "list_workspace_actions")!;
-    const result = await definition.handler({});
+    const result = await definition.handler({ detail: "full" });
     expect(result.isError).toBeUndefined();
     const catalog = JSON.parse(result.content[0]!.text) as WorkspaceActionCatalog;
     const names = catalog.actions.flatMap((action) => [action.command, ...action.aliases]);
@@ -61,6 +61,29 @@ describe("workspace action exposure contract", () => {
       .toEqual(["gain", "mute", "fade-in", "fade-out"]);
     const edit = first.actions.find((action) => action.id === "tool.plan_sequence_edit")!;
     expect(edit.inputSchema.properties?.edits?.items?.oneOf).toBeDefined();
+  });
+
+  it("summarizes actions by default and filters by query, group and ids", async () => {
+    const definition = tools.find((tool) => tool.name === "list_workspace_actions")!;
+    const read = async (args: Record<string, unknown>) =>
+      JSON.parse((await definition.handler(args)).content[0]!.text) as { actions: Array<Record<string, unknown>>; tools?: unknown[] };
+    const full = await read({ detail: "full" });
+    const summary = await read({});
+    expect(summary.tools).toBeUndefined();
+    expect(summary.actions).toHaveLength(full.actions.length);
+    expect(JSON.stringify(summary).length).toBeLessThan(JSON.stringify(full).length / 5);
+    expect(summary.actions.find((action) => action.id === "tool.trim_video")).toEqual({
+      id: "tool.trim_video", command: "/trim-video", title: expect.any(String), group: "Video", runs: "tool:trim_video",
+    });
+    const trims = await read({ query: "trim" });
+    expect(trims.actions.map((action) => action.id)).toEqual(expect.arrayContaining(["tool.trim_video", "tool.trim_audio"]));
+    expect(trims.actions.every((action) => JSON.stringify(full.actions.find((entry) => entry.id === action.id)).toLowerCase().includes("trim"))).toBe(true);
+    const tags = await read({ group: "Tags" });
+    expect(tags.actions.length).toBeGreaterThan(0);
+    expect(tags.actions.every((action) => action.group === "Tags")).toBe(true);
+    const selected = await read({ ids: ["tool.trim_video"], detail: "full" });
+    expect(selected.actions).toHaveLength(1);
+    expect(selected.actions[0]).toHaveProperty("inputSchema");
   });
 
   it("rejects new unmapped capabilities, missing handlers and alias collisions", () => {

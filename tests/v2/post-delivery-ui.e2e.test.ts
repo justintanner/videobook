@@ -259,7 +259,7 @@ describe('Post delivery review in the chat composer', () => {
     await expect.poll(() => page.getByText('@h8 is not a Post or a clip', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThan(0)
     expect(await review().count()).toBe(0)
 
-    const catalog = await call<{ actions: Array<{ command: string; handler: { kind: string; action?: string } }> }>('list_workspace_actions')
+    const catalog = await call<{ actions: Array<{ command: string; handler: { kind: string; action?: string } }> }>('list_workspace_actions', { detail: 'full' })
     expect(catalog.actions.find(action => action.command === '/save-post-to-icloud')?.handler).toEqual({ kind: 'ui', action: 'open_post_icloud' })
     expect(catalog.actions.find(action => action.command === '/upload-post-to-dropbox')?.handler).toEqual({ kind: 'ui', action: 'open_post_dropbox' })
     expect(errors).toEqual([])
