@@ -44,7 +44,12 @@ import {
 } from '@/videobook/cell-highlight'
 import {
   mediaCellGenerationState,
+  mediaGenerationProducer,
 } from '@/videobook/media-cell-generation-state'
+import {
+  notebookCellRepairMediaLabel,
+  notebookCellRepairPrompt,
+} from '@/videobook/notebook-cell-repair'
 import { parseGenerationRequestInspection } from '@/videobook/generation-request-inspection'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
@@ -614,6 +619,8 @@ import {
   CellContextMenuContext,
   cellContextMenuId,
   CellRunContext,
+  CellActionsContext,
+  type CellActionsContextValue,
   GenerationTitlesContext,
   GoalMarksContext,
   GoalTileContext,
@@ -4586,16 +4593,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const deleteNotebookCells = async (
     cells: readonly NotebookDocument['cells'][number][],
+    options?: { confirm?: boolean },
   ) => {
     if (!bookId || !notebook || cells.length === 0) return
     const uniqueCells = [...new Map(cells.map((cell) => [cell.id, cell])).values()]
     const cellIds = new Set(uniqueCells.map((cell) => cell.id))
     const addresses = uniqueCells.map((cell) => notebookGridTag(cell.slot))
     const count = uniqueCells.length
-    const confirmed = window.confirm(count === 1
-      ? `Delete ${addresses[0]}?\n\nThis removes the cell and its connections. This cannot be undone.`
-      : `Delete ${count} selected cells?\n\n${addresses.join(', ')}\n\nThis removes the cells and their connections. This cannot be undone.`)
-    if (!confirmed) return
+    const failedCellIds = new Set(presentedNodes
+      .filter((node) => node.data.status === 'error')
+      .map((node) => node.id))
+    const needsConfirm = options?.confirm
+      ?? uniqueCells.some((cell) => !failedCellIds.has(cell.id))
+    if (needsConfirm) {
+      const confirmed = window.confirm(count === 1
+        ? `Delete ${addresses[0]}?\n\nThis removes the cell and its connections. This cannot be undone.`
+        : `Delete ${count} selected cells?\n\n${addresses.join(', ')}\n\nThis removes the cells and their connections. This cannot be undone.`)
+      if (!confirmed) return
+    }
 
     const deletedIds = new Set<string>()
     const reconcileDeletedSelection = () => {
@@ -10484,6 +10499,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const deleteContextMenuCell = () => {
     if (contextMenuCell) void deleteNotebookCells([contextMenuCell])
   }
+  const repairCell = async (cellId: string) => {
+    if (!bookId || !notebook) return
+    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+    if (!cell) return
+    const producer = mediaGenerationProducer(cell, notebook.cells, notebook.edges)
+    const prompt = notebookCellRepairPrompt({
+      address: notebookGridTag(cell.slot),
+      error: presentedNodes.find((node) => node.id === cellId)?.data.statusError
+        ?? 'the provider rejected the request',
+      mediaLabel: notebookCellRepairMediaLabel(cell.type),
+      producerAddress: producer ? notebookGridTag(producer.slot) : null,
+      provider: producer?.provider ?? cell.provider ?? null,
+      model: producer?.model ?? cell.model ?? null,
+    })
+    setComposerDockOpen(true)
+    const chat = beginComposerTurn(prompt)
+    const outcome = await executeComposerCommand(prompt, { chat })
+    if (!outcome.ok) setNotice(outcome.message, 'error')
+  }
+  const cellActionsContextValue: CellActionsContextValue = {
+    deleteCell: async (cellId) => {
+      const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
+      if (cell) await deleteNotebookCells([cell], { confirm: false })
+    },
+    repairCell,
+  }
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen
     : null
@@ -11456,6 +11497,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       <TimelineContext.Provider value={timelineContext}>
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
+                        <CellActionsContext.Provider value={cellActionsContextValue}>
                           <PrimaryCellContext.Provider value={selectedCellId}>
                             <GenerationTitlesContext.Provider value={generationTitleByTool}>
                               <CellContextMenuContext.Provider value={cellContextMenuContextValue}>
@@ -11629,6 +11671,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               </CellContextMenuContext.Provider>
                             </GenerationTitlesContext.Provider>
                           </PrimaryCellContext.Provider>
+                        </CellActionsContext.Provider>
                         </CellRunContext.Provider>
                       </MediaSlotContext.Provider>
                       </TimelineContext.Provider>

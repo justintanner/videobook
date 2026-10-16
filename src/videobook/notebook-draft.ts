@@ -5,6 +5,7 @@ import type {
   NotebookDocument,
 } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
+import { mediaGenerationProducer } from './media-cell-generation-state'
 import { notebookCellFamily } from './notebook-cell-types'
 import {
   isPublishedPostCell,
@@ -42,6 +43,8 @@ export interface NotebookCellData extends Record<string, unknown> {
   targetInputConnectionCounts?: Record<string, number>
   sourcePorts?: string[]
   frameProvenance?: NotebookFrameProvenance
+  producerProvider?: string
+  producerModel?: string
 }
 
 type NotebookFrameProvenance = {
@@ -173,6 +176,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
   }
   return document.cells.map((cell) => {
     const frameProvenance = cellFrameProvenance(cellsById, cell)
+    const producer = mediaGenerationProducer(cell, document.cells, document.edges)
     return {
       id: cell.id,
       type: cell.type === 'timeline' || cell.type === 'goal' ? cell.type : 'cell',
@@ -205,6 +209,10 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
           : { outputArtifactId: cell.outputArtifactId }),
         ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
         ...(frameProvenance === null ? {} : { frameProvenance }),
+        ...(producer?.provider === undefined
+          ? {}
+          : { producerProvider: producer.provider }),
+        ...(producer?.model === undefined ? {} : { producerModel: producer.model }),
       },
     }
   })

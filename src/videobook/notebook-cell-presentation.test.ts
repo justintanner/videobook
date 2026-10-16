@@ -2,9 +2,34 @@ import { describe, expect, it } from 'vitest'
 import {
   notebookCellClockLabel,
   notebookCellRunObservation,
+  notebookCellGenerationPhase,
   notebookCellStateFromStatus,
   notebookCellStatePresentation,
 } from './notebook-cell-presentation'
+
+describe('notebookCellGenerationPhase', () => {
+  it('maps run statuses onto the three generation steps', () => {
+    expect(notebookCellGenerationPhase('queued')).toEqual({ step: 1, label: 'QUEUED' })
+    for (const status of ['running', 'generating', 'awaiting-output']) {
+      expect(notebookCellGenerationPhase(status)).toEqual({
+        step: 2,
+        label: 'PROVIDER GENERATING',
+      })
+    }
+    for (const status of ['downloading', 'completing']) {
+      expect(notebookCellGenerationPhase(status)).toEqual({
+        step: 3,
+        label: 'DOWNLOAD & COMMIT',
+      })
+    }
+  })
+
+  it('has no phase for statuses outside a generation run', () => {
+    for (const status of ['ready', 'completed', 'error', 'rendering', 'trimming']) {
+      expect(notebookCellGenerationPhase(status)).toBeNull()
+    }
+  })
+})
 
 describe('notebookCellRunObservation', () => {
   const cellId = '018f7cf5-0d31-7d96-8c0f-800000000002'

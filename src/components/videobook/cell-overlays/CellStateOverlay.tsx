@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 import type { NotebookCellType } from 'videobook-engine'
 import { isNotebookMediaPresentationCellType } from '@/videobook/notebook-cell-types'
-import { notebookCellStateFromStatus } from '@/videobook/notebook-cell-presentation'
+import {
+  notebookCellGenerationPhase,
+  notebookCellStateFromStatus,
+} from '@/videobook/notebook-cell-presentation'
 import { CellClockOverlay } from './CellClockOverlay'
 import { CellFailedOverlay } from './CellFailedOverlay'
 
@@ -12,7 +15,10 @@ export function CellStateOverlay({
   statusStartedAt,
   statusError,
   icon,
-  onRetry,
+  generator = null,
+  generation = false,
+  onRepair,
+  onDelete,
 }: {
   kind: NotebookCellType
   address: string
@@ -20,7 +26,10 @@ export function CellStateOverlay({
   statusStartedAt?: string
   statusError?: string
   icon: ReactNode
-  onRetry?: () => void
+  generator?: string | null
+  generation?: boolean
+  onRepair?: () => void
+  onDelete?: () => void
 }) {
   const presentation = notebookCellStateFromStatus(kind, status, {
     error: statusError ?? null,
@@ -35,6 +44,8 @@ export function CellStateOverlay({
         address={address}
         startedAt={presentation.startedAt}
         variant={status === 'downloading' ? 'stream' : 'rise'}
+        meta={generator}
+        phase={generation ? notebookCellGenerationPhase(status) : null}
       />
     )
   }
@@ -47,7 +58,9 @@ export function CellStateOverlay({
           ? 'MEDIA FAILED'
           : 'GENERATION FAILED'}
         address={address}
-        onRetry={onRetry}
+        meta={generator}
+        onRepair={onRepair}
+        onDelete={onDelete}
       />
     )
   }

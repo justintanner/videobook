@@ -45,6 +45,7 @@ import {
   type MediaSlotState,
   MediaSlotContext,
   CellRunContext,
+  CellActionsContext,
   PrimaryCellContext,
   GenerationTitlesContext,
   CellContextMenuContext,
@@ -322,6 +323,7 @@ function CellStatusBadge({ status }: { status: string | null }) {
 export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
+  const cellActions = useContext(CellActionsContext)
   const primaryCellId = useContext(PrimaryCellContext)
   const generationTitles = useContext(GenerationTitlesContext)
   const contextMenu = useContext(CellContextMenuContext)
@@ -366,6 +368,15 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }, data.status)
   const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
   const generationCell = isNotebookGenerationCellType(data.kind)
+  const generationRun = generationCell || isImageVideoGenerationResultCell({
+    type: data.kind,
+    inputs: data.inputs,
+  })
+  const generatorLine = generationRun
+    ? [data.provider ?? data.producerProvider, data.model ?? data.producerModel]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0)
+      .join(' · ') || null
+    : null
   const toolTitle = generationCell && data.model
     ? generationTitles.get(data.model) ?? null
     : null
@@ -632,6 +643,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             </span>
           )}
         </header>
+        <div className="cell-node-body">
         {data.kind === 'post' ? (
           <PostTile post={data.post} source={data.postSource} />
         ) : emptyMediaSlot && slotKind ? (
@@ -692,6 +704,23 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             )}
           </div>
         )}
+        <CellStateOverlay
+          kind={data.kind}
+          address={notebookGridAddress(data.slot)}
+          status={data.status}
+          statusStartedAt={data.statusStartedAt}
+          statusError={data.statusError}
+          icon={<CellIcon kind={data.kind} />}
+          generator={generatorLine}
+          generation={generationRun}
+          onRepair={generationRun ? () => {
+            void cellActions.repairCell(id)
+          } : undefined}
+          onDelete={() => {
+            void cellActions.deleteCell(id)
+          }}
+        />
+        </div>
         <footer className="cell-node-footer">
           <strong>{notebookGridTag(data.slot)}</strong>
           <span className="cell-node-footer-actions">
@@ -719,17 +748,6 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             </button>
           </span>
         </footer>
-        <CellStateOverlay
-          kind={data.kind}
-          address={notebookGridAddress(data.slot)}
-          status={data.status}
-          statusStartedAt={data.statusStartedAt}
-          statusError={data.statusError}
-          icon={<CellIcon kind={data.kind} />}
-          onRetry={slotKind ? undefined : () => {
-            void runCell(id)
-          }}
-        />
       </section>
       <Handle
         type="source"

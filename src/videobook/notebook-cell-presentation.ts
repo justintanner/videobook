@@ -225,6 +225,39 @@ export function notebookCellClockLabel(
   return 'RUNNING'
 }
 
+export type NotebookCellGenerationPhase = {
+  step: 1 | 2 | 3
+  label: string
+}
+
+export const notebookCellGenerationPhaseCount = 3
+
+const generationPhaseLabels: Record<NotebookCellGenerationPhase['step'], string> = {
+  1: 'QUEUED',
+  2: 'PROVIDER GENERATING',
+  3: 'DOWNLOAD & COMMIT',
+}
+
+function generationPhaseStep(
+  status: string,
+): NotebookCellGenerationPhase['step'] | null {
+  if (status === 'queued') return 1
+  if (
+    status === 'running'
+    || status === 'generating'
+    || status === 'awaiting-output'
+  ) return 2
+  if (status === 'downloading' || status === 'completing') return 3
+  return null
+}
+
+export function notebookCellGenerationPhase(
+  status: string,
+): NotebookCellGenerationPhase | null {
+  const step = generationPhaseStep(status)
+  return step === null ? null : { step, label: generationPhaseLabels[step] }
+}
+
 function parseTimestamp(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value !== 'string' || value.length === 0) return null

@@ -42,6 +42,16 @@ export const CellRunContext = createContext<(
   async () => undefined,
 )
 
+export type CellActionsContextValue = {
+  deleteCell: (cellId: string) => Promise<void>
+  repairCell: (cellId: string) => Promise<void>
+}
+
+export const CellActionsContext = createContext<CellActionsContextValue>({
+  deleteCell: async () => undefined,
+  repairCell: async () => undefined,
+})
+
 export const PrimaryCellContext = createContext<string | null>(null)
 
 export const GenerationTitlesContext = createContext<ReadonlyMap<string, string>>(

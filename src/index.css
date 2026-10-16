@@ -2417,6 +2417,19 @@ textarea:focus-visible {
   background: rgba(4, 14, 9, 0.99);
 }
 
+.cell-node-body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cell-node-body:has(> .cell-state-overlay) .cell-media-pending-face,
+.cell-node-body:has(> .cell-state-overlay) .cell-media-slot > * {
+  visibility: hidden;
+}
+
 .cell-node-queued {
   --cell-state-color: #4f9f72;
   --cell-state-soft: rgba(79, 159, 114, 0.18);
@@ -2454,6 +2467,15 @@ textarea:focus-visible {
   --cell-state-color: #ef4444;
   --cell-state-soft: rgba(239, 68, 68, 0.22);
   --cell-state-glow: rgba(239, 68, 68, 0.4);
+  border-color: color-mix(in srgb, var(--cell-state-color) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--cell-state-color) 16%, transparent),
+    0 0 14px color-mix(in srgb, var(--cell-state-color) 28%, transparent),
+    0 10px 26px rgba(0, 0, 0, 0.34);
+}
+
+.cell-node-error::before {
+  border-color: var(--cell-state-color);
 }
 
 .cell-node-created {
@@ -2513,7 +2535,7 @@ textarea:focus-visible {
   z-index: 20;
   overflow: hidden;
   color: var(--cell-state-color);
-  background: rgba(2, 12, 8, 0.72);
+  background: rgba(2, 12, 8, 0.9);
 }
 
 .cell-state-overlay-clock {
@@ -2549,15 +2571,16 @@ textarea:focus-visible {
 }
 
 .cell-state-overlay-icon svg {
-  width: 22px;
-  height: 22px;
+  width: calc(31px * var(--notebook-detail-scale, 1));
+  height: calc(31px * var(--notebook-detail-scale, 1));
+  stroke-width: 1.5;
 }
 
 .cell-state-overlay-copy {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 5px;
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   line-height: 1;
@@ -2576,6 +2599,91 @@ textarea:focus-visible {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+}
+
+.cell-state-clock-body {
+  flex-direction: column;
+  gap: calc(11px * var(--notebook-detail-scale, 1));
+  padding: 12px 14px;
+}
+
+.cell-state-clock-row {
+  display: flex;
+  align-items: center;
+  gap: calc(11px * var(--notebook-detail-scale, 1));
+}
+
+.cell-state-meta {
+  max-width: 100%;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--cell-state-color) 55%, white);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: var(--cell-label-font-size);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-state-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.cell-state-phase-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.cell-state-phase-step {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cell-state-color) 22%, transparent);
+}
+
+.cell-state-phase-step[data-status='done'] {
+  background: var(--cell-state-color);
+  opacity: 0.85;
+}
+
+.cell-state-phase-step[data-status='active'] {
+  background: var(--cell-state-color);
+  box-shadow: 0 0 7px var(--cell-state-glow);
+  animation: cell-state-phase-pulse 1400ms ease-in-out infinite;
+}
+
+@keyframes cell-state-phase-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.cell-state-phase-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: color-mix(in srgb, var(--cell-state-color) 70%, white);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: calc(10px * var(--notebook-detail-scale, 1));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.cell-state-phase-label > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cell-state-shimmer {
@@ -2635,7 +2743,7 @@ textarea:focus-visible {
 }
 
 .cell-state-overlay-failed {
-  background: color-mix(in srgb, var(--cell-state-color) 22%, rgba(2, 12, 8, 0.82));
+  background: color-mix(in srgb, var(--cell-state-color) 22%, rgba(2, 12, 8, 0.86));
 }
 
 .cell-state-scanlines {
@@ -2666,7 +2774,7 @@ textarea:focus-visible {
 .cell-state-failed-body {
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px 28px;
+  padding: 10px 12px;
   text-align: center;
   filter: none;
 }
@@ -2689,31 +2797,70 @@ textarea:focus-visible {
   font-size: var(--cell-label-font-size);
   line-height: 1.35;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-.cell-state-retry {
+.cell-state-failed-body .cell-state-meta {
+  color: color-mix(in srgb, var(--cell-state-color) 60%, white);
+}
+
+.cell-state-actions {
   position: relative;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.cell-state-action {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
-  padding: 3px 8px;
-  border: 0;
+  height: calc(28px * var(--notebook-detail-scale, 1));
+  padding: 0 10px;
+  border: 1px solid transparent;
   border-radius: 2px;
-  color: #fff;
-  background: color-mix(in srgb, var(--cell-state-color) 85%, black);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: var(--cell-label-font-size);
   font-weight: 700;
   letter-spacing: 0.12em;
+  line-height: 1;
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease;
 }
 
-.cell-state-retry:hover {
+.cell-state-repair {
+  border-color: color-mix(in srgb, var(--cell-state-color) 85%, black);
+  color: #fff;
+  background: color-mix(in srgb, var(--cell-state-color) 85%, black);
+}
+
+.cell-state-repair:hover,
+.cell-state-repair:focus-visible {
+  border-color: color-mix(in srgb, var(--cell-state-color) 95%, black);
   background: color-mix(in srgb, var(--cell-state-color) 95%, black);
+  outline: 0;
+}
+
+.cell-state-delete {
+  border-color: color-mix(in srgb, var(--cell-state-color) 60%, transparent);
+  color: color-mix(in srgb, var(--cell-state-color) 55%, white);
+  background: color-mix(in srgb, var(--cell-state-color) 10%, transparent);
+}
+
+.cell-state-delete:hover,
+.cell-state-delete:focus-visible {
+  border-color: var(--cell-state-color);
+  color: #fff;
+  background: var(--cell-state-color);
+  box-shadow: 0 0 10px var(--cell-state-glow);
+  outline: 0;
 }
 
 .cell-node-header,
@@ -12850,7 +12997,11 @@ textarea:focus-visible {
   }
 
   .cell-state-overlay-clock {
-    background: rgba(2, 12, 8, 0.82);
+    background: rgba(2, 12, 8, 0.94);
+  }
+
+  .cell-state-phase-step[data-status='active'] {
+    animation: none;
   }
 }
 
