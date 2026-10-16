@@ -1,5 +1,5 @@
 /**
- * Client half of `forget_asset`: the tool destroys an asset's stored bytes, so
+ * Client half of `delete_asset` with `forget`: it destroys an asset's stored bytes, so
  * the UI has to say plainly what still holds it and what was reclaimed.
  */
 export type ForgetAssetReference = {

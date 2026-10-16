@@ -75,7 +75,7 @@ describe('library endpoints over HTTP MCP', () => {
 
   it.each(['video', 'audio'] as const)('copies a trimmed %s using its current media streams', async (kind) => {
     const source = await upload(kind)
-    await call(sourceBook, 'add_asset_tag', { asset_id: source, facet: 'custom', label: 'Edited clip' })
+    await call(sourceBook, 'edit_asset_tag', { op: 'add', asset_id: source, facet: 'custom', label: 'Edited clip' })
     await call(sourceBook, kind === 'video' ? 'trim_video' : 'trim_audio', { asset_id: source, trim_start: 1, trim_end: 3 })
     await idle(sourceBook)
     const cellId = await cell(kind)
@@ -140,7 +140,7 @@ describe('library endpoints over HTTP MCP', () => {
 
   it('finds tagged media across books with the owning identities intact', async () => {
     const source = await upload('audio')
-    await call(sourceBook, 'add_asset_tag', { asset_id: source, facet: 'custom', label: 'Cross book' })
+    await call(sourceBook, 'edit_asset_tag', { op: 'add', asset_id: source, facet: 'custom', label: 'Cross book' })
     const result = await call<{ assets: Array<{ artifact_id: string; owning_book_id: string }> }>(targetBook, 'search_library_assets', {
       kinds: ['audio'], tags_all: [{ facet: 'custom', label: 'cross book' }],
     })

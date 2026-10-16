@@ -144,12 +144,14 @@ describe('asset tag lifecycle', () => {
 
   it('deduplicates a case and accent variant of a tag someone already added', async () => {
     const assetId = await makeAsset('video', 'original.mp4', 'a')
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Café Scene',
     })
-    const second = parse(await invoke('add_asset_tag', {
+    const second = parse(await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       // Same text, different case and a decomposed accent.
@@ -163,12 +165,14 @@ describe('asset tag lifecycle', () => {
   it('keeps a dismissal through forced re-analysis and keeps manual tags too', async () => {
     const assetId = await makeAsset('video', 'original.mp4', 'a', KITCHEN_ANALYSIS)
     expect((await tag(assetId)).outcome).toBe('tagged')
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Keeper',
     })
-    await invoke('remove_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'remove',
       asset_id: assetId,
       facet: 'places',
       label: 'kitchen',
@@ -179,7 +183,8 @@ describe('asset tag lifecycle', () => {
     expect(tagsOf(assetId)).toContain('custom/keeper')
 
     // Restoring lets the analysis surface it again.
-    await invoke('restore_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'restore',
       asset_id: assetId,
       facet: 'places',
       label: 'kitchen',
@@ -193,7 +198,8 @@ describe('asset tag lifecycle', () => {
     // order the engine serializes them in.
     const [, manual] = await Promise.all([
       tag(assetId),
-      invoke('add_asset_tag', {
+      invoke('edit_asset_tag', {
+        op: 'add',
         asset_id: assetId,
         facet: 'custom',
         label: 'Mid-flight',
@@ -206,7 +212,8 @@ describe('asset tag lifecycle', () => {
 
   it('drops automatic tags when the content they described is replaced', async () => {
     const assetId = await makeAsset('video', 'original.mp4', 'first', KITCHEN_ANALYSIS)
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Keeper',
@@ -244,7 +251,8 @@ describe('asset tag lifecycle', () => {
     expect(artifact.ok).toBe(true)
 
     // Manual tagging still works, which is the promise that matters here.
-    const manual = parse(await invoke('add_asset_tag', {
+    const manual = parse(await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'By hand',
@@ -257,12 +265,14 @@ describe('asset tag lifecycle', () => {
     await tag(assetId)
     const before = engine.jobs.queue.list({ type: 'semantic_index' }).length
 
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Keeper',
     })
-    await invoke('remove_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'remove',
       asset_id: assetId,
       facet: 'custom',
       label: 'Keeper',
@@ -280,7 +290,8 @@ describe('asset tag lifecycle', () => {
     if (!targetBook.ok) throw new Error(targetBook.error.message)
 
     const assetId = await makeAsset('image', 'original.png', 'a')
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'places',
       label: 'Kitchen',
@@ -294,8 +305,8 @@ describe('asset tag lifecycle', () => {
       .toEqual(['places/kitchen'])
 
     await invoke(
-      'add_asset_tag',
-      { asset_id: copied.targetArtifactId, facet: 'custom', label: 'Copy only' },
+      'edit_asset_tag',
+      { op: 'add', asset_id: copied.targetArtifactId, facet: 'custom', label: 'Copy only' },
       targetBook.value.engine,
       other.value.bookId,
     )
@@ -309,7 +320,8 @@ describe('asset tag lifecycle', () => {
   it('lets a tagged asset be deleted and leaves no tags behind', async () => {
     const assetId = await makeAsset('video', 'original.mp4', 'a', KITCHEN_ANALYSIS)
     await tag(assetId)
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Keeper',
@@ -370,13 +382,15 @@ describe('asset tag lifecycle', () => {
 
   it('reads tags as an earlier revision recorded them', async () => {
     const assetId = await makeAsset('video', 'original.mp4', 'a')
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'First',
     })
     const revision = engine.head
-    await invoke('add_asset_tag', {
+    await invoke('edit_asset_tag', {
+      op: 'add',
       asset_id: assetId,
       facet: 'custom',
       label: 'Second',

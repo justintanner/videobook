@@ -74,111 +74,57 @@ function matchingIdentities(engine: Engine, assetId: string, input: { facet?: Ta
   return { tag, identities };
 }
 
+type TagEditOp = "add" | "remove" | "restore";
+
+type TagEdit = { asset_id: string; op: TagEditOp; facet?: TagFacet; label: string; entity_id?: string };
+
+async function applyToIdentities(
+  engine: Engine,
+  assetId: string,
+  identities: ReadonlyArray<{ facet: TagFacet; label: string }>,
+  op: "remove" | "restore",
+): Promise<void> {
+  for (const identity of identities) {
+    const result = op === "remove"
+      ? await engine.tags.remove(assetId, identity)
+      : await engine.tags.restore(assetId, identity);
+    if (!result.ok) throw new Error(result.error.message);
+  }
+}
+
+async function editAssetTag(engine: Engine, edit: TagEdit): Promise<ToolResult> {
+  if (edit.entity_id && edit.op !== "add") throw new Error("entity_id applies only to op add");
+  const artifact = resolveArtifact(engine, edit.asset_id);
+  const assetId = artifact.artifactId;
+  const { tag, identities } = matchingIdentities(engine, assetId, edit);
+  if (edit.op === "add") {
+    const added = await engine.tags.add(assetId, { ...tag, ...(edit.entity_id ? { entityId: edit.entity_id } : {}) });
+    if (!added.ok) throw new Error(added.error.message);
+  }
+  await applyToIdentities(engine, assetId, identities, edit.op === "remove" ? "remove" : "restore");
+  return json({ asset_id: assetId, tags: tagState(engine, assetId) });
+}
+
 export function assetTagDefs(engine: Engine): ToolDef[] {
   return [
     {
-      name: "add_asset_tag",
+      name: "edit_asset_tag",
       description:
-        "Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.",
+        "Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.",
       annotations: { idempotentHint: true },
       schema: {
         book_id: z.string().describe("Book that owns the asset"),
-        asset_id: z.string().describe("Artifact id to tag"),
+        asset_id: z.string().describe("Artifact id to edit"),
+        op: z.enum(["add", "remove", "restore"]),
         facet: facetSchema.optional(),
         label: labelSchema,
         entity_id: z.string().optional().describe(
-          "An already-confirmed entity to reference; never invent one",
+          "With op add: an already-confirmed entity to reference; never invent one",
         ),
       },
       handler: async (args) => {
-        const { asset_id, facet, label, entity_id } = args as {
-          asset_id: string;
-          facet?: TagFacet;
-          label: string;
-          entity_id?: string;
-        };
         try {
-          const artifact = resolveArtifact(engine, asset_id);
-          const { tag, identities } = matchingIdentities(engine, asset_id, { facet, label });
-          const result = await engine.tags.add(artifact.artifactId, {
-            ...tag,
-            ...(entity_id ? { entityId: entity_id } : {}),
-          });
-          if (!result.ok) return failure(new Error(result.error.message));
-          for (const identity of identities) {
-            const restored = await engine.tags.restore(asset_id, identity);
-            if (!restored.ok) return failure(new Error(restored.error.message));
-          }
-          return json({
-            asset_id: artifact.artifactId,
-            tags: tagState(engine, asset_id),
-          });
-        } catch (cause) {
-          return failure(cause);
-        }
-      },
-    },
-    {
-      name: "remove_asset_tag",
-      description:
-        "Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.",
-      annotations: { idempotentHint: true },
-      schema: {
-        book_id: z.string().describe("Book that owns the asset"),
-        asset_id: z.string().describe("Artifact id to edit"),
-        facet: facetSchema.optional(),
-        label: labelSchema,
-      },
-      handler: async (args) => {
-        const { asset_id, facet, label } = args as {
-          asset_id: string;
-          facet?: TagFacet;
-          label: string;
-        };
-        try {
-          const artifact = resolveArtifact(engine, asset_id);
-          const { identities } = matchingIdentities(engine, asset_id, { facet, label });
-          for (const identity of identities) {
-            const result = await engine.tags.remove(asset_id, identity);
-            if (!result.ok) return failure(new Error(result.error.message));
-          }
-          return json({
-            asset_id: artifact.artifactId,
-            tags: tagState(engine, asset_id),
-          });
-        } catch (cause) {
-          return failure(cause);
-        }
-      },
-    },
-    {
-      name: "restore_asset_tag",
-      description:
-        "Restore a dismissed automatic tag so future analysis may surface it again.",
-      annotations: { idempotentHint: true },
-      schema: {
-        book_id: z.string().describe("Book that owns the asset"),
-        asset_id: z.string().describe("Artifact id to edit"),
-        facet: facetSchema.optional(),
-        label: labelSchema,
-      },
-      handler: async (args) => {
-        const { asset_id, facet, label } = args as {
-          asset_id: string;
-          facet?: TagFacet;
-          label: string;
-        };
-        try {
-          const artifact = resolveArtifact(engine, asset_id);
-          const { identities } = matchingIdentities(engine, asset_id, { facet, label });
-          for (const identity of identities) {
-            const result = await engine.tags.restore(asset_id, identity);
-            if (!result.ok) return failure(new Error(result.error.message));
-          }
-          return json({
-            asset_id: artifact.artifactId,
-            tags: tagState(engine, asset_id),
-          });
+          return await editAssetTag(engine, args as TagEdit);
         } catch (cause) {
           return failure(cause);
         }

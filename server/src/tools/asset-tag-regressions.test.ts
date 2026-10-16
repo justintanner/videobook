@@ -48,7 +48,7 @@ describe("canonical tag boundaries", () => {
   it("infers categories and converges manual aliases with automatic tags and filters", async () => {
     await automatic("close-up");
     for (const label of ["closeup", "close up", "tight shot"]) {
-      const { tags } = await invoke("add_asset_tag", { label });
+      const { tags } = await invoke("edit_asset_tag", { op: "add", label });
       expect(tags.effective.map((tag) => `${tag.facet}/${tag.key}`)).toEqual(["editing/close-up"]);
       expect(tags.effective[0]!.origin).toBe("manual");
       expect(matchesTagFilter(tags, { all: [{ label }] })).toBe(true);
@@ -56,13 +56,13 @@ describe("canonical tag boundaries", () => {
       const suggestions = await invoke("suggest_asset_tags", { prefix: label });
       expect(suggestions.suggestions).toEqual([expect.objectContaining({ key: "close-up", assets: 1 })]);
     }
-    expect((await invoke("add_asset_tag", { label: "kitchen" })).tags.effective)
+    expect((await invoke("edit_asset_tag", { op: "add", label: "kitchen" })).tags.effective)
       .toContainEqual(expect.objectContaining({ facet: "places", key: "kitchen" }));
-    expect((await invoke("add_asset_tag", { label: "Client approved" })).tags.effective)
+    expect((await invoke("edit_asset_tag", { op: "add", label: "Client approved" })).tags.effective)
       .toContainEqual(expect.objectContaining({ facet: "custom", key: "client approved" }));
-    expect((await invoke("remove_asset_tag", { label: "close up" })).tags.effective.some((tag) => tag.facet === "editing"))
+    expect((await invoke("edit_asset_tag", { op: "remove", label: "close up" })).tags.effective.some((tag) => tag.facet === "editing"))
       .toBe(false);
-    expect((await invoke("restore_asset_tag", { label: "closeup" })).tags.effective)
+    expect((await invoke("edit_asset_tag", { op: "restore", label: "closeup" })).tags.effective)
       .toContainEqual(expect.objectContaining({ key: "close-up", origin: "automatic" }));
   });
 
@@ -74,21 +74,21 @@ describe("canonical tag boundaries", () => {
     expect(assetTagSummary(before.value).effective).toHaveLength(1);
     expect((await invoke("suggest_asset_tags", { prefix: "closeu" })).suggestions)
       .toEqual([expect.objectContaining({ key: "close-up", assets: 1 })]);
-    const removed = await invoke("remove_asset_tag", { label: "close-up" });
+    const removed = await invoke("edit_asset_tag", { op: "remove", label: "close-up" });
     expect(removed.tags.effective).toEqual([]);
     expect(removed.tags.dismissed).toHaveLength(1);
     await automatic("closeup");
     const state = engine.tags.read(assetId);
     if (!state.ok) throw new Error(state.error.message);
     expect(assetTagSummary(state.value).effective).toEqual([]);
-    expect((await invoke("restore_asset_tag", { label: "close up" })).tags.effective)
+    expect((await invoke("edit_asset_tag", { op: "restore", label: "close up" })).tags.effective)
       .toEqual([expect.objectContaining({ key: "close-up", origin: "automatic" })]);
     expect((await engine.tags.remove(assetId, { facet: "editing", label: "closeup" })).ok).toBe(true);
     await automatic("close-up");
     const legacy = engine.tags.read(assetId);
     if (!legacy.ok) throw new Error(legacy.error.message);
     expect(assetTagSummary(legacy.value).effective).toEqual([]);
-    expect((await invoke("add_asset_tag", { label: "closeup" })).tags.effective)
+    expect((await invoke("edit_asset_tag", { op: "add", label: "closeup" })).tags.effective)
       .toEqual([expect.objectContaining({ key: "close-up", origin: "manual" })]);
   });
 });

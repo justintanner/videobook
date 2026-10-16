@@ -91,6 +91,30 @@ describe("delete_asset tool", () => {
     expect(timeline.slots).toEqual([]);
   });
 
+  it("rejects clear_references without forget and keeps the asset", async () => {
+    const data = Buffer.from("fake-png-data").toString("base64");
+    const uploadResult = await client.callTool({
+      name: "upload_file",
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
+    });
+    const uploaded = JSON.parse(
+      (uploadResult.content as Array<{ type: string; text: string }>)[0].text
+    ) as { assetId: string };
+
+    const result = await client.callTool({
+      name: "delete_asset",
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj", clear_references: true },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as Array<{ type: string; text: string }>)[0].text).toBe("clear_references applies only with forget");
+
+    const manifestResult = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
+    });
+    expect(manifestResult.isError).toBeFalsy();
+  });
+
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "delete_asset",

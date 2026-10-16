@@ -87,9 +87,7 @@ resets them. Older workers cannot overwrite a replacement pass.
 
 | Tool | Purpose |
 | --- | --- |
-| `add_asset_tag` | Add a manual tag to one asset |
-| `remove_asset_tag` | Remove and dismiss a tag |
-| `restore_asset_tag` | Restore a dismissed automatic tag |
+| `edit_asset_tag` | `op: add` a manual tag, `remove` (and dismiss) a tag, or `restore` a dismissed automatic tag on one asset |
 | `suggest_asset_tags` | Tags in use with per-asset counts, for autocomplete and discovery |
 | `retag_asset` | Re-run tagging for one asset (`force`, `cached_only`) |
 | `backfill_asset_tags` | `start`, `resume`, `pause`, `cancel`, `status` for a whole book |

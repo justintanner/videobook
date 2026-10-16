@@ -4658,9 +4658,10 @@ describe('chat composer browser flow', () => {
       .toBeGreaterThan(0)
     expect(await field.evaluate((node) => node === document.activeElement)).toBe(true)
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'add_asset_tag'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
-        name: 'add_asset_tag',
+      call.name === 'edit_asset_tag' && call.arguments.op === 'add'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
+        name: 'edit_asset_tag',
         arguments: {
+          op: 'add',
           asset_id: videoArtifactId,
           book_id: bookId,
           facet: 'custom',
@@ -4694,9 +4695,9 @@ describe('chat composer browser flow', () => {
       await reopened.getByRole('button', { name: 'Remove tag Hero shot (Added by you)', exact: true }).count(), { timeout: MCP_ROUNDTRIP_MS })
       .toBe(0)
     await expect.poll(() => observedCalls.find((call) =>
-      call.name === 'remove_asset_tag'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
-        name: 'remove_asset_tag',
-        arguments: { asset_id: videoArtifactId, book_id: bookId },
+      call.name === 'edit_asset_tag' && call.arguments.op === 'remove'), { timeout: MCP_ROUNDTRIP_MS }).toMatchObject({
+        name: 'edit_asset_tag',
+        arguments: { op: 'remove', asset_id: videoArtifactId, book_id: bookId },
       })
   }, 120_000)
 

@@ -78,7 +78,7 @@ describe('asset lifecycle endpoints over HTTP MCP', () => {
 
   it('duplicates bytes and manual tags into a notebook cell, then edits the copy independently', async () => {
     const source = await upload()
-    await call('add_asset_tag', { asset_id: source, facet: 'custom', label: '  Cat Study  ' })
+    await call('edit_asset_tag', { op: 'add', asset_id: source, facet: 'custom', label: '  Cat Study  ' })
     const original = await file(source)
     const graph = await place(source)
     const copy = await call<Duplicate>('duplicate_asset', { asset_id: source, notebook_id: graph.id })
@@ -87,7 +87,7 @@ describe('asset lifecycle endpoints over HTTP MCP', () => {
     expect(await file(copy.new_asset_id)).toEqual(original)
     expect((await notebook(graph.id)).cells.find((cell) => cell.id === copy.cell_id)).toMatchObject({ output_artifact_id: copy.new_asset_id, slot: { row: 1, column: 0 } })
     expect((await assets({ tags_all: [{ facet: 'custom', label: 'cat study' }] })).map((asset) => asset.artifact_id).sort()).toEqual([source, copy.new_asset_id].sort())
-    await call('remove_asset_tag', { asset_id: copy.new_asset_id, facet: 'custom', label: 'CAT STUDY' })
+    await call('edit_asset_tag', { op: 'remove', asset_id: copy.new_asset_id, facet: 'custom', label: 'CAT STUDY' })
     expect((await assets({ tags_all: [{ facet: 'custom', label: 'cat study' }] })).map((asset) => asset.artifact_id)).toEqual([source])
     await call('invert_image', { asset_id: copy.new_asset_id })
     await idle()
@@ -154,11 +154,11 @@ describe('asset lifecycle endpoints over HTTP MCP', () => {
     await idle()
     const bytes = await file(copy.new_asset_id)
     await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: source }] })
-    const refused = await call<{ status: string }>('forget_asset', { asset_id: source })
+    const refused = await call<{ status: string }>('delete_asset', { asset_id: source, forget: true })
     expect(refused.status).toBe('in_use')
     expect((await notebook(graph.id)).cells).toEqual(graph.cells)
     await addOverlay()
-    const forgotten = await call<{ status: string; shared_objects: number; cleared_cells: number }>('forget_asset', { asset_id: source, clear_references: true })
+    const forgotten = await call<{ status: string; shared_objects: number; cleared_cells: number }>('delete_asset', { asset_id: source, forget: true, clear_references: true })
     expect(forgotten.status).toBe('forgotten')
     expect(forgotten.shared_objects).toBeGreaterThan(0)
     expect(forgotten.cleared_cells).toBe(1)
@@ -168,14 +168,14 @@ describe('asset lifecycle endpoints over HTTP MCP', () => {
 
   it('keeps tag suggestions scoped to their book and counts normalized manual identities once', async () => {
     const source = await upload()
-    for (const label of ['  Cat Study ', 'CAT STUDY', 'cat study']) await call('add_asset_tag', { asset_id: source, facet: 'custom', label })
+    for (const label of ['  Cat Study ', 'CAT STUDY', 'cat study']) await call('edit_asset_tag', { op: 'add', asset_id: source, facet: 'custom', label })
     const result = await call<{ suggestions: Array<{ label: string; assets: number }>; tags: Asset['tags'] }>('suggest_asset_tags', { prefix: 'CAT', asset_id: source })
     expect(result.suggestions).toHaveLength(1)
     expect(result.suggestions[0]!.assets).toBe(1)
     expect(result.tags.effective).toHaveLength(1)
     const otherBook = (await callTool<{ bookId: string }>(client, 'create_book', { name: 'Other' })).bookId
     expect(await call('suggest_asset_tags', { book_id: otherBook })).toMatchObject({ suggestions: [] })
-    const rejected = await client.callTool({ name: 'add_asset_tag', arguments: { book_id: otherBook, asset_id: source, label: 'Foreign' } })
+    const rejected = await client.callTool({ name: 'edit_asset_tag', arguments: { op: 'add', book_id: otherBook, asset_id: source, label: 'Foreign' } })
     expect(rejected.isError).toBe(true)
     expect((await assets()).find((asset) => asset.artifact_id === source)?.tags.effective).toHaveLength(1)
   })

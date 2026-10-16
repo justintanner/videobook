@@ -71,7 +71,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "release_search_reference", "search_library_assets",
   ],
   Tags: [
-    "add_asset_tag", "remove_asset_tag", "restore_asset_tag", "suggest_asset_tags",
+    "edit_asset_tag", "suggest_asset_tags",
     "backfill_asset_tags", "retag_asset", "configure_asset_tagging",
   ],
   Entities: [
@@ -86,7 +86,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "get_history_action",
   ],
   Recovery: [
-    "forget_asset", "clean_failed_assets", "recover_asset", "retry_generation",
+    "clean_failed_assets", "recover_asset", "retry_generation",
     "doctor", "archive_clip", "search_archive", "restore_archive_clips",
     "reconcile_project_work", "wait_for_asset_ready", "list_ingest_status",
     "retry_ingest", "legacy_migration", "list_jobs", "cancel_job", "retry_job",

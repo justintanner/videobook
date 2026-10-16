@@ -36,7 +36,6 @@ import { reorderCharacterImagesDef } from "./reorder-character-images.js";
 import { uploadFileDef } from "./upload-file.js";
 import { assetManifestDef } from "./asset-manifest.js";
 import { deleteAssetDef } from "./delete-asset.js";
-import { forgetAssetDef } from "./forget-asset.js";
 import { clearFailedTasksDef } from "./clear-failed-tasks.js";
 import { recoverAssetDef } from "./recover-asset.js";
 import { retryGenerationDef } from "./retry-generation.js";
@@ -318,7 +317,6 @@ export function getAllToolDefs(
     uploadFileDef(engine),
     assetManifestDef(engine),
     deleteAssetDef(engine),
-    forgetAssetDef(engine),
     clearFailedTasksDef(engine),
     recoverAssetDef(engine),
     retryGenerationDef(engine),

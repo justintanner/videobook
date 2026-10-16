@@ -89,7 +89,8 @@ describe("asset tag tools", () => {
     await makeBook("tags-basic");
     const assetId = await upload("tags-basic", "photo.png");
 
-    const added = parse(await call("add_asset_tag", {
+    const added = parse(await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-basic",
       asset_id: assetId,
       facet: "places",
@@ -104,7 +105,8 @@ describe("asset tag tools", () => {
     const row = listed.assets.find((asset) => asset.artifact_id === assetId);
     expect(row?.tags?.effective.map((tag) => tag.label)).toEqual(["Kitchen"]);
 
-    const removed = parse(await call("remove_asset_tag", {
+    const removed = parse(await call("edit_asset_tag", {
+      op: "remove",
       book_id: "tags-basic",
       asset_id: assetId,
       facet: "places",
@@ -113,7 +115,8 @@ describe("asset tag tools", () => {
     expect((removed.tags as TagSummary).effective).toEqual([]);
 
     // Restoring a manual tag that was never automatic is a no-op, not a crash.
-    const restored = await call("restore_asset_tag", {
+    const restored = await call("edit_asset_tag", {
+      op: "restore",
       book_id: "tags-basic",
       asset_id: assetId,
       facet: "places",
@@ -126,13 +129,15 @@ describe("asset tag tools", () => {
     await makeBook("tags-normalize");
     const assetId = await upload("tags-normalize", "photo.png");
 
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-normalize",
       asset_id: assetId,
       facet: "editing",
       label: "  Close   Up  ",
     });
-    const second = parse(await call("add_asset_tag", {
+    const second = parse(await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-normalize",
       asset_id: assetId,
       facet: "editing",
@@ -146,13 +151,15 @@ describe("asset tag tools", () => {
     await makeBook("tags-facets");
     const assetId = await upload("tags-facets", "photo.png");
 
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-facets",
       asset_id: assetId,
       facet: "people",
       label: "Handheld",
     });
-    const both = parse(await call("add_asset_tag", {
+    const both = parse(await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-facets",
       asset_id: assetId,
       facet: "editing",
@@ -165,7 +172,8 @@ describe("asset tag tools", () => {
     ]);
 
     // Removing one facet's tag leaves the other in place.
-    const afterRemove = parse(await call("remove_asset_tag", {
+    const afterRemove = parse(await call("edit_asset_tag", {
+      op: "remove",
       book_id: "tags-facets",
       asset_id: assetId,
       facet: "people",
@@ -180,7 +188,8 @@ describe("asset tag tools", () => {
     await makeBook("tags-invalid");
     const assetId = await upload("tags-invalid", "photo.png");
 
-    const missing = await call("add_asset_tag", {
+    const missing = await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-invalid",
       asset_id: "01a00000-0000-7000-8000-000000000000",
       facet: "custom",
@@ -198,7 +207,8 @@ describe("asset tag tools", () => {
     // A synthetic notebook row is not an artifact: it carries no tag state and
     // cannot be tagged.
     expect(notebookRow?.tags).toBeNull();
-    const notebookTag = await call("add_asset_tag", {
+    const notebookTag = await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-invalid",
       asset_id: notebookRow!.artifact_id,
       facet: "custom",
@@ -206,7 +216,8 @@ describe("asset tag tools", () => {
     });
     expect(notebookTag.isError).toBe(true);
 
-    const badFacet = await call("add_asset_tag", {
+    const badFacet = await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-invalid",
       asset_id: assetId,
       facet: "vibes",
@@ -214,13 +225,25 @@ describe("asset tag tools", () => {
     });
     expect(badFacet.isError).toBe(true);
 
-    const blank = await call("add_asset_tag", {
+    const blank = await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-invalid",
       asset_id: assetId,
       facet: "custom",
       label: "   ",
     });
     expect(blank.isError).toBe(true);
+
+    const entityOnRemove = await call("edit_asset_tag", {
+      op: "remove",
+      book_id: "tags-invalid",
+      asset_id: assetId,
+      facet: "custom",
+      label: "Nope",
+      entity_id: "char-1",
+    });
+    expect(entityOnRemove.isError).toBe(true);
+    expect((entityOnRemove.content as Array<{ text: string }>)[0]!.text).toBe("entity_id applies only to op add");
   });
 
   it("filters list_assets by exact tags and pages the filtered total", async () => {
@@ -235,14 +258,16 @@ describe("asset tag tools", () => {
       [street, "Street"],
       [both, "Kitchen"],
     ] as const) {
-      await call("add_asset_tag", {
+      await call("edit_asset_tag", {
+        op: "add",
         book_id: "tags-filter",
         asset_id: assetId,
         facet: "places",
         label,
       });
     }
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-filter",
       asset_id: both,
       facet: "editing",
@@ -324,14 +349,16 @@ describe("asset tag tools", () => {
     const first = await upload("tags-suggest", "one.png");
     const second = await upload("tags-suggest", "two.png");
     for (const assetId of [first, second]) {
-      await call("add_asset_tag", {
+      await call("edit_asset_tag", {
+        op: "add",
         book_id: "tags-suggest",
         asset_id: assetId,
         facet: "editing",
         label: "Interview",
       });
     }
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-suggest",
       asset_id: first,
       facet: "editing",
@@ -365,7 +392,8 @@ describe("asset tag tools", () => {
   it("copies tags onto a duplicate without linking the two", async () => {
     await makeBook("tags-duplicate");
     const assetId = await upload("tags-duplicate", "photo.png");
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-duplicate",
       asset_id: assetId,
       facet: "people",
@@ -389,7 +417,8 @@ describe("asset tag tools", () => {
     ]);
 
     // Editing the copy leaves the original alone.
-    await call("add_asset_tag", {
+    await call("edit_asset_tag", {
+      op: "add",
       book_id: "tags-duplicate",
       asset_id: copyId,
       facet: "custom",
@@ -489,7 +518,8 @@ describe("asset tags across books", () => {
     const assetA = await makeAsset(bookA, "a");
     const assetB = await makeAsset(bookB, "b");
 
-    const tagged = await invoke(bookA, "add_asset_tag", {
+    const tagged = await invoke(bookA, "edit_asset_tag", {
+      op: "add",
       asset_id: assetA,
       facet: "custom",
       label: "Only A",
@@ -499,7 +529,8 @@ describe("asset tags across books", () => {
     expect(tagsOf(bookB, assetB)).toEqual([]);
 
     // Book B holds no such artifact, so the write cannot land there.
-    const leak = await invoke(bookB, "add_asset_tag", {
+    const leak = await invoke(bookB, "edit_asset_tag", {
+      op: "add",
       asset_id: assetA,
       facet: "custom",
       label: "Leak",
@@ -512,12 +543,14 @@ describe("asset tags across books", () => {
     const source = await makeBook("tags-copy-source");
     const target = await makeBook("tags-copy-target");
     const assetId = await makeAsset(source, "shared");
-    await invoke(source, "add_asset_tag", {
+    await invoke(source, "edit_asset_tag", {
+      op: "add",
       asset_id: assetId,
       facet: "places",
       label: "Kitchen",
     });
-    await invoke(source, "add_asset_tag", {
+    await invoke(source, "edit_asset_tag", {
+      op: "add",
       asset_id: assetId,
       facet: "editing",
       label: "Wide shot",
@@ -533,7 +566,8 @@ describe("asset tags across books", () => {
       "Wide shot",
     ]);
 
-    await invoke(target, "remove_asset_tag", {
+    await invoke(target, "edit_asset_tag", {
+      op: "remove",
       asset_id: copied.targetArtifactId,
       facet: "places",
       label: "Kitchen",

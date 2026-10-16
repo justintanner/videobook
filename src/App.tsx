@@ -4102,17 +4102,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!confirmed && !window.confirm(forgetConfirmation(name))) return { ok: false, message: 'Forget cancelled' }
     setBusy(true)
     try {
-      let outcome = asForgetAssetOutcome(await call('forget_asset', {
+      let outcome = asForgetAssetOutcome(await call('delete_asset', {
         book_id: bookId,
         asset_id: asset.artifactId,
+        forget: true,
       }))
       if (outcome.status === 'in_use') {
         if (!window.confirm(clearReferencesConfirmation(name, outcome.references))) {
           return { ok: false, message: 'Forget cancelled; media is still in use' }
         }
-        outcome = asForgetAssetOutcome(await call('forget_asset', {
+        outcome = asForgetAssetOutcome(await call('delete_asset', {
           book_id: bookId,
           asset_id: asset.artifactId,
+          forget: true,
           clear_references: true,
         }))
       }
@@ -9460,7 +9462,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { message: result.message }
     }
     const tool = action.handler.tool
-    if (tool === 'forget_asset') {
+    if (tool === 'delete_asset' && values.forget === true) {
       const target = assets.find((asset) => asset.artifactId === values.asset_id)
       if (!target) throw new Error('Choose media from the current project.')
       const result = await forgetAsset({ ...target, errorMessage: null, lastUsedAt: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)

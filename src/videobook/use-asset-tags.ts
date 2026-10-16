@@ -67,12 +67,6 @@ function readSuggestions(response: unknown): TagSuggestion[] {
   })
 }
 
-const TOOL_BY_ACTION: Record<TagEditAction, string> = {
-  add: 'add_asset_tag',
-  remove: 'remove_asset_tag',
-  restore: 'restore_asset_tag',
-}
-
 type PendingEdit = { id: number; edit: TagEdit; action: TagEditAction }
 
 type EditorState = {
@@ -125,8 +119,8 @@ export function useAssetTags({ call, target, tags }: UseAssetTagsInput): AssetTa
     setLocal((state) => ({ ...state, pending: [...state.pending, { id, edit, action }], error: null }))
     const operation = queueRef.current.then(async () => {
       try {
-        const response = await call(TOOL_BY_ACTION[action], {
-          book_id: target.bookId, asset_id: target.assetId, facet: edit.facet, label: edit.label,
+        const response = await call('edit_asset_tag', {
+          op: action, book_id: target.bookId, asset_id: target.assetId, facet: edit.facet, label: edit.label,
         })
         const canonical = readTags(response)
         if (!canonical) throw new Error('The server returned no tag state')

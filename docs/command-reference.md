@@ -8,9 +8,8 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (237)
+## MCP endpoints (234)
 
-- `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `alive_captions` — Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.
@@ -61,7 +60,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
 - `create_watermark_card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.
 - `crop_asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.
-- `delete_asset` — Delete an artifact and its owned media records after removing timeline references
+- `delete_asset` — Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept)
 - `delete_book` — Permanently delete a book after typed name confirmation
 - `delete_entity` — Delete a reusable prompt, scene or character
 - `delete_google_flow_character` — Delete a Google Flow character by its ref.
@@ -75,6 +74,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `draft_post_copy` — Draft a Post's caption and hashtags from its clip's analysis, transcript and prompts (analyzing the clip first when needed) without saving. language defaults to Thai for TikTok and English otherwise; instruction, caption and tags rewrite an existing draft.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
+- `edit_asset_tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.
 - `edit_cold_open` — Create the cold-open copy from a reviewed prepare_cold_open suggestion: the chosen range, a hard cut, then the full original clip. The source is kept; poll list_jobs for the new asset.
 - `edit_image_subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
@@ -90,7 +90,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `extract_notebook_audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
 - `extract_video_clip` — Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.
-- `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
 - `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
@@ -175,7 +174,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
-- `remove_asset_tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
@@ -192,7 +190,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace a video's audio track in place with an audio asset, or with one file of another asset given as <artifactId>/<filename>. Existing renders become stale.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current Videobook as new assets.
-- `restore_asset_tag` — Restore a dismissed automatic tag so future analysis may surface it again.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
 - `retag_asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.
@@ -248,11 +245,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (312; 146 dedicated command routes)
+## Slash actions (309; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
-- `/add-asset-tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.; MCP: `add_asset_tag`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/alive` — Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals; UI: `open_alive_captions`
@@ -334,6 +330,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/download` — Download video from URL; MCP: `download_video`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
+- `/edit-asset-tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.; MCP: `edit_asset_tag`
 - `/edit-cold-open` — Review an AI-selected highlight, then create a copy with the highlight followed by the full original clip; UI: `open_cold_open`
 - `/edit-image-subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image; MCP: `edit_image_subjects`
 - `/enqueue-notebook-run` — Revalidate and enqueue a persisted aggregate workbook plan; MCP: `enqueue_notebook_run`
@@ -358,7 +355,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/final` — Finalize and export the project timeline; MCP: `render_timeline`
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
 - `/folder` — Show asset folder; MCP: `export_asset_file`
-- `/forget-asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept; MCP: `forget_asset`
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
@@ -464,7 +460,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
 - `/relayout-notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.; MCP: `relayout_notebook`
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
-- `/remove-asset-tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.; MCP: `remove_asset_tag`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
 - `/remove-slot` (aliases: `/unassign`) — Remove a timeline slot and shift later slots left; MCP: `remove_timeline_slot`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
@@ -479,7 +474,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
 - `/replace-google-flow-character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.; MCP: `replace_google_flow_character`
 - `/replace-sequence-clip-with-search-moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment; MCP: `replace_sequence_clip_with_search_moment`
-- `/restore-asset-tag` — Restore a dismissed automatic tag so future analysis may surface it again.; MCP: `restore_asset_tag`
 - `/restore-asset-version` — Restore an asset from an immutable revision as a new revision; MCP: `restore_asset_version`
 - `/restore-edit-action` — Create a forward revision restoring a prior edit action or revision; MCP: `restore_edit_action`
 - `/retag-asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.; MCP: `retag_asset`

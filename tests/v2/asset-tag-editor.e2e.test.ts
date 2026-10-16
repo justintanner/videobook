@@ -96,7 +96,7 @@ describe('asset tag editor with a real engine', () => {
           const data = JSON.parse(body) as { tool: string; args: Record<string, unknown> }
           const def = defs.find((entry) => entry.name === data.tool)
           if (!def) throw new Error('Unknown tool')
-          const gate = data.tool === 'add_asset_tag' ? responseGate : null
+          const gate = data.tool === 'edit_asset_tag' && data.args.op === 'add' ? responseGate : null
           if (gate) responseGate = null
           const result = await def.handler(z.object(def.schema).parse(data.args))
           if (gate) { gate.started.resolve(); await gate.release.promise }

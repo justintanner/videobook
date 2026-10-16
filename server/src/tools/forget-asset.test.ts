@@ -37,7 +37,7 @@ function bareHash(objectHash: string): string {
     : objectHash;
 }
 
-describe("forget_asset tool", () => {
+describe("delete_asset with forget", () => {
   let client: Client;
   let tempDir: string;
 
@@ -86,10 +86,11 @@ describe("forget_asset tool", () => {
     clearReferences = false,
   ): Promise<Record<string, unknown>> {
     const result = await client.callTool({
-      name: "forget_asset",
+      name: "delete_asset",
       arguments: {
         book_id: "test-proj",
         asset_id: assetId,
+        forget: true,
         ...(clearReferences ? { clear_references: true } : {}),
       },
     });
