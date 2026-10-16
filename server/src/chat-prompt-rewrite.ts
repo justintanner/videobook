@@ -17,76 +17,14 @@
  * an improvement, never a precondition.
  */
 import type { Engine } from "videobook-engine";
-import { getCanonicalName } from "./generation-registry.js";
+import { modelEntry } from "./media/catalog.js";
+import type { PromptGuide } from "./media/types.js";
 import { unresolvedProviderMentions } from "./provider-prompt-transform.js";
 import { rewritePromptDef } from "./tools/rewrite-prompt.js";
 import type { ToolResult } from "./tools/tool-def.js";
 
 /** A `rewrite_prompt` model key, i.e. one of the prompting guides on disk. */
-export type RewriteGuideModel =
-  | "nano_banana"
-  | "gpt_image"
-  | "kling30"
-  | "grok_imagine"
-  | "grok_image"
-  | "seedance2"
-  | "seedance25";
-
-// Canonical generation action -> the guide that describes how to prompt it.
-// Keyed on canonical names only; getCanonicalName folds the legacy aliases in
-// first. A tool absent here has no guide, so its prompt goes through
-// untouched rather than being rewritten against someone else's grammar.
-const GUIDE_BY_CANONICAL_TOOL: Record<string, RewriteGuideModel> = {
-  generate_kie_seedance_2_5_video: "seedance25",
-
-  generate_kie_seedance_2_0_video: "seedance2",
-  generate_kie_seedance_2_0_fast_video: "seedance2",
-  generate_kie_seedance_2_0_mini_video: "seedance2",
-  generate_fal_seedance_2_0_text_to_video: "seedance2",
-  generate_fal_seedance_2_0_image_to_video: "seedance2",
-  generate_fal_seedance_2_0_reference_to_video: "seedance2",
-  generate_fal_seedance_2_0_fast_text_to_video: "seedance2",
-  generate_fal_seedance_2_0_fast_image_to_video: "seedance2",
-  generate_fal_seedance_2_0_fast_reference_to_video: "seedance2",
-
-  generate_kie_kling_3_0_video: "kling30",
-  generate_kie_kling_3_0_turbo_video: "kling30",
-  generate_kie_kling_3_0_motion_control: "kling30",
-  generate_kie_kling_3_0_omni_text_to_video: "kling30",
-  generate_kie_kling_3_0_omni_image_to_video: "kling30",
-  generate_kie_kling_3_0_omni_reference_to_video: "kling30",
-  generate_kie_kling_3_0_omni_transformation: "kling30",
-  generate_fal_kling_video_v3_pro_text_to_video: "kling30",
-  generate_fal_kling_video_v3_pro_image_to_video: "kling30",
-  generate_fal_kling_video_v3_standard_text_to_video: "kling30",
-  generate_fal_kling_video_v3_standard_image_to_video: "kling30",
-
-  generate_kie_nano_banana_pro_text_to_image: "nano_banana",
-  generate_google_flow_nano_banana_pro_image: "nano_banana",
-  generate_fal_nano_banana_pro_text_to_image: "nano_banana",
-  generate_fal_nano_banana_pro_edit_image: "nano_banana",
-  generate_fal_nano_banana_text_to_image: "nano_banana",
-  generate_fal_nano_banana_edit_image: "nano_banana",
-  generate_fal_nano_banana_2_text_to_image: "nano_banana",
-  generate_fal_nano_banana_2_edit_image: "nano_banana",
-  generate_fal_nano_banana_2_lite_text_to_image: "nano_banana",
-  generate_fal_nano_banana_2_lite_edit_image: "nano_banana",
-
-  generate_kie_gpt_image_2_5_flare_image: "gpt_image",
-  generate_kie_gpt_image_2_5_sunburst_image: "gpt_image",
-
-  generate_kie_grok_imagine_text_to_video: "grok_imagine",
-  generate_kie_grok_imagine_image_to_video: "grok_imagine",
-  generate_xai_grok_imagine_video: "grok_imagine",
-  generate_fal_grok_imagine_video_image_to_video: "grok_imagine",
-  generate_fal_grok_imagine_video_reference_to_video: "grok_imagine",
-  generate_fal_grok_imagine_video_edit_video: "grok_imagine",
-
-  generate_kie_grok_imagine_text_to_image: "grok_image",
-  generate_kie_grok_imagine_image_to_image: "grok_image",
-  generate_fal_grok_imagine_text_to_image: "grok_image",
-  generate_fal_grok_imagine_edit_image: "grok_image",
-};
+export type RewriteGuideModel = PromptGuide;
 
 // Rides on rewrite_prompt's custom_prompt, which caps at 500 characters. The
 // mention rule protects the reference wiring; the model-name rule is the reason
@@ -101,9 +39,9 @@ export const CHAT_REWRITE_INSTRUCTION =
   + "Do not state duration, aspect ratio or resolution — those ride their own "
   + "fields, not the prompt.";
 
-/** The prompting guide for a routed generation tool, or null when it has none. */
-export function rewriteGuideForTool(tool: string): RewriteGuideModel | null {
-  return GUIDE_BY_CANONICAL_TOOL[getCanonicalName(tool)] ?? null;
+/** The prompting guide for a catalog model, or null when it has none. */
+export function rewriteGuideForModel(model: string): RewriteGuideModel | null {
+  return modelEntry(model)?.guide ?? null;
 }
 
 /** Every @ token the rewrite has to hand back. Same scanner the provider
@@ -137,21 +75,21 @@ function rewrittenPromptFromResult(result: ToolResult): string {
 
 /**
  * Rewrite a routed generation prompt against its model's guide. Returns the
- * original prompt when the tool has no guide, when the rewrite fails, and when
+ * original prompt when the model has no guide, when the rewrite fails, and when
  * the result would cost a mention — this sits between routing and the confirm
  * sheet, so it must never be the thing that stops a generation.
  */
 export async function rewriteChatGenerationPrompt(
   engine: Engine,
-  input: { bookId: string; tool: string; prompt: string },
+  input: { bookId: string; model: string; prompt: string },
 ): Promise<string> {
-  const model = rewriteGuideForTool(input.tool);
-  if (!model || !input.prompt.trim()) return input.prompt;
+  const guide = rewriteGuideForModel(input.model);
+  if (!guide || !input.prompt.trim()) return input.prompt;
   try {
     const result = await rewritePromptDef(engine).handler({
       book_id: input.bookId,
       prompt: input.prompt,
-      model,
+      model: guide,
       custom_prompt: CHAT_REWRITE_INSTRUCTION,
     });
     return usableRewrite(input.prompt, rewrittenPromptFromResult(result));

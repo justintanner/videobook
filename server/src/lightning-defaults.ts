@@ -1,28 +1,26 @@
-export const LIGHTNING_SCENE_TOOL = "generate_kie_nano_banana_2_1_image";
-export const LIGHTNING_SCENE_MODEL_KEY = "nano_banana_2_1";
+export const LIGHTNING_SCENE_MODEL = "kie:nano-banana-2-1";
 export const LIGHTNING_SCENE_ASPECT_RATIO = "16:9";
 export const LIGHTNING_SCENE_RESOLUTION = "2K";
 export const LIGHTNING_SCENE_OUTPUT_FORMAT = "jpg";
 export const LIGHTNING_SCENE_PROMPT_WORDS = 25;
 
-export const LIGHTNING_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
+export const LIGHTNING_VIDEO_MODEL = "kie:bytedance/seedance-2-5";
 export const LIGHTNING_VIDEO_ASPECT_RATIO = "16:9";
 export const LIGHTNING_VIDEO_RESOLUTION = "1080p";
-export const LIGHTNING_VIDEO_DURATION = "13";
 export const LIGHTNING_VIDEO_DURATION_SECONDS = 13;
 export const LIGHTNING_VIDEO_OUTPUT_FORMAT = "mp4";
 export const LIGHTNING_VIDEO_GENERATE_AUDIO = true;
 export const LIGHTNING_VIDEO_PROMPT_WORDS = 60;
 
-export const LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS = {
+export const LIGHTNING_VIDEO_OPTIONS = {
   resolution: LIGHTNING_VIDEO_RESOLUTION,
   aspect_ratio: LIGHTNING_VIDEO_ASPECT_RATIO,
-  duration: LIGHTNING_VIDEO_DURATION,
+  duration: LIGHTNING_VIDEO_DURATION_SECONDS,
   output_format: LIGHTNING_VIDEO_OUTPUT_FORMAT,
   generate_audio: LIGHTNING_VIDEO_GENERATE_AUDIO,
 } as const;
 
-export const LIGHTNING_SCENE_SCHEMA_DEFAULTS = {
+export const LIGHTNING_SCENE_OPTIONS = {
   aspect_ratio: LIGHTNING_SCENE_ASPECT_RATIO,
   resolution: LIGHTNING_SCENE_RESOLUTION,
   output_format: LIGHTNING_SCENE_OUTPUT_FORMAT,

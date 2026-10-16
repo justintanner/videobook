@@ -166,7 +166,10 @@ describe("slash_commands tool", () => {
     expect(voices.uiAction).toBe("speak_preview");
     expect(voices.description).toMatch(/speak preview/i);
     const say = commands.find((c) => c.command === "/say")!;
-    expect(say.mcpTool?.tool).toBe("generate_elevenlabs_text_to_audio");
+    expect(say.mcpTool?.tool).toBe("generate_audio");
+    expect(say.mcpTool?.injectParams).toEqual({ model: "kie:elevenlabs/text-to-speech-turbo-2-5" });
+    expect(say.params.map((p) => p.name)).toEqual(["prompt"]);
+    expect(commandNames).not.toContain("/grok-upscale");
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");

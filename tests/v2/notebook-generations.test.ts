@@ -23,9 +23,9 @@ import {
 import { listCellGenerationsDef } from "../../server/src/tools/list-cell-generations.js";
 import type { ListCellGenerationsResponse } from "../../server/src/tools/list-cell-generations.js";
 
-const VIDEO_TOOL = "generate_kie_grok_imagine_text_to_video";
-const VIDEO_JOB_TYPE = "generate_grok_imagine_t2v_video";
-const PROVIDER_MODEL = "grok-imagine/text-to-video";
+const VIDEO_TOOL = "generate_video";
+const VIDEO_JOB_TYPE = "generate_media";
+const PROVIDER_MODEL = "kie:grok-imagine/text-to-video";
 
 describe("notebook generation rows", () => {
   let rootDir: string;
@@ -70,7 +70,7 @@ describe("notebook generation rows", () => {
       slot: { row: 0, column: 0 },
       prompt: "A quiet skyline",
       provider: "kie",
-      model: "GrokTextToVideoRequestSchema",
+      model: PROVIDER_MODEL,
       operation: "text_to_video",
       tool: VIDEO_TOOL,
       inputs: { generationMode: "default", state: "pending" },
@@ -99,7 +99,7 @@ describe("notebook generation rows", () => {
 
   it("tracks one row through dispatched → awaiting_provider → completed with the provider model", async () => {
     registerJobHandler(VIDEO_JOB_TYPE, async (payload) => {
-      const assetId = (payload as { vidAssetId: string }).vidAssetId;
+      const assetId = (payload as { assetId: string }).assetId;
       await engine.files.write(
         assetId,
         "original.mp4",
@@ -297,7 +297,7 @@ describe("notebook generation rows", () => {
   // the two-dispatch case is covered with a stubbed provider generation.
   it("records exactly two rows for two dispatches of the same cell", async () => {
     registerJobHandler(VIDEO_JOB_TYPE, async (payload) => {
-      const assetId = (payload as { vidAssetId: string }).vidAssetId;
+      const assetId = (payload as { assetId: string }).assetId;
       await engine.files.write(
         assetId,
         "original.mp4",

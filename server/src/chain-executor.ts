@@ -10,8 +10,10 @@ import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
 import { failNotebookProviderOutput } from "./jobs/run-notebook.js";
 import {
   preflightChainPlan,
+  readChainParam,
   revalidatePinnedTargets,
   substituteChainRefs,
+  writeChainParam,
   supportedChainTool,
   type ChainPreflightContext,
   type ChainPreflightPlan,
@@ -270,18 +272,18 @@ function applyPins(
   params: Record<string, unknown>,
   pins: readonly PinnedChainTarget[],
 ): Record<string, unknown> {
-  const next = { ...params };
+  let next = { ...params };
   for (const pin of pins) {
     const index = pin.index ?? null;
+    const current = readChainParam(next, pin.field);
     if (index === null) {
-      if (typeof next[pin.field] === "string") next[pin.field] = pin.artifactId;
+      if (typeof current === "string") next = writeChainParam(next, pin.field, pin.artifactId);
       continue;
     }
-    const current = next[pin.field];
     if (!Array.isArray(current) || typeof current[index] !== "string") continue;
     const replaced = [...current];
     replaced[index] = pin.artifactId;
-    next[pin.field] = replaced;
+    next = writeChainParam(next, pin.field, replaced);
   }
   return next;
 }

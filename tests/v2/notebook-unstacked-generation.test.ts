@@ -68,12 +68,10 @@ describe("unstacked image/video generation results", () => {
       prompt: "a scene",
       provider: "kie",
       model: type === "generate_image"
-        ? "NanoBananaProRequestSchema"
-        : "GeminiOmniVideoRequestSchema",
-      operation: type === "generate_image" ? "text_to_image" : "text_to_video",
-      tool: type === "generate_image"
-        ? "generate_kie_nano_banana_pro_text_to_image"
-        : "generate_kie_gemini_omni_text_to_video",
+        ? "kie:nano-banana-pro"
+        : "kie:gemini-omni-video",
+      operation: type === "generate_image" ? "text_to_image" : "image_to_video",
+      tool: type,
     });
     const written = await engine.notebooks.write({
       ...created.value,
@@ -376,7 +374,8 @@ describe("unstacked image/video generation results", () => {
       type: "generate_audio",
       slot: { row: 0, column: 0 },
       prompt: "hum",
-      tool: "generate_elevenlabs_t2a",
+      tool: "generate_audio",
+      model: "elevenlabs:text-to-speech",
     });
     const first = await engine.artifacts.create({ kind: "audio", label: "a1" });
     const second = await engine.artifacts.create({ kind: "audio", label: "a2" });
@@ -418,10 +417,8 @@ describe("unstacked image/video generation results", () => {
 });
 
 describe("unstacked generation run and await", () => {
-  const VIDEO_TOOL = "generate_kie_grok_imagine_text_to_video";
-  const VIDEO_JOB_TYPE = "generate_grok_imagine_t2v_video";
-  const IMAGE_TOOL = "generate_kie_nano_banana_pro_text_to_image";
-  const IMAGE_JOB_TYPE = "generate_nano_banana_image";
+  const VIDEO_MODEL = "kie:grok-imagine/text-to-video";
+  const IMAGE_MODEL = "kie:nano-banana-pro";
 
   let rootDir: string;
   let engine: Engine;
@@ -447,11 +444,11 @@ describe("unstacked generation run and await", () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  function stubMediaJob(jobType: string, filename: string, bytes: string): void {
-    registerJobHandler(jobType, async (payload) => {
-      const assetId = jobType === IMAGE_JOB_TYPE
-        ? (payload as { imgAssetId: string }).imgAssetId
-        : (payload as { vidAssetId: string }).vidAssetId;
+  function stubMediaJob(): void {
+    registerJobHandler("generate_media", async (payload) => {
+      const { assetId, model } = payload as { assetId: string; model: string };
+      const filename = model === IMAGE_MODEL ? "original.jpg" : "original.mp4";
+      const bytes = model === IMAGE_MODEL ? "stub-image" : "stub-video";
       await engine.files.write(assetId, filename, Buffer.from(bytes));
       await engine.metadata.artifacts.write(assetId, "original", { name: filename });
       return { success: true, taskId: `stub-${assetId}` };
@@ -508,11 +505,11 @@ describe("unstacked generation run and await", () => {
   }
 
   it("keeps a generate_video producer idle after an accepted provider-active run", async () => {
-    stubMediaJob(VIDEO_JOB_TYPE, "original.mp4", "stub-video");
+    stubMediaJob();
     const { notebookId, cell } = await seedProducer({
       type: "generate_video",
-      tool: VIDEO_TOOL,
-      model: "GrokTextToVideoRequestSchema",
+      tool: "generate_video",
+      model: VIDEO_MODEL,
       operation: "text_to_video",
     });
     const document = engine.notebooks.read(notebookId);
@@ -548,12 +545,11 @@ describe("unstacked generation run and await", () => {
   });
 
   it("completes three same-producer image and video runs out of order on distinct tiles", async () => {
-    stubMediaJob(IMAGE_JOB_TYPE, "original.jpg", "stub-image");
-    stubMediaJob(VIDEO_JOB_TYPE, "original.mp4", "stub-video");
+    stubMediaJob();
     const image = await seedProducer({
       type: "generate_image",
-      tool: IMAGE_TOOL,
-      model: "NanoBananaProRequestSchema",
+      tool: "generate_image",
+      model: IMAGE_MODEL,
       operation: "text_to_image",
     });
     const videoNotebook = await engine.notebooks.create("Video");
@@ -565,9 +561,9 @@ describe("unstacked generation run and await", () => {
       slot: { row: 0, column: 0 },
       prompt: "a scene",
       provider: "kie",
-      model: "GrokTextToVideoRequestSchema",
+      model: VIDEO_MODEL,
       operation: "text_to_video",
-      tool: VIDEO_TOOL,
+      tool: "generate_video",
     });
     const videoWritten = await engine.notebooks.write({
       ...videoNotebook.value,

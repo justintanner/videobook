@@ -23,32 +23,10 @@ const TINY_PNG = Buffer.from(
 
 describe("provider completion routing", () => {
   it.each([
-    ["nano_banana_2_1", "seedreamV5Image"],
-    ["nano_banana_image", "nanoBananaImage"],
-    ["fal_nano_banana_2_edit", "nanoBananaImage"],
-    ["qwen2_image_edit", "qwenImage"],
-    ["fal_qwen_image", "qwenImage"],
-    ["seedream_image", "seedreamImage"],
-    ["fal_seedream_v5_lite_edit", "seedreamV5Image"],
-    ["fal_bria_fibo_edit_1_5_product_holding", "seedreamV5Image"],
-    ["fal_bria_fibo_edit_1_5_virtual_try_on", "seedreamV5Image"],
-    ["kling30_motion_control_video", "klingVideo"],
-    ["kling30_omni_video", "providerVideo"],
-    ["seedance2_video", "providerVideo"],
-    ["fal_wan27_videoedit", "providerVideo"],
-    ["fal_grok_imagine_video_extend", "providerVideo"],
-    ["grok_imagine_upscale_video", "grokVideo"],
-    ["wan27_extend_video", "wanVideo"],
-    ["happyhorse_ref_video", "happyHorseVideo"],
-    ["minimax_h3_i2v_video", "miniMaxVideo"],
-    ["volcengine_lipsync_video", "lipSyncVideo"],
-    ["omnihuman_video", "omnihumanVideo"],
-    ["fal_wan27_pro_edit", "wanImage"],
-    ["alibaba_video", "alibabaVideo"],
-    ["alibaba_image_pro", "alibabaImage"],
-    ["alibaba_qwen_image_edit", "alibabaQwenImage"],
-    ["fal_grok_imagine_image_edit", "grokImage"],
-    ["gpt_image_text", "gptImage"],
+    ["media_kie", "media"],
+    ["fal_media", "media"],
+    ["xai_media", "media"],
+    ["media_googleflow", "media"],
     ["isolate_vocals", "isolateVocals"],
   ])("routes %s to %s", (taskType, family) => {
     expect(completionFamilyForTaskType(taskType)).toBe(family);
@@ -56,10 +34,11 @@ describe("provider completion routing", () => {
 
   it("rejects task types without a completion family", () => {
     expect(completionFamilyForTaskType("unknown_provider_task")).toBeUndefined();
+    expect(completionFamilyForTaskType("seedance2_video")).toBeUndefined();
   });
 });
 
-describe("complete_kie_task fal_qwen branches", () => {
+describe("complete_kie_task media generations", () => {
   let projectsDir: string;
   let imageServer: Server;
   let imageUrl: string;
@@ -95,6 +74,7 @@ describe("complete_kie_task fal_qwen branches", () => {
   async function seedPendingTask(
     taskType: string,
     assetType = "img",
+    media = assetType === "video" ? "video" : "image",
   ): Promise<{ assetId: string; assetDir: string; taskId: string; bookId: string; fs: ReturnType<typeof createEngineForTest> }> {
     const cfs = createEngineForTest(projectsDir);
     testEngine = cfs;
@@ -116,7 +96,7 @@ describe("complete_kie_task fal_qwen branches", () => {
         artifactId: asset.value.artifactId,
         taskId,
         taskType,
-        meta: { prompt: "a cat", sourceImageIds: [] },
+        meta: { prompt: "a cat", sourceImageIds: [], media, model: "kie:nano-banana-2-1" },
       }, lease.ownerId
     );
     expect(written.ok).toBe(true);
@@ -131,197 +111,84 @@ describe("complete_kie_task fal_qwen branches", () => {
     };
   }
 
-  it.each([
-    ["gpt_image", "gpt-image-2-5-sunburst-image-to-image"],
-    ["gpt_image_text", "gpt-image-2-5-flare-text-to-image"],
-    ["gpt_image", undefined],
-    ["gpt_image_text", undefined],
-  ] as const)("preserves completed GPT provenance for %s / %s", async (taskType, model) => {
-    const { assetId, assetDir, taskId, bookId, fs: engine } = await seedPendingTask(taskType);
+  function readOriginal(engine: ReturnType<typeof createEngineForTest>, assetId: string, filename: string) {
+    return engine.files.read(assetId, filename);
+  }
+
+  it("records the catalog model and prompt as image provenance", async () => {
+    const { assetId, assetDir, taskId, bookId, fs: engine } = await seedPendingTask("media_kie");
     registerCompleteProviderTaskJob(engine);
     registerProcessImageJob(engine);
-    await appQueue.enqueueAndWait(`complete-gpt-${assetId}`, {
+    await appQueue.enqueueAndWait(`complete-media-${assetId}`, {
       type: "complete_kie_task",
-      taskId, taskType, assetId, assetDir, bookId,
-      meta: {
-        prompt: "a cat", sourceImageIds: [],
-        ...(model ? { model, resolution: "2K", background: "transparent" } : {}),
-      },
+      taskId, taskType: "media_kie", assetId, assetDir, bookId,
+      meta: { prompt: "a cat", sourceImageIds: [], media: "image", model: "kie:gpt-image-2-5-sunburst-text-to-image" },
       resultUrls: [imageUrl],
     }, 10_000);
-
-    const expectedModel = model ?? (taskType === "gpt_image" ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image");
     await expect.poll(async () => {
       const result = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
       return result.ok ? result.value : null;
     }, { timeout: 10_000 }).toMatchObject({
-      model: expectedModel, prompt: "a cat", width: 1, height: 1,
-      ...(model ? { resolution: "2K", background: "transparent" } : {}),
+      model: "kie:gpt-image-2-5-sunburst-text-to-image", prompt: "a cat", width: 1, height: 1, download_url: imageUrl,
     });
   });
 
-  it("downloads fal_qwen_image_edit result instead of marking ready empty", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image_edit");
-    registerCompleteProviderTaskJob(cfs);
-    // Swallow process_image follow-up so the completion path alone is under test.
-    registerJobHandler("process_image", async () => ({ ok: true }));
-
-    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
-      `complete-qwen-edit-${assetId}`,
-      {
-        type: "complete_kie_task",
-        taskId,
-        taskType: "fal_qwen_image_edit",
-        assetId,
-        assetDir,
-        bookId,
-        meta: { prompt: "a cat", sourceImageIds: [] },
-        resultUrls: [],
-        resultObject: { images: [{ url: imageUrl }] },
-      },
-      10_000,
-    );
-
-    expect(result.success).toBe(true);
-
-    const original = await cfs.files.read(assetId, "original.png");
-    expect(original.ok).toBe(true);
-    if (original.ok) {
-      const buf = typeof original.value === "string"
-        ? Buffer.from(original.value)
-        : Buffer.from(original.value);
-      expect(buf.equals(TINY_PNG)).toBe(true);
-    }
-
-    const pending = await cfs.jobs.pending.read(assetId);
-    expect(pending.ok).toBe(true);
-    expect(pending.ok ? pending.value : "fail").toBeNull();
-  });
-
-  it("downloads fal_qwen_image (T2I) result", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image");
-    registerCompleteProviderTaskJob(cfs);
-    registerJobHandler("process_image", async () => ({ ok: true }));
-
-    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
-      `complete-qwen-t2i-${assetId}`,
-      {
-        type: "complete_kie_task",
-        taskId,
-        taskType: "fal_qwen_image",
-        assetId,
-        assetDir,
-        bookId,
-        meta: { prompt: "a dog", sourceImageIds: [] },
-        resultUrls: [],
-        resultObject: { images: [{ url: imageUrl }] },
-      },
-      10_000,
-    );
-
-    expect(result.success).toBe(true);
-
-    const original = await cfs.files.read(assetId, "original.png");
-    expect(original.ok).toBe(true);
-  });
-
   it.each([
-    "fal_bria_fibo_edit_1_5_product_holding",
-    "fal_bria_fibo_edit_1_5_virtual_try_on",
-  ])("downloads %s when the result publishes image.url and omits images", async (taskType) => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask(taskType);
+    ["images", { images: [{ url: "IMAGE" }] }],
+    ["image.url", { image: { url: "IMAGE" } }],
+  ] as const)("downloads a fal result published as %s", async (_label, shape) => {
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_media");
     registerCompleteProviderTaskJob(cfs);
     registerJobHandler("process_image", async () => ({ ok: true }));
-
-    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
-      `complete-fibo-${assetId}`,
-      {
-        type: "complete_kie_task",
-        taskId,
-        taskType,
-        assetId,
-        assetDir,
-        bookId,
-        meta: { prompt: "hold the product", sourceImageIds: [], model: "bria/fibo-edit-1.5" },
-        resultUrls: [],
-        resultObject: { image: { url: imageUrl } },
-      },
-      10_000,
-    );
-
+    const resultObject = JSON.parse(JSON.stringify(shape).replace("IMAGE", imageUrl)) as Record<string, unknown>;
+    const result = await appQueue.enqueueAndWait<{ success: boolean }>(`complete-fal-${assetId}`, {
+      type: "complete_kie_task",
+      taskId, taskType: "fal_media", assetId, assetDir, bookId,
+      meta: { prompt: "a dog", sourceImageIds: [], media: "image", model: "fal:fal-ai/qwen-image" },
+      resultUrls: [],
+      resultObject,
+    }, 10_000);
     expect(result.success).toBe(true);
-    const original = await cfs.files.read(assetId, "original.png");
+    const original = await readOriginal(cfs, assetId, "original.png");
     expect(original.ok).toBe(true);
-    if (original.ok) {
-      const buf = typeof original.value === "string"
-        ? Buffer.from(original.value)
-        : Buffer.from(original.value);
-      expect(buf.equals(TINY_PNG)).toBe(true);
-    }
+    if (original.ok) expect(Buffer.from(original.value).equals(TINY_PNG)).toBe(true);
     const pending = await cfs.jobs.pending.read(assetId);
-    expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value : "fail").toBeNull();
   });
 
-  it("fails when fal_qwen result has no image URLs (no silent ready)", async () => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_qwen_image_edit");
+  it("fails when the provider result has no media URL (no silent ready)", async () => {
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("fal_media");
     registerCompleteProviderTaskJob(cfs);
-
-    await expect(
-      appQueue.enqueueAndWait(
-        `complete-qwen-empty-${assetId}`,
-        {
-          type: "complete_kie_task",
-          taskId,
-          taskType: "fal_qwen_image_edit",
-          assetId,
-          assetDir,
-          bookId,
-          meta: { prompt: "a cat", sourceImageIds: [] },
-          resultUrls: [],
-          resultObject: { images: [] },
-        },
-        10_000,
-      ),
-    ).rejects.toThrow(/No image URL in result/i);
-
-    // Regression: prior bug deleted the pending task and left the asset empty.
-    const original = await cfs.files.read(assetId, "original.png");
+    await expect(appQueue.enqueueAndWait(`complete-empty-${assetId}`, {
+      type: "complete_kie_task",
+      taskId, taskType: "fal_media", assetId, assetDir, bookId,
+      meta: { prompt: "a cat", sourceImageIds: [], media: "image", model: "fal:fal-ai/qwen-image" },
+      resultUrls: [],
+      resultObject: { images: [] },
+    }, 10_000)).rejects.toThrow(/Provider returned no image/i);
+    const original = await readOriginal(cfs, assetId, "original.png");
     expect(original.ok).toBe(false);
   });
 
-  it.each([
-    ["seedance2_video", true],
-    ["fal_seedance2_i2v", false],
-  ] as const)("records KIE metadata only for KIE-backed shared video task %s", async (taskType, expectKieMetadata) => {
-    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask(taskType, "video");
+  it("writes a generated video and hands it to process_video", async () => {
+    const { assetId, assetDir, taskId, bookId, fs: cfs } = await seedPendingTask("media_kie", "video");
     registerCompleteProviderTaskJob(cfs);
-    registerJobHandler("process_video", async () => ({ ok: true }));
-
-    const result = await appQueue.enqueueAndWait<{ success: boolean }>(
-      `complete-video-${assetId}`,
-      {
-        type: "complete_kie_task",
-        taskId,
-        taskType,
-        assetId,
-        assetDir,
-        bookId,
-        meta: {},
-        resultUrls: taskType === "seedance2_video" ? [imageUrl] : [],
-        ...(taskType.startsWith("fal_")
-          ? { resultObject: { video: { url: imageUrl } } }
-          : {}),
-      },
-      10_000,
-    );
-
+    const processed: Array<Record<string, unknown>> = [];
+    registerJobHandler("process_video", async (payload) => {
+      processed.push(payload);
+      return { ok: true };
+    });
+    const result = await appQueue.enqueueAndWait<{ success: boolean }>(`complete-video-${assetId}`, {
+      type: "complete_kie_task",
+      taskId, taskType: "media_kie", assetId, assetDir, bookId,
+      meta: { prompt: "waves", media: "video", model: "kie:bytedance/seedance-2-5" },
+      resultUrls: [imageUrl.replace("image.png", "clip.mp4")],
+    }, 10_000);
     expect(result.success).toBe(true);
-    const taskMetadata = await cfs.metadata.artifacts.read<{ taskId: string }>(assetId, "kie-task-id");
-    expect(taskMetadata.ok).toBe(expectKieMetadata);
-    if (taskMetadata.ok) {
-      expect(taskMetadata.value).toEqual({ taskId });
-    }
+    const original = await readOriginal(cfs, assetId, "original.mp4");
+    expect(original.ok).toBe(true);
+    await expect.poll(() => processed.length, { timeout: 10_000 }).toBe(1);
+    expect(processed[0]).toMatchObject({ assetId, provenance: { model: "kie:bytedance/seedance-2-5", prompt: "waves" } });
   });
 
   it("fails an unknown provider task instead of silently completing it", async () => {

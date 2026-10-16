@@ -46,24 +46,42 @@ export type ChainToolSpec = {
   artifactOutput?: string;
 };
 
+const GENERATION_OUTPUTS: Record<string, ChainOutputType> = {
+  asset_id: "artifact",
+  model: "string",
+  cell_id: "string",
+  address: "string",
+  job_id: "string",
+  status: "string",
+};
+
 export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
-  generate_kie_nano_banana_2_1_image: {
-    outputs: { img_asset_id: "artifact", asset_id: "artifact", cell_id: "string", address: "string", job_id: "string", status: "string" },
-    completion: "generation", gridFields: ["image_refs"],
-    inputTypes: { prompt: "string", image_refs: "artifact", aspect_ratio: "string", resolution: "string", output_format: "string" },
-    placement: "generate_image", artifactOutput: "img_asset_id",
+  generate_image: {
+    outputs: GENERATION_OUTPUTS,
+    completion: "generation",
+    gridFields: ["refs.image"],
+    inputTypes: { model: "string", prompt: "string", image: "artifact", options: "json" },
+    placement: "generate_image",
+    artifactOutput: "asset_id",
   },
-  ...Object.fromEntries(["sunburst", "flare"].map(variant => [
-    `generate_kie_gpt_image_2_5_${variant}_image`,
-    {
-      outputs: { img_asset_id: "artifact", asset_id: "artifact", cell_id: "string", address: "string", job_id: "string", status: "string" },
-      completion: "generation",
-      gridFields: ["image_refs"],
-      inputTypes: { prompt: "string", image_refs: "artifact", aspect_ratio: "string", resolution: "string", background: "string" },
-      placement: "generate_image",
-      artifactOutput: "img_asset_id",
-    } satisfies ChainToolSpec,
-  ])),
+  generate_video: {
+    outputs: GENERATION_OUTPUTS,
+    completion: "generation",
+    gridFields: ["refs.first_frame", "refs.last_frame", "refs.image", "refs.video", "refs.audio", "replace_audio_with"],
+    inputTypes: {
+      model: "string",
+      prompt: "string",
+      first_frame: "artifact",
+      last_frame: "artifact",
+      image: "artifact",
+      video: "artifact",
+      audio: "artifact",
+      replace_audio_with: "artifact",
+      options: "json",
+    },
+    placement: "generate_video",
+    artifactOutput: "asset_id",
+  },
   assemble_goal: {
     outputs: { sequence_id: "string", status: "string" },
     completion: "sync",
@@ -155,61 +173,6 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     completion: "sync",
     gridFields: ["asset_id"],
     inputTypes: { asset_id: "artifact", name: "string" },
-  },
-  generate_kie_seedance_2_5_video: {
-    outputs: {
-      vid_asset_id: "artifact",
-      asset_id: "artifact",
-      cell_id: "string",
-      address: "string",
-      job_id: "string",
-      status: "string",
-    },
-    completion: "generation",
-    gridFields: [
-      "first_frame_ref",
-      "last_frame_ref",
-      "image_refs",
-      "video_refs",
-      "audio_refs",
-      "replace_audio_with",
-    ],
-    inputTypes: {
-      prompt: "string",
-      first_frame_ref: "artifact",
-      last_frame_ref: "artifact",
-      image_refs: "artifact",
-      video_refs: "artifact",
-      audio_refs: "artifact",
-      replace_audio_with: "artifact",
-      duration: "string",
-      resolution: "string",
-      aspect_ratio: "string",
-      output_format: "string",
-    },
-    placement: "generate_video",
-    artifactOutput: "vid_asset_id",
-  },
-  generate_kie_nano_banana_pro_text_to_image: {
-    outputs: {
-      img_asset_id: "artifact",
-      asset_id: "artifact",
-      cell_id: "string",
-      address: "string",
-      job_id: "string",
-      status: "string",
-    },
-    completion: "generation",
-    gridFields: ["image_refs"],
-    inputTypes: {
-      prompt: "string",
-      image_refs: "artifact",
-      aspect_ratio: "string",
-      resolution: "string",
-      output_format: "string",
-    },
-    placement: "generate_image",
-    artifactOutput: "img_asset_id",
   },
 };
 
@@ -325,6 +288,29 @@ export const chainApproveInputSchema = z.object({
   step_id: z.string().min(1).max(64),
   actor: z.enum(["chat", "voice", "api"]).optional(),
 });
+
+export function readChainParam(params: Record<string, unknown>, path: string): unknown {
+  let current: unknown = params;
+  for (const segment of path.split(".")) {
+    if (current === null || typeof current !== "object" || Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+export function writeChainParam(
+  params: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): Record<string, unknown> {
+  const [head, ...rest] = path.split(".");
+  if (rest.length === 0) return { ...params, [head!]: value };
+  const child = params[head!];
+  const nested = child !== null && typeof child === "object" && !Array.isArray(child)
+    ? child as Record<string, unknown>
+    : {};
+  return { ...params, [head!]: writeChainParam(nested, rest.join("."), value) };
+}
 
 export function isChainRef(value: unknown): value is ChainRef {
   return chainRefSchema.safeParse(value).success;
@@ -724,7 +710,7 @@ export async function preflightChainPlan(
 
     const pins: PinnedChainTarget[] = [];
     for (const field of spec.gridFields) {
-      const raw = step.params[field];
+      const raw = readChainParam(step.params, field);
       if (isChainRef(raw) || raw === undefined) continue;
       const entries: Array<{ index: number | null; value: unknown }> = Array.isArray(raw)
         ? raw.map((value, position) => ({ index: position, value }))

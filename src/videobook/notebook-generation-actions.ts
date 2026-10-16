@@ -9,10 +9,6 @@ import {
 import { generationModeInputError, generationModeInputTarget } from '../../server/src/generation-input-policy'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
-import {
-  GEMINI_OMNI_VIDEO_TOOL,
-  geminiOmniClipInputError,
-} from '../../server/src/gemini-omni-clip'
 
 export type GenerationSelection = {
   provider: string
@@ -157,40 +153,14 @@ function generationControlError(
     : `${control.label}: Required`
 }
 
-export type GenerationSettingsContext = {
-  tool?: string
-  videoConnected?: boolean
-}
-
-function generationClipValue(
-  controls: readonly GenerationControl[],
-  settings: Record<string, GenerationControlValue>,
-  name: string,
-): GenerationControlValue | undefined {
-  const control = controls.find((candidate) => candidate.name === name)
-  if (!control) return settings[name]
-  return effectiveGenerationControlValue(control, settings)
-}
-
 export function generationSettingsError(
   controls: readonly GenerationControl[],
   settings: Record<string, GenerationControlValue>,
-  context: GenerationSettingsContext = {},
 ): string | null {
   const problems = controls.flatMap((control) => {
     const message = generationControlError(control, settings)
     return message ? [message] : []
   })
-  if (context.tool === GEMINI_OMNI_VIDEO_TOOL) {
-    const clipError = geminiOmniClipInputError({
-      hasVideo: context.videoConnected === true,
-      start: generationClipValue(controls, settings, 'video_clip_start'),
-      ends: generationClipValue(controls, settings, 'video_clip_ends'),
-      startLabel: controls.find((control) => control.name === 'video_clip_start')?.label,
-      endsLabel: controls.find((control) => control.name === 'video_clip_ends')?.label,
-    })
-    if (clipError) problems.push(clipError)
-  }
   return problems.length > 0 ? problems.join('; ') : null
 }
 
@@ -402,6 +372,11 @@ export function generationActionForSelection(
   const available = generationActionsForCell(actions, type, true)
     .filter((action) => !action.existingCellOnly
       || (action.tool === selection.tool && action.model === selection.model))
+  const modelMatch = selection.model
+    ? available.find((action) => action.model === selection.model
+      && (!selection.tool || action.tool === selection.tool))
+    : undefined
+  if (modelMatch) return modelMatch
   const toolMatch = selection.tool
     ? available.filter((action) => action.tool === selection.tool)
         .sort((left, right) => selectionScore(right, selection) - selectionScore(left, selection))[0]
@@ -613,7 +588,7 @@ function compareGenerationActions(
   const title = left.title.localeCompare(right.title)
   if (title !== 0) return title
   const provider = left.providerLabel.localeCompare(right.providerLabel)
-  return provider !== 0 ? provider : left.tool.localeCompare(right.tool)
+  return provider !== 0 ? provider : left.model.localeCompare(right.model)
 }
 
 export function compatibleGenerationActions(

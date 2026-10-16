@@ -118,7 +118,7 @@ describe("process_video transcript scheduling is shared", () => {
       join(here, "../local-upload.ts"),
       join(here, "process-upload.ts"),
       join(here, "download-video.ts"),
-      join(here, "complete-provider-task.ts"),
+      join(here, "../media/complete.ts"),
     ];
     for (const file of files) {
       const source = await readFile(file, "utf8");

@@ -79,22 +79,28 @@ describe("selected notebook subgraph planning", () => {
       type: "generate_image",
       label: "Missing artifact",
       slot: { row: 3, column: 0 },
-      operation: "generate_image",
-      tool: "generate_seedream_image",
+      provider: "kie",
+      model: "kie:seedream/5-lite-text-to-image",
+      operation: "text_to_image",
+      tool: "generate_image",
     });
     const target = engine.notebooks.createCell({
       type: "generate_image",
       label: "Target",
       slot: { row: 4, column: 0 },
-      operation: "generate_image",
-      tool: "generate_seedream_image",
+      provider: "kie",
+      model: "kie:seedream/5-lite-text-to-image",
+      operation: "text_to_image",
+      tool: "generate_image",
     });
     const unrelated = engine.notebooks.createCell({
       type: "generate_image",
       label: "Unrelated paid",
       slot: { row: 0, column: 4 },
-      operation: "generate_image",
-      tool: "generate_seedream_image",
+      provider: "kie",
+      model: "kie:seedream/5-lite-text-to-image",
+      operation: "text_to_image",
+      tool: "generate_image",
     });
     const document: NotebookDocument = {
       ...notebook.value,

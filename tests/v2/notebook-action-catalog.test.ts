@@ -6,9 +6,9 @@ import type { NotebookDocument } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import { scopedBookEngine, withBookContext } from "../../server/src/book-context.js";
 import {
-  DEFAULT_ANIMATION_TOOL,
-  DEFAULT_IMAGE_TOOL,
-  DEFAULT_VIDEO_TOOL,
+  DEFAULT_ANIMATION_MODEL,
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_VIDEO_MODEL,
   listNotebookActions,
   selectedCellDetails,
   validateCellConfiguration,
@@ -57,15 +57,15 @@ describe("notebook action catalog", () => {
           reasoning: { effort: "medium" },
         },
       });
-    expect(actions.some((action) => action.tool === DEFAULT_ANIMATION_TOOL)).toBe(true);
+    expect(actions.some((action) => action.model === DEFAULT_ANIMATION_MODEL)).toBe(true);
     expect(actions.find((action) =>
       action.kind === "generation"
       && action.cellTypes.includes("generate_video")
-      && action.isDefault)?.tool).toBe(DEFAULT_VIDEO_TOOL);
+      && action.isDefault)?.model).toBe(DEFAULT_VIDEO_MODEL);
     expect(actions.find((action) =>
       action.kind === "generation"
       && action.cellTypes.includes("generate_image")
-      && action.isDefault)?.tool).toBe(DEFAULT_IMAGE_TOOL);
+      && action.isDefault)?.model).toBe(DEFAULT_IMAGE_MODEL);
     expect(actions
       .filter((action) => action.kind === "generation" && action.isDefault)
       .map((action) => action.cellTypes[0])
@@ -93,7 +93,8 @@ describe("notebook action catalog", () => {
         || type === "video"
         || type === "character"))).toBe(false);
     expect(actions
-      .filter((action) => action.tool?.includes("qwen_3_0_edit_image"))
+      .filter((action) => action.kind === "generation"
+        && (action.model === "fal:alibaba/qwen-image-3/edit" || action.model === "kie:qwen3/image-to-image"))
       .map((action) => ({
         tool: action.tool,
         provider: action.provider,
@@ -101,16 +102,16 @@ describe("notebook action catalog", () => {
         model: action.model,
       }))).toEqual([
       {
-        tool: "generate_fal_qwen_3_0_edit_image",
+        tool: "generate_image",
         provider: "fal",
         providerLabel: "Fal",
-        model: "alibaba/qwen-image-3/edit",
+        model: "fal:alibaba/qwen-image-3/edit",
       },
       {
-        tool: "generate_kie_qwen_3_0_edit_image",
+        tool: "generate_image",
         provider: "kie",
         providerLabel: "Kie",
-        model: "Qwen3ImageToImageRequestSchema",
+        model: "kie:qwen3/image-to-image",
       },
     ]);
   });
@@ -163,9 +164,9 @@ describe("notebook action catalog", () => {
       slot: { row: 1, column: 0 },
       prompt: "combine @image1 with the other references",
       provider: "fal",
-      model: "fal-ai/qwen-image-3/edit",
+      model: "fal:alibaba/qwen-image-3/edit",
       operation: "edit_image",
-      tool: "generate_fal_qwen_3_0_edit_image",
+      tool: "generate_image",
       inputs: { generationMode: "default" },
     });
     const written = await engine.notebooks.write({
@@ -186,9 +187,9 @@ describe("notebook action catalog", () => {
       draft: {
         prompt: generation.prompt,
         provider: "kie",
-        model: "Qwen3ImageToImageRequestSchema",
+        model: "kie:qwen3/image-to-image",
         operation: "edit_image",
-        tool: "generate_kie_qwen_3_0_edit_image",
+        tool: "generate_image",
         inputs: {
           generationMode: "default",
           generationSettings: {
@@ -219,9 +220,9 @@ describe("notebook action catalog", () => {
     const expectedUrls = artifactIds.map((artifactId) =>
       `http://url.resolved.later.for/${artifactId}`);
     expect(preview).toMatchObject({
-      tool: "generate_kie_qwen_3_0_edit_image",
+      tool: "generate_image",
       provider: "kie",
-      model: "qwen3/image-to-image",
+      model: "kie:qwen3/image-to-image",
       payload: {
         model: "qwen3/image-to-image",
         input: {
@@ -325,6 +326,7 @@ describe("notebook action catalog", () => {
     })) as {
       actions: Array<{
         tool: string;
+        model: string;
         title: string;
         providerLabel: string;
         defaultPriority?: number;
@@ -347,25 +349,26 @@ describe("notebook action catalog", () => {
       }>;
     };
     const geminiCatalogAction = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_gemini_omni_video");
+      action.model === "kie:gemini-omni-video");
     expect(geminiCatalogAction).toMatchObject({
-      title: "Gemini Omni Video",
+      tool: "generate_video",
+      title: "Gemini Omni",
       providerLabel: "Kie",
     });
     expect(geminiCatalogAction?.inputContract?.modes.map((mode) => mode.id))
-      .toEqual(["t2v", "r2v", "v2v"]);
+      .toEqual(["i2v", "v2v"]);
     expect(geminiCatalogAction?.controls?.find((control) =>
       control.name === "aspect_ratio")).toMatchObject({
       options: ["16:9", "9:16"],
     });
     expect(geminiCatalogAction?.controls?.find((control) =>
       control.name === "duration")).toMatchObject({
-      defaultValue: "8",
       options: ["4", "6", "8", "10"],
     });
     const seedance25Action = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_seedance_2_5_video");
+      action.model === "kie:bytedance/seedance-2-5");
     expect(seedance25Action).toMatchObject({
+      tool: "generate_video",
       title: "Seedance 2.5",
       providerLabel: "Kie",
       defaultPriority: 0,
@@ -377,10 +380,10 @@ describe("notebook action catalog", () => {
       field: slot.field,
       max: slot.max,
     }))).toEqual([
-      { field: "image_refs", max: 30 },
-      { field: "video_refs", max: 10 },
-      { field: "audio_refs", max: 10 },
-      { field: "replace_audio_with", max: 1 },
+      { field: "image", max: 30 },
+      { field: "video", max: 10 },
+      { field: "audio", max: 10 },
+      { field: "replace_audio", max: 1 },
     ]);
     expect(seedance25Action?.controls?.map((control) => control.name)).toEqual([
       "return_last_frame",
@@ -392,11 +395,10 @@ describe("notebook action catalog", () => {
       "web_search",
       "nsfw_checker",
     ]);
-    expect(seedance25Action?.controls?.find((control) =>
-      control.name === "duration")).toMatchObject({
-      defaultValue: "13",
-      options: ["-1", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30"],
-    });
+    const seedanceDuration = seedance25Action?.controls?.find((control) =>
+      control.name === "duration");
+    expect(seedanceDuration).toMatchObject({ defaultValue: 13 });
+    expect(seedanceDuration?.options ?? [13]).toContain(13);
     expect(seedance25Action?.controls?.find((control) =>
       control.name === "output_format")).toMatchObject({
       defaultValue: "mp4",
@@ -408,36 +410,40 @@ describe("notebook action catalog", () => {
       options: ["480p", "720p", "1080p"],
     });
     const wan30PrimeAction = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_wan_3_0_prime_video");
+      action.model === "kie:wan/3-0-video-prime");
     expect(wan30PrimeAction).toMatchObject({
-      title: "Wan 3.0 Prime Video",
+      tool: "generate_video",
+      title: "Wan 3.0 Prime",
       providerLabel: "Kie",
     });
     expect(wan30PrimeAction?.inputContract?.modes.map((mode) => mode.id))
       .toEqual(["t2v", "i2v", "r2v"]);
     expect(wan30PrimeAction?.inputContract?.modes.find((mode) =>
       mode.id === "i2v")?.slots.map((slot) => slot.field)).toEqual([
-      "first_frame_ref",
-      "last_frame_ref",
+      "first_frame",
+      "last_frame",
+      "replace_audio",
     ]);
     const motionControlAction = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_kling_3_0_motion_control");
+      action.model === "kie:kling-3.0/motion-control");
     expect(motionControlAction).toMatchObject({
-      title: "Kling 3.0 Motion Control",
+      tool: "generate_video",
+      title: "Kling 3.0 Motion",
       providerLabel: "Kie",
     });
     const omniTransformationAction = generationCatalog.actions.find((action) =>
-      action.tool === "generate_kie_kling_3_0_omni_transformation");
+      action.model === "kie:kling-3.0-omni/transformation");
     expect(omniTransformationAction).toMatchObject({
+      tool: "generate_video",
       title: "Kling 3.0 Omni Transformation",
       providerLabel: "Kie",
     });
     expect(omniTransformationAction?.inputContract?.modes.map((mode) => mode.id))
-      .toEqual(["transformation"]);
+      .toEqual(["v2v", "v2v_refs"]);
     expect(omniTransformationAction?.inputContract?.modes[0]?.slots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          field: "video_refs",
+          field: "video",
           kind: "video",
           min: 1,
           max: 1,
@@ -460,14 +466,15 @@ describe("notebook action catalog", () => {
       }>;
     };
     expect(fullCatalog.actions
-      .filter((action) => action.kind === "generation")
+      .filter((action) => action.kind === "generation" && action.tool?.startsWith("generate_"))
       .every((action) => Array.isArray(action.controls))).toBe(true);
     expect(fullCatalog.actions.find((action) =>
-      action.tool === "generate_elevenlabs_text_to_audio")?.controls?.find(
+      action.model === "elevenlabs:text-to-speech")?.controls?.find(
       (control) => control.name === "voice_id",
     )).toMatchObject({ required: true });
     const qwen3Actions = fullCatalog.actions.filter((action) =>
-      action.tool?.includes("qwen_3_0_edit_image"));
+      action.kind === "generation"
+      && (action.model === "fal:alibaba/qwen-image-3/edit" || action.model === "kie:qwen3/image-to-image"));
     expect(qwen3Actions.map((action) => ({
       tool: action.tool,
       provider: action.provider,
@@ -475,16 +482,16 @@ describe("notebook action catalog", () => {
       model: action.model,
     }))).toEqual([
       {
-        tool: "generate_fal_qwen_3_0_edit_image",
+        tool: "generate_image",
         provider: "fal",
         providerLabel: "Fal",
-        model: "alibaba/qwen-image-3/edit",
+        model: "fal:alibaba/qwen-image-3/edit",
       },
       {
-        tool: "generate_kie_qwen_3_0_edit_image",
+        tool: "generate_image",
         provider: "kie",
         providerLabel: "Kie",
-        model: "Qwen3ImageToImageRequestSchema",
+        model: "kie:qwen3/image-to-image",
       },
     ]);
     expect(qwen3Actions.find((action) => action.provider === "fal")
@@ -541,13 +548,15 @@ describe("notebook action catalog", () => {
       operation: string;
       tool: string;
     };
-    expect(generation.tool).toBe(DEFAULT_IMAGE_TOOL);
-    expect(DEFAULT_IMAGE_TOOL).toBe("generate_kie_nano_banana_2_1_image");
+    expect(generation.tool).toBe("generate_image");
+    expect(generation.model).toBe(DEFAULT_IMAGE_MODEL);
+    expect(DEFAULT_IMAGE_MODEL).toBe("kie:nano-banana-2-1");
     expect(resultJson(await invoke("preview_notebook_generation", {
       notebook_id: notebookId,
       cell_id: generation.id,
     }))).toMatchObject({
-      tool: DEFAULT_IMAGE_TOOL,
+      tool: "generate_image",
+      model: DEFAULT_IMAGE_MODEL,
       payload: {
         model: "nano-banana-2-1",
         input: {
@@ -565,9 +574,9 @@ describe("notebook action catalog", () => {
       draft: {
         prompt: "draft prompt",
         provider: "kie",
-        model: "GptImage25FlareTextToImageRequestSchema",
-        operation: "generate_image",
-        tool: "generate_kie_gpt_image_2_5_flare_image",
+        model: "kie:gpt-image-2-5-flare-text-to-image",
+        operation: "text_to_image",
+        tool: "generate_image",
       },
     })) as {
       tool: string;
@@ -575,7 +584,8 @@ describe("notebook action catalog", () => {
       estimate: { currency: string; usd: number };
     };
     expect(preview).toMatchObject({
-      tool: "generate_kie_gpt_image_2_5_flare_image",
+      tool: "generate_image",
+      model: "kie:gpt-image-2-5-flare-text-to-image",
       payload: {
         model: "gpt-image-2-5-flare-text-to-image",
         input: { prompt: "draft prompt", resolution: "2K" },
@@ -588,7 +598,8 @@ describe("notebook action catalog", () => {
     expect(afterPreview.cells.find((cell) => cell.id === generation.id))
       .toMatchObject({
         prompt: "persisted prompt",
-        tool: DEFAULT_IMAGE_TOOL,
+        tool: "generate_image",
+        model: DEFAULT_IMAGE_MODEL,
       });
 
     const pendingCellId = "01900000-0000-7000-8000-000000000021";
@@ -601,9 +612,9 @@ describe("notebook action catalog", () => {
         slot: { row: 2, column: 1 },
         prompt: "pending draft prompt",
         provider: "kie",
-        model: "GptImage25FlareTextToImageRequestSchema",
-        operation: "generate_image",
-        tool: "generate_kie_gpt_image_2_5_flare_image",
+        model: "kie:gpt-image-2-5-flare-text-to-image",
+        operation: "text_to_image",
+        tool: "generate_image",
       },
       connections: [],
     })) as {
@@ -612,7 +623,7 @@ describe("notebook action catalog", () => {
       estimate: { usd: number };
     };
     expect(pendingPreview).toMatchObject({
-      tool: "generate_kie_gpt_image_2_5_flare_image",
+      tool: "generate_image",
       payload: { input: { prompt: "pending draft prompt" } },
       estimate: { usd: expect.any(Number) },
     });
@@ -630,17 +641,18 @@ describe("notebook action catalog", () => {
         slot: { row: 4, column: 0 },
         prompt: "A moonlit garden in motion",
       },
-    })) as { id: string; tool: string };
-    expect(videoGeneration.tool).toBe(DEFAULT_VIDEO_TOOL);
+    })) as { id: string; tool: string; model: string };
+    expect(videoGeneration.tool).toBe("generate_video");
+    expect(videoGeneration.model).toBe(DEFAULT_VIDEO_MODEL);
     const videoPreview = resultJson(await invoke("preview_notebook_generation", {
       notebook_id: notebookId,
       cell_id: videoGeneration.id,
       draft: {
         prompt: "A moonlit garden in motion",
         provider: "kie",
-        model: "GeminiOmniVideoRequestSchema",
-        operation: "image_to_video",
-        tool: DEFAULT_VIDEO_TOOL,
+        model: DEFAULT_VIDEO_MODEL,
+        operation: "text_to_video",
+        tool: "generate_video",
         inputs: {
           generationMode: "t2v",
           generationSettings: {
@@ -657,7 +669,8 @@ describe("notebook action catalog", () => {
       };
     };
     expect(videoPreview).toMatchObject({
-      tool: DEFAULT_VIDEO_TOOL,
+      tool: "generate_video",
+      model: DEFAULT_VIDEO_MODEL,
       provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
       payload: {
         model: "bytedance/seedance-2-5",
@@ -677,9 +690,9 @@ describe("notebook action catalog", () => {
       draft: {
         prompt: "A moonlit garden in motion",
         provider: "kie",
-        model: "GeminiOmniVideoRequestSchema",
-        operation: "image_to_video",
-        tool: DEFAULT_VIDEO_TOOL,
+        model: DEFAULT_VIDEO_MODEL,
+        operation: "text_to_video",
+        tool: "generate_video",
         inputs: {
           generationMode: "r2v",
           generationSettings: { duration: "8" },

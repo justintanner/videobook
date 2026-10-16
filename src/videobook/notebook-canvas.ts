@@ -12,7 +12,7 @@ import { recordValue, asString } from '@/videobook/value-decoders'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { formatMediaAspectRatio, notebookSplitFrameIds } from '@/videobook/notebook-cell-presentation'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
-import { seedance25FrameAspectRatio } from '../../server/src/seedance25'
+import { frameAspectRatio } from '../../server/src/media/frame-options'
 
 export interface CanvasCellData extends NotebookCellData {
   post?: PostView
@@ -118,7 +118,7 @@ function videoCanvasMetadata(
   const generationSettings = producer?.type === 'generate_video'
     ? recordValue(producer.inputs?.generationSettings)
     : null
-  const configuredAspectRatio = seedance25FrameAspectRatio(producer?.tool ?? '', producer?.inputs ?? {}) ?? asString(
+  const configuredAspectRatio = frameAspectRatio(producer?.model ?? '', producer?.inputs ?? {}) ?? asString(
     cell?.inputs?.aspectRatio ?? cell?.inputs?.aspect_ratio,
   ) ?? asString(generationSettings?.aspect_ratio)
   const aspectRatio = configuredAspectRatio

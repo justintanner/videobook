@@ -31,7 +31,7 @@ import { isPublishedPostCell } from "../notebook-published-post.js";
 import { slotRight } from "../notebook-placement.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
-import { resolveImageRef } from "./_seedance2-shared.js";
+import { resolveImageRef } from "./_media-refs.js";
 
 function failure(message: string) {
   return {

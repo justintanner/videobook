@@ -1,14 +1,10 @@
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  LIGHTNING_SCENE_SCHEMA_DEFAULTS,
-  LIGHTNING_SCENE_TOOL,
-  LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS,
-  LIGHTNING_VIDEO_TOOL,
+  LIGHTNING_VIDEO_MODEL,
   payloadPrompt,
   submittedGenerationPrompt,
 } from "../lightning-defaults.js";
-import { seedance25FrameAspectRatio } from "../seedance25.js";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type {
@@ -43,14 +39,12 @@ import {
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
-import { translateToolPayload } from "../payload-builders.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
 import { spliceVideoDef } from "../tools/splice-video.js";
-import {
-  getActionSpec,
-  type GenerationActionSpec,
-} from "../generation-registry.js";
+import { tryResolveModel } from "../media/descriptor.js";
+import { previewGeneration } from "../media/preview.js";
+import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 import {
   captureFrame,
   concatSourceRanges,
@@ -66,7 +60,6 @@ import { analyzeNotebookSource } from "../notebook-live-analysis.js";
 import { analysisFixtureForCell } from "../notebook-fixtures.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
 import {
-  DEFAULT_ANIMATION_TOOL,
   normalizeLegacyAnalyzeCell,
   normalizeLegacyAnalyzeDocument,
 } from "../notebook-action-catalog.js";
@@ -81,18 +74,12 @@ import {
   notebookGenerationInputsAreCompatible,
 } from "../notebook-generation-contract.js";
 import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
-import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
 import {
   resolveGenerationInputReferences,
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
-import {
-  GEMINI_OMNI_VIDEO_TOOL,
-  geminiOmniClipInputError,
-} from "../gemini-omni-clip.js";
 import { sortByKindSlot } from "../generation-input-mentions.js";
-import { grokImagine1080pImageCountError } from "../grok-imagine-video-contract.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
 import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
@@ -273,7 +260,7 @@ export function notebookCellMediaType(
 export function notebookCellIsPaid(cell: NotebookCell): boolean {
   return cell.operation === "rewrite_prompt"
     || (cell.tool === "edit_image_subjects" && cell.provider !== "local")
-    || Boolean(getActionSpec(cell.tool ?? cell.model ?? ""));
+    || notebookCellModel(cell) !== null;
 }
 
 export function notebookCellIsRunnable(cell: NotebookCell): boolean {
@@ -451,29 +438,6 @@ export async function markNotebookCellQueued(
     { cellId, runId },
   );
   if (!result.ok) throw new Error(result.error.message);
-}
-
-function geminiOmniNotebookClipError(
-  document: NotebookDocument,
-  cell: NotebookCell,
-): string | null {
-  if (resolveNotebookGenerationTool(cell) !== GEMINI_OMNI_VIDEO_TOOL) return null;
-  const hasVideo = upstreamValues(document, cell).some((entry) =>
-    typeof entry.output === "string"
-    && entry.output !== ""
-    && notebookCellMediaType(entry.cell) === "video");
-  const inputs = cell.inputs ?? {};
-  const settings = inputs.generationSettings;
-  const saved = settings
-    && typeof settings === "object"
-    && !Array.isArray(settings)
-    ? settings as Record<string, unknown>
-    : {};
-  return geminiOmniClipInputError({
-    hasVideo,
-    start: saved.video_clip_start ?? inputs.video_clip_start,
-    ends: saved.video_clip_ends ?? inputs.video_clip_ends,
-  });
 }
 
 function upstreamValues(
@@ -991,217 +955,160 @@ function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
 
-function modelArgsWithMentions(
+function cellGenerationSettings(cell: NotebookCell): Record<string, unknown> {
+  const settings = cell.inputs?.generationSettings;
+  return settings && typeof settings === "object" && !Array.isArray(settings)
+    ? settings as Record<string, unknown>
+    : {};
+}
+
+type UpstreamEntry = ReturnType<typeof upstreamValues>[number];
+
+function outputsOf(entries: readonly UpstreamEntry[]): string[] {
+  return entries.flatMap(({ output }) => typeof output === "string" ? [output] : []);
+}
+
+function upstreamOfKind(upstream: readonly UpstreamEntry[], kind: "image" | "video" | "audio"): UpstreamEntry[] {
+  return upstream.filter(({ cell: source, output }) =>
+    typeof output === "string" && notebookCellMediaType(source) === kind);
+}
+
+function toolArgsWithMentions(
   definition: ToolDef,
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
   engine?: Engine,
 ): { input: Record<string, unknown>; mentions: NotebookPromptResolution } {
-  const settings = cell.inputs?.generationSettings;
-  const generationSettings = settings
-    && typeof settings === "object"
-    && !Array.isArray(settings)
-    ? settings as Record<string, unknown>
-    : {};
-  const upstream = upstreamValues(document, cell);
-  const refFor = (artifactId: string): string => `@${artifactId}`;
-  const configuredMode = typeof cell.inputs?.generationMode === "string"
-    ? cell.inputs.generationMode
-    : undefined;
-  const inputContract = notebookGenerationInputContract(definition.name, definition.schema);
-  const compatibleModes = inputContract.modes.filter((mode) => notebookGenerationInputsAreCompatible(
-    inputContract, document, cell, mode.id,
-  ));
+  const mentions = resolveGenerationInputReferences({ engine, document, cell, prompt: promptFor(document, cell) });
+  const args: Record<string, unknown> = {
+    ...(cell.inputs ?? {}),
+    ...cellGenerationSettings(cell),
+    book_id: bookId,
+    prompt: mentions.prompt,
+  };
+  delete args.generationMode;
+  delete args.generationSettings;
+  if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
+    args.model = typeof cell.inputs?.targetModel === "string" ? cell.inputs.targetModel : "seedance25";
+  }
+  const images = sortByKindSlot(
+    upstreamOfKind(upstreamValues(document, cell), "image")
+      .filter(({ targetInput }) => targetInput !== "first_frame" && targetInput !== "last_frame"),
+    "image",
+  );
+  if ("image_refs" in definition.schema && images.length > 0) args.image_refs = outputsOf(images);
+  return { input: args, mentions };
+}
+
+function generationModeFor(
+  model: ResolvedModel,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  upstream: readonly UpstreamEntry[],
+): string | undefined {
+  const contract = notebookGenerationInputContract(model);
+  const configured = typeof cell.inputs?.generationMode === "string" ? cell.inputs.generationMode : undefined;
+  if (contract.modes.some((mode) => mode.id === configured)) return configured;
+  const compatible = contract.modes.filter((mode) =>
+    notebookGenerationInputsAreCompatible(contract, document, cell, mode.id));
   const hasFrameInput = upstream.some((entry) =>
     entry.targetInput === "first_frame" || entry.targetInput === "last_frame");
-  const generationMode = inputContract.modes.find((mode) => mode.id === configuredMode)?.id
-    ?? compatibleModes.find((mode) => mode.id === (hasFrameInput ? "i2v" : "r2v"))?.id
-    ?? compatibleModes[0]?.id
-    ?? configuredMode;
-  const generationCell = { ...cell, inputs: { ...cell.inputs, generationMode } };
+  return compatible.find((mode) => mode.id === (hasFrameInput ? "i2v" : "r2v"))?.id
+    ?? compatible[0]?.id
+    ?? configured;
+}
+
+function frameEntry(upstream: readonly UpstreamEntry[], target: string, mode: string | undefined): UpstreamEntry | undefined {
+  return mode === "r2v"
+    ? undefined
+    : upstream.find((entry) => entry.targetInput === target && typeof entry.output === "string" && isImageLikeCell(entry.cell));
+}
+
+function mediaRefsFor(
+  model: ResolvedModel,
+  upstream: readonly UpstreamEntry[],
+  mode: string | undefined,
+): MediaRefs {
+  const roles = new Set(model.slots.map((slot) => slot.role));
+  const modeRoles = new Set(model.modes.find((candidate) => candidate.id === mode)?.roles ?? [...roles]);
+  let firstFrame = frameEntry(upstream, "first_frame", mode);
+  let lastFrame = frameEntry(upstream, "last_frame", mode);
+  const images = sortByKindSlot(
+    upstreamOfKind(upstream, "image").filter(({ targetInput }) =>
+      mode === "r2v" || (targetInput !== "first_frame" && targetInput !== "last_frame")),
+    "image",
+  );
+  const frameMode = mode === "i2v" || ((mode === undefined || mode === "default") && Boolean(firstFrame || lastFrame));
+  if (frameMode && !firstFrame && modeRoles.has("first_frame") && !modeRoles.has("image")) firstFrame = images.shift();
+  if (frameMode && !lastFrame && modeRoles.has("last_frame") && !modeRoles.has("image")) lastFrame = images.shift();
+  const videos = sortByKindSlot(upstreamOfKind(upstream, "video"), "video");
+  const audios = sortByKindSlot(
+    upstreamOfKind(upstream, "audio").filter(({ targetInput }) => targetInput !== "replace_audio"),
+    "audio",
+  );
+  const candidates: MediaRefs = {
+    first_frame: outputsOf(firstFrame ? [firstFrame] : []),
+    last_frame: outputsOf(lastFrame ? [lastFrame] : []),
+    image: outputsOf(images),
+    video: outputsOf(videos),
+    audio: outputsOf(audios),
+  };
+  const refs: MediaRefs = {};
+  for (const role of REF_ROLES) {
+    const list = candidates[role] ?? [];
+    if (list.length > 0 && modeRoles.has(role)) refs[role] = list;
+  }
+  return refs;
+}
+
+function mediaOptions(model: ResolvedModel, cell: NotebookCell): Record<string, unknown> {
+  const settings = cellGenerationSettings(cell);
+  const names = new Set(model.options.map((option) => option.name));
+  return Object.fromEntries(Object.entries(settings).filter(([name, value]) =>
+    names.has(name) && value !== undefined && value !== ""));
+}
+
+function mediaGenerationArgs(
+  model: ResolvedModel,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+  engine?: Engine,
+): { input: Record<string, unknown>; mentions: NotebookPromptResolution } {
+  const upstream = upstreamValues(document, cell);
+  const mode = generationModeFor(model, document, cell, upstream);
+  const generationCell = { ...cell, inputs: { ...cell.inputs, generationMode: mode } };
   const mentions = resolveGenerationInputReferences({
     engine,
     document,
     cell: generationCell,
     prompt: promptFor(document, generationCell),
   });
-  const prompt = mentions.prompt;
-  const args: Record<string, unknown> = {
-    ...(cell.inputs ?? {}),
-    ...generationSettings,
-    book_id: bookId,
-    prompt,
-  };
-  delete args.generationMode;
-  delete args.generationSettings;
-  if (generationMode === "r2v") {
-    delete args.first_frame_ref;
-    delete args.last_frame_ref;
-    delete args.end_frame_ref;
-  }
-  if ("text" in definition.schema) {
-    args.text = prompt;
-  }
-  if (
-    definition.name === "generate_kie_gemini_omni_video"
-    && args.duration === undefined
-  ) {
-    args.duration = "8";
-  }
-  if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
-    args.model = typeof cell.inputs?.targetModel === "string"
-      ? cell.inputs.targetModel
-      : "seedance25";
-  }
-  let firstFrame = upstream.find((entry) =>
-    generationMode !== "r2v" && entry.targetInput === "first_frame"
-    && typeof entry.output === "string"
-    && isImageLikeCell(entry.cell));
-  let lastFrame = upstream.find((entry) =>
-    generationMode !== "r2v" && entry.targetInput === "last_frame"
-    && typeof entry.output === "string"
-    && isImageLikeCell(entry.cell));
-  const genericImages = sortByKindSlot(
-    upstream.filter(({ cell: source, output, targetInput }) =>
-      typeof output === "string"
-      && isImageLikeCell(source)
-      && (generationMode === "r2v"
-        || (targetInput !== "first_frame" && targetInput !== "last_frame"))),
-    "image",
-  );
-  const supportsFirstFrame = "first_frame_ref" in definition.schema;
-  const supportsLastFrame = "last_frame_ref" in definition.schema
-    || "end_frame_ref" in definition.schema;
-  const frameMode = generationMode === "i2v"
-    || (
-      (generationMode === undefined || generationMode === "default")
-      && Boolean(firstFrame?.output || lastFrame?.output)
-    );
-  if (frameMode && !firstFrame?.output && supportsFirstFrame) {
-    firstFrame = genericImages.shift();
-  }
-  if (frameMode && !lastFrame?.output && supportsLastFrame) {
-    lastFrame = genericImages.shift();
-  }
-  if (firstFrame?.output && "first_frame_ref" in definition.schema) {
-    args.first_frame_ref = refFor(firstFrame.output);
-  }
-  if (lastFrame?.output && "last_frame_ref" in definition.schema) {
-    args.last_frame_ref = refFor(lastFrame.output);
-  }
-  if (lastFrame?.output && "end_frame_ref" in definition.schema) {
-    args.end_frame_ref = refFor(lastFrame.output);
-  }
-
-  const imageReferences = genericImages.map(({ output }) => refFor(output!));
-  if ("image_refs" in definition.schema && imageReferences.length > 0) {
-    args.image_refs = imageReferences;
-  }
-  if (
-    "character_image_refs" in definition.schema
-    && imageReferences.length > 0
-  ) {
-    args.character_image_refs = imageReferences;
-  }
-  if ("image_ref" in definition.schema && imageReferences[0]) {
-    args.image_ref = imageReferences[0];
-  }
-  const videoReferences = sortByKindSlot(
-    upstream.filter(({ cell: source, output }) =>
-      typeof output === "string"
-      && notebookCellMediaType(source) === "video"),
-    "video",
-  ).map(({ output }) => refFor(output!));
-  if ("video_refs" in definition.schema && videoReferences.length > 0) {
-    args.video_refs = videoReferences;
-  }
-  if (
-    "motion_video_refs" in definition.schema
-    && videoReferences.length > 0
-  ) {
-    args.motion_video_refs = videoReferences;
-  }
-  if ("video_ref" in definition.schema && videoReferences[0]) {
-    args.video_ref = videoReferences[0];
-  }
-  if ("first_clip_ref" in definition.schema && videoReferences[0]) {
-    args.first_clip_ref = videoReferences[0];
-  }
   const replacementAudio = upstream.find((entry) =>
     entry.targetInput === "replace_audio" && typeof entry.output === "string");
-  if (
-    replacementAudio?.output
-    && "replace_audio_with" in definition.schema
-  ) {
-    args.replace_audio_with = refFor(replacementAudio.output);
-  }
-  const audioReferences = sortByKindSlot(
-    upstream.filter(({ cell: source, output, targetInput }) =>
-      typeof output === "string"
-      && notebookCellMediaType(source) === "audio"
-      && targetInput !== "replace_audio"),
-    "audio",
-  ).map(({ output }) => refFor(output!));
-  if (
-    "audio_refs" in definition.schema
-    && audioReferences.length > 0
-    && !firstFrame?.output
-    && !lastFrame?.output
-  ) {
-    args.audio_refs = audioReferences;
-  }
-  if ("audio_ref" in definition.schema && audioReferences[0]) {
-    args.audio_ref = audioReferences[0];
-  }
-  if ("driving_audio_ref" in definition.schema && audioReferences[0]) {
-    args.driving_audio_ref = audioReferences[0];
-  }
-  const omittedDefaults = definition.name === LIGHTNING_VIDEO_TOOL
-    ? LIGHTNING_SEEDANCE_SCHEMA_DEFAULTS
-    : definition.name === LIGHTNING_SCENE_TOOL
-      ? LIGHTNING_SCENE_SCHEMA_DEFAULTS
-      : null;
-  if (omittedDefaults) {
-    for (const [key, value] of Object.entries(omittedDefaults)) {
-      if (args[key] === undefined) args[key] = value;
-    }
-  }
-  const aspectRatio = seedance25FrameAspectRatio(definition.name, args);
-  if (aspectRatio) args.aspect_ratio = aspectRatio;
-  return { input: args, mentions };
+  const input: Record<string, unknown> = {
+    book_id: bookId,
+    model: model.id,
+    ...(mentions.prompt ? { prompt: mentions.prompt } : {}),
+    refs: mediaRefsFor(model, upstream, mode),
+    options: mediaOptions(model, cell),
+    ...(mode && mode !== "default" ? { mode } : {}),
+    ...(replacementAudio?.output && model.media === "video" ? { replace_audio_with: replacementAudio.output } : {}),
+  };
+  return { input, mentions };
 }
 
-export function modelArgs(
-  definition: ToolDef,
-  document: NotebookDocument,
-  cell: NotebookCell,
-  bookId: string,
-  engine?: Engine,
-): Record<string, unknown> {
-  return modelArgsWithMentions(
-    definition,
-    document,
-    cell,
-    bookId,
-    engine,
-  ).input;
+export function notebookCellModel(cell: NotebookCell): ResolvedModel | null {
+  if (cell.type !== "generate_image" && cell.type !== "generate_video" && cell.type !== "generate_audio") return null;
+  if (cell.tool === "edit_image_subjects") return null;
+  return cell.model ? tryResolveModel(cell.model.trim()) : null;
 }
 
 export function resolveNotebookGenerationTool(cell: NotebookCell): string | null {
-  const tool = cell.tool?.trim();
-  if (tool) return tool;
-  const model = cell.model?.trim();
-  if (
-    model
-    && (model.startsWith("generate_")
-      || model.startsWith("extend_")
-      || model.startsWith("upscale_")
-      || Boolean(getActionSpec(model)))
-  ) {
-    return model;
-  }
-  return null;
+  const model = notebookCellModel(cell);
+  if (model) return `generate_${model.media}`;
+  return cell.tool?.trim() || null;
 }
 
 function formatNotebookGenerationSchemaError(error: z.ZodError): string {
@@ -1222,170 +1129,117 @@ function formatNotebookGenerationSchemaError(error: z.ZodError): string {
   }).join("; ");
 }
 
-export async function prepareNotebookGeneration(
-  engine: Engine,
-  document: NotebookDocument,
-  cell: NotebookCell,
-  bookId: string,
-  options: { allowReferenceIssues?: boolean } = {},
-): Promise<{
+type PreparedNotebookGeneration = {
   tool: string;
   provider: string;
   model: string;
   input: Record<string, unknown>;
   mentions: NotebookPromptResolution;
   imageEdit?: Awaited<ReturnType<typeof prepareNotebookImageEdit>>;
-}> {
-  const tool = resolveNotebookGenerationTool(cell);
-  if (!tool) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
-  if (tool === "edit_image_subjects") {
-    const mentions = resolveGenerationInputReferences({ engine, document, cell, prompt: cell.prompt ?? "" });
-    const issues = [...mentions.unresolved, ...mentions.unconnected];
-    if (!options.allowReferenceIssues && issues.length > 0) {
-      throw new Error(issues.map((issue) => issue.message).join("; "));
-    }
-    const imageEdit = await prepareNotebookImageEdit(engine, document, cell, mentions.prompt);
-    return { tool, provider: imageEdit.provider, model: imageEdit.model,
-      input: imageEdit.input, mentions, imageEdit };
+};
+
+function referenceIssueError(cell: NotebookCell, mentions: NotebookPromptResolution): string | null {
+  const issues = [...mentions.unresolved, ...mentions.unconnected];
+  return issues.length > 0
+    ? `Cannot prepare ${notebookGridTag(cell.slot)}: ${issues.map((reference) => reference.message).join("; ")}`
+    : null;
+}
+
+function prepareMediaGeneration(
+  model: ResolvedModel,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+  engine: Engine,
+  options: { allowReferenceIssues?: boolean },
+): PreparedNotebookGeneration {
+  const expected = cell.type.replace(/^generate_/u, "");
+  if (model.media !== expected) {
+    throw new Error(`${model.id} generates ${model.media}, not ${cell.type}`);
   }
-  const spec = getActionSpec(tool);
-  if (spec) {
-    const expected = cell.type === "generate_video"
-      ? "video"
-      : cell.type === "generate_image"
-        ? "image"
-        : cell.type === "generate_audio"
-          ? "audio"
-          : null;
-    if (!expected || spec.media_type !== expected) {
-      throw new Error(
-        `Generation tool ${tool} produces ${spec.media_type}, not ${cell.type}`,
-      );
-    }
-  }
-  const { getAllToolDefs } = await import("../tools/index.js");
-  const definition = getAllToolDefs(engine).find((candidate) => candidate.name === tool);
-  if (!definition) throw new Error(`Unknown notebook generation model: ${tool}`);
-  if (
-    cell.type === "generate_image"
-    && !("image_refs" in definition.schema)
-    && !("image_ref" in definition.schema)
-  ) {
-    const connectedImages = upstreamValues(document, cell).filter((entry) =>
-      typeof entry.output === "string" && isImageLikeCell(entry.cell)).length;
-    if (connectedImages > 0) {
-      throw new Error(
-        `${notebookGridTag(cell.slot)} has ${connectedImages} image input(s) connected, but ${tool} `
-        + "accepts no image and would ignore them — switch OPERATION to "
-        + "image_to_image or edit_image, or disconnect the image input",
-      );
-    }
-  }
-  const inputContract = notebookGenerationInputContract(tool, definition.schema);
-  const generationMode = typeof cell.inputs?.generationMode === "string"
-    ? cell.inputs.generationMode
-    : undefined;
-  if (!notebookGenerationInputsAreCompatible(
-    inputContract,
-    document,
-    cell,
-    generationMode,
-  )) {
-    const inputError = notebookGenerationInputError(inputContract, document, cell, generationMode);
+  const contract = notebookGenerationInputContract(model);
+  const configuredMode = typeof cell.inputs?.generationMode === "string" ? cell.inputs.generationMode : undefined;
+  if (!notebookGenerationInputsAreCompatible(contract, document, cell, configuredMode)) {
+    const inputError = notebookGenerationInputError(contract, document, cell, configuredMode);
     throw new Error(
-      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for ${notebookGridTag(cell.slot)}${inputError ? `. ${inputError}` : ""}`,
+      `${model.title}${configuredMode ? ` mode ${configuredMode}` : ""} does not accept the current media inputs for ${notebookGridTag(cell.slot)}${inputError ? `. ${inputError}` : ""}`,
     );
   }
-  const preparedArgs = modelArgsWithMentions(
-    definition,
-    document,
-    cell,
-    bookId,
-    engine,
-  );
-  const referenceIssues = [
-    ...preparedArgs.mentions.unresolved,
-    ...preparedArgs.mentions.unconnected,
-  ];
-  if (!options.allowReferenceIssues && referenceIssues.length > 0) {
-    throw new Error(
-      `Cannot prepare ${notebookGridTag(cell.slot)}: ${referenceIssues
-        .map((reference) => reference.message)
-        .join("; ")}`,
-    );
-  }
-  const parsed = z.object(definition.schema).safeParse(preparedArgs.input);
-  if (!parsed.success) {
-    throw new Error(formatNotebookGenerationSchemaError(parsed.error));
-  }
-  if (tool === GEMINI_OMNI_VIDEO_TOOL) {
-    const data = parsed.data as Record<string, unknown>;
-    const clipError = geminiOmniClipInputError({
-      hasVideo: typeof data.video_ref === "string" && data.video_ref.trim() !== "",
-      start: data.video_clip_start,
-      ends: data.video_clip_ends,
-    });
-    if (clipError) throw new Error(clipError);
-  }
-  if (
-    spec?.canonical_name === "generate_kie_grok_imagine_image_to_video"
-    && !(typeof parsed.data._provider === "string" && parsed.data._provider.startsWith("xai"))
-  ) {
-    const imageCount = Array.isArray(parsed.data.image_refs)
-      ? parsed.data.image_refs.length
-      : typeof parsed.data.asset_id === "string" ? 1 : 0;
-    const resolutionError = grokImagine1080pImageCountError(
-      imageCount,
-      parsed.data.resolution,
-    );
-    if (resolutionError) throw new Error(resolutionError);
-  }
-  if (tool === "generate_kie_kling_3_0_motion_control") {
-    const motionRefs = parsed.data.motion_video_refs;
-    const motionRef = Array.isArray(motionRefs)
-      ? motionRefs.find((value): value is string => typeof value === "string")
-      : undefined;
-    if (!motionRef) {
-      throw new Error("Kling 3.0 Motion Control requires one motion video");
-    }
-    await assertKlingMotionControlDuration(
-      engine,
-      motionRef,
-      parsed.data.character_orientation === "image" ? "image" : "video",
-    );
+  const prepared = mediaGenerationArgs(model, document, cell, bookId, engine);
+  const referenceError = referenceIssueError(cell, prepared.mentions);
+  if (!options.allowReferenceIssues && referenceError) throw new Error(referenceError);
+  if (!referenceError) {
+    const preview = previewGeneration(prepared.input);
+    if (!preview.ok) throw new Error(preview.error);
   }
   return {
-    tool,
-    provider: spec?.provider ?? "unknown",
-    model: providerModelString(tool, parsed.data, spec, cell.model),
-    input: parsed.data as Record<string, unknown>,
-    mentions: preparedArgs.mentions,
+    tool: `generate_${model.media}`,
+    provider: model.provider,
+    model: model.id,
+    input: prepared.input,
+    mentions: prepared.mentions,
   };
 }
 
-function payloadModelString(payload: Record<string, unknown>): string | undefined {
-  const model = payload.model ?? payload.endpoint_id;
-  return typeof model === "string" && model.trim() !== "" ? model : undefined;
+async function prepareImageEditGeneration(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  options: { allowReferenceIssues?: boolean },
+): Promise<PreparedNotebookGeneration> {
+  const mentions = resolveGenerationInputReferences({ engine, document, cell, prompt: cell.prompt ?? "" });
+  const issues = [...mentions.unresolved, ...mentions.unconnected];
+  if (!options.allowReferenceIssues && issues.length > 0) {
+    throw new Error(issues.map((issue) => issue.message).join("; "));
+  }
+  const imageEdit = await prepareNotebookImageEdit(engine, document, cell, mentions.prompt);
+  return { tool: "edit_image_subjects", provider: imageEdit.provider, model: imageEdit.model,
+    input: imageEdit.input, mentions, imageEdit };
 }
 
-function providerModelString(
+async function prepareToolGeneration(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
   tool: string,
-  input: Record<string, unknown>,
-  spec: GenerationActionSpec | undefined,
-  cellModel: string | undefined,
-): string {
-  try {
-    const translated = translateToolPayload(tool, input, spec?.provider);
-    const model = translated ? payloadModelString(translated.payload) : undefined;
-    if (model) return model;
-  } catch {
-    // Payload build is best-effort here (e.g. unresolved preview mentions);
-    // fall through to identifiers that are not zod schema names.
+  options: { allowReferenceIssues?: boolean },
+): Promise<PreparedNotebookGeneration> {
+  const { getAllToolDefs } = await import("../tools/index.js");
+  const definition = getAllToolDefs(engine).find((candidate) => candidate.name === tool);
+  if (!definition) throw new Error(`Unknown notebook generation tool: ${tool}`);
+  const prepared = toolArgsWithMentions(definition, document, cell, bookId, engine);
+  const referenceError = referenceIssueError(cell, prepared.mentions);
+  if (!options.allowReferenceIssues && referenceError) throw new Error(referenceError);
+  const parsed = z.object(definition.schema).safeParse(prepared.input);
+  if (!parsed.success) throw new Error(formatNotebookGenerationSchemaError(parsed.error));
+  return {
+    tool,
+    provider: cell.provider ?? "unknown",
+    model: cell.model ?? tool,
+    input: parsed.data as Record<string, unknown>,
+    mentions: prepared.mentions,
+  };
+}
+
+export async function prepareNotebookGeneration(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+  options: { allowReferenceIssues?: boolean } = {},
+): Promise<PreparedNotebookGeneration> {
+  if (cell.tool === "edit_image_subjects") return prepareImageEditGeneration(engine, document, cell, options);
+  const model = notebookCellModel(cell);
+  if (model) return prepareMediaGeneration(model, document, cell, bookId, engine, options);
+  if (cell.type === "generate_image" || cell.type === "generate_video" || cell.type === "generate_audio") {
+    throw new Error(
+      `${notebookGridTag(cell.slot)} uses ${cell.model || cell.tool || "no model"}, which is not a generation model; pick one from list_generation_models`,
+    );
   }
-  const identifier = spec?.apicity_identifier;
-  if (identifier && !identifier.endsWith("Schema")) return identifier;
-  if (cellModel && !cellModel.endsWith("Schema")) return cellModel;
-  return tool;
+  const tool = resolveNotebookGenerationTool(cell);
+  if (!tool) throw new Error(`No generation tool for ${cell.type} cell ${cell.id}`);
+  return prepareToolGeneration(engine, document, cell, bookId, tool, options);
 }
 
 const GENERATION_ERROR_MAX_LENGTH = 500;
@@ -2409,13 +2263,13 @@ async function executeLocalOrGeneration(
       || cell.type === "generate_image"
       || cell.type === "generate_audio"
     )
-    && (getActionSpec(resolveNotebookGenerationTool(cell) ?? "")
+    && (notebookCellModel(cell) !== null
       || cell.tool === "edit_image_subjects")
   ) {
     const requiresConfirmation = cell.inputs?.requiresConfirmation === true
       || (cell.tool === "edit_image_subjects" && cell.provider !== "local")
-      || (cell.tool ?? cell.model ?? "").includes("seedance")
-      || (cell.tool ?? cell.model) === DEFAULT_ANIMATION_TOOL;
+      || (cell.model ?? "").includes("seedance")
+      || cell.model === LIGHTNING_VIDEO_MODEL;
     if (requiresConfirmation && !options.confirmPaid) {
       throw new Error(
         `Paid generation for ${notebookGridTag(cell.slot)} requires confirmation before starting`,
@@ -2461,6 +2315,11 @@ async function executeLocalOrGeneration(
     };
   }
 
+  if (cell.type === "generate_video" || cell.type === "generate_image" || cell.type === "generate_audio") {
+    throw new Error(
+      `${notebookGridTag(cell.slot)} uses ${cell.model || cell.tool || "no model"}, which is not a generation model; pick one from list_generation_models`,
+    );
+  }
   throw new Error(`Cell operation ${cell.operation ?? "unset"} is not runnable`);
 }
 
@@ -2482,8 +2341,6 @@ export async function runNotebookCell(
   );
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
-  const clipError = geminiOmniNotebookClipError(normalizedDocument, normalizedCell);
-  if (clipError) throw new Error(clipError);
   const generateMediaOutput = normalizedCell.type === "generate_audio"
     ? ensureGenerationMediaOutput(
         engine,
@@ -3103,8 +2960,6 @@ export async function claimNotebookGenerationPlan(
           `Notebook cell ${notebookGridTag(cell.slot)} is already ${execution.status}`,
         );
       }
-      const clipError = geminiOmniNotebookClipError(document, cell);
-      if (clipError) throw new Error(clipError);
       let working = document;
       let outputCellId: string | undefined;
       if (cell.type === "generate_image" || cell.type === "generate_video") {

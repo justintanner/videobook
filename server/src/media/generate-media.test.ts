@@ -169,8 +169,8 @@ describe("generic media generation", () => {
     expect(speech.models.length).toBeGreaterThan(5);
     for (const model of speech.models) expect(model).toMatchObject({ media: "audio", operations: expect.arrayContaining(["speech"]) });
     const seedance = all.models.find((model) => model.id === "kie:bytedance/seedance-2-5") as unknown as { options: Array<{ name: string; defaultValue?: unknown }>; modes: Array<{ id: string }> };
-    expect(seedance.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: "resolution", defaultValue: "720p" })]));
-    expect(seedance.modes.map((mode) => mode.id)).toEqual(["i2v", "r2v"]);
+    expect(seedance.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: "resolution", defaultValue: "1080p" })]));
+    expect(seedance.modes.map((mode) => mode.id)).toEqual(["t2v", "i2v", "r2v"]);
   });
 
   it("rejects bad generation calls before creating an artifact", async () => {
@@ -178,7 +178,7 @@ describe("generic media generation", () => {
     const before = engine.artifacts.list().length;
     expect(toolError(await client.callTool({ name: "generate_image", arguments: { book_id, model: "generate_kie_nano_banana_2_1_image", prompt: "x" } }))).toMatch(/Unknown model/);
     expect(toolError(await client.callTool({ name: "generate_image", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x" } }))).toMatch(/generates video, not image/);
-    expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x", options: { duration: 999 } } }))).toMatch(/options\.duration/);
+    expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x", options: { duration: 999 } } }))).toMatch(/Duration:/);
     expect(toolError(await client.callTool({ name: "generate_image", arguments: { book_id, model: "kie:nano-banana-2-1", prompt: "x", refs: { image: ["0198c2a0-0000-7000-8000-00000000dead"] } } }))).toMatch(/image ref/);
     expect(toolError(await client.callTool({ name: "generate_audio", arguments: { book_id, model: "kie:suno/generate", prompt: "x", operation: "speech" } }))).toMatch(/does not support speech/);
     const image = await imageArtifact();
@@ -199,7 +199,7 @@ describe("generic media generation", () => {
     const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
     expect(submitted).toMatchObject({
       model: "nano-banana-2-1",
-      input: { prompt: "reference image 1 in the snow", aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
+      input: { prompt: "reference image 1 in the snow", aspect_ratio: "16:9", resolution: "2K", output_format: "jpg" },
     });
     expect(submitted.input.image_input).toEqual([source]);
     const pending = engine.jobs.pending.read(assetId);

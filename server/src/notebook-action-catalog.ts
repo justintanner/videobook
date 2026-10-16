@@ -1,5 +1,4 @@
-import { NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
-import { LIGHTNING_VIDEO_TOOL } from "./lightning-defaults.js";
+import { LIGHTNING_SCENE_MODEL, LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import type {
   Generation,
   NotebookCell,
@@ -8,11 +7,10 @@ import type {
 } from "videobook-engine";
 import { notebookCellTableRows } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
-import {
-  GENERATION_ACTIONS,
-  getActionSpec,
-  type GenerationActionSpec,
-} from "./generation-registry.js";
+import { listModels } from "./media/listing.js";
+import type { ResolvedModel } from "./media/types.js";
+import { notebookGenerationInputContract } from "./notebook-generation-contract.js";
+import { controlsForModel } from "./notebook-generation-controls.js";
 import {
   ANALYSIS_REASONING_EFFORT,
   INTELLIGENCE_MODEL,
@@ -316,132 +314,61 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
 ];
 
-const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_5_video";
-const DEFAULT_VIDEO_TOOL = LIGHTNING_VIDEO_TOOL;
-const DEFAULT_IMAGE_TOOL = NANO_BANANA_2_1_TOOL;
-const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
+const DEFAULT_ANIMATION_MODEL = LIGHTNING_VIDEO_MODEL;
+const DEFAULT_VIDEO_MODEL = LIGHTNING_VIDEO_MODEL;
+const DEFAULT_IMAGE_MODEL = LIGHTNING_SCENE_MODEL;
+const DEFAULT_AUDIO_MODEL = "elevenlabs:text-to-speech";
+const DEFAULT_MODELS = new Set([DEFAULT_VIDEO_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_AUDIO_MODEL]);
 
-const generationTitleOverrides: Record<string, string> = {
-  generate_kie_gpt_image_2_5_flare_image: "GPT Image 2.5 Flare",
-  generate_kie_gpt_image_2_5_sunburst_image: "GPT Image 2.5 Sunburst",
-  generate_kie_gemini_omni_video: "Gemini Omni Video",
-  generate_google_flow_omni_flash_video: "Gemini Omni Video",
-  generate_kie_nano_banana_pro_text_to_image: "Nano Banana Pro",
-  generate_kie_nano_banana_2_1_image: "Nano Banana 2.1",
-  generate_google_flow_nano_banana_pro_image: "Nano Banana Pro",
-  generate_kie_seedance_2_5_video: "Seedance 2.5",
-  generate_kie_kling_3_0_omni_text_to_video: "Kling 3.0 Omni",
-  generate_kie_kling_3_0_omni_image_to_video: "Kling 3.0 Omni Image",
-  generate_kie_kling_3_0_omni_reference_to_video: "Kling 3.0 Omni Reference",
-  generate_kie_kling_3_0_omni_transformation: "Kling 3.0 Omni Transformation",
-  generate_kie_kling_3_0_motion_control: "Kling 3.0 Motion Control",
-  generate_elevenlabs_text_to_audio: "ElevenLabs",
-};
-
-const providerLabels: Record<GenerationActionSpec["provider"], string> = {
+const providerLabels: Record<ResolvedModel["provider"], string> = {
   kie: "Kie",
   fal: "Fal",
   xai: "xAI",
-  google_flow: "Google Flow",
+  googleflow: "Google Flow",
   alibaba: "Alibaba",
   elevenlabs: "ElevenLabs",
-  workflow: "Workflow",
 };
 
-function generationActionTitle(spec: GenerationActionSpec): string {
-  const override = generationTitleOverrides[spec.canonical_name];
-  if (override) return override;
-  const withoutAction = spec.canonical_name.replace(
-    /^(generate|extend|upscale)_/,
-    "",
-  );
-  const withoutProvider = withoutAction.replace(
-    /^(kie|fal|xai|google_flow|alibaba|elevenlabs|workflow)_/,
-    "",
-  );
-  return withoutProvider
-    .replace(/_(\d)_(\d)(?=_|$)/g, "_$1.$2")
-    .split("_")
-    .map((word) => {
-      if (word === "gpt") return "GPT";
-      if (word === "xai") return "xAI";
-      if (word === "to") return "to";
-      return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
-    })
-    .join(" ");
+function hasDualFrame(model: ResolvedModel): boolean {
+  const roles = new Set(model.slots.map((slot) => slot.role));
+  return roles.has("first_frame") && roles.has("last_frame");
 }
 
-function generationDefaultPriority(tool: string): number | undefined {
-  if (
-    tool === DEFAULT_VIDEO_TOOL
-    || tool === DEFAULT_IMAGE_TOOL
-    || tool === DEFAULT_AUDIO_TOOL
-  ) return 0;
-  if (tool === DEFAULT_ANIMATION_TOOL) return 1;
-  return undefined;
-}
-
-function generationCellType(
-  spec: GenerationActionSpec,
-): NotebookCellType | null {
-  if (spec.media_type === "video") return "generate_video";
-  if (spec.media_type === "image") return "generate_image";
-  if (spec.media_type === "audio") return "generate_audio";
-  return null;
-}
-
-function generationAction(spec: GenerationActionSpec): NotebookAction | null {
-  const cellType = generationCellType(spec);
-  if (!cellType) return null;
+function generationAction(model: ResolvedModel): NotebookAction {
+  const operation = model.entry.operations[0]!;
+  const tool = `generate_${model.media}`;
   return {
-    id: `generation.${spec.canonical_name}`,
-    cellTypes: [cellType],
+    id: `generation.${model.id}`,
+    cellTypes: [`generate_${model.media}`],
     kind: "generation",
-    operation: spec.operation,
-    provider: spec.provider,
-    model: spec.apicity_identifier,
-    tool: spec.canonical_name,
-    title: generationActionTitle(spec),
-    description: `${spec.provider} ${spec.operation} (${spec.media_type})`,
+    operation,
+    provider: model.provider,
+    model: model.id,
+    tool,
+    title: model.title,
+    description: model.entry.description ?? `${providerLabels[model.provider]} ${model.entry.operations.join(", ")}`,
     outputKind: "artifact",
     billable: true,
-    defaults: {
-      provider: spec.provider,
-      model: spec.apicity_identifier,
-      operation: spec.operation,
-      tool: spec.canonical_name,
-    },
+    defaults: { provider: model.provider, model: model.id, operation, tool },
     parameters: [],
     requiredInputs: [],
     capabilities: {
-      dualFrame: spec.canonical_name.includes("seedance"),
+      dualFrame: hasDualFrame(model),
       localMedia: false,
       requiresConfirmation: true,
     },
-    providerLabel: providerLabels[spec.provider],
-    defaultPriority: generationDefaultPriority(spec.canonical_name),
-    isDefault:
-      spec.canonical_name === DEFAULT_VIDEO_TOOL
-      || spec.canonical_name === DEFAULT_IMAGE_TOOL
-      || spec.canonical_name === DEFAULT_AUDIO_TOOL,
+    providerLabel: providerLabels[model.provider],
+    ...(DEFAULT_MODELS.has(model.id) ? { defaultPriority: 0, isDefault: true } : {}),
+    inputContract: notebookGenerationInputContract(model),
+    controls: controlsForModel(model),
   };
 }
 
 export function listNotebookActions(options: {
   includeHiddenGeneration?: boolean;
 } = {}): NotebookAction[] {
-  const generation = GENERATION_ACTIONS
-    .filter((spec) =>
-      options.includeHiddenGeneration
-      || spec.picker_visibility === "visible"
-      || spec.canonical_name === DEFAULT_VIDEO_TOOL
-      || spec.canonical_name === DEFAULT_ANIMATION_TOOL
-      || spec.canonical_name === DEFAULT_IMAGE_TOOL
-      || spec.canonical_name === DEFAULT_AUDIO_TOOL)
-    .flatMap((spec) => {
-      const action = generationAction(spec);
-      return action ? [action] : [];
-    });
+  const generation = listModels({ includeHidden: options.includeHiddenGeneration === true })
+    .map(generationAction);
   const imageEdits: NotebookAction[] = [
     ...IMAGE_EDIT_MODELS,
     { id: "sharp/layer-composite", label: "Remove subjects", provider: "local" as const },
@@ -479,6 +406,21 @@ export function listNotebookActions(options: {
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
+function configuredAction(
+  actions: readonly NotebookAction[],
+  cell: NotebookCell,
+): NotebookAction | undefined {
+  if (cell.model) {
+    const byModel = actions.find((action) => action.model === cell.model
+      && (!cell.tool || action.tool === cell.tool));
+    if (byModel) return byModel;
+  }
+  const tool = cell.tool;
+  if (!tool) return undefined;
+  return actions.find((action) => action.kind !== "generation"
+    && (action.tool === tool || action.id === tool));
+}
+
 function actionsForCell(
   cell: NotebookCell,
   document: NotebookDocument,
@@ -496,8 +438,8 @@ function actionsForCell(
   const hasFrames = inputs.has("first_frame") && inputs.has("last_frame");
   return all.filter((action) => {
     if (action.kind !== "generation") return true;
-    if (!action.capabilities.dualFrame) return !hasFrames || action.tool === cell.tool;
-    return hasFrames || action.tool === DEFAULT_ANIMATION_TOOL || action.tool === cell.tool;
+    if (!action.capabilities.dualFrame) return !hasFrames || action.model === cell.model;
+    return hasFrames || action.model === DEFAULT_ANIMATION_MODEL || action.model === cell.model;
   });
 }
 
@@ -512,11 +454,7 @@ function defaultActionForCell(
       action.operation === normalizedCell.operation);
     if (splitOperation) return splitOperation;
   }
-  const tool = normalizedCell.tool ?? normalizedCell.model;
-  const configured = tool
-    ? actions.find((action) =>
-      action.tool === tool || action.id === tool || action.model === tool)
-    : undefined;
+  const configured = configuredAction(actions, normalizedCell);
   if (configured) return configured;
   if (normalizedCell.operation) {
     const operation = actions.find((action) =>
@@ -540,18 +478,14 @@ function defaultActionForCell(
     return actions.find((action) => action.operation === "splice_video")
       ?? null;
   }
-  const defaultGenerationTools = normalizedCell.type === "generate_video"
-    ? [DEFAULT_VIDEO_TOOL, DEFAULT_ANIMATION_TOOL]
+  const defaultModel = normalizedCell.type === "generate_video"
+    ? DEFAULT_VIDEO_MODEL
     : normalizedCell.type === "generate_image"
-      ? [DEFAULT_IMAGE_TOOL]
+      ? DEFAULT_IMAGE_MODEL
       : normalizedCell.type === "generate_audio"
-        ? [DEFAULT_AUDIO_TOOL]
-        : [];
-  for (const tool of defaultGenerationTools) {
-    const action = actions.find((candidate) => candidate.tool === tool);
-    if (action) return action;
-  }
-  return null;
+        ? DEFAULT_AUDIO_MODEL
+        : null;
+  return actions.find((candidate) => candidate.model === defaultModel) ?? null;
 }
 
 export function validateCellConfiguration(
@@ -581,19 +515,13 @@ export function validateCellConfiguration(
   }
   const tool = normalizedCell.tool ?? normalizedCell.model;
   if (tool) {
-    const registeredSpec = getActionSpec(tool);
-    const registeredAction = registeredSpec
-      ? generationAction(registeredSpec)
-      : null;
-    const match = actions.find((action) =>
-      (action.tool === tool || action.id === tool || action.model === tool)
-      && (!action.existingCellOnly || action.model === normalizedCell.model))
-      ?? registeredAction
-      ?? undefined;
+    const match = configuredAction(actions, normalizedCell);
     if (!match || !match.cellTypes.includes(normalizedCell.type)) {
       return {
         ok: false,
-        message: `Tool ${tool} is not valid for cell type ${normalizedCell.type}`,
+        message: normalizedCell.model
+          ? `Model ${normalizedCell.model} is not available for ${normalizedCell.type} cells; pick a model from list_generation_models`
+          : `Tool ${tool} is not valid for cell type ${normalizedCell.type}`,
       };
     }
     if (
@@ -801,4 +729,4 @@ function sanitizeResolvedRequest(
   };
 }
 
-export { DEFAULT_ANIMATION_TOOL, DEFAULT_IMAGE_TOOL, DEFAULT_VIDEO_TOOL };
+export { DEFAULT_ANIMATION_MODEL, DEFAULT_AUDIO_MODEL, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL };

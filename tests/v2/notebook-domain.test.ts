@@ -192,9 +192,9 @@ describe('v2 notebook domain tools', () => {
     }
     expect(image).toMatchObject({
       provider: 'kie',
-      model: 'NanoBanana21RequestSchema',
-      operation: 'generate_image',
-      tool: 'generate_kie_nano_banana_2_1_image',
+      model: 'kie:nano-banana-2-1',
+      operation: 'text_to_image',
+      tool: 'generate_image',
     })
     expect(image.output_cell).toBeUndefined()
 
@@ -490,7 +490,7 @@ describe('v2 notebook domain tools', () => {
       execution: {
         [generated.id]: {
           status: 'ready',
-          tool: 'generate_kie_gpt_image_2_5_sunburst_image',
+          tool: 'generate_image',
         },
       },
       generationPlans: [{
@@ -1004,9 +1004,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 0, column: 0 },
       prompt: 'An establishing frame',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
       outputArtifactId: upstreamOutput.value.artifactId,
     })
     const target = engine.notebooks.createCell({
@@ -1015,9 +1015,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 1, column: 0 },
       prompt: 'A continuation frame',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
     })
     const document = {
       ...notebook,
@@ -1130,9 +1130,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 0, column: 0 },
       prompt: 'An earlier image',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
       outputArtifactId: historicalOutput.value.artifactId,
     })
     const source = engine.notebooks.createCell({
@@ -1141,9 +1141,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 1, column: 0 },
       prompt: 'The image selected by the user',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
       outputArtifactId: currentOutput.value.artifactId,
     })
     const target = engine.notebooks.createCell({
@@ -1152,9 +1152,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 2, column: 0 },
       prompt: 'Combine the selected images',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
     })
     const document = {
       ...notebook,
@@ -1249,9 +1249,9 @@ describe('v2 notebook domain tools', () => {
       slot: { row: 0, column: 0 },
       prompt: 'A continuation frame',
       provider: 'kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
     })
     const document = { ...notebook, cells: [target] }
     const plan = {
@@ -1344,7 +1344,7 @@ describe('v2 notebook domain tools', () => {
         label: 'generate-image-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',
-        model: 'generate_kie_gpt_image_2_5_sunburst_image',
+        model: 'kie:gpt-image-2-5-sunburst-text-to-image',
       },
     })) as { id: string }
     const plan = resultJson(await invoke('plan_notebook_generation', {
@@ -1448,7 +1448,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       plan_id: retry.planId,
       action: 'switch',
-      model: 'generate_kie_nano_banana_pro_text_to_image',
+      model: 'kie:nano-banana-pro',
       source_surface: 'chat',
       actor: 'tester',
     })) as {
@@ -1456,8 +1456,11 @@ describe('v2 notebook domain tools', () => {
       stages: Array<{ model: string; input: { generation_tool: string } }>
     }
     expect(switched.stages[0]).toMatchObject({
-      model: 'nano-banana-pro',
-      input: { generation_tool: 'generate_kie_nano_banana_pro_text_to_image' },
+      model: 'kie:nano-banana-pro',
+      input: {
+        generation_tool: 'generate_image',
+        generation_input: { model: 'kie:nano-banana-pro' },
+      },
     })
     resultJson(await invoke('revise_notebook_generation_plan', {
       notebook_id: notebookId,

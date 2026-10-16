@@ -115,11 +115,13 @@ export async function captureGoalSceneFrame(engine: Engine, notebookId: string, 
 }
 
 function estimateInput(engine: Engine, plan: GoalPlanV3, step: ChainStep): Record<string, unknown> {
-  const videoRefs = plan.video.videoRefs.map(reference => reference.artifactId);
+  const images = (step.id === "video" ? plan.video.imageRefs : plan.scene.imageRefs).map(reference => reference.artifactId);
+  const videos = step.id === "video" ? plan.video.videoRefs.map(reference => reference.artifactId) : [];
   return {
     book_id: engine.book.get().bookId,
     ...step.params,
-    ...(step.id === "video" && videoRefs.length > 0 ? { video_refs: videoRefs } : {}),
+    refs: { image: images, video: videos },
+    ...(step.id === "video" && images.length + videos.length > 0 ? { mode: "r2v" } : {}),
   };
 }
 

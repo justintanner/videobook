@@ -1,73 +1,63 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import type { NotebookDocument } from "videobook-engine";
+import { resolveModel } from "../../server/src/media/descriptor.js";
 import {
   notebookGenerationInputContract,
   notebookGenerationInputsAreCompatible,
 } from "../../server/src/notebook-generation-contract.js";
 
+function contractFor(model: string) {
+  return notebookGenerationInputContract(resolveModel(model));
+}
+
+const REPLACE_AUDIO_SLOT = {
+  field: "replace_audio",
+  kind: "audio",
+  targets: ["replace_audio"],
+  min: 0,
+  max: 1,
+};
+
 describe("notebook generation input contracts", () => {
-  it("reads media kinds and slot limits from registered-style schemas", () => {
-    expect(notebookGenerationInputContract("generate_test", {
-      image_refs: z.array(z.string()).min(1).max(3),
-      video_ref: z.string().optional(),
-      audio_ref: z.string(),
-    })).toEqual({
+  it("reads media kinds and slot limits from apicity schemas", () => {
+    expect(contractFor("kie:qwen3/image-to-image")).toEqual({
       modes: [{
         id: "default",
-        slots: [
-          {
-            field: "image_refs",
-            kind: "image",
-            targets: ["image"],
-            min: 1,
-            max: 3,
-          },
-          {
-            field: "video_ref",
-            kind: "video",
-            targets: ["video"],
-            min: 0,
-            max: 1,
-          },
-          {
-            field: "audio_ref",
-            kind: "audio",
-            targets: ["audio"],
-            min: 1,
-            max: 1,
-          },
-        ],
+        slots: [{
+          field: "image",
+          kind: "image",
+          targets: ["image"],
+          min: 1,
+          max: 3,
+        }],
         requiredGroups: [],
       }],
+    });
+    expect(contractFor("elevenlabs:text-to-speech")).toEqual({
+      modes: [{ id: "default", slots: [], requiredGroups: [] }],
     });
   });
 
   it("publishes Kling 3.0 Motion Control character and motion inputs", () => {
-    expect(notebookGenerationInputContract(
-      "generate_kie_kling_3_0_motion_control",
-      {
-        character_image_refs: z.array(z.string()).min(1),
-        motion_video_refs: z.array(z.string()).min(1).max(1),
-      },
-    )).toEqual({
+    expect(contractFor("kie:kling-3.0/motion-control")).toEqual({
       modes: [{
         id: "default",
         slots: [
           {
-            field: "character_image_refs",
+            field: "image",
             kind: "image",
             targets: ["image"],
             min: 1,
-            max: null,
+            max: 1,
           },
           {
-            field: "motion_video_refs",
+            field: "video",
             kind: "video",
             targets: ["video"],
             min: 1,
-            max: 1,
+            max: null,
           },
+          REPLACE_AUDIO_SLOT,
         ],
         requiredGroups: [],
       }],
@@ -75,48 +65,21 @@ describe("notebook generation input contracts", () => {
   });
 
   it("publishes Kling Omni transformation image and video requirements", () => {
-    expect(notebookGenerationInputContract(
-      "generate_kie_kling_3_0_omni_transformation",
-      {
-        image_refs: z.array(z.string()).min(1).max(4).optional(),
-        video_refs: z.array(z.string()).min(1).max(1),
-      },
-    )).toEqual({
-      modes: [{
-        id: "transformation",
-        slots: [
-          {
-            field: "image_refs",
-            kind: "image",
-            targets: ["image"],
-            min: 0,
-            max: 4,
-          },
-          {
-            field: "video_refs",
-            kind: "video",
-            targets: ["video"],
-            min: 1,
-            max: 1,
-          },
-        ],
-        requiredGroups: [["video_refs"]],
-      }],
+    const video = { field: "video", kind: "video", targets: ["video"], min: 1, max: 1 };
+    expect(contractFor("kie:kling-3.0-omni/transformation")).toEqual({
+      modes: [
+        { id: "v2v", slots: [video, REPLACE_AUDIO_SLOT], requiredGroups: [["video"]] },
+        {
+          id: "v2v_refs",
+          slots: [{ field: "image", kind: "image", targets: ["image"], min: 0, max: 4 }, video, REPLACE_AUDIO_SLOT],
+          requiredGroups: [["video"]],
+        },
+      ],
     });
   });
 
   it("keeps Seedance frame and reference modes exclusive", () => {
-    const contract = notebookGenerationInputContract(
-      "generate_kie_seedance_2_5_video",
-      {
-        first_frame_ref: z.string().optional(),
-        last_frame_ref: z.string().optional(),
-        image_refs: z.array(z.string()).max(9).optional(),
-        video_refs: z.array(z.string()).max(3).optional(),
-        audio_refs: z.array(z.string()).max(3).optional(),
-        replace_audio_with: z.string().optional(),
-      },
-    );
+    const contract = contractFor("kie:bytedance/seedance-2-5");
     expect(contract.modes.map((mode) => mode.id)).toEqual([
       "t2v",
       "i2v",
@@ -124,97 +87,70 @@ describe("notebook generation input contracts", () => {
     ]);
     expect(contract.modes.find((mode) => mode.id === "i2v")?.slots
       .map((slot) => slot.field)).toEqual([
-      "first_frame_ref",
-      "last_frame_ref",
-      "replace_audio_with",
+      "first_frame",
+      "last_frame",
+      "replace_audio",
     ]);
     expect(contract.modes.find((mode) => mode.id === "r2v")?.slots
       .map((slot) => slot.field)).toEqual([
-      "image_refs",
-      "video_refs",
-      "audio_refs",
-      "replace_audio_with",
+      "image",
+      "video",
+      "audio",
+      "replace_audio",
     ]);
   });
 
   it("publishes Seedance 2.5 expanded multimodal slots", () => {
-    const contract = notebookGenerationInputContract(
-      "generate_kie_seedance_2_5_video",
-      {
-        first_frame_ref: z.string().optional(),
-        last_frame_ref: z.string().optional(),
-        image_refs: z.array(z.string()).max(30).optional(),
-        video_refs: z.array(z.string()).max(10).optional(),
-        audio_refs: z.array(z.string()).max(10).optional(),
-      },
-    );
-    const references = contract.modes.find((mode) => mode.id === "r2v");
+    const references = contractFor("kie:bytedance/seedance-2-5").modes
+      .find((mode) => mode.id === "r2v");
     expect(references?.slots.map((slot) => ({
       field: slot.field,
       max: slot.max,
     }))).toEqual([
-      { field: "image_refs", max: 30 },
-      { field: "video_refs", max: 10 },
-      { field: "audio_refs", max: 10 },
+      { field: "image", max: 30 },
+      { field: "video", max: 10 },
+      { field: "audio", max: 10 },
+      { field: "replace_audio", max: 1 },
     ]);
+    expect(references?.requiredGroups).toEqual([["image", "video", "audio"]]);
   });
 
   it("publishes Google Omni modes with their required input roles", () => {
-    const contract = notebookGenerationInputContract(
-      "generate_google_flow_omni_flash_video",
-      {
-        first_frame_ref: z.string().optional(),
-        image_refs: z.array(z.string()).max(7).optional(),
-        video_ref: z.string().optional(),
-      },
-    );
+    const contract = contractFor("googleflow:omni-flash");
     expect(contract.modes.map((mode) => ({
       id: mode.id,
+      fields: mode.slots.map((slot) => slot.field),
       requiredGroups: mode.requiredGroups,
     }))).toEqual([
-      { id: "t2v", requiredGroups: [] },
-      { id: "i2v", requiredGroups: [["first_frame_ref"]] },
-      { id: "r2v", requiredGroups: [["image_refs"]] },
-      { id: "v2v", requiredGroups: [["video_ref"]] },
+      { id: "i2v", fields: ["first_frame", "image", "replace_audio"], requiredGroups: [] },
+      { id: "v2v", fields: ["image", "video", "replace_audio"], requiredGroups: [["video"]] },
     ]);
   });
 
-  it("publishes Kie Gemini text, reference, and video modes", () => {
-    const contract = notebookGenerationInputContract(
-      "generate_kie_gemini_omni_video",
-      {
-        image_refs: z.array(z.string()).max(7).optional(),
-        video_ref: z.string().optional(),
-      },
-    );
+  it("publishes Kie Gemini image and video modes", () => {
+    const contract = contractFor("kie:gemini-omni-video");
     expect(contract.modes.map((mode) => ({
       id: mode.id,
+      fields: mode.slots.map((slot) => slot.field),
       requiredGroups: mode.requiredGroups,
     }))).toEqual([
-      { id: "t2v", requiredGroups: [] },
-      { id: "r2v", requiredGroups: [["image_refs"]] },
-      { id: "v2v", requiredGroups: [["video_ref"]] },
+      { id: "i2v", fields: ["image", "replace_audio"], requiredGroups: [] },
+      { id: "v2v", fields: ["image", "video", "replace_audio"], requiredGroups: [["video"]] },
     ]);
   });
 
   it.each([
-    "generate_kie_wan_3_0_video",
-    "generate_kie_wan_3_0_prime_video",
-  ])("keeps %s frame and reference modes exclusive", (tool) => {
-    const contract = notebookGenerationInputContract(tool, {
-      first_frame_ref: z.string().optional(),
-      last_frame_ref: z.string().optional(),
-      image_refs: z.array(z.string()).max(10).optional(),
-      video_refs: z.array(z.string()).max(5).optional(),
-      audio_refs: z.array(z.string()).max(5).optional(),
-    });
+    "kie:wan/3-0-video",
+    "kie:wan/3-0-video-prime",
+  ])("keeps %s frame and reference modes exclusive", (model) => {
+    const contract = contractFor(model);
     expect(contract.modes.map((mode) => ({
       id: mode.id,
       fields: mode.slots.map((slot) => slot.field),
     }))).toEqual([
-      { id: "t2v", fields: [] },
-      { id: "i2v", fields: ["first_frame_ref", "last_frame_ref"] },
-      { id: "r2v", fields: ["image_refs", "video_refs", "audio_refs"] },
+      { id: "t2v", fields: ["replace_audio"] },
+      { id: "i2v", fields: ["first_frame", "last_frame", "replace_audio"] },
+      { id: "r2v", fields: ["image", "video", "audio", "replace_audio"] },
     ]);
 
     const source = {

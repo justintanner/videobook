@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { BookManager } from '../../server/src/book-manager.js'
 import { buildRoutableTools, getRoutableTool } from '../../server/src/chat-router.js'
+import { applyGenerationRoutingDefaults } from '../../server/src/chat-generation-routing.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import { getAllToolDefs } from '../../server/src/tools/index.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
@@ -70,13 +71,15 @@ describe('notebook chat generation', () => {
     const target = definitions.find((definition) => definition.name === route?.actualTool)
     if (!route || !target) throw new Error('Missing generic video route')
     const prompt = 'Fluffy orange cat bats a blue yarn ball across a sunlit floor'
-    const params = z.object(target.schema).parse({
+    const params = z.object(target.schema).parse(await applyGenerationRoutingDefaults(route.actualTool, {
       book_id: bookId,
       prompt,
-      duration: '5',
-      aspect_ratio: '16:9',
-      resolution: '720p',
-    })
+      options: {
+        duration: 5,
+        aspect_ratio: '16:9',
+        resolution: '720p',
+      },
+    }))
     const notebookId = engine.notebooks.list()[0]!.id
     const current = engine.notebooks.read(notebookId)
     expect(current.ok).toBe(true)
@@ -105,12 +108,13 @@ describe('notebook chat generation', () => {
       },
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
-      preferredTool: route.actualTool,
+      preferredModel: params.model,
       routedParams: params,
     })
-    expect(draft.cell.tool).toBe('generate_kie_seedance_2_5_video')
+    expect(draft.cell.tool).toBe('generate_video')
+    expect(draft.cell.model).toBe('kie:bytedance/seedance-2-5')
     expect(notebookChatGenerationSettings(draft)).toMatchObject({
-      duration: '5',
+      duration: 5,
       aspect_ratio: '16:9',
       resolution: '720p',
     })
@@ -277,9 +281,9 @@ describe('notebook chat generation', () => {
         slot: { row: 0, column: 3 },
         prompt: 'neon rain',
         provider: 'kie',
-        model: 'NanoBanana21RequestSchema',
-        operation: 'generate_image',
-        tool: 'generate_kie_nano_banana_2_1_image',
+        model: 'kie:nano-banana-2-1',
+        operation: 'text_to_image',
+        tool: 'generate_image',
       })
     expect(connected.value.edges).toContainEqual(expect.objectContaining({
       source: source.id,
@@ -295,7 +299,7 @@ describe('notebook chat generation', () => {
       timeline_start_frame: 0,
     }) as {
       stages: Array<{
-        input: { cell_id: string; generation_input: { image_refs: string[] } }
+        input: { cell_id: string; generation_input: { model: string; refs: { image: string[] } } }
         tool: string
       }>
     }
@@ -304,7 +308,9 @@ describe('notebook chat generation', () => {
       input: {
         cell_id: materialized.cellId,
         generation_input: {
-          image_refs: [`@${artifact.value.artifactId}`],
+          model: 'kie:nano-banana-2-1',
+          prompt: 'neon rain',
+          refs: { image: [artifact.value.artifactId] },
         },
       },
     })
@@ -406,7 +412,7 @@ describe('notebook chat generation', () => {
       command,
       document: current.value,
       fallbackSlot: { row: 1, column: 0 },
-      preferredTool: 'generate_google_flow_nano_banana_pro_image',
+      preferredModel: 'googleflow:nano-banana-pro',
     })
     const selectedCells = draft.sourceCellIds.flatMap((cellId) => {
       const cell = current.value.cells.find((candidate) => candidate.id === cellId)
@@ -479,8 +485,8 @@ describe('notebook chat generation', () => {
     }
     expect(preview.payload).toMatchObject({
       prompt: 'scene @reference_1, character @reference_2, fluffy kitten standing',
-      reference_1: `@${firstArtifact.value.artifactId}`,
-      reference_2: `@${secondArtifact.value.artifactId}`,
+      reference_1: `http://url.resolved.later.for/${firstArtifact.value.artifactId}`,
+      reference_2: `http://url.resolved.later.for/${secondArtifact.value.artifactId}`,
     })
     const materialized = await materializeNotebookChatGeneration({
       bookId: created.bookId,
@@ -588,7 +594,7 @@ describe('notebook chat generation', () => {
       },
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
-      preferredTool: 'generate_google_flow_nano_banana_pro_image',
+      preferredModel: 'googleflow:nano-banana-pro',
     })
     expect(draft.sourceCellIds).toEqual([firstSource.id])
 
@@ -741,13 +747,13 @@ describe('notebook chat generation cycle guards', () => {
 
   it('allows adding a completed descendant image to the generation review', () => {
     const action = {
-      id: 'generation.generate_kie_nano_banana_pro_text_to_image',
+      id: 'generation.kie:nano-banana-pro',
       cellTypes: ['generate_image' as const],
       provider: 'kie',
       providerLabel: 'Kie',
-      model: 'NanoBananaProRequestSchema',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_kie_nano_banana_pro_text_to_image',
+      tool: 'generate_image',
       title: 'Nano Banana Pro',
       isDefault: true,
       defaultPriority: 0,
@@ -755,7 +761,7 @@ describe('notebook chat generation cycle guards', () => {
         modes: [{
           id: 'default',
           slots: [{
-            field: 'image_refs',
+            field: 'image',
             kind: 'image' as const,
             targets: ['image'],
             min: 0,

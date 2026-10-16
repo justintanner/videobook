@@ -145,9 +145,9 @@ describe("MiniMax H3 Max insert video settings", () => {
         slot: { row: 1, column: 0 },
         prompt: "Motion video. Match motion, timing. Render coherent video.",
         provider: "fal",
-        model: "minimax/h3-max/insert-video",
-        operation: "insert_video",
-        tool: "generate_fal_minimax_h3_max_insert_video",
+        model: "fal:minimax/h3-max/insert-video",
+        operation: "edit_video",
+        tool: "generate_video",
       });
       const written = await engine.notebooks.write({
         ...notebook.value,
@@ -165,9 +165,9 @@ describe("MiniMax H3 Max insert video settings", () => {
         draft: {
           prompt: generation.prompt,
           provider: "fal",
-          model: "minimax/h3-max/insert-video",
-          operation: "insert_video",
-          tool: "generate_fal_minimax_h3_max_insert_video",
+          model: "fal:minimax/h3-max/insert-video",
+          operation: "edit_video",
+          tool: "generate_video",
           inputs: {
             generationMode: "default",
             generationSettings: settings,
@@ -187,9 +187,9 @@ describe("MiniMax H3 Max insert video settings", () => {
       const result = await preview({ start_time: 2, resume_time: 4, duration: 5, resolution: "768p" });
       expect(result.isError, resultText(result)).toBeUndefined();
       const payload = JSON.parse(resultText(result)) as {
-        payload: { start_time: number; resume_time: number; duration: number; resolution: string };
+        payload: { input: { start_time: number; resume_time: number; duration: number; resolution: string } };
       };
-      expect(payload.payload).toMatchObject({
+      expect(payload.payload.input).toMatchObject({
         start_time: 2,
         resume_time: 4,
         duration: 5,

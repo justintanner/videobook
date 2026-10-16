@@ -31,6 +31,13 @@ function durationHint(input: Record<string, unknown>): CostHints {
   return seconds !== undefined && seconds > 0 ? { durationSeconds: seconds } : {};
 }
 
+function combinedHints(model: ResolvedModel, input: Record<string, unknown>, hints: CostHints): CostHints {
+  const combined = { ...planHints(model), ...durationHint(input), ...hints };
+  return combined.durationSeconds === undefined && combined.inputDurationSeconds !== undefined
+    ? { ...combined, durationSeconds: combined.inputDurationSeconds }
+    : combined;
+}
+
 export function estimateWireRequest(
   model: ResolvedModel,
   request: Record<string, unknown>,
@@ -41,7 +48,7 @@ export function estimateWireRequest(
     provider: costProvider(model),
     payload: costPayload(model, request, input),
     endpoint: model.apiId,
-    costHints: { ...planHints(model), ...durationHint(input), ...hints },
+    costHints: combinedHints(model, input, hints),
   });
 }
 

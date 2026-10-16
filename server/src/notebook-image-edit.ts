@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findImageEditModel } from "./image-edit-models.js";
-import { resolveImageRef } from "./tools/_seedance2-shared.js";
+import { resolveImageRef } from "./tools/_media-refs.js";
 import { previewPlaceholderUrl } from "./preview-payload.js";
 import { previewImageSubjectEditRequest, type GenerateImageSubjectEditPayload } from "./jobs/image-subjects.js";
 

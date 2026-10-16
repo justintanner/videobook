@@ -13,10 +13,9 @@ import {
 } from "../../server/src/dancing-workflow.js";
 import { FFMPEG, probeVideo } from "../../server/src/ffmpeg.js";
 import {
-  modelArgs,
   notebookCellIsStale,
+  prepareNotebookGeneration,
 } from "../../server/src/jobs/run-notebook.js";
-import { generateKlingOmniTransformationDef } from "../../server/src/tools/generate-kling30-omni-video.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -113,8 +112,9 @@ describe("Dancing workflow fixture", () => {
     }));
     expect(kittens).toEqual(expect.objectContaining({
       type: "generate_image",
-      tool: "generate_google_flow_nano_banana_pro_image",
-      model: "googleflow/image/nano-banana-pro",
+      tool: "generate_image",
+      provider: "googleflow",
+      model: "googleflow:nano-banana-pro",
     }));
     expect(kittens?.prompt).toContain("two kittens");
     expect(kittens?.prompt).toContain("freeway");
@@ -136,9 +136,10 @@ describe("Dancing workflow fixture", () => {
     }));
     expect(motion).toEqual(expect.objectContaining({
       type: "generate_video",
-      operation: "transformation",
-      tool: "generate_kie_kling_3_0_omni_transformation",
-      model: "kling-3.0-omni/transformation",
+      operation: "edit_video",
+      tool: "generate_video",
+      provider: "kie",
+      model: "kie:kling-3.0-omni/transformation",
     }));
     expect(motion?.inputs).toEqual(expect.objectContaining({
       generationSettings: {
@@ -209,19 +210,28 @@ describe("Dancing workflow fixture", () => {
     const probe = await probeVideo(join(sourceManifest.value.path, sourceVideo.name));
     expect(probe.duration).toBeGreaterThanOrEqual(9.9);
     expect(probe.duration).toBeLessThanOrEqual(10.1);
-    const args = modelArgs(
-      generateKlingOmniTransformationDef(engine),
+    const prepared = await prepareNotebookGeneration(
+      engine,
       seeded,
       motion,
       engine.book.get().bookId,
-      engine,
     );
-    expect(args).toEqual(expect.objectContaining({
-      resolution: "720p",
-      aspect_ratio: "9:16",
-      duration: "10",
-      image_refs: [`@${kittenOutput?.outputArtifactId}`],
-      video_refs: [`@${source.outputArtifactId}`],
+    expect(prepared).toMatchObject({
+      tool: "generate_video",
+      provider: "kie",
+      model: "kie:kling-3.0-omni/transformation",
+    });
+    expect(prepared.input).toEqual(expect.objectContaining({
+      model: "kie:kling-3.0-omni/transformation",
+      options: {
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        duration: "10",
+      },
+      refs: {
+        image: [kittenOutput?.outputArtifactId],
+        video: [source.outputArtifactId],
+      },
     }));
     if (!extract || !kittens) {
       throw new Error("Dancing fixture preparation cells are missing");

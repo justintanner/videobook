@@ -552,37 +552,39 @@ describe('legacy book discovery and migration', () => {
     const unknown = document.cells.find((cell) => cell.id === legacy.unknownId)!
     const connectedImage = document.cells.find((cell) => cell.id === legacy.connectedImageId)!
     for (const generator of [image, defaultImage, video, unknown, connectedImage]) expect(notebookCellIsRunnable(generator)).toBe(true)
-    expect(validateCellConfiguration(image, document).ok).toBe(true)
-    const normalized = normalizeCellActionFields(image, document)
-    expect(normalized).toMatchObject({ type: 'generate_image', provider: 'kie', operation: 'text_to_image', tool: 'generate_kie_gpt_image_2_text_to_image' })
-    for (const generator of [normalized, defaultImage, connectedImage]) {
-      await expect(prepareNotebookGeneration(engine, document, generator, legacy.bookId))
-        .rejects.toThrow('Unknown notebook generation model: generate_kie_gpt_image_2_text_to_image')
+    const retired = /uses generate_kie_gpt_image_2_text_to_image, which is not a generation model; pick one from list_generation_models/
+    expect(validateCellConfiguration(image, document)).toMatchObject({ ok: false })
+    expect(normalizeCellActionFields(image, document)).toMatchObject({ type: 'generate_image', tool: 'generate_kie_gpt_image_2_text_to_image', model: 'generate_kie_gpt_image_2_text_to_image' })
+    for (const generator of [image, defaultImage, connectedImage]) {
+      await expect(prepareNotebookGeneration(engine, document, generator, legacy.bookId)).rejects.toThrow(retired)
     }
     for (const [generator, prompt] of [
-      [normalized, 'Blue square\n\nIn a quiet harbor'],
+      [image, 'Blue square\n\nIn a quiet harbor'],
       [defaultImage, 'A lighthouse'],
       [connectedImage, 'In a quiet harbor'],
     ] as const) {
       expect(await prepareNotebookGeneration(engine, document, {
         ...generator,
-        tool: 'generate_kie_gpt_image_2_5_sunburst_image',
-        model: 'GptImage25SunburstTextToImageRequestSchema',
-        operation: 'generate_image',
+        tool: 'generate_image',
+        provider: 'kie',
+        model: 'kie:gpt-image-2-5-sunburst-text-to-image',
+        operation: 'text_to_image',
       }, legacy.bookId)).toMatchObject({
-        tool: 'generate_kie_gpt_image_2_5_sunburst_image', input: { prompt },
+        tool: 'generate_image', model: 'kie:gpt-image-2-5-sunburst-text-to-image', input: { prompt },
       })
     }
     expect(video.tool).toBe('generate_kie_wan_2_7_text_to_video')
     expect(selectedCellDetails(legacy.notebookId, document, video.id)).toMatchObject({
-      action: { tool: video.tool }, resolvedRequest: { tool: video.tool },
+      action: null, resolvedRequest: { tool: video.tool },
     })
-    await expect(prepareNotebookGeneration(engine, document, video, legacy.bookId)).rejects.toThrow('Unknown notebook generation model: generate_kie_wan_2_7_text_to_video')
+    await expect(prepareNotebookGeneration(engine, document, video, legacy.bookId))
+      .rejects.toThrow(/uses generate_kie_wan_2_7_text_to_video, which is not a generation model/)
     expect(validateCellConfiguration(unknown, document).ok).toBe(false)
     expect(selectedCellDetails(legacy.notebookId, document, unknown.id)).toMatchObject({
       action: null, resolvedRequest: { tool: 'custom-legacy-video-tool' },
     })
-    await expect(prepareNotebookGeneration(engine, document, unknown, legacy.bookId)).rejects.toThrow('Unknown notebook generation model: custom-legacy-video-tool')
+    await expect(prepareNotebookGeneration(engine, document, unknown, legacy.bookId))
+      .rejects.toThrow(/uses custom-legacy-video-tool, which is not a generation model/)
     const adopted = migrateStackedGenerationResults(engine, document)
     const result = findGenerateImageOutput(adopted, image.id)
     expect(result?.outputCell).toMatchObject({ type: 'image', outputArtifactId: legacy.artifactId })

@@ -8,15 +8,13 @@ process.env.VIDEOBOOK_LIBRARY_DIR = join(temporaryRoot, "books");
 process.env.VIDEOBOOK_APP_STATE_PATH = join(temporaryRoot, "runtime", "app-state.json");
 
 const [
-  { renderCommandReference, renderGenerationNamingManifest, renderWorkspaceActionCoverage },
-  { GENERATION_ACTIONS },
+  { renderCommandReference, renderGenerationModels, renderWorkspaceActionCoverage },
   { getCanonicalCommands },
   { getAllToolDefs },
   { bookManager },
   { buildWorkspaceActionCatalog },
 ] = await Promise.all([
   import("../server/src/command-reference.js"),
-  import("../server/src/generation-registry.js"),
   import("../server/src/tools/commands.js"),
   import("../server/src/tools/index.js"),
   import("../server/src/engine.js"),
@@ -35,13 +33,9 @@ try {
     renderCommandReference(
       getAllToolDefs(bookEngine),
       getCanonicalCommands(),
-      GENERATION_ACTIONS,
     ),
   );
-  writeFileSync(
-    resolve(root, "docs/generation-naming-manifest.md"),
-    renderGenerationNamingManifest(GENERATION_ACTIONS),
-  );
+  writeFileSync(resolve(root, "docs/generation-models.md"), renderGenerationModels());
   writeFileSync(resolve(root, "docs/action-coverage.md"), renderWorkspaceActionCoverage(buildWorkspaceActionCatalog(getAllToolDefs(bookEngine), getCanonicalCommands())));
 } finally {
   bookEngine.close();

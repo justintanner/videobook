@@ -65,8 +65,6 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
       });
     case "seedance":
       return stripRefMentions(seedance(prompt, refs), frames(refs));
-    case "seedance_keep_frames":
-      return seedance(prompt, refs);
     case "image_ref":
       return stripRefMentions(
         rewriteImageRefMentions(prompt, refsFor(refs, "image")),

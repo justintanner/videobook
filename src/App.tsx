@@ -1321,7 +1321,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     NotebookGenerationAction[]
   >(() => initialWorkspace?.generationActions ?? [])
   const generationTitleByTool = useMemo(
-    () => new Map(generationActions.map((action) => [action.tool, action.title])),
+    () => new Map(generationActions.map((action) => [action.model, action.title])),
     [generationActions],
   )
   const [providers, setProviders] = useState<SettingsProvider[]>([])
@@ -7503,7 +7503,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const previewNotebookGenerationCommand = async (
     command: NotebookChatGenerationCommand,
     options?: {
-      preferredTool?: string
+      preferredModel?: string
       reason?: string
       routedParams?: Record<string, unknown>
       isCurrent?: () => boolean
@@ -7533,8 +7533,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           lastWorkSlot,
         ),
         lastWorkSlot,
-        ...(options?.preferredTool
-          ? { preferredTool: options.preferredTool }
+        ...(options?.preferredModel
+          ? { preferredModel: options.preferredModel }
           : {}),
         ...(options?.routedParams
           ? { routedParams: options.routedParams }
@@ -8284,11 +8284,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         plan.routedTool,
         generationActions,
       )
-      // TTS routes carry the spoken words in text rather than prompt.
-      const rawRoutedPrompt = (plan.tool === 'generate_elevenlabs_text_to_audio'
-        ? asString(plan.params.text) ?? asString(plan.params.prompt)
-        : asString(plan.params.prompt))
-        ?? originalInput
+      const rawRoutedPrompt = asString(plan.params.prompt) ?? originalInput
       const routedPrompt = restoreNotebookMentionAliases(
         rawRoutedPrompt,
         commandMentionAssets,
@@ -8315,7 +8311,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       return await previewNotebookGenerationCommand(command, {
         isCurrent,
-        preferredTool: plan.tool,
+        ...(asString(plan.params.model) ? { preferredModel: asString(plan.params.model)! } : {}),
         reason: plan.confirmation.reason,
         routedParams: plan.params,
       }, chat)
@@ -9038,8 +9034,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.action === 'skeleton') {
       if (asset.type !== 'image') throw new Error('Choose an image for a pose guide.')
-      await openWorkspaceActions('tool.generate_kie_qwen_3_0_edit_image', {
-        image_refs: [asset.artifactId],
+      await openWorkspaceActions('tool.generate_image', {
+        model: 'kie:qwen3/image-to-image',
+        refs: { image: [asset.artifactId] },
         prompt: 'Create a pose skeleton guide from this reference image. Preserve the visible body poses, joint positions and framing. Show only clearly connected colored skeleton joints and limbs on a black background, without clothing, faces, scenery or text.',
       }, undefined, undefined, chat)
       return { ok: true, message: 'AI pose guide options opened. Review the provider and cost before generating.' }

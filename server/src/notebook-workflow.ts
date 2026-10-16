@@ -17,7 +17,7 @@ import {
   lastCreatedCellSlot,
 } from "./notebook-placement.js";
 import {
-  DEFAULT_ANIMATION_TOOL,
+  DEFAULT_ANIMATION_MODEL,
   normalizeCellActionFields,
   normalizeLegacyAnalyzeCell,
 } from "./notebook-action-catalog.js";
@@ -664,17 +664,20 @@ function createBranchCells(
     slot: animateBase.slot,
     prompt: "",
     provider: "kie",
-    model: "bytedance/seedance-2-5",
+    model: DEFAULT_ANIMATION_MODEL,
     operation: "image_to_video",
-    tool: DEFAULT_ANIMATION_TOOL,
+    tool: "generate_video",
     inputs: {
       ...(animateBase.inputs ?? {}),
       ...commonInputs,
       workflowRole: branchRole("animate", shot.ordinal),
-      duration: "15",
-      resolution: "720p",
-      aspect_ratio: "16:9",
-      generate_audio: false,
+      generationMode: "i2v",
+      generationSettings: {
+        duration: 15,
+        resolution: "720p",
+        aspect_ratio: "16:9",
+        generate_audio: false,
+      },
       requiresConfirmation: true,
       state: stateForDerivedCell(animateExisting),
     },

@@ -7,7 +7,7 @@ import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-a
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
-import { seedance25FrameAspectRatio } from '../../server/src/seedance25'
+import { frameAspectRatio } from '../../server/src/media/frame-options'
 import {
   nextNotebookHorizontalGenerationSlot,
   nextNotebookVideoGenerationSlot,
@@ -140,11 +140,11 @@ function selectGenerationAction(input: {
   actions: readonly NotebookGenerationAction[]
   cellType: NotebookGenerationCellType
   connectedInputs: readonly GenerationConnectedInput[]
-  preferredTool?: string
+  preferredModel?: string
 }): NotebookGenerationAction | null {
-  const preferred = input.preferredTool
+  const preferred = input.preferredModel
     ? generationActionsForCell(input.actions, input.cellType).find((action) =>
-        action.tool === input.preferredTool)
+        action.model === input.preferredModel)
     : undefined
   if (preferred && generationActionIsCompatible(preferred, input.connectedInputs)) {
     return preferred
@@ -164,8 +164,11 @@ function generationSettings(
   params: Record<string, unknown> | undefined,
 ): Record<string, GenerationControlValue> {
   if (!params) return {}
+  const options = params.options && typeof params.options === 'object' && !Array.isArray(params.options)
+    ? params.options as Record<string, unknown>
+    : {}
   return Object.fromEntries(action.controls.flatMap((control) => {
-    const value = params[control.name]
+    const value = options[control.name] ?? params[control.name]
     return typeof value === 'string'
       || typeof value === 'number'
       || typeof value === 'boolean'
@@ -178,16 +181,21 @@ export function notebookChatGenerationReferences(input: string): string[] {
   return uniqueReferences(input)
 }
 
+function stringValues(value: unknown): string[] {
+  if (typeof value === 'string') return [value]
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
 export function notebookChatGenerationParameterReferences(
   params: Record<string, unknown>,
 ): string[] {
-  const values = Object.entries(params).flatMap(([name, value]) => {
-    if (!/(?:^|_)(?:ref|refs)$/u.test(name)) return []
-    if (typeof value === 'string') return [value]
-    return Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === 'string')
-      : []
-  })
+  const refs = params.refs && typeof params.refs === 'object' && !Array.isArray(params.refs)
+    ? Object.values(params.refs as Record<string, unknown>).flatMap(stringValues)
+    : []
+  const values = [...refs, ...Object.entries(params).flatMap(([name, value]) =>
+    /(?:^|_)(?:ref|refs)$/u.test(name) ? stringValues(value) : [])]
   return uniqueReferences(values.map((value) => (
     value.startsWith('@') ? value : `@${value}`
   )).join(' '))
@@ -254,7 +262,7 @@ export function planNotebookChatGeneration(input: {
   document: NotebookDocument
   fallbackSlot: NotebookGridSlot
   lastWorkSlot?: NotebookGridSlot | null
-  preferredTool?: string
+  preferredModel?: string
   routedParams?: Record<string, unknown>
 }): NotebookChatGenerationDraft {
   const sources = resolveNotebookChatGenerationSources(
@@ -280,7 +288,7 @@ export function planNotebookChatGeneration(input: {
       actions: input.actions,
       cellType: input.command.cellType,
       connectedInputs: candidate,
-      ...(input.preferredTool ? { preferredTool: input.preferredTool } : {}),
+      ...(input.preferredModel ? { preferredModel: input.preferredModel } : {}),
     })
     if (!selected) continue
     action = selected
@@ -403,7 +411,7 @@ export function notebookChatGenerationSettings(
       || typeof value === 'boolean'
       ? [[name, value]]
       : []))
-  const aspectRatio = seedance25FrameAspectRatio(draft.action.tool, inputs ?? {})
+  const aspectRatio = frameAspectRatio(draft.action.model, inputs ?? {})
   return aspectRatio ? { ...values, aspect_ratio: aspectRatio } : values
 }
 

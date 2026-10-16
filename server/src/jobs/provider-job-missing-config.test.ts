@@ -5,12 +5,7 @@ import type { Engine } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
-import { registerGenerateGptImageJob } from "./generate-gpt-image.js";
-import { registerGenerateGptImage25Job } from "./generate-gpt-image-2-5.js";
-import { registerGenerateGrokImagineImageJob } from "./generate-grok-imagine-image.js";
-import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
-import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
-import { registerGenerateNanoBananaImageJob } from "./generate-nano-banana-image.js";
+import { registerGenerateMediaJob } from "./generate-media.js";
 import { registerIsolateVocalsJob } from "./isolate-vocals.js";
 
 type MissingConfigCase = {
@@ -25,96 +20,30 @@ type MissingConfigCase = {
   ) => Record<string, unknown>;
 };
 
+function mediaCase(name: string, model: string, key: MissingConfigCase["key"], artifactKind: "image" | "video"): MissingConfigCase {
+  return {
+    name,
+    type: "generate_media",
+    key,
+    artifactKind,
+    payload: (assetId, assetDir, bookId) => ({
+      type: "generate_media",
+      model,
+      prompt: "offline failure",
+      refs: {},
+      options: {},
+      assetId,
+      assetDir,
+      bookId,
+    }),
+  };
+}
+
 const cases: MissingConfigCase[] = [
-  {
-    name: "GPT Image 2.5",
-    type: "generate_gpt_image_2_5",
-    key: "KIE_API_KEY",
-    artifactKind: "image",
-    payload: (imgAssetId, imgAssetDir, bookId) => ({
-      type: "generate_gpt_image_2_5",
-      variant: "sunburst",
-      input: { prompt: "offline failure" },
-      imageInputs: [],
-      imgAssetId,
-      imgAssetDir,
-      sourceImageIds: [],
-      bookId,
-    }),
-  },
-  {
-    name: "GPT image",
-    type: "generate_gpt_image",
-    key: "KIE_API_KEY",
-    artifactKind: "image",
-    payload: (imgAssetId, imgAssetDir, bookId) => ({
-      type: "generate_gpt_image",
-      prompt: "offline failure",
-      imageInputs: [],
-      imgAssetId,
-      imgAssetDir,
-      sourceImageIds: [],
-      bookId,
-    }),
-  },
-  {
-    name: "Grok image",
-    type: "generate_grok_imagine_image",
-    key: "KIE_API_KEY",
-    artifactKind: "image",
-    payload: (imgAssetId, imgAssetDir, bookId) => ({
-      type: "generate_grok_imagine_image",
-      imagePath: join(imgAssetDir, "missing.png"),
-      imageFilename: "original.png",
-      imgAssetId,
-      imgAssetDir,
-      sourceImageId: "missing-source",
-      bookId,
-    }),
-  },
-  {
-    name: "Grok image-to-video",
-    type: "generate_grok_imagine_video",
-    key: "KIE_API_KEY",
-    artifactKind: "video",
-    payload: (vidAssetId, vidAssetDir, bookId) => ({
-      type: "generate_grok_imagine_video",
-      sourceImageIds: ["missing-source"],
-      imageFilenames: ["original.png"],
-      vidAssetId,
-      vidAssetDir,
-      bookId,
-    }),
-  },
-  {
-    name: "Grok reference video",
-    type: "generate_grok_imagine_ref_video",
-    key: "XAI_API_KEY",
-    artifactKind: "video",
-    payload: (vidAssetId, vidAssetDir, bookId) => ({
-      type: "generate_grok_imagine_ref_video",
-      prompt: "offline failure",
-      vidAssetId,
-      vidAssetDir,
-      bookId,
-      refImages: [],
-    }),
-  },
-  {
-    name: "Nano Banana image",
-    type: "generate_nano_banana_image",
-    key: "KIE_API_KEY",
-    artifactKind: "image",
-    payload: (imgAssetId, imgAssetDir, bookId) => ({
-      type: "generate_nano_banana_image",
-      prompt: "offline failure",
-      imageInputs: [],
-      imgAssetId,
-      imgAssetDir,
-      sourceImageIds: [],
-      bookId,
-    }),
-  },
+  mediaCase("Kie GPT Image 2.5", "kie:gpt-image-2-5-sunburst-text-to-image", "KIE_API_KEY", "image"),
+  mediaCase("Kie Nano Banana", "kie:nano-banana-2-1", "KIE_API_KEY", "image"),
+  mediaCase("Kie Grok text-to-video", "kie:grok-imagine/text-to-video", "KIE_API_KEY", "video"),
+  mediaCase("xAI Grok video", "xai:grok-imagine-video", "XAI_API_KEY", "video"),
   {
     name: "vocal isolation",
     type: "isolate_vocals",
@@ -155,12 +84,7 @@ describe("provider job missing configuration", () => {
     engineRoot = join(tempDir, "engine");
     fs = createEngineForTest(engineRoot);
     await setEngineRoot(engineRoot, fs);
-    registerGenerateGptImageJob(fs);
-    registerGenerateGptImage25Job(fs);
-    registerGenerateGrokImagineImageJob(fs);
-    registerGenerateGrokImagineRefVideoJob(fs);
-    registerGenerateGrokImagineVideoJob(fs);
-    registerGenerateNanoBananaImageJob(fs);
+    registerGenerateMediaJob(fs);
     registerIsolateVocalsJob(fs);
   });
 

@@ -1,5 +1,5 @@
 import type { Engine } from "videobook-engine";
-import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_seedance2-shared.js";
+import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
 import { REF_ROLES, type MediaRefs, type RefRole } from "./types.js";
 

@@ -6,7 +6,6 @@ import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
 import { v7 as uuidv7 } from "uuid";
 import {
-  applySpeechRoutingDefaults,
   chatActionPlanSchema,
   duplicateDestinationReference,
   loadScriptContentsForChat,
@@ -14,10 +13,10 @@ import {
   normalizeChatTimestampParams,
   parseChatDecision,
   repairChatRoutingJson,
-  sanitizeGenerateImageParams,
   enrichAssetContext,
 } from "./chat.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
+import { applyGenerationRoutingDefaults, CHAT_DEFAULT_MODELS } from "../chat-generation-routing.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 
@@ -469,31 +468,7 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
   });
 });
 
-describe("sanitizeGenerateImageParams", () => {
-  it("folds @vid-* image_refs into prompt and keeps only @img-*", () => {
-    const out = sanitizeGenerateImageParams({
-      prompt: "qr code",
-      image_refs: ["@vid-og", "@img-style"],
-    });
-    expect(out.image_refs).toEqual(["@img-style"]);
-    expect(out.prompt).toBe("qr code (from source @vid-og)");
-  });
-
-  it("builds a prompt when only non-image slugs are present", () => {
-    const out = sanitizeGenerateImageParams({
-      image_refs: ["@vid-og"],
-    });
-    expect(out.image_refs).toEqual([]);
-    expect(out.prompt).toBe("from source @vid-og");
-  });
-
-  it("leaves params unchanged when image_refs is absent", () => {
-    const input = { prompt: "qr code image" };
-    expect(sanitizeGenerateImageParams(input)).toEqual(input);
-  });
-});
-
-describe("applySpeechRoutingDefaults", () => {
+describe("applyGenerationRoutingDefaults", () => {
   const origCustomVoices = process.env.ELEVENLABS_CUSTOM_VOICE_IDS;
 
   afterEach(() => {
@@ -504,37 +479,81 @@ describe("applySpeechRoutingDefaults", () => {
     }
   });
 
-  it("leaves non-speech tools untouched", async () => {
+  it("leaves non-generation tools untouched", async () => {
     const params = { prompt: "a red fox" };
-    expect(await applySpeechRoutingDefaults("generate_video", params))
+    expect(await applyGenerationRoutingDefaults("trim_video", params))
       .toBe(params);
   });
 
-  it("keeps explicit text and voice as provided", async () => {
-    const result = await applySpeechRoutingDefaults(
-      "generate_elevenlabs_text_to_audio",
-      { text: "welcome back", voice_id: "voice-explicit" },
-    );
-    expect(result.text).toBe("welcome back");
-    expect(result.voice_id).toBe("voice-explicit");
+  it("fills the default model for each media tool", async () => {
+    for (const tool of ["generate_image", "generate_video"] as const) {
+      const result = await applyGenerationRoutingDefaults(tool, { prompt: "a red fox" });
+      expect(result).toEqual({ prompt: "a red fox", model: CHAT_DEFAULT_MODELS[tool] });
+    }
+    expect(CHAT_DEFAULT_MODELS).toEqual({
+      generate_image: "kie:nano-banana-2-1",
+      generate_video: "kie:bytedance/seedance-2-5",
+      generate_audio: "elevenlabs:text-to-speech",
+    });
   });
 
-  it("folds prompt into text when the router omitted text", async () => {
-    process.env.ELEVENLABS_CUSTOM_VOICE_IDS = "Narrator=custom-voice-1";
-    const result = await applySpeechRoutingDefaults(
-      "generate_elevenlabs_text_to_audio",
-      { prompt: "welcome back everyone" },
+  it("keeps an explicit model", async () => {
+    const result = await applyGenerationRoutingDefaults(
+      "generate_image",
+      { model: "kie:nano-banana-pro", prompt: "a red fox" },
     );
-    expect(result.text).toBe("welcome back everyone");
+    expect(result.model).toBe("kie:nano-banana-pro");
+  });
+
+  it("folds flat ref fields into refs by role", async () => {
+    const result = await applyGenerationRoutingDefaults("generate_video", {
+      model: "kie:bytedance/seedance-2-5",
+      prompt: "dance",
+      refs: { image: ["@a1"] },
+      image_refs: ["@a2"],
+      video_ref: "@b1",
+      audio_refs: ["@c1"],
+      first_frame_ref: "@d1",
+      last_frame_ref: "@d2",
+    });
+    expect(result).toEqual({
+      model: "kie:bytedance/seedance-2-5",
+      prompt: "dance",
+      refs: {
+        image: ["@a1", "@a2"],
+        video: ["@b1"],
+        audio: ["@c1"],
+        first_frame: ["@d1"],
+        last_frame: ["@d2"],
+      },
+    });
+  });
+
+  it("keeps an explicit voice as provided", async () => {
+    const result = await applyGenerationRoutingDefaults(
+      "generate_audio",
+      { prompt: "welcome back", options: { voice_id: "voice-explicit" } },
+    );
+    expect(result.model).toBe("elevenlabs:text-to-speech");
+    expect(result.prompt).toBe("welcome back");
+    expect(result.options).toEqual({ voice_id: "voice-explicit" });
   });
 
   it("defaults an omitted voice_id from the catalog, custom voices first", async () => {
     process.env.ELEVENLABS_CUSTOM_VOICE_IDS = "Narrator=custom-voice-1";
-    const result = await applySpeechRoutingDefaults(
-      "generate_elevenlabs_text_to_audio",
-      { text: "welcome back" },
+    const result = await applyGenerationRoutingDefaults(
+      "generate_audio",
+      { prompt: "welcome back", options: { stability: 0.5 } },
     );
-    expect(result.voice_id).toBe("custom-voice-1");
+    expect(result.options).toEqual({ stability: 0.5, voice_id: "custom-voice-1" });
+  });
+
+  it("leaves the voice alone for non-speech audio models", async () => {
+    const result = await applyGenerationRoutingDefaults(
+      "generate_audio",
+      { model: "elevenlabs:sound-generation", prompt: "door slam" },
+    );
+    expect(result).toEqual({ model: "elevenlabs:sound-generation", prompt: "door slam" });
   });
 });
 

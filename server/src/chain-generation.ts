@@ -8,7 +8,7 @@ import {
 } from "./notebook-cell-outputs.js";
 import { lastCreatedCellSlot, nextGenerationOutputSlot } from "./notebook-placement.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
-import { getActionSpec } from "./generation-registry.js";
+import { tryResolveModel } from "./media/descriptor.js";
 import { generationLabel } from "./artifact-label.js";
 import type { ChainPlacementKind, PinnedChainTarget } from "./chain-plan.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
@@ -31,32 +31,30 @@ export type ChainGenerationPlacementInput = {
   pins: readonly PinnedChainTarget[];
 };
 
-/** Generation settings worth keeping on the producer cell for re-run and display. */
-const SETTING_KEYS = [
-  "duration",
-  "resolution",
-  "aspect_ratio",
-  "output_format",
-  "generate_audio",
-] as const;
+function producerModel(params: Record<string, unknown>) {
+  return typeof params.model === "string" ? tryResolveModel(params.model) : null;
+}
 
 function producerLabel(
-  tool: string,
+  params: Record<string, unknown>,
   placement: ChainPlacementKind,
-  prompt: unknown,
 ): string {
-  const spec = getActionSpec(tool);
-  const model = spec
-    ? spec.apicity_identifier
-    : placement === "generate_video" ? "Generate video" : "Generate image";
-  return generationLabel(model, typeof prompt === "string" ? prompt : undefined);
+  const title = producerModel(params)?.title
+    ?? (placement === "generate_video" ? "Generate video" : "Generate image");
+  return generationLabel(title, typeof params.prompt === "string" ? params.prompt : undefined);
 }
 
 function producerSettings(params: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    SETTING_KEYS.flatMap((key) =>
-      params[key] === undefined ? [] : [[key, params[key]] as const]),
-  );
+  const options = params.options;
+  return options !== null && typeof options === "object" && !Array.isArray(options)
+    ? { generationSettings: options }
+    : {};
+}
+
+function pinTargetInput(pin: PinnedChainTarget): string {
+  const role = pin.field.split(".").pop() ?? pin.field;
+  const field = role === "replace_audio_with" ? "replace_audio" : role;
+  return pin.index === null || pin.index === 0 ? field : `${field}_${pin.index + 1}`;
 }
 
 /**
@@ -86,11 +84,13 @@ export async function placeChainGeneration(
         ?? lastCreatedCellSlot(notebook.cells)
         ?? { row: 1, column: 1 };
       const occupied = notebookOccupiedSlots(notebook.cells);
+      const model = producerModel(input.params);
       const producer = input.engine.notebooks.createCell({
         type: input.placement,
-        label: producerLabel(input.tool, input.placement, input.params.prompt),
+        label: producerLabel(input.params, input.placement),
         slot: nextGenerationOutputSlot(input.placement, anchorSlot, occupied),
         tool: input.tool,
+        ...(model ? { model: model.id, provider: model.provider, operation: model.entry.operations[0]! } : {}),
         ...(typeof input.params.prompt === "string"
           ? { prompt: input.params.prompt }
           : {}),
@@ -101,9 +101,7 @@ export async function placeChainGeneration(
       });
       const provenance = input.pins.flatMap((pin) => {
         if (!pin.cellId || !anchors.some(anchor => anchor.id === pin.cellId)) return [];
-        const field = pin.field.replace(/_refs?$/u, "").replace(/^replace_audio_with$/u, "replace_audio");
-        const targetInput = pin.index === null || pin.index === 0 ? field : `${field}_${pin.index + 1}`;
-        return [input.engine.notebooks.createEdge({ source: pin.cellId, target: producer.id, targetInput })];
+        return [input.engine.notebooks.createEdge({ source: pin.cellId, target: producer.id, targetInput: pinTargetInput(pin) })];
       });
       const withProducer = {
         ...notebook,

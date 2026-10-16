@@ -1,5 +1,5 @@
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
-import { getActionSpec } from "./generation-registry.js";
+import { parseModelId } from "./media/model-id.js";
 
 interface NotebookProviderFailureReference {
   notebookId: string;
@@ -13,6 +13,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   fal: "Fal",
   google: "Google Flow",
   google_flow: "Google Flow",
+  googleflow: "Google Flow",
   kie: "Kie",
   openai: "OpenAI",
   workflow: "Workflow",
@@ -35,8 +36,7 @@ function providerCell(
 }
 
 function providerLabel(cell: NotebookCell | null): string {
-  const spec = cell ? getActionSpec(cell.tool ?? cell.model ?? "") : undefined;
-  const key = cell?.provider?.trim() || spec?.provider;
+  const key = cell?.provider?.trim() || parseModelId(cell?.model ?? "")?.provider;
   if (!key) return "Provider";
   return PROVIDER_LABELS[key.toLowerCase()]
     ?? key.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase());

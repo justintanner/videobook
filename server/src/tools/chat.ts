@@ -32,7 +32,7 @@ import { rewriteChatGenerationPrompt } from "../chat-prompt-rewrite.js";
 import type { ChatRoutingNotebookContext } from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
-import { listElevenLabsVoices } from "./list-elevenlabs-voices.js";
+import { applyGenerationRoutingDefaults } from "../chat-generation-routing.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
@@ -175,47 +175,6 @@ function formatHistoryForPrompt(lines: ChatLogEntry[]): string {
       : `Assistant: ${line.tool ? `[${line.tool}] ` : ""}${line.message ?? ""}`,
   );
   return `Recent conversation:\n${formatted.join("\n")}`;
-}
-
-/** Drop non-@img refs from generate_image params; fold them into prompt text. */
-export function sanitizeGenerateImageParams(
-  params: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!Array.isArray(params.image_refs)) return params;
-  const slugs = params.image_refs.map(String);
-  const imageOnly = slugs.filter((s) => /^@?img-/.test(s));
-  const dropped = slugs.filter((s) => !/^@?img-/.test(s));
-  const next: Record<string, unknown> = { ...params, image_refs: imageOnly };
-  if (dropped.length > 0) {
-    const base = typeof params.prompt === "string" ? params.prompt : "";
-    const note = `from source ${dropped.join(", ")}`;
-    next.prompt = base ? `${base} (${note})` : note;
-  }
-  return next;
-}
-
-/**
- * Fill speech-routing gaps for generate_elevenlabs_text_to_audio: the words to
- * speak may arrive in prompt instead of text, and the router model cannot know
- * ElevenLabs voice ids, so an omitted voice_id gets the catalog default
- * (custom voices first). The client review drawer lets the user change it.
- */
-export async function applySpeechRoutingDefaults(
-  tool: string,
-  params: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  if (tool !== "generate_elevenlabs_text_to_audio") return params;
-  const next: Record<string, unknown> = { ...params };
-  const text = typeof next.text === "string" ? next.text.trim() : "";
-  const prompt = typeof next.prompt === "string" ? next.prompt.trim() : "";
-  if (!text && prompt) next.text = prompt;
-  const voiceId = typeof next.voice_id === "string" ? next.voice_id.trim() : "";
-  if (!voiceId) {
-    const catalog = await listElevenLabsVoices();
-    const fallback = catalog.voices[0]?.voice_id;
-    if (fallback) next.voice_id = fallback;
-  }
-  return next;
 }
 
 function isMediaContextObject(value: unknown): value is Record<string, unknown> {
@@ -935,13 +894,6 @@ async function handleChatRequest(
     params.notebook_id = notebookId;
   }
 
-  // generate_image only accepts @img-* refs; models often put @vid-* in
-  // image_refs for "from the source of @vid-…". Drop non-image slugs and
-  // fold them into the text prompt so generation still has the intent.
-  if (decision.tool === "generate_image") {
-    Object.assign(params, sanitizeGenerateImageParams(params));
-  }
-
   // create_watermark_card needs a URL; if the model omitted it, take source_url
   // from a referenced asset (e.g. "QR from the url in @vid-og").
   if (decision.tool === "create_watermark_card" && (params.url === undefined || params.url === "")) {
@@ -957,12 +909,10 @@ async function handleChatRequest(
     params.prompt = combinedScript;
   }
 
-  // Speech requests: fold prompt into text and default the voice, since
-  // the router model cannot know ElevenLabs voice ids. Runs after the
-  // script injection above so script content reaches the spoken text.
-  if (decision.tool === "generate_elevenlabs_text_to_audio") {
-    Object.assign(params, await applySpeechRoutingDefaults(decision.tool, params));
-  }
+  // Generation routes: default the model, fold flat ref fields into refs, and
+  // default the ElevenLabs voice. Runs after the script injection above so
+  // script content reaches the prompt.
+  Object.assign(params, await applyGenerationRoutingDefaults(decision.tool, params));
 
   // The voice model writes its own params, so a bare address can survive there
   // even when the query carried none.
@@ -982,7 +932,7 @@ async function handleChatRequest(
   ) {
     params.prompt = await rewriteChatGenerationPrompt(engine, {
       bookId,
-      tool: routableTool.actualTool,
+      model: typeof params.model === "string" ? params.model : "",
       prompt: params.prompt,
     });
   }

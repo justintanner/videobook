@@ -33,7 +33,7 @@ Keep prompts under ~150 words. Place subject and action first.
 
 ## @ Tag Reference Syntax (r2v)
 
-Reference uploaded files inline using `@Image1`, `@Video1`, `@Audio1`. Numbers correspond to upload order. The r2v tools accept `image_refs` / `video_refs` / `audio_refs` arrays of artifact ids — index 0 is `@Image1`, index 1 is `@Image2`, etc.
+Reference uploaded files inline using `@Image1`, `@Video1`, `@Audio1`. Numbers correspond to upload order. `generate_video` in `r2v` mode accepts `refs.image` / `refs.video` / `refs.audio` arrays of artifact ids — index 0 is `@Image1`, index 1 is `@Image2`, etc.
 
 Limits per request:
 - Images: `@Image1` … `@Image9` (max 9)
@@ -79,13 +79,13 @@ This prompt works because every @-tag has an explicit role (`replace … with`, 
 
 ### Actor replacement (video source + still identity refs)
 
-Use Seedance 2.0 reference-to-video when replacing people in a clip. Pass the source clip as `video_refs` (`@Video1`) and one still per actor as `image_refs` (`@Image1`…), then map each still onto an on-screen person:
+Use Seedance 2.0 reference-to-video when replacing people in a clip. Pass the source clip in `refs.video` (`@Video1`) and one still per actor in `refs.image` (`@Image1`…), then map each still onto an on-screen person:
 
 ```
 Replace the on-screen person matching @Image1 with @Image1 as character reference. Replace the on-screen person matching @Image2 with @Image2 as character reference. Replace the on-screen person matching @Image3 with @Image3 as character reference. Keep camera movement, pacing, and framing of @Video1.
 ```
 
-Notebook wiring: connect the source video plus the identity stills to a Seedance 2 generation cell (`generate_kie_seedance_2_0_video`). The runner fills `video_refs` from connected video cells and `image_refs` from connected image cells. The result is a normal generated video artifact (`original.mp4` / `proxy.mp4`), not an orientation render.
+Notebook wiring: connect the source video plus the identity stills to a Seedance generation cell (model `kie:bytedance/seedance-2-5`, mode `r2v`). The runner fills `refs.video` from connected video cells and `refs.image` from connected image cells. The result is a normal generated video artifact (`original.mp4` / `proxy.mp4`), not an orientation render.
 
 ## Camera Movement Vocabulary
 

@@ -7,8 +7,7 @@ import { Seedance25RequestSchema } from "@apicity/kie/zod";
 import { prepareNotebookGeneration } from "../../server/src/jobs/run-notebook.js";
 import { withBookContext } from "../../server/src/book-context.js";
 import { getAllToolDefs } from "../../server/src/tools/index.js";
-import { translateToolPayload } from "../../server/src/payload-builders.js";
-import { applyPreviewPlaceholderUrls } from "../../server/src/preview-payload.js";
+import { previewGeneration } from "../../server/src/media/preview.js";
 import { generationInputMentions } from "../../server/src/generation-input-mentions.js";
 import { generationModeInputError } from "../../server/src/generation-input-policy.js";
 import {
@@ -21,7 +20,17 @@ import {
 
 const kinds = ["image", "video", "audio"] as const;
 type Counts = Record<typeof kinds[number], number>;
-const tool = "generate_kie_seedance_2_5_video";
+const model = "kie:bytedance/seedance-2-5";
+
+function refsOf(input: Record<string, unknown>): Record<string, string[] | undefined> {
+  return input.refs as Record<string, string[] | undefined>;
+}
+
+function previewPayload(input: Record<string, unknown>): Record<string, unknown> {
+  const preview = previewGeneration(input);
+  if (!preview.ok) throw new Error(preview.error);
+  return preview.preview.payload;
+}
 
 describe("reference video generation inputs", () => {
   let rootDir: string;
@@ -52,10 +61,10 @@ describe("reference video generation inputs", () => {
       type: "generate_video",
       slot: { row: 10, column: 0 },
       provider: "kie",
-      model: "bytedance/seedance-2-5",
-      operation: "generate_video",
-      tool,
-      inputs: { generationMode: "r2v", generationSettings: { duration: "20", aspect_ratio: "9:16" } },
+      model,
+      operation: "text_to_video",
+      tool: "generate_video",
+      inputs: { generationMode: "r2v", generationSettings: { duration: 20, aspect_ratio: "9:16" } },
     });
     const document: NotebookDocument = { ...empty, cells: [generator], edges: [] };
     for (const kind of kinds) {
@@ -84,7 +93,7 @@ describe("reference video generation inputs", () => {
   }
 
   function seedanceAction() {
-    const action = actions.find((candidate) => candidate.tool === tool);
+    const action = actions.find((candidate) => candidate.model === model);
     if (!action) throw new Error("Missing Seedance action");
     return action;
   }
@@ -99,9 +108,7 @@ describe("reference video generation inputs", () => {
     const inputs = generationConnectedInputs(generator.id, document.cells, document.edges);
     expect(generationModeIsCompatible(seedanceAction(), "r2v", inputs)).toBe(true);
     const prepared = await prepareNotebookGeneration(engine, document, generator, engine.book.get().bookId);
-    const translated = translateToolPayload(tool, prepared.input, "kie");
-    expect(translated).not.toBeNull();
-    const payload = applyPreviewPlaceholderUrls(translated!.payload).payload;
+    const payload = previewPayload(prepared.input);
     const checked = Seedance25RequestSchema.safeParse(payload);
     expect(checked.success, JSON.stringify(checked.error)).toBe(true);
     if (!checked.success) return;
@@ -124,15 +131,14 @@ describe("reference video generation inputs", () => {
       .map((target) => `Start from @${target.replace("_", "")}`).join(". ");
     generator.inputs = { ...generator.inputs, first_frame_ref: "stale-first", last_frame_ref: "stale-last" };
     const prepared = await prepareNotebookGeneration(engine, document, generator, engine.book.get().bookId);
-    expect(prepared.input.image_refs).toHaveLength(targets.length);
-    expect(prepared.input.video_refs).toHaveLength(1);
-    expect(prepared.input.audio_refs).toHaveLength(1);
-    expect(prepared.input.first_frame_ref).toBeUndefined();
-    expect(prepared.input.last_frame_ref).toBeUndefined();
-    expect(prepared.input.aspect_ratio).toBe("9:16");
+    expect(refsOf(prepared.input).image).toHaveLength(targets.length);
+    expect(refsOf(prepared.input).video).toHaveLength(1);
+    expect(refsOf(prepared.input).audio).toHaveLength(1);
+    expect(refsOf(prepared.input).first_frame).toBeUndefined();
+    expect(refsOf(prepared.input).last_frame).toBeUndefined();
+    expect(prepared.input.options).toMatchObject({ aspect_ratio: "9:16" });
     expect(prepared.mentions.unresolved).toEqual([]);
-    const translated = translateToolPayload(tool, prepared.input, "kie")!;
-    expect(Seedance25RequestSchema.safeParse(applyPreviewPlaceholderUrls(translated.payload).payload).success).toBe(true);
+    expect(Seedance25RequestSchema.safeParse(previewPayload(prepared.input)).success).toBe(true);
     await expect(prepareNotebookGeneration(engine, document, {
       ...generator, inputs: { ...generator.inputs, generationMode: "i2v" },
     }, engine.book.get().bookId)).rejects.toThrow(/does not accept/);
@@ -144,10 +150,10 @@ describe("reference video generation inputs", () => {
     const inputs = generationConnectedInputs(generator.id, document.cells, document.edges);
     expect(generationModeIsCompatible(action, "r2v", inputs)).toBe(true);
     const prepared = await prepareNotebookGeneration(engine, document, generator, engine.book.get().bookId);
-    expect(prepared.input.image_refs).toHaveLength(30);
-    expect(prepared.input.video_refs).toHaveLength(10);
-    expect(prepared.input.audio_refs).toHaveLength(10);
-    const payload = applyPreviewPlaceholderUrls(translateToolPayload(tool, prepared.input, "kie")!.payload).payload;
+    expect(refsOf(prepared.input).image).toHaveLength(30);
+    expect(refsOf(prepared.input).video).toHaveLength(10);
+    expect(refsOf(prepared.input).audio).toHaveLength(10);
+    const payload = previewPayload(prepared.input);
     expect(Seedance25RequestSchema.safeParse(payload).success).toBe(true);
     for (const kind of kinds) {
       const extra = engine.notebooks.createCell({ type: kind, slot: { row: 9, column: 0 } });
@@ -163,7 +169,7 @@ describe("reference video generation inputs", () => {
       await expect(prepareNotebookGeneration(engine, overLimit, generator, engine.book.get().bookId))
         .rejects.toThrow(`at most ${kind === "image" ? 30 : 10} ${kind}`);
     }
-    const gemini = actions.find((candidate) => candidate.tool === "generate_kie_gemini_omni_video")!;
+    const gemini = actions.find((candidate) => candidate.model === "kie:gemini-omni-video")!;
     expect(generationModeIsCompatible(gemini, "r2v", [{ kind: "audio", target: "audio" }])).toBe(false);
     expect(generationModeIsCompatible(action, "r2v", [])).toBe(false);
   });
@@ -206,16 +212,16 @@ describe("reference video generation inputs", () => {
       const prepared = await prepareNotebookGeneration(engine, document, {
         ...generator, inputs: { ...generator.inputs, generationMode },
       }, engine.book.get().bookId);
-      expect(prepared.input.image_refs).toHaveLength(2);
-      expect(prepared.input.first_frame_ref).toBeUndefined();
+      expect(refsOf(prepared.input).image).toHaveLength(2);
+      expect(refsOf(prepared.input).first_frame).toBeUndefined();
     }
     const mixed = await documentFor({ image: 2, video: 1, audio: 2 }, ["first_frame", "last_frame"]);
     mixed.document.edges.at(-1)!.targetInput = "replace_audio";
     mixed.generator.prompt = "Use @image1 with @audio1";
     const prepared = await prepareNotebookGeneration(engine, mixed.document, mixed.generator, engine.book.get().bookId);
-    expect(prepared.input.image_refs).toHaveLength(2);
-    expect(prepared.input.video_refs).toHaveLength(1);
-    expect(prepared.input.audio_refs).toHaveLength(1);
-    expect(prepared.input.replace_audio_with).toBe(`@${mixed.document.cells.at(-1)!.outputArtifactId}`);
+    expect(refsOf(prepared.input).image).toHaveLength(2);
+    expect(refsOf(prepared.input).video).toHaveLength(1);
+    expect(refsOf(prepared.input).audio).toHaveLength(1);
+    expect(prepared.input.replace_audio_with).toBe(`${mixed.document.cells.at(-1)!.outputArtifactId}`);
   });
 });

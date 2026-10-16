@@ -5,7 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { textPart, imageUrlPart } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
-import { getCanonicalName } from "../generation-registry.js";
+import { modelEntry } from "../media/catalog.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 import { expandTimelineSlotRefs, timelineSlotArtifactIds } from "../timeline-helpers.js";
@@ -292,9 +292,9 @@ export function validateSceneRewrite(
   toolParams: Record<string, unknown>,
   sceneIndex: number,
 ): void {
-  const tool = toolParams.tool as string | undefined;
-  if (tool === undefined || !getCanonicalName(tool).startsWith("generate_kie_kling_3_0")) {
-    throw new Error(`Scene rewrite requires a Kling 3.0 asset, got tool: ${tool}`);
+  const model = (toolParams.model ?? toolParams.tool) as string | undefined;
+  if (model === undefined || modelEntry(model)?.guide !== "kling30") {
+    throw new Error(`Scene rewrite requires a Kling 3.0 asset, got model: ${model}`);
   }
   const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;
   const nScenes = multiPrompt ? multiPrompt.length : 1;

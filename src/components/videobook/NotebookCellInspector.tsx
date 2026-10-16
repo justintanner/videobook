@@ -2637,15 +2637,9 @@ function ExecutableCellInspector({
   const generationControls = selectedGenerationAction?.controls ?? []
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
-  const generationVideoConnected = connectedGenerationInputs.some((input) =>
-    input.kind === 'video')
   const generationSettingsMessage = generationSettingsError(
     generationControls,
     draft.generationSettings,
-    {
-      tool: selectedGenerationAction?.tool,
-      videoConnected: generationVideoConnected,
-    },
   )
   const generationSettingsValid = generationSettingsMessage === null
   const generationCompatible = generationActionCompatible
@@ -2779,11 +2773,6 @@ function ExecutableCellInspector({
     const settingsError = generationSettingsError(
       selected?.controls ?? [],
       value.generationSettings,
-      {
-        tool: selected?.tool ?? value.tool,
-        videoConnected: generationConnectedInputs(cell.id, cells, inputEdges)
-          .some((input) => input.kind === 'video'),
-      },
     )
     if (settingsError) {
       if (promptPreviewRequestRef.current === requestId) {

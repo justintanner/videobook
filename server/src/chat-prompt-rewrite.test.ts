@@ -7,7 +7,7 @@ import { createEngineForTest } from "./engine.js";
 import {
   CHAT_REWRITE_INSTRUCTION,
   rewriteChatGenerationPrompt,
-  rewriteGuideForTool,
+  rewriteGuideForModel,
   usableRewrite,
 } from "./chat-prompt-rewrite.js";
 import { rewritePromptDef } from "./tools/rewrite-prompt.js";
@@ -35,25 +35,21 @@ describe("CHAT_REWRITE_INSTRUCTION", () => {
   });
 });
 
-describe("rewriteGuideForTool", () => {
-  it("maps each guided generation family to its prompting guide", () => {
-    expect(rewriteGuideForTool("generate_kie_seedance_2_5_video")).toBe("seedance25");
-    expect(rewriteGuideForTool("generate_kie_seedance_2_0_video")).toBe("seedance2");
-    expect(rewriteGuideForTool("generate_kie_kling_3_0_omni_reference_to_video")).toBe("kling30");
-    expect(rewriteGuideForTool("generate_kie_nano_banana_pro_text_to_image")).toBe("nano_banana");
-    expect(rewriteGuideForTool("generate_kie_gpt_image_2_5_flare_image")).toBe("gpt_image");
-    expect(rewriteGuideForTool("generate_kie_gpt_image_2_5_sunburst_image")).toBe("gpt_image");
-    expect(rewriteGuideForTool("generate_xai_grok_imagine_video")).toBe("grok_imagine");
-    expect(rewriteGuideForTool("generate_kie_grok_imagine_text_to_image")).toBe("grok_image");
+describe("rewriteGuideForModel", () => {
+  it("maps each guided catalog model to its prompting guide", () => {
+    expect(rewriteGuideForModel("kie:bytedance/seedance-2-5")).toBe("seedance25");
+    expect(rewriteGuideForModel("kie:kling-3.0-omni/reference-to-video")).toBe("kling30");
+    expect(rewriteGuideForModel("kie:nano-banana-pro")).toBe("nano_banana");
+    expect(rewriteGuideForModel("kie:gpt-image-2-5-flare-text-to-image")).toBe("gpt_image");
+    expect(rewriteGuideForModel("kie:gpt-image-2-5-sunburst-image-to-image")).toBe("gpt_image");
+    expect(rewriteGuideForModel("xai:grok-imagine-video")).toBe("grok_imagine");
+    expect(rewriteGuideForModel("kie:grok-imagine/text-to-image")).toBe("grok_image");
   });
 
-  it("resolves legacy tool names through the generation registry", () => {
-    expect(rewriteGuideForTool("generate_grok_imagine_ref_video")).toBe("grok_imagine");
-  });
-
-  it("returns null for a generation tool with no guide", () => {
-    expect(rewriteGuideForTool("generate_elevenlabs_text_to_audio")).toBeNull();
-    expect(rewriteGuideForTool("generate_kie_veo_3_0_video")).toBeNull();
+  it("returns null for a model with no guide or an unknown id", () => {
+    expect(rewriteGuideForModel("elevenlabs:text-to-speech")).toBeNull();
+    expect(rewriteGuideForModel("kie:veo3")).toBeNull();
+    expect(rewriteGuideForModel("generate_kie_seedance_2_5_video")).toBeNull();
   });
 });
 
@@ -106,11 +102,11 @@ describe("rewriteChatGenerationPrompt", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("passes a guideless generation tool through untouched", async () => {
+  it("passes a guideless generation model through untouched", async () => {
     const prompt = "Read the opening paragraph aloud";
     expect(await rewriteChatGenerationPrompt(engine, {
       bookId: "test-book",
-      tool: "generate_elevenlabs_text_to_audio",
+      model: "elevenlabs:text-to-speech",
       prompt,
     })).toBe(prompt);
   });
@@ -118,7 +114,7 @@ describe("rewriteChatGenerationPrompt", () => {
   it("passes a blank prompt through untouched", async () => {
     expect(await rewriteChatGenerationPrompt(engine, {
       bookId: "test-book",
-      tool: "generate_kie_seedance_2_5_video",
+      model: "kie:bytedance/seedance-2-5",
       prompt: "   ",
     })).toBe("   ");
   });
@@ -127,7 +123,7 @@ describe("rewriteChatGenerationPrompt", () => {
     delete process.env.OPENAI_API_KEY;
     expect(await rewriteChatGenerationPrompt(engine, {
       bookId: "test-book",
-      tool: "generate_kie_seedance_2_5_video",
+      model: "kie:bytedance/seedance-2-5",
       prompt: SPOKEN_PROMPT,
     })).toBe(SPOKEN_PROMPT);
   });

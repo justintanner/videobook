@@ -33,18 +33,27 @@ export type PromptDialect =
   | "natural_kinds"
   | "natural_source_video"
   | "seedance"
-  | "seedance_keep_frames"
   | "image_ref"
   | "image_ref_reference"
   | "strip_frames"
   | "brackets"
   | "happyhorse_edit";
 
+export type PromptGuide =
+  | "nano_banana"
+  | "gpt_image"
+  | "kling30"
+  | "grok_imagine"
+  | "grok_image"
+  | "seedance2"
+  | "seedance25";
+
 export interface ModeSpec {
   id: string;
   label: string;
   roles: readonly RefRole[];
   requireAny?: readonly RefRole[];
+  defaults?: Record<string, unknown>;
 }
 
 export interface InputRules {
@@ -63,6 +72,7 @@ export interface ModelEntry {
   defaults?: Record<string, unknown>;
   refItem?: Partial<Record<RefRole, Record<string, unknown>>>;
   dialect?: PromptDialect;
+  guide?: PromptGuide;
   modes?: readonly ModeSpec[];
   frameOptions?: Record<string, unknown>;
   rules?: InputRules;

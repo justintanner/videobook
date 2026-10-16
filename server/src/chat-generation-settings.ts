@@ -77,18 +77,34 @@ export function settingIsRequested(name: string, query: string): boolean {
  * Drop the optional settings a generation request never asked for, so the tool
  * applies its own defaults instead of values the router filled in.
  */
-export function withoutUnrequestedSettings(
-  input: GenerationSettingsFilter,
-): GenerationSettingsResult {
-  const required = new Set(input.requiredParams);
-  const params: Record<string, unknown> = {};
-  const dropped: string[] = [];
-  for (const [name, value] of Object.entries(input.params)) {
-    if (required.has(name) || settingIsRequested(name, input.query)) {
-      params[name] = value;
+function requestedEntries(
+  entries: Record<string, unknown>,
+  query: string,
+  required: ReadonlySet<string>,
+  dropped: string[],
+): Record<string, unknown> {
+  const kept: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(entries)) {
+    if (required.has(name) || settingIsRequested(name, query)) {
+      kept[name] = value;
       continue;
     }
     dropped.push(name);
   }
+  return kept;
+}
+
+function optionsRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+export function withoutUnrequestedSettings(
+  input: GenerationSettingsFilter,
+): GenerationSettingsResult {
+  const required = new Set(input.requiredParams);
+  const dropped: string[] = [];
+  const params = requestedEntries(input.params, input.query, required, dropped);
+  const options = optionsRecord(params.options);
+  if (options) params.options = requestedEntries(options, input.query, new Set(), dropped);
   return { params, dropped };
 }

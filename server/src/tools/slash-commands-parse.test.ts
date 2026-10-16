@@ -305,9 +305,8 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(simulateParse("/rewrite", "\"make it more cinematic\"")).toEqual({
         prompt: "make it more cinematic",
       });
-      expect(simulateParse("/say", "EXAVITQu4vr4xnSDxMaL \"to be or not to be\"")).toEqual({
-        voice_id: "EXAVITQu4vr4xnSDxMaL",
-        text: "to be or not to be",
+      expect(simulateParse("/say", "\"to be or not to be\"")).toEqual({
+        prompt: "to be or not to be",
       });
       const duplicate = findCommand("/duplicate");
       expect(adaptCommandArgs(duplicate.mcpTool?.adapter, parseCommandArgs("@a1 \"To The Moon\" @b1", duplicate.params))).toEqual({
@@ -413,9 +412,8 @@ describe("slash command parse/normalize/dispatch", () => {
     });
 
     it("keeps a leading to in free text", () => {
-      expect(simulateParse("/say", "EXAVITQu4vr4xnSDxMaL to be or not to be")).toEqual({
-        voice_id: "EXAVITQu4vr4xnSDxMaL",
-        text: "to be or not to be",
+      expect(simulateParse("/say", "to be or not to be")).toEqual({
+        prompt: "to be or not to be",
       });
       expect(simulateParse("/speak", "to be or not to be")).toEqual({
         text: "to be or not to be",

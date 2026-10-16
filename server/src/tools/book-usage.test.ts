@@ -92,17 +92,18 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.summary().totals.count).toBe(2);
   });
 
-  it("prices Google Flow by the submitted model and settles asynchronous and synchronous responses", async () => {
+  it("prices Google Flow through the apicity table and settles asynchronous and synchronous responses", async () => {
     const provider = createGoogleFlow({ apiKey: "test", baseURL: url });
     reply = { jobid: "flow-one", status: "created" };
     await scoped(() => provider.post.v1.videos({ model: "veo-3.1-fast", prompt: "test" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 1, pendingUsd: 0.8, estimatedUsd: 0 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 1, pendingUsd: 0.4, estimatedUsd: 0 });
     reply = { jobid: "flow-one", status: "completed" };
     await scoped(() => provider.get.v1.jobs.retrieve({ jobId: "flow-one" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 0, estimatedUsd: 0.8 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 0, estimatedUsd: 0.4 });
     reply = { jobId: "flow-image", images: [{ url: "https://example.test/image.png" }] };
     await scoped(() => provider.post.v1.images({ model: "nano-banana-pro", prompt: "test" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, estimatedUsd: 0.934 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, estimatedUsd: 0.4, unpriced: 1 });
+    expect(engine.usage.find("googleflow", "flow-image")).toMatchObject({ basis: "unknown", costUsd: null, model: "nano-banana-pro" });
   });
 
   it("records fal Alibaba routes and resolves polling by request id rather than output id", async () => {

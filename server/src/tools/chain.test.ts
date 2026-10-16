@@ -240,11 +240,12 @@ describe("chain MCP tool", () => {
       { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
       {
         id: "animate",
-        tool: "generate_kie_seedance_2_5_video",
+        tool: "generate_video",
         params: {
+          model: "kie:bytedance/seedance-2-5",
           prompt: "Animate the frame",
-          first_frame_ref: { $ref: { step_id: "frame", output: "image_asset_id" } },
-          duration: "5",
+          refs: { first_frame: { $ref: { step_id: "frame", output: "image_asset_id" } } },
+          options: { duration: 5 },
         },
       },
     ];

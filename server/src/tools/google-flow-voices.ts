@@ -20,7 +20,7 @@ import {
 // ---------------------------------------------------------------------------
 // Google Flow custom voices (POST/GET/DELETE /google-flow/voices). A voice is a
 // saved TTS clip built on one of the 30 system presets; its ref feeds
-// referenceAudio_1..5 on generate_google_flow_omni_flash_video (voice_refs). Refs carry
+// referenceAudio_1..5 options of generate_video with model googleflow:omni-flash. Refs carry
 // ':'/'@' that must reach useapi.net raw — the googleFlowFetch hook wired into
 // createGoogleFlowProvider handles the GET/DELETE-by-ref paths
 // (docs/apicity-gaps.md §16).
@@ -116,7 +116,7 @@ export function createGoogleFlowVoiceDef(): ToolDef {
   return {
     name: "create_google_flow_voice",
     description:
-      "Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.",
+      "Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.",
     schema: createGoogleFlowVoiceSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof createGoogleFlowVoiceSchema>;
@@ -134,7 +134,7 @@ export function createGoogleFlowVoiceDef(): ToolDef {
         });
         return jsonResult({
           ...result,
-          usage: "Pass voice_ref in voice_refs of generate_google_flow_omni_flash_video (referenceAudio_1..5)",
+          usage: "Pass voice_ref as options.referenceAudio_1..5 of generate_video with model googleflow:omni-flash",
         });
       } catch (err) {
         return toolError(err instanceof Error ? err.message : String(err));

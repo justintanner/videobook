@@ -76,10 +76,11 @@ export function arrayBounds(schema: JsonSchema): { min: number; max: number | nu
 export function enumValues(schema: JsonSchema): Array<string | number> {
   const values: Array<string | number> = [];
   for (const branch of branches(schema)) {
-    for (const value of branch.enum ?? []) {
+    const literals = [...(branch.enum ?? []), ...(branch.const !== undefined ? [branch.const] : [])];
+    if (literals.length === 0) return [];
+    for (const value of literals) {
       if (typeof value === "string" || typeof value === "number") values.push(value);
     }
-    if (typeof branch.const === "string" || typeof branch.const === "number") values.push(branch.const);
   }
   return [...new Set(values)];
 }

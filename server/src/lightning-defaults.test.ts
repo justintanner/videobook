@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getImageToolSchema } from "./image-models.js";
+import { resolveModel } from "./media/descriptor.js";
 import {
   finishingIdentityKey,
   freshPostLanguage,
   freshPostTags,
-  LIGHTNING_SCENE_MODEL_KEY,
-  LIGHTNING_VIDEO_TOOL,
+  LIGHTNING_SCENE_MODEL,
+  LIGHTNING_VIDEO_MODEL,
   LIGHTNING_WATERMARK_PROFILE,
   preservedPrompt,
   submittedGenerationPrompt,
@@ -14,38 +14,28 @@ import {
   watermarkWindowsFor,
   X_WATERMARK_PROFILE,
 } from "./lightning-defaults.js";
-import { selectPreviewImageModel } from "./tools/preview-image-gen.js";
-import { getVideoToolSchema } from "./video-models.js";
 
 describe("lightning defaults", () => {
-  it("fills a fresh Seedance 2.5 schema with the lightning video profile", () => {
-    const schema = getVideoToolSchema(LIGHTNING_VIDEO_TOOL);
-    expect(schema?.defaults).toMatchObject({
+  function defaults(model: string): Record<string, unknown> {
+    return Object.fromEntries(resolveModel(model).options.map((option) => [option.name, option.defaultValue]));
+  }
+
+  it("defaults the Seedance 2.5 catalog model to the lightning video profile", () => {
+    expect(defaults(LIGHTNING_VIDEO_MODEL)).toMatchObject({
       resolution: "1080p",
       aspect_ratio: "16:9",
-      duration: "13",
+      duration: 13,
       output_format: "mp4",
       generate_audio: true,
     });
   });
 
-  it("fills a fresh Nano Banana 2.1 schema with the lightning scene profile", () => {
-    const schema = getImageToolSchema("generate_kie_nano_banana_2_1_image");
-    expect(schema?.defaults).toMatchObject({
+  it("defaults the Nano Banana 2.1 catalog model to the lightning scene profile", () => {
+    expect(defaults(LIGHTNING_SCENE_MODEL)).toMatchObject({
       aspect_ratio: "16:9",
       resolution: "2K",
       output_format: "jpg",
     });
-  });
-
-  it("keeps an explicit preview model and a compatible historical model", () => {
-    const options = [
-      { key: LIGHTNING_SCENE_MODEL_KEY, image_slots: { min: 0, max: 10 } },
-      { key: "grok_imagine_text", image_slots: null },
-    ];
-    expect(selectPreviewImageModel("grok_imagine_text", null, 0, options)).toBe("grok_imagine_text");
-    expect(selectPreviewImageModel(undefined, "grok_imagine_text", 0, options)).toBe("grok_imagine_text");
-    expect(selectPreviewImageModel(undefined, null, 0, options)).toBe(LIGHTNING_SCENE_MODEL_KEY);
   });
 
   it("uses the submitted prompt and ignores a disagreeing resolved prompt", () => {

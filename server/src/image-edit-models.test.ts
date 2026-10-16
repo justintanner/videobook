@@ -12,8 +12,7 @@ import {
   FalNanoBananaProEditRequestSchema,
   FalWanV2p7EditRequestSchema,
 } from "@apicity/fal/zod";
-import { GENERATION_ACTIONS, RETIRED_GENERATION_ACTIONS } from "./generation-registry.js";
-import { getImageModels, getImageToolSchema, validateImageParams } from "./image-models.js";
+import { resolveModel } from "./media/descriptor.js";
 import {
   DEFAULT_IMAGE_EDIT_MODEL_ID,
   findImageEditModel,
@@ -50,25 +49,13 @@ function imageUrl(count: number): string[] {
 }
 
 describe("image edit model catalog", () => {
-  it("maps every entry to a registry action or the seedream pro i2i special case", () => {
-    const liveActions = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
-    const retiredActions = new Set(RETIRED_GENERATION_ACTIONS.map((action) => action.canonical_name));
-    const shadowingRetired: string[] = [];
+  it("maps every entry to an image-editing catalog model", () => {
     for (const entry of IMAGE_EDIT_MODELS) {
-      if (entry.shadowedAction === null) {
-        expect(entry.id).toBe("seedream/5-pro-image-to-image");
-        continue;
-      }
-      expect(
-        liveActions.has(entry.shadowedAction) || retiredActions.has(entry.shadowedAction),
-        `${entry.id} shadows ${entry.shadowedAction}`,
-      ).toBe(true);
-      if (retiredActions.has(entry.shadowedAction)) shadowingRetired.push(entry.id);
+      const model = resolveModel(entry.catalogModel);
+      expect(model.media, entry.id).toBe("image");
+      expect(model.apiId, entry.id).toBe(entry.id);
+      expect(model.slots.some((slot) => slot.role === "image"), entry.id).toBe(true);
     }
-    expect(shadowingRetired).toEqual([
-      "gpt-image-2-image-to-image",
-      "fal-ai/wan/v2.7/edit",
-    ]);
   });
 
   it("derives max input images from the apicity schema boundary, not literals", () => {
@@ -90,29 +77,6 @@ describe("image edit model catalog", () => {
     expect(DEFAULT_IMAGE_EDIT_MODEL_ID).toBe("nano-banana-2-1");
     expect(findImageEditModel(DEFAULT_IMAGE_EDIT_MODEL_ID)?.provider).toBe("kie");
     expect(new Set(IMAGE_EDIT_MODELS.map((entry) => entry.id)).size).toBe(IMAGE_EDIT_MODELS.length);
-  });
-
-  it("lists apicity 0.14.0 edit actions on the image generation list with required media", () => {
-    const models = getImageModels();
-    const requiredMedia = [
-      "fibo_product_holding",
-      "fibo_virtual_try_on",
-      "seedream_v5_flash_edit",
-      "seedream_v5_flash_layerize",
-      "ideogram_v4_5_edit",
-      "flux_3_edit",
-      "seedream_v5_flash_kie_edit",
-      "seedream_v5_flash_kie_layers",
-    ];
-    for (const key of requiredMedia) {
-      const model = models[key];
-      expect(model, key).toBeDefined();
-      const schema = getImageToolSchema(model.tool_name);
-      expect(schema?.required, key).toContain("image_refs");
-      const textOnly = validateImageParams(model.tool_name, { prompt: "a paper crane at dusk" });
-      expect(textOnly.image_slots?.min ?? 0, key).toBeGreaterThan(0);
-      expect(textOnly.missing_required, key).toContain("image_refs");
-    }
   });
 
   it("matches env keys and provider families", () => {

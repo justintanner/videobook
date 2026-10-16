@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { GENERATION_ACTIONS } from "./generation-registry.js";
 import { WORKSPACE_TOOL_GROUPS } from "./workspace-action-groups.js";
 import { toolSpendsMoney } from "./paid-tools.js";
 import { WORKSPACE_ACTION_SURFACES } from "./workspace-action-surfaces.js";
@@ -16,7 +15,11 @@ import type {
 import type { Command } from "./tools/video-editing-command-contract.js";
 import type { ToolDef } from "./tools/tool-def.js";
 
-const generationSpecs = new Map(GENERATION_ACTIONS.map((action) => [action.canonical_name, action]));
+const GENERATION_MEDIA: Readonly<Record<string, string>> = {
+  generate_image: "image",
+  generate_video: "video",
+  generate_audio: "audio",
+};
 const toolGroups = new Map(Object.entries(WORKSPACE_TOOL_GROUPS).flatMap(([group, tools]) =>
   tools.map((tool) => [tool, group as ActionGroup] as const)));
 const uiActions = new Set<string>(UI_ACTION_IDS);
@@ -74,7 +77,6 @@ function title(value: string): string {
 function groupForTool(name: string): ActionGroup {
   const group = toolGroups.get(name);
   if (group) return group;
-  if (generationSpecs.has(name)) return "Generation";
   throw new Error(`No workspace action group for ${name}`);
 }
 
@@ -217,7 +219,7 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
   const name = command?.command ?? (reserved.has(preferredCommand) ? `/tool-${preferredCommand.slice(1)}` : preferredCommand);
   reserved.add(name);
   const target = targetForSchema(schema, group);
-  const generation = generationSpecs.get(tool.name);
+  const mediaType = GENERATION_MEDIA[tool.name];
   return {
     id: `tool.${tool.name}`,
     title: tool.annotations?.title ?? title(tool.name),
@@ -225,13 +227,13 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
     group,
     command: name,
     aliases: [...(command?.aliases ?? [])],
-    keywords: [tool.name, group, ...(generation ? [generation.provider, generation.apicity_identifier] : [])],
+    keywords: [tool.name, group, ...(mediaType ? [mediaType, "generate"] : [])],
     scope: scopeForSchema(schema),
     target,
     handler: { kind: "tool", tool: tool.name },
     inputSchema: schema,
     ...(command?.mcpTool?.injectParams ? { initialArgs: { ...command.mcpTool.injectParams } } : {}),
-    ...(generation ? { generation: { provider: generation.provider, operation: generation.operation, mediaType: generation.media_type } } : {}),
+    ...(mediaType ? { generation: { provider: "catalog", operation: tool.name, mediaType } } : {}),
     surfaces: target.kind === "asset" ? ["slash", "launcher", "cell-menu", "library-menu"]
       : target.kind === "cell" ? ["slash", "launcher", "cell-menu", "selection-menu"] : ["slash", "launcher"],
     focus: "dialog",

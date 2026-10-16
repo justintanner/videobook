@@ -53,10 +53,10 @@ describe('reusing descendant images as generation inputs', () => {
       slot: { row: 2, column: 7 },
       prompt: 'Animate @image1 and @image2',
       provider: 'kie',
-      model: 'bytedance/seedance-2-5',
-      operation: 'generate_video',
-      tool: 'generate_kie_seedance_2_5_video',
-      inputs: { generationMode: 'r2v', generationSettings: { aspect_ratio: '9:16', duration: '20' } },
+      model: 'kie:bytedance/seedance-2-5',
+      operation: 'text_to_video',
+      tool: 'generate_video',
+      inputs: { generationMode: 'r2v', generationSettings: { aspect_ratio: '9:16', duration: 20 } },
     })
     const videoArtifact = valueOf(await engine.artifacts.create('video', 'Previous output'))
     video = engine.notebooks.createCell({

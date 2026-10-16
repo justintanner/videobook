@@ -1,4 +1,4 @@
-import { NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
+import { LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { planStackedChainFromQuery } from "./chain-plan.js";
 import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
@@ -28,12 +28,6 @@ const AUTO_APPLY_TOOL_NAMES = new Set([
   "extract_frame",
 ]);
 
-type ChatToolAlias = {
-  name: string;
-  actualTool: string;
-  description: string;
-};
-
 type ChatRoutingNotebookContext = {
   id: string;
   name: string;
@@ -56,21 +50,6 @@ type ChatRoutingUserMessageContext = {
 };
 
 type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
-
-const SEEDANCE_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
-
-const CHAT_TOOL_ALIASES: ChatToolAlias[] = [
-  {
-    name: "generate_video",
-    actualTool: SEEDANCE_VIDEO_TOOL,
-    description: "Generate a video from a text prompt or image references",
-  },
-  {
-    name: "generate_image",
-    actualTool: NANO_BANANA_2_1_TOOL,
-    description: "Generate an image from a text prompt, optionally with reference images",
-  },
-];
 
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
@@ -163,24 +142,6 @@ function constraintsForTool(definition: RoutableDefinition): string[] {
 }
 
 function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
-  const definitionByName = new Map(
-    definitions.map((definition) => [definition.name, definition]),
-  );
-  const aliases = CHAT_TOOL_ALIASES.flatMap((alias) => {
-    const target = definitionByName.get(alias.actualTool);
-    if (!target) return [];
-    const category = categoryForTool(alias.actualTool);
-    return [{
-      ...alias,
-      params: paramsForTool(target),
-      requiredParams: requiredParamsForTool(target),
-      constraints: constraintsForTool(target),
-      category,
-      effect: effectForTool(alias.actualTool, category),
-      autoApply: AUTO_APPLY_TOOL_NAMES.has(alias.name)
-        || AUTO_APPLY_TOOL_NAMES.has(alias.actualTool),
-    }];
-  });
   const tools = definitions
     .filter((definition) => definition.name !== "chat")
     .map((definition) => {
@@ -209,10 +170,10 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
     effect: "view" as const,
     autoApply: true,
   }));
-  return [...aliases, ...views, ...tools];
+  return [...views, ...tools];
 }
 
-const SEEDREAM_IMAGE_I2I_TOOL = "generate_kie_seedream_v5_lite_image_to_image";
+const SEEDREAM_IMAGE_EDIT_MODEL = "kie:seedream/5-lite-image-to-image";
 const SEEDANCE_SUBSTITUTION_NOTE =
   "Using Seedream for this image edit (Seedance is video).";
 
@@ -370,13 +331,14 @@ function applyBytedanceNamedModelRoute(input: BytedanceRouteInput): BytedanceRou
         ? `${input.message.trim().replace(/[.!]?$/, "")}. ${SEEDANCE_SUBSTITUTION_NOTE}`
         : SEEDANCE_SUBSTITUTION_NOTE)
       : input.message;
-    const { video_refs: _droppedVideoRefs, ...imageParams } = input.params;
+    const { video_refs: _videoRefs, image_refs: _imageRefs, refs: _refs, ...imageParams } = input.params;
     return {
-      tool: SEEDREAM_IMAGE_I2I_TOOL,
+      tool: "generate_image",
       params: {
         ...imageParams,
+        model: SEEDREAM_IMAGE_EDIT_MODEL,
         prompt,
-        image_refs: imageRefs,
+        refs: { image: imageRefs },
       },
       message,
       substituted: saidSeedance,
@@ -384,24 +346,34 @@ function applyBytedanceNamedModelRoute(input: BytedanceRouteInput): BytedanceRou
   }
 
   if (hasVideo) {
+    const routedRefs = input.params.refs !== null && typeof input.params.refs === "object" && !Array.isArray(input.params.refs)
+      ? input.params.refs as Record<string, unknown>
+      : {};
     const videoRefs = uniqueMentions([
       ...(target && targetType === "video" ? [target] : []),
       ...videoMentions,
       ...stringList(input.params.video_refs),
+      ...stringList(routedRefs.video),
     ]).filter((mention) => mediaTypeForMention(mention, input.assetContext) !== "image");
     const imageRefs = uniqueMentions([
       ...replacements.filter((mention) =>
         mediaTypeForMention(mention, input.assetContext) === "image"),
       ...imageMentions,
       ...stringList(input.params.image_refs),
+      ...stringList(routedRefs.image),
     ]).filter((mention) => mediaTypeForMention(mention, input.assetContext) !== "video");
+    const { video_refs: _videoRefs, image_refs: _imageRefs, refs: _refs, ...videoParams } = input.params;
     return {
-      tool: SEEDANCE_VIDEO_TOOL,
+      tool: "generate_video",
       params: {
-        ...input.params,
+        ...videoParams,
+        model: LIGHTNING_VIDEO_MODEL,
         prompt,
-        ...(videoRefs.length > 0 ? { video_refs: videoRefs } : {}),
-        ...(imageRefs.length > 0 ? { image_refs: imageRefs } : {}),
+        refs: {
+          ...(videoRefs.length > 0 ? { video: videoRefs } : {}),
+          ...(imageRefs.length > 0 ? { image: imageRefs } : {}),
+        },
+        mode: "r2v",
       },
       message: input.message,
       substituted: false,
@@ -660,7 +632,7 @@ Given a user query (possibly with @asset references), determine:
 3. message: A brief present-progressive status message (2-5 words, e.g. "Trimming video.")
 
 Parameter guidelines:
-- For a generic video or image generation request that does not name a concrete model or provider, use generate_video or generate_image instead of a provider-specific generation tool
+- Generate images, video and audio with generate_image, generate_video and generate_audio. Omit model unless the user names a model or provider; the default model is applied automatically. When the user names one, pick its id from list_generation_models (for example kie:bytedance/seedance-2-5, kie:nano-banana-2-1, fal:fal-ai/nano-banana-pro). Put media inputs in refs by role (image, first_frame, last_frame, video, audio) and model settings in options
 - Include every required parameter. Omit optional parameters unless the user explicitly requests them so the tool can apply its defaults
 - For parameters with listed allowed values, use exactly one listed value and never borrow an option from another tool
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
@@ -678,15 +650,15 @@ Parameter guidelines:
 - Prefer the pattern "thing, role, action. Next visual fact." and compact clauses such as "scene @a5, character @a1, fluffy kitten standing"
 - Preserve every consumed notebook @address in the generation prompt at the semantic position where it belongs. Do not strip, rename, or expand notebook references into prose
 - For generate_video: put the compact generation description in "prompt" and preserve every consumed @ reference
-- For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use image_refs ONLY for the corresponding resolved asset tags whose asset context type is "image", in the same order (include @ prefix). Never put a video or audio asset tag in image_refs — if the user wants an image inspired by a video, describe that source without connecting it as an image
-- ByteDance naming: Seedance is video, Seedream is image. Users often say Seedance for both. When the query names seedance, bytedance, or seedream: if the edit/replace target is an image, use generate_kie_seedream_v5_lite_image_to_image and put the edit-target image first in image_refs, followed by replacement image refs. If the target is a video, use generate_kie_seedance_2_5_video with that clip in video_refs and replacement stills in image_refs. Never route an image-target Seedance ask to a Seedance video tool or to Nano Banana Pro
+- For generate_image: put the compact image description in "prompt" and preserve every consumed image @address there; use refs.image ONLY for the corresponding resolved asset tags whose asset context type is "image", in the same order (include @ prefix). Never put a video or audio asset tag in refs.image — if the user wants an image inspired by a video, describe that source without connecting it as an image
+- ByteDance naming: Seedance is video, Seedream is image. Users often say Seedance for both. When the query names seedance, bytedance, or seedream: if the edit/replace target is an image, use generate_image with model kie:seedream/5-lite-image-to-image and put the edit-target image first in refs.image, followed by replacement image refs. If the target is a video, use generate_video with model kie:bytedance/seedance-2-5, that clip in refs.video and replacement stills in refs.image. Never route an image-target Seedance ask to a video model or to Nano Banana Pro
 - Treat "Seedance 5.0 edit", "Seedance 5", and "Seedream 5" as Seedream 5. Generic chat uses Seedream 5 Lite image-to-image; Seedream 5 Pro edit lives in the subject/region pipeline. When Seedream is used for an image ask that said Seedance, the status message must note that substitution
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X or TikTok alias without @; set platform to "tiktok" for TikTok or "x" for X. apply_watermark uses the same platform field for its alias, icon, and default QR destination
 - For create_qart (artistic / picture QR): use when turning an image asset into scan-safe color and monochrome QR mosaics; pass image_ref and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
 - For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_refs (array of image asset ids), plus sound_effect_ref only for an explicit audio asset override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a video asset, it is NOT generate_video or create_watermark_card.
-- For speech, voiceover, narration, or text-to-speech requests use generate_elevenlabs_text_to_audio: put the exact words to speak in "text" (write out the words even when the user paraphrases them) and omit voice_id unless the user supplies a specific ElevenLabs voice id
-- For sound effects, foley, or background ambience (rain, crowd, whoosh, door slam) use generate_elevenlabs_sound_effect with the sound described in "prompt". For background music, a score, or a music bed use generate_elevenlabs_music with the music described in "prompt"; set generation_mode "ambience" for atmospheric beds and "loop" for seamless loops. To score an existing video use generate_elevenlabs_video_to_music with that clip's asset tag in video_ref. Use a provider-specific audio tool only when the user names that model or provider
+- For speech, voiceover, narration, or text-to-speech requests use generate_audio and put the exact words to speak in "prompt" (write out the words even when the user paraphrases them); omit options.voice_id unless the user supplies a specific ElevenLabs voice id
+- For sound effects, foley, or background ambience (rain, crowd, whoosh, door slam) use generate_audio with model elevenlabs:sound-generation and the sound described in "prompt". For background music, a score, or a music bed use generate_audio with model elevenlabs:music and the music described in "prompt"; set options.generation_mode "ambience" for atmospheric beds and "loop" for seamless loops. To score an existing video use generate_audio with model elevenlabs:video-to-music and that clip's asset tag in refs.video
 - For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - For splice_video: join two or more videos into one new asset. Use this for splice, concat, or stitch requests, not plan_chat_command. Pass first_asset_id and second_asset_id in playback order, additional_asset_ids for any further clips in that same order, and overlap 0 to concatenate complete clips
 - For chain: use when one request stacks two or more supported actions in order, including extract audio then replace another clip's soundtrack. Pass action "run", version 1, and ordered steps. Each step is {"id","tool","params"}. id is required and unique, starts with a letter (extract, replace, step1). Point a later step at an earlier output with {"$ref":{"step_id":"<that id>","output":"<field>"}} and never interpolate a ref inside a string. Do not nest chain or chat. Leave book_id out of step params
@@ -735,7 +707,6 @@ function getRoutableTool(
 
 export {
   AUTO_APPLY_TOOL_NAMES,
-  CHAT_TOOL_ALIASES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,

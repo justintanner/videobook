@@ -476,31 +476,31 @@ describe("extractSceneContext", () => {
 });
 
 describe("validateSceneRewrite", () => {
-  it("throws when tool is not kling30", () => {
-    expect(() => validateSceneRewrite({ tool: "generate_grok_imagine_video" }, 0)).toThrow(
+  it("throws when the model is not a Kling 3.0 model", () => {
+    expect(() => validateSceneRewrite({ model: "kie:grok-imagine/text-to-video" }, 0)).toThrow(
       "Scene rewrite requires a Kling 3.0 asset",
     );
   });
 
-  it("throws when tool is undefined", () => {
+  it("throws when the model is undefined", () => {
     expect(() => validateSceneRewrite({}, 0)).toThrow("Scene rewrite requires a Kling 3.0 asset");
   });
 
   it("passes for valid kling30 single-scene at index 0", () => {
     expect(() =>
-      validateSceneRewrite({ tool: "generate_kling30_video", prompt: "test" }, 0),
+      validateSceneRewrite({ model: "kie:kling-3.0-omni/text-to-video", prompt: "test" }, 0),
     ).not.toThrow();
   });
 
   it("throws for scene_index out of range on single scene", () => {
     expect(() =>
-      validateSceneRewrite({ tool: "generate_kling30_video", prompt: "test" }, 1),
+      validateSceneRewrite({ model: "kie:kling-3.0-omni/text-to-video", prompt: "test" }, 1),
     ).toThrow("out of range");
   });
 
   it("passes for valid scene_index in multi_prompt", () => {
     const params = {
-      tool: "generate_kling30_video",
+      model: "kie:kling-3.0-omni/text-to-video",
       multi_prompt: [
         { prompt: "s0", duration: 5 },
         { prompt: "s1", duration: 3 },
@@ -511,13 +511,13 @@ describe("validateSceneRewrite", () => {
 
   it("throws for negative scene_index", () => {
     expect(() =>
-      validateSceneRewrite({ tool: "generate_kling30_video", prompt: "test" }, -1),
+      validateSceneRewrite({ model: "kie:kling-3.0-omni/text-to-video", prompt: "test" }, -1),
     ).toThrow("out of range");
   });
 
   it("throws for scene_index equal to scene count", () => {
     const params = {
-      tool: "generate_kling30_video",
+      model: "kie:kling-3.0-omni/text-to-video",
       multi_prompt: [{ prompt: "s0", duration: 5 }],
     };
     expect(() => validateSceneRewrite(params, 1)).toThrow("out of range");

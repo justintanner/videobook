@@ -74,9 +74,9 @@ describe("awaiting notebook output startup recovery", () => {
       label: "Generate image",
       slot: { row: 0, column: 0 },
       provider: "kie",
-      model: "NanoBananaProRequestSchema",
+      model: "kie:nano-banana-pro",
       operation: "text_to_image",
-      tool: "generate_kie_nano_banana_pro_text_to_image",
+      tool: "generate_image",
     });
     const runId = "019f0000-0000-7000-8000-000000000021";
     const restoredPlan = {
@@ -132,9 +132,9 @@ describe("awaiting notebook output startup recovery", () => {
       slot: { row: 0, column: 0 },
       prompt: "An establishing frame",
       provider: "kie",
-      model: "NanoBananaProRequestSchema",
+      model: "kie:nano-banana-pro",
       operation: "text_to_image",
-      tool: "generate_kie_nano_banana_pro_text_to_image",
+      tool: "generate_image",
     });
     const target = engine.notebooks.createCell({
       type: "generate_image",
@@ -142,9 +142,9 @@ describe("awaiting notebook output startup recovery", () => {
       slot: { row: 0, column: 1 },
       prompt: "A continuation frame",
       provider: "kie",
-      model: "NanoBananaProRequestSchema",
+      model: "kie:nano-banana-pro",
       operation: "text_to_image",
-      tool: "generate_kie_nano_banana_pro_text_to_image",
+      tool: "generate_image",
     });
     const document = {
       ...created.value,
@@ -295,8 +295,8 @@ describe("awaiting notebook output startup recovery", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     const runId = "019f0000-0000-7000-8000-000000000021:frame";
     const placed = await placeChainGeneration({
-      engine, notebookId: notebook.value.id, tool: "generate_kie_gpt_image_2_5_sunburst_image", placement: "generate_image",
-      params: { prompt: "A full frame" }, artifactId: artifact.value.artifactId, runId, pins: [],
+      engine, notebookId: notebook.value.id, tool: "generate_image", placement: "generate_image",
+      params: { model: "kie:gpt-image-2-5-sunburst-text-to-image", prompt: "A full frame" }, artifactId: artifact.value.artifactId, runId, pins: [],
     });
     const bytes = await sharp({ create: { width: 32, height: 32, channels: 3, background: "red" } }).png().toBuffer();
     expect((await engine.files.write(artifact.value.artifactId, "original.png", bytes)).ok).toBe(true);
@@ -376,7 +376,7 @@ describe("awaiting notebook output startup recovery", () => {
     expect(engine.jobs.queue.list({ type: "await_notebook_output" })).toHaveLength(1);
   });
 
-  it.each(["pending", "saved", "legacy", "completing"])(
+  it.each(["pending", "saved", "completing"])(
     "recovers a shutdown-interrupted result with %s provider state and surfaces the provider failure",
     async (providerState) => {
       const artifact = await engine.artifacts.create("video", "Interrupted Seedance output");
@@ -386,8 +386,8 @@ describe("awaiting notebook output startup recovery", () => {
       const bookId = engine.book.get().bookId;
       const runId = "019f0000-0000-7000-8000-000000000041:clip";
       const placed = await placeChainGeneration({
-        engine, notebookId: notebook.value.id, tool: "generate_kie_seedance_2_5_video",
-        placement: "generate_video", params: { prompt: "A scene" },
+        engine, notebookId: notebook.value.id, tool: "generate_video",
+        placement: "generate_video", params: { model: "kie:bytedance/seedance-2-5", prompt: "A scene" },
         artifactId, runId, pins: [],
       });
       const read = engine.notebooks.read(notebook.value.id);
@@ -403,7 +403,7 @@ describe("awaiting notebook output startup recovery", () => {
       const recorded = await engine.generations.record({
         notebookId: notebook.value.id, cellId: placed.producerCellId,
         outputCellId: placed.outputCellId, runId, status: "awaiting_provider",
-        tool: "generate_kie_seedance_2_5_video", provider: "kie",
+        tool: "generate_video", provider: "kie", model: "kie:bytedance/seedance-2-5",
         providerArtifactId: artifactId,
       });
       if (!recorded.ok) throw new Error(recorded.error.message);
@@ -413,24 +413,14 @@ describe("awaiting notebook output startup recovery", () => {
       });
       if (!owner) throw new Error("Missing fixture owner");
       const pending = await engine.jobs.pending.write({
-        artifactId, taskId, taskType: "seedance2_video", meta: { prompt: "A scene" },
+        artifactId, taskId, taskType: "media_kie",
+        meta: { model: "kie:bytedance/seedance-2-5", media: "video", prompt: "A scene", sourceImageIds: [], sourceVideoIds: [], sourceAudioIds: [] },
       }, owner.ownerId);
       if (!pending.ok || !pending.value) throw new Error("Missing pending task");
       engine.jobs.artifactWork.complete(artifactId, owner.ownerId);
       if (providerState === "saved") {
         await preserveProviderTask(engine, pending.value.task);
         expect(engine.jobs.pending.delete(artifactId).ok).toBe(true);
-      }
-      if (providerState === "legacy") {
-        expect(engine.jobs.pending.delete(artifactId).ok).toBe(true);
-        const submission = engine.jobs.queue.enqueue({
-          type: "generate_seedance25_video", artifactId,
-          payload: { type: "generate_seedance25_video", bookId, vidAssetId: artifactId, prompt: "A scene" },
-        }).job;
-        const running = engine.jobs.queue.dequeue(process.pid, 60_000);
-        expect(running?.id).toBe(submission.id);
-        if (!running) throw new Error("Missing submission job");
-        expect(await engine.jobs.queue.complete(running.id, { result: { success: true, taskId } }, running.fence)).toBe(true);
       }
       if (providerState === "completing") {
         expect(engine.jobs.pending.markCompleting(artifactId).ok).toBe(true);
@@ -489,7 +479,7 @@ describe("awaiting notebook output startup recovery", () => {
           status: "failed", error: expect.stringContaining("copyright restrictions"),
         });
         expect(requests).toEqual([`/api/v1/jobs/recordInfo?taskId=${taskId}`]);
-        expect(engine.jobs.queue.list({ type: "generate_seedance25_video" })).toHaveLength(providerState === "legacy" ? 1 : 0);
+        expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
       } finally {
         if (previousKey === undefined) delete process.env.KIE_API_KEY;
         else process.env.KIE_API_KEY = previousKey;
@@ -811,7 +801,7 @@ describe("awaiting notebook output startup recovery", () => {
       cellId: fixture.targetCellId,
       runId: fixture.runId,
       status: "awaiting_provider",
-      tool: "generate_kie_nano_banana_pro_text_to_image",
+      tool: "generate_image",
       providerArtifactId: providerArtifact.value.artifactId,
     });
     expect(generation.ok).toBe(true);
@@ -1258,9 +1248,9 @@ describe("awaiting notebook output startup recovery", () => {
       slot: { row: 0, column: 0 },
       prompt: "Original source",
       provider: "kie",
-      model: "NanoBananaProRequestSchema",
+      model: "kie:nano-banana-pro",
       operation: "text_to_image",
-      tool: "generate_kie_nano_banana_pro_text_to_image",
+      tool: "generate_image",
       outputArtifactId: saved.value.artifactId,
     });
     const target = engine.notebooks.createCell({
@@ -1303,7 +1293,7 @@ describe("awaiting notebook output startup recovery", () => {
         runId,
       } satisfies RunNotebookPayload) as unknown as Record<string, unknown>,
       5_000,
-    )).rejects.toThrow("Cell operation unsupported_generation is not runnable");
+    )).rejects.toThrow("@a2 uses no model, which is not a generation model; pick one from list_generation_models");
 
     const notebook = engine.notebooks.read(created.value.id);
     expect(notebook.ok).toBe(true);
@@ -1320,7 +1310,7 @@ describe("awaiting notebook output startup recovery", () => {
     expect(notebook.value.execution?.[failedOutput?.id ?? ""]).toMatchObject({
       status: "error",
       runId,
-      error: "Cell operation unsupported_generation is not runnable",
+      error: expect.stringContaining("@a2 uses no model, which is not a generation model"),
     });
     expect(notebook.value.execution?.[target.id]?.status).not.toBe("error");
     const upstreamGenerations = engine.generations.listForCell(

@@ -32,7 +32,7 @@ import {
 // ---------------------------------------------------------------------------
 // Google Flow characters (POST/GET/DELETE /google-flow/characters). A character
 // bundles 1-2 reference images (plus optional personality notes and a voice)
-// into a ref that feeds character_1..N on generate_google_flow_omni_flash_video
+// into a ref that feeds character_1..N options of generate_video with model googleflow:omni-flash
 // (character_refs). Each character costs a flat 2 of omni's 7 reference slots
 // shared with image_refs, regardless of its image count (google-flow-refs.ts).
 // GET/DELETE-by-ref paths ride the googleFlowFetch raw
@@ -276,7 +276,7 @@ export function createGoogleFlowCharacterDef(engine: Engine): ToolDef {
   return {
     name: "create_google_flow_character",
     description:
-      "Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.",
+      "Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.",
     schema: createGoogleFlowCharacterSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof createGoogleFlowCharacterSchema>;
@@ -327,7 +327,7 @@ export function createGoogleFlowCharacterDef(engine: Engine): ToolDef {
         return jsonResult({
           ...result,
           source_images: resolved.map((r) => r.assetId),
-          usage: "Pass character_ref in character_refs of generate_google_flow_omni_flash_video (character_1..7)",
+          usage: "Pass character_ref as options.character_1..7 of generate_video with model googleflow:omni-flash",
         });
       } catch (err) {
         return toolError(err instanceof Error ? err.message : String(err));

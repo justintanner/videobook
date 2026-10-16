@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ChainStep } from "./chain-plan.js";
 import type { GoalPlanV3 } from "./goal-plan-v3.js";
-import { NANO_BANANA_2_1_TOOL } from "./image-edit-default.js";
+import { LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 import { GOAL_STYLE_IDS, goalStyleFragment, resolveGoalStyleOptions, type GoalStyleStage } from "./goal-styles.js";
 
@@ -10,12 +10,13 @@ export { buildGoalPlanV3, compileGoalV3Approval, compileGoalV3Steps, goalMediaRe
 
 export { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 
-export const GOAL_VIDEO_TOOL = "generate_kie_seedance_2_5_video";
-export const GOAL_IMAGE_TOOLS = {
-  "nano-banana-2-1": NANO_BANANA_2_1_TOOL,
-  sunburst: "generate_kie_gpt_image_2_5_sunburst_image",
-  flare: "generate_kie_gpt_image_2_5_flare_image",
-};
+export const GOAL_VIDEO_TOOL = "generate_video";
+export const GOAL_VIDEO_MODEL = LIGHTNING_VIDEO_MODEL;
+const GOAL_IMAGE_MODELS = {
+  "nano-banana-2-1": { text: "kie:nano-banana-2-1", edit: "kie:nano-banana-2-1" },
+  sunburst: { text: "kie:gpt-image-2-5-sunburst-text-to-image", edit: "kie:gpt-image-2-5-sunburst-image-to-image" },
+  flare: { text: "kie:gpt-image-2-5-flare-text-to-image", edit: "kie:gpt-image-2-5-flare-image-to-image" },
+} as const;
 const GOAL_MAX_SHOTS = 8;
 const goalPrompt = (limit: number) => z.string().trim().min(1).max(limit)
   .regex(/^[^@]*$/u, "Use Reference 1, Reference 2 and plain text in plan prompts; input references are added automatically");
@@ -141,18 +142,31 @@ function goalReferenceLegend(plan: GoalPlan, characters: readonly GoalCharacter[
   return `${[...(frame ? [plan.storyboardLayout === "six-panel" ? "@image1 approved scene: keep clothes, props, place" : "@image1 full frame: keep clothes, props"] : []), ...characters.map((_, index) => `@image${index + (frame ? 2 : 1)} ${goalReferenceName(plan, index)}`)].join("; ")}.`;
 }
 
-function goalFrameParams(plan: GoalPlan, characters: readonly GoalCharacter[]): Record<string, unknown> {
+function goalImageStep(id: string, plan: GoalPlan, prompt: string, references: readonly string[]): ChainStep {
+  const models = GOAL_IMAGE_MODELS[plan.imageModel];
   return {
-    prompt: `${styledGoalPrompt(plan, "frame", `${plan.continuity}\n\n${plan.frame.prompt}`)}\n\n${goalReferenceLegend(plan, characters)}`,
-    image_refs: characters.map(character => character.address),
-    aspect_ratio: plan.aspectRatio,
-    resolution: plan.imageResolution,
-    ...(plan.imageModel === "nano-banana-2-1" ? { output_format: "png" } : { background: "opaque" }),
+    id,
+    tool: "generate_image",
+    params: {
+      model: references.length > 0 ? models.edit : models.text,
+      prompt,
+      refs: { image: [...references] },
+      options: {
+        aspect_ratio: plan.aspectRatio,
+        resolution: plan.imageResolution,
+        ...(plan.imageModel === "nano-banana-2-1" ? { output_format: "png" } : { background: "opaque" }),
+      },
+    },
   };
 }
 
 export function compileFrameSteps(plan: GoalPlan, characters: readonly GoalCharacter[]): ChainStep[] {
-  return [{ id: "frame", tool: GOAL_IMAGE_TOOLS[plan.imageModel], params: goalFrameParams(plan, characters) }];
+  return [goalImageStep(
+    "frame",
+    plan,
+    `${styledGoalPrompt(plan, "frame", `${plan.continuity}\n\n${plan.frame.prompt}`)}\n\n${goalReferenceLegend(plan, characters)}`,
+    characters.map(character => character.address),
+  )];
 }
 
 function storyboardLayoutPrompt(plan: GoalPlan, index: number): string {
@@ -165,17 +179,12 @@ function storyboardLayoutPrompt(plan: GoalPlan, index: number): string {
 
 export function compileStoryboardSteps(plan: GoalPlan, characters: readonly GoalCharacter[], frame: string, indexes = plan.shots.map((_, index) => index)): ChainStep[] {
   const frames = [...indexes.map(index => ({ index, ending: false })), ...(plan.frameContinuity ? indexes.map(index => ({ index, ending: true })) : [])];
-  return frames.map(({ index, ending }) => ({
-    id: `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
-    tool: GOAL_IMAGE_TOOLS[plan.imageModel],
-    params: {
-      prompt: `${styledGoalPrompt(plan, ending ? "ending" : "storyboard", ending ? `Ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan, index)}\n\n${goalStillPrompt(plan, "storyboards", index)}`)}\n\n${goalReferenceLegend(plan, characters, "full")}`,
-      image_refs: [frame, ...characters.map(character => character.address)],
-      aspect_ratio: plan.aspectRatio,
-      resolution: plan.imageResolution,
-      ...(plan.imageModel === "nano-banana-2-1" ? { output_format: "png" } : { background: "opaque" }),
-    },
-  }));
+  return frames.map(({ index, ending }) => goalImageStep(
+    `storyboard${index + 1 + (ending ? plan.shots.length : 0)}`,
+    plan,
+    `${styledGoalPrompt(plan, ending ? "ending" : "storyboard", ending ? `Ending frame. ${goalEndingPrompt(plan, index)}` : `${storyboardLayoutPrompt(plan, index)}\n\n${goalStillPrompt(plan, "storyboards", index)}`)}\n\n${goalReferenceLegend(plan, characters, "full")}`,
+    [frame, ...characters.map(character => character.address)],
+  ));
 }
 
 function goalEndingPrompt(plan: GoalPlan, index: number): string {
@@ -199,15 +208,12 @@ export function compileReviseStillStep(plan: GoalPlan, characters: readonly Goal
   if (stage === "storyboards" && !frame) throw new Error("Choose a full frame before revising storyboards");
   const references = ["@image1: previous version", ...(frame ? ["@image2: full frame"] : []),
     ...characters.map((_, position) => `@image${position + (frame ? 3 : 2)}: ${goalReferenceName(plan, position)}`)];
-  return {
-    id: stage === "frame" ? "frame" : `storyboard${index + 1}`,
-    tool: GOAL_IMAGE_TOOLS[plan.imageModel],
-    params: {
-      prompt: `${styledGoalPrompt(plan, "revise", `${storyboard ? `${storyboardLayoutPrompt(plan, index)}\n\n` : ""}${basePrompt}\n\nChange @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep rest.${storyboard ? plan.storyboardLayout === "six-panel" ? " Six distinct moments." : " Four distinct moments." : ""}`)}\n\n${references.join("; ")}.`,
-      image_refs: [current, ...(frame ? [frame] : []), ...characters.map(character => character.address)],
-      aspect_ratio: plan.aspectRatio, resolution: plan.imageResolution, ...(plan.imageModel === "nano-banana-2-1" ? { output_format: "png" } : { background: "opaque" }),
-    },
-  };
+  return goalImageStep(
+    stage === "frame" ? "frame" : `storyboard${index + 1}`,
+    plan,
+    `${styledGoalPrompt(plan, "revise", `${storyboard ? `${storyboardLayoutPrompt(plan, index)}\n\n` : ""}${basePrompt}\n\nChange @image1: ${feedback.replace(/[.!?]+$/u, "")}. Keep rest.${storyboard ? plan.storyboardLayout === "six-panel" ? " Six distinct moments." : " Four distinct moments." : ""}`)}\n\n${references.join("; ")}.`,
+    [current, ...(frame ? [frame] : []), ...characters.map(character => character.address)],
+  );
 }
 
 type GoalVideoOptions = { frame?: string; characters?: readonly GoalCharacter[]; indexes?: readonly number[]; feedback?: string | null; assemble?: boolean };
@@ -220,12 +226,16 @@ function goalShotParams(plan: GoalPlan, index: number, storyboard: string, endin
   const sceneSlot = ending ? 3 : 2;
   const legend = six ? [options.frame ? `@image${sceneSlot} approved scene` : "", ...(options.characters ?? []).map((_, position) => `@image${sceneSlot + (options.frame ? 1 : 0) + position} ${goalReferenceName(plan, position)}`)].filter(Boolean).join("; ") : "";
   return {
+    model: GOAL_VIDEO_MODEL,
     prompt: `${shot.videoPrompt}${options.feedback ? `\nRevision: ${options.feedback}` : ""}\n\n@image1 storyboard. ${six ? "Six beats in reading order, follow its timestamps" : `Four beats in order, ${shot.durationSeconds / 4}s each`}. Same people, place. Full-screen.${fragment ? ` ${fragment}` : ""}${ending ? " @image2 ending pose." : ""}${legend ? ` ${legend}.` : ""} No grid, borders, notes, text. No music.`,
-    image_refs: references,
-    duration: String(shot.durationSeconds),
-    aspect_ratio: plan.aspectRatio,
-    resolution: plan.videoResolution,
-    generate_audio: true,
+    refs: { image: references },
+    mode: "r2v",
+    options: {
+      duration: shot.durationSeconds,
+      aspect_ratio: plan.aspectRatio,
+      resolution: plan.videoResolution,
+      generate_audio: true,
+    },
   };
 }
 

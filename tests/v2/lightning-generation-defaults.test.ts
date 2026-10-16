@@ -12,21 +12,24 @@ import {
 import {
   LIGHTNING_SCENE_ASPECT_RATIO,
   LIGHTNING_SCENE_OUTPUT_FORMAT,
+  LIGHTNING_SCENE_MODEL,
   LIGHTNING_SCENE_RESOLUTION,
-  LIGHTNING_SCENE_TOOL,
   LIGHTNING_VIDEO_ASPECT_RATIO,
-  LIGHTNING_VIDEO_DURATION,
+  LIGHTNING_VIDEO_DURATION_SECONDS,
   LIGHTNING_VIDEO_GENERATE_AUDIO,
+  LIGHTNING_VIDEO_MODEL,
   LIGHTNING_VIDEO_OUTPUT_FORMAT,
   LIGHTNING_VIDEO_RESOLUTION,
-  LIGHTNING_VIDEO_TOOL,
 } from "../../server/src/lightning-defaults.js";
 import {
   prepareNotebookGeneration,
   registerRunNotebookJob,
   runNotebookCell,
 } from "../../server/src/jobs/run-notebook.js";
-import { translateToolPayload } from "../../server/src/payload-builders.js";
+import type { GenerateMediaJob } from "../../server/src/jobs/generate-media.js";
+import { resolveModel } from "../../server/src/media/descriptor.js";
+import { previewGeneration } from "../../server/src/media/preview.js";
+import { buildWireRequest } from "../../server/src/media/request.js";
 import {
   queue,
   registerJobHandler,
@@ -38,17 +41,19 @@ import {
 const STALE = "An older long cinematic prompt that must not be submitted again";
 const SHORT = "A short submitted prompt";
 const SECOND = "A second short prompt";
-const VIDEO_JOB = "generate_seedance25_video";
+const VIDEO_JOB = "generate_media";
 
 describe("lightning generation defaults and submitted prompts", () => {
   let rootDir: string;
   let engine: Engine;
   let bookId: string;
   let previousKieKey: string | undefined;
-  const seen: Array<Record<string, unknown>> = [];
+  const seen: GenerateMediaJob[] = [];
+  const requests: Array<Record<string, unknown>> = [];
 
   beforeEach(async () => {
     seen.length = 0;
+    requests.length = 0;
     rootDir = await mkdtemp(join(tmpdir(), "videobook-lightning-gen-"));
     engine = createEngine({
       durableWrites: false,
@@ -62,29 +67,19 @@ describe("lightning generation defaults and submitted prompts", () => {
     await setEngineRoot(rootDir, engine);
     registerRunNotebookJob(engine);
     registerJobHandler(VIDEO_JOB, async (payload) => {
-      const job = payload as {
-        vidAssetId: string;
-        prompt?: string;
-        duration?: string;
-        resolution?: string;
-        aspect_ratio?: string;
-        generate_audio?: boolean;
-        output_format?: string;
-      };
+      const job = payload as GenerateMediaJob;
       seen.push(job);
-      await engine.files.write(job.vidAssetId, "original.mp4", Buffer.from("stub lightning video"));
-      await engine.metadata.artifacts.write(job.vidAssetId, "original", { name: "original.mp4" });
-      await engine.metadata.artifacts.write(job.vidAssetId, "generation-payload", {
-        model: "bytedance/seedance-2-5",
-        input: {
-          prompt: job.prompt ?? "",
-          duration: Number(job.duration),
-          resolution: job.resolution,
-          aspect_ratio: job.aspect_ratio,
-          generate_audio: job.generate_audio,
-          output_format: job.output_format,
-        },
+      const built = buildWireRequest(resolveModel(job.model), {
+        prompt: job.prompt,
+        refUrls: {},
+        options: job.options,
+        mode: job.mode,
       });
+      if (!built.ok) throw new Error(built.error);
+      requests.push(built.request);
+      await engine.files.write(job.assetId, "original.mp4", Buffer.from("stub lightning video"));
+      await engine.metadata.artifacts.write(job.assetId, "original", { name: "original.mp4" });
+      await engine.metadata.artifacts.write(job.assetId, "generation-payload", built.request);
       return { success: true, taskId: "stub-lightning-task" };
     });
   });
@@ -117,9 +112,9 @@ describe("lightning generation defaults and submitted prompts", () => {
       slot: { row: 0, column: 0 },
       prompt,
       provider: "kie",
-      model: "bytedance/seedance-2-5",
+      model: LIGHTNING_VIDEO_MODEL,
       operation: "text_to_video",
-      tool: LIGHTNING_VIDEO_TOOL,
+      tool: "generate_video",
       inputs,
     });
   }
@@ -157,15 +152,10 @@ describe("lightning generation defaults and submitted prompts", () => {
     const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
     expect(prepared.input.prompt).toBe(SHORT);
     expect(prepared.input.prompt).not.toBe(STALE);
-    expect(prepared.input).toMatchObject({
-      duration: LIGHTNING_VIDEO_DURATION,
-      resolution: LIGHTNING_VIDEO_RESOLUTION,
-      aspect_ratio: LIGHTNING_VIDEO_ASPECT_RATIO,
-      generate_audio: LIGHTNING_VIDEO_GENERATE_AUDIO,
-      output_format: LIGHTNING_VIDEO_OUTPUT_FORMAT,
-    });
-    const translated = translateToolPayload(prepared.tool, prepared.input, prepared.provider);
-    expect(translated?.payload).toMatchObject({
+    expect(prepared).toMatchObject({ tool: "generate_video", provider: "kie", model: LIGHTNING_VIDEO_MODEL });
+    const preview = previewGeneration(prepared.input);
+    if (!preview.ok) throw new Error(preview.error);
+    expect(preview.preview.payload).toMatchObject({
       model: "bytedance/seedance-2-5",
       input: {
         prompt: SHORT,
@@ -183,13 +173,17 @@ describe("lightning generation defaults and submitted prompts", () => {
       runId,
     });
     await waitForJobs(1);
-    expect(seen[0]).toMatchObject({
-      prompt: SHORT,
-      duration: LIGHTNING_VIDEO_DURATION,
-      resolution: LIGHTNING_VIDEO_RESOLUTION,
-      aspect_ratio: LIGHTNING_VIDEO_ASPECT_RATIO,
-      generate_audio: true,
-      output_format: LIGHTNING_VIDEO_OUTPUT_FORMAT,
+    expect(seen[0]).toMatchObject({ model: LIGHTNING_VIDEO_MODEL, prompt: SHORT, mode: "t2v" });
+    expect(requests[0]).toMatchObject({
+      model: "bytedance/seedance-2-5",
+      input: {
+        prompt: SHORT,
+        duration: LIGHTNING_VIDEO_DURATION_SECONDS,
+        resolution: LIGHTNING_VIDEO_RESOLUTION,
+        aspect_ratio: LIGHTNING_VIDEO_ASPECT_RATIO,
+        generate_audio: LIGHTNING_VIDEO_GENERATE_AUDIO,
+        output_format: LIGHTNING_VIDEO_OUTPUT_FORMAT,
+      },
     });
     expect(JSON.stringify(seen[0])).not.toContain(STALE);
 
@@ -264,7 +258,7 @@ describe("lightning generation defaults and submitted prompts", () => {
     const cell = videoCell("Keep my settings", {
       generationMode: "t2v",
       generationSettings: {
-        duration: "5",
+        duration: 5,
         resolution: "720p",
         aspect_ratio: "9:16",
         generate_audio: false,
@@ -275,22 +269,27 @@ describe("lightning generation defaults and submitted prompts", () => {
     const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
     expect(prepared.input).toMatchObject({
       prompt: "Keep my settings",
-      duration: "5",
-      resolution: "720p",
-      aspect_ratio: "9:16",
-      generate_audio: false,
-      output_format: "mov",
+      options: {
+        duration: 5,
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        generate_audio: false,
+        output_format: "mov",
+      },
     });
     const runId = uuidv7();
     await runNotebookCell(engine, bookId, notebookId, document, cell, { confirmPaid: true, runId });
     await waitForJobs(1);
-    expect(seen[0]).toMatchObject({
-      prompt: "Keep my settings",
-      duration: "5",
-      resolution: "720p",
-      aspect_ratio: "9:16",
-      generate_audio: false,
-      output_format: "mov",
+    expect(seen[0]).toMatchObject({ prompt: "Keep my settings", options: { duration: 5 } });
+    expect(requests[0]).toMatchObject({
+      input: {
+        prompt: "Keep my settings",
+        duration: 5,
+        resolution: "720p",
+        aspect_ratio: "9:16",
+        generate_audio: false,
+        output_format: "mov",
+      },
     });
   });
 
@@ -301,29 +300,26 @@ describe("lightning generation defaults and submitted prompts", () => {
       slot: { row: 0, column: 0 },
       prompt: SHORT,
       provider: "kie",
-      model: "nano-banana-2-1",
-      operation: "generate_image",
-      tool: LIGHTNING_SCENE_TOOL,
+      model: LIGHTNING_SCENE_MODEL,
+      operation: "text_to_image",
+      tool: "generate_image",
       inputs: { resolvedPrompt: STALE },
     });
     const { document } = await writeCell(cell);
     const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
     expect(prepared.input.prompt).toBe(SHORT);
-    expect(prepared.input).toMatchObject({
-      aspect_ratio: LIGHTNING_SCENE_ASPECT_RATIO,
-      resolution: LIGHTNING_SCENE_RESOLUTION,
-      output_format: LIGHTNING_SCENE_OUTPUT_FORMAT,
-    });
-    const translated = translateToolPayload(prepared.tool, prepared.input, prepared.provider);
-    expect(translated?.payload).toMatchObject({
+    expect(prepared).toMatchObject({ tool: "generate_image", provider: "kie", model: LIGHTNING_SCENE_MODEL });
+    const preview = previewGeneration(prepared.input);
+    if (!preview.ok) throw new Error(preview.error);
+    expect(preview.preview.payload).toMatchObject({
       model: "nano-banana-2-1",
       input: {
         prompt: SHORT,
-        aspect_ratio: "16:9",
-        resolution: "2K",
-        output_format: "jpg",
+        aspect_ratio: LIGHTNING_SCENE_ASPECT_RATIO,
+        resolution: LIGHTNING_SCENE_RESOLUTION,
+        output_format: LIGHTNING_SCENE_OUTPUT_FORMAT,
       },
     });
-    expect(JSON.stringify(translated)).not.toContain(STALE);
+    expect(JSON.stringify(preview.preview.payload)).not.toContain(STALE);
   });
 });

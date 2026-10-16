@@ -661,20 +661,6 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "concat_images", autoInject: ["book_id"] },
   },
   {
-    command: "/grok-upscale",
-    description: "Upscale a Grok-Imagine video via Kie",
-    example: "/grok-upscale @a1",
-    category: "context_menu",
-    icon: "Zap",
-    size: "default",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Grok-Imagine video asset to upscale" },
-    ],
-    mcpTool: { tool: "upscale_kie_grok_imagine_video", autoInject: ["book_id"] },
-  },
-  {
     command: "/rewrite-script",
     description: "Rewrite a script asset in place with the full describe model",
     example: "/rewrite-script @a1",
@@ -1628,18 +1614,17 @@ const CANONICAL_COMMANDS: Command[] = [
 
   {
     command: "/say",
-    description: "Generate speech audio from text using an ElevenLabs voice ID",
-    example: "/say EXAVITQu4vr4xnSDxMaL welcome back everyone",
+    description: "Generate speech audio from text with ElevenLabs",
+    example: "/say welcome back everyone",
     category: "context_menu",
     icon: "Mic",
     size: "default",
     variant: "pink",
     chevron: "right",
     params: [
-      { name: "voice_id", type: "string", required: true, description: "ElevenLabs voice ID" },
-      { name: "text", type: "string", required: true, description: "Text to synthesize" },
+      { name: "prompt", type: "string", required: true, description: "Text to speak" },
     ],
-    mcpTool: { tool: "generate_elevenlabs_text_to_audio", autoInject: ["book_id"] },
+    mcpTool: { tool: "generate_audio", autoInject: ["book_id"], injectParams: { model: "kie:elevenlabs/text-to-speech-turbo-2-5" } },
   },
   {
     command: "/speak",

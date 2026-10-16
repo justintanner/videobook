@@ -3,7 +3,6 @@ import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { scopedEngine } from "../engine.js";
-import { GENERATION_ACTIONS } from "../generation-registry.js";
 import { buildWorkspaceActionCatalog } from "../workspace-action-catalog.js";
 import type { WorkspaceActionCatalog } from "../workspace-action-contract.js";
 import { getCanonicalCommands } from "./commands.js";
@@ -33,9 +32,17 @@ describe("workspace action exposure contract", () => {
       expect(ids, entry.tool).toContain(entry.actionId);
       expect(entry.reason.trim().length, entry.tool).toBeGreaterThan(0);
     }
-    for (const action of GENERATION_ACTIONS) {
-      expect(catalog.tools.map((entry) => entry.tool), action.canonical_name).toContain(action.canonical_name);
+    for (const media of ["image", "video", "audio"]) {
+      const tool = `generate_${media}`;
+      expect(catalog.tools.map((entry) => entry.tool), tool).toContain(tool);
+      expect(catalog.actions.find((action) => action.id === `tool.${tool}`), tool).toMatchObject({
+        group: "Generation",
+        confirmation: "generation",
+        generation: { provider: "catalog", operation: tool, mediaType: media },
+      });
     }
+    expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).toMatchObject({ group: "Generation" });
+    expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).not.toHaveProperty("generation");
   });
 
   it("preserves real nested schemas and distinct command presets across repeated reads", () => {

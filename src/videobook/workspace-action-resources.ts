@@ -81,6 +81,10 @@ export async function loadWorkspaceActionResources(
     const plans = rows(await call(tool.includes('generation') || tool === 'continue_notebook_generation' ? 'list_notebook_generation_plans' : 'list_notebook_run_plans', { notebook_id: values.notebook_id }), 'plans')
     result.choices.plan_id = choices(plans, ['planId', 'plan_id'], ['prompt', 'status'])
   })())
+  if (fields.model && action.generation) requests.push((async () => {
+    const models = rows(await call('list_generation_models', { media: action.generation?.mediaType }), 'models')
+    result.choices.model = choices(models, ['id'], ['title'])
+  })())
   if (fields.voice_id) requests.push((async () => {
     result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])
   })())

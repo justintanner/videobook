@@ -4,11 +4,11 @@ Every current MCP endpoint and discoverable action is listed once. Use the Actio
 
 Media commands `/export`, `/delete`, `/reverse` and `/trim` target media. Sequence operations use `/export-sequence`, `/clip-delete`, `/clip-reverse`, `/clip-trim`, and `/clip-audio`; clip timing uses frames and media trimming uses seconds. `/clip-audio` edits gain, mute, and fades on an audio-track clip. Explicit legacy clip IDs and `/export @sequence-main` remain accepted. Use grid addresses such as `/crop @a1`, `/trim @a1 0 2` or `/insert @a1 0 60`.
 
-Historical MCP names remain lookup-only compatibility keys. Slash aliases match their canonical action in search. The legacy `/skeleton` shortcut opens a reviewed AI pose-guide request. Import owns upload transport and duplicate-byte checks; it uses a native file picker. Set `VIDEOBOOK_DOWNLOADS_DIR` to override the server's default Downloads directory.
+Image, video and audio generation runs through `generate_image`, `generate_video` and `generate_audio` with a model id from `list_generation_models`; see [generation-models.md](generation-models.md). Slash aliases match their canonical action in search. The legacy `/skeleton` shortcut opens a reviewed AI pose-guide request. Import owns upload transport and duplicate-byte checks; it uses a native file picker. Set `VIDEOBOOK_DOWNLOADS_DIR` to override the server's default Downloads directory.
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (379)
+## MCP endpoints (263)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -32,7 +32,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
-- `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
 - `cancel_legacy_migration` — Cancel queued or copying migration work before its final archive switch starts
 - `chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.
@@ -40,7 +39,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
-- `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
+- `clean_failed_assets` — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
 - `clean_video_audio` — Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `commit_music_video` — Apply a reviewed music-video draft once, checking its timeline, source and beat-map revisions. Returns the previous action on a retry.
@@ -53,8 +52,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_character_entity` — Create a reusable character
-- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.
-- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.
+- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.
+- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.
 - `create_notebook` — Create an empty notebook
 - `create_notebook_cell` — Create a UUIDv7 notebook cell
 - `create_post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.
@@ -89,14 +88,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
-- `estimate_cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.
+- `estimate_cost` — Estimate the USD cost of generation calls before running them. Accepts one or more {tool_name, input} pairs (generate_image, generate_video, generate_audio with their model, refs and options) and returns one CostEstimate summed across all calls, priced from @apicity/cost. Models without published rates return $0 with a warning.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
-- `extend_audio_asset` (historical names, not exposed: `extend_audio`) — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
-- `extend_fal_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_video_extend_fal`, `generate_grok_imagine_extend_fal_video`) — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.
-- `extend_fal_minimax_h3_max_turbo_video` — Extend a source video with MiniMax H3 Max Turbo on fal
-- `extend_kie_grok_imagine_video` (historical names, not exposed: `extend_grok_imagine_video`) — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.
+- `extend_audio_asset` — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
 - `extract_audio` — Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).
 - `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
 - `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
@@ -105,118 +101,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
 - `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
 - `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
-- `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
-- `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
 - `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
-- `generate_elevenlabs_music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music
-- `generate_elevenlabs_sound_effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs
-- `generate_elevenlabs_text_to_audio` (historical names, not exposed: `generate_elevenlabs_t2a`) — Generate an aud-* text-to-audio asset using an ElevenLabs voice.
-- `generate_elevenlabs_video_to_music` — Score a connected video with a music track timed to its picture using ElevenLabs Music
-- `generate_fal_bria_fibo_edit_1_5_product_holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal
-- `generate_fal_bria_fibo_edit_1_5_virtual_try_on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal
-- `generate_fal_elevenlabs_music_2_5` — Compose music or an instrumental background bed with ElevenLabs Music 2.5 on fal
-- `generate_fal_elevenlabs_tts_eleven_v4` — Speak text with ElevenLabs Eleven v4 on fal; supports audio tags such as [whispering]
-- `generate_fal_elevenlabs_tts_eleven_v4_turbo` — Speak text quickly with ElevenLabs Eleven v4 Turbo on fal
-- `generate_fal_flux_3_edit_image` — Edit 1-10 images with FLUX 3 on fal
-- `generate_fal_flux_3_text_to_image` — Text-to-image with FLUX 3 on fal
-- `generate_fal_gemini_3_8_flash_lite_tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on fal
-- `generate_fal_gemini_3_8_flash_tts` — Speak text with Gemini 3.8 Flash TTS on fal, with separate style instructions
-- `generate_fal_grok_imagine_edit_image` (historical names, not exposed: `generate_grok_imagine_image_edit_fal`) — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_image_fal`) — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_grok_imagine_video_edit_video` (historical names, not exposed: `generate_grok_imagine_video_edit_fal`) — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.
-- `generate_fal_grok_imagine_video_image_to_video` (historical names, not exposed: `generate_grok_imagine_video_i2v_fal`) — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.
-- `generate_fal_grok_imagine_video_reference_to_video` (historical names, not exposed: `generate_grok_imagine_video_r2v_fal`, `generate_grok_imagine_r2v_fal_video`) — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new video artifact and enqueues a background job.
-- `generate_fal_grok_imagine_video_v1_5_lite_image_to_video` — Animate one image with Grok Imagine Video 1.5 Lite on fal
-- `generate_fal_grok_imagine_video_v1_5_lite_text_to_video` — Text-to-video with Grok Imagine Video 1.5 Lite on fal
-- `generate_fal_ideogram_v4_5_edit_image` — Edit one image with Ideogram 4.5 on fal
-- `generate_fal_ideogram_v4_5_text_to_image` — Text-to-image with Ideogram 4.5 on fal
-- `generate_fal_minimax_h3_max_insert_video` — Insert a generated span into a source video with MiniMax H3 Max on fal
-- `generate_fal_minimax_h3_max_recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal
-- `generate_fal_minimax_music_3` — Generate music up to 5 minutes with MiniMax Music 3 on fal; omit lyrics for an instrumental
-- `generate_fal_nano_banana_2_edit_image` (historical names, not exposed: `generate_nano_banana_2_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_2_lite_edit_image` (historical names, not exposed: `generate_nano_banana_2_lite_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_2_lite_text_to_image` (historical names, not exposed: `generate_nano_banana_2_lite_fal`) — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_2_text_to_image` (historical names, not exposed: `generate_nano_banana_2_fal`) — Generate an image via fal.ai using Google Nano Banana 2 from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_edit_image` (historical names, not exposed: `generate_nano_banana_edit_fal`) — Edit images via fal.ai using Google Nano Banana (v1) with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_pro_edit_image` (historical names, not exposed: `generate_nano_banana_pro_edit_fal`) — Edit or compose images via fal.ai using Google Nano Banana Pro with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_pro_fal`) — Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_nano_banana_text_to_image` (historical names, not exposed: `generate_nano_banana_fal`) — Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen_image_edit_fal`) — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.
-- `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_qwen_3_0_edit_image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_qwen_audio_3_tts` — Speak text with Qwen Audio 3 TTS on fal in ten languages
-- `generate_fal_recraft_v4_1_flash_text_to_image` — Text-to-image with Recraft 4.1 Flash on fal
-- `generate_fal_seed_speech_tts_v2` — Speak text with ByteDance Seed Speech TTS v2 on fal, with speed, pitch and voice instructions
-- `generate_fal_seedream_v5_flash_edit_image` — Edit images with ByteDance Seedream 5 Flash on fal
-- `generate_fal_seedream_v5_flash_layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal
-- `generate_fal_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on fal
-- `generate_fal_seedream_v5_lite_edit_image` (historical names, not exposed: `generate_seedream_v5_lite_edit_fal`) — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_fal_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_v5_lite_fal`) — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.
-- `generate_fal_wan_3_0_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.
-- `generate_fal_wan_3_0_prime_image_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.
-- `generate_fal_wan_3_0_prime_reference_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.
-- `generate_fal_wan_3_0_prime_text_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a text prompt only. Creates a new video artifact and enqueues a background job.
-- `generate_fal_wan_3_0_reference_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.
-- `generate_fal_wan_3_0_text_to_video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a text prompt only. Creates a new video artifact and enqueues a background job.
-- `generate_google_flow_nano_banana_pro_image` (historical names, not exposed: `generate_nano_banana_pro_google`) — Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.
-- `generate_google_flow_omni_flash_video` (historical names, not exposed: `generate_google_omni_video`) — Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.
-- `generate_google_flow_veo_3_1_fast_video` (historical names, not exposed: `generate_veo31_fast_video`) — Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new video artifact and enqueues a background job.
-- `generate_google_flow_veo_3_1_lite_low_priority_video` (historical names, not exposed: `generate_veo31_lite_low_priority_video`) — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new video artifact and enqueues a background job.
-- `generate_google_flow_veo_3_1_lite_video` (historical names, not exposed: `generate_veo31_lite_video`) — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.
-- `generate_google_flow_veo_3_1_quality_video` (historical names, not exposed: `generate_veo31_video`) — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
-- `generate_image_model_comparison` (historical names, not exposed: `gen_images_all_models`) — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.
-- `generate_kie_elevenlabs_sound_effect_v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie
-- `generate_kie_elevenlabs_text_to_dialogue_v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]
-- `generate_kie_elevenlabs_text_to_speech_multilingual_v2` — Speak text with ElevenLabs Multilingual v2 on Kie
-- `generate_kie_elevenlabs_text_to_speech_turbo_2_5` — Speak text quickly and cheaply with ElevenLabs Turbo 2.5 on Kie
-- `generate_kie_gemini_2_5_pro_tts` — Speak text with Gemini 2.5 Pro TTS on Kie, with accent, style and pace controls
-- `generate_kie_gemini_3_1_flash_tts` — Speak text with Gemini 3.1 Flash TTS on Kie, with accent, style and pace controls
-- `generate_kie_gemini_3_8_flash_lite_tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on Kie
-- `generate_kie_gemini_3_8_flash_tts` — Speak text with Gemini 3.8 Flash TTS on Kie
-- `generate_kie_gemini_omni_video` (historical names, not exposed: `generate_gemini_omni_video`) — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.
-- `generate_kie_gpt_image_2_5_flare_image` — Generate or edit an image using GPT Image 2.5 Flare with up to 16 optional reference images. Creates an image artifact and enqueues a background job.
-- `generate_kie_gpt_image_2_5_sunburst_image` — Generate or edit an image using GPT Image 2.5 Sunburst with up to 16 optional reference images. Creates an image artifact and enqueues a background job.
-- `generate_kie_grok_imagine_image_to_image` (historical names, not exposed: `generate_grok_imagine_image`) — Generate an image from an image asset using Grok Imagine image-to-image. Creates a new image artifact and enqueues a background job. Requires at least one of asset_id or image_refs.
-- `generate_kie_grok_imagine_image_to_video` (historical names, not exposed: `generate_grok_imagine_video`) — Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or asset_id.
-- `generate_kie_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_text_image`) — Generate an image from a text prompt using Grok Imagine. Creates a new image artifact and enqueues a background job. No reference images needed.
-- `generate_kie_grok_imagine_text_to_video` (historical names, not exposed: `generate_grok_imagine_t2v_video`) — Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new video artifact and enqueues a background job.
-- `generate_kie_happyhorse_1_1_edit_video` (historical names, not exposed: `generate_happyhorse_videoedit_video`) — Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new video artifact and enqueues a background job.
-- `generate_kie_happyhorse_1_1_image_to_video` (historical names, not exposed: `generate_happyhorse_i2v_video`) — Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_happyhorse_1_1_reference_to_video` (historical names, not exposed: `generate_happyhorse_ref_video`) — Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.
-- `generate_kie_happyhorse_1_1_text_to_video` (historical names, not exposed: `generate_happyhorse_t2v_video`) — Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_kling_3_0_motion_control` (historical names, not exposed: `generate_kling30_motion_control_video`) — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.
-- `generate_kie_kling_3_0_omni_image_to_video` — Generate a video using Kling 3.0 Omni image-to-video (KIE). Requires one first-frame image, or first and last frames. Creates a new video artifact and enqueues a background job.
-- `generate_kie_kling_3_0_omni_reference_to_video` — Generate a video using Kling 3.0 Omni reference-to-video (KIE). Requires at least one reference image or one reference video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_kling_3_0_omni_text_to_video` — Generate a video using Kling 3.0 Omni text-to-video (KIE). Prompt-only generation at 720p, 1080p, or 4k with optional native audio and multi-shot controls. Creates a new video artifact and enqueues a background job.
-- `generate_kie_kling_3_0_omni_transformation` — Generate a video using Kling 3.0 Omni transformation (KIE). Transfers motion from a source video onto optional character images. Creates a new video artifact and enqueues a background job.
-- `generate_kie_minimax_h3_image_to_video` — Generate a video from a first and/or last frame image using MiniMax H3 image-to-video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_minimax_h3_reference_to_video` — Generate a video from reference images, videos, and/or audio using MiniMax H3 reference-to-video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_minimax_h3_text_to_video` — Generate a video from a prompt using MiniMax H3 text-to-video. Creates a new video artifact and enqueues a background job.
-- `generate_kie_nano_banana_2_1_image` — Generate or edit an image with Nano Banana 2.1 using up to 10 references
-- `generate_kie_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_image`) — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.
-- `generate_kie_omnihuman_1_5_video` (historical names, not exposed: `generate_omnihuman_video`) — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.
-- `generate_kie_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen2_image_edit`) — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.
-- `generate_kie_qwen_2_1_edit_image` — Edit or compose images using Qwen Image 2.1 via Kie with 1-10 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_kie_qwen_2_1_text_to_image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.
-- `generate_kie_qwen_3_0_edit_image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_kie_seedance_2_5_video` (historical names, not exposed: `generate_seedance25_video`) — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.
-- `generate_kie_seedream_v5_flash_image_to_image` — Edit 1-10 images with ByteDance Seedream 5 Flash on kie
-- `generate_kie_seedream_v5_flash_layer_decomposition` — Decompose one image into layers with ByteDance Seedream 5 Flash on kie
-- `generate_kie_seedream_v5_flash_text_to_image` — Text-to-image with ByteDance Seedream 5 Flash on kie
-- `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.
-- `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.
-- `generate_kie_suno_music` — Generate a song or instrumental background track with Suno on Kie; set a style to use custom mode
-- `generate_kie_suno_sounds` — Generate a sound effect, ambience or loop with Suno Sounds on Kie, with optional tempo and key
-- `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.
-- `generate_kie_veo_3_0_video` (historical names, not exposed: `generate_veo3_video`) — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.
-- `generate_kie_vidu_q4_image_to_video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image
-- `generate_kie_vidu_q4_reference_to_video` — Generate video with Vidu Q4 using 1-15 reference images and up to 3 audio references, with 3-16 seconds and 540p to 4k output
-- `generate_kie_volcengine_video_to_video_lip_sync` (historical names, not exposed: `generate_volcengine_lipsync_video`) — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.
-- `generate_kie_wan_3_0_prime_video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
-- `generate_kie_wan_3_0_video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
 - `generate_video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
-- `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.
 - `get_book` — Read the current book identity
 - `get_book_usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.
 - `get_character_entity` — Read a reusable character
@@ -242,7 +129,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `icloud_status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
 - `insert_timeline_slot` — Typed timelines cannot contain empty slots; assign an asset directly with assign_slot
-- `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
+- `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
 - `link_post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.
@@ -292,9 +179,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
 - `post_icloud_sync_status` — Read whether a saved Post's clip and caption.txt have finished uploading to iCloud. A folder outside iCloud Drive reports that it is not an iCloud folder.
 - `prepare_cold_open` — Select an exciting 2–5 second video highlight with AI for a cold-open copy. Start here when asked for a cold open: review and adjust the returned range before calling edit_cold_open. Returns a cached suggestion or an analysis job ID; read its result with list_jobs. Does not create a video copy.
-- `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
-- `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
 - `preview_notebook_generation` — Preview the exact provider payload a generation cell would submit, without running it
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
@@ -302,7 +187,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
 - `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists. Pass raw=true to return the untouched sidecar text instead of the parsed projection.
-- `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
+- `reconcile_project_work` — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
 - `record_post_metrics` — Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate, audio_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
@@ -382,7 +267,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `update_timeline_audio` — Update an audio overlay's volume or fades
 - `upload_file` — Upload a media or markdown file into a Videobook project as an asset
 - `upload_post_to_dropbox` — Upload the frozen Post media and caption.txt to a private Dropbox folder. A caption saves to the Post first and freezes with the first delivery. Interrupted uploads resume without replacing unrelated files.
-- `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new video artifact and enqueues a background job.
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `video_goal` — Create a goal from image and video references. A new goal with no supplied plan is one concise scene and one Seedance 2.5 video: Nano Banana 2.1 at 16:9, 2K, JPG, then 16:9, 1080p, 13 seconds, MP4, with audio. Portrait or square only when the brief says so. No storyboard, ending frame, or style preset. Approving a new goal generates the scene, then the video, and stops at finishing review. finish suggests a 2.3 second cold open, then burns the saved watermark onto a copy after the range is approved. An explicit v2 plan keeps that plan's settings, storyboard, and approval stages. Explicit approval is required before paid generation. update saves a new goal's title and scene or video prompt, or a v2 plan; revise edits a selected image or reruns video with feedback; regenerate makes fresh outputs; select picks any completed version, including after goal completion. Legacy v1 plans stay readable. cancel restores the previous output during revision; retry resumes failed work when the plan and references are unchanged. Multi-clip revisions require explicit assemble and never overwrite user-edited timeline clips; combine renders the selected assembled clips locally. Deleting the goal tile stops it.
@@ -390,7 +274,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (447; 149 dedicated command routes)
+## Slash actions (331; 148 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -426,7 +310,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/backfill-asset-tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.; MCP: `backfill_asset_tags`
 - `/bg` — Background mode; UI: `settings_bg`
 - `/books` — Open the book selector dropdown; UI: `open_projects`
-- `/build-generation-provider-payload` — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.; MCP: `build_generation_provider_payload`
 - `/cancel-job` — Cancel a queued or running persistent job; MCP: `cancel_job`
 - `/cancel-legacy-migration` — Cancel queued or copying migration work before its final archive switch starts; MCP: `cancel_legacy_migration`
 - `/caption` — Preview a sequence caption with timing and style; preview or workspace operation
@@ -454,8 +337,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/copy` — Copy asset name; UI: `copy_clipboard`
 - `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `copy_file_to_clipboard`
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
-- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.; MCP: `create_google_flow_character`
-- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.; MCP: `create_google_flow_voice`
+- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.; MCP: `create_google_flow_character`
+- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.; MCP: `create_google_flow_voice`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
 - `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
 - `/create-post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.; MCP: `create_post`
@@ -488,16 +371,13 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`
 - `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
-- `/estimate-cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.; MCP: `estimate_cost`
+- `/estimate-cost` — Estimate the USD cost of generation calls before running them. Accepts one or more {tool_name, input} pairs (generate_image, generate_video, generate_audio with their model, refs and options) and returns one CostEstimate summed across all calls, priced from @apicity/cost. Models without published rates return $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
 - `/export-sequence` — Review and export the current sequence; preview or workspace operation
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
 - `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
 - `/extend-audio` — Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset; MCP: `extend_audio_asset`
-- `/extend-fal-grok-imagine-video` — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new video artifact and enqueues a background job.; MCP: `extend_fal_grok_imagine_video`
-- `/extend-fal-minimax-h3-max-turbo-video` — Extend a source video with MiniMax H3 Max Turbo on fal; MCP: `extend_fal_minimax_h3_max_turbo_video`
-- `/extend-kie-grok-imagine-video` — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new video artifact and enqueues a background job. Requires at least one of asset_id or video_ref.; MCP: `extend_kie_grok_imagine_video`
 - `/extract-audio` — Extract audio track from video as audio asset (MP3); MCP: `extract_audio`
 - `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_first_frame`
 - `/extract-frame` — Extract a frame at a specific timestamp from a video as an image asset; MCP: `extract_frame`
@@ -511,118 +391,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/folder` — Show asset folder; MCP: `show_folder`
 - `/forget-asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept; MCP: `forget_asset`
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
-- `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
-- `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
-- `/generate-audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_audio`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
-- `/generate-elevenlabs-music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music; MCP: `generate_elevenlabs_music`
-- `/generate-elevenlabs-sound-effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs; MCP: `generate_elevenlabs_sound_effect`
-- `/generate-elevenlabs-video-to-music` — Score a connected video with a music track timed to its picture using ElevenLabs Music; MCP: `generate_elevenlabs_video_to_music`
-- `/generate-fal-bria-fibo-edit-1-5-product-holding` — Place a person holding 1-3 product images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_product_holding`
-- `/generate-fal-bria-fibo-edit-1-5-virtual-try-on` — Dress a person in 1-3 garment images with Bria FIBO Edit 1.5 on fal; MCP: `generate_fal_bria_fibo_edit_1_5_virtual_try_on`
-- `/generate-fal-elevenlabs-music-2-5` — Compose music or an instrumental background bed with ElevenLabs Music 2.5 on fal; MCP: `generate_fal_elevenlabs_music_2_5`
-- `/generate-fal-elevenlabs-tts-eleven-v4` — Speak text with ElevenLabs Eleven v4 on fal; supports audio tags such as [whispering]; MCP: `generate_fal_elevenlabs_tts_eleven_v4`
-- `/generate-fal-elevenlabs-tts-eleven-v4-turbo` — Speak text quickly with ElevenLabs Eleven v4 Turbo on fal; MCP: `generate_fal_elevenlabs_tts_eleven_v4_turbo`
-- `/generate-fal-flux-3-edit-image` — Edit 1-10 images with FLUX 3 on fal; MCP: `generate_fal_flux_3_edit_image`
-- `/generate-fal-flux-3-text-to-image` — Text-to-image with FLUX 3 on fal; MCP: `generate_fal_flux_3_text_to_image`
-- `/generate-fal-gemini-3-8-flash-lite-tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on fal; MCP: `generate_fal_gemini_3_8_flash_lite_tts`
-- `/generate-fal-gemini-3-8-flash-tts` — Speak text with Gemini 3.8 Flash TTS on fal, with separate style instructions; MCP: `generate_fal_gemini_3_8_flash_tts`
-- `/generate-fal-grok-imagine-edit-image` — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_edit_image`
-- `/generate-fal-grok-imagine-text-to-image` — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_text_to_image`
-- `/generate-fal-grok-imagine-video-edit-video` — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_edit_video`
-- `/generate-fal-grok-imagine-video-image-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_image_to_video`
-- `/generate-fal-grok-imagine-video-reference-to-video` — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_grok_imagine_video_reference_to_video`
-- `/generate-fal-grok-imagine-video-v1-5-lite-image-to-video` — Animate one image with Grok Imagine Video 1.5 Lite on fal; MCP: `generate_fal_grok_imagine_video_v1_5_lite_image_to_video`
-- `/generate-fal-grok-imagine-video-v1-5-lite-text-to-video` — Text-to-video with Grok Imagine Video 1.5 Lite on fal; MCP: `generate_fal_grok_imagine_video_v1_5_lite_text_to_video`
-- `/generate-fal-ideogram-v4-5-edit-image` — Edit one image with Ideogram 4.5 on fal; MCP: `generate_fal_ideogram_v4_5_edit_image`
-- `/generate-fal-ideogram-v4-5-text-to-image` — Text-to-image with Ideogram 4.5 on fal; MCP: `generate_fal_ideogram_v4_5_text_to_image`
-- `/generate-fal-minimax-h3-max-insert-video` — Insert a generated span into a source video with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_insert_video`
-- `/generate-fal-minimax-h3-max-recast` — Recast a source video using 1-4 reference images with MiniMax H3 Max on fal; MCP: `generate_fal_minimax_h3_max_recast`
-- `/generate-fal-minimax-music-3` — Generate music up to 5 minutes with MiniMax Music 3 on fal; omit lyrics for an instrumental; MCP: `generate_fal_minimax_music_3`
-- `/generate-fal-nano-banana-2-edit-image` — Edit images via fal.ai using Google Nano Banana 2 with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_edit_image`
-- `/generate-fal-nano-banana-2-lite-edit-image` — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_edit_image`
-- `/generate-fal-nano-banana-2-lite-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_lite_text_to_image`
-- `/generate-fal-nano-banana-2-text-to-image` — Generate an image via fal.ai using Google Nano Banana 2 from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_2_text_to_image`
-- `/generate-fal-nano-banana-edit-image` — Edit images via fal.ai using Google Nano Banana (v1) with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_edit_image`
-- `/generate-fal-nano-banana-pro-edit-image` — Edit or compose images via fal.ai using Google Nano Banana Pro with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_pro_edit_image`
-- `/generate-fal-nano-banana-pro-text-to-image` — Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_pro_text_to_image`
-- `/generate-fal-nano-banana-text-to-image` — Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_nano_banana_text_to_image`
-- `/generate-fal-qwen-2-0-edit-image` — Edit an image via fal.ai using Alibaba Qwen Image edit with one image artifact reference input. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_edit_image`
-- `/generate-fal-qwen-2-0-text-to-image` — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_2_0_text_to_image`
-- `/generate-fal-qwen-3-0-edit-image` — Edit images via fal.ai using Alibaba Qwen Image 3 with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_qwen_3_0_edit_image`
-- `/generate-fal-qwen-audio-3-tts` — Speak text with Qwen Audio 3 TTS on fal in ten languages; MCP: `generate_fal_qwen_audio_3_tts`
-- `/generate-fal-recraft-v4-1-flash-text-to-image` — Text-to-image with Recraft 4.1 Flash on fal; MCP: `generate_fal_recraft_v4_1_flash_text_to_image`
-- `/generate-fal-seed-speech-tts-v2` — Speak text with ByteDance Seed Speech TTS v2 on fal, with speed, pitch and voice instructions; MCP: `generate_fal_seed_speech_tts_v2`
-- `/generate-fal-seedream-v5-flash-edit-image` — Edit images with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_edit_image`
-- `/generate-fal-seedream-v5-flash-layerize` — Split one image into layers with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_layerize`
-- `/generate-fal-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on fal; MCP: `generate_fal_seedream_v5_flash_text_to_image`
-- `/generate-fal-seedream-v5-lite-edit-image` — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_edit_image`
-- `/generate-fal-seedream-v5-lite-text-to-image` — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new image artifact and enqueues a background job.; MCP: `generate_fal_seedream_v5_lite_text_to_image`
-- `/generate-fal-wan-3-0-image-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_image_to_video`
-- `/generate-fal-wan-3-0-prime-image-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a first-frame image (optional end frame and prompt). Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_prime_image_to_video`
-- `/generate-fal-wan-3-0-prime-reference-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.; MCP: `generate_fal_wan_3_0_prime_reference_to_video`
-- `/generate-fal-wan-3-0-prime-text-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Prime (higher quality tier) from a text prompt only. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_prime_text_to_video`
-- `/generate-fal-wan-3-0-reference-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 Reference-to-Video guided by reference images, videos, audio, a file URL, a web URL, and/or a prompt. Creates a new video artifact and enqueues a background job. Requires at least one of prompt, image_refs, video_refs, audio_refs, file_url, or web_url.; MCP: `generate_fal_wan_3_0_reference_to_video`
-- `/generate-fal-wan-3-0-text-to-video` — Generate a video via fal.ai using Alibaba Wan 3.0 from a text prompt only. Creates a new video artifact and enqueues a background job.; MCP: `generate_fal_wan_3_0_text_to_video`
-- `/generate-google-flow-nano-banana-pro-image` — Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new image artifact and enqueues a background job.; MCP: `generate_google_flow_nano_banana_pro_image`
-- `/generate-google-flow-omni-flash-video` — Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_omni_flash_video`
-- `/generate-google-flow-veo-3-1-fast-video` — Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_fast_video`
-- `/generate-google-flow-veo-3-1-lite-low-priority-video` — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_low_priority_video`
-- `/generate-google-flow-veo-3-1-lite-video` — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_video`
-- `/generate-google-flow-veo-3-1-quality-video` — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_quality_video`
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
-- `/generate-image-model-comparison` — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.; MCP: `generate_image_model_comparison`
-- `/generate-kie-elevenlabs-sound-effect-v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie; MCP: `generate_kie_elevenlabs_sound_effect_v2`
-- `/generate-kie-elevenlabs-text-to-dialogue-v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]; MCP: `generate_kie_elevenlabs_text_to_dialogue_v3`
-- `/generate-kie-elevenlabs-text-to-speech-multilingual-v2` — Speak text with ElevenLabs Multilingual v2 on Kie; MCP: `generate_kie_elevenlabs_text_to_speech_multilingual_v2`
-- `/generate-kie-elevenlabs-text-to-speech-turbo-2-5` — Speak text quickly and cheaply with ElevenLabs Turbo 2.5 on Kie; MCP: `generate_kie_elevenlabs_text_to_speech_turbo_2_5`
-- `/generate-kie-gemini-2-5-pro-tts` — Speak text with Gemini 2.5 Pro TTS on Kie, with accent, style and pace controls; MCP: `generate_kie_gemini_2_5_pro_tts`
-- `/generate-kie-gemini-3-1-flash-tts` — Speak text with Gemini 3.1 Flash TTS on Kie, with accent, style and pace controls; MCP: `generate_kie_gemini_3_1_flash_tts`
-- `/generate-kie-gemini-3-8-flash-lite-tts` — Speak text with the low-cost Gemini 3.8 Flash Lite TTS on Kie; MCP: `generate_kie_gemini_3_8_flash_lite_tts`
-- `/generate-kie-gemini-3-8-flash-tts` — Speak text with Gemini 3.8 Flash TTS on Kie; MCP: `generate_kie_gemini_3_8_flash_tts`
-- `/generate-kie-gemini-omni-video` — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_gemini_omni_video`
-- `/generate-kie-gpt-image-2-5-flare-image` — Generate or edit an image using GPT Image 2.5 Flare with up to 16 optional reference images. Creates an image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_5_flare_image`
-- `/generate-kie-gpt-image-2-5-sunburst-image` — Generate or edit an image using GPT Image 2.5 Sunburst with up to 16 optional reference images. Creates an image artifact and enqueues a background job.; MCP: `generate_kie_gpt_image_2_5_sunburst_image`
-- `/generate-kie-grok-imagine-image-to-image` — Generate an image from an image asset using Grok Imagine image-to-image. Creates a new image artifact and enqueues a background job. Requires at least one of asset_id or image_refs.; MCP: `generate_kie_grok_imagine_image_to_image`
-- `/generate-kie-grok-imagine-image-to-video` — Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new video artifact and enqueues a background job. Requires at least one of image_refs or asset_id.; MCP: `generate_kie_grok_imagine_image_to_video`
-- `/generate-kie-grok-imagine-text-to-image` — Generate an image from a text prompt using Grok Imagine. Creates a new image artifact and enqueues a background job. No reference images needed.; MCP: `generate_kie_grok_imagine_text_to_image`
-- `/generate-kie-grok-imagine-text-to-video` — Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_grok_imagine_text_to_video`
-- `/generate-kie-happyhorse-1-1-edit-video` — Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_edit_video`
-- `/generate-kie-happyhorse-1-1-image-to-video` — Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_image_to_video`
-- `/generate-kie-happyhorse-1-1-reference-to-video` — Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_reference_to_video`
-- `/generate-kie-happyhorse-1-1-text-to-video` — Generate a video from a prompt using HappyHorse text-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_happyhorse_1_1_text_to_video`
-- `/generate-kie-kling-3-0-motion-control` — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_motion_control`
-- `/generate-kie-kling-3-0-omni-image-to-video` — Generate a video using Kling 3.0 Omni image-to-video (KIE). Requires one first-frame image, or first and last frames. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_image_to_video`
-- `/generate-kie-kling-3-0-omni-reference-to-video` — Generate a video using Kling 3.0 Omni reference-to-video (KIE). Requires at least one reference image or one reference video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_reference_to_video`
-- `/generate-kie-kling-3-0-omni-text-to-video` — Generate a video using Kling 3.0 Omni text-to-video (KIE). Prompt-only generation at 720p, 1080p, or 4k with optional native audio and multi-shot controls. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_text_to_video`
-- `/generate-kie-kling-3-0-omni-transformation` — Generate a video using Kling 3.0 Omni transformation (KIE). Transfers motion from a source video onto optional character images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_kling_3_0_omni_transformation`
-- `/generate-kie-minimax-h3-image-to-video` — Generate a video from a first and/or last frame image using MiniMax H3 image-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_image_to_video`
-- `/generate-kie-minimax-h3-reference-to-video` — Generate a video from reference images, videos, and/or audio using MiniMax H3 reference-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_reference_to_video`
-- `/generate-kie-minimax-h3-text-to-video` — Generate a video from a prompt using MiniMax H3 text-to-video. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_minimax_h3_text_to_video`
-- `/generate-kie-nano-banana-2-1-image` — Generate or edit an image with Nano Banana 2.1 using up to 10 references; MCP: `generate_kie_nano_banana_2_1_image`
-- `/generate-kie-nano-banana-pro-text-to-image` — Generate an image using the nano-banana-pro model. Creates a new image artifact and enqueues a background job. Prompt is required; reference images are optional.; MCP: `generate_kie_nano_banana_pro_text_to_image`
-- `/generate-kie-omnihuman-1-5-video` — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_omnihuman_1_5_video`
-- `/generate-kie-qwen-2-0-edit-image` — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_0_edit_image`
-- `/generate-kie-qwen-2-1-edit-image` — Edit or compose images using Qwen Image 2.1 via Kie with 1-10 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_1_edit_image`
-- `/generate-kie-qwen-2-1-text-to-image` — Generate an image from text using Qwen Image 2.1 via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_2_1_text_to_image`
-- `/generate-kie-qwen-3-0-edit-image` — Edit or compose images using Qwen Image 3 via Kie with 1-3 ordered image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_qwen_3_0_edit_image`
-- `/generate-kie-seedance-2-5-video` — Generate a video using ByteDance Seedance 2.5 (KIE). Supports text-only, first/last frame, and up to 30 image, 10 video, and 10 audio references with every Apicity 0.10.2 generation option including 1080p. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_seedance_2_5_video`
-- `/generate-kie-seedream-v5-flash-image-to-image` — Edit 1-10 images with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_image_to_image`
-- `/generate-kie-seedream-v5-flash-layer-decomposition` — Decompose one image into layers with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_layer_decomposition`
-- `/generate-kie-seedream-v5-flash-text-to-image` — Text-to-image with ByteDance Seedream 5 Flash on kie; MCP: `generate_kie_seedream_v5_flash_text_to_image`
-- `/generate-kie-seedream-v5-lite-image-to-image` — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 image artifact reference inputs. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_image_to_image`
-- `/generate-kie-seedream-v5-lite-text-to-image` — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new image artifact and enqueues a background job.; MCP: `generate_kie_seedream_v5_lite_text_to_image`
-- `/generate-kie-suno-music` — Generate a song or instrumental background track with Suno on Kie; set a style to use custom mode; MCP: `generate_kie_suno_music`
-- `/generate-kie-suno-sounds` — Generate a sound effect, ambience or loop with Suno Sounds on Kie, with optional tempo and key; MCP: `generate_kie_suno_sounds`
-- `/generate-kie-veo-3-0-fast-video` — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_fast_video`
-- `/generate-kie-veo-3-0-video` — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_veo_3_0_video`
-- `/generate-kie-vidu-q4-image-to-video` — Animate one image with Vidu Q4, with optional audio, 3-16 seconds and 540p to 4k output; aspect ratio follows the image; MCP: `generate_kie_vidu_q4_image_to_video`
-- `/generate-kie-vidu-q4-reference-to-video` — Generate video with Vidu Q4 using 1-15 reference images and up to 3 audio references, with 3-16 seconds and 540p to 4k output; MCP: `generate_kie_vidu_q4_reference_to_video`
-- `/generate-kie-volcengine-video-to-video-lip-sync` — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_volcengine_video_to_video_lip_sync`
-- `/generate-kie-wan-3-0-prime-video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_prime_video`
-- `/generate-kie-wan-3-0-video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_video`
 - `/generate-video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
-- `/generate-xai-grok-imagine-video` — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.; MCP: `generate_xai_grok_imagine_video`
 - `/get-book` — Read the current book identity; MCP: `get_book`
 - `/get-book-usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.; MCP: `get_book_usage`
 - `/get-character-entity` — Read a reusable character; MCP: `get_character_entity`
@@ -647,7 +418,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-watermark-config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.; MCP: `get_watermark_config`
 - `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
 - `/goal` — Build a portrait video in Cinematic or IG Influencer style; choose format, delivery, camera and light before the frame, then review each stage; UI: `start_goal`
-- `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
 - `/icloud-status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.; MCP: `icloud_status`
@@ -716,9 +486,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`
 - `/portrait` — Show portrait crop (1080x1920); UI: `viewer_set_portrait`
 - `/post` — Post a video or image asset to X (Twitter), now or scheduled; UI: `open_post_composer`
-- `/prepare-image-generation` — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.; MCP: `prepare_image_generation`
 - `/prepare-search-reference` — Prepare an existing image or video asset for temporary reverse search; MCP: `prepare_search_reference`
-- `/prepare-video-generation` — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.; MCP: `prepare_video_generation`
 - `/preview-edit-intent` — Preview one CommandPlan edit stage through the canonical engine diff; MCP: `preview_edit_intent`
 - `/preview-notebook-generation` — Preview the exact provider payload a generation cell would submit, without running it; MCP: `preview_notebook_generation`
 - `/prompt-new` — Create a reusable prompt entity; MCP: `create_prompt_entity`
@@ -770,7 +538,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/run-notebook-cell` — Run one selected notebook cell using saved upstream media; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
 - `/save-post-to-icloud` — Review a Post's clip and caption, then save them to the shared iCloud Drive Videobook folder so they appear on iPhone; UI: `open_post_icloud`
-- `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
+- `/say` — Generate speech audio from text with ElevenLabs; MCP: `generate_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
 - `/scene-new` — Create a reusable scene entity; MCP: `create_scene_entity`
 - `/search-archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.; MCP: `search_archive`

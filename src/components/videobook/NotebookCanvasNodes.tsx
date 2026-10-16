@@ -1,6 +1,6 @@
 import './Posts.css'
 import type { NotebookCellType } from 'videobook-engine'
-import { seedance25FrameAspectRatio } from '../../../server/src/seedance25'
+import { frameAspectRatio } from '../../../server/src/media/frame-options'
 import {
   Video,
   Image,
@@ -366,8 +366,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }, data.status)
   const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
   const generationCell = isNotebookGenerationCellType(data.kind)
-  const toolTitle = generationCell && data.tool
-    ? generationTitles.get(data.tool) ?? null
+  const toolTitle = generationCell && data.model
+    ? generationTitles.get(data.model) ?? null
     : null
   const generationModelTitle = generationCell
     ? toolTitle ?? data.model ?? data.tool ?? null
@@ -390,7 +390,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const generationSettings = generationCell
     ? recordValue(data.inputs?.generationSettings)
     : null
-  const aspectRatio = seedance25FrameAspectRatio(data.tool ?? '', data.inputs ?? {}) ?? (generationSettings
+  const aspectRatio = frameAspectRatio(data.model ?? '', data.inputs ?? {}) ?? (generationSettings
     ? asString(generationSettings.aspect_ratio)
     : null)
   const generationDuration = generationSettings
@@ -411,8 +411,8 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const imagePrompt = imageMediaCell
     ? resolvedPrompt ?? data.asset?.prompt ?? null
     : null
-  const imageToolTitle = imageMediaCell && data.tool
-    ? generationTitles.get(data.tool) ?? null
+  const imageToolTitle = imageMediaCell && data.model
+    ? generationTitles.get(data.model) ?? null
     : null
   const promptCell = textCell || (generationCell && Boolean(data.prompt))
   const address = notebookGridTag(data.slot)
@@ -448,7 +448,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         aspectRatio: data.videoAspectRatio ?? null,
         width: data.asset?.width ?? null,
         height: data.asset?.height ?? null,
-        tool: data.tool ? generationTitles.get(data.tool) ?? null : null,
+        tool: data.model ? generationTitles.get(data.model) ?? null : null,
         model: data.model ?? data.tool ?? null,
         provenance: frameProvenance,
       })

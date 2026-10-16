@@ -20,8 +20,8 @@ describe("Videobook MCP parity", () => {
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(379);
-    expect(new Set(names).size).toBe(379);
+    expect(names).toHaveLength(263);
+    expect(new Set(names).size).toBe(263);
     expect(names).toEqual(
       expect.arrayContaining([
         "save_post_to_icloud",
@@ -88,47 +88,10 @@ describe("Videobook MCP parity", () => {
         "list_image_edit_models",
         "analyze_video",
         "export_transcript_srt",
-        "generate_kie_kling_3_0_omni_text_to_video",
-        "generate_kie_kling_3_0_omni_image_to_video",
-        "generate_kie_kling_3_0_omni_reference_to_video",
-        "generate_kie_kling_3_0_omni_transformation",
-        "generate_kie_kling_3_0_motion_control",
-        "generate_kie_seedance_2_5_video",
-        "generate_fal_wan_3_0_text_to_video",
-        "generate_fal_wan_3_0_image_to_video",
-        "generate_fal_wan_3_0_reference_to_video",
-        "generate_fal_wan_3_0_prime_text_to_video",
-        "generate_fal_wan_3_0_prime_image_to_video",
-        "generate_fal_wan_3_0_prime_reference_to_video",
-        "generate_kie_vidu_q4_image_to_video",
-        "generate_kie_vidu_q4_reference_to_video",
-        "generate_elevenlabs_sound_effect",
-        "generate_elevenlabs_music",
-        "generate_elevenlabs_video_to_music",
-        "generate_kie_elevenlabs_sound_effect_v2",
-        "generate_kie_elevenlabs_text_to_speech_multilingual_v2",
-        "generate_kie_elevenlabs_text_to_speech_turbo_2_5",
-        "generate_kie_elevenlabs_text_to_dialogue_v3",
-        "generate_kie_gemini_2_5_pro_tts",
-        "generate_kie_gemini_3_1_flash_tts",
-        "generate_kie_gemini_3_8_flash_tts",
-        "generate_kie_gemini_3_8_flash_lite_tts",
-        "generate_kie_suno_music",
-        "generate_kie_suno_sounds",
-        "generate_fal_elevenlabs_music_2_5",
-        "generate_fal_minimax_music_3",
-        "generate_fal_elevenlabs_tts_eleven_v4",
-        "generate_fal_elevenlabs_tts_eleven_v4_turbo",
-        "generate_fal_gemini_3_8_flash_tts",
-        "generate_fal_gemini_3_8_flash_lite_tts",
-        "generate_fal_qwen_audio_3_tts",
-        "generate_fal_seed_speech_tts_v2",
-        "generate_kie_wan_3_0_video",
-        "generate_kie_wan_3_0_prime_video",
-        "generate_kie_qwen_3_0_edit_image",
-        "generate_fal_qwen_3_0_edit_image",
-        "generate_kie_qwen_2_1_text_to_image",
-        "generate_kie_qwen_2_1_edit_image",
+        "generate_image",
+        "generate_video",
+        "generate_audio",
+        "list_generation_models",
       ]),
     );
   });

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import { prepareNotebookGeneration } from '../../server/src/jobs/run-notebook.js'
+import { previewGeneration } from '../../server/src/media/preview.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 
@@ -100,9 +101,9 @@ describe('notebook initial generation prompts', () => {
         slot: { row: 2, column: 0 },
         prompt: '',
         provider: 'kie',
-        model: 'Seedance2InputSchema',
+        model: 'kie:bytedance/seedance-2-5',
         operation: 'image_to_video',
-        tool: 'generate_kie_seedance_2_5_video',
+        tool: 'generate_video',
         inputs: { generationMode: 'r2v' },
       },
     })) as {
@@ -266,8 +267,10 @@ describe('notebook initial generation prompts', () => {
       id: string
       inputs?: Record<string, unknown>
       tool?: string
+      model?: string
     }
-    expect(target.tool).toBe('generate_kie_seedance_2_5_video')
+    expect(target.tool).toBe('generate_video')
+    expect(target.model).toBe('kie:bytedance/seedance-2-5')
     expect(target.inputs?.generationMode).toBeUndefined()
 
     resultJson(await invoke('connect_notebook_cells', {
@@ -290,10 +293,17 @@ describe('notebook initial generation prompts', () => {
       connectedTarget,
       created.bookId,
     )
-    expect(prepared.tool).toBe('generate_kie_seedance_2_5_video')
-    expect(prepared.input.image_refs).toEqual([
-      `@${artifact.value.artifactId}`,
-    ])
-    expect(prepared.input.duration).toBe('13')
+    expect(prepared.tool).toBe('generate_video')
+    expect(prepared.model).toBe('kie:bytedance/seedance-2-5')
+    expect(prepared.input.mode).toBe('r2v')
+    expect(prepared.input.refs).toEqual({
+      image: [artifact.value.artifactId],
+    })
+    const preview = previewGeneration(prepared.input)
+    expect(preview.ok).toBe(true)
+    if (!preview.ok) return
+    expect(preview.preview.payload).toMatchObject({
+      input: { duration: 13 },
+    })
   })
 })

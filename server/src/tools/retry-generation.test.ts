@@ -48,14 +48,15 @@ describe("retry_generation tool", () => {
     const assetId = assetResult.value.artifactId;
     await failAsset(fs, "retry-proj", assetId, "task-original");
 
-    // Persist a replayable generation-request payload (mirrors what the omni
-    // tool writes between createAsset and enqueue).
     const payload = {
-      type: "generate_google_omni_video",
-      vidAssetId: assetId,
-      vidAssetDir: assetId,
+      type: "generate_media",
+      model: "googleflow:omni-flash",
+      assetId,
+      assetDir: assetResult.value.path,
       bookId: fs.book.get().bookId,
       prompt: "a sunset",
+      refs: {},
+      options: {},
     };
     await fs.metadata.artifacts.write(assetId, "generation-request", payload);
 
@@ -93,10 +94,13 @@ describe("retry_generation tool", () => {
     const b = await fs.artifacts.create("vid", "other");
     if (!a.ok || !b.ok) throw new Error("createAsset failed");
     await fs.metadata.artifacts.write(a.value.artifactId, "generation-request", {
-      type: "generate_google_omni_video",
-      vidAssetId: b.value.artifactId,
+      type: "generate_media",
+      model: "kie:nano-banana-2-1",
+      assetId: b.value.artifactId,
       bookId: "retry-proj",
       prompt: "x",
+      refs: {},
+      options: {},
     });
 
     const res = await client.callTool({
@@ -105,5 +109,21 @@ describe("retry_generation tool", () => {
     });
     expect(res.isError).toBe(true);
     expect((res.content as TextContent)[0].text).toContain("different asset");
+  });
+
+  it("refuses a request stored by a retired per-model generation tool", async () => {
+    const assetResult = await fs.artifacts.create("vid", "legacy");
+    if (!assetResult.ok) throw new Error("createAsset failed");
+    await fs.metadata.artifacts.write(assetResult.value.artifactId, "generation-request", {
+      type: "generate_google_omni_video",
+      vidAssetId: assetResult.value.artifactId,
+      prompt: "x",
+    });
+    const res = await client.callTool({
+      name: "retry_generation",
+      arguments: { asset_id: assetResult.value.artifactId, book_id: "retry-proj" },
+    });
+    expect(res.isError).toBe(true);
+    expect((res.content as TextContent)[0].text).toContain("regenerate it with generate_image, generate_video or generate_audio");
   });
 });

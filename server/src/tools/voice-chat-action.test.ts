@@ -84,7 +84,8 @@ describe("voice chat action policy", () => {
   });
 
   it("keeps specific model discovery available alongside exact action lookup", () => {
-    expect(discoverVoiceActions(engine, "generate wan video").some(action => action.name.includes("wan"))).toBe(true);
+    expect(discoverVoiceActions(engine, "generate wan video").map(action => action.name)).toContain("generate_video");
+    expect(discoverVoiceActions(engine, "list generation models").map(action => action.name)).toEqual(["list_generation_models"]);
     expect(discoverVoiceActions(engine, "rename asset").map(action => action.name)).toEqual(["rename_asset"]);
   });
 
@@ -108,15 +109,15 @@ describe("voice chat action policy", () => {
     expect(engine.artifacts.get(artifactId)).toMatchObject({ ok: true, value: { label: "opening" } });
   });
 
-  it("retains generation aliases, the options the speaker asked for, and the paid review gate", async () => {
+  it("retains the default generation model, the options the speaker asked for, and the paid review gate", async () => {
     const result = await prepare("Generate a 5 second 720p cat video in 16:9", {
       tool: "generate_video",
-      params: { prompt: "A cat playing", duration: "5", aspect_ratio: "16:9", resolution: "720p" },
+      params: { prompt: "A cat playing", options: { duration: 5, aspect_ratio: "16:9", resolution: "720p" } },
       message: "Review this cat video generation.",
     });
     expect(chatActionPlanSchema.parse(value(result))).toMatchObject({
-      tool: "generate_kie_seedance_2_5_video", effect: "generation",
-      params: { duration: "5", aspect_ratio: "16:9", resolution: "720p" },
+      tool: "generate_video", effect: "generation",
+      params: { model: "kie:bytedance/seedance-2-5", options: { duration: 5, aspect_ratio: "16:9", resolution: "720p" } },
       confirmation: { required: true },
     });
   });
@@ -124,13 +125,14 @@ describe("voice chat action policy", () => {
   it("drops generation options the speaker never asked for", async () => {
     const result = await prepare("Generate a cat video", {
       tool: "generate_video",
-      params: { prompt: "A cat playing", duration: "5", aspect_ratio: "16:9", resolution: "720p" },
+      params: { prompt: "A cat playing", options: { duration: 5, aspect_ratio: "16:9", resolution: "720p" } },
       message: "Review this cat video generation.",
     });
     const plan = chatActionPlanSchema.parse(value(result));
-    expect(plan.params).not.toHaveProperty("duration");
-    expect(plan.params).not.toHaveProperty("aspect_ratio");
-    expect(plan.params).not.toHaveProperty("resolution");
+    const options = (plan.params.options ?? {}) as Record<string, unknown>;
+    expect(options).not.toHaveProperty("duration");
+    expect(options).not.toHaveProperty("aspect_ratio");
+    expect(options).not.toHaveProperty("resolution");
     expect(plan.params).toMatchObject({ prompt: "A cat playing" });
   });
 

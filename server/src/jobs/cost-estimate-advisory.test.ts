@@ -186,10 +186,9 @@ describe("advisory cost estimation", () => {
       slot: { row: 1, column: 0 },
       prompt: "restyle the source clip as watercolor",
       provider: "kie",
-      model: "KlingOmniTransformationRequestSchema",
-      operation: "transformation",
-      tool: "generate_kie_kling_3_0_omni_transformation",
-      inputs: { generationMode: "transformation" },
+      model: "kie:kling-3.0-omni/transformation",
+      operation: "edit_video",
+      tool: "generate_video",
     });
     const written = await engine.notebooks.write({
       ...notebook.value,
@@ -224,6 +223,8 @@ describe("advisory cost estimation", () => {
     const paid = stages.find((stage) => stage.cellId === producer.id);
     expect(paid?.kind).toBe("queued");
     expect(paid?.jobType).toBe("generation");
+    expect(paid?.tool).toBe("generate_video");
+    expect(paid?.model).toBe("kie:kling-3.0-omni/transformation");
 
     const fingerprint = notebookCellDefinitionFingerprint(document.value, producer);
     const unpricedPlanId = "019f0000-0000-7000-8000-00000000c0de";

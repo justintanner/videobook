@@ -1,5 +1,5 @@
 import type { ZodError } from "zod";
-import type { MediaRefs, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
+import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
 export interface WireRequestInput {
   prompt?: string;
@@ -112,6 +112,17 @@ function applyOptions(model: ResolvedModel, value: Record<string, unknown>, opti
   return null;
 }
 
+function activeMode(model: ResolvedModel, refs: MediaRefs, mode: string | undefined): ModeSpec | undefined {
+  if (mode) return model.modes.find((candidate) => candidate.id === mode);
+  const used = (Object.keys(refs) as RefRole[]).filter((role) => refCount(refs, role) > 0);
+  return model.modes.find((candidate) => used.every((role) => candidate.roles.includes(role))
+    && ((candidate.requireAny ?? []).length === 0 || (candidate.requireAny ?? []).some((role) => refCount(refs, role) > 0)));
+}
+
+function applyModeDefaults(model: ResolvedModel, value: Record<string, unknown>, refs: MediaRefs, mode: string | undefined): void {
+  for (const [path, option] of Object.entries(activeMode(model, refs, mode)?.defaults ?? {})) setPath(value, path, clone(option));
+}
+
 function hasFrames(refs: MediaRefs): boolean {
   return refCount(refs, "first_frame") > 0 || refCount(refs, "last_frame") > 0;
 }
@@ -131,12 +142,27 @@ function checkPrompt(model: ResolvedModel, prompt: string | undefined): string |
   return null;
 }
 
+function issueLabel(path: readonly PropertyKey[]): string {
+  return path
+    .filter((segment) => segment !== "input")
+    .map(String)
+    .join(" ")
+    .replaceAll("_", " ")
+    .replace(/^./u, (character) => character.toUpperCase());
+}
+
+function issueMessage(issue: ZodError["issues"][number]): string {
+  const input = "input" in issue ? issue.input : undefined;
+  const missing = issue.code === "invalid_type" && (input === undefined || input === null);
+  return missing ? "Required" : issue.message;
+}
+
 function formatIssues(model: ResolvedModel, error: ZodError): string {
   const issues = error.issues.map((issue) => {
-    const path = issue.path.filter((segment) => segment !== "input").join(".");
-    return `${path === "" ? "request" : `options.${path}`}: ${issue.message}`;
+    const label = issueLabel(issue.path);
+    return label ? `${label}: ${issueMessage(issue)}` : `${model.title}: ${issueMessage(issue)}`;
   });
-  return `Invalid ${model.id} request: ${issues.join("; ")}`;
+  return issues.join("; ");
 }
 
 export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): WireRequestResult {
@@ -146,6 +172,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   const promptError = checkPrompt(model, call.prompt);
   if (promptError) return { ok: false, error: promptError };
   const value: Record<string, unknown> = clone(model.entry.defaults) ?? {};
+  applyModeDefaults(model, value, refs, call.mode);
   placeRefs(model, value, refs);
   const optionError = applyOptions(model, value, call.options ?? {});
   if (optionError) return { ok: false, error: optionError };

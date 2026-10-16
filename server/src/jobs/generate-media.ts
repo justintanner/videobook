@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import type { CostHints } from "@apicity/cost";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
+import { requireApiKey } from "../api-key.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
@@ -54,6 +55,7 @@ function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: Resol
 export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
   const model = resolveModel(job.model);
   const adapter = adapterFor(model);
+  requireApiKey(adapter.envKey);
   await engine.metadata.artifacts.write(job.assetId, "generation-request", job);
   const prompt = job.prompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, job.prompt, job.refs);
   const refs = await uploadRefs(engine, adapter, job.refs);

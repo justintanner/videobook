@@ -16,7 +16,6 @@ const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
 
 const SAMPLE_REFS: Record<string, MediaRefs> = {
   "kie:grok-imagine/image-to-video": { image: ["https://example.com/image0.png"] },
-  "kie:kling-3.0-omni/transformation": { video: ["https://example.com/video0.mp4"] },
 };
 
 function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {
@@ -90,13 +89,13 @@ describe("media catalog contract", () => {
 });
 
 describe("media request building", () => {
-  it("fills apicity defaults for a minimal seedance request", () => {
+  it("fills catalog and apicity defaults for a minimal seedance request", () => {
     const built = buildWireRequest(resolveModel("kie:bytedance/seedance-2-5"), { prompt: "a cat" });
     expect(built).toMatchObject({
       ok: true,
       request: {
         model: "bytedance/seedance-2-5",
-        input: { prompt: "a cat", resolution: "720p", aspect_ratio: "adaptive", duration: 5, generate_audio: true },
+        input: { prompt: "a cat", resolution: "1080p", aspect_ratio: "16:9", duration: 13, generate_audio: true, return_last_frame: false },
       },
     });
   });
@@ -159,7 +158,7 @@ describe("media request building", () => {
     const seedance = resolveModel("kie:bytedance/seedance-2-5");
     expect(buildWireRequest(seedance, { prompt: "x", options: { colour: "red" } })).toMatchObject({ ok: false, error: expect.stringContaining("options.colour") });
     expect(buildWireRequest(seedance, { prompt: "x", options: { first_frame_url: "u" } })).toMatchObject({ ok: false, error: expect.stringContaining("refs") });
-    expect(buildWireRequest(seedance, { prompt: "x", options: { duration: 999 } })).toMatchObject({ ok: false, error: expect.stringContaining("options.duration") });
+    expect(buildWireRequest(seedance, { prompt: "x", options: { duration: 999 } })).toMatchObject({ ok: false, error: expect.stringContaining("Duration:") });
     const nano = resolveModel("kie:nano-banana-2-1");
     expect(buildWireRequest(nano, { prompt: "x", refUrls: { video: ["u"] } })).toMatchObject({ ok: false, error: expect.stringContaining("video") });
     expect(buildWireRequest(nano, { prompt: "x", refUrls: { image: Array.from({ length: 11 }, () => "u") } })).toMatchObject({ ok: false, error: expect.stringContaining("at most 10") });

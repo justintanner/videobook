@@ -7,18 +7,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createEngine,
   type Engine,
+  type NotebookCell,
   type NotebookDocument,
 } from "videobook-engine";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
-  modelArgs,
   prepareNotebookGeneration,
   resolveNotebookGenerationTool,
   runNotebookCell,
 } from "../../server/src/jobs/run-notebook.js";
-import { DEFAULT_ANIMATION_TOOL } from "../../server/src/notebook-action-catalog.js";
+import { frameAspectRatio } from "../../server/src/media/frame-options.js";
+import { previewGeneration } from "../../server/src/media/preview.js";
+import { DEFAULT_ANIMATION_MODEL } from "../../server/src/notebook-action-catalog.js";
 import { buildAssetList } from "../../server/src/tools/reconcile-project-work.js";
-import type { ToolDef } from "../../server/src/tools/tool-def.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -41,19 +42,41 @@ describe("notebook runner frames and concat", () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
-  it("resolves generation tool from a generate_video cell before provider model id", () => {
-    const tool = resolveNotebookGenerationTool({
+  async function openEngine(name: string): Promise<Engine> {
+    rootDir = await mkdtemp(join(tmpdir(), `vb-${name}-`));
+    engine = createEngine({ durableWrites: false, rootDir, initialBookName: name });
+    await engine.ready;
+    return engine;
+  }
+
+  async function prepareInput(
+    document: NotebookDocument,
+    cell: NotebookCell,
+  ): Promise<Record<string, unknown>> {
+    const opened = await openEngine("runner-refs");
+    const prepared = await prepareNotebookGeneration(opened, document, cell, "book-id");
+    return prepared.input;
+  }
+
+  it("resolves generation tool from a generate_video cell model", () => {
+    expect(resolveNotebookGenerationTool({
       id: "019f0000-0000-7000-8000-000000000001",
       type: "generate_video",
       label: "Animate scene",
       slot: { row: 0, column: 0 },
-      model: "bytedance/seedance-2",
-      tool: DEFAULT_ANIMATION_TOOL,
-    });
-    expect(tool).toBe(DEFAULT_ANIMATION_TOOL);
+      model: DEFAULT_ANIMATION_MODEL,
+      tool: "generate_video",
+    })).toBe("generate_video");
+    expect(resolveNotebookGenerationTool({
+      id: "019f0000-0000-7000-8000-000000000002",
+      type: "generate_image",
+      label: "Scene",
+      slot: { row: 0, column: 1 },
+      model: "kie:nano-banana-2-1",
+    })).toBe("generate_image");
   });
 
-  it("maps numbered video inputs into generation reference fields", () => {
+  it("maps numbered video inputs into generation reference fields", async () => {
     const video = {
       id: "019f0000-0000-7000-8000-000000000010",
       type: "video" as const,
@@ -67,6 +90,8 @@ describe("notebook runner frames and concat", () => {
       label: "Animate from reference",
       slot: { row: 1, column: 0 },
       prompt: "Follow the reference motion",
+      model: DEFAULT_ANIMATION_MODEL,
+      tool: "generate_video",
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000013",
@@ -80,20 +105,13 @@ describe("notebook runner frames and concat", () => {
       }],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: DEFAULT_ANIMATION_TOOL,
-      schema: {
-        book_id: {},
-        prompt: {},
-        video_refs: {},
-      },
-    } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, animate, "book-id").video_refs)
-      .toEqual([`@${video.outputArtifactId}`]);
+    const input = await prepareInput(document, animate);
+    expect(input.refs).toEqual({ video: [video.outputArtifactId] });
+    expect(input.mode).toBe("r2v");
   });
 
-  it("maps a source clip plus three identity stills into Seedance 2 r2v refs", () => {
+  it("maps a source clip plus three identity stills into Seedance r2v refs", async () => {
     const video = {
       id: "019f0000-0000-7000-8000-000000000110",
       type: "video" as const,
@@ -114,7 +132,8 @@ describe("notebook runner frames and concat", () => {
       label: "Replace actors",
       slot: { row: 1, column: 0 },
       prompt: "Replace the three actors",
-      tool: DEFAULT_ANIMATION_TOOL,
+      model: DEFAULT_ANIMATION_MODEL,
+      tool: "generate_video",
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000141",
@@ -136,23 +155,19 @@ describe("notebook runner frames and concat", () => {
       ],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: DEFAULT_ANIMATION_TOOL,
-      schema: {
-        book_id: {},
-        prompt: {},
-        image_refs: {},
-        video_refs: {},
-      },
-    } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
-      video_refs: [`@${video.outputArtifactId}`],
-      image_refs: stills.map((still) => `@${still.outputArtifactId}`),
+    const input = await prepareInput(document, generate);
+    expect(input).toMatchObject({
+      model: DEFAULT_ANIMATION_MODEL,
+      mode: "r2v",
+      refs: {
+        video: [video.outputArtifactId],
+        image: stills.map((still) => still.outputArtifactId),
+      },
     });
   });
 
-  it("orders Qwen 3 image_refs by named image/image_2/image_3 slots", () => {
+  it("orders Qwen 3 image refs by named image/image_2/image_3 slots", async () => {
     const smoke = {
       id: "019f0000-0000-7000-8000-000000000210",
       type: "image" as const,
@@ -180,7 +195,8 @@ describe("notebook runner frames and concat", () => {
       label: "Qwen edit",
       slot: { row: 1, column: 0 },
       prompt: "in the smoke of @019f0000-0000-7000-8000-000000000211",
-      tool: "generate_kie_qwen_3_0_edit_image",
+      model: "kie:qwen3/image-to-image",
+      tool: "generate_image",
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000217",
@@ -208,23 +224,18 @@ describe("notebook runner frames and concat", () => {
       ],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: "generate_kie_qwen_3_0_edit_image",
-      schema: {
-        book_id: {},
-        prompt: {},
-        image_refs: {},
-      },
-    } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, generate, "book-id").image_refs).toEqual([
-      `@${first.outputArtifactId}`,
-      `@${second.outputArtifactId}`,
-      `@${smoke.outputArtifactId}`,
-    ]);
+    const input = await prepareInput(document, generate);
+    expect(input.refs).toEqual({
+      image: [
+        first.outputArtifactId,
+        second.outputArtifactId,
+        smoke.outputArtifactId,
+      ],
+    });
   });
 
-  it("maps a legacy Wan generic image plus last frame into frame fields", () => {
+  it("maps a Wan generic image plus last frame into frame refs", async () => {
     const first = {
       id: "019f0000-0000-7000-8000-000000000220",
       type: "image" as const,
@@ -245,12 +256,13 @@ describe("notebook runner frames and concat", () => {
       label: "Wan Prime",
       slot: { row: 1, column: 0 },
       prompt: "Walk away from the camera",
-      tool: "generate_kie_wan_3_0_prime_video",
+      model: "kie:wan/3-0-video-prime",
+      tool: "generate_video",
       inputs: { generationMode: "default" },
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000225",
-      name: "Wan legacy frames",
+      name: "Wan frames",
       cells: [first, last, generate],
       edges: [
         {
@@ -268,37 +280,22 @@ describe("notebook runner frames and concat", () => {
       ],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: "generate_kie_wan_3_0_prime_video",
-      schema: {
-        book_id: {},
-        prompt: {},
-        first_frame_ref: {},
-        last_frame_ref: {},
-        image_refs: {},
-        video_refs: {},
-        audio_refs: {},
-      },
-    } as unknown as ToolDef;
+    const frameRefs = {
+      first_frame: [first.outputArtifactId],
+      last_frame: [last.outputArtifactId],
+    };
 
-    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
-      first_frame_ref: `@${first.outputArtifactId}`,
-      last_frame_ref: `@${last.outputArtifactId}`,
-    });
-    expect(modelArgs(definition, document, generate, "book-id"))
-      .not.toHaveProperty("image_refs");
-    expect(modelArgs(
-      definition,
-      document,
-      { ...generate, inputs: undefined },
-      "book-id",
-    )).toMatchObject({
-      first_frame_ref: `@${first.outputArtifactId}`,
-      last_frame_ref: `@${last.outputArtifactId}`,
-    });
+    const configured = await prepareInput(document, generate);
+    expect(configured.refs).toEqual(frameRefs);
+    expect(configured.mode).toBe("i2v");
+    engine?.close();
+    await rm(rootDir!, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    const unconfigured = await prepareInput(document, { ...generate, inputs: undefined });
+    expect(unconfigured.refs).toEqual(frameRefs);
+    expect(unconfigured.mode).toBe("i2v");
   });
 
-  it("maps Kling motion control image and video inputs", () => {
+  function klingDocument(model: string) {
     const image = {
       id: "019f0000-0000-7000-8000-000000000020",
       type: "image" as const,
@@ -319,6 +316,8 @@ describe("notebook runner frames and concat", () => {
       label: "Motion control video",
       slot: { row: 1, column: 0 },
       prompt: "Follow the reference performance",
+      model,
+      tool: "generate_video",
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000025",
@@ -340,37 +339,30 @@ describe("notebook runner frames and concat", () => {
       ],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: "generate_kie_kling_3_0_omni_transformation",
-      schema: {
-        book_id: {},
-        prompt: {},
-        image_refs: {},
-        video_refs: {},
-      },
-    } as unknown as ToolDef;
+    return {
+      document,
+      generate,
+      refs: { image: [image.outputArtifactId], video: [video.outputArtifactId] },
+    };
+  }
 
-    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
-      image_refs: [`@${image.outputArtifactId}`],
-      video_refs: [`@${video.outputArtifactId}`],
-    });
-
-    const motionControlDefinition = {
-      name: "generate_kie_kling_3_0_motion_control",
-      schema: {
-        book_id: {},
-        prompt: {},
-        character_image_refs: {},
-        motion_video_refs: {},
-      },
-    } as unknown as ToolDef;
-    expect(modelArgs(motionControlDefinition, document, generate, "book-id")).toMatchObject({
-      character_image_refs: [`@${image.outputArtifactId}`],
-      motion_video_refs: [`@${video.outputArtifactId}`],
-    });
+  it("maps Kling motion control image and video inputs", async () => {
+    const { document, generate, refs } = klingDocument("kie:kling-3.0/motion-control");
+    const opened = await openEngine("runner-kling");
+    const prepared = await prepareNotebookGeneration(opened, document, generate, "book-id");
+    expect(prepared.model).toBe("kie:kling-3.0/motion-control");
+    expect(prepared.input.refs).toEqual(refs);
   });
 
-  it("accepts extracted-frame image cells as generation image sources", () => {
+  it("maps Kling Omni transformation image and video inputs", async () => {
+    const { document, generate, refs } = klingDocument("kie:kling-3.0-omni/transformation");
+    const opened = await openEngine("runner-kling-omni");
+    const prepared = await prepareNotebookGeneration(opened, document, generate, "book-id");
+    expect(prepared.model).toBe("kie:kling-3.0-omni/transformation");
+    expect(prepared.input.refs).toEqual(refs);
+  });
+
+  it("accepts extracted-frame image cells as generation image sources", async () => {
     const extractedFrame = {
       id: "019f0000-0000-7000-8000-000000000030",
       type: "image" as const,
@@ -391,6 +383,9 @@ describe("notebook runner frames and concat", () => {
       type: "generate_image" as const,
       label: "Generate from source image",
       slot: { row: 2, column: 0 },
+      prompt: "Blend both sources",
+      model: "kie:nano-banana-pro",
+      tool: "generate_image",
     };
     const document: NotebookDocument = {
       id: "019f0000-0000-7000-8000-000000000035",
@@ -412,20 +407,14 @@ describe("notebook runner frames and concat", () => {
       ],
       createdAt: "2026-01-01T00:00:00.000Z",
     };
-    const definition = {
-      name: "generate_test_image",
-      schema: {
-        book_id: {},
-        prompt: {},
-        image_refs: {},
-      },
-    } as unknown as ToolDef;
 
-    expect(modelArgs(definition, document, generate, "book-id").image_refs)
-      .toEqual([
-        `@${extractedFrame.outputArtifactId}`,
-        `@${image.outputArtifactId}`,
-      ]);
+    const input = await prepareInput(document, generate);
+    expect(input.refs).toEqual({
+      image: [
+        extractedFrame.outputArtifactId,
+        image.outputArtifactId,
+      ],
+    });
   });
 
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
@@ -464,9 +453,9 @@ describe("notebook runner frames and concat", () => {
       slot: { row: 0, column: 2 },
       prompt: "Camera push in",
       provider: "kie",
-      model: "bytedance/seedance-2",
+      model: DEFAULT_ANIMATION_MODEL,
       operation: "image_to_video",
-      tool: DEFAULT_ANIMATION_TOOL,
+      tool: "generate_video",
       inputs: { requiresConfirmation: true, generationSettings: { aspect_ratio: "9:16" } },
     });
     const document: NotebookDocument = {
@@ -487,37 +476,25 @@ describe("notebook runner frames and concat", () => {
     };
     await engine.notebooks.write(document);
 
-    const definition = {
-      name: DEFAULT_ANIMATION_TOOL,
-      schema: {
-        book_id: {},
-        prompt: {},
-        first_frame_ref: {},
-        last_frame_ref: {},
-      },
-    } as unknown as ToolDef;
-
-    const args = modelArgs(
-      definition,
-      document,
-      animate,
-      engine.book.get().bookId,
-      engine,
-    );
-    expect(args.first_frame_ref).toBe(`@${first.value.artifactId}`);
-    expect(args.last_frame_ref).toBe(`@${last.value.artifactId}`);
-    expect(args.aspect_ratio).toBe("adaptive");
-
     const prepared = await prepareNotebookGeneration(
       engine,
       document,
       animate,
       engine.book.get().bookId,
     );
-    expect(prepared.tool).toBe(DEFAULT_ANIMATION_TOOL);
-    expect(prepared.input.first_frame_ref).toBe(`@${first.value.artifactId}`);
-    expect(prepared.input.last_frame_ref).toBe(`@${last.value.artifactId}`);
-    expect(prepared.input.aspect_ratio).toBe("adaptive");
+    expect(prepared.tool).toBe("generate_video");
+    expect(prepared.model).toBe(DEFAULT_ANIMATION_MODEL);
+    expect(prepared.provider).toBe("kie");
+    expect(prepared.input.refs).toEqual({
+      first_frame: [first.value.artifactId],
+      last_frame: [last.value.artifactId],
+    });
+    expect(prepared.input.mode).toBe("i2v");
+    expect(frameAspectRatio(DEFAULT_ANIMATION_MODEL, prepared.input)).toBe("adaptive");
+    const preview = previewGeneration(prepared.input);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(JSON.stringify(preview.preview.payload)).toContain("\"aspect_ratio\":\"adaptive\"");
     await expect(
       prepareNotebookGeneration(
         engine,
@@ -525,7 +502,7 @@ describe("notebook runner frames and concat", () => {
         { ...animate, type: "generate_image" },
         engine.book.get().bookId,
       ),
-    ).rejects.toThrow(/produces video, not generate_image/i);
+    ).rejects.toThrow(/generates video, not generate_image/i);
 
     await expect(
       runNotebookCell(

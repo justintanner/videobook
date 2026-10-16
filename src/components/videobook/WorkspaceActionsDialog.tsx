@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, Play, X } from 'lucide-react'
 import type { WorkspaceAction } from '../../../server/src/workspace-action-contract'
-import { seedance25FrameAspectRatio, SEEDANCE25_FRAME_ASPECT_DESCRIPTION } from '../../../server/src/seedance25'
+import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../server/src/media/frame-options'
 import {
   actionFieldLabel,
   actionUnavailableReason,
@@ -73,10 +73,12 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
     })
     return { ...seeded, ...Object.fromEntries(Object.entries(initialValues ?? {}).filter(([name]) => name in (action.inputSchema.properties ?? {}) && (name !== '_provider' || !action.generation))) }
   })
-  const frameAspectRatio = action.handler.kind === 'tool'
-    ? seedance25FrameAspectRatio(action.handler.tool, draftValues)
+  const frameAspectRatio = action.generation && typeof draftValues.model === 'string'
+    ? modelFrameAspectRatio(draftValues.model, draftValues)
     : undefined
-  const values = frameAspectRatio ? { ...draftValues, aspect_ratio: frameAspectRatio } : draftValues
+  const values: Record<string, unknown> = frameAspectRatio
+    ? { ...draftValues, options: { ...(draftValues.options && typeof draftValues.options === 'object' ? draftValues.options : {}), aspect_ratio: frameAspectRatio } }
+    : draftValues
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [review, setReview] = useState<WorkspaceActionReview | null>(null)
@@ -143,7 +145,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
           setResult(null)
         }} />)}
     </div>
-    {frameAspectRatio && <p role="status">{SEEDANCE25_FRAME_ASPECT_DESCRIPTION}</p>}
+    {frameAspectRatio && <p role="status">{FRAME_ASPECT_DESCRIPTION}</p>}
     {hasDependentChoices && <button type="button" disabled={busy} onClick={() => onOpenAction(action.id, values)}>Refresh available choices</button>}
     {unavailable && <p role="status">{unavailable}</p>}
     {error && <p role="alert" className="workspace-action-error">{error}</p>}

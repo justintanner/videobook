@@ -18,6 +18,7 @@ import {
   type ImageEditProviderRequest,
 } from "./_image-edit-adapter.js";
 import { findImageEditModel } from "../image-edit-models.js";
+import { resolveModel } from "../media/descriptor.js";
 
 const SOURCE = "https://example.test/source.png";
 const REPLACEMENTS = [
@@ -56,7 +57,7 @@ function catalogSchemaParse(adapter: ImageEditAdapter, stored: unknown): boolean
   const payload = model.provider === "fal"
     ? (stored as { input: unknown }).input
     : stored;
-  return model.requestSchema.safeParse(payload).success;
+  return resolveModel(model.catalogModel).wire.request.safeParse(payload).success;
 }
 
 function imageUrlsOf(request: ImageEditProviderRequest): unknown {
@@ -156,7 +157,7 @@ describe("image edit adapters", () => {
   it("rejects wan 2.7 prompts beyond 500 characters before submit", () => {
     const adapter = imageEditAdapter("fal-ai/wan/v2.7/edit")!;
     expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(500)))).not.toThrow();
-    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(501)))).toThrow(/500 characters/);
+    expect(() => adapter.buildSemanticRequest(semanticInput("a".repeat(501)))).toThrow("fal:fal-ai/wan/v2.7/edit prompt is 501 characters; the limit is 500");
   });
 
   it("keeps the grok exact-mask route outside the swappable registry", () => {

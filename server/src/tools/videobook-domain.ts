@@ -58,11 +58,9 @@ import {
   selectedCellDetails,
   validateCellConfiguration,
 } from "../notebook-action-catalog.js";
-import { notebookGenerationInputContract } from "../notebook-generation-contract.js";
-import { notebookGenerationControls } from "../notebook-generation-controls.js";
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
-import { translateToolPayload } from "../payload-builders.js";
+import { previewGeneration } from "../media/preview.js";
 import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import { jobProviderTaskStatus } from "../provider-task-status.js";
@@ -1308,46 +1306,11 @@ export function videobookDomainDefs(
         cell_type: cellTypeSchema.optional(),
       },
       handler: async (args) => {
-        const [
-          { getAllToolDefs },
-          { getVideoToolSchema },
-          { getImageToolSchema },
-        ] = await Promise.all([
-          import("./index.js"),
-          import("../video-models.js"),
-          import("../image-models.js"),
-        ]);
-        const definitions = new Map(
-          getAllToolDefs(engine).map((definition) => [definition.name, definition]),
-        );
         const actions = listNotebookActions()
           .filter((action) =>
             args.cell_type
               ? action.cellTypes.includes(args.cell_type as NotebookCellType)
-              : true)
-          .map((action) => {
-            if (action.kind !== "generation" || !action.tool || action.existingCellOnly) return action;
-            const definition = definitions.get(action.tool);
-            if (!definition) return action;
-            const settingsSchema = action.cellTypes.includes("generate_video")
-              ? getVideoToolSchema(action.tool)
-              : action.cellTypes.includes("generate_image")
-                ? getImageToolSchema(action.tool)
-                : null;
-            return {
-              ...action,
-              inputContract: notebookGenerationInputContract(
-                action.tool,
-                definition.schema,
-              ),
-              controls: notebookGenerationControls(
-                settingsSchema ?? z.object(definition.schema).toJSONSchema(),
-                action.tool === "generate_kie_gemini_omni_video"
-                  ? { duration: "8" }
-                  : {},
-              ),
-            };
-          });
+              : true);
         return json({ actions });
       },
     },
@@ -2112,18 +2075,22 @@ export function videobookDomainDefs(
               message: reference.message,
             })),
           ];
+          const mediaPreview = promptLeaks.length === 0 && !prepared.imageEdit
+            ? previewGeneration(prepared.input)
+            : null;
+          if (mediaPreview && !mediaPreview.ok) return failure(mediaPreview.error);
           const translated = promptLeaks.length === 0
             ? prepared.imageEdit
               ? { payload: prepared.imageEdit.providerPayload, provider_path: undefined }
-              : translateToolPayload(
-                prepared.tool,
-                prepared.input,
-                prepared.provider,
-              )
+              : mediaPreview?.ok
+                ? { payload: mediaPreview.preview.payload, provider_path: mediaPreview.preview.providerPath }
+                : null
             : null;
-          const previewPayload = translated
-            ? applyPreviewPlaceholderUrls(translated.payload)
-            : null;
+          const previewPayload = mediaPreview?.ok
+            ? { payload: mediaPreview.preview.payload, placeholders: mediaPreview.preview.placeholders }
+            : translated
+              ? applyPreviewPlaceholderUrls(translated.payload)
+              : null;
           const costResult = await estimateCostDef(engine).handler({
             calls: [{
               tool_name: prepared.tool,

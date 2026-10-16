@@ -14,8 +14,10 @@ import {
   isChainRef,
   planStackedChainFromQuery,
   preflightChainPlan,
+  readChainParam,
   substituteChainRefs,
   supportedChainTool,
+  writeChainParam,
   type ChainPreflightContext,
   type ChainStep,
 } from "./chain-plan.js";
@@ -60,15 +62,29 @@ describe("chain catalog and refs", () => {
   });
 
   it("lets generation be chained, carrying how its output reaches the grid", () => {
-    const video = supportedChainTool("generate_kie_seedance_2_5_video");
+    const video = supportedChainTool("generate_video");
     expect(video?.completion).toBe("generation");
     expect(video?.placement).toBe("generate_video");
-    expect(video?.artifactOutput).toBe("vid_asset_id");
-    expect(video?.gridFields).toContain("first_frame_ref");
-    expect(video?.gridFields).toContain("image_refs");
-    const image = supportedChainTool("generate_kie_nano_banana_pro_text_to_image");
+    expect(video?.artifactOutput).toBe("asset_id");
+    expect(video?.gridFields).toContain("refs.first_frame");
+    expect(video?.gridFields).toContain("refs.image");
+    expect(video?.gridFields).toContain("replace_audio_with");
+    const image = supportedChainTool("generate_image");
     expect(image?.placement).toBe("generate_image");
-    expect(image?.artifactOutput).toBe("img_asset_id");
+    expect(image?.artifactOutput).toBe("asset_id");
+    expect(image?.gridFields).toEqual(["refs.image"]);
+    expect(supportedChainTool("generate_kie_seedance_2_5_video")).toBeNull();
+  });
+
+  it("reads and writes nested chain params by dotted path", () => {
+    const params = { prompt: "go", refs: { image: ["@a1"] } };
+    expect(readChainParam(params, "refs.image")).toEqual(["@a1"]);
+    expect(readChainParam(params, "refs.video")).toBeUndefined();
+    expect(readChainParam(params, "prompt.length")).toBeUndefined();
+    const written = writeChainParam(params, "refs.first_frame", "@b2");
+    expect(written).toEqual({ prompt: "go", refs: { image: ["@a1"], first_frame: "@b2" } });
+    expect(params.refs).toEqual({ image: ["@a1"] });
+    expect(writeChainParam({}, "replace_audio_with", "@c1")).toEqual({ replace_audio_with: "@c1" });
   });
 
   it("substitutes structured $ref values and never interpolates strings", () => {
@@ -276,10 +292,11 @@ describe("preflightChainPlan", () => {
         { id: "frame", tool: "extract_first_frame", params: { asset_id: "@b2" } },
         {
           id: "animate",
-          tool: "generate_kie_seedance_2_5_video",
+          tool: "generate_video",
           params: {
+            model: "kie:bytedance/seedance-2-5",
             prompt: "Animate it",
-            first_frame_ref: { $ref: { step_id: "frame", output: "image_asset_id" } },
+            refs: { first_frame: { $ref: { step_id: "frame", output: "image_asset_id" } } },
           },
         },
       ],
@@ -319,8 +336,12 @@ describe("preflightChainPlan", () => {
       steps: [
         {
           id: "animate",
-          tool: "generate_kie_seedance_2_5_video",
-          params: { prompt: "Blend them", video_refs: ["@b2", "@c4"] },
+          tool: "generate_video",
+          params: {
+            model: "kie:bytedance/seedance-2-5",
+            prompt: "Blend them",
+            refs: { video: ["@b2", "@c4"] },
+          },
         },
       ],
     }, ctx);
@@ -328,8 +349,8 @@ describe("preflightChainPlan", () => {
     if (!result.ok) return;
     const pins = result.plan.steps[0]?.pins ?? [];
     expect(pins.map((pin) => [pin.field, pin.index])).toEqual([
-      ["video_refs", 0],
-      ["video_refs", 1],
+      ["refs.video", 0],
+      ["refs.video", 1],
     ]);
     expect(pins.map((pin) => pin.address.replace(/^@/, ""))).toEqual(["b2", "c4"]);
   });

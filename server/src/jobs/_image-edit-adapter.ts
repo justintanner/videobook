@@ -1,27 +1,16 @@
 import { createFal } from "../usage-providers.js";
 import { submitMediaJob } from "@apicity/kie";
 import type { MediaGenerationRequest } from "@apicity/kie";
-import type { FalEndpointId, FalEndpointInputMap } from "@apicity/fal";
-import type { FalQueueSubmitRequest } from "@apicity/fal/zod";
 import { FalError } from "@apicity/fal";
-import {
-  FalAlibabaQwenImage3EditRequestSchema,
-  FalNanoBanana2EditRequestSchema,
-  FalNanoBananaProEditRequestSchema,
-  FalWanV2p7EditRequestSchema,
-} from "@apicity/fal/zod";
-import {
-  NanoBanana21RequestSchema,
-  GptImage2ImageToImageRequestSchema,
-  SeedreamProImageToImageRequestSchema,
-} from "@apicity/kie/zod";
+import { SeedreamProImageToImageRequestSchema } from "@apicity/kie/zod";
 import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-import { buildGptImage25Payload, GPT_IMAGE_2_5_MODELS } from "../gpt-image-2-5.js";
-import { buildNanoBanana21Payload } from "../nano-banana-2-1.js";
-import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-default.js";
+import { IMAGE_EDIT_MODELS, type ImageEditModelInfo } from "../image-edit-models.js";
+import { resolveModel } from "../media/descriptor.js";
+import { buildWireRequest } from "../media/request.js";
+import type { ResolvedModel } from "../media/types.js";
 import { mintKieOtp } from "./kie-paygate.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -47,16 +36,6 @@ export interface ImageEditRequestInput {
   width: number;
   height: number;
 }
-
-type KieImageEditRequestSchema = {
-  parse(value: unknown): MediaGenerationRequest;
-  safeParse(value: unknown): { success: true; data: MediaGenerationRequest } | { success: false; error: unknown };
-};
-
-type FalImageEditInputSchema<T> = {
-  parse(value: unknown): T;
-  safeParse(value: unknown): { success: true; data: T } | { success: false; error: unknown };
-};
 
 /**
  * One image-edit model behind the subject-edit job pipeline. Stored-task resume
@@ -160,28 +139,51 @@ function falResultImageUrls(resultObject: Record<string, unknown>): string[] {
     .filter((url): url is string => typeof url === "string");
 }
 
-function kieImageEditAdapter(args: {
-  id: string;
-  requestSchema: KieImageEditRequestSchema;
-  build(input: ImageEditRequestInput): ImageEditProviderRequest;
-}): ImageEditAdapter {
+function optionsFor(model: ResolvedModel, input: ImageEditRequestInput): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  const aspect = model.options.find((option) => option.name === "aspect_ratio");
+  const closest = closestAspectRatio(input.width, input.height);
+  if (aspect?.enumValues.includes(closest)) options.aspect_ratio = closest;
+  const format = model.options.find((option) => option.name === "output_format");
+  if (format?.enumValues.includes("png")) options.output_format = "png";
+  return options;
+}
+
+function catalogEditRequest(model: ResolvedModel, input: ImageEditRequestInput): Record<string, unknown> {
+  const built = buildWireRequest(model, {
+    prompt: input.prompt,
+    refUrls: { image: [...input.imageUrls] },
+    options: optionsFor(model, input),
+  });
+  if (!built.ok) throw new Error(built.error);
+  return built.request;
+}
+
+function kieImageEditAdapter(model: ResolvedModel, build?: (input: ImageEditRequestInput) => ImageEditProviderRequest): ImageEditAdapter {
+  const parse = (value: unknown) => model.wire.request.safeParse(value) as
+    { success: true; data: MediaGenerationRequest } | { success: false };
+  const buildRequest = build ?? ((input: ImageEditRequestInput) => {
+    const request = catalogEditRequest(model, input) as unknown as MediaGenerationRequest;
+    return toProviderRequest(request.model, { ...(request.input as Record<string, unknown>) });
+  });
   return {
-    id: args.id,
+    id: model.apiId,
     uploadAsset: (engine, artifactId, filename) =>
       uploadAssetToKie(engine, artifactId, filename),
     buildSemanticRequest: (input) =>
-      args.build({ ...input, imageUrls: [input.imageUrls[0]!] }),
-    buildRegionRequest: args.build,
+      buildRequest({ ...input, imageUrls: [input.imageUrls[0]!] }),
+    buildRegionRequest: buildRequest,
     submit: async (engine, imageAssetId, request) => {
-      const parsed = args.requestSchema.parse(request);
+      const parsed = parse(request);
+      if (!parsed.success) throw new Error(`Invalid ${model.id} image edit request`);
       const metadata = await engine.metadata.artifacts.write(
         imageAssetId,
         "generation-payload",
-        parsed,
+        parsed.data,
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
-      const taskId = await submitMediaJob(kieProvider(), parsed, {
-        otp: mintKieOtp(parsed),
+      const taskId = await submitMediaJob(kieProvider(), parsed.data, {
+        otp: mintKieOtp(parsed.data),
       });
       const taskMetadata = await engine.metadata.artifacts.write(
         imageAssetId,
@@ -200,47 +202,67 @@ function kieImageEditAdapter(args: {
         "subject-edit",
       );
       const urls = parseResultUrls(resultJson);
-      return downloadResultImages(urls, signal, `${args.id} edit`);
+      return downloadResultImages(urls, signal, `${model.apiId} edit`);
     },
     parseStoredPayload: (payload) => {
-      const parsed = args.requestSchema.safeParse(payload);
+      const parsed = parse(payload);
       if (!parsed.success) return null;
-      return toProviderRequest(parsed.data.model, { ...parsed.data.input });
+      return toProviderRequest(parsed.data.model, { ...(parsed.data.input as Record<string, unknown>) });
     },
   };
 }
 
-function falImageEditAdapter<Id extends FalEndpointId>(args: {
-  id: Id;
-  inputSchema: FalImageEditInputSchema<FalEndpointInputMap[Id]>;
-  build(input: ImageEditRequestInput): FalEndpointInputMap[Id];
-}): ImageEditAdapter {
+async function awaitFalImages(model: ResolvedModel, taskId: string, signal: AbortSignal): Promise<Buffer[]> {
+  const provider = createFal({ apiKey: requireApiKey("FAL_API_KEY"), timeout: 30_000 });
+  const namespace = falNamespace(model.apiId);
+  const deadlineAt = Date.now() + FAL_RESULT_TIMEOUT_MS;
+  for (;;) {
+    if (Date.now() >= deadlineAt) {
+      throw new Error(`Fal task ${taskId} did not finish within 25 minutes`);
+    }
+    let status;
+    try {
+      status = await provider.v1.queue.status({ endpoint_id: namespace, request_id: taskId });
+    } catch (cause) {
+      if (cause instanceof FalError && cause.status >= 400 && cause.status < 500) throw cause;
+      await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, { signal });
+      continue;
+    }
+    if (status.status === "COMPLETED") {
+      if (status.error) {
+        throw new Error(`Fal image edit failed: ${status.error}`);
+      }
+      const result = await provider.v1.queue.result({ endpoint_id: namespace, request_id: taskId });
+      const urls = falResultImageUrls(result);
+      if (urls.length === 0) throw new Error(`${model.apiId} image edit returned no image`);
+      return downloadResultImages(urls, signal, `${model.apiId} edit`);
+    }
+    await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, { signal });
+  }
+}
+
+function falImageEditAdapter(model: ResolvedModel): ImageEditAdapter {
+  const parse = (value: unknown) => model.wire.input.safeParse(value);
+  const buildRequest = (input: ImageEditRequestInput) =>
+    toProviderRequest(model.apiId, catalogEditRequest(model, input));
   return {
-    id: args.id,
+    id: model.apiId,
     uploadAsset: (engine, artifactId, filename) =>
       uploadAssetToFal(engine, artifactId, filename),
-    buildSemanticRequest: (input) => {
-      const parsed = args.inputSchema.parse(
-        args.build({ ...input, imageUrls: [input.imageUrls[0]!] }),
-      );
-      return toProviderRequest(args.id, { ...parsed });
-    },
-    buildRegionRequest: (input) => {
-      const parsed = args.inputSchema.parse(args.build(input));
-      return toProviderRequest(args.id, { ...parsed });
-    },
+    buildSemanticRequest: (input) => buildRequest({ ...input, imageUrls: [input.imageUrls[0]!] }),
+    buildRegionRequest: buildRequest,
     submit: async (engine, imageAssetId, request) => {
-      const input = args.inputSchema.parse(request.input);
+      const parsed = parse(request.input);
+      if (!parsed.success) throw new Error(`Invalid ${model.id} image edit request`);
+      const input = parsed.data as Record<string, unknown>;
       const provider = createFal({ apiKey: requireApiKey("FAL_API_KEY"), timeout: 60_000 });
       const metadata = await engine.metadata.artifacts.write(
         imageAssetId,
         "generation-payload",
-        { endpoint_id: args.id, input },
+        { endpoint_id: model.apiId, input },
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
-      // FalQueueSubmitRequest's conditional input type cannot see the generic Id here.
-      const params = { endpoint_id: args.id, input } as FalQueueSubmitRequest<Id>;
-      const submitted = await provider.post.v1.queue.submit(params);
+      const submitted = await provider.post.v1.queue.submit({ endpoint_id: model.apiId, input } as never);
       const taskMetadata = await engine.metadata.artifacts.write(
         imageAssetId,
         "kie-task-id",
@@ -249,131 +271,26 @@ function falImageEditAdapter<Id extends FalEndpointId>(args: {
       if (!taskMetadata.ok) throw new Error(taskMetadata.error.message);
       return submitted.request_id;
     },
-    awaitResult: async (taskId, signal) => {
-      const provider = createFal({ apiKey: requireApiKey("FAL_API_KEY"), timeout: 30_000 });
-      const namespace = falNamespace(args.id);
-      const deadlineAt = Date.now() + FAL_RESULT_TIMEOUT_MS;
-      for (;;) {
-        if (Date.now() >= deadlineAt) {
-          throw new Error(`Fal task ${taskId} did not finish within 25 minutes`);
-        }
-        let status;
-        try {
-          status = await provider.v1.queue.status({ endpoint_id: namespace, request_id: taskId });
-        } catch (cause) {
-          if (cause instanceof FalError && cause.status >= 400 && cause.status < 500) throw cause;
-          await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, { signal });
-          continue;
-        }
-        if (status.status === "COMPLETED") {
-          if (status.error) {
-            throw new Error(`Fal image edit failed: ${status.error}`);
-          }
-          const result = await provider.v1.queue.result({ endpoint_id: namespace, request_id: taskId });
-          const urls = falResultImageUrls(result);
-          if (urls.length === 0) throw new Error(`${args.id} image edit returned no image`);
-          return downloadResultImages(urls, signal, `${args.id} edit`);
-        }
-        await delay(Math.min(3_000, Math.max(1, deadlineAt - Date.now())), undefined, { signal });
-      }
-    },
+    awaitResult: (taskId, signal) => awaitFalImages(model, taskId, signal),
     parseStoredPayload: (payload) => {
       if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
-      if (!("endpoint_id" in payload) || payload.endpoint_id !== args.id) return null;
+      if (!("endpoint_id" in payload) || payload.endpoint_id !== model.apiId) return null;
       if (!("input" in payload)) return null;
-      const parsed = args.inputSchema.safeParse(payload.input);
+      const parsed = parse(payload.input);
       if (!parsed.success) return null;
-      return toProviderRequest(args.id, { ...parsed.data });
+      return toProviderRequest(model.apiId, { ...(parsed.data as Record<string, unknown>) });
     },
   };
 }
 
-function falEditBuild(
-  input: ImageEditRequestInput,
-  maxPromptLength?: number,
-): { prompt: string; image_urls: string[] } {
-  if (maxPromptLength !== undefined && input.prompt.length > maxPromptLength) {
-    throw new Error(
-      `This model accepts prompts of at most ${maxPromptLength} characters; the composed edit prompt is ${input.prompt.length} characters.`,
-    );
-  }
-  return { prompt: input.prompt, image_urls: [...input.imageUrls] };
+function adapterForEditModel(info: ImageEditModelInfo): ImageEditAdapter {
+  const model = resolveModel(info.catalogModel);
+  if (info.provider === "fal") return falImageEditAdapter(model);
+  if (model.apiId === "seedream/5-pro-image-to-image") return kieImageEditAdapter(model, seedreamRegionReplacementRequest);
+  return kieImageEditAdapter(model);
 }
 
-const gptImage25EditAdapter = (variant: keyof typeof GPT_IMAGE_2_5_MODELS): ImageEditAdapter => {
-  const config = GPT_IMAGE_2_5_MODELS[variant];
-  return kieImageEditAdapter({
-    id: config.editSchema.shape.model.value,
-    requestSchema: config.editSchema,
-    build: (input) => {
-      const request = buildGptImage25Payload(
-        variant,
-        {
-          prompt: input.prompt,
-          aspect_ratio: closestAspectRatio(input.width, input.height),
-        },
-        [...input.imageUrls],
-      );
-      return toProviderRequest(request.model, { ...request.input });
-    },
-  });
-};
-
-const SEEDREAM_I2I_ADAPTER: ImageEditAdapter = kieImageEditAdapter({
-  id: "seedream/5-pro-image-to-image",
-  requestSchema: SeedreamProImageToImageRequestSchema,
-  build: seedreamRegionReplacementRequest,
-});
-
-export const IMAGE_EDIT_ADAPTERS: readonly ImageEditAdapter[] = [
-  kieImageEditAdapter({
-    id: DEFAULT_IMAGE_EDIT_MODEL_ID,
-    requestSchema: NanoBanana21RequestSchema,
-    build: input => buildNanoBanana21Payload({
-      prompt: input.prompt,
-      aspect_ratio: closestAspectRatio(input.width, input.height),
-      output_format: "png",
-    }, input.imageUrls),
-  }),
-  SEEDREAM_I2I_ADAPTER,
-  gptImage25EditAdapter("flare"),
-  gptImage25EditAdapter("sunburst"),
-  kieImageEditAdapter({
-    id: GptImage2ImageToImageRequestSchema.shape.model.value,
-    requestSchema: GptImage2ImageToImageRequestSchema,
-    build: (input) => {
-      const parsed = GptImage2ImageToImageRequestSchema.parse({
-        model: "gpt-image-2-image-to-image",
-        input: {
-          prompt: input.prompt,
-          input_urls: [...input.imageUrls],
-          aspect_ratio: closestAspectRatio(input.width, input.height),
-        },
-      });
-      return toProviderRequest(parsed.model, { ...parsed.input });
-    },
-  }),
-  falImageEditAdapter({
-    id: "fal-ai/nano-banana-pro/edit",
-    inputSchema: FalNanoBananaProEditRequestSchema,
-    build: (input) => falEditBuild(input),
-  }),
-  falImageEditAdapter({
-    id: "fal-ai/nano-banana-2/edit",
-    inputSchema: FalNanoBanana2EditRequestSchema,
-    build: (input) => falEditBuild(input),
-  }),
-  falImageEditAdapter({
-    id: "alibaba/qwen-image-3/edit",
-    inputSchema: FalAlibabaQwenImage3EditRequestSchema,
-    build: (input) => falEditBuild(input),
-  }),
-  falImageEditAdapter({
-    id: "fal-ai/wan/v2.7/edit",
-    inputSchema: FalWanV2p7EditRequestSchema,
-    build: (input) => falEditBuild(input, 500),
-  }),
-];
+export const IMAGE_EDIT_ADAPTERS: readonly ImageEditAdapter[] = IMAGE_EDIT_MODELS.map(adapterForEditModel);
 
 export function imageEditAdapter(id: string): ImageEditAdapter | undefined {
   return IMAGE_EDIT_ADAPTERS.find((adapter) => adapter.id === id);

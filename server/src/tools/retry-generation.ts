@@ -31,14 +31,11 @@ export function retryGenerationDef(engine: Engine): ToolDef {
       const payload = metaResult.value;
 
       const type = typeof payload.type === "string" ? payload.type : "";
-      if (!type.startsWith("generate_")) {
-        return error(`Stored generation-request for ${assetId} is not a replayable generation (type: ${type || "unknown"})`);
+      if (type !== "generate_media") {
+        return error(`Stored generation-request for ${assetId} is not a replayable generation (type: ${type || "unknown"}); regenerate it with generate_image, generate_video or generate_audio`);
       }
 
-      // The embedded target asset id must match the asset being retried.
-      const embeddedId = typeof payload.vidAssetId === "string" ? payload.vidAssetId
-        : typeof payload.assetId === "string" ? payload.assetId
-          : null;
+      const embeddedId = typeof payload.assetId === "string" ? payload.assetId : null;
       if (embeddedId !== assetId) {
         return error(`generation-request payload targets a different asset (${embeddedId ?? "none"}) than ${assetId}`);
       }

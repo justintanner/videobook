@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import {
   AUTO_APPLY_TOOL_NAMES,
-  CHAT_TOOL_ALIASES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,
@@ -48,7 +47,7 @@ describe("chat routing catalog", () => {
       .filter((name) => name !== "chat");
     expect(new Set(directNames)).toEqual(new Set(expectedNames));
     expect(tools).toHaveLength(
-      expectedNames.length + CHAT_TOOL_ALIASES.length + CHAT_VIEW_ACTIONS.length,
+      expectedNames.length + CHAT_VIEW_ACTIONS.length,
     );
     expect(getRoutableTool(tools, "chat")).toBeUndefined();
     expect(getRoutableTool(tools, "chain")?.actualTool).toBe("chain");
@@ -125,22 +124,12 @@ describe("chat routing catalog", () => {
 
   it("publishes required parameters and enum domains to the router", () => {
     const tools = buildRoutableTools(definitions);
-    const transformation = getRoutableTool(
-      tools,
-      "generate_kie_kling_3_0_omni_transformation",
-    );
-    expect(transformation?.requiredParams).toEqual([
-      "prompt",
-      "video_refs",
-    ]);
-    expect(transformation?.constraints).toEqual([
-      'resolution="720p"|"1080p"|"4k"',
-      'aspect_ratio="16:9"|"9:16"|"1:1"|"auto"',
-    ]);
+    const video = getRoutableTool(tools, "generate_video");
+    expect(video?.requiredParams).toEqual(["model"]);
+    const listing = getRoutableTool(tools, "list_generation_models");
+    expect(listing?.constraints).toContainEqual('media="image"|"video"|"audio"');
     const prompt = buildChatRoutingPrompt("my-book", tools);
-    expect(prompt).toContain(
-      'allowed: resolution="720p"|"1080p"|"4k", aspect_ratio="16:9"|"9:16"|"1:1"|"auto"',
-    );
+    expect(prompt).toContain('allowed: media="image"|"video"|"audio"');
     expect(prompt).toContain("Omit optional parameters");
     const mediaSlot = getRoutableTool(tools, "set_notebook_media_slot");
     expect(mediaSlot?.requiredParams).toContain("artifact_ref");
@@ -148,19 +137,24 @@ describe("chat routing catalog", () => {
     expect(prompt).toMatch(/set_notebook_media_slot[^\n]*required:[^\n]*artifact_ref/);
   });
 
-  it("keeps generic generation aliases", () => {
+  it("routes generation through the generic media tools", () => {
     const tools = buildRoutableTools(definitions);
     expect(getRoutableTool(tools, "generate_video")).toMatchObject({
-      actualTool: "generate_kie_seedance_2_5_video",
+      actualTool: "generate_video",
       category: "generation",
       effect: "generation",
       autoApply: false,
     });
     expect(getRoutableTool(tools, "generate_video")?.params).toEqual(
-      expect.arrayContaining(["prompt", "duration", "aspect_ratio", "resolution"]),
+      expect.arrayContaining(["model", "prompt", "refs", "mode", "options", "replace_audio_with"]),
     );
     expect(getRoutableTool(tools, "generate_image")).toMatchObject({
-      actualTool: "generate_kie_nano_banana_2_1_image",
+      actualTool: "generate_image",
+      category: "generation",
+      effect: "generation",
+    });
+    expect(getRoutableTool(tools, "generate_audio")).toMatchObject({
+      actualTool: "generate_audio",
       category: "generation",
       effect: "generation",
     });
@@ -208,9 +202,7 @@ describe("chat routing catalog", () => {
       effect: "mutation",
       autoApply: false,
     });
-    expect(
-      getRoutableTool(tools, "generate_kie_minimax_h3_text_to_video")?.autoApply,
-    ).toBe(false);
+    expect(getRoutableTool(tools, "generate_video")?.autoApply).toBe(false);
     expect(getRoutableTool(tools, "chain")?.autoApply).toBe(false);
   });
 
@@ -302,9 +294,9 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("Preserve every consumed notebook @address");
     expect(prompt).toContain("same order");
     expect(prompt).toContain("Seedance is video, Seedream is image");
-    expect(prompt).toContain("generate_kie_seedream_v5_lite_image_to_image");
+    expect(prompt).toContain("generate_image with model kie:seedream/5-lite-image-to-image");
     expect(prompt).toContain("edit-target image first");
-    expect(prompt).toContain("generate_kie_seedance_2_5_video");
+    expect(prompt).toContain("generate_video with model kie:bytedance/seedance-2-5");
   });
 });
 
@@ -390,17 +382,21 @@ describe("ByteDance named-model routing", () => {
   it("routes a seedance-named image actor replacement to Seedream i2i with the edit target first", () => {
     const routed = applyBytedanceNamedModelRoute({
       query: "replace the three actors in @e2 with @d1 @d2 @d3 using seedance",
-      tool: "generate_kie_seedance_2_5_video",
+      tool: "generate_video",
       params: {
+        model: "kie:bytedance/seedance-2-5",
         prompt: "replace the three actors",
-        video_refs: ["@e2"],
-        image_refs: ["@d1", "@d2", "@d3"],
+        refs: { video: ["@e2"], image: ["@d1", "@d2", "@d3"] },
       },
       message: "Generating video.",
       assetContext: actorAssets,
     });
-    expect(routed.tool).toBe("generate_kie_seedream_v5_lite_image_to_image");
-    expect(routed.params.image_refs).toEqual(["@e2", "@d1", "@d2", "@d3"]);
+    expect(routed.tool).toBe("generate_image");
+    expect(routed.params).toEqual({
+      model: "kie:seedream/5-lite-image-to-image",
+      prompt: "replace the three actors",
+      refs: { image: ["@e2", "@d1", "@d2", "@d3"] },
+    });
     expect(routed.substituted).toBe(true);
     expect(routed.message).toContain("Seedream");
     expect(routed.message).toContain("Seedance is video");
@@ -412,14 +408,18 @@ describe("ByteDance named-model routing", () => {
       tool: "generate_image",
       params: {
         prompt: "replace the three actors",
-        image_refs: ["@e1", "@d1", "@d2", "@d3"],
+        refs: { image: ["@e1", "@d1", "@d2", "@d3"] },
       },
       message: "Generating image.",
       assetContext: actorAssets,
     });
-    expect(routed.tool).toBe("generate_kie_seedance_2_5_video");
-    expect(routed.params.video_refs).toEqual(["@e1"]);
-    expect(routed.params.image_refs).toEqual(["@d1", "@d2", "@d3"]);
+    expect(routed.tool).toBe("generate_video");
+    expect(routed.params).toEqual({
+      model: "kie:bytedance/seedance-2-5",
+      prompt: "replace the three actors",
+      refs: { video: ["@e1"], image: ["@d1", "@d2", "@d3"] },
+      mode: "r2v",
+    });
     expect(routed.substituted).toBe(false);
   });
 
@@ -431,8 +431,9 @@ describe("ByteDance named-model routing", () => {
       message: "Generating image.",
       assetContext: actorAssets,
     });
-    expect(routed.tool).toBe("generate_kie_seedream_v5_lite_image_to_image");
-    expect(routed.params.image_refs).toEqual(["@e2", "@d1"]);
+    expect(routed.tool).toBe("generate_image");
+    expect(routed.params.model).toBe("kie:seedream/5-lite-image-to-image");
+    expect(routed.params.refs).toEqual({ image: ["@e2", "@d1"] });
   });
 });
 

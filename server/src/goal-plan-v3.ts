@@ -6,17 +6,16 @@ import { goalPromptWords } from "./goal-prompt-budget.js";
 import {
   LIGHTNING_COLD_OPEN_SECONDS,
   LIGHTNING_SCENE_ASPECT_RATIO,
-  LIGHTNING_SCENE_MODEL_KEY,
+  LIGHTNING_SCENE_MODEL,
   LIGHTNING_SCENE_OUTPUT_FORMAT,
   LIGHTNING_SCENE_PROMPT_WORDS,
   LIGHTNING_SCENE_RESOLUTION,
-  LIGHTNING_SCENE_TOOL,
   LIGHTNING_VIDEO_DURATION_SECONDS,
   LIGHTNING_VIDEO_GENERATE_AUDIO,
   LIGHTNING_VIDEO_OUTPUT_FORMAT,
   LIGHTNING_VIDEO_PROMPT_WORDS,
   LIGHTNING_VIDEO_RESOLUTION,
-  LIGHTNING_VIDEO_TOOL,
+  LIGHTNING_VIDEO_MODEL,
   LIGHTNING_WATERMARK_PROFILE,
   preservedPrompt,
 } from "./lightning-defaults.js";
@@ -42,8 +41,8 @@ export const goalPlanV3Schema = z.object({
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
   scene: z.object({
     prompt: z.string().trim().min(1).max(4000),
-    tool: z.literal(LIGHTNING_SCENE_TOOL),
-    model: z.literal(LIGHTNING_SCENE_MODEL_KEY),
+    tool: z.literal("generate_image"),
+    model: z.literal(LIGHTNING_SCENE_MODEL),
     aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
     resolution: z.literal(LIGHTNING_SCENE_RESOLUTION),
     outputFormat: z.literal(LIGHTNING_SCENE_OUTPUT_FORMAT),
@@ -51,7 +50,8 @@ export const goalPlanV3Schema = z.object({
   }).strict(),
   video: z.object({
     prompt: z.string().trim().min(1).max(4000),
-    tool: z.literal(LIGHTNING_VIDEO_TOOL),
+    tool: z.literal("generate_video"),
+    model: z.literal(LIGHTNING_VIDEO_MODEL),
     aspectRatio: z.enum(["16:9", "9:16", "1:1", "adaptive"]),
     resolution: z.literal(LIGHTNING_VIDEO_RESOLUTION),
     durationSeconds: z.number().int().min(4).max(30),
@@ -201,8 +201,8 @@ export function buildGoalPlanV3(input: {
     aspectRatio: timing.aspectRatio,
     scene: {
       prompt: scenePrompt,
-      tool: LIGHTNING_SCENE_TOOL,
-      model: LIGHTNING_SCENE_MODEL_KEY,
+      tool: "generate_image",
+      model: LIGHTNING_SCENE_MODEL,
       aspectRatio: timing.aspectRatio,
       resolution: LIGHTNING_SCENE_RESOLUTION,
       outputFormat: LIGHTNING_SCENE_OUTPUT_FORMAT,
@@ -210,7 +210,8 @@ export function buildGoalPlanV3(input: {
     },
     video: {
       prompt: videoPrompt,
-      tool: LIGHTNING_VIDEO_TOOL,
+      tool: "generate_video",
+      model: LIGHTNING_VIDEO_MODEL,
       aspectRatio: timing.aspectRatio,
       resolution: LIGHTNING_VIDEO_RESOLUTION,
       durationSeconds: timing.durationSeconds,
@@ -259,28 +260,26 @@ export function refreshGoalPlanV3(plan: GoalPlanV3, document: NotebookDocument):
   };
 }
 
-function omitEmptyRefs(params: Record<string, unknown>): Record<string, unknown> {
-  const next = { ...params };
-  for (const key of ["image_refs", "video_refs"]) {
-    if (Array.isArray(next[key]) && next[key].length === 0) delete next[key];
-  }
-  return next;
+function refList(params: Record<string, unknown>, role: "image" | "video"): string[] {
+  const refs = params.refs as Record<string, unknown> | undefined;
+  const list = refs?.[role];
+  return Array.isArray(list) ? list.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function withRefs(params: Record<string, unknown>, images: readonly string[], videos: readonly string[]): Record<string, unknown> {
+  const refs = {
+    ...(images.length > 0 ? { image: [...images] } : {}),
+    ...(videos.length > 0 ? { video: [...videos] } : {}),
+  };
+  const { refs: _previous, mode: _mode, ...rest } = params;
+  return Object.keys(refs).length > 0 ? { ...rest, refs, ...(params.mode ? { mode: params.mode } : {}) } : rest;
 }
 
 export function compileGoalV3Approval(plan: GoalPlanV3, stage: "frame" | "videos", sceneAddress?: string): ChainStep {
   const [scene, video] = compileGoalV3Steps(plan);
-  if (stage === "frame") return { ...scene!, params: omitEmptyRefs(scene!.params) };
-  const imageRefs = [
-    ...(sceneAddress ? [sceneAddress] : []),
-    ...((Array.isArray(video!.params.image_refs) ? video!.params.image_refs : []) as string[]),
-  ];
-  return {
-    ...video!,
-    params: omitEmptyRefs({
-      ...video!.params,
-      ...(imageRefs.length > 0 ? { image_refs: [...new Set(imageRefs)] } : {}),
-    }),
-  };
+  if (stage === "frame") return { ...scene!, params: withRefs(scene!.params, refList(scene!.params, "image"), []) };
+  const imageRefs = [...new Set([...(sceneAddress ? [sceneAddress] : []), ...refList(video!.params, "image")])];
+  return { ...video!, params: withRefs(video!.params, imageRefs, refList(video!.params, "video")) };
 }
 
 export function compileGoalV3Steps(plan: GoalPlanV3): ChainStep[] {
@@ -292,25 +291,34 @@ export function compileGoalV3Steps(plan: GoalPlanV3): ChainStep[] {
       id: "scene",
       tool: plan.scene.tool,
       params: {
+        model: plan.scene.model,
         prompt: plan.scene.prompt,
-        image_refs: sceneRefs.map(reference => reference.address),
-        aspect_ratio: plan.scene.aspectRatio,
-        resolution: plan.scene.resolution,
-        output_format: plan.scene.outputFormat,
+        refs: { image: sceneRefs.map(reference => reference.address) },
+        options: {
+          aspect_ratio: plan.scene.aspectRatio,
+          resolution: plan.scene.resolution,
+          output_format: plan.scene.outputFormat,
+        },
       },
     },
     {
       id: "video",
       tool: plan.video.tool,
       params: {
+        model: plan.video.model,
         prompt: plan.video.prompt,
-        image_refs: videoImages.map(reference => reference.address),
-        video_refs: videoRefs.map(reference => reference.address),
-        aspect_ratio: plan.video.aspectRatio,
-        resolution: plan.video.resolution,
-        duration: String(plan.video.durationSeconds),
-        generate_audio: plan.video.generateAudio,
-        output_format: plan.video.outputFormat,
+        refs: {
+          image: videoImages.map(reference => reference.address),
+          video: videoRefs.map(reference => reference.address),
+        },
+        ...(videoImages.length + videoRefs.length > 0 ? { mode: "r2v" } : {}),
+        options: {
+          aspect_ratio: plan.video.aspectRatio,
+          resolution: plan.video.resolution,
+          duration: plan.video.durationSeconds,
+          generate_audio: plan.video.generateAudio,
+          output_format: plan.video.outputFormat,
+        },
       },
     },
   ];

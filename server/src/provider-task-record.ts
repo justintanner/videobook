@@ -1,4 +1,4 @@
-import type { Engine, Job, PendingTask } from "videobook-engine";
+import type { Engine, PendingTask } from "videobook-engine";
 
 interface ProviderTaskRecord {
   taskId: string;
@@ -37,33 +37,6 @@ export async function preserveProviderTask(
   if (!written.ok) throw new Error(written.error.message);
 }
 
-function legacySeedanceTask(job: Job): ProviderTaskRecord | null {
-  if (
-    job.type !== "generate_seedance25_video"
-    && job.type !== "generate_seedance2_video"
-  ) return null;
-  const result = job.result;
-  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
-  const taskId = (result as Record<string, unknown>).taskId;
-  if (typeof taskId !== "string" || !taskId || taskId === "queued") return null;
-  const { payload } = job;
-  const meta = Object.fromEntries([
-    "prompt", "sourceImageIds", "sourceVideoIds", "sourceAudioIds",
-    "return_last_frame", "output_format", "replaceAudioWith",
-  ].flatMap((key) => payload[key] === undefined ? [] : [[key, payload[key]]]));
-  return {
-    taskId,
-    taskType: "seedance2_video",
-    createdAt: job.finishedAt ?? job.enqueuedAt,
-    meta: {
-      ...meta,
-      apiModel: job.type === "generate_seedance25_video"
-        ? "bytedance/seedance-2-5"
-        : "bytedance/seedance-2",
-    },
-  };
-}
-
 export async function readProviderTaskRecord(
   engine: Engine,
   artifactId: string,
@@ -72,14 +45,7 @@ export async function readProviderTaskRecord(
   if (pending.ok && pending.value) return pending.value;
   const saved = await engine.metadata.artifacts.read<unknown>(artifactId, "provider-task");
   const record = saved.ok ? taskRecord(saved.value) : null;
-  if (record) return record;
-  const jobs = engine.jobs.queue.list({ states: ["done"], artifactId });
-  for (const job of jobs) {
-    if (job.artifactId !== artifactId && job.payload.vidAssetId !== artifactId) continue;
-    const legacy = legacySeedanceTask(job);
-    if (legacy) return legacy;
-  }
-  return null;
+  return record;
 }
 
 export async function recoverNotebookProviderTask(

@@ -1,3 +1,5 @@
+import type { OptionSpec, ResolvedModel } from "./media/types.js";
+
 type NotebookGenerationControlValue = string | number | boolean;
 
 export interface NotebookGenerationControl {
@@ -149,5 +151,43 @@ export function notebookGenerationControls(
         ? property.description
         : labelFor(name),
     }];
+  });
+}
+
+function optionControl(option: OptionSpec): NotebookGenerationControl | null {
+  const options = option.enumValues.flatMap((value) => {
+    const parsed = controlValue(value);
+    return parsed === undefined ? [] : [parsed];
+  });
+  const kind = options.length > 0
+    ? "select"
+    : option.valueType === "boolean"
+      ? "boolean"
+      : option.valueType === "number" || option.valueType === "integer"
+        ? "number"
+        : option.valueType === "string" ? "text" : null;
+  if (!kind) return null;
+  const valueType = options.length > 0
+    ? options.every((value) => typeof value === "number") ? "number" : "string"
+    : kind === "boolean" ? "boolean" : kind === "number" ? "number" : "string";
+  const defaultValue = controlValue(option.defaultValue);
+  return {
+    name: option.name,
+    label: labelFor(option.name),
+    kind,
+    valueType,
+    required: option.required,
+    ...(defaultValue === undefined ? {} : { defaultValue }),
+    ...(options.length === 0 ? {} : { options }),
+    ...(option.minimum !== undefined ? { minimum: option.minimum } : {}),
+    ...(option.maximum !== undefined ? { maximum: option.maximum } : {}),
+    description: option.description || labelFor(option.name),
+  };
+}
+
+export function controlsForModel(model: ResolvedModel): NotebookGenerationControl[] {
+  return model.options.flatMap((option) => {
+    const control = optionControl(option);
+    return control ? [control] : [];
   });
 }

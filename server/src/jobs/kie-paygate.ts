@@ -1,7 +1,6 @@
 import { createKie } from "../usage-providers.js";
-import { normalizeSeedance25Request } from "../seedance25.js";
-import type { MediaGenerationRequest, VeoGenerateRequest } from "@apicity/kie";
-import { submitMediaJob, KieError } from "@apicity/kie";
+import type { MediaGenerationRequest } from "@apicity/kie";
+import { submitMediaJob } from "@apicity/kie";
 import { mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -11,7 +10,6 @@ import type { JobHandlerContext } from "../queue.js";
 import { QUEUED_TASK_ID } from "videobook-engine";
 import type { PendingTask, TaskType, Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-import type { KieCostHints } from "../cost-adapters.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 import {
@@ -19,10 +17,10 @@ import {
   logUnavailableCostEstimate,
   type CostEstimateAssessment,
   type CostEstimateLogContext,
+  type KieCostHints,
 } from "./cost-estimate-assessment.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
-const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
 
 type SubmitKieTaskArgs = {
   request: MediaGenerationRequest;
@@ -137,7 +135,7 @@ export async function submitKieTask(
   ctx: JobHandlerContext,
   args: SubmitKieTaskArgs,
 ): Promise<string> {
-  const request = normalizeSeedance25Request(args.request);
+  const request = args.request;
   assertProviderPayload(request, {
     toolName: args.taskType,
     wire: true,
@@ -194,15 +192,11 @@ export async function submitQueuedKieTask(
 
   const payloadResult = await engine.metadata.artifacts.read<MediaGenerationRequest>(task.artifactId, "generation-payload");
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.artifactId}`);
-  const request = normalizeSeedance25Request(payloadResult.value);
+  const request = payloadResult.value;
   assertProviderPayload(request, {
     toolName: task.taskType,
     wire: true,
   });
-  if (request !== payloadResult.value) {
-    const saved = await engine.metadata.artifacts.write(task.artifactId, "generation-payload", request);
-    if (!saved.ok) throw new Error(`Failed to update prepared KIE payload: ${saved.error.message}`);
-  }
 
   // Reload persisted cost hints (if any) so the OTP minted on resubmission
   // sees the same duration the original handler resolved, without leaking it
@@ -235,67 +229,4 @@ export async function submitQueuedKieTask(
 
   await engine.metadata.artifacts.write(task.artifactId, "kie-task-id", { taskId });
   return writeResult.value.task;
-}
-
-type SubmitVeoTaskArgs = {
-  request: VeoGenerateRequest;
-  assetId: string;
-  assetDir: string;
-  bookId: string;
-  taskType: TaskType;
-  meta: Record<string, unknown>;
-};
-
-/** Submit a Veo 3 / Veo 3 Fast generation task. Veo uses a separate kie
- *  namespace (`kie.veo.post.api.v1.veo.generate`) and paygate dotPath
- *  (`api.v1.veo.generate`) from the standard `jobs.createTask` path. */
-export async function submitVeoTask(
-  engine: Engine,
-  ctx: JobHandlerContext,
-  args: SubmitVeoTaskArgs,
-): Promise<string> {
-  assertProviderPayload(args.request, {
-    toolName: args.taskType,
-    wire: true,
-  });
-  const apiKey = requireApiKey("KIE_API_KEY");
-  await engine.metadata.artifacts.write(args.assetId, "generation-payload", args.request);
-  const provider = createKieProvider(apiKey);
-
-  const { otp } = await authorizeKiePaygate(
-    args.request as unknown as MediaGenerationRequest,
-    {
-      dotPath: VEO_PAYGATE_DOT_PATH,
-      engine,
-      correlation: {
-        bookId: args.bookId,
-        artifactId: args.assetId,
-        tool: args.taskType,
-        stage: "submit-veo",
-      },
-    },
-  );
-  const result = await provider.veo.post.api.v1.veo.generate(args.request, {
-    otp,
-  });
-  if (!result.data?.taskId) {
-    throw new KieError(
-      `veo.generate failed: ${result.code} ${typeof result === "object" && result !== null && "msg" in result ? String((result as { msg?: unknown }).msg) : "no taskId in response"}`,
-      result.code,
-    );
-  }
-  const taskId = result.data.taskId;
-
-  const pendingResult = await engine.jobs.pending.write({
-    taskId,
-    taskType: args.taskType,
-    artifactId: args.assetId,
-    meta: args.meta,
-  }, ctx.getOwnerId());
-  if (!pendingResult.ok) throw new Error(`Failed to write pending-task for ${args.assetId}: ${pendingResult.error.message}`);
-  if (pendingResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
-
-  await engine.metadata.artifacts.write(args.assetId, "kie-task-id", { taskId });
-  ctx.setLease({ kind: "task", taskId });
-  return taskId;
 }

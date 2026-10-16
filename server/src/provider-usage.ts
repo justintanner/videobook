@@ -3,8 +3,6 @@ import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { currentBookContext } from "./book-context.js";
-import { estimateGoogleFlowCost } from "./google-flow-cost.js";
-import { GENERATION_ACTIONS } from "./generation-registry.js";
 
 type Provider = "openai" | "xai" | "kie" | "fal" | "googleflow" | "alibaba" | "elevenlabs";
 type RecordValue = Record<string, unknown>;
@@ -79,16 +77,6 @@ function tokenPrice(provider: Provider, model: string, tokens: ReturnType<typeof
 
 function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string, hints?: CostHints): Price {
   try {
-    if (provider === "googleflow") {
-      const action = GENERATION_ACTIONS.find((candidate) => candidate.provider === "google_flow" && candidate.apicity_identifier.endsWith(`/${model}`));
-      const flow = action ? estimateGoogleFlowCost(action.canonical_name, payload) : null;
-      if (!flow) return unknownPrice();
-      return {
-        costUsd: flow.usd, basis: flow.usd === 0 ? "free" : "estimated",
-        rateSource: "https://ai.google.dev/gemini-api/docs/pricing", pricingVersion: `google-flow:${flow.rateAsOf}`,
-        units: flow.breakdown.units ?? null, unit: flow.breakdown.unit ?? null, warnings: flow.warnings,
-      };
-    }
     const request: EstimateRequest = { provider, payload, ...(provider === "fal" ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
     const estimate = cost.estimate(request);
     if (estimate.warnings.length || estimate.source === "tokens-heuristic+table") return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
