@@ -95,7 +95,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
 - `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
-- `generate_video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
+- `generate_video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `get_book` — Read the current book identity
 - `get_book_usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
@@ -366,7 +366,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
-- `/generate-video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
+- `/generate-video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
 - `/get-book` — Read the current book identity; MCP: `get_book`
 - `/get-book-usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.; MCP: `get_book_usage`
 - `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`

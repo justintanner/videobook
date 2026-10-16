@@ -181,6 +181,7 @@ describe("generic media generation", () => {
     expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x", options: { duration: 999 } } }))).toMatch(/Duration:/);
     expect(toolError(await client.callTool({ name: "generate_image", arguments: { book_id, model: "kie:nano-banana-2-1", prompt: "x", refs: { image: ["0198c2a0-0000-7000-8000-00000000dead"] } } }))).toMatch(/image ref/);
     expect(toolError(await client.callTool({ name: "generate_audio", arguments: { book_id, model: "kie:suno/generate", prompt: "x", operation: "speech" } }))).toMatch(/does not support speech/);
+    expect(toolError(await client.callTool({ name: "generate_image", arguments: { book_id, model: "kie:nano-banana-2-1", prompt: "x", operation: "text_to_video" } }))).toMatch(/Input validation error/);
     const image = await imageArtifact();
     expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x", refs: { video: [image] } } }))).toMatch(/video ref must be a video artifact/);
     expect(engine.artifacts.list()).toHaveLength(before + 1);

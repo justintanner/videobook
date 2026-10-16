@@ -5,7 +5,7 @@ import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { buildWireRequest } from "./request.js";
 import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
-import type { MediaRefs, ModeSpec, ResolvedModel } from "./types.js";
+import { OPERATIONS_BY_MEDIA, type MediaRefs, type ModeSpec, type Operation, type ResolvedModel } from "./types.js";
 
 const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
   "fal:minimax/h3-max/insert-video": { start_time: 2, resume_time: 5 },
@@ -44,6 +44,13 @@ function requiredOptions(model: ResolvedModel): Record<string, unknown> {
 const KIE_MEDIA_TYPES = createKie({ apiKey: "" }).modelInputSchemas as Record<string, { type: string } | undefined>;
 
 describe("media catalog contract", () => {
+  it("declares only operations of each model's own media", () => {
+    for (const entry of MODEL_ENTRIES) {
+      const allowed: readonly Operation[] = OPERATIONS_BY_MEDIA[entry.media];
+      expect(entry.operations.filter((operation) => !allowed.includes(operation)), entry.id).toEqual([]);
+    }
+  });
+
   it("has unique model ids", () => {
     const ids = MODEL_ENTRIES.map((entry) => entry.id);
     expect(new Set(ids).size).toBe(ids.length);

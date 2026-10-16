@@ -22,6 +22,12 @@ export type Operation =
   | "sfx"
   | "video_to_music";
 
+export const OPERATIONS_BY_MEDIA = {
+  image: ["text_to_image", "edit_image", "layer_image"],
+  video: ["text_to_video", "image_to_video", "reference_to_video", "edit_video", "extend_video", "upscale_video", "lip_sync", "motion_control"],
+  audio: ["speech", "dialogue", "music", "sfx", "video_to_music"],
+} as const satisfies Record<Media, readonly [Operation, ...Operation[]]>;
+
 export type RefRole = "image" | "video" | "audio" | "first_frame" | "last_frame";
 
 export const REF_ROLES: readonly RefRole[] = ["first_frame", "last_frame", "image", "video", "audio"];

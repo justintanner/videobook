@@ -8,16 +8,16 @@ import { buildWireRequest } from "../media/request.js";
 import { checkRefs, normalizeRefs } from "../media/refs.js";
 import { PROVIDER_ENV_KEYS } from "../media/adapters/index.js";
 import { listModels, modelListing } from "../media/listing.js";
-import { REF_ROLES, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
+import { OPERATIONS_BY_MEDIA, REF_ROLES, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
 import type { GenerateMediaJob } from "../jobs/generate-media.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const ARTIFACT_KIND: Record<Media, "img" | "vid" | "aud"> = { image: "img", video: "vid", audio: "aud" };
 
 const OPERATIONS = [
-  "text_to_image", "edit_image", "layer_image",
-  "text_to_video", "image_to_video", "reference_to_video", "edit_video", "extend_video", "upscale_video", "lip_sync", "motion_control",
-  "speech", "dialogue", "music", "sfx", "video_to_music",
+  ...OPERATIONS_BY_MEDIA.image,
+  ...OPERATIONS_BY_MEDIA.video,
+  ...OPERATIONS_BY_MEDIA.audio,
 ] as const satisfies readonly Operation[];
 
 const refList = z.union([z.string(), z.array(z.string())]).optional();
@@ -114,7 +114,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
 function generateDef(engine: Engine, media: Media): ToolDef {
   return {
     name: `generate_${media}`,
-    description: `Generate ${media === "audio" ? "audio (speech, dialogue, music, sound effects)" : `an ${media === "image" ? "image" : "video"}`} with any catalog model. `
+    description: `Generate ${media === "audio" ? "audio (speech, dialogue, music, sound effects)" : media === "image" ? "an image" : "a video"} with any catalog model. `
       + "Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.",
     schema: {
       book_id: z.string().describe("Book id"),
@@ -122,7 +122,7 @@ function generateDef(engine: Engine, media: Media): ToolDef {
       prompt: z.string().optional().describe("Prompt; name inputs as @image1, @video1, @audio1, @firstframe or @lastframe"),
       refs: refsSchema(),
       mode: z.string().optional().describe("Input mode id for models with several (for example i2v or r2v)"),
-      operation: z.enum(OPERATIONS).optional().describe("Optional check that the model supports this operation"),
+      operation: z.enum(OPERATIONS_BY_MEDIA[media]).optional().describe("Optional check that the model supports this operation"),
       options: z.record(z.string(), z.unknown()).optional().describe("Model options from list_generation_models"),
       ...(media === "video" ? { replace_audio_with: z.string().optional().describe("Audio artifact to splice over the generated video") } : {}),
     },
