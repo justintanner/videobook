@@ -191,7 +191,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to open folder for" },
     ],
-    mcpTool: { tool: "show_folder", autoInject: ["book_id"] },
+    mcpTool: { tool: "export_asset_file", autoInject: ["book_id"], injectParams: { to: "finder" } },
   },
   {
     command: "/describe",
@@ -704,7 +704,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to copy to clipboard" },
     ],
-    mcpTool: { tool: "copy_file_to_clipboard", autoInject: ["book_id"] },
+    mcpTool: { tool: "export_asset_file", autoInject: ["book_id"], injectParams: { to: "clipboard" } },
     aliases: ["/copy-video"],
   },
   {
@@ -719,7 +719,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to export" },
     ],
-    mcpTool: { tool: "export_to_downloads", autoInject: ["book_id"] },
+    mcpTool: { tool: "export_asset_file", autoInject: ["book_id"], injectParams: { to: "downloads" } },
   },
   {
     command: "/duplicate",

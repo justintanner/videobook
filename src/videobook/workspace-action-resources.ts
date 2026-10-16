@@ -73,7 +73,7 @@ export async function loadWorkspaceActionResources(
       return typeof path === 'string' ? [{ name: path }] : []
     }), ['name'], ['name'])
   })())
-  if (fields.filename && assetId && ['read_file_at_commit', 'copy_file_to_clipboard', 'export_to_downloads'].includes(tool)) requests.push((async () => {
+  if (fields.filename && assetId && ['read_file_at_commit', 'export_asset_file'].includes(tool)) requests.push((async () => {
     result.choices.filename = choices(rows(await call('asset_manifest', { asset_id: assetId }), 'files'), ['name'], ['name'])
   })())
   if (fields.plan_id && typeof values.notebook_id === 'string') requests.push((async () => {

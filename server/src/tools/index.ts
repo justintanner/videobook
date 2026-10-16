@@ -103,9 +103,7 @@ import { goalDefs } from "./goal.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { setTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
-import { showFolderDef } from "./show-folder.js";
-import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
-import { exportToDownloadsDef } from "./export-to-downloads.js";
+import { exportAssetFileDef } from "./export-asset-file.js";
 import { exportTranscriptSrtDef } from "./export-transcript-srt.js";
 import { recordPromptDef, listPromptHistoryDef } from "./prompt-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
@@ -352,9 +350,7 @@ export function getAllToolDefs(
     chatDef(engine),
     chainDef(engine),
     ...goalDefs(engine),
-    showFolderDef(engine),
-    copyFileToClipboardDef(engine),
-    exportToDownloadsDef(engine),
+    exportAssetFileDef(engine),
     exportTranscriptSrtDef(engine),
     recordPromptDef(engine),
     listPromptHistoryDef(engine),

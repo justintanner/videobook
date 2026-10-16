@@ -22,8 +22,8 @@ export async function performMediaFileAction(
   artifactId: string,
 ): Promise<string> {
   const result = recordValue(await call(
-    action === 'copy' ? 'copy_file_to_clipboard' : 'export_to_downloads',
-    { book_id: bookId, asset_id: artifactId },
+    'export_asset_file',
+    { book_id: bookId, asset_id: artifactId, to: action === 'copy' ? 'clipboard' : 'downloads' },
     { background: true },
   ))
   const expectedStatus = action === 'copy' ? 'copied' : 'exported'

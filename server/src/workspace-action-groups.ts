@@ -20,8 +20,8 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   Media: [
     "upload_file", "asset_manifest", "crop_asset", "delete_asset", "rename_asset", "rename_all",
     "mark_asset_seen", "duplicate_asset", "export_asset_to_project",
-    "read_asset_metadata", "download_video", "list_assets", "show_folder",
-    "copy_file_to_clipboard", "export_to_downloads", "check_duplicate_bytes",
+    "read_asset_metadata", "download_video", "list_assets", "export_asset_file",
+    "check_duplicate_bytes",
     "list_media_streams",
   ],
   Video: [

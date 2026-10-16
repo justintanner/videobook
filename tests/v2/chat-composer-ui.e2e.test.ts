@@ -4910,9 +4910,9 @@ describe('chat composer browser flow', () => {
     const downloaded = (await readdir(downloadsDir)).find((file) => !existingDownloads.has(file))!
     expect(await readFile(join(downloadsDir, downloaded)))
       .toEqual(await readFile(join(rootDir, 'split-source.mp4')))
-    expect(observedCalls.filter((call) => call.name === 'export_to_downloads')).toEqual([{
-      name: 'export_to_downloads',
-      arguments: { book_id: bookId, asset_id: videoArtifactId },
+    expect(observedCalls.filter((call) => call.name === 'export_asset_file')).toEqual([{
+      name: 'export_asset_file',
+      arguments: { book_id: bookId, asset_id: videoArtifactId, to: 'downloads' },
     }])
     await page.getByText(`Saved ${join(downloadsDir, downloaded)}`, { exact: true })
       .waitFor({ state: 'visible' })

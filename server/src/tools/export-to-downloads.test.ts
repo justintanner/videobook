@@ -5,8 +5,7 @@ import type { ArtifactKind, Engine } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { findOriginalMediaFile } from "../original-media-file.js";
-import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
-import { exportToDownloadsDef } from "./export-to-downloads.js";
+import { exportAssetFileDef } from "./export-asset-file.js";
 
 describe("original media file actions", () => {
   let root: string;
@@ -57,7 +56,7 @@ describe("original media file actions", () => {
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(findOriginalMediaFile(manifest.value.files, kind)?.name).toBe(`original.${ext}`);
     for (const suffix of ["", " (2)"]) {
-      const result = await exportToDownloadsDef(engine).handler({ asset_id: artifactId });
+      const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to: "downloads" });
       expect(result.isError).toBeFalsy();
       const text = result.content as Array<{ text: string }>;
       const payload = JSON.parse(text[0]!.text) as { status: string; path: string };
@@ -70,15 +69,15 @@ describe("original media file actions", () => {
 
   it("retains final render export selection", async () => {
     const artifactId = await asset("final", { "timeline_portrait.mp4": "render" });
-    const result = await exportToDownloadsDef(engine).handler({ asset_id: artifactId });
+    const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to: "downloads" });
     expect(result.isError).toBeFalsy();
     expect(await readFile(join(downloads, "media - take.mp4"), "utf8")).toBe("render");
   });
 
   it.each(["video", "audio", "image"] as const)("rejects missing %s originals for download and copy", async (kind) => {
     const artifactId = await asset(kind, { "thumbnail.jpg": "thumbnail", "proxy.mp4": "proxy" });
-    for (const tool of [exportToDownloadsDef(engine), copyFileToClipboardDef(engine)]) {
-      const result = await tool.handler({ asset_id: artifactId });
+    for (const to of ["downloads", "clipboard"]) {
+      const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to });
       expect(result).toMatchObject({ isError: true, content: [{ text: "No original media file found for asset" }] });
     }
     expect(await readdir(downloads)).toEqual([]);

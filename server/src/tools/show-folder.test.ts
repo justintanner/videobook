@@ -7,7 +7,7 @@ import { createEngineForTest } from "../engine.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
-describe("show_folder tool", () => {
+describe("export_asset_file to finder", () => {
   let client: Client;
   let tempDir: string;
   let fs: Engine;
@@ -29,8 +29,8 @@ describe("show_folder tool", () => {
       arguments: { book_id: "test" },
     });
     const result = await client.callTool({
-      name: "show_folder",
-      arguments: { asset_id: "img-nonexistent", book_id: "test" },
+      name: "export_asset_file",
+      arguments: { to: "finder", asset_id: "img-nonexistent", book_id: "test" },
     });
     expect(result.isError).toBe(true);
   });
@@ -46,8 +46,8 @@ describe("show_folder tool", () => {
     const assetId = assetResult.value.artifactId;
 
     const result = await client.callTool({
-      name: "show_folder",
-      arguments: { asset_id: assetId, book_id: "test" },
+      name: "export_asset_file",
+      arguments: { to: "finder", asset_id: assetId, book_id: "test" },
     });
     // On CI/headless, open -R may fail, but the tool should still return a result
     const content = result.content as Array<{ type: string; text: string }>;

@@ -212,7 +212,7 @@ describe("slash command parse/normalize/dispatch", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. /folder — show_folder
+  // 2. /folder — export_asset_file
   // -----------------------------------------------------------------------
   describe("/folder", () => {
     it("parses '/folder @product-shot'", () => {

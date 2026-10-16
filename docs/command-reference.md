@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (239)
+## MCP endpoints (237)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -48,7 +48,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `connect_service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
-- `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
 - `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_entity` — Create a reusable prompt, scene or character
@@ -82,8 +81,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
 - `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.
+- `export_asset_file` — Hand an asset's original media file to macOS: copy it to Downloads, put it on the pasteboard as a file, or reveal its folder in Finder.
 - `export_asset_to_project` — Export an asset from one project to a different project
-- `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
 - `extend_audio_asset` — Extend an audio asset to a total duration with a matching ElevenLabs continuation that keeps the source at the start, as a new audio asset.
 - `extract_audio` — Extract a video's audio as MP3 into a new audio asset, or as a file inside an existing asset with destination. range limits it to a time window.
@@ -219,7 +218,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
 - `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
-- `show_folder` — Reveal an asset's folder in Finder
 - `slash_commands` — List all available UI commands with scope metadata
 - `smooth_scene_concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.
 - `splice_video` — Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.
@@ -311,7 +309,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
 - `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
 - `/copy` — Copy asset name; UI: `copy_clipboard`
-- `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `copy_file_to_clipboard`
+- `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `export_asset_file`
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
 - `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_character`
 - `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_voice`
@@ -344,7 +342,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/entities` — Open the reusable entity library; UI: `open_entities`
 - `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
-- `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
+- `/export` — Export asset to Downloads folder; MCP: `export_asset_file`
 - `/export-sequence` — Review and export the current sequence; preview or workspace operation
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
 - `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
@@ -359,7 +357,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/files` — Focus file by position; UI: `viewer_focus_file`
 - `/final` — Finalize and export the project timeline; MCP: `render_timeline`
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
-- `/folder` — Show asset folder; MCP: `show_folder`
+- `/folder` — Show asset folder; MCP: `export_asset_file`
 - `/forget-asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept; MCP: `forget_asset`
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation

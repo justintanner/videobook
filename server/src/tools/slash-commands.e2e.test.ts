@@ -199,14 +199,14 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. /folder — show_folder
+  // 2. /folder — export_asset_file
   // -----------------------------------------------------------------------
   describe("/folder", () => {
 
     it("errors for nonexistent asset", async () => {
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: "img-nonexistent", book_id: "test-proj" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: "img-nonexistent", book_id: "test-proj" },
       });
       expect(result.isError).toBe(true);
     });
@@ -1559,8 +1559,8 @@ describe("slash commands e2e", () => {
       const assetId = parseResult(upload).assetId as string;
 
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: assetId, book_id: "test-proj" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: assetId, book_id: "test-proj" },
       });
       // On CI this may fail because Finder isn't available, but the asset path
       // resolution should succeed. Either way it should not be an MCP error
@@ -2613,8 +2613,8 @@ describe("slash commands e2e", () => {
       await fs.files.write(asset.value.artifactId, "mix.mp3", Buffer.from("fake"));
 
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: asset.value.artifactId, book_id: "test-proj" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: asset.value.artifactId, book_id: "test-proj" },
       });
       // On macOS should succeed, but may fail on CI
       if (!result.isError) {
@@ -2631,8 +2631,8 @@ describe("slash commands e2e", () => {
       await fs.files.write(asset.value.artifactId, "original.mp4", Buffer.from("fake"));
 
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: asset.value.artifactId, book_id: "test-proj" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: asset.value.artifactId, book_id: "test-proj" },
       });
       if (!result.isError) {
         const parsed = parseResult(result);
@@ -3440,8 +3440,8 @@ describe("slash commands e2e", () => {
   describe("/folder with createAsset", () => {
     it("errors for nonexistent project", async () => {
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: "img-test", book_id: "no-such-project" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: "img-test", book_id: "no-such-project" },
       });
       expect(result.isError).toBe(true);
     });
@@ -3453,8 +3453,8 @@ describe("slash commands e2e", () => {
       await fs.files.write(asset.value.artifactId, "photo.png", Buffer.from("fake"));
 
       const result = await client.callTool({
-        name: "show_folder",
-        arguments: { asset_id: asset.value.artifactId, book_id: "test-proj" },
+        name: "export_asset_file",
+        arguments: { to: "finder", asset_id: asset.value.artifactId, book_id: "test-proj" },
       });
       // On macOS with Finder this should succeed; either way no validation error
       if (!result.isError) {
