@@ -148,10 +148,10 @@ async function runWorkflow(operation: string) {
       const result = await searchLibraryAssets(books, { kinds: ['image'] })
       expect(result.assets).toEqual([])
     } else {
-      const name = operation === 'ingest-status' ? 'list_ingest_status' : operation === 'retry-ingest' ? 'retry_ingest' : 'search_library_moments'
+      const name = operation === 'ingest-status' ? 'list_ingest_status' : operation === 'retry-ingest' ? 'retry_ingest' : 'search_moments'
       const tool = semanticSearchDefs(engine, books).find((entry) => entry.name === name)!
       referenceId = searchReferenceStore.put({ kind: 'image', name: 'Reference', reference: { kind: 'image', embeddingSpace: 'fixture', vector: [1, 0, 0] } }).reference_id
-      const result = await tool.handler({ book_id: summary.bookId, artifact_id: id, reference_id: referenceId, query: { modalities: ['visual'] } })
+      const result = await tool.handler({ book_id: summary.bookId, ...(name === 'search_moments' ? { scope: 'library' } : {}), artifact_id: id, reference_id: referenceId, query: { modalities: ['visual'] } })
       if (operation === 'retry-ingest') {
         expect(result.isError).toBe(true)
         expect(result.content[0]?.text).toContain('not available locally')

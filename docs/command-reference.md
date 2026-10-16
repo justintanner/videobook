@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (251)
+## MCP endpoints (250)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -219,8 +219,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `save_post_to_icloud` — Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
-- `search_library_moments` — Federate a moment search across every current-schema book
-- `search_moments` — Search indexed book moments with text, media references, and filters
+- `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `set_alive_captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
@@ -262,7 +261,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (321; 146 dedicated command routes)
+## Slash actions (320; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -524,8 +523,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/scene-new` — Create a reusable scene entity; MCP: `create_entity`
 - `/search-archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.; MCP: `search_archive`
 - `/search-library-assets` — Search ready audio, image, and video assets across all books; MCP: `search_library_assets`
-- `/search-library-moments` — Federate a moment search across every current-schema book; MCP: `search_library_moments`
-- `/search-moments` — Search indexed book moments with text, media references, and filters; MCP: `search_moments`
+- `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
 - `/set-alive-captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`

@@ -76,8 +76,12 @@ async function seed(engine: Engine): Promise<string> {
   return artifact.artifactId
 }
 
-it.each(['search_moments', 'search_library_moments', 'search_library_assets'])(
-  '%s returns deduplicated preparation work, then the client retries successfully', async (name) => {
+it.each([
+  ['search_moments', 'book'],
+  ['search_moments', 'library'],
+  ['search_library_assets', 'library'],
+] as const)(
+  '%s (%s) returns deduplicated preparation work, then the client retries successfully', async (name, scope) => {
     root = await mkdtemp(join(tmpdir(), 'videobook-preparation-tools-'))
     books = new BookManager({ libraryDir: join(root, 'books') })
     await books.ready()
@@ -97,7 +101,11 @@ it.each(['search_moments', 'search_library_moments', 'search_library_assets'])(
       },
     })
     referenceId = reference.reference_id
-    const args = { book_id: summary.bookId, query: { modalities: ['visual'], limit: 10 }, kinds: ['video'], reference_id: referenceId }
+    const args = {
+      book_id: summary.bookId,
+      ...(name === 'search_moments' && scope === 'library' ? { scope } : {}),
+      query: { modalities: ['visual'], limit: 10 }, kinds: ['video'], reference_id: referenceId,
+    }
     const started = performance.now()
     const [first, duplicate] = await Promise.all([call(searchTool, args), call(searchTool, args)])
     expect(performance.now() - started).toBeLessThan(2_000)

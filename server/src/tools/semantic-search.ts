@@ -233,7 +233,6 @@ export function semanticSearchDefs(
   books?: BookManager,
 ): ToolDef[] {
   return [
-    ...(books ? [librarySearchDef(books)] : []),
     {
       name: "list_ingest_status",
       description: "List independent ingest and search-index phase states",
@@ -376,14 +375,18 @@ export function semanticSearchDefs(
     },
     {
       name: "search_moments",
-      description: "Search indexed book moments with text, media references, and filters",
+      description: "Search indexed moments with text, media references and filters in this book, or in every book with scope library",
       scope: "book",
       schema: {
         ...bookSchema,
+        scope: z.enum(["book", "library"]).optional(),
         query: searchQuerySchema,
         ...preparedReferenceFields,
       },
       handler: async (args) => {
+        if (args.scope === "library") {
+          return books ? searchLibraryMoments(books, args) : failure("Library search is unavailable");
+        }
         registerLocalClipSearchProvider(engine);
         registerLocalClapSearchProvider(engine, FFMPEG);
         const query = args.query as SearchQuery;
@@ -1161,113 +1164,105 @@ export function semanticSearchDefs(
   ];
 }
 
-function librarySearchDef(books: BookManager): ToolDef {
-  return {
-    name: "search_library_moments",
-    description: "Federate a moment search across every current-schema book",
-    scope: "global",
-    schema: {
-      query: searchQuerySchema,
-      ...preparedReferenceFields,
-    },
-    handler: async (args) => {
-      await books.ready();
-      const query = args.query as SearchQuery;
-      const referenceId = typeof args.reference_id === "string"
-        ? args.reference_id
+async function searchLibraryMoments(
+  books: BookManager,
+  args: Record<string, unknown>,
+): Promise<ToolResult> {
+  await books.ready();
+  const query = args.query as SearchQuery;
+  const referenceId = typeof args.reference_id === "string"
+    ? args.reference_id
+    : undefined;
+  const prepared = referenceId
+    ? searchReferenceStore.get(referenceId).reference
+    : undefined;
+  const preparedOptions = preparedSearchOptions(args.reference_range);
+  const pages = await Promise.all(books.list().map(async (summary) => {
+    const managed = books.get(summary.bookId);
+    if (!managed.ok) {
+      return { summary, error: managed.error.message };
+    }
+    registerLocalClipSearchProvider(managed.value.engine);
+    registerLocalClapSearchProvider(managed.value.engine, FFMPEG);
+    const bookQuery = {
+      ...query,
+      cursor: undefined,
+      limit: Math.min(query.limit ?? 30, 100),
+    };
+    const result = prepared
+      ? await managed.value.engine.temporalSearch.queryPrepared(
+          bookQuery,
+          prepared,
+          preparedOptions,
+        )
+      : await managed.value.engine.temporalSearch.query(bookQuery);
+    if (!result.ok) {
+      const preparationJob = result.error.code === "NOT_READY" && result.error.details?.requiresIndexPreparation
+        ? await enqueueTemporalSearchPreparation(summary.bookId)
         : undefined;
-      const prepared = referenceId
-        ? searchReferenceStore.get(referenceId).reference
-        : undefined;
-      const preparedOptions = preparedSearchOptions(args.reference_range);
-      const pages = await Promise.all(books.list().map(async (summary) => {
-        const managed = books.get(summary.bookId);
-        if (!managed.ok) {
-          return { summary, error: managed.error.message };
-        }
-        registerLocalClipSearchProvider(managed.value.engine);
-        registerLocalClapSearchProvider(managed.value.engine, FFMPEG);
-        const bookQuery = {
-          ...query,
-          cursor: undefined,
-          limit: Math.min(query.limit ?? 30, 100),
-        };
-        const result = prepared
-          ? await managed.value.engine.temporalSearch.queryPrepared(
-              bookQuery,
-              prepared,
-              preparedOptions,
-            )
-          : await managed.value.engine.temporalSearch.query(bookQuery);
-        if (!result.ok) {
-          const preparationJob = result.error.code === "NOT_READY" && result.error.details?.requiresIndexPreparation
-            ? await enqueueTemporalSearchPreparation(summary.bookId)
-            : undefined;
-          return { summary, error: result.error.message, preparationJob };
-        }
-        const assets = await managed.value.engine.withLocalMedia(() => buildAssetList(
-          managed.value.engine,
-          summary.bookId,
-          "newest",
-        )).catch(() => []);
-        const assetById = new Map(
-          assets.map((asset) => [asset.artifact_id, asset]),
-        );
-        return {
-          summary,
-          page: {
-            ...result.value,
-            hits: result.value.hits.map((hit) => {
-              const asset = assetById.get(hit.artifactId);
-              return {
-                ...hit,
-                mediaUrl: asset?.media_url ?? null,
-                thumbnailUrl: asset?.thumbnail_url ?? null,
-              };
-            }),
-          },
-        };
-      }));
-      const hits = pages.flatMap((entry) =>
-        entry.page?.hits.map((hit) => ({
-          ...hit,
-          score: comparableHitScore(hit),
-          owningBookId: entry.summary.bookId,
-          owningBookName: entry.summary.name,
-        })) ?? []);
-      hits.sort((left, right) =>
-        right.score - left.score
-        || left.owningBookName.localeCompare(right.owningBookName)
-        || left.artifactId.localeCompare(right.artifactId)
-        || JSON.stringify(left.location).localeCompare(JSON.stringify(right.location)));
-      const limit = Math.min(query.limit ?? 30, 100);
-      return json({
-        hits: hits.slice(0, limit),
-        preparationJobs: pages.flatMap((entry) => entry.preparationJob ? [entry.preparationJob] : []),
-        coverage: {
-          state: pages.some((entry) => entry.error || entry.page?.coverage.partialResults)
-            ? "partial"
-            : "ready",
-          partialResults: pages.some((entry) =>
-            Boolean(entry.error || entry.page?.coverage.partialResults)),
-          indexedArtifactCount: pages.reduce(
-            (sum, entry) => sum + (entry.page?.coverage.indexedArtifactCount ?? 0),
-            0,
-          ),
-          totalArtifactCount: pages.reduce(
-            (sum, entry) => sum + (entry.page?.coverage.totalArtifactCount ?? 0),
-            0,
-          ),
-          books: pages.map((entry) => ({
-            bookId: entry.summary.bookId,
-            name: entry.summary.name,
-            ...(entry.page ? { coverage: entry.page.coverage } : {}),
-            ...(entry.error ? { error: entry.error } : {}),
-          })),
-        },
-      });
+      return { summary, error: result.error.message, preparationJob };
+    }
+    const assets = await managed.value.engine.withLocalMedia(() => buildAssetList(
+      managed.value.engine,
+      summary.bookId,
+      "newest",
+    )).catch(() => []);
+    const assetById = new Map(
+      assets.map((asset) => [asset.artifact_id, asset]),
+    );
+    return {
+      summary,
+      page: {
+        ...result.value,
+        hits: result.value.hits.map((hit) => {
+          const asset = assetById.get(hit.artifactId);
+          return {
+            ...hit,
+            mediaUrl: asset?.media_url ?? null,
+            thumbnailUrl: asset?.thumbnail_url ?? null,
+          };
+        }),
+      },
+    };
+  }));
+  const hits = pages.flatMap((entry) =>
+    entry.page?.hits.map((hit) => ({
+      ...hit,
+      score: comparableHitScore(hit),
+      owningBookId: entry.summary.bookId,
+      owningBookName: entry.summary.name,
+    })) ?? []);
+  hits.sort((left, right) =>
+    right.score - left.score
+    || left.owningBookName.localeCompare(right.owningBookName)
+    || left.artifactId.localeCompare(right.artifactId)
+    || JSON.stringify(left.location).localeCompare(JSON.stringify(right.location)));
+  const limit = Math.min(query.limit ?? 30, 100);
+  return json({
+    hits: hits.slice(0, limit),
+    preparationJobs: pages.flatMap((entry) => entry.preparationJob ? [entry.preparationJob] : []),
+    coverage: {
+      state: pages.some((entry) => entry.error || entry.page?.coverage.partialResults)
+        ? "partial"
+        : "ready",
+      partialResults: pages.some((entry) =>
+        Boolean(entry.error || entry.page?.coverage.partialResults)),
+      indexedArtifactCount: pages.reduce(
+        (sum, entry) => sum + (entry.page?.coverage.indexedArtifactCount ?? 0),
+        0,
+      ),
+      totalArtifactCount: pages.reduce(
+        (sum, entry) => sum + (entry.page?.coverage.totalArtifactCount ?? 0),
+        0,
+      ),
+      books: pages.map((entry) => ({
+        bookId: entry.summary.bookId,
+        name: entry.summary.name,
+        ...(entry.page ? { coverage: entry.page.coverage } : {}),
+        ...(entry.error ? { error: entry.error } : {}),
+      })),
     },
-  };
+  });
 }
 
 function preparedSearchOptions(value: unknown): PreparedSearchOptions {

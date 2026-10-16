@@ -106,7 +106,7 @@ type ReplacePreviewPayload = {
 
 type LastSearchRequest = {
   query: SearchQuery
-  tool: 'search_moments' | 'search_library_moments'
+  library: boolean
   referenceId?: string
   referenceRange?: { start_seconds: number; duration_seconds?: number }
 }
@@ -205,9 +205,7 @@ function MomentSearch({
       if (nextMode !== 'text' && !nextReference) {
         throw new Error(`Choose a ${referenceKind(nextMode)} reference`)
       }
-      const tool = nextMode !== 'text' || scope === 'library'
-        ? 'search_library_moments'
-        : 'search_moments'
+      const library = nextMode !== 'text' || scope === 'library'
       let referenceRange
       try {
         referenceRange = nextMode === 'video-reverse' && nextReference
@@ -222,13 +220,14 @@ function MomentSearch({
       }
       const request: LastSearchRequest = {
         query,
-        tool,
+        library,
         ...(nextReference ? { referenceId: nextReference.referenceId } : {}),
         ...(referenceRange ? { referenceRange } : {}),
       }
       const value = await searchWithPreparation({
-        search: () => call(tool, {
-          ...(tool === 'search_moments' ? { book_id: bookId } : {}),
+        search: () => call('search_moments', {
+          book_id: bookId,
+          ...(library ? { scope: 'library' } : {}),
           query,
           ...(request.referenceId ? { reference_id: request.referenceId } : {}),
           ...(request.referenceRange ? { reference_range: request.referenceRange } : {}),
@@ -368,8 +367,9 @@ function MomentSearch({
     setWorking(true)
     try {
       const value = await searchWithPreparation({
-        search: () => call(lastSearchRequest.tool, {
-          ...(lastSearchRequest.tool === 'search_moments' ? { book_id: bookId } : {}),
+        search: () => call('search_moments', {
+          book_id: bookId,
+          ...(lastSearchRequest.library ? { scope: 'library' } : {}),
           query: { ...lastSearchRequest.query, cursor: page.nextCursor },
           ...(lastSearchRequest.referenceId ? { reference_id: lastSearchRequest.referenceId } : {}),
           ...(lastSearchRequest.referenceRange ? { reference_range: lastSearchRequest.referenceRange } : {}),

@@ -64,7 +64,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "plan_sequence_sound_effects", "plan_music_video", "commit_music_video", "get_sequence_rhythm", "update_sequence_rhythm",
   ],
   Search: [
-    "search_library_moments", "search_moments", "suggest_sequence_coverage",
+    "search_moments", "suggest_sequence_coverage",
     "get_search_coverage", "get_search_index_status", "register_search_manifest",
     "pin_search_moment", "send_search_moment_to_sequence",
     "list_sequence_replace_targets", "replace_sequence_clip_with_search_moment",

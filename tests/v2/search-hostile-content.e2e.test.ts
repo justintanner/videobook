@@ -262,7 +262,6 @@ describe("hostile search content across browser surfaces", () => {
       const calls = toolCalls(await requestBody(route));
       const searching = calls.some(
         (call) =>
-          call.name === "search_library_moments" ||
           call.name === "search_moments",
       );
       if (!searching || interception === "none") {

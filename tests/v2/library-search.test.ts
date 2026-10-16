@@ -47,10 +47,10 @@ describe('library moment search', () => {
     await indexStill(betaBook.value.engine, 'red van beta')
 
     const tool = semanticSearchDefs(alphaBook.value.engine, books)
-      .find((entry) => entry.name === 'search_library_moments')
+      .find((entry) => entry.name === 'search_moments')
     expect(tool).toBeTruthy()
     if (!tool) return
-    const result = await tool.handler({ query: { text: 'red van', limit: 10 } })
+    const result = await tool.handler({ scope: 'library', query: { text: 'red van', limit: 10 } })
     expect(result.isError).toBeUndefined()
     const payload = JSON.parse(result.content[0]!.text) as {
       hits: Array<{ owningBookId: string; owningBookName: string }>
@@ -75,6 +75,7 @@ describe('library moment search', () => {
       },
     })
     const reverseResult = await tool.handler({
+      scope: 'library',
       query: { artifactKinds: ['image'], limit: 10 },
       reference_id: reference.reference_id,
     })
@@ -102,7 +103,7 @@ describe('library moment search', () => {
     await indexStill(betaBook.value.engine, 'red van beta')
 
     const tool = semanticSearchDefs(alphaBook.value.engine, books)
-      .find((entry) => entry.name === 'search_library_moments')
+      .find((entry) => entry.name === 'search_moments')
     expect(tool).toBeTruthy()
     if (!tool) return
     const reference = searchReferenceStore.put({
@@ -115,6 +116,7 @@ describe('library moment search', () => {
       },
     })
     const result = await tool.handler({
+      scope: 'library',
       query: { artifactKinds: ['image'], limit: 10 },
       reference_id: reference.reference_id,
     })
@@ -144,7 +146,7 @@ describe('library moment search', () => {
     await indexStill(betaBook.value.engine, 'red van beta', 'beta-source-bytes')
 
     const tool = semanticSearchDefs(alphaBook.value.engine, books)
-      .find((entry) => entry.name === 'search_library_moments')
+      .find((entry) => entry.name === 'search_moments')
     expect(tool).toBeTruthy()
     if (!tool) return
     const reference = searchReferenceStore.put({
@@ -158,6 +160,7 @@ describe('library moment search', () => {
       },
     })
     const result = await tool.handler({
+      scope: 'library',
       query: { artifactKinds: ['image'], limit: 10 },
       reference_id: reference.reference_id,
     })
