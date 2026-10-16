@@ -63,10 +63,7 @@ export function renameAllDef(engine: Engine): ToolDef {
   return {
     name: "rename_all",
     description:
-      "Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display " +
-      "labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited " +
-      "`renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and " +
-      "references never change.",
+      "Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.",
     schema,
     handler: async (args) => {
       const { dry_run, renames } = args as {

@@ -28,7 +28,7 @@ const failure = (error: unknown): ToolResult => ({ isError: true, content: [{ ty
 export function coldOpenDefs(engine: Engine): ToolDef[] {
   return [{
     name: "prepare_cold_open",
-    description: "Select an exciting 2–5 second video highlight with AI for a cold-open copy. Start here when asked for a cold open: review and adjust the returned range before calling edit_cold_open. Returns a cached suggestion or an analysis job ID; read its result with list_jobs. Does not create a video copy.",
+    description: "Suggest an exciting 2-5 second highlight of a video for a cold open (cached, or an analysis job to read with list_jobs). Start here for cold opens: review the range, then create the copy with edit_cold_open.",
     schema: sourceSchema.shape,
     handler: async (input) => {
       try {
@@ -54,7 +54,7 @@ export function coldOpenDefs(engine: Engine): ToolDef[] {
     },
   }, {
     name: "edit_cold_open",
-    description: "Create a new cold-open video copy from a reviewed highlight: selected source range, hard cut, then the complete original clip. Requires a suggestion from prepare_cold_open and the user's reviewed start/end times. Preserves the source. Poll list_jobs for the output artifact and notebook cell.",
+    description: "Create the cold-open copy from a reviewed prepare_cold_open suggestion: the chosen range, a hard cut, then the full original clip. The source is kept; poll list_jobs for the new asset.",
     annotations: { destructiveHint: false, readOnlyHint: false, idempotentHint: true, openWorldHint: false },
     schema: editSchema.shape,
     handler: async (input) => {

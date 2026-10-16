@@ -22,7 +22,7 @@ function defaultExtendedName(source: Artifact, targetDurationSeconds: number): s
 export function extendAudioDef(engine: Engine): ToolDef {
   return {
     name: "extend_audio_asset",
-    description: "Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.",
+    description: "Extend an audio asset to a total duration with a matching ElevenLabs continuation that keeps the source at the start, as a new audio asset.",
     schema: {
       asset_id: z.string().describe("Source audio artifact id"),
       target_duration_seconds: z.number().positive().describe("Requested total output duration in seconds"),

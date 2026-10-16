@@ -276,7 +276,7 @@ export function createGoogleFlowCharacterDef(engine: Engine): ToolDef {
   return {
     name: "create_google_flow_character",
     description:
-      "Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.",
+      "Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.",
     schema: createGoogleFlowCharacterSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof createGoogleFlowCharacterSchema>;

@@ -56,7 +56,7 @@ function validateTrimParams(
 export function trimVideoDef(engine: Engine): ToolDef {
   return {
     name: "trim_video",
-    description: "Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.",
+    description: "Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.",
     annotations: {
       title: "Trim video in place",
       readOnlyHint: false,

@@ -279,7 +279,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
   return {
     name: "apply_watermark",
     description:
-      "Previewed watermark apply for video: burns an optional positioned QR and optional X or TikTok alias. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional platform icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.",
+      "Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z.string().describe("Video asset id to watermark"),

@@ -14,7 +14,7 @@ function deriveAudioName(source: Artifact): string {
 export function extractAudioDef(engine: Engine): ToolDef {
   return {
     name: "extract_audio",
-    description: "Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
+    description: "Extract a video's audio as MP3 into a new audio asset, or as a file inside an existing asset with destination. range limits it to a time window.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book UUID"),

@@ -29,7 +29,7 @@ function validVideoProbe(probe: ProbeResult): boolean {
 export function smoothSceneConcatDef(engine: Engine): ToolDef {
   return {
     name: "smooth_scene_concat",
-    description: "Smoothly concatenate two video scenes into a new video asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.",
+    description: "Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.",
     schema: {
       first_asset_id: z.string().describe("First video artifact id in playback order"),
       second_asset_id: z.string().describe("Second video artifact id in playback order"),

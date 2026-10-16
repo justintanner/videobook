@@ -75,7 +75,7 @@ async function resolveSpliceClip(
 export function spliceVideoDef(engine: Engine): ToolDef {
   return {
     name: "splice_video",
-    description: "Splice two or more videos in playback order with an explicit overlap window. An overlap of 0 concatenates every complete clip; a positive overlap searches that many seconds at the end of each preceding clip for the frame that best matches the first frame of the next. Creates a new video asset.",
+    description: "Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.",
     schema: {
       first_asset_id: z.string().describe("First video artifact id in playback order. The match point is searched within this video."),
       second_asset_id: z.string().describe("Second video artifact id in playback order. Its first frame is the search target against the preceding clip."),

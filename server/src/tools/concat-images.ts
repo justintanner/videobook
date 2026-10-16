@@ -63,7 +63,7 @@ export function concatImagesDef(engine: Engine): ToolDef {
   return {
     name: "concat_images",
     description:
-      "Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.",
+      "Combine 1-9 image assets into one new image sheet, each fit without stretching; one or two inputs use a two-slot sheet (landscape side by side, portrait stacked).",
     schema: concatImagesSchema,
     handler: async (args) => {
       const {

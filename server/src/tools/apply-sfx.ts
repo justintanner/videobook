@@ -74,9 +74,7 @@ export function applySfxDef(engine: Engine): ToolDef {
   return {
     name: "apply_sfx",
     description:
-      "Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. "
-      + "Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. "
-      + "Re-runs process_video downstream. Pair with /suggest-sfx to source entries.",
+      "Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
       book_id: z.string().describe("Book id"),

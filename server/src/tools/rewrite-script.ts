@@ -22,12 +22,7 @@ export function rewriteScriptDef(engine: Engine): ToolDef {
   return {
     name: "rewrite_script",
     description:
-      "Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). " +
-      "Variants: \"full\" (full reproduction prompt + breakdown) or \"tldr\" (1–2 sentence summary). " +
-      "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that feed. " +
-      "Optional custom_prompt applies a transformation instruction (e.g. \"replace the pig with a man in a blue suit\"). " +
-      "Previous versions are preserved as immutable Dolt revisions. " +
-      "Returns immediately; reconcile_project_work reports status=\"generating\" until the new markdown is written.",
+      "Rewrite a script asset's markdown in place without re-reading the source image: variant full (reproduction prompt and breakdown) or tldr (one or two sentences), with an optional platform preset and custom_prompt instruction. Asynchronous; earlier versions stay in history.",
     schema: {
       asset_id: z.string().describe("Script artifact id"),
       variant: z.enum(["full", "tldr"]).describe("Rewrite style"),

@@ -10,9 +10,7 @@ export function recoverAssetDef(engine: Engine): ToolDef {
   return {
     name: "recover_asset",
     description:
-      "Recover a single asset stuck in the failed/error state by clearing its persisted generation error. " +
-      "Non-destructive: the asset and its media files are kept intact — only the error record is removed, " +
-      "returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.",
+      "Clear a failed asset's generation error and keep its media, returning it to ready. Use clean_failed_assets instead to delete failed generations.",
     schema: {
       asset_id: z.string().describe("Asset ID to recover (vid-*, img-*, etc., or @-prefixed)"),
       book_id: z.string().describe("Book id"),

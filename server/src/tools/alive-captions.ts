@@ -50,7 +50,7 @@ export function aliveCaptionsDef(engine: Engine): ToolDef {
   return {
     name: "alive_captions",
     description:
-      "Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.",
+      "Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book id"),
@@ -138,7 +138,7 @@ export function setAliveCaptionsDef(engine: Engine): ToolDef {
   return {
     name: "set_alive_captions",
     description:
-      "Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.",
+      "Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book id"),

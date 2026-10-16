@@ -47,7 +47,7 @@ export function cropImageDef(engine: Engine): ToolDef {
   return {
     name: "crop_image",
     description:
-      "Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.",
+      "Crop an image in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-my-photo)"),
       book_id: z.string().describe("Book id"),

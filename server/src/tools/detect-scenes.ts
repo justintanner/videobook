@@ -8,11 +8,7 @@ export function detectScenesDef(engine: Engine): ToolDef {
   return {
     name: "detect_scenes",
     description:
-      "Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. " +
-      "Each candidate is { t, score, kind } where kind=\"shot\" is a camera/cut change (scdet score ≥ 10) " +
-      "and kind=\"settle\" is a motion-settle moment inside a steady shot (the falling edge of a sustained " +
-      "high-motion run, e.g. \"the man finished standing up\"). Runs in the background and persists to " +
-      ".detect-scenes.json and is useful as a standalone read-only diagnostic.",
+      "Find natural visual breaks in a video in a background job: shot cuts and motion-settle moments inside steady shots, each with a time and score. Read-only.",
     schema: {
       source_asset_id: z.string().describe("Video asset id (vid-*) inside the project"),
       book_id: z.string().describe("Book id"),

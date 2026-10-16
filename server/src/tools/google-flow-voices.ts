@@ -116,7 +116,7 @@ export function createGoogleFlowVoiceDef(): ToolDef {
   return {
     name: "create_google_flow_voice",
     description:
-      "Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.",
+      "Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.",
     schema: createGoogleFlowVoiceSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof createGoogleFlowVoiceSchema>;

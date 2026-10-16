@@ -10,7 +10,7 @@ export function readTranscriptDef(engine: Engine): ToolDef {
   return {
     name: "read_transcript",
     description:
-      "Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists. Pass raw=true to return the untouched sidecar text instead of the parsed projection.",
+      "Read a video or audio asset's transcript: timed per-word cues when available, otherwise plain text; kind reports timed, plain, silence or missing. raw returns the stored file unparsed.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-clip)"),
       book_id: z.string().describe("Book id"),

@@ -79,7 +79,7 @@ export function chainDef(engine: Engine): ToolDef {
   return {
     name: "chain",
     description:
-      "Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.",
+      "Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.",
     scope: "book",
     schema: {
       action: z.enum(["run", "status", "cancel", "approve"]).default("run"),

@@ -8,7 +8,7 @@ export function translateSubtitlesDef(engine: Engine): ToolDef {
   return {
     name: "translate_subtitles",
     description:
-      "Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.",
+      "Translate an asset's transcript subtitles into another language for renders with that subtitle_language; cached per language until the asset is re-transcribed.",
     schema: {
       asset_id: z.string().describe("Video or audio artifact id"),
       book_id: z.string().describe("Book id"),

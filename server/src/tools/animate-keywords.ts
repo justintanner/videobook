@@ -108,7 +108,7 @@ export function animateKeywordsDef(engine: Engine): ToolDef {
   return {
     name: "animate_keywords",
     description:
-      "Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.",
+      "Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book id"),

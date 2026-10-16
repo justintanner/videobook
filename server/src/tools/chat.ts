@@ -540,7 +540,7 @@ export { chatActionPlanSchema, duplicateDestinationReference };
 export function chatDef(engine: Engine): ToolDef {
   return {
     name: "chat",
-    description: "LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.",
+    description: "Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.",
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),

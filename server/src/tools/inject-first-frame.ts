@@ -75,7 +75,7 @@ async function findFinalVideo(
 export function injectFirstFrameDef(engine: Engine): ToolDef {
   return {
     name: "inject_first_frame",
-    description: "Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.",
+    description: "Replace the first frame of a video, or of the final render, with an image asset in place, keeping runtime and audio; for final, orientation defaults to the timeline's.",
     schema: {
       target_asset_id: z.string().describe("Target video artifact id, or final"),
       image_asset_id: z.string().describe("Source image artifact id"),

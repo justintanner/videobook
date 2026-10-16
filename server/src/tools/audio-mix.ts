@@ -75,9 +75,7 @@ export function audioMixDef(engine: Engine): ToolDef {
   return {
     name: "audio_mix",
     description:
-      "Mix audio from a video or audio layer asset into a video or audio target asset in-place. "
-      + "The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, "
-      + "and video targets retain their original video stream with git versioning.",
+      "Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.",
     schema: {
       target_asset_id: z.string().describe("Artifact id to edit in-place (video or audio)"),
       layer_asset_id: z.string().describe("Artifact whose audio is layered onto the target (video or audio artifact id)"),

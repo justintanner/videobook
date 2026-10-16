@@ -18,7 +18,7 @@ function derivedClipName(
 export function extractVideoClipDef(engine: Engine): ToolDef {
   return {
     name: "extract_video_clip",
-    description: "Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.",
+    description: "Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.",
     annotations: {
       title: "Extract new video clip",
       readOnlyHint: false,

@@ -14,7 +14,7 @@ const JOB_TIMEOUT_MS = 30 * 60_000;
 export function removeSoundDef(engine: Engine): ToolDef {
   return {
     name: "remove_sound",
-    description: "Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.",
+    description: "Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.",
     schema: {
       asset_id: z.string().describe("Artifact id to edit in-place (video or audio)"),
       sound: z.string().min(1).max(200).describe('Description of the sound to remove, e.g. "horse neighing"'),

@@ -16,10 +16,7 @@ export function analyzeJokesDef(engine: Engine): ToolDef {
   return {
     name: "analyze_jokes",
     description:
-      "Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type " +
-      "(pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end " +
-      "timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. " +
-      "Requires an ElevenLabs transcript — run /transcribe first if missing.",
+      "Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
       book_id: z.string().describe("Book id"),

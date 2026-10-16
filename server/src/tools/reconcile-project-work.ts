@@ -1634,7 +1634,7 @@ export async function reconcileProjectWork(
 export function reconcileProjectWorkDef(engine: Engine): ToolDef {
   return {
     name: "reconcile_project_work",
-    description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
+    description: "Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.",
     schema: {
       book_id: z.string().describe("Book id"),
     },

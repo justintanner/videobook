@@ -118,13 +118,7 @@ export function doctorDef(engine: Engine): ToolDef {
   return {
     name: "doctor",
     description:
-      "Diagnose the health of every asset in a project (all asset types: video, image, audio, " +
-      "script, final, character, plan). Reports assets stuck in the error state and assets wedged " +
-      "in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore " +
-      "that one asset to its last usable state before the current error — clears a stale error or " +
-      "lease when the media is intact, otherwise restores the asset from Dolt history. A bare " +
-      "fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this " +
-      "book and include per-book byte/chunk reclamation in the report.",
+      "Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. gc reclaims catalog storage for this book.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z

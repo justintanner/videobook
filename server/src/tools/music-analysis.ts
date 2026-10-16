@@ -13,7 +13,7 @@ export function musicAnalysisDefs(engine: Engine): ToolDef[] {
   return [
     {
       name: "analyze_music",
-      description: "Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio. Pass sections to also request an energy curve, candidate section boundaries and suggested section labels (intro, verse, chorus, drop); labels are suggestions with provenance and may use a paid model. Results stay optional: beat editing works without them",
+      description: "Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.",
       scope: "book",
       schema: { ...schema, force: z.boolean().optional(), sections: z.boolean().optional() },
       handler: async (args) => {

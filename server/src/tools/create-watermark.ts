@@ -21,7 +21,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
-      "Generate a compact transparent QR plus plain X or TikTok alias badge and store it as an image artifact. The platform icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.",
+      "Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.",
     schema: {
       book_id: z.string().describe("Book id"),
       platform: z.enum(WATERMARK_PLATFORMS).optional().describe("Alias platform (default tiktok)"),

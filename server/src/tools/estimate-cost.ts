@@ -151,10 +151,7 @@ export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "estimate_cost",
     description:
-      "Estimate the USD cost of generation calls before running them. Accepts one or more " +
-      "{tool_name, input} pairs (generate_image, generate_video, generate_audio with their model, refs and options) " +
-      "and returns one CostEstimate summed across all calls, priced from @apicity/cost. " +
-      "Models without published rates return $0 with a warning.",
+      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;

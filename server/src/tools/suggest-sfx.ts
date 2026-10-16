@@ -8,9 +8,7 @@ export function suggestSfxDef(engine: Engine): ToolDef {
   return {
     name: "suggest_sfx",
     description:
-      "Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: " +
-      "timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. " +
-      "Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.",
+      "Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
       book_id: z.string().describe("Book id"),

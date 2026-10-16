@@ -41,7 +41,7 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
   return {
     name: "analyze_video",
     description:
-      "Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.",
+      "Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book UUID"),

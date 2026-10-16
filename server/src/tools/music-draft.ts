@@ -8,7 +8,7 @@ const schema = z.object({ book_id: z.string().uuid(), expected_revision: z.strin
   actor: z.string().default("videobook-user"), source_surface: z.enum(["ui", "slash", "chat", "system"]).default("ui"), options: musicDraftOptionsSchema });
 
 export function musicDraftDefs(engine: Engine): ToolDef[] {
-  return [{ name: "plan_music_video", description: "Make a reviewable beat-aligned music video draft from selected sources. Does not save edits. Preview the returned sequence, then use commit_music_video with its intent, preview hash, rhythm revision and sequence content revision only after review. Uncovered spans require more footage or explicit reuse/retiming.", scope: "book", schema: schema.shape,
+  return [{ name: "plan_music_video", description: "Draft a beat-aligned music video from selected sources without saving it. Review the returned sequence, then apply it with commit_music_video using the returned intent, preview hash and revisions.", scope: "book", schema: schema.shape,
     annotations: { readOnlyHint: true }, handler: async (input) => {
       try {
         const args = schema.parse(input);

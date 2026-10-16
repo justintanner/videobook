@@ -8,9 +8,7 @@ export function suggestCutsDef(engine: Engine): ToolDef {
   return {
     name: "suggest_cuts",
     description:
-      "Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: " +
-      "dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. " +
-      "Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.",
+      "Suggest trims for a video (dead air, filler words, awkward sections) from its frames and transcript in a background job. Needs a transcript; apply the result with apply_cuts.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
       book_id: z.string().describe("Book id"),

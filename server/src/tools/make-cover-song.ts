@@ -17,7 +17,7 @@ function coverSongLabel(source: Artifact): string {
 export function makeCoverSongDef(engine: Engine): ToolDef {
   return {
     name: "make_cover_song",
-    description: "Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.",
+    description: "Make a new drums-and-strings instrumental cover of 10-240 seconds of a video or audio asset's sound, generated locally with ACE-Step. The duration matches exactly; style matching is best-effort.",
     schema: {
       book_id: z.string().describe("Book UUID"),
       asset_id: z.string().describe("Source video or audio artifact id"),

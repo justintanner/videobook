@@ -13,7 +13,7 @@ export function cleanVideoAudioDef(engine: Engine): ToolDef {
   return {
     name: "clean_video_audio",
     description:
-      "Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.",
+      "Clean a video's audio in place with ElevenLabs Voice Isolator: dialogue first, a quiet denoised bed for important sounds, edge fades and optional subtle music. The picture is unchanged.",
     schema: {
       asset_id: z.string().describe("Video artifact id (with or without a leading @)"),
       book_id: z.string().describe("Book id"),

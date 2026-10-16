@@ -9,7 +9,7 @@ import type { ToolDef } from "./tool-def.js";
 export function replaceVideoAudioDef(engine: Engine): ToolDef {
   return {
     name: "replace_video_audio",
-    description: "Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
+    description: "Replace a video's audio track in place with an audio asset, or with one file of another asset given as <artifactId>/<filename>. Existing renders become stale.",
     schema: {
       asset_id: z.string().describe("Video artifact whose audio is being replaced"),
       audio_asset_id: z.string().describe("Audio source: an audio artifact id, or `<artifactId>/<filename>` to point at a specific file inside another artifact"),

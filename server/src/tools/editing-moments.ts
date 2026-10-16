@@ -30,7 +30,7 @@ export function editingMomentsDefs(engine: Engine): ToolDef[] {
   return [
     {
       name: "analyze_editing_moments",
-      description: "Analyze selected footage in a background job for editing: timestamped shot boundaries, per-shot motion, subject-change candidates, usable source ranges and ranked source moments. Reuses analyze_video summaries and the temporal search index as context; vision data stays approximate and never supplies beat timings. Reusing results for unchanged sources",
+      description: "Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.",
       scope: "book",
       schema: {
         ...schema,

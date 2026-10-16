@@ -45,9 +45,7 @@ export function applyCutsDef(engine: Engine): ToolDef {
   return {
     name: "apply_cuts",
     description:
-      "Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; "
-      + "re-runs process_video downstream so frames, transcripts, and analyses are regenerated. "
-      + "Pair with /suggest-cuts to source ranges, or hand-pick them.",
+      "Remove one or more time ranges from a video in place, then reprocess its frames, transcript and analysis. Take ranges from suggest_cuts or choose them.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
       book_id: z.string().describe("Book id"),

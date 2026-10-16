@@ -13,36 +13,36 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
-- `alive_captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.
-- `analyze_editing_moments` — Analyze selected footage in a background job for editing: timestamped shot boundaries, per-shot motion, subject-change candidates, usable source ranges and ranked source moments. Reuses analyze_video summaries and the temporal search index as context; vision data stays approximate and never supplies beat timings. Reusing results for unchanged sources
+- `alive_captions` — Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.
+- `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
-- `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
-- `analyze_music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio. Pass sections to also request an energy curve, candidate section boundaries and suggested section labels (intro, verse, chorus, drop); labels are suggestions with provenance and may use a paid model. Results stay optional: beat editing works without them
-- `analyze_video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.
-- `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
-- `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
-- `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
-- `apply_watermark` — Previewed watermark apply for video: burns an optional positioned QR and optional X or TikTok alias. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional platform icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.
-- `archive_clip` — Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.
+- `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript.
+- `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
+- `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.
+- `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
+- `apply_cuts` — Remove one or more time ranges from a video in place, then reprocess its frames, transcript and analysis. Take ranges from suggest_cuts or choose them.
+- `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.
+- `apply_watermark` — Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.
+- `archive_clip` — Save a URL or a video or audio asset to the global clip archive (B2 when configured, otherwise local), deduplicated by content and transcribed; restore it with restore_archive_clips.
 - `assemble_goal` — Append a reviewed goal's completed video-stage clips in order to the sequence. Used by Goal mode for multi-clip plans; single-clip goals need no assembly.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
 - `assign_slot` — Assign an artifact to a typed timeline slot
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
-- `audio_mix` — Mix audio from a video or audio layer asset into a video or audio target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
+- `audio_mix` — Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
 - `cancel_job` — Cancel a queued or running persistent job
-- `chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.
+- `chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
-- `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
+- `chat` — Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
 - `clean_failed_assets` — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
-- `clean_video_audio` — Clean a video artifact's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
+- `clean_video_audio` — Clean a video's audio in place with ElevenLabs Voice Isolator: dialogue first, a quiet denoised bed for important sounds, edge fades and optional subtle music. The picture is unchanged.
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `commit_music_video` — Apply a reviewed music-video draft once, checking its timeline, source and beat-map revisions. Returns the previous action on a retry.
-- `concat_images` — Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
+- `concat_images` — Combine 1-9 image assets into one new image sheet, each fit without stretching; one or two inputs use a two-slot sheet (landscape side by side, portrait stacked).
 - `configure_asset_tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
 - `connect_service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.
@@ -52,16 +52,16 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_entity` — Create a reusable prompt, scene or character
-- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.
-- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.
+- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.
+- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.
 - `create_notebook` — Create an empty notebook
 - `create_notebook_cell` — Create a UUIDv7 notebook cell
 - `create_post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.
 - `create_qart` — Create scan-safe color and monochrome QR mosaics from a source image artifact. The image is sampled per QR module with protected QR structures and white quiet zones.
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
-- `create_watermark_card` — Generate a compact transparent QR plus plain X or TikTok alias badge and store it as an image artifact. The platform icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.
-- `crop_image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.
+- `create_watermark_card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.
+- `crop_image` — Crop an image in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.
 - `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
 - `delete_asset` — Delete an artifact and its owned media records after removing timeline references
 - `delete_book` — Permanently delete a book after typed name confirmation
@@ -70,28 +70,28 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `delete_google_flow_voice` — Delete a Google Flow custom voice by its ref.
 - `delete_notebook` — Delete a notebook and its cells, edges, and runs
 - `delete_notebook_cell` — Delete one notebook cell and incident edges
-- `describe_image` — Analyze an image asset with vision and create a new script asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status="generating" until the markdown is written.
-- `detect_scenes` — Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. Each candidate is { t, score, kind } where kind="shot" is a camera/cut change (scdet score ≥ 10) and kind="settle" is a motion-settle moment inside a steady shot (the falling edge of a sustained high-motion run, e.g. "the man finished standing up"). Runs in the background and persists to .detect-scenes.json and is useful as a standalone read-only diagnostic.
+- `describe_image` — Write a reproduction-ready prompt for an image asset into a new script asset using vision (asynchronous).
+- `detect_scenes` — Find natural visual breaks in a video in a background job: shot cuts and motion-settle moments inside steady shots, each with a time and score. Read-only.
 - `disconnect_notebook_cells` — Delete a notebook edge
-- `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this book and include per-book byte/chunk reclamation in the report.
+- `doctor` — Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. gc reclaims catalog storage for this book.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
-- `draft_post_copy` — Draft a Post's caption and hashtags with Astra from the source clip's video analysis, transcript and generation prompts. Analyzes the clip first when it has no analysis yet. language picks English or Thai; omitted language is Thai for TikTok and English otherwise. platform defaults to the Post's platform and sets the length and tag budget. instruction, caption and tags rewrite an existing draft. Returns the draft without saving it.
+- `draft_post_copy` — Draft a Post's caption and hashtags from its clip's analysis, transcript and prompts (analyzing the clip first when needed) without saving. language defaults to Thai for TikTok and English otherwise; instruction, caption and tags rewrite an existing draft.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
-- `edit_cold_open` — Create a new cold-open video copy from a reviewed highlight: selected source range, hard cut, then the complete original clip. Requires a suggestion from prepare_cold_open and the user's reviewed start/end times. Preserves the source. Poll list_jobs for the output artifact and notebook cell.
+- `edit_cold_open` — Create the cold-open copy from a reviewed prepare_cold_open suggestion: the chosen range, a hard cut, then the full original clip. The source is kept; poll list_jobs for the new asset.
 - `edit_image_subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
-- `estimate_cost` — Estimate the USD cost of generation calls before running them. Accepts one or more {tool_name, input} pairs (generate_image, generate_video, generate_audio with their model, refs and options) and returns one CostEstimate summed across all calls, priced from @apicity/cost. Models without published rates return $0 with a warning.
+- `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
-- `extend_audio_asset` — Extend an existing audio asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new audio asset.
-- `extract_audio` — Extract the audio track from a video asset as MP3. By default creates a new audio asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset. Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).
+- `extend_audio_asset` — Extend an audio asset to a total duration with a matching ElevenLabs continuation that keeps the source at the start, as a new audio asset.
+- `extract_audio` — Extract a video's audio as MP3 into a new audio asset, or as a file inside an existing asset with destination. range limits it to a time window.
 - `extract_frame` — Save one video frame as a new image asset (JPEG): the first frame, the last frame, or the frame at timestamp seconds.
 - `extract_notebook_audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
-- `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
+- `extract_video_clip` — Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.
 - `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
 - `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
@@ -115,7 +115,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_sequence_rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.
-- `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
+- `inject_first_frame` — Replace the first frame of a video, or of the final render, with an image asset in place, keeping runtime and audio; for final, orientation defaults to the timeline's.
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
@@ -143,7 +143,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_prompt_history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
 - `list_workspace_actions` — List discoverable workspace actions, typed inputs, supported surfaces, and the visible workflow for each endpoint.
-- `make_cover_song` — Create a new drums-and-strings instrumental cover from 10 to 240 seconds of source audio in a video or audio asset, generated locally by the ACE-Step (acestep.cpp) runtime with source-audio conditioning. Rhythm and style matching are best-effort generative; output duration and sample count are exact.
+- `make_cover_song` — Make a new drums-and-strings instrumental cover of 10-240 seconds of a video or audio asset's sound, generated locally with ACE-Step. The duration matches exactly; style matching is best-effort.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `move_notebook_cells` — Persist notebook cell grid slots
 - `move_timeline_audio` — Move an audio overlay to a frame offset
@@ -151,7 +151,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `pin_search_moment` — Pin a revision-stable search moment into a notebook media selection cell
 - `plan_chat_command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools
 - `plan_generation_insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion
-- `plan_music_video` — Make a reviewable beat-aligned music video draft from selected sources. Does not save edits. Preview the returned sequence, then use commit_music_video with its intent, preview hash, rhythm revision and sequence content revision only after review. Uncovered spans require more footage or explicit reuse/retiming.
+- `plan_music_video` — Draft a beat-aligned music video from selected sources without saving it. Review the returned sequence, then apply it with commit_music_video using the returned intent, preview hash and revisions.
 - `plan_notebook_generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution
 - `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
 - `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
@@ -161,28 +161,28 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
 - `post_icloud_sync_status` — Read whether a saved Post's clip and caption.txt have finished uploading to iCloud. A folder outside iCloud Drive reports that it is not an iCloud folder.
-- `prepare_cold_open` — Select an exciting 2–5 second video highlight with AI for a cold-open copy. Start here when asked for a cold open: review and adjust the returned range before calling edit_cold_open. Returns a cached suggestion or an analysis job ID; read its result with list_jobs. Does not create a video copy.
+- `prepare_cold_open` — Suggest an exciting 2-5 second highlight of a video for a cold open (cached, or an analysis job to read with list_jobs). Start here for cold opens: review the range, then create the copy with edit_cold_open.
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
 - `preview_notebook_generation` — Preview the exact provider payload a generation cell would submit, without running it
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
-- `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists. Pass raw=true to return the untouched sidecar text instead of the parsed projection.
-- `reconcile_project_work` — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
+- `read_transcript` — Read a video or audio asset's transcript: timed per-word cues when available, otherwise plain text; kind reports timed, plain, silence or missing. raw returns the stored file unparsed.
+- `reconcile_project_work` — Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.
 - `record_post_metrics` — Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate, audio_generate.
-- `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
+- `recover_asset` — Clear a failed asset's generation error and keep its media, returning it to ready. Use clean_failed_assets instead to delete failed generations.
 - `refresh_post_metrics` — Fetch a current X metrics observation. Non-X publications use record_post_metrics. Unknown values remain unknown.
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
 - `remove_asset_tag` — Remove a tag from one asset. Removing an automatic tag records a dismissal, so re-analysis cannot bring it back.
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
-- `remove_sound` — Remove a described sound (e.g. a horse neigh) from a video or audio asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
+- `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
 - `remove_timeline_slot` — Remove a typed timeline slot and shift later slots left
-- `rename_all` — Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and references never change.
+- `rename_all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.
 - `rename_asset` — Set an asset's display label. Labels are display-only — the artifact id and all references stay unchanged.
 - `rename_book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.
 - `rename_notebook` — Rename a notebook
@@ -192,28 +192,28 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `repair_library_search_indexes` — Index ready visual media that is missing Similar-search coverage across books
 - `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
-- `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an audio asset, or a specific file inside another asset via the `<artifactId>/<filename>` form. Operates on the video asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
+- `replace_video_audio` — Replace a video's audio track in place with an audio asset, or with one file of another asset given as <artifactId>/<filename>. Existing renders become stale.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current Videobook as new assets.
 - `restore_asset_tag` — Restore a dismissed automatic tag so future analysis may surface it again.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
 - `retag_asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.
-- `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
+- `retry_generation` — Re-run a failed generation with its original request payload and inputs, clearing the asset's error first.
 - `retry_ingest` — Retry derivation jobs without uploading source bytes again
 - `retry_job` — Re-enqueue a failed or cancelled persistent job with the same durable payload
 - `reverse_video` — Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.
 - `revise_notebook_generation_plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
-- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
+- `rewrite_script` — Rewrite a script asset's markdown in place without re-reading the source image: variant full (reproduction prompt and breakdown) or tldr (one or two sentences), with an optional platform preset and custom_prompt instruction. Asynchronous; earlier versions stay in history.
 - `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
 - `run_notebook_cell` — Run one selected notebook cell using saved upstream media
-- `save_post_to_icloud` — Save the frozen Post media and caption.txt into the shared iCloud Drive › Videobook folder so they appear in Files on the iPhones. folder is relative to that root. A caption saves to the Post first and freezes with the first delivery. Repeating is a no-op; existing different files are never replaced.
+- `save_post_to_icloud` — Deliver a Post's frozen media and caption.txt to the shared iCloud Drive Videobook folder (folder is relative to it) so they appear in Files on the phones. A caption saves to the Post first. Repeats are no-ops and never replace different files.
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `service_status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.
-- `set_alive_captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.
+- `set_alive_captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
@@ -222,22 +222,22 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
 - `show_folder` — Reveal an asset's folder in Finder
 - `slash_commands` — List all available UI commands with scope metadata
-- `smooth_scene_concat` — Smoothly concatenate two video scenes into a new video asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.
-- `splice_video` — Splice two or more videos in playback order with an explicit overlap window. An overlap of 0 concatenates every complete clip; a positive overlap searches that many seconds at the end of each preceding clip for the frame that best matches the first frame of the next. Creates a new video asset.
+- `smooth_scene_concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.
+- `splice_video` — Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.
 - `split_video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.
-- `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh video assets.
+- `split_video_by_durations` — Cut a video into chunks of the target_secs lengths (e.g. [10, 15]) plus a leftover chunk, as new video assets; the source is kept. With destination, the chunks are written as files into an existing asset instead, without the leftover.
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
 - `suggest_asset_tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.
-- `suggest_cuts` — Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.
+- `suggest_cuts` — Suggest trims for a video (dead air, filler words, awkward sections) from its frames and transcript in a background job. Needs a transcript; apply the result with apply_cuts.
 - `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
-- `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.
+- `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
-- `transcribe` — Transcribe audio from a video or audio asset. Uses ElevenLabs speech-to-text when an audio file and ELEVENLABS_API_KEY are available (writes word-timed elevenlabs.json), otherwise falls back to OpenAI speech-to-text straight off the video (writes .analysis.gpt4otrans.json).
-- `translate_subtitles` — Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.
+- `transcribe` — Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text.
+- `translate_subtitles` — Translate an asset's transcript subtitles into another language for renders with that subtitle_language; cached per language until the asset is re-transcribed.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
-- `trim_video` — Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.
+- `trim_video` — Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.
 - `update_entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity
 - `update_notebook_cell` — Update one notebook cell
 - `update_post` — Edit a Post draft or its notes. Delivered media, caption and source versions are immutable; create another Post for a repost.
@@ -248,7 +248,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `upload_post_to_dropbox` — Upload the frozen Post media and caption.txt to a private Dropbox folder. A caption saves to the Post first and freezes with the first delivery. Interrupted uploads resume without replacing unrelated files.
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
-- `video_goal` — Create a goal from image and video references. A new goal with no supplied plan is one concise scene and one Seedance 2.5 video: Nano Banana 2.1 at 16:9, 2K, JPG, then 16:9, 1080p, 13 seconds, MP4, with audio. Portrait or square only when the brief says so. No storyboard, ending frame, or style preset. Approving a new goal generates the scene, then the video, and stops at finishing review. finish suggests a 2.3 second cold open, then burns the saved watermark onto a copy after the range is approved. An explicit v2 plan keeps that plan's settings, storyboard, and approval stages. Explicit approval is required before paid generation. update saves a new goal's title and scene or video prompt, or a v2 plan; revise edits a selected image or reruns video with feedback; regenerate makes fresh outputs; select picks any completed version, including after goal completion. Legacy v1 plans stay readable. cancel restores the previous output during revision; retry resumes failed work when the plan and references are unchanged. Multi-clip revisions require explicit assemble and never overwrite user-edited timeline clips; combine renders the selected assembled clips locally. Deleting the goal tile stops it.
+- `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
 ## Slash actions (313; 146 dedicated command routes)
@@ -259,15 +259,15 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/alive` — Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals; UI: `open_alive_captions`
-- `/alive-captions` — Load the alive-caption analysis for a video: transcript words grouped into stacked phrases, vocal onsets and per-word energy from the audio, a loudness envelope, and per-phrase face/text regions for frame-aware placement. Runs the analysis when it is missing or stale. Also returns the saved alive caption settings.; MCP: `alive_captions`
-- `/analyze-editing-moments` — Analyze selected footage in a background job for editing: timestamped shot boundaries, per-shot motion, subject-change candidates, usable source ranges and ranked source moments. Reuses analyze_video summaries and the temporal search index as context; vision data stays approximate and never supplies beat timings. Reusing results for unchanged sources; MCP: `analyze_editing_moments`
+- `/alive-captions` — Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.; MCP: `alive_captions`
+- `/analyze-editing-moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.; MCP: `analyze_editing_moments`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
-- `/analyze-music` — Analyze audio beats and waveform locally in a background job, reusing results for unchanged audio. Pass sections to also request an energy curve, candidate section boundaries and suggested section labels (intro, verse, chorus, drop); labels are suggestions with provenance and may use a paid model. Results stay optional: beat editing works without them; MCP: `analyze_music`
-- `/analyze-video` — Analyze a video asset with vision: samples frames, folds in the transcript when one exists, and writes .original.analysis.json (summary, scenes, tags, subjects, burned-in subtitle and watermark detection). Returns as soon as the job is enqueued; the analysis appears on the asset once the job completes.; MCP: `analyze_video`
+- `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
+- `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.; MCP: `analyze_video`
 - `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
-- `/apply-watermark` — Previewed watermark apply for video: burns an optional positioned QR and optional X or TikTok alias. The handle can stay horizontally centered or sit above, on, or below the QR. At least one must be included. Burn mode supports optional platform icon and handle border, independent handle padding X/Y and corner rounding, independent QR/handle opacity, independent visibility windows that fade in/out at any edge inside the clip, and adjustable handle height. Pass wait=false to return once the burn is queued (poll list_jobs or wait_for_asset_ready). Pass mode=overlay to store a legacy single-card render-time overlay instead.; MCP: `apply_watermark`
+- `/apply-watermark` — Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.; MCP: `apply_watermark`
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
 - `/archive-browse` — Open the clip archive browser, optionally with an initial search; UI: `open_archive`
 - `/archive-restore` — Restore archived clips into the current project by archive ID; MCP: `restore_archive_clips`
@@ -289,10 +289,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/books` — Open the book selector dropdown; UI: `open_projects`
 - `/cancel-job` — Cancel a queued or running persistent job; MCP: `cancel_job`
 - `/caption` — Preview a sequence caption with timing and style; preview or workspace operation
-- `/chain` — Run a bounded ordered list of existing book actions, passing earlier step outputs through structured {$ref:{step_id,output}} references. Each step is {id, tool, params}; id is a unique name that starts with a letter. A step that spends money stops first and waits for its own review. Use action=run to start, action=status or action=cancel with chain_id to inspect or stop a run, and action=approve with chain_id and step_id to let a waiting step spend and carry on. Cancelling drops every remaining step.; MCP: `chain`
+- `/chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.; MCP: `chain`
 - `/character` — Create a character folder; MCP: `create_character`
 - `/character-new` — Create a reusable Videobook character entity; MCP: `create_entity`
-- `/chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.; MCP: `chat`
+- `/chat` — Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.; MCP: `chat`
 - `/check-kimi-coding-api` — Check whether the Kimi Coding API is reachable and its configured API key is valid; MCP: `check_kimi_coding_api`
 - `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
 - `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
@@ -314,14 +314,14 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/copy` — Copy asset name; UI: `copy_clipboard`
 - `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `copy_file_to_clipboard`
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
-- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref to pass as options.character_1..7 of generate_video with model googleflow:omni-flash. Consumes plan credits.; MCP: `create_google_flow_character`
-- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref to pass as options.referenceAudio_N of generate_video with model googleflow:omni-flash.; MCP: `create_google_flow_voice`
+- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_character`
+- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_voice`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
 - `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
 - `/create-post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.; MCP: `create_post`
-- `/create-watermark-card` — Generate a compact transparent QR plus plain X or TikTok alias badge and store it as an image artifact. The platform icon and handle border are optional, and handle padding X/Y and corner rounding are adjustable. Apply it via apply_watermark or manually through on-screen graphic settings.; MCP: `create_watermark_card`
+- `/create-watermark-card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.; MCP: `create_watermark_card`
 - `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
-- `/crop-image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.; MCP: `crop_image`
+- `/crop-image` — Crop an image in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_image`
 - `/crop-video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.; MCP: `crop_video`
 - `/delete` — Delete an asset; MCP: `delete_asset`
 - `/delete-book` — Permanently delete a book after typed name confirmation; MCP: `delete_book`
@@ -344,7 +344,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`
 - `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
-- `/estimate-cost` — Estimate the USD cost of generation calls before running them. Accepts one or more {tool_name, input} pairs (generate_image, generate_video, generate_audio with their model, refs and options) and returns one CostEstimate summed across all calls, priced from @apicity/cost. Models without published rates return $0 with a warning.; MCP: `estimate_cost`
+- `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
 - `/export-sequence` — Review and export the current sequence; preview or workspace operation
@@ -357,7 +357,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_frame`
 - `/extract-notebook-audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range; MCP: `extract_notebook_audio`
 - `/extract-notebook-frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp; MCP: `extract_notebook_frame`
-- `/extract-video-clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.; MCP: `extract_video_clip`
+- `/extract-video-clip` — Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.; MCP: `extract_video_clip`
 - `/files` — Focus file by position; UI: `viewer_focus_file`
 - `/final` — Finalize and export the project timeline; MCP: `render_timeline`
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
@@ -439,7 +439,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/pin-search-moment` — Pin a revision-stable search moment into a notebook media selection cell; MCP: `pin_search_moment`
 - `/plan-chat-command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools; MCP: `plan_chat_command`
 - `/plan-generation-insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion; MCP: `plan_generation_insert`
-- `/plan-music-video` — Make a reviewable beat-aligned music video draft from selected sources. Does not save edits. Preview the returned sequence, then use commit_music_video with its intent, preview hash, rhythm revision and sequence content revision only after review. Uncovered spans require more footage or explicit reuse/retiming.; MCP: `plan_music_video`
+- `/plan-music-video` — Draft a beat-aligned music video from selected sources without saving it. Review the returned sequence, then apply it with commit_music_video using the returned intent, preview hash and revisions.; MCP: `plan_music_video`
 - `/plan-notebook-generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution; MCP: `plan_notebook_generation`
 - `/plan-notebook-rough-cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan; MCP: `plan_notebook_rough_cut`
 - `/plan-notebook-run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure; MCP: `plan_notebook_run`
@@ -460,7 +460,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
 - `/read-asset-metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.; MCP: `read_asset_metadata`
 - `/read-file-at-commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.; MCP: `read_file_at_commit`
-- `/reconcile-project-work` — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.; MCP: `reconcile_project_work`
+- `/reconcile-project-work` — Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.; MCP: `reconcile_project_work`
 - `/record-post-metrics` — Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.; MCP: `record_post_metrics`
 - `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
 - `/reframe` — Preview a crop transform for a visual sequence clip; preview or workspace operation
@@ -487,7 +487,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/restore-asset-version` — Restore an asset from an immutable revision as a new revision; MCP: `restore_asset_version`
 - `/restore-edit-action` — Create a forward revision restoring a prior edit action or revision; MCP: `restore_edit_action`
 - `/retag-asset` — Re-run tagging for one asset and return its tag state. Manual tags and dismissals are preserved; use it to retry after adding a provider key or to pick up a newer analysis.; MCP: `retag_asset`
-- `/retry-generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.; MCP: `retry_generation`
+- `/retry-generation` — Re-run a failed generation with its original request payload and inputs, clearing the asset's error first.; MCP: `retry_generation`
 - `/retry-ingest` — Retry derivation jobs without uploading source bytes again; MCP: `retry_ingest`
 - `/retry-job` — Re-enqueue a failed or cancelled persistent job with the same durable payload; MCP: `retry_job`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
@@ -510,7 +510,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
 - `/service-status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.; MCP: `service_status`
-- `/set-alive-captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.; MCP: `set_alive_captions`
+- `/set-alive-captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
 - `/set-notebook-cell-input` — Atomically replace or clear one named notebook cell input; MCP: `set_notebook_cell_input`
@@ -543,7 +543,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
 - `/tldr` — Rewrite a script asset in place as a 1–2 sentence TLDR; MCP: `rewrite_script`
 - `/tool-post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.; MCP: `post`
-- `/tool-rename-all` — Bulk-relabel video and image assets with an explicit dry run. Dry run proposes descriptive display labels via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply. Labels are display-only — artifact ids and references never change.; MCP: `rename_all`
+- `/tool-rename-all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.; MCP: `rename_all`
 - `/track-add` — Add a video, audio or caption track; preview or workspace operation
 - `/track-remove` — Remove an empty sequence track; preview or workspace operation
 - `/transcribe` — Transcribe audio using ElevenLabs; MCP: `transcribe`

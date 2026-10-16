@@ -12,7 +12,7 @@ function error(text: string): ToolResult {
 export function transcribeDef(engine: Engine): ToolDef {
   return {
     name: "transcribe",
-    description: "Transcribe audio from a video or audio asset. Uses ElevenLabs speech-to-text when an audio file and ELEVENLABS_API_KEY are available (writes word-timed elevenlabs.json), otherwise falls back to OpenAI speech-to-text straight off the video (writes .analysis.gpt4otrans.json).",
+    description: "Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text.",
     schema: {
       asset_id: z.string().describe("Video or audio artifact id"),
       book_id: z.string().describe("Book UUID"),

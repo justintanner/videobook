@@ -22,7 +22,7 @@ export function describeImageDef(engine: Engine): ToolDef {
   return {
     name: "describe_image",
     description:
-      "Analyze an image asset with vision and create a new script asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status=\"generating\" until the markdown is written.",
+      "Write a reproduction-ready prompt for an image asset into a new script asset using vision (asynchronous).",
     schema: {
       asset_id: z.string().describe("Image artifact id"),
       book_id: z.string().describe("Book UUID"),
