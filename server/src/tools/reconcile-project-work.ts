@@ -46,6 +46,7 @@ import type { PendingTask } from "videobook-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { probeVideo } from "../ffmpeg.js";
+import { providerEndpoints } from "../media/endpoints.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
 import {
@@ -1036,6 +1037,8 @@ type PollPendingProviderTasksOptions = {
   signal?: AbortSignal;
   /** Point KIE recordInfo at a local server. Production polls use the provider default. */
   kieBaseURL?: string;
+  /** Point FAL queue status/result at a local server. Production polls use the provider default. */
+  falQueueBaseURL?: string;
 };
 
 /**
@@ -1067,6 +1070,8 @@ export async function pollPendingProviderTasks(
   const tasksRes = await engine.jobs.pending.findAll();
   const tasks: PendingTask[] = tasksRes.ok ? tasksRes.value : [];
   if (tasks.length === 0) return result;
+  const kieBaseURL = options.kieBaseURL ?? providerEndpoints().kieBaseURL;
+  const falQueueBaseURL = options.falQueueBaseURL ?? providerEndpoints().falQueueBaseURL;
 
   // Age out any non-completing task older than timeout so it
   // stops showing as pending forever. Completing tasks are skipped because the
@@ -1127,7 +1132,7 @@ export async function pollPendingProviderTasks(
     const provider = createKie({
       apiKey: kieApiKey,
       timeout: 30_000,
-      ...(options.kieBaseURL ? { baseURL: options.kieBaseURL } : {}),
+      ...(kieBaseURL ? { baseURL: kieBaseURL } : {}),
     });
 
     await Promise.all(kieTasks.map(async (task) => {
@@ -1155,7 +1160,7 @@ export async function pollPendingProviderTasks(
     const provider = createKie({
       apiKey: kieApiKey,
       timeout: 30_000,
-      ...(options.kieBaseURL ? { baseURL: options.kieBaseURL } : {}),
+      ...(kieBaseURL ? { baseURL: kieBaseURL } : {}),
     });
 
     await Promise.all(veoTasks.map(async (task) => {
@@ -1420,7 +1425,7 @@ export async function pollPendingProviderTasks(
   // Poll FAL tasks (only if API key is set)
   const falTasks = pollableTasks.filter((t) => t.taskType.startsWith("fal_"));
   if (process.env.FAL_API_KEY && falTasks.length > 0) {
-    const provider = createFal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000 });
+    const provider = createFal({ apiKey: process.env.FAL_API_KEY, timeout: 30_000, ...(falQueueBaseURL ? { queueBaseURL: falQueueBaseURL } : {}) });
 
     // FAL's queue status/result endpoints live under the app namespace
     // (first 2 path segments). Hitting them with the full nested endpoint id

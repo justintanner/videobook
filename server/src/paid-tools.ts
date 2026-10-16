@@ -13,6 +13,7 @@ const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "retag_asset", "verify_x_mentions",
   "create_google_flow_voice", "backfill_asset_tags", "retry_generation", "retry_job",
   "run_notebook", "run_notebook_cell", "enqueue_notebook_run", "continue_notebook_generation",
+  "generate_image", "generate_video", "generate_audio",
 ]);
 
 const generationToolNames: ReadonlySet<string> = new Set(

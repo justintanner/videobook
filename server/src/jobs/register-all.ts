@@ -162,6 +162,7 @@ import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js
 import { registerPrepareTemporalSearchJob } from "./prepare-temporal-search.js";
 import { registerImageSubjectJobs } from "./image-subjects.js";
 import { registerApicity014Jobs } from "./generate-apicity-014.js";
+import { registerGenerateMediaJob } from "./generate-media.js";
 
 export function registerAllJobHandlers(
   engine: Engine,
@@ -309,6 +310,7 @@ export function registerAllJobHandlers(
   registerGenerateWan30VideoJob(engine);
   registerGenerateWan30PrimeVideoJob(engine);
   registerApicity014Jobs(engine);
+  registerGenerateMediaJob(engine);
   registerGenerateElevenlabsT2aJob(engine);
   registerAudioGenerationJobs(engine);
   registerAcestepCoverJob(engine);

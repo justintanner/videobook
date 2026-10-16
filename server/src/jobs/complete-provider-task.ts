@@ -8,6 +8,8 @@ import { contentHash } from "../upload.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { APICITY_014_IMAGE_TASK_TYPES, APICITY_014_VIDEO_TASK_TYPES } from "../apicity-014-media.js";
+import { completeMediaGeneration, providerResultUrls } from "../media/complete.js";
+import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -105,6 +107,7 @@ const TASK_TYPES_BY_COMPLETION_FAMILY = {
   ],
   gptImage: ["gpt_image", "gpt_image_text"],
   isolateVocals: ["isolate_vocals"],
+  media: Object.values(MEDIA_TASK_TYPES),
 } as const;
 
 type ProviderCompletionFamily = keyof typeof TASK_TYPES_BY_COMPLETION_FAMILY;
@@ -184,9 +187,11 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
       }
     }, 20_000);
 
-    const urls = taskType.startsWith("fal_")
-      ? extractFalUrls(taskType, resultObject)
-      : resultUrls;
+    const urls = completionFamily === "media"
+      ? providerResultUrls(resultUrls, resultObject)
+      : taskType.startsWith("fal_")
+        ? extractFalUrls(taskType, resultObject)
+        : resultUrls;
 
     try {
       switch (completionFamily) {
@@ -288,6 +293,9 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
           break;
         case "isolateVocals":
           await completeIsolateVocals(engine, assetId, meta, urls);
+          break;
+        case "media":
+          await completeMediaGeneration({ engine, assetId, assetDir, bookId, meta, outputs: urls.map((url) => ({ url })) });
           break;
         default: {
           const unhandledFamily: never = completionFamily;

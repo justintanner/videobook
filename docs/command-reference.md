@@ -8,7 +8,7 @@ Historical MCP names remain lookup-only compatibility keys. Slash aliases match 
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (375)
+## MCP endpoints (379)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -107,6 +107,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `forget_asset` — Delete an asset and permanently destroy its stored content; bytes shared with another asset are kept
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
 - `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
+- `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_elevenlabs_music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music
 - `generate_elevenlabs_sound_effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs
 - `generate_elevenlabs_text_to_audio` (historical names, not exposed: `generate_elevenlabs_t2a`) — Generate an aud-* text-to-audio asset using an ElevenLabs voice.
@@ -163,6 +164,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_google_flow_veo_3_1_lite_low_priority_video` (historical names, not exposed: `generate_veo31_lite_low_priority_video`) — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new video artifact and enqueues a background job.
 - `generate_google_flow_veo_3_1_lite_video` (historical names, not exposed: `generate_veo31_lite_video`) — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.
 - `generate_google_flow_veo_3_1_quality_video` (historical names, not exposed: `generate_veo31_video`) — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.
+- `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_image_model_comparison` (historical names, not exposed: `gen_images_all_models`) — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.
 - `generate_kie_elevenlabs_sound_effect_v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie
 - `generate_kie_elevenlabs_text_to_dialogue_v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]
@@ -213,6 +215,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `generate_kie_volcengine_video_to_video_lip_sync` (historical names, not exposed: `generate_volcengine_lipsync_video`) — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.
 - `generate_kie_wan_3_0_prime_video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
 - `generate_kie_wan_3_0_video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.
+- `generate_video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.
 - `get_book` — Read the current book identity
 - `get_book_usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.
@@ -251,6 +254,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_chat_history` — List recent chat input history entries.
 - `list_chat_models` — List supported chat routing models and the default selection
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
+- `list_generation_models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
 - `list_image_edit_models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model
@@ -386,7 +390,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (443; 149 dedicated command routes)
+## Slash actions (447; 149 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -509,6 +513,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-alibaba-qwen-2-0-edit-image` — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.; MCP: `generate_alibaba_qwen_2_0_edit_image`
 - `/generate-alibaba-qwen-2-0-text-to-image` — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.; MCP: `generate_alibaba_qwen_2_0_text_to_image`
+- `/generate-audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_audio`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
 - `/generate-elevenlabs-music` — Compose a music track, seamless loop, or background ambience bed from a text description with ElevenLabs Music; MCP: `generate_elevenlabs_music`
 - `/generate-elevenlabs-sound-effect` — Generate a sound effect or background ambience clip (0.5-30 seconds, optionally looping) from a text description with ElevenLabs; MCP: `generate_elevenlabs_sound_effect`
@@ -565,6 +570,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-google-flow-veo-3-1-lite-low-priority-video` — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_low_priority_video`
 - `/generate-google-flow-veo-3-1-lite-video` — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_lite_video`
 - `/generate-google-flow-veo-3-1-quality-video` — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new video artifact and enqueues a background job.; MCP: `generate_google_flow_veo_3_1_quality_video`
+- `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
 - `/generate-image-model-comparison` — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Seedream v5 Lite, Grok Imagine). Creates one image artifact per model and enqueues background jobs.; MCP: `generate_image_model_comparison`
 - `/generate-kie-elevenlabs-sound-effect-v2` — Generate a sound effect or ambience clip from a text description with ElevenLabs Sound Effects v2 on Kie; MCP: `generate_kie_elevenlabs_sound_effect_v2`
 - `/generate-kie-elevenlabs-text-to-dialogue-v3` — Perform expressive lines with ElevenLabs v3 on Kie; supports audio tags such as [laughs] and [whispers]; MCP: `generate_kie_elevenlabs_text_to_dialogue_v3`
@@ -615,6 +621,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/generate-kie-volcengine-video-to-video-lip-sync` — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_volcengine_video_to_video_lip_sync`
 - `/generate-kie-wan-3-0-prime-video` — Generate a video using Wan 3.0 Prime (KIE), the high-speed tier. One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_prime_video`
 - `/generate-kie-wan-3-0-video` — Generate a video using Wan 3.0 (KIE). One omni model covering text-to-video, first/last-frame, and reference modes with image, video, and audio references; mode is inferred from the supplied inputs. Creates a new video artifact and enqueues a background job.; MCP: `generate_kie_wan_3_0_video`
+- `/generate-video` — Generate an video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
 - `/generate-xai-grok-imagine-video` — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new video artifact and enqueues a background job.; MCP: `generate_xai_grok_imagine_video`
 - `/get-book` — Read the current book identity; MCP: `get_book`
 - `/get-book-usage` — Read recorded provider tokens and USD cost for this book, with estimated and unavailable prices, activity/model breakdowns, and the latest 20 requests. Tracking starts when usage recording is enabled for this book.; MCP: `get_book_usage`
@@ -664,6 +671,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-chat-history` — List recent chat input history entries.; MCP: `list_chat_history`
 - `/list-chat-models` — List supported chat routing models and the default selection; MCP: `list_chat_models`
 - `/list-elevenlabs-voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them; MCP: `list_elevenlabs_voices`
+- `/list-generation-models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity; MCP: `list_generation_models`
 - `/list-google-flow-characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).; MCP: `list_google_flow_characters`
 - `/list-google-flow-voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.; MCP: `list_google_flow_voices`
 - `/list-image-edit-models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model; MCP: `list_image_edit_models`

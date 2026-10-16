@@ -50,6 +50,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   Generation: [
     "estimate_cost", "prepare_video_generation", "prepare_image_generation",
     "build_generation_provider_payload", "rewrite_prompt", "rewrite_script",
+    "generate_image", "generate_video", "generate_audio", "list_generation_models",
   ],
   Sequence: [
     "get_timeline", "set_timeline", "render_timeline", "assign_slot", "unassign_slot",
