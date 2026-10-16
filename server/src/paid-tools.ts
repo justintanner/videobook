@@ -2,7 +2,7 @@
  * Tools that spend provider money: generation, analysis, transcription,
  * tagging, and the notebook run entry points that dispatch paid cells.
  */
-const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
+export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "prepare_cold_open", "analyze_video", "analyze_jokes", "suggest_cuts", "suggest_sfx", "apply_sfx",
   "transcribe", "translate_subtitles", "isolate_vocals", "clean_video_audio",
   "make_cover_song", "extend_audio_asset", "rewrite_prompt", "rewrite_script",

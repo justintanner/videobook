@@ -25,7 +25,7 @@ const toolGroups = new Map(Object.entries(WORKSPACE_TOOL_GROUPS).flatMap(([group
 const uiActions = new Set<string>(UI_ACTION_IDS);
 const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 
-const workflowTools: Readonly<Record<string, { actionId: string; reason: string }>> = {
+export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason: string }>> = {
   upload_post_to_dropbox: { actionId: "command.upload-post-to-dropbox", reason: "Uploads after the composer review shows the Post, its editable caption and the destination folder." },
   save_post_to_icloud: { actionId: "command.save-post-to-icloud", reason: "Saves after the composer delivery sheet shows the Post, its caption and the iPhone folder." },
   post_icloud_sync_status: { actionId: "command.save-post-to-icloud", reason: "Reports iCloud upload progress for a Post the delivery sheet already saved." },
@@ -276,7 +276,7 @@ export function buildWorkspaceActionCatalog(
   const coverage: WorkspaceActionCatalog["tools"] = [];
   for (const tool of tools) {
     groupForTool(tool.name);
-    const workflow = workflowTools[tool.name];
+    const workflow = WORKFLOW_TOOLS[tool.name];
     if (workflow) {
       coverage.push({ tool: tool.name, ...workflow, exposure: "workflow" });
       continue;

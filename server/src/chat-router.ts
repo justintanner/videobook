@@ -67,10 +67,6 @@ const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
 const READ_ONLY_TOOL_NAMES = new Set([
   "asset_history",
   "asset_manifest",
-  "commands",
-  "project_activity",
-  "project_history",
-  "revision_history",
   "slash_commands",
   "storage_status",
   "x_connect_status",
@@ -92,10 +88,7 @@ const READ_ONLY_TOOL_PREFIXES = [
 
 function categoryForTool(name: string): RoutableToolInfo["category"] {
   return /^(?:generate|extend|upscale)_/u.test(name)
-    || name === "prepare_video_generation"
-    || name === "prepare_image_generation"
     || name === "concat_images"
-    || name === "gen_images_all"
     ? "generation"
     : "action";
 }
@@ -705,6 +698,7 @@ function getRoutableTool(
 
 export {
   AUTO_APPLY_TOOL_NAMES,
+  READ_ONLY_TOOL_NAMES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
   applyBytedanceNamedModelRoute,

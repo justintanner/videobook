@@ -48,8 +48,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "create_qr_outro", "create_qart", "create_qrbtf",
   ],
   Generation: [
-    "estimate_cost", "prepare_video_generation", "prepare_image_generation",
-    "build_generation_provider_payload", "rewrite_prompt", "rewrite_script",
+    "estimate_cost", "rewrite_prompt", "rewrite_script",
     "generate_image", "generate_video", "generate_audio", "list_generation_models",
   ],
   Sequence: [
