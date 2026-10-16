@@ -7,8 +7,7 @@ import { getPost, listPosts, migrateLegacyPosts, updatePost } from "../posts/pos
 import { POST_METRIC_NAMES, POST_PLATFORMS } from "../posts/post-contract.js";
 import type { PostMetrics, PostPlatform, PostView } from "../posts/post-contract.js";
 import { recordPostMetrics } from "../posts/post-metrics.js";
-import { dropboxStatus, startDropboxConnect } from "../posts/dropbox-auth.js";
-import { icloudStatus, postIcloudSyncStatus } from "../posts/icloud-drive.js";
+import { postIcloudSyncStatus } from "../posts/icloud-drive.js";
 import { postAnalysisTarget } from "../posts/post-copy.js";
 import { freshPostLanguage } from "../lightning-defaults.js";
 import { POST_COPY_LANGUAGES } from "../posts/post-copy-format.js";
@@ -75,9 +74,6 @@ export function postRecordDefs(engine: Engine): ToolDef[] {
       recordPostMetrics(engine, String(args.post_cell_id), { source: "manual", observedAt: String(args.observed_at), values: args.values as PostMetrics, note: args.note as string | undefined });
       return getPost(engine, String(args.post_cell_id));
     }),
-    define("dropbox_connect_start", "Connect Dropbox with offline OAuth access; returns an authorization URL. Credentials stay in application state.", {}, () => startDropboxConnect(), "global"),
-    define("icloud_status", "Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.", {}, () => icloudStatus(), "global"),
     define("post_icloud_sync_status", "Read whether a saved Post's clip and caption.txt have finished uploading to iCloud. A folder outside iCloud Drive reports that it is not an iCloud folder.", target, async (args) => postIcloudSyncStatus(engine, String(args.post_cell_id))),
-    define("dropbox_connect_status", "Read Dropbox connection status without exposing credentials.", {}, () => dropboxStatus(), "global"),
   ];
 }

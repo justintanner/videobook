@@ -12,11 +12,11 @@ export function DropboxConnectionCard({ call }: { call?: PostToolCall }) {
     setError(null)
     try {
       if (connect) {
-        const result = await call('dropbox_connect_start', {}) as { authorize_url: string }
+        const result = await call('connect_service', { service: 'dropbox' }) as { authorize_url: string }
         if (popup) popup.location.href = result.authorize_url
         else window.open(result.authorize_url, '_blank', 'noopener,noreferrer')
       }
-      setStatus(await call('dropbox_connect_status', {}) as { connected: boolean; pending: boolean; error?: string })
+      setStatus(await call('service_status', { service: 'dropbox' }) as { connected: boolean; pending: boolean; error?: string })
     } catch (cause) { popup?.close(); setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setBusy(false) }
   }

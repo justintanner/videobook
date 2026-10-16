@@ -280,7 +280,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 export async function fetchDropboxConnection(call: DeliveryCall): Promise<DropboxConnection> {
-  const status = record(await call('dropbox_connect_status', {}))
+  const status = record(await call('service_status', { service: 'dropbox' }))
   return {
     connected: status.connected === true,
     pending: status.pending === true,
@@ -290,7 +290,7 @@ export async function fetchDropboxConnection(call: DeliveryCall): Promise<Dropbo
 }
 
 export async function fetchIcloudStatus(call: DeliveryCall): Promise<ICloudStatus> {
-  const status = record(await call('icloud_status', {}))
+  const status = record(await call('service_status', { service: 'icloud' }))
   const role = status.role === 'owner' || status.role === 'participant' ? status.role : null
   return {
     available: status.available === true,
@@ -302,7 +302,7 @@ export async function fetchIcloudStatus(call: DeliveryCall): Promise<ICloudStatu
 }
 
 export async function startDropboxConnection(call: DeliveryCall): Promise<string> {
-  const result = record(await call('dropbox_connect_start', {}))
+  const result = record(await call('connect_service', { service: 'dropbox' }))
   if (typeof result.authorize_url !== 'string') throw new Error('Dropbox did not return an authorization link.')
   return result.authorize_url
 }

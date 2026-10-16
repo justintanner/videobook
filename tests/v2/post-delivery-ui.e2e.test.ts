@@ -127,7 +127,7 @@ describe('Post delivery review in the chat composer', () => {
     const folder = await review().getByLabel('Folder', { exact: true }).inputValue()
     expect(folder).toMatch(/^delivery-ui\/post-/u)
     await expect.poll(() => review().getByRole('button', { name: /^Upload/ }).isEnabled(), { timeout: 15_000 }).toBe(true)
-    expect(calls).toContain('icloud_status')
+    expect(calls).toContain('service_status')
     expect(calls).not.toContain('save_post_to_icloud')
     expect(await review().textContent()).not.toContain('Uploading to iCloud')
 
@@ -155,7 +155,7 @@ describe('Post delivery review in the chat composer', () => {
     await expect.poll(() => review().getByRole('heading', { name: 'Upload to Dropbox', exact: true }).count()).toBe(1)
     await expect.poll(() => review().getByRole('alert').textContent(), { timeout: 15_000 }).toContain('DROPBOX_CLIENT_ID')
     expect(await review().getByRole('button', { name: /^Upload/ }).isDisabled()).toBe(true)
-    expect(calls).toContain('dropbox_connect_status')
+    expect(calls).toContain('service_status')
     expect(calls).not.toContain('upload_post_to_dropbox')
 
     await page.setViewportSize({ width: 390, height: 844 })

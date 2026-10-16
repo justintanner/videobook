@@ -80,10 +80,10 @@ function scriptedCallTool(statuses: Array<Record<string, unknown>>) {
     options?: { background?: boolean },
   ): Promise<unknown> => {
     calls.push({ tool, background: options?.background === true })
-    if (tool === 'x_connect_start') {
+    if (tool === 'connect_service') {
       return { authorize_url: 'https://x.com/i/oauth2/authorize?state=abc' }
     }
-    if (tool === 'x_connect_status') {
+    if (tool === 'service_status') {
       const status = statuses[Math.min(index, statuses.length - 1)]
       index += 1
       return status
@@ -117,7 +117,7 @@ describe('X connection status', () => {
     else process.env.X_CLIENT_SECRET = originalClientSecret
   })
 
-  it('reads the real x_connect_status shape before and after tokens exist', async () => {
+  it('reads the real X service_status shape before and after tokens exist', async () => {
     const { fetch: fetchImpl, urls } = usersMeFetch('Premium')
     expect(parseXConnectionStatus(await getOAuthFlowStatus(memoryStore(), { fetchImpl }))).toEqual({
       ...disconnectedStatus,
@@ -163,7 +163,7 @@ describe('X connection status', () => {
     }
     await fetchXConnectionStatus(callTool)
     await fetchXConnectionStatus(callTool, { refreshAccount: true })
-    expect(calls).toEqual([{}, { refresh_account: true }])
+    expect(calls).toEqual([{ service: 'x' }, { service: 'x', refresh_account: true }])
   })
 
   it('starts the flow and polls in the background until X reports the connection', async () => {
@@ -185,9 +185,9 @@ describe('X connection status', () => {
     expect(status).toEqual(connectedStatus)
     expect(xConnectionOutcome(status)).toEqual({ ok: true, message: 'X account connected' })
     expect(sleeps).toEqual([X_CONNECTION_POLL_MS, X_CONNECTION_POLL_MS])
-    expect(calls[0]).toEqual({ tool: 'x_connect_start', background: false })
+    expect(calls[0]).toEqual({ tool: 'connect_service', background: false })
     expect(calls.slice(1).every((call) =>
-      call.tool === 'x_connect_status' && call.background)).toBe(true)
+      call.tool === 'service_status' && call.background)).toBe(true)
   })
 
   it('surfaces the server-side failure and stops polling', async () => {

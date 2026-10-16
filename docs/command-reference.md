@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (243)
+## MCP endpoints (240)
 
 - `add_asset_tag` — Add a manual tag to one asset. Manual tags survive re-analysis and cannot be replaced by automatic tagging.
 - `add_sequence_track` — Append a canonical video, audio, or caption track
@@ -45,6 +45,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `concat_images` — Concatenate 1-9 image artifacts into a new image artifact. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `configure_asset_tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
+- `connect_service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
 - `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
@@ -75,8 +76,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports. Pass gc:true to run catalog GC on this book and include per-book byte/chunk reclamation in the report.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `draft_post_copy` — Draft a Post's caption and hashtags with Astra from the source clip's video analysis, transcript and generation prompts. Analyzes the clip first when it has no analysis yet. language picks English or Thai; omitted language is Thai for TikTok and English otherwise. platform defaults to the Post's platform and sets the length and tag budget. instruction, caption and tags rewrite an existing draft. Returns the draft without saving it.
-- `dropbox_connect_start` — Connect Dropbox with offline OAuth access; returns an authorization URL. Credentials stay in application state.
-- `dropbox_connect_status` — Read Dropbox connection status without exposing credentials.
 - `duplicate_asset` — Duplicate a media asset and place its notebook cell at an optional destination or directly below the source
 - `edit_cold_open` — Create a new cold-open video copy from a reviewed highlight: selected source range, hard cut, then the complete original clip. Requires a suggestion from prepare_cold_open and the user's reviewed start/end times. Preserves the source. Poll list_jobs for the output artifact and notebook cell.
 - `edit_image_subjects` — Remove, semantically edit, or replace selected cached image subjects and user-drawn regions into a new connected notebook image
@@ -116,7 +115,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_sequence_rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.
-- `icloud_status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.
 - `inject_first_frame` — Replace exactly the first frame of a video artifact or the final video with an image artifact in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
@@ -214,6 +212,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
+- `service_status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.
 - `set_alive_captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
@@ -251,10 +250,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `video_goal` — Create a goal from image and video references. A new goal with no supplied plan is one concise scene and one Seedance 2.5 video: Nano Banana 2.1 at 16:9, 2K, JPG, then 16:9, 1080p, 13 seconds, MP4, with audio. Portrait or square only when the brief says so. No storyboard, ending frame, or style preset. Approving a new goal generates the scene, then the video, and stops at finishing review. finish suggests a 2.3 second cold open, then burns the saved watermark onto a copy after the range is approved. An explicit v2 plan keeps that plan's settings, storyboard, and approval stages. Explicit approval is required before paid generation. update saves a new goal's title and scene or video prompt, or a v2 plan; revise edits a selected image or reruns video with feedback; regenerate makes fresh outputs; select picks any completed version, including after goal completion. Legacy v1 plans stay readable. cancel restores the previous output during revision; retry resumes failed work when the plan and references are unchanged. Multi-clip revisions require explicit assemble and never overwrite user-edited timeline clips; combine renders the selected assembled clips locally. Deleting the goal tile stops it.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
-- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
-- `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).
 
-## Slash actions (316; 146 dedicated command routes)
+## Slash actions (313; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -310,6 +307,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
 - `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
+- `/connect-service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.; MCP: `connect_service`
 - `/connect-x` — Connect your X (Twitter) account via browser OAuth; UI: `x_connect`
 - `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
 - `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
@@ -338,8 +336,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
 - `/download` — Download video from URL; MCP: `download_video`
-- `/dropbox-connect-start` — Connect Dropbox with offline OAuth access; returns an authorization URL. Credentials stay in application state.; MCP: `dropbox_connect_start`
-- `/dropbox-connect-status` — Read Dropbox connection status without exposing credentials.; MCP: `dropbox_connect_status`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
 - `/edit-cold-open` — Review an AI-selected highlight, then create a copy with the highlight followed by the full original clip; UI: `open_cold_open`
@@ -394,7 +390,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/goal` — Build a portrait video in Cinematic or IG Influencer style; choose format, delivery, camera and light before the frame, then review each stage; UI: `start_goal`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
-- `/icloud-status` — Report whether iCloud Drive delivery is available, its Videobook root folder, and whether that folder is shared with the phones.; MCP: `icloud_status`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
@@ -514,6 +509,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-library-assets` — Search ready audio, image, and video assets across all books; MCP: `search_library_assets`
 - `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
+- `/service-status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.; MCP: `service_status`
 - `/set-alive-captions` — Save how a video's alive captions look and move: stack, punch or karaoke style; pop, slam or rise word entrance; vocal-energy sizing; snapping words to vocal onsets; keeping words off faces and on-screen text; text and hit colors. By default also switches the video's renders to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
@@ -570,6 +566,4 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/volume` — Preview a sequence clip's audio gain; preview or workspace operation
 - `/wait-for-asset-ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.; MCP: `wait_for_asset_ready`
 - `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`
-- `/x-connect-start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.; MCP: `x_connect_start`
-- `/x-connect-status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at?, account, post_max_characters } so the client can poll while the user authorizes in the browser. account carries the connected username and X subscription tier; post_max_characters is the post length that tier allows (280, or 25000 with any X Premium tier).; MCP: `x_connect_status`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

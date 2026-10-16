@@ -142,7 +142,7 @@ import { estimateCostDef } from "./estimate-cost.js";
 import { bookUsageDef } from "./book-usage.js";
 import { postRecordDefs } from "./post-record.js";
 import { postDef } from "./post.js";
-import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
+import { connectServiceDef, serviceStatusDef } from "./connect-service.js";
 import { createWatermarkCardDef } from "./create-watermark.js";
 import { applyWatermarkDef } from "./apply-watermark.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
@@ -353,8 +353,8 @@ export function getAllToolDefs(
     ...generateMediaDefs(engine),
     postDef(),
     ...postRecordDefs(engine),
-    xConnectStartDef(),
-    xConnectStatusDef(),
+    connectServiceDef(),
+    serviceStatusDef(),
     createQrOutroDef(engine),
     createQartDef(engine),
     createQrbtfDef(engine),

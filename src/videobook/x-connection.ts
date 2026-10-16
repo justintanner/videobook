@@ -113,8 +113,8 @@ export async function fetchXConnectionStatus(
 ): Promise<XConnectionStatus> {
   return parseXConnectionStatus(
     await callTool(
-      'x_connect_status',
-      options.refreshAccount ? { refresh_account: true } : {},
+      'service_status',
+      { service: 'x', ...(options.refreshAccount ? { refresh_account: true } : {}) },
       { background: true },
     ),
   )
@@ -123,7 +123,7 @@ export async function fetchXConnectionStatus(
 export async function startXConnection(
   callTool: XConnectionCallTool,
 ): Promise<string> {
-  const payload = recordValue(await callTool('x_connect_start', {}))
+  const payload = recordValue(await callTool('connect_service', { service: 'x' }))
   const authorizeUrl = nonEmptyStringValue(payload?.authorize_url)
   if (!authorizeUrl) throw new Error('X did not return an authorization URL.')
   return authorizeUrl

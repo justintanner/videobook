@@ -69,7 +69,7 @@ const READ_ONLY_TOOL_NAMES = new Set([
   "asset_manifest",
   "slash_commands",
   "storage_status",
-  "x_connect_status",
+  "service_status",
 ]);
 
 const READ_ONLY_TOOL_PREFIXES = [

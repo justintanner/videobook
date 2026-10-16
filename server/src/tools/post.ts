@@ -64,7 +64,7 @@ export function postDef(): ToolDef {
         .max(X_PREMIUM_POST_MAX_CHARACTERS)
         .optional()
         .describe(
-          "Title of the root post (X limit 280 chars, or 25000 when the connected account has X Premium; x_connect_status reports post_max_characters). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
+          "Title of the root post (X limit 280 chars, or 25000 when the connected account has X Premium; service_status with service x reports post_max_characters). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
         ),
       orientation: z
         .enum(["portrait", "landscape"])
