@@ -261,43 +261,33 @@ export async function findPreviousErrorForPrompt(
 }
 
 type SceneDef = { prompt: string; duration: number };
-type ElementDef = { name: string; desc: string; refs: string[] };
+type ElementDef = { name: string; desc: string };
+export type SceneRequest = { model?: unknown; prompt?: unknown; options?: Record<string, unknown> };
 
-export function extractSceneContext(
-  toolParams: Record<string, unknown>,
-): { scenes: SceneDef[]; elements: ElementDef[]; refs: string[]; aspectRatio: string } {
-  const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;
-  const scenes: SceneDef[] = multiPrompt
-    ? multiPrompt
-    : [{ prompt: (toolParams.prompt as string) ?? "", duration: Number(toolParams.duration ?? 8) }];
-
-  const elements: ElementDef[] = [];
-  for (let i = 1; i <= 3; i++) {
-    const refs = toolParams[`input_element${i}_refs`] as string[] | undefined;
-    if (!refs) continue;
-    elements.push({
-      name: (toolParams[`element${i}_name`] as string) ?? "",
-      desc: (toolParams[`element${i}_desc`] as string) ?? "",
-      refs,
-    });
-  }
-
-  const refs = (toolParams.input_image_refs as string[]) ?? [];
-  const aspectRatio = (toolParams.aspect_ratio as string) ?? "16:9";
-
-  return { scenes, elements, refs, aspectRatio };
+function requestOptions(request: SceneRequest): Record<string, unknown> {
+  return request.options ?? {};
 }
 
-export function validateSceneRewrite(
-  toolParams: Record<string, unknown>,
-  sceneIndex: number,
-): void {
-  const model = (toolParams.model ?? toolParams.tool) as string | undefined;
+function sceneElements(options: Record<string, unknown>): ElementDef[] {
+  const elements = Array.isArray(options.elements) ? options.elements as Array<Record<string, unknown>> : [];
+  return elements.map((element) => ({ name: String(element.name ?? ""), desc: String(element.description ?? "") }));
+}
+
+export function extractSceneContext(request: SceneRequest): { scenes: SceneDef[]; elements: ElementDef[] } {
+  const options = requestOptions(request);
+  const multiPrompt = Array.isArray(options.multi_prompt) ? options.multi_prompt as SceneDef[] : [];
+  const scenes: SceneDef[] = multiPrompt.length > 0
+    ? multiPrompt
+    : [{ prompt: typeof request.prompt === "string" ? request.prompt : "", duration: Number(options.duration ?? 5) }];
+  return { scenes, elements: sceneElements(options) };
+}
+
+export function validateSceneRewrite(request: SceneRequest, sceneIndex: number): void {
+  const model = typeof request.model === "string" ? request.model : undefined;
   if (model === undefined || modelEntry(model)?.guide !== "kling30") {
     throw new Error(`Scene rewrite requires a Kling 3.0 asset, got model: ${model}`);
   }
-  const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;
-  const nScenes = multiPrompt ? multiPrompt.length : 1;
+  const nScenes = extractSceneContext(request).scenes.length;
   if (sceneIndex < 0 || sceneIndex >= nScenes) {
     throw new Error(`scene_index ${sceneIndex} out of range (0-${nScenes - 1})`);
   }
@@ -580,17 +570,17 @@ async function handleSceneRewrite(
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const assetId = assetRef.replace(/^@/, "");
 
-  const metaResult = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params");
-  if (!metaResult.ok) {
+  const metaResult = await engine.metadata.artifacts.read<SceneRequest>(assetId, "generation-request");
+  if (!metaResult.ok || metaResult.value === null) {
     return {
       isError: true as const,
-      content: [{ type: "text" as const, text: `No .tool.params.json found for ${assetRef}` }],
+      content: [{ type: "text" as const, text: `No generation-request found for ${assetRef}; scene rewrite needs a video made with generate_video` }],
     };
   }
 
-  const toolParams = metaResult.value;
+  const request = metaResult.value;
   try {
-    validateSceneRewrite(toolParams, sceneIndex);
+    validateSceneRewrite(request, sceneIndex);
   } catch (e) {
     return {
       isError: true as const,
@@ -598,7 +588,7 @@ async function handleSceneRewrite(
     };
   }
 
-  const { scenes, elements } = extractSceneContext(toolParams);
+  const { scenes, elements } = extractSceneContext(request);
 
   const guide = await loadGuide("kling30");
   const text = buildSceneRewriteText(guide, scenes, elements, sceneIndex, instruction);

@@ -388,90 +388,55 @@ describe("findPreviousErrorForPrompt", () => {
 });
 
 describe("extractSceneContext", () => {
-  it("uses multi_prompt when provided", () => {
-    const params = {
-      multi_prompt: [
-        { prompt: "scene1", duration: 5 },
-        { prompt: "scene2", duration: 3 },
-      ],
+  it("uses options.multi_prompt when provided", () => {
+    const request = {
+      options: {
+        multi_prompt: [
+          { prompt: "scene1", duration: 5 },
+          { prompt: "scene2", duration: 3 },
+        ],
+      },
     };
-    const ctx = extractSceneContext(params);
+    const ctx = extractSceneContext(request);
     expect(ctx.scenes).toHaveLength(2);
     expect(ctx.scenes[0].prompt).toBe("scene1");
     expect(ctx.scenes[1].duration).toBe(3);
   });
 
-  it("falls back to single scene from prompt/duration params", () => {
-    const params = { prompt: "single scene", duration: 10 };
-    const ctx = extractSceneContext(params);
-    expect(ctx.scenes).toHaveLength(1);
-    expect(ctx.scenes[0].prompt).toBe("single scene");
-    expect(ctx.scenes[0].duration).toBe(10);
+  it("falls back to a single scene from the prompt and options.duration", () => {
+    const ctx = extractSceneContext({ prompt: "single scene", options: { duration: 10 } });
+    expect(ctx.scenes).toEqual([{ prompt: "single scene", duration: 10 }]);
   });
 
-  it("defaults duration to 8 if not provided", () => {
-    const params = { prompt: "a scene" };
-    const ctx = extractSceneContext(params);
-    expect(ctx.scenes[0].duration).toBe(8);
+  it("treats an empty multi_prompt as a single scene", () => {
+    const ctx = extractSceneContext({ prompt: "one shot", options: { multi_prompt: [] } });
+    expect(ctx.scenes).toEqual([{ prompt: "one shot", duration: 5 }]);
   });
 
-  it("extracts elements from numbered params", () => {
-    const params = {
+  it("defaults duration to Kling's 5 seconds if not provided", () => {
+    const ctx = extractSceneContext({ prompt: "a scene" });
+    expect(ctx.scenes[0].duration).toBe(5);
+  });
+
+  it("reads element names and descriptions from options.elements", () => {
+    const request = {
       prompt: "test",
-      input_element1_refs: ["@019fcc00-0000-7000-8000-0000000000a1"],
-      element1_name: "Character",
-      element1_desc: "A character",
-      input_element2_refs: ["@019fcc00-0000-7000-8000-0000000000b1"],
-      element2_name: "Background",
-      element2_desc: "A background",
+      options: {
+        elements: [
+          { name: "Character", description: "A character", element_input_urls: ["https://example.test/a.png"] },
+          { name: "Background", description: "A background", element_input_urls: ["https://example.test/b.png"] },
+        ],
+      },
     };
-    const ctx = extractSceneContext(params);
-    expect(ctx.elements).toHaveLength(2);
-    expect(ctx.elements[0].name).toBe("Character");
-    expect(ctx.elements[1].refs).toEqual(["@019fcc00-0000-7000-8000-0000000000b1"]);
-  });
-
-  it("skips elements without refs", () => {
-    const params = {
-      prompt: "test",
-      element1_name: "Character",
-      element1_desc: "A character",
-    };
-    const ctx = extractSceneContext(params);
-    expect(ctx.elements).toHaveLength(0);
-  });
-
-  it("extracts refs from input_image_refs", () => {
-    const params = {
-      prompt: "test",
-      input_image_refs: [
-        "@019fcc00-0000-7000-8000-0000000000c1",
-        "@019fcc00-0000-7000-8000-0000000000c2",
-      ],
-    };
-    const ctx = extractSceneContext(params);
-    expect(ctx.refs).toEqual([
-      "@019fcc00-0000-7000-8000-0000000000c1",
-      "@019fcc00-0000-7000-8000-0000000000c2",
+    const ctx = extractSceneContext(request);
+    expect(ctx.elements).toEqual([
+      { name: "Character", desc: "A character" },
+      { name: "Background", desc: "A background" },
     ]);
   });
 
-  it("defaults refs to empty array", () => {
-    const params = { prompt: "test" };
-    const ctx = extractSceneContext(params);
-    expect(ctx.refs).toEqual([]);
-  });
-
-  it("extracts aspect_ratio with default 16:9", () => {
-    const params = { prompt: "test" };
-    const ctx = extractSceneContext(params);
-    expect(ctx.aspectRatio).toBe("16:9");
-  });
-
-  it("respects custom aspect_ratio", () => {
-    const params = { prompt: "test", aspect_ratio: "9:16" };
-    const ctx = extractSceneContext(params);
-    expect(ctx.aspectRatio).toBe("9:16");
+  it("defaults elements to an empty list", () => {
+    expect(extractSceneContext({ prompt: "test" }).elements).toEqual([]);
   });
 });
 
@@ -499,14 +464,16 @@ describe("validateSceneRewrite", () => {
   });
 
   it("passes for valid scene_index in multi_prompt", () => {
-    const params = {
+    const request = {
       model: "kie:kling-3.0-omni/text-to-video",
-      multi_prompt: [
-        { prompt: "s0", duration: 5 },
-        { prompt: "s1", duration: 3 },
-      ],
+      options: {
+        multi_prompt: [
+          { prompt: "s0", duration: 5 },
+          { prompt: "s1", duration: 3 },
+        ],
+      },
     };
-    expect(() => validateSceneRewrite(params, 1)).not.toThrow();
+    expect(() => validateSceneRewrite(request, 1)).not.toThrow();
   });
 
   it("throws for negative scene_index", () => {
@@ -516,11 +483,11 @@ describe("validateSceneRewrite", () => {
   });
 
   it("throws for scene_index equal to scene count", () => {
-    const params = {
+    const request = {
       model: "kie:kling-3.0-omni/text-to-video",
-      multi_prompt: [{ prompt: "s0", duration: 5 }],
+      options: { multi_prompt: [{ prompt: "s0", duration: 5 }] },
     };
-    expect(() => validateSceneRewrite(params, 1)).toThrow("out of range");
+    expect(() => validateSceneRewrite(request, 1)).toThrow("out of range");
   });
 });
 
@@ -539,7 +506,7 @@ describe("buildSceneRewriteText", () => {
 
   it("includes elements when provided", () => {
     const scenes = [{ prompt: "test", duration: 5 }];
-    const elements = [{ name: "Hero", desc: "Main character", refs: ["@img-a"] }];
+    const elements = [{ name: "Hero", desc: "Main character" }];
     const text = buildSceneRewriteText("guide", scenes, elements, 0);
     expect(text).toContain("@Hero");
     expect(text).toContain("Main character");
@@ -619,9 +586,8 @@ describe("rewrite_prompt tool", () => {
     expect(content[0].text).toContain("Provide a prompt");
   });
 
-  it("returns error for scene rewrite with no .tool.params.json", async () => {
+  it("returns error for scene rewrite on an asset without a generation request", async () => {
     process.env.OPENAI_API_KEY = "test-key-for-validation";
-    // Upload a video to create an asset, but it won't have tool.params metadata
     const data = Buffer.from("fake-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
@@ -640,7 +606,7 @@ describe("rewrite_prompt tool", () => {
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("No .tool.params.json");
+    expect(content[0].text).toContain("No generation-request found");
   });
 
   it("returns error when image_refs resolve to no files", async () => {

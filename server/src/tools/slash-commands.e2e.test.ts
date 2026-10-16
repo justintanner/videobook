@@ -2377,7 +2377,7 @@ describe("slash commands e2e", () => {
   // 36. /rewrite — scene mode validation
   // -----------------------------------------------------------------------
   describe("/rewrite scene mode", () => {
-    it("errors when asset_ref provided but no tool.params.json", async () => {
+    it("errors when asset_ref has no generation request", async () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
@@ -2394,7 +2394,7 @@ describe("slash commands e2e", () => {
           },
         });
         expect(result.isError).toBe(true);
-        expect((result.content as TextContent)[0].text).toContain("tool.params");
+        expect((result.content as TextContent)[0].text).toContain("generation-request");
       } finally {
         if (origKey) process.env.OPENAI_API_KEY = origKey;
         else delete process.env.OPENAI_API_KEY;
@@ -2409,11 +2409,11 @@ describe("slash commands e2e", () => {
         const asset = await fs.artifacts.create("vid", "scene-range");
         if (!asset.ok) throw new Error("Failed to create asset");
 
-        // Write tool.params with a single scene (no multi_prompt)
-        await fs.metadata.artifacts.write(asset.value.artifactId, "tool.params", {
-          tool: "generate_kling30_video",
+        await fs.metadata.artifacts.write(asset.value.artifactId, "generation-request", {
+          type: "generate_media",
+          model: "kie:kling-3.0-omni/text-to-video",
           prompt: "a test prompt",
-          duration: 8,
+          options: { duration: 8 },
         });
 
         const result = await client.callTool({
@@ -2432,7 +2432,7 @@ describe("slash commands e2e", () => {
       }
     });
 
-    it("errors when tool is not generate_kling30_video", async () => {
+    it("errors when the asset was not made with Kling 3.0", async () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
@@ -2440,8 +2440,9 @@ describe("slash commands e2e", () => {
         const asset = await fs.artifacts.create("vid", "wrong-tool");
         if (!asset.ok) throw new Error("Failed to create asset");
 
-        await fs.metadata.artifacts.write(asset.value.artifactId, "tool.params", {
-          tool: "generate_grok_imagine_video",
+        await fs.metadata.artifacts.write(asset.value.artifactId, "generation-request", {
+          type: "generate_media",
+          model: "kie:grok-imagine/text-to-video",
           prompt: "a test prompt",
         });
 
@@ -3360,10 +3361,11 @@ describe("slash commands e2e", () => {
         const fs = createEngineForTest(tempDir);
         const asset = await fs.artifacts.create("vid", "neg-scene");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.metadata.artifacts.write(asset.value.artifactId, "tool.params", {
-          tool: "generate_kling30_video",
+        await fs.metadata.artifacts.write(asset.value.artifactId, "generation-request", {
+          type: "generate_media",
+          model: "kie:kling-3.0-omni/text-to-video",
           prompt: "test",
-          duration: 8,
+          options: { duration: 8 },
         });
 
         const result = await client.callTool({
@@ -3389,12 +3391,16 @@ describe("slash commands e2e", () => {
         const fs = createEngineForTest(tempDir);
         const asset = await fs.artifacts.create("vid", "multi-scene");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.metadata.artifacts.write(asset.value.artifactId, "tool.params", {
-          tool: "generate_kling30_video",
-          multi_prompt: [
-            { prompt: "scene one", duration: 4 },
-            { prompt: "scene two", duration: 4 },
-          ],
+        await fs.metadata.artifacts.write(asset.value.artifactId, "generation-request", {
+          type: "generate_media",
+          model: "kie:kling-3.0-omni/text-to-video",
+          options: {
+            customize_multi_shots: true,
+            multi_prompt: [
+              { prompt: "scene one", duration: 4 },
+              { prompt: "scene two", duration: 4 },
+            ],
+          },
         });
 
         const result = await client.callTool({
@@ -3426,7 +3432,7 @@ describe("slash commands e2e", () => {
           },
         });
         expect(result.isError).toBe(true);
-        expect((result.content as TextContent)[0].text).toContain("tool.params");
+        expect((result.content as TextContent)[0].text).toContain("generation-request");
       } finally {
         if (origKey) process.env.OPENAI_API_KEY = origKey;
         else delete process.env.OPENAI_API_KEY;
