@@ -35,6 +35,7 @@ import { comparableHitScore } from "../search-scoring.js";
 import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { advertisedAs } from "./tool-json-schema.js";
 import { buildAssetList } from "./reconcile-project-work.js";
 import {
   videoProxyMetadataMatches,
@@ -141,7 +142,7 @@ const preparedReferenceFields = {
     duration_seconds: z.number().positive().optional(),
   }).optional(),
 };
-const searchHitSchema = z.object({
+const searchHitSchema = advertisedAs(z.object({
   artifactId: z.string().uuid(),
   artifactLabel: z.string().min(1).optional(),
   artifactKind: z.enum([
@@ -160,6 +161,9 @@ const searchHitSchema = z.object({
   signals: z.array(searchSignalSchema),
   excerpt: z.string().optional(),
   indexManifestIds: z.array(z.string().min(1)),
+}), {
+  type: "object",
+  description: "One hit copied unchanged from a search_moments result",
 });
 const roughCutBeatSchema = z.object({
   beat_id: z.string().min(1),
@@ -851,7 +855,10 @@ export function semanticSearchDefs(
           row: z.number().int().min(0).max(NOTEBOOK_GRID_ROW_COUNT - 1),
           column: z.number().int().min(0).max(NOTEBOOK_GRID_COLUMN_COUNT - 1),
         }).optional(),
-        query: searchQuerySchema,
+        query: advertisedAs(searchQuerySchema.describe("search_moments query"), {
+          type: "object",
+          description: "The search_moments query that returned hit, copied unchanged",
+        }),
         hit: searchHitSchema,
       },
       handler: async (args) => {

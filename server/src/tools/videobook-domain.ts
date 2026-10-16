@@ -50,6 +50,7 @@ import {
 import { estimateCostDef } from "./estimate-cost.js";
 import { pairForCell } from "./list-cell-generations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { advertisedAs } from "./tool-json-schema.js";
 import {
   listNotebookActions,
   markDescendantsStale,
@@ -301,7 +302,7 @@ const searchSignalSchema = z.object({
   score: z.number().optional(),
   explanation: z.string().optional(),
 });
-const pinnedSearchResultSchema = z.object({
+const pinnedSearchResultSchema = advertisedAs(z.object({
   id: z.string().uuid(),
   artifact_id: z.string().uuid(),
   object_hash: z.string().min(1),
@@ -312,6 +313,9 @@ const pinnedSearchResultSchema = z.object({
   selected_revision: z.string().min(1),
   ordinal: z.number().int().nonnegative(),
   created_at: z.number().int().nonnegative(),
+}), {
+  type: "object",
+  description: "A pinned result copied unchanged from get_notebook; pin new ones with pin_search_moment",
 });
 const cellInputSchema = z.object({
   id: z.string().uuid().optional(),

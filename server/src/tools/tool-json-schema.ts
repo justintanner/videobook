@@ -1,7 +1,10 @@
 import type { StandardSchemaWithJSON } from "@modelcontextprotocol/server";
-import { z, type ZodRawShape } from "zod";
+import { z, type ZodRawShape, type ZodType } from "zod";
 
 type JsonSchema = Record<string, unknown>;
+type JsonSchemaOverride = NonNullable<z.core.ToJSONSchemaParams["override"]>;
+
+const ADVERTISED_SCHEMAS = new WeakMap<object, JsonSchema>();
 
 const SUBSCHEMA_MAPS = new Set([
   "properties",
@@ -74,6 +77,19 @@ function compactNode(value: unknown): unknown {
   );
 }
 
+export function advertisedAs<T extends ZodType>(schema: T, advertised: JsonSchema): T {
+  ADVERTISED_SCHEMAS.set(schema, advertised);
+  return schema;
+}
+
+const advertise: JsonSchemaOverride = ({ zodSchema, jsonSchema }) => {
+  const advertised = ADVERTISED_SCHEMAS.get(zodSchema);
+  if (!advertised) return;
+  const target = jsonSchema as JsonSchema;
+  for (const key of Object.keys(target)) delete target[key];
+  Object.assign(target, advertised);
+};
+
 export function compactJsonSchema(schema: JsonSchema): JsonSchema {
   return compactNode(schema) as JsonSchema;
 }
@@ -85,6 +101,7 @@ export function toolInputJsonSchema(
   return compactJsonSchema(z.toJSONSchema(z.object(shape), {
     io: "input",
     unrepresentable,
+    override: advertise,
   }) as JsonSchema);
 }
 
@@ -98,7 +115,10 @@ export function toolInputSchema(
       vendor: standard.vendor,
       validate: standard.validate,
       jsonSchema: {
-        input: (options) => compactJsonSchema(standard.jsonSchema.input(options)),
+        input: (options) => compactJsonSchema(standard.jsonSchema.input({
+          ...options,
+          libraryOptions: { ...options.libraryOptions, override: advertise },
+        })),
         output: (options) => compactJsonSchema(standard.jsonSchema.output(options)),
       },
     },

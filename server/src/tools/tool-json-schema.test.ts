@@ -5,7 +5,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createTestClient } from "../test-client.js";
-import { compactJsonSchema, toolInputJsonSchema } from "./tool-json-schema.js";
+import { advertisedAs, compactJsonSchema, toolInputJsonSchema, toolInputSchema } from "./tool-json-schema.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -98,5 +98,39 @@ describe("compact tool JSON Schemas", () => {
       enum: [value],
       properties: { nested: { type: "string", format: "uuid" } },
     });
+  });
+
+  it("advertises echo-back objects compactly while still validating them in full", async () => {
+    const hit = advertisedAs(z.object({ artifactId: z.uuid(), score: z.number() }), {
+      type: "object",
+      description: "A hit copied unchanged from a search result",
+    });
+    const shape = { hit, hits: z.array(hit).optional() };
+    const advertised = {
+      type: "object",
+      properties: {
+        hit: { type: "object", description: "A hit copied unchanged from a search result" },
+        hits: { type: "array", items: { type: "object", description: "A hit copied unchanged from a search result" } },
+      },
+      required: ["hit"],
+    };
+
+    expect(toolInputJsonSchema(shape)).toEqual(advertised);
+    const standard = toolInputSchema(shape)["~standard"];
+    expect(standard.jsonSchema.input({ target: "draft-2020-12" })).toEqual(advertised);
+    expect(await standard.validate({ hit: { artifactId: "not-a-uuid", score: 1 } })).toHaveProperty("issues");
+    expect(await standard.validate({ hit: { artifactId: "01a0dc2c-38fa-7316-9136-174c1d69a40a", score: 1 } }))
+      .toEqual({ value: { hit: { artifactId: "01a0dc2c-38fa-7316-9136-174c1d69a40a", score: 1 } } });
+  });
+
+  it("lists search hits compactly to MCP clients", async () => {
+    const { tools } = await client.listTools();
+    const pin = tools.find((tool) => tool.name === "pin_search_moment");
+    expect(pin?.inputSchema.properties?.hit).toEqual({
+      type: "object",
+      description: "One hit copied unchanged from a search_moments result",
+    });
+    const search = tools.find((tool) => tool.name === "search_moments");
+    expect(JSON.stringify(search?.inputSchema.properties?.query)).toContain("modalities");
   });
 });
