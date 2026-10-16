@@ -708,11 +708,12 @@ describe("MCP tools e2e", () => {
 
   // ── Section 14: Generation tools (require KIE_API_KEY) ─────────
 
-  it("generate_nano_banana_image returns error without KIE_API_KEY", async () => {
+  it("generate_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_kie_nano_banana_pro_text_to_image",
+      name: "generate_image",
       arguments: {
+        model: "kie:nano-banana-pro",
         prompt: "a sunset over the ocean",
         book_id: PROJECT,
       },
@@ -721,12 +722,13 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIE_API_KEY");
   });
 
-  it("generate_grok_imagine_video returns error without KIE_API_KEY", async () => {
+  it("generate_video returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_kie_grok_imagine_image_to_video",
+      name: "generate_video",
       arguments: {
-        asset_id: imgAssetId,
+        model: "kie:grok-imagine/image-to-video",
+        refs: { image: imgAssetId },
         book_id: PROJECT,
       },
     });
@@ -734,12 +736,13 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIE_API_KEY");
   });
 
-  it("generate_grok_imagine_image returns error without KIE_API_KEY", async () => {
+  it("generate_audio returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_kie_grok_imagine_image_to_image",
+      name: "generate_audio",
       arguments: {
-        asset_id: imgAssetId,
+        model: "kie:suno/generate",
+        prompt: "a calm piano loop",
         book_id: PROJECT,
       },
     });
@@ -747,44 +750,16 @@ describe("MCP tools e2e", () => {
     expect(parseText(result)).toContain("KIE_API_KEY");
   });
 
-  it("generate_gpt_image returns error without KIE_API_KEY", async () => {
-    if (hasKieKey) return;
-    const result = await client.callTool({
-      name: "generate_kie_gpt_image_2_5_flare_image",
-      arguments: {
-        prompt: "a sunset",
-        book_id: PROJECT,
-      },
-    });
-    expect(result.isError).toBe(true);
-    expect(parseText(result)).toContain("KIE_API_KEY");
-  });
+  // ── Section 15: Generation model listing (no API key) ─────────
 
-  // ── Section 15: Preview tools (require OPENAI_API_KEY) ─────────
-
-  it("preview_video returns error without OPENAI_API_KEY", async () => {
-    if (hasOpenAiKey) return;
-    const result = await client.callTool({
-      name: "prepare_video_generation",
-      arguments: {
-        prompt: "generate a sunset video",
-        book_id: PROJECT,
-      },
-    });
-    expect(result.isError).toBe(true);
-    expect(parseText(result)).toContain("OPENAI_API_KEY");
-  });
-
-  it("preview_image returns model options without OPENAI_API_KEY", async () => {
-    const result = await client.callTool({
-      name: "prepare_image_generation",
-      arguments: {
-        prompt: "generate a sunset image",
-        book_id: PROJECT,
-      },
-    });
-    expect(result.isError).toBeFalsy();
-    expect(parse(result).category).toBe("image");
+  it("list_generation_models returns image and video models without API keys", async () => {
+    for (const media of ["image", "video"] as const) {
+      const result = await client.callTool({ name: "list_generation_models", arguments: { media } });
+      expect(result.isError).toBeFalsy();
+      const models = parse(result).models as Array<{ id: string; media: string }>;
+      expect(models.length).toBeGreaterThan(0);
+      expect(models.every((model) => model.media === media)).toBe(true);
+    }
   });
 
   it("chat returns error without OPENAI_API_KEY", async () => {

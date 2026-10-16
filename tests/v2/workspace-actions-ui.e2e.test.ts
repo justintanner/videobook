@@ -326,19 +326,22 @@ describe('workspace action launcher with real endpoints', () => {
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).count()).toBe(0)
   })
 
-  it('switches an advanced provider while retaining the draft and reviews unknown cost without generating', async () => {
-    const original = catalog.actions.find(action => action.id === 'tool.generate_kie_qwen_3_0_edit_image')!
-    await openActions(original.command)
-    await page.getByRole('textbox', { name: /^Prompt\b/u }).fill('Keep the same scene and use a watercolor style')
-    await page.getByText('Advanced provider and model', { exact: true }).click()
-    await page.getByLabel('Provider and model', { exact: true }).selectOption('tool.generate_fal_qwen_3_0_edit_image')
-    await page.getByRole('heading', { level: 3, name: 'Generate fal qwen 3 0 edit image' }).waitFor()
-    expect(await page.getByRole('textbox', { name: /^Prompt\b/u }).inputValue()).toBe('Keep the same scene and use a watercolor style')
-    const refs = page.getByRole('dialog', { name: 'Workspace actions' }).locator('select').filter({ has: page.locator(`option[value="${imageId}"]`) })
-    await refs.first().selectOption(imageId)
+  it('switches the generation model while retaining the draft and reviews cost without generating', async () => {
+    const action = catalog.actions.find(entry => entry.id === 'tool.generate_image')!
+    const listed = record(await call('list_generation_models', { media: 'image', operation: 'text_to_image' }))
+    const [first, second] = (listed?.models as Record<string, unknown>[]).map(model => String(model.id))
+    await openActions(action.command)
+    const prompt = page.getByRole('textbox', { name: /^Prompt\b/u })
+    await prompt.fill('Keep the same scene and use a watercolor style')
+    const model = page.getByRole('combobox', { name: /^Model\b/u })
+    await expect.poll(() => model.locator(`option[value="${second}"]`).count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(1)
+    await model.selectOption(first!)
+    await model.selectOption(second!)
+    expect(await prompt.inputValue()).toBe('Keep the same scene and use a watercolor style')
     const before = JSON.stringify(await call('list_jobs'))
     await page.getByRole('button', { name: 'Review action', exact: true }).click()
-    await page.getByText('Cost estimate unavailable', { exact: true }).waitFor()
+    const cost = page.locator('.workspace-action-review strong')
+    await expect.poll(() => cost.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toMatch(/^(?:Estimated cost: \$\d+\.\d{4}|Cost estimate unavailable)$/u)
     expect(await page.getByRole('button', { name: 'Confirm and run', exact: true }).isEnabled()).toBe(true)
     expect(JSON.stringify(await call('list_jobs'))).toBe(before)
     await page.setViewportSize({ width: 390, height: 844 })
