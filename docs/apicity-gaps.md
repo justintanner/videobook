@@ -286,6 +286,12 @@ Not re-verified for 0.15.0: the behavior is service-side and needs a live
 Google Flow call. `@apicity/googleflow` 0.15.0 differs from 0.14.2 only in its
 version number.
 
+Update 2026-10-17 (0.16.1): a read-only live probe resolved the account but
+useapi.net answered `GET characters` with 404 (`flow.projectInitialData`), so
+neither the list nor the singleton read could be compared. The reconcile stays
+until a live comparison shows the singleton keeps its name and notes; nothing
+in `@apicity/googleflow` changed the reads.
+
 ## 19. (bug) ~~ElevenLabs Sound Generation omits the 450-character cap~~ — RESOLVED in 0.8.0
 
 `ElevenLabsSoundGenerationRequestSchema.shape.text` now has `.max(450)`.
@@ -509,8 +515,12 @@ Update 2026-10-17 (0.16.1): `@apicity/kie` exports
 `MiniMaxH3ReferenceClipDurationMs` (`ac-j3d6ki.2`): 2,000–15,000 ms per file and
 15,000 ms combined, for reference videos and, per Kie's docs, reference audio
 too. The schema descriptions state the same window. A URL carries no duration,
-so the schema still cannot enforce it; vb-6rct should read the constant instead
-of hard-coding 2–15 s. That guard is a Videobook product gap, not an Apicity one.
+so the schema cannot enforce it. The `kie:minimax-h3/reference-to-video`
+catalog entry now carries the constant as its `rules.refDurationMs`, and
+`checkRefDurations` (`server/src/media/refs.ts`) applies it to every video and
+audio ref with a known `original` duration, in `generate_video` before the
+artifact exists and in the job before any upload or submission (vb-6rct).
+Unknown durations and URLs still pass through to Kie.
 
 ---
 
@@ -673,7 +683,7 @@ the versioned Qwen models, so neither change reaches the catalog.
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
-| **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | nothing; vb-6rct guard should read the constant        |
+| **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | catalog rule reads the apicity constant (vb-6rct)      |
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
 | **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
@@ -725,6 +735,7 @@ deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
 `force_message` and `audio.output.speed` (§39), `MODEL_DISPLAY` names for the
 fal entries (§42), the schema's required Bria `image_url` (§8, §42),
 `GoogleFlowImagesResponseSchema` for image responses (§14), and the package's
-Flow path encoding (§16). Still open: §18 (service-side), the image-model
-pattern in §14, the 13 unpriced fal requests in §41, and the vb-6rct guard that
-should read §36's constant.
+Flow path encoding (§16). The §36 clip window is enforced from the
+apicity constant (vb-6rct). Still open: §18 (service-side; the live probe hit a
+404 on the account), the image-model pattern in §14, and the 13 unpriced fal
+requests in §41.

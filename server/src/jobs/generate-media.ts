@@ -7,7 +7,7 @@ import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
-import { resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
+import { checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { adapterFor } from "../media/adapters/index.js";
 import { completeMediaGeneration } from "../media/complete.js";
 import type { MediaRefs, ResolvedModel } from "../media/types.js";
@@ -58,6 +58,8 @@ export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ct
   requireApiKey(adapter.envKey);
   await engine.metadata.artifacts.write(job.assetId, "generation-request", job);
   const prompt = job.prompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, job.prompt, job.refs);
+  const durationError = await checkRefDurations(engine, model, job.refs);
+  if (durationError) throw new Error(durationError);
   const refs = await uploadRefs(engine, adapter, job.refs);
   const built = buildWireRequest(model, { prompt, refUrls: refs.urls, options: job.options, mode: job.mode });
   if (!built.ok) throw new Error(built.error);

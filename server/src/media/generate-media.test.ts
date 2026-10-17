@@ -9,7 +9,7 @@ import type { Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, waitForJob, type JobHandlerContext, type LeaseToken } from "../queue.js";
-import { runFfmpeg } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { pollPendingProviderTasks } from "../tools/reconcile-project-work.js";
 import { runGenerateMedia, type GenerateMediaJob } from "../jobs/generate-media.js";
 import { configureProviderEndpoints } from "./endpoints.js";
@@ -53,6 +53,8 @@ describe("generic media generation", () => {
   let png: Buffer;
   let mp4: Buffer;
   let mp3: Buffer;
+  let longClip: string;
+  let shortClip: string;
   let server: Server;
   let baseURL: string;
   let requests: RecordedRequest[];
@@ -84,6 +86,10 @@ describe("generic media generation", () => {
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1", join(fixtures, "red.png")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", join(fixtures, "clip.mp4")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "libmp3lame", join(fixtures, "tone.mp3")]);
+    longClip = join(fixtures, "long.mp4");
+    shortClip = join(fixtures, "short.mp4");
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=green:s=64x64:d=17", "-pix_fmt", "yuv420p", longClip]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=green:s=64x64:d=6", "-pix_fmt", "yuv420p", shortClip]);
     png = await readFile(join(fixtures, "red.png"));
     mp4 = await readFile(join(fixtures, "clip.mp4"));
     mp3 = await readFile(join(fixtures, "tone.mp3"));
@@ -147,6 +153,15 @@ describe("generic media generation", () => {
       },
       markAssetFailureHandled: () => {},
     };
+  }
+
+  async function probedVideoArtifact(file: string): Promise<string> {
+    const created = await engine.artifacts.create("vid", "reference clip");
+    if (!created.ok) throw new Error(created.error.message);
+    expect((await engine.files.write(created.value.artifactId, "original.mp4", await readFile(file))).ok).toBe(true);
+    const { duration } = await probeVideo(file);
+    expect((await engine.metadata.artifacts.write(created.value.artifactId, "original", { duration })).ok).toBe(true);
+    return created.value.artifactId;
   }
 
   function queuedJob(assetId: string): GenerateMediaJob {
@@ -238,6 +253,30 @@ describe("generic media generation", () => {
     const metadata = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
     expect(metadata.ok && metadata.value).toMatchObject({ model: "elevenlabs:sound-generation", prompt: "Glass shattering" });
     expect(metadata.ok && Number(metadata.value.duration)).toBeGreaterThan(0.5);
+  });
+
+  it("holds MiniMax H3 reference clips to the apicity duration window before creating or submitting work", async () => {
+    const book_id = engine.book.get().bookId;
+    const model = "kie:minimax-h3/reference-to-video";
+    const long = await probedVideoArtifact(longClip);
+    const short = await probedVideoArtifact(shortClip);
+    const before = engine.artifacts.list().length;
+    expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model, options: { duration: 6 }, prompt: "@video1 at dusk", refs: { video: [long] } } })))
+      .toMatch(new RegExp(`video ref ${long} is 17 s; ${model} accepts 2-15 s per video reference`));
+    expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model, options: { duration: 6 }, prompt: "@video1 @video2 @video3", refs: { video: [short, short, short] } } })))
+      .toMatch(/video refs total 18 s; .* accepts at most 15 s of video references/);
+    expect(engine.artifacts.list()).toHaveLength(before);
+
+    const unknown = await engine.artifacts.create("vid", "clip without metadata");
+    if (!unknown.ok) throw new Error(unknown.error.message);
+    expect((await engine.files.write(unknown.value.artifactId, "original.mp4", await readFile(longClip))).ok).toBe(true);
+    toolJson(await client.callTool({ name: "generate_video", arguments: { book_id, model, options: { duration: 6 }, prompt: "@video1 at dusk", refs: { video: [unknown.value.artifactId] } } }));
+    const accepted = toolJson(await client.callTool({ name: "generate_video", arguments: { book_id, model, options: { duration: 6 }, prompt: "@video1 at dusk", refs: { video: [short] } } }));
+    expect(queuedJob(String(accepted.asset_id)).refs).toEqual({ video: [short] });
+
+    const stale = { ...queuedJob(String(accepted.asset_id)), refs: { video: [long] } };
+    await expect(runGenerateMedia(engine, stale, await ownerContext(stale.assetId))).rejects.toThrow(/is 17 s; .* accepts 2-15 s/);
+    expect(requests.filter((entry) => entry.path === "/api/v1/jobs/createTask")).toEqual([]);
   });
 
   it("keeps the video fixture available for reference-video models", async () => {

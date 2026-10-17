@@ -1,3 +1,4 @@
+import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import type { ModeSpec, ModelEntry } from "./types.js";
 
@@ -172,7 +173,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:happyhorse/video-edit", media: "video", operations: ["edit_video"], dialect: "happyhorse_edit" },
   { id: "kie:minimax-h3/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "kie:minimax-h3/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
-  { id: "kie:minimax-h3/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural" },
+  { id: "kie:minimax-h3/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", rules: { refDurationMs: MiniMaxH3ReferenceClipDurationMs } },
   { id: "kie:volcengine/video-to-video-lip-sync", media: "video", operations: ["lip_sync"] },
   { id: "kie:omnihuman-1-5", media: "video", operations: ["image_to_video", "lip_sync"], dialect: "natural" },
   { id: "kie:vidu-q4/image-to-video", media: "video", operations: ["image_to_video"], dialect: "natural_kinds" },

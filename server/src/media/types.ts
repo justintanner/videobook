@@ -63,8 +63,15 @@ export interface ModeSpec {
   defaults?: Record<string, unknown>;
 }
 
+export interface RefDurationWindowMs {
+  minimum: number;
+  maximum: number;
+  maximumTotal: number;
+}
+
 export interface InputRules {
   maxPromptChars?: number;
+  refDurationMs?: Partial<Record<"video" | "audio", RefDurationWindowMs>>;
 }
 
 export interface ModelEntry {

@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
-import { REF_ROLES, type MediaRefs, type RefRole } from "./types.js";
+import { REF_ROLES, type MediaRefs, type RefDurationWindowMs, type RefRole, type ResolvedModel } from "./types.js";
 
 export interface ResolvedRefs {
   urls: MediaRefs;
@@ -87,4 +87,49 @@ export function normalizeRefs(raw: unknown): MediaRefs {
     if (strings.length > 0) refs[role] = strings;
   }
   return refs;
+}
+
+type TimedRole = "video" | "audio";
+
+function seconds(ms: number): string {
+  return String(Math.round(ms / 100) / 10);
+}
+
+async function knownDurationMs(engine: Engine, role: TimedRole, raw: string): Promise<number | undefined> {
+  if (isHttpUrl(raw)) return undefined;
+  const input = await resolveRefInput(engine, role, raw);
+  if (!input.filename.startsWith("original")) return undefined;
+  const meta = await engine.metadata.artifacts.read<{ duration?: unknown }>(input.assetId, "original");
+  const duration = meta.ok ? meta.value?.duration : undefined;
+  return typeof duration === "number" && Number.isFinite(duration) && duration > 0 ? Math.round(duration * 1000) : undefined;
+}
+
+function clipError(modelId: string, role: TimedRole, raw: string, ms: number, window: RefDurationWindowMs): string | null {
+  if (ms >= window.minimum && ms <= window.maximum) return null;
+  return `${role} ref ${raw} is ${seconds(ms)} s; ${modelId} accepts ${seconds(window.minimum)}-${seconds(window.maximum)} s per ${role} reference`;
+}
+
+async function checkRoleDurations(engine: Engine, modelId: string, role: TimedRole, raws: readonly string[], window: RefDurationWindowMs): Promise<string | null> {
+  let total = 0;
+  for (const raw of raws) {
+    const ms = await knownDurationMs(engine, role, raw);
+    if (ms === undefined) continue;
+    const error = clipError(modelId, role, raw, ms, window);
+    if (error) return error;
+    total += ms;
+  }
+  return total > window.maximumTotal
+    ? `${role} refs total ${seconds(total)} s; ${modelId} accepts at most ${seconds(window.maximumTotal)} s of ${role} references`
+    : null;
+}
+
+export async function checkRefDurations(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<string | null> {
+  const windows = model.entry.rules?.refDurationMs;
+  if (!windows) return null;
+  for (const role of ["video", "audio"] as const) {
+    const window = windows[role];
+    const error = window ? await checkRoleDurations(engine, model.id, role, refs[role] ?? [], window) : null;
+    if (error) return error;
+  }
+  return null;
 }
