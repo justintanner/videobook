@@ -11518,8 +11518,14 @@ textarea:focus-visible {
 
 @media (max-width: 360px) {
   .canvas-selection-count > span,
-  .canvas-delete-selection > span {
+  .canvas-delete-selection > span,
+  .canvas-quick-add > span {
     display: none;
+  }
+
+  .canvas-quick-add {
+    width: 32px;
+    padding: 0;
   }
 
   .canvas-selection-actions > span {

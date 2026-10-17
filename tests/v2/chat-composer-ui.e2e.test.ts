@@ -43,7 +43,7 @@ async function collapseComposerDock(page: Page): Promise<void> {
   const composer = page.locator('.command-composer')
   if (await composer.getAttribute('data-dock-open') !== 'true') return
   const collapse = composer.locator('[data-composer-dock-hide]')
-  if (await collapse.count()) await collapse.click()
+  if (await collapse.count()) await collapse.click({ timeout: 5_000 }).catch(() => undefined)
   await expect.poll(async () => await composer.getAttribute('data-dock-open'), { timeout: MCP_ROUNDTRIP_MS })
     .toBe('false')
 }
@@ -409,13 +409,13 @@ describe('chat composer browser flow', () => {
       label: 'generate-video-target',
       slot: { row: 1, column: 0 },
       provider: 'kie',
-      model: 'Seedance2MiniInputSchema',
+      model: 'kie:bytedance/seedance-2-5',
       operation: 'image_to_video',
-      tool: 'generate_kie_seedance_2_5_video',
+      tool: 'generate_video',
       inputs: {
         state: 'running',
         generationSettings: {
-          duration: '10',
+          duration: 10,
           resolution: '720p',
           aspect_ratio: '9:16',
         },
@@ -452,13 +452,13 @@ describe('chat composer browser flow', () => {
       slot: { row: 3, column: 1 },
       prompt: 'A moonlit garden moving in a light breeze',
       provider: 'kie',
-      model: 'Seedance2MiniInputSchema',
+      model: 'kie:bytedance/seedance-2-5',
       operation: 'text_to_video',
-      tool: 'generate_kie_seedance_2_5_video',
+      tool: 'generate_video',
       inputs: {
         generationMode: 't2v',
         generationSettings: {
-          duration: '5',
+          duration: 5,
           resolution: '720p',
           aspect_ratio: '16:9',
         },
@@ -527,19 +527,19 @@ describe('chat composer browser flow', () => {
       label: 'generate-image-fullscreen',
       slot: { row: 2, column: 1 },
       prompt: 'A fullscreen image fixture',
-      provider: 'google-flow',
-      model: 'nano-banana-pro',
+      provider: 'googleflow',
+      model: 'googleflow:nano-banana-pro',
       operation: 'text_to_image',
-      tool: 'generate_google_flow_nano_banana_pro_image',
+      tool: 'generate_image',
     })
     fullscreenImageCellId = await createCell({
       type: 'image',
       label: 'generate-image-fullscreen image',
       slot: { row: 2, column: 2 },
       prompt: 'A fullscreen image fixture',
-      provider: 'google-flow',
-      model: 'nano-banana-pro',
-      tool: 'generate_google_flow_nano_banana_pro_image',
+      provider: 'googleflow',
+      model: 'googleflow:nano-banana-pro',
+      tool: 'generate_image',
       output_artifact_id: fullscreenImageArtifactId,
       inputs: {
         mediaRole: 'generate-image-output',
@@ -589,9 +589,9 @@ describe('chat composer browser flow', () => {
       slot: { row: 1, column: 3 },
       prompt: 'Fallback thread prompt',
       provider: 'kie',
-      model: 'Seedance2MiniInputSchema',
+      model: 'kie:bytedance/seedance-2-5',
       operation: 'image_to_video',
-      tool: 'generate_kie_seedance_2_5_video',
+      tool: 'generate_video',
       inputs: {
         resolvedPrompt: 'Exact final generation prompt for the making-of thread',
       },
@@ -861,10 +861,10 @@ describe('chat composer browser flow', () => {
         slot: { row: 2, column: 7 },
         prompt: 'Animate the two reference frames',
         provider: 'kie',
-        model: 'bytedance/seedance-2-5',
+        model: 'kie:bytedance/seedance-2-5',
         operation: 'generate_video',
-        tool: 'generate_kie_seedance_2_5_video',
-        inputs: { generationMode: 'r2v', generationSettings: { duration: '20', aspect_ratio: '9:16' } },
+        tool: 'generate_video',
+        inputs: { generationMode: 'r2v', generationSettings: { duration: 20, aspect_ratio: '9:16' } },
       })
       const outputId = await createCell({
         type: 'video',
@@ -945,9 +945,9 @@ describe('chat composer browser flow', () => {
       const generator = await call<{ id: string }>('create_notebook_cell', {
         cell: {
           type: 'generate_video', slot: { row: 2, column: 7 },
-          prompt: 'Use @image1 and @firstframe', provider: 'kie', model: 'bytedance/seedance-2-5',
-          operation: 'generate_video', tool: 'generate_kie_seedance_2_5_video',
-          inputs: { generationMode: 'r2v', generationSettings: { duration: '20', aspect_ratio: '9:16' } },
+          prompt: 'Use @image1 and @firstframe', provider: 'kie', model: 'kie:bytedance/seedance-2-5',
+          operation: 'generate_video', tool: 'generate_video',
+          inputs: { generationMode: 'r2v', generationSettings: { duration: 20, aspect_ratio: '9:16' } },
         },
       })
       created.push(generator.id)
@@ -1609,9 +1609,9 @@ describe('chat composer browser flow', () => {
         label: 'generate-video-dynamic-target',
         slot: { row: 2, column: 4 },
         provider: 'kie',
-        model: 'Seedance2MiniInputSchema',
+        model: 'kie:bytedance/seedance-2-5',
         operation: 'image_to_video',
-        tool: 'generate_kie_seedance_2_5_video',
+        tool: 'generate_video',
       })
       dynamicCellIds.push(videoTargetCellId)
       const videoTargetNode = page.locator(
@@ -2173,7 +2173,7 @@ describe('chat composer browser flow', () => {
     await generationNode.waitFor({ state: 'visible' })
     expect(await generationNode.locator('.cell-media').count()).toBe(0)
     expect((await generationNode.locator('.cell-model-line').textContent())?.trim())
-      .toBe('Nano Banana Pro')
+      .toBe('Nano Banana Pro (Google Flow)')
     expect((await generationNode.locator('.cell-copy-text p').textContent())?.trim())
       .toBe('A fullscreen image fixture')
     const fullscreenNode = page.locator(
@@ -3769,26 +3769,38 @@ describe('chat composer browser flow', () => {
     await input.fill(routedPrompt)
     await wait(700)
     observedCalls.length = 0
-    await page.getByLabel('Send command').click()
-    await page.waitForFunction(() =>
-      document.querySelector('[data-testid="composer-history"] .mcp-call-running .mcp-call-name')
-        ?.textContent === 'Routing chat')
+    let releaseChat: () => void = () => undefined
+    const heldChat = new Promise<void>((resolve) => { releaseChat = resolve })
+    const holdChat = async (route: Route) => {
+      if (toolCalls(await requestBody(route)).some((call) => call.name === 'chat')) await heldChat
+      await route.fallback()
+    }
     const shell = page.locator('.command-line-shell')
     const composer = page.locator('.command-composer')
-    expect(await shell.getAttribute('aria-busy')).toBe('true')
-    expect(await composer.evaluate((element) => window.getComputedStyle(element).animationName))
-      .toContain('command-transmit-pulse')
     const workingIndicator = page.locator('.command-send .busy-indicator')
-    await workingIndicator.waitFor({ state: 'visible' })
-    await wait(220)
-    const workingBox = await workingIndicator.boundingBox()
-    expect(await workingIndicator.evaluate((element) =>
-      window.getComputedStyle(element.querySelector('svg')!).animationName))
-      .toBe('busy-signal-beat')
-    await wait(240)
-    expect(await workingIndicator.boundingBox()).toEqual(workingBox)
     const screenshotPath = process.env.VIDEOBOOK_E2E_SCREENSHOT
-    if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
+    await page.route('**/mcp', holdChat)
+    try {
+      await page.getByLabel('Send command').click()
+      await page.waitForFunction(() =>
+        document.querySelector('[data-testid="composer-history"] .mcp-call-running .mcp-call-name')
+          ?.textContent === 'Routing chat')
+      expect(await shell.getAttribute('aria-busy')).toBe('true')
+      expect(await composer.evaluate((element) => window.getComputedStyle(element).animationName))
+        .toContain('command-transmit-pulse')
+      await workingIndicator.waitFor({ state: 'visible' })
+      await wait(220)
+      const workingBox = await workingIndicator.boundingBox()
+      expect(await workingIndicator.evaluate((element) =>
+        window.getComputedStyle(element.querySelector('svg')!).animationName))
+        .toBe('busy-signal-beat')
+      await wait(240)
+      expect(await workingIndicator.boundingBox()).toEqual(workingBox)
+      if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
+    } finally {
+      releaseChat()
+      await page.unroute('**/mcp', holdChat)
+    }
 
     await expect.poll(() => observedCalls.find((call) => call.name === 'chat'), {
       timeout: 20_000,
@@ -4165,7 +4177,7 @@ describe('chat composer browser flow', () => {
     expect(await editor.getByText('Or type', { exact: false }).count()).toBe(0)
 
     const imageModel = editor.getByLabel('Generation model')
-    expect(await imageModel.inputValue()).toBe('generation.generate_kie_nano_banana_2_1_image')
+    expect(await imageModel.inputValue()).toBe('generation.kie:nano-banana-2-1')
     expect(await editor.getByLabel('Resolution', { exact: true }).inputValue()).toBe('string:2K')
     expect(await source.textContent()).toContain('"resolution": "2K"')
     const gptModels = await imageModel.locator('option').allTextContents()
@@ -4175,7 +4187,7 @@ describe('chat composer browser flow', () => {
     ])
 
     await editor.getByLabel('Generation model').selectOption(
-      'generation.generate_kie_nano_banana_pro_text_to_image',
+      'generation.kie:nano-banana-pro',
     )
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
@@ -4322,7 +4334,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await source.textContent(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('A moonlit garden moving in a light breeze')
-    expect(await editor.getByLabel('Duration', { exact: true }).inputValue()).toBe('string:5')
+    expect(await editor.getByLabel('Duration', { exact: true }).inputValue()).toBe('5')
     expect(await source.textContent()).not.toContain('A revised moonlit garden')
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     expect(await editor.getByRole('region', { name: 'Dolt source' }).isVisible()).toBe(true)
@@ -4365,9 +4377,9 @@ describe('chat composer browser flow', () => {
       await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
       await editor.getByRole('button', { name: 'Add input', exact: true }).click()
       await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
-      await model.selectOption('generation.generate_kie_vidu_q4_image_to_video')
+      await model.selectOption('generation.kie:vidu-q4/image-to-video')
       await prompt.fill('')
-      await editor.getByLabel('Duration', { exact: true }).selectOption('string:3')
+      await editor.getByLabel('Duration', { exact: true }).fill('3')
       await editor.getByLabel('Resolution', { exact: true }).selectOption('string:540p')
       const audio = editor.getByRole('switch', { name: 'Audio', exact: true })
       await audio.setChecked(false)
@@ -4379,11 +4391,11 @@ describe('chat composer browser flow', () => {
       expect(await source.textContent()).toContain('"duration": 3')
       expect(await editor.getByLabel('Aspect ratio', { exact: true }).count()).toBe(0)
 
-      await model.selectOption('generation.generate_kie_vidu_q4_reference_to_video')
+      await model.selectOption('generation.kie:vidu-q4/reference-to-video')
       await prompt.fill('Animate @image1 in a gentle breeze')
       await editor.getByLabel('Aspect ratio', { exact: true }).selectOption('string:9:16')
       await editor.getByLabel('Resolution', { exact: true }).selectOption('string:4k')
-      await editor.getByLabel('Duration', { exact: true }).selectOption('string:16')
+      await editor.getByLabel('Duration', { exact: true }).fill('16')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
         .toContain('"model": "vidu-q4/reference-to-video"')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
@@ -4393,8 +4405,11 @@ describe('chat composer browser flow', () => {
       expect(await source.textContent()).toContain('"aspect_ratio": "9:16"')
       expect(await source.textContent()).toContain('"resolution": "4k"')
       expect(observedCalls.some(call => call.name === 'run_notebook'
-        || call.name.startsWith('generate_kie_vidu_q4'))).toBe(false)
+        || call.name === 'generate_video')).toBe(false)
     } finally {
+      const addedInput = editor.getByLabel('Remove @c3 input')
+      if (await addedInput.count()) await addedInput.click()
+      await expect.poll(() => addedInput.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       notebookDirty = true
     }
   }, 60_000)
@@ -4417,7 +4432,7 @@ describe('chat composer browser flow', () => {
       await notebookCellNode(page!, cellId).click()
       const generate = page!.getByLabel('Primary cell action')
         .getByRole('button', { name: 'Generate' })
-      await expect.poll(async () => await generate.isEnabled()).toBe(true)
+      await expect.poll(async () => await generate.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       observedCalls.length = 0
       await generate.click({ timeout: 10_000 })
       await expect.poll(() => observedCalls.some((call) =>
@@ -4888,7 +4903,9 @@ describe('chat composer browser flow', () => {
     expect((await videoMenu.getByRole('menuitem').allTextContents())
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
+      'Create Post',
       'Open media',
+      'Edit cold open',
       'Download video',
       'Extract frame',
       'Generate video',
@@ -4942,6 +4959,7 @@ describe('chat composer browser flow', () => {
     expect((await duplicateMenu.getByRole('menuitem').allTextContents())
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
+      'Create Post',
       'Open media',
       'Generate video',
       'Generate image',
