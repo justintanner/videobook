@@ -26,12 +26,18 @@ import { probeVideo } from '../../server/src/ffmpeg.js'
 import { readGoal, saveGoal } from '../../server/src/goal-store.js'
 import { constrainGoalPlannerPlan } from '../../server/src/goal-planner-prompt.js'
 import { cancelChainRun, getChainRun, waitForChainRun } from '../../server/src/chain-executor.js'
+import { tryResolveModel } from '../../server/src/media/descriptor.js'
 import type { GoalSnapshot } from '../../server/src/tools/goal.js'
 import { availablePort, resultValue, startProcess, stopProcess, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
 const live = process.env.VIDEOBOOK_RUN_MODEL_E2E === '1'
 const scenario = live ? it.skip : it
+
+function generationJobs(engine: Engine, media: 'image' | 'video') {
+  return engine.jobs.queue.list({ type: 'generate_media' })
+    .filter(job => tryResolveModel(String(job.payload.model))?.media === media)
+}
 
 function openNotebookSlot(cells: ReadonlyArray<{ slot: { row: number; column: number } }>): { row: number; column: number } {
   const used = new Set(cells.map(cell => `${cell.slot.row}:${cell.slot.column}`))
@@ -269,10 +275,10 @@ describe('staged goal mode in the browser', () => {
     expect(running.revision).toBe(2)
     const runningPlan = running.plan
     expect(runningPlan && 'shots' in runningPlan ? runningPlan.shots[0]?.durationSeconds : undefined).toBe(12)
-    const jobs = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' })
+    const jobs = generationJobs(engine, 'image')
     expect(jobs).toHaveLength(1)
-    expect(jobs[0]!.payload).toMatchObject({ input: { aspect_ratio: '9:16', resolution: '2K' } })
-    expect(engine.jobs.queue.list({ type: 'generate_seedance25_video' })).toHaveLength(0)
+    expect(jobs[0]!.payload).toMatchObject({ options: { aspect_ratio: '9:16', resolution: '2K' } })
+    expect(generationJobs(engine, 'video')).toHaveLength(0)
     await expect.poll(() => page.locator('.cell-goal-mark').count(), { timeout: 15_000 }).toBe(previousMarkers + 2)
     expect(getChainRun(engine, running.chainId!)!.steps.map(step => step.id)).toEqual(['frame'])
     await status().click()
@@ -317,12 +323,12 @@ describe('staged goal mode in the browser', () => {
     await card.getByLabel('What should change in Full frame?', { exact: true }).fill('Give Character 1 a red cap')
     await screenshot('goal-frame-versions')
     await pauseBookQueueForTests(bookId)
-    const before = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length
+    const before = generationJobs(engine, 'image').length
     await card.getByRole('button', { name: /^Revise ·/ }).click()
-    await expect.poll(() => engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length, { timeout: 15_000 }).toBe(before + 1)
+    await expect.poll(() => generationJobs(engine, 'image').length, { timeout: 15_000 }).toBe(before + 1)
     const running = await current(created)
-    const job = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).find(job => String(job.payload.input && (job.payload.input as Record<string, unknown>).prompt).includes('Give Character 1 a red cap'))!
-    expect(job.payload).toMatchObject({ sourceImageIds: [firstId, ...created.characters.map(character => character.artifactId)], input: { prompt: expect.stringContaining('Change @image1: Give Character 1 a red cap') } })
+    const job = generationJobs(engine, 'image').find(job => String(job.payload.prompt).includes('Give Character 1 a red cap'))!
+    expect(job.payload).toMatchObject({ refs: { image: [firstId, ...created.characters.map(character => character.artifactId)] }, prompt: expect.stringContaining('Change @image1: Give Character 1 a red cap') })
     expect(running.stages.frame!.attempts!.at(-1)).toMatchObject({ parentArtifactId: firstId, feedback: 'Give Character 1 a red cap' })
     await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Revising frame')
     await status().click()
@@ -389,7 +395,7 @@ describe('staged goal mode in the browser', () => {
   scenario('shows placeholder failure and retries only the frame with new tiles and provenance', async () => {
     const saved = await create()
     await open(saved)
-    const before = engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length
+    const before = generationJobs(engine, 'image').length
     await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
     await expect.poll(async () => (await current(saved)).status, { timeout: 30_000 }).toBe('failed')
     await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Full frame failed')
@@ -397,12 +403,12 @@ describe('staged goal mode in the browser', () => {
     expect(failed.error).toContain('placeholder')
     await status().click()
     await panel().getByRole('button', { name: /^Retry frame · \$/ }).click()
-    await expect.poll(() => engine.jobs.queue.list({ type: 'generate_gpt_image_2_5' }).length, { timeout: 15_000 }).toBe(before + 2)
+    await expect.poll(() => generationJobs(engine, 'image').length, { timeout: 15_000 }).toBe(before + 2)
     await expect.poll(async () => (await current(saved)).status, { timeout: 30_000 }).toBe('failed')
     await status().click()
     await expect.poll(() => panel().getByRole('button', { name: /^Retry frame · \$/ }).isVisible(), { timeout: 15_000 }).toBe(true)
     await screenshot('goal-failed')
-    expect(engine.jobs.queue.list({ type: 'generate_seedance25_video' })).toHaveLength(0)
+    expect(generationJobs(engine, 'video')).toHaveLength(0)
     expect(errors).toEqual([])
   }, 60_000)
 
@@ -772,7 +778,10 @@ describe('staged goal mode in the browser', () => {
     expect(await panel().getByRole('button', { name: /storyboard/i }).count()).toBe(0)
     expect(await panel().getByText('Use these storyboards').count()).toBe(0)
     expect(await panel().getByRole('button', { name: /Open @image1/ }).isVisible()).toBe(true)
+    expect(await panel().getByRole('button', { name: /Open @video1/ }).count()).toBe(0)
+    await tabs.getByRole('button', { name: 'Video', exact: true }).click()
     expect(await panel().getByRole('button', { name: /Open @video1/ }).isVisible()).toBe(true)
+    await tabs.getByRole('button', { name: 'Scene', exact: true }).click()
     const scenePrompt = panel().getByLabel('Scene prompt', { exact: true })
     await scenePrompt.fill('Morning market skate past the fruit stalls')
     expect(await panel().getByRole('button', { name: /^Generate scene · \$/ }).isEnabled()).toBe(true)

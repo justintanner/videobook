@@ -3,12 +3,46 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { CostHints } from '@apicity/cost'
 import { BookManager } from '../../server/src/book-manager.js'
+import { estimateGeneration } from '../../server/src/media/cost.js'
+import { tryResolveModel } from '../../server/src/media/descriptor.js'
+import type { MediaRefs } from '../../server/src/media/types.js'
 import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
-interface Fixture { bookId: string; videoId: string; audioId: string; duration: number; resolution: string }
+interface Fixture { bookId: string; videoId: string; audioId: string; duration: number }
 interface Estimate { usd: number; breakdown: Record<string, unknown>; warnings: string[] }
 interface EstimateResult { estimate: Estimate; per_call: Array<{ tool_name: string; estimate: Estimate }> }
+interface SourceCase { model: string; prompt?: string; source: 'video' | 'audio'; refs: MediaRefs; options: Record<string, unknown> }
+
+const IMAGE_URL = 'https://example.test/still.png'
+const VIDEO_URL = 'https://example.test/source.mp4'
+const AUDIO_URL = 'https://example.test/voice.mp3'
+const MOTION: SourceCase = { model: 'kie:kling-3.0/motion-control', source: 'video', refs: { image: [IMAGE_URL] }, options: {} }
+const SOURCE_CASES: SourceCase[] = [
+  MOTION,
+  { model: 'kie:happyhorse/video-edit', prompt: 'make it rain', source: 'video', refs: {}, options: { resolution: '1080p' } },
+  { model: 'kie:omnihuman-1-5', prompt: 'a calm presenter', source: 'audio', refs: { image: [IMAGE_URL] }, options: {} },
+  { model: 'kie:volcengine/video-to-video-lip-sync', source: 'video', refs: { audio: [AUDIO_URL] }, options: { mode: 'lite' } },
+]
+
+function sourceRefs(item: SourceCase, ref: string): MediaRefs {
+  return { ...item.refs, [item.source]: [ref] }
+}
+
+function expectedUsd(item: SourceCase, hints: CostHints): number {
+  const model = tryResolveModel(item.model)
+  if (!model) throw new Error(`Unknown model ${item.model}`)
+  const placeholder = item.source === 'video' ? VIDEO_URL : AUDIO_URL
+  const result = estimateGeneration(model, { prompt: item.prompt, refUrls: sourceRefs(item, placeholder), options: item.options }, hints)
+  if (!result.ok) throw new Error(result.error)
+  return result.estimate.usd
+}
+
+function sourceInput(item: SourceCase, fixture: Fixture, bookId: string = fixture.bookId): Record<string, unknown> {
+  const ref = item.source === 'video' ? fixture.videoId : fixture.audioId
+  return { book_id: bookId, model: item.model, ...(item.prompt ? { prompt: item.prompt } : {}), refs: sourceRefs(item, `@${ref}`), options: item.options }
+}
 
 describe('source-dependent cost endpoints over HTTP MCP', () => {
   let rootDir: string
@@ -22,8 +56,8 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
     fixtures = []
     try {
       await books.ready()
-      for (const [duration, resolution] of [[4, '480p'], [9, '720p']] as const) {
-        const created = await books.create(`Cost ${resolution}`)
+      for (const duration of [4, 9]) {
+        const created = await books.create(`Cost ${duration}s`)
         if (!created.ok) throw new Error(created.error.message)
         const book = books.get(created.value.bookId)
         if (!book.ok) throw new Error(book.error.message)
@@ -35,9 +69,7 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
           const metadata = await engine.metadata.artifacts.write(asset.artifactId, 'original', { duration })
           if (!metadata.ok) throw new Error(metadata.error.message)
         }
-        const payload = await engine.metadata.artifacts.write(video.value.artifactId, 'generation-payload', { model: 'grok-imagine/text-to-video', input: { resolution } })
-        if (!payload.ok) throw new Error(payload.error.message)
-        fixtures.push({ bookId: created.value.bookId, videoId: video.value.artifactId, audioId: audio.value.artifactId, duration, resolution })
+        fixtures.push({ bookId: created.value.bookId, videoId: video.value.artifactId, audioId: audio.value.artifactId, duration })
       }
     } finally { await books.close() }
     server = await startServer(rootDir)
@@ -53,39 +85,33 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
 
-  const estimate = (tool: string, input: Record<string, unknown>) => callTool<EstimateResult>(client, 'estimate_cost', { calls: [{ tool_name: tool, input }] })
+  const estimate = (input: Record<string, unknown>) => callTool<EstimateResult>(client, 'estimate_cost', { calls: [{ tool_name: 'generate_video', input }] })
 
-  it('resolves each Grok extension source in its own book within a mixed batch', async () => {
-    const calls = fixtures.map((fixture) => ({ tool_name: 'extend_kie_grok_imagine_video', input: { book_id: fixture.bookId, video_ref: `@${fixture.videoId}`, extend_times: '6' } }))
-    const expected = await Promise.all(fixtures.map((fixture) => estimate('extend_kie_grok_imagine_video', { resolution: fixture.resolution, extend_times: '6' })))
+  it('resolves each source in its own book within a mixed batch', async () => {
+    const calls = fixtures.map((fixture) => ({ tool_name: 'generate_video', input: sourceInput(MOTION, fixture) }))
     const actual = await callTool<EstimateResult>(client, 'estimate_cost', { calls })
-    expect(actual.per_call.map((call) => call.estimate)).toEqual(expected.map((result) => result.estimate))
-    expect(actual.estimate.usd).toBeCloseTo(expected.reduce((sum, result) => sum + result.estimate.usd, 0), 8)
+    const expected = fixtures.map((fixture) => expectedUsd(MOTION, { inputDurationSeconds: fixture.duration }))
+    expect(actual.per_call.map((call) => call.estimate.usd)).toEqual(expected)
+    expect(new Set(expected).size).toBe(fixtures.length)
+    expect(actual.estimate.usd).toBeCloseTo(expected.reduce((sum, usd) => sum + usd, 0), 8)
   })
 
-  it.each([
-    ['generate_kie_kling_3_0_motion_control', 'motion_video_refs', { mode: '1080p' }],
-    ['generate_kie_happyhorse_1_1_edit_video', 'video_ref', { resolution: '1080p' }],
-    ['generate_kie_omnihuman_1_5_video', 'audio_ref', {}],
-    ['generate_kie_volcengine_video_to_video_lip_sync', 'video_ref', {}],
-  ] as const)('reads source duration for %s without a top-level book argument', async (tool, field, settings) => {
+  it.each(SOURCE_CASES)('reads the source duration for $model through book_id', async (item) => {
     for (const fixture of fixtures) {
-      const ref = field === 'audio_ref' ? fixture.audioId : fixture.videoId
-      const source = field === 'motion_video_refs' ? [`@${ref}`] : `@${ref}`
-      const expected = await estimate(tool, { ...settings, duration: fixture.duration })
-      const actual = await estimate(tool, { ...settings, book_id: fixture.bookId, [field]: source })
-      expect(actual.estimate).toEqual(expected.estimate)
+      const actual = await estimate(sourceInput(item, fixture))
+      expect(actual.estimate.warnings).toEqual([])
       expect(actual.estimate.usd).toBeGreaterThan(0)
+      expect(actual.estimate.usd).toBeCloseTo(expectedUsd(item, { inputDurationSeconds: fixture.duration }), 8)
     }
   })
 
   it('does not enrich a foreign artifact through another book and rejects unknown books', async () => {
     const first = fixtures[0]!
     const second = fixtures[1]!
-    const expected = await estimate('extend_kie_grok_imagine_video', { extend_times: '6' })
-    const foreign = await estimate('extend_kie_grok_imagine_video', { book_id: first.bookId, video_ref: second.videoId, extend_times: '6' })
-    expect(foreign.estimate).toEqual(expected.estimate)
-    const unknown = await client.callTool({ name: 'estimate_cost', arguments: { calls: [{ tool_name: 'extend_kie_grok_imagine_video', input: { book_id: '00000000-0000-7000-8000-000000000001', video_ref: second.videoId, extend_times: '6' } }] } })
+    const foreign = await estimate(sourceInput(MOTION, second, first.bookId))
+    expect(foreign.estimate.usd).toBe(expectedUsd(MOTION, {}))
+    expect(foreign.estimate.usd).not.toBe(expectedUsd(MOTION, { inputDurationSeconds: second.duration }))
+    const unknown = await client.callTool({ name: 'estimate_cost', arguments: { calls: [{ tool_name: 'generate_video', input: sourceInput(MOTION, second, '00000000-0000-7000-8000-000000000001') }] } })
     expect(unknown.isError).toBe(true)
   })
 })
