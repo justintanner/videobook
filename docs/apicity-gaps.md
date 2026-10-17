@@ -667,3 +667,12 @@ entries, 24 of them in the picker (§41–§43). The fal audio, 3D, robotics and
 routing endpoints new in 0.15.0 (Mureka, Mirelo SFX audio, VEED Clean Audio,
 Grok Voice, Meshy 6 Lite Retexture, FLUX.3 Action SO-101, OpenRouter decisions)
 are not catalogued.
+
+**Upstream tracking (2026-10-17):** apicity epic `ac-j3d6ki` carries the open
+asks: `.1` Bria sample-photo default (§42), `.2` MiniMax H3 clip window (§36),
+`.3` fal Seedance estimates and `.4` the other unpriced fal endpoints (§41),
+`.5` Google Flow image rates (§15), `.6` missing `MODEL_DISPLAY` names (§42),
+`.7` typed Google Flow responses (§14), and `.10`–`.12` publishing the OpenAI
+and xAI realtime transports (with §39's types) and the X and Dropbox changes
+Videobook vendors. `.10`–`.12` wait on the `.8` and `.9` ASKs to push the local
+apicity commits they need.
