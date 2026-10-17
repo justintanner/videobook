@@ -24,8 +24,9 @@ checksum.
 
 The new cost tables price Seedance 2.5 by reference-video presence, and count
 input plus output video duration for Seedance, Wan 3.0, MiniMax H3 reference
-video, and HappyHorse edits. Estimates resolve local reference durations; job
-submission persists the same duration hints outside the provider payload.
+video, and HappyHorse edits. Estimates resolve local reference durations; KIE
+job submission persists the same duration hints outside the provider payload
+(fal submissions do not yet; see §41).
 Unknown reference durations produce an unavailable estimate instead of an
 output-only quote.
 
@@ -34,9 +35,15 @@ including xAI's `usage.cost_in_usd_ticks` ([cost tracking](https://docs.x.ai/dev
 Supported rates are saved as estimates with their pricing version. Requests
 without a reported charge or supported rate stay unpriced. The bundled tables do not yet price the current chat
 and realtime defaults (`gpt-5.6-sol`, `gpt-realtime-2.1`, and
-`grok-voice-think-fast-2.0`). Google Flow retains the Gemini API list-rate
-convention described in §15. Accounting starts at rollout and does not
+`grok-voice-think-fast-2.0`). Google Flow estimates use the package's Flow
+credit × plan rates (§15). Accounting starts at rollout and does not
 reconstruct older usage.
+
+Sections written before 2026-10-16 name per-model tools (`generate_kie_*`,
+`generate_fal_*`), `payload-builders.ts`, `cost-adapters.ts` and similar
+modules. Commit d8814110 replaced them with the media catalog in
+`server/src/media/`, so those references are history. Each OPEN or PARTIAL
+section and the status table name the code that carries a workaround today.
 
 Legend: **bug** = the published contract is wrong or internally inconsistent;
 **gap** = the published contract omits required information; **quirk** = correct
@@ -64,6 +71,13 @@ values to `normal`, omits `index` on the `image_urls` path (Kie treats `index` a
 `task_id`-only), and rewrites prompt `@img-*` mentions to `@imageN` after
 ordering `image_urls` by first prompt mention.
 
+Update 2026-10-17: that tool and its payload builder are gone. The
+`kie:grok-imagine/image-to-video` catalog entry advertises the schema's full
+`fun`/`normal`/`spicy` enum plus `task_id` and `index`, and the apicity
+refinement rejects `spicy` with external `image_urls` while the request is
+built (`spicy mode is unavailable with external image_urls`), before any
+submission. Stored requests are no longer rewritten from `spicy` to `normal`.
+
 ## 3. (gap) ~~Fal model aliases use output types~~ — RESOLVED in 0.8.8 (adopted)
 
 Kie, Alibaba, xAI, and the other request-oriented packages now export request
@@ -86,6 +100,11 @@ One residual upstream nit: `FAL_ENDPOINT_REQUEST_SCHEMAS` keys Qwen edit as
 `fal-ai/qwen-image-edit`, but the real fal endpoint (and Videocity's wire id)
 is `fal-ai/qwen-image/edit`. That one job therefore stays on the untyped
 fallback branch until the upstream key is fixed.
+
+Update 2026-10-17: that note was wrong. Fal's live queue OpenAPI serves
+`fal-ai/qwen-image-edit` and returns 404 for `fal-ai/qwen-image/edit`, so the
+apicity key is the real endpoint, and the hidden `fal:fal-ai/qwen-image-edit`
+catalog entry submits to it.
 
 ## 4. (gap) ~~Alibaba Qwen stable model and slot schemas~~ — RESOLVED in 0.7.3
 
@@ -124,14 +143,18 @@ an offline fallback.
 
 ## 8. (quirk) Deliberate Videocity restrictions that differ from a base schema
 
-| Tool/field                                           | Videocity                              | Base Apicity schema                                    | Reason                                                                           |
-| ---------------------------------------------------- | -------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `generate_grok_imagine_video.mode`                   | `fun`/`normal`                         | includes conditionally valid `spicy`                   | Videocity exposes only the external-image path; see §2                           |
-| `generate_grok_imagine_video` with `image_urls`      | omits `index`                          | optional `index` still accepted alongside `image_urls` | Kie docs: `index` is `task_id`-only; see §2                                      |
+| Catalog entry                                          | Videobook                                  | Base Apicity schema                             | Reason                                                              |
+| ------------------------------------------------------ | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
+| `kie:bytedance/seedance-2-5` with a frame              | `aspect_ratio` set to `adaptive`           | rejects fixed ratios for frame tasks            | keeps frame requests valid instead of failing; see §40              |
+| `fal:bria/guided-remove-background`                    | requires one image                         | `image_url` defaults to Bria's sample photo     | a run without a source image would bill for the sample; see §42     |
+| `fal:bytedance/seedance-2.0/us/reference-to-video`     | requires an image or video reference       | every reference array optional                  | fal states the requirement only in the `audio_urls` description     |
+| `fal:bytedance/seedance-2.5/us/reference-to-video`     | v2v and extend modes require a video       | `task` editing/extension with optional videos   | editing and extension continue a reference video; see §42           |
 
-These are the only deliberate restrictions represented by
-`APICITY_DERIVE_SKIP` or by targeted validation against an otherwise reusable
-strict provider schema. Google Flow's broader local contract is tracked in §14.
+The catalog expresses these with `frameOptions` and mode `requireAny` in
+`server/src/media/catalog.ts`; every other field, enum and range comes straight
+from the apicity schemas. Before the catalog (d8814110) this table listed the
+Grok `spicy` and `index` filters of the removed `generate_grok_imagine_video`
+tool (§2). Google Flow's broader local contract is tracked in §14.
 
 ## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 
@@ -170,7 +193,7 @@ Videocity does not yet expose Kie audio/character ID-minting workflows, so its
 Gemini Omni generation tool intentionally omits optional `audio_ids` and
 `character_ids`. That is a Videocity product gap, not an Apicity gap.
 
-## 14. (gap) Google Flow schemas still have loose enums and generic responses — PARTIAL in 0.8.0
+## 14. (gap) Google Flow schemas still have loose enums and generic responses — PARTIAL in 0.15.0
 
 0.8.0 narrows the Veo model escape hatch to versioned aliases
 (`veo-\d+(?:\.\d+)*(?:-[a-z0-9]+)*`) instead of bare `z.string()`. Image/video
@@ -182,7 +205,18 @@ response readers.
 
 **Ask Apicity:** export strict per-model schemas and typed job/entity responses.
 
-## 15. (gap) Google Flow package rates are credit×Pro, not Gemini API list USD — PARTIAL in 0.8.0
+Update 2026-10-17 (0.15.0): `GoogleFlowVideosRequestSchema` is now a union of
+per-model schemas with literal model ids and per-model durations (`veo-3.1-fast`,
+`-lite` and `-lite-low-priority` 4/6/8 s, `veo-3.1-quality` 8 s, `omni-flash`
+4/6/8/10 s); only the versioned `veo-*` escape hatch keeps 4/6/8/10. The
+catalog reads those per-model schemas directly, so the local per-model domains
+are gone. Still loose: the image model accepts an enum or a
+`nano-banana-*` pattern, every provider method returns the generic
+`GoogleFlowResponse`, and images have no response schema (videos, jobs,
+assets, characters and voices do). `server/src/media/adapters/googleflow.ts`
+keeps tolerant response readers.
+
+## 15. (gap) Google Flow package rates are credit×Pro, not Gemini API list USD — PARTIAL in 0.15.0
 
 `@apicity/cost@0.8.0` accepts `provider: "googleflow"` and prices
 `veo-3.1-quality` / `fast` / `lite` / `lite-low-priority` / `omni-flash` as Flow
@@ -196,6 +230,14 @@ switch to credit-native numbers.
 
 **Ask Apicity:** optionally expose Gemini API list-rate USD alongside Flow
 credit estimates, or document plan-tier selection so credit×USD matches Ultra.
+
+Update 2026-10-17 (0.15.0): `server/src/google-flow-cost.ts` was removed with
+the per-model tools in d8814110, so the displayed numbers are now the
+package's credit-native estimates. `server/src/media/cost.ts` passes
+`GOOGLE_FLOW_PLAN_TIER` as `costHints.googleFlowPlan`; unset means Pro
+(`veo-3.1-fast` $0.40, `veo-3.1-quality` $2.00 per generation; Ultra $0.08 and
+$0.80). `googleflow:nano-banana-pro` has no Flow rate at all, so it estimates
+$0 with a "not found in pricing table" warning.
 
 ## 16. (bug) ~~Google Flow path IDs are percent-encoded~~ — RESOLVED in 0.8.0
 
@@ -227,6 +269,10 @@ Singleton character retrieval can return `Untitled Character` and omit
 and list records and reports conflicts/partial success.
 
 This may be a useapi.net service bug rather than an SDK bug; confirm upstream.
+
+Not re-verified for 0.15.0: the behavior is service-side and needs a live
+Google Flow call. `@apicity/googleflow` 0.15.0 differs from 0.14.2 only in its
+version number.
 
 ## 19. (bug) ~~ElevenLabs Sound Generation omits the 450-character cap~~ — RESOLVED in 0.8.0
 
@@ -267,6 +313,11 @@ to integers in [1, 6]. Videocity's Seedream fal tools dropped the hand-declared
 (with the `auto_4K` preset) and the count bounds via `apicityField`.
 `return_byteplus_urls` is documented on the text-to-image surface only and is
 deliberately not exposed: Videocity ingests through its own CDN download path.
+
+Update 2026-10-17: the catalog derives every option from the schema, so
+`return_byteplus_urls` is now an ordinary option on the hidden
+`fal:fal-ai/bytedance/seedream/v5/lite/text-to-image` entry. Completion
+downloads whatever output URL fal returns.
 
 ## 24. (bug) ~~Fal Nano Banana edit reference caps missing~~ — RESOLVED in 0.8.8 (decided: no cap)
 
@@ -409,7 +460,7 @@ therefore fails closed only when the estimate is zero (unknown model or
 underivable units); a positive estimate with warnings is a floor the package
 stands behind and is admitted.
 
-## 36. (gap) KIE MiniMax H3 reference clip duration bounds absent from schema — OPEN in 0.8.8
+## 36. (gap) KIE MiniMax H3 reference clip duration bounds absent from schema — OPEN in 0.15.0
 
 `MiniMaxH3ReferenceToVideoInputSchema` bounds only reference counts (max 9
 images / 3 videos / 3 audios). Kie additionally enforces a per-clip duration
@@ -435,6 +486,12 @@ artifact metadata does not describe sibling files.
 **Ask Apicity:** document the reference clip duration window on the
 reference-to-video schema (description at minimum), and confirm whether the
 same bound applies to `reference_audio_urls`.
+
+Update 2026-10-17 (0.15.0): the schema still bounds only reference counts. The
+local check described above lived in the per-model tool, which d8814110
+removed, so `kie:minimax-h3/reference-to-video` currently has no pre-submit
+duration guard and an over-long clip fails at Kie after the paygate OTP.
+Restoring it as catalog data is tracked in vb-6rct.
 
 ---
 
@@ -463,10 +520,10 @@ not expose, matching the other Qwen tools.
 
 ---
 
-## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.13.2
+## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.15.0
 
 `XaiRealtimeSession` and the vendored realtime event types (`@apicity/xai`
-0.13.2, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
+0.15.0, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
 speech-to-speech features Videobook uses. `conversation.item.create` with
 `item.type = "force_message"` (an assistant item forced into the transcript
 without a response.create round-trip) drives the voice activation line; the
@@ -482,16 +539,18 @@ and xAI pace is not configurable.
 
 
 
-## 40. (gap) Seedance 2.5 frame aspect restriction — OPEN in 0.13.2
+## 40. (gap) ~~Seedance 2.5 frame aspect restriction~~ — RESOLVED in 0.14.0
 
 KIE rejects first-frame and first/last-frame requests with a fixed aspect ratio:
 `Seedance 2.5 first-frame and first-last-frame tasks only support adaptive aspect ratio`.
-The installed `Seedance25RequestSchema` accepts these requests. Videobook normalizes
-frame requests to `adaptive` in notebook preparation, tool dispatch, payload previews,
-and submission of persisted retries. Frame controls explain that output follows the
-first image and prevent fixed-ratio selection. Text and reference modes retain their
-supported fixed ratios. Remove this workaround only when the upstream contract and
-all preview/submission paths enforce the same restriction.
+Since 0.14.0 `Seedance25RequestSchema` enforces the same rule with that message,
+and its `aspect_ratio` description says frames require `adaptive`. Videobook
+keeps setting frame requests to `adaptive` (the `kie:bytedance/seedance-2-5`
+catalog entry's `frameOptions`, applied by the shared request builder for
+generation, previews, notebook runs and retries), so a frame request succeeds
+instead of failing validation. Frame controls explain that output follows the
+first image and prevent fixed-ratio selection. Text and reference modes retain
+their supported fixed ratios.
 
 ---
 
@@ -572,27 +631,27 @@ the versioned Qwen models, so neither change reaches the catalog.
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
-| **OPEN**     | §36 MiniMax H3 reference clip bounds                                | pre-submit 2–15s check from local `original` metadata  |
-| **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | provider-derived resolution adapters                  |
+| **OPEN**     | §36 MiniMax H3 reference clip bounds                                | nothing since d8814110; guard tracked in vb-6rct       |
+| **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
-| **OPEN**     | §40 Seedance 2.5 frame aspect ratio                                 | adaptive normalization and mode-aware controls        |
+| **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
 | **OPEN**     | §41 fal 0.15.0 endpoints without a local rate                       | unpriced estimates; fal usage hints (vb-t2pr)          |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect, titles  |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
-| **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
+| **PARTIAL**  | §14 Flow loose image model and generic responses                    | tolerant response readers                              |
+| **PARTIAL**  | §15 Flow estimate semantics                                         | package credit × plan USD; no Flow Nano Banana Pro rate |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim (defensive Flow path decode only on §16) |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
 
-**Deliberate product quirks (not Apicity defects):** §2 Grok external-image-only
-`spicy` filter, §8 table, §17 route-specific Flow email resolution, §23
-`return_byteplus_urls` not exposed (Videocity ingests via its own CDN path).
+**Deliberate product quirks (not Apicity defects):** §8 table, §17
+route-specific Flow email resolution, §42 fal request shapes. The §2 Grok
+`spicy` filter and the §23 `return_byteplus_urls` omission ended with the
+per-model tools (d8814110).
 
 **Deferred upstream verification:** §18 appears service-side. §14–15 remain
-broader Google Flow product and schema work. One residual upstream nit from the
-0.8.8 adoption: `FalEndpointInputMap` keys Qwen edit as `fal-ai/qwen-image-edit`
-while the real endpoint is `fal-ai/qwen-image/edit` (§3).
+broader Google Flow product and schema work. The §3 Qwen edit key note was
+checked against fal's live OpenAPI on 2026-10-17: the apicity key is correct.
 
 **0.11.0 Wan 3.0 / Qwen 3 update (2026-08-25, vb-2erh):** all Wan 2.x surfaces
 are retired (§5, §26, §28 updates above). Wan 3.0 + Prime ship via six fal
