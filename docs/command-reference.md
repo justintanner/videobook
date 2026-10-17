@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (234)
+## MCP endpoints (233)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -116,7 +116,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
-- `legacy_migration` — Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch
 - `link_post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.
 - `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.
 - `list_book_actions` — List authored semantic revisions for a book
@@ -245,7 +244,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (309; 146 dedicated command routes)
+## Slash actions (308; 146 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -392,7 +391,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
-- `/legacy-migration` — Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch; MCP: `legacy_migration`
 - `/link-post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.; MCP: `link_post`
 - `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.; MCP: `list_assets`
 - `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`

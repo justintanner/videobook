@@ -89,7 +89,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "clean_failed_assets", "recover_asset", "retry_generation",
     "doctor", "archive_clip", "search_archive", "restore_archive_clips",
     "reconcile_project_work", "wait_for_asset_ready", "list_ingest_status",
-    "retry_ingest", "legacy_migration", "list_jobs", "cancel_job", "retry_job",
+    "retry_ingest", "list_jobs", "cancel_job", "retry_job",
     "storage_status", "storage_sync",
   ],
   Publishing: ["create_post", "update_post", "get_post", "list_posts", "link_post", "upload_post_to_dropbox", "save_post_to_icloud", "refresh_post_metrics", "record_post_metrics", "connect_service", "service_status", "post_icloud_sync_status", "draft_post_copy", "post", "verify_x_mentions"],

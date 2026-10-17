@@ -41,10 +41,6 @@ const objectStore = contentStoreFromEnvironment();
 
 export const bookManager = new BookManager({
   libraryDir: BOOK_LIBRARY_DIR,
-  onMigrationPublished: async (bookId) => {
-    const { queue } = await import("./queue.js");
-    await queue.startBook(bookId);
-  },
   ...(objectStore ? { remoteObjects: objectStore } : {}),
   objectPrefix: environmentValue(
     process.env.VIDEOBOOK_OBJECT_PREFIX,

@@ -285,7 +285,6 @@ async function shutdown(): Promise<void> {
     stopPostMetricsScheduler();
     await voiceSessions.close();
     await mcpHandler.close();
-    await bookManager.stopMigrations();
     await queue.stop();
     await stopAceServer();
     await bookManager.close();

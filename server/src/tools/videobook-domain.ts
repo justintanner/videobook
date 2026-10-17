@@ -822,31 +822,6 @@ export function videobookDomainDefs(
       },
     },
     {
-      name: "legacy_migration",
-      description: "Copy schema-v4 books forward: list books awaiting migration, start a confirmed migration with the source head and migration key from list, read its progress, or cancel it before the final archive switch",
-      scope: "global",
-      schema: {
-        action: z.enum(["list", "start", "status", "cancel"]),
-        book_id: z.string().uuid().optional(),
-        migration_key: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
-        expected_source_head: z.string().min(1).optional().describe("Required to start"),
-      },
-      handler: async (args) => {
-        try {
-          await books.ready();
-          if (args.action === "list") return json(books.listLegacy());
-          const bookId = z.string().uuid().parse(args.book_id);
-          const migrationKey = z.string().parse(args.migration_key);
-          if (args.action === "start") {
-            return json(await books.enqueueLegacyMigration(bookId, z.string().min(1).parse(args.expected_source_head), migrationKey));
-          }
-          return json(args.action === "cancel"
-            ? await books.cancelLegacyMigration(bookId, migrationKey)
-            : await books.legacyMigrationStatus(bookId, migrationKey));
-        } catch (cause) { return failure(cause instanceof Error ? cause.message : String(cause)); }
-      },
-    },
-    {
       name: "rename_book",
       description: "Rename a book. Project names are normalized to lowercase slugs with hyphens.",
       scope: "global",

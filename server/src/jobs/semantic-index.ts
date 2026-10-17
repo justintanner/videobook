@@ -355,13 +355,8 @@ async function indexLocalArtifact(
 }
 
 export function registerSemanticIndexJob(engine: Engine): void {
-  registerJobHandler("semantic_index", async (payload, ctx) => engine.withLocalMedia(async () => {
-    if (payload.migration === true) {
-      const { prepareMigrationFrames } = await import("../migration-media.js");
-      await prepareMigrationFrames(engine, String(payload.assetId), ctx.signal);
-    }
-    return runSemanticIndex(engine, payload as SemanticIndexPayload, ctx);
-  }));
+  registerJobHandler("semantic_index", async (payload, ctx) => engine.withLocalMedia(async () =>
+    runSemanticIndex(engine, payload as SemanticIndexPayload, ctx)));
 }
 
 async function indexClipArtifact(

@@ -4,19 +4,15 @@ import { join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
 import { logger } from "./logger.js";
-import { LegacyMigrationQueue, migrationFailure, type MigratedBook, type MigrationOptions, type MigrationCheckpoint } from "./legacy-migration.js";
 import {
   createEngine,
-  dryRunV4Migration,
   err,
   isUuidV7,
   ok,
-  readV4BookIdentity,
   type ContentStore,
   type Engine,
   type EngineError,
   type Result,
-  type V4MigrationDryRun,
 } from "videobook-engine";
 
 interface BookSummary {
@@ -32,14 +28,7 @@ export interface ManagedBook extends BookSummary {
   engine: Engine;
 }
 
-interface LegacyBookSummary extends V4MigrationDryRun {
-  slug: string;
-}
-
 interface BookManagerOptions {
-  migrationLeaseMs?: number;
-  onMigrationCheckpoint?: (phase: MigrationCheckpoint) => void | Promise<void>;
-  onMigrationPublished?: (bookId: string) => Promise<void>;
   libraryDir: string;
   remoteObjects?: ContentStore;
   objectPrefix?: string;
@@ -82,11 +71,9 @@ function sortBooks(
 }
 
 export class BookManager {
-  private readonly migrations: LegacyMigrationQueue;
   private readonly libraryDir: string;
   private readonly options: BookManagerOptions;
   private readonly books = new Map<string, ManagedBook>();
-  private readonly legacyBooks = new Map<string, LegacyBookSummary>();
   private readonly knownRoots = new Set<string>();
   private readonly opening = new Map<string, Promise<void>>();
   private readonly reservedNames = new Set<string>();
@@ -96,25 +83,6 @@ export class BookManager {
   constructor(options: BookManagerOptions) {
     this.libraryDir = resolve(options.libraryDir);
     this.options = { ...options, libraryDir: this.libraryDir };
-    this.migrations = new LegacyMigrationQueue({
-      libraryDir: this.libraryDir,
-      legacy: (bookId) => this.legacyBooks.get(bookId),
-      existing: (bookId) => this.books.get(bookId)?.engine,
-      open: (root) => this.createEngine(root),
-      adopt: async (engine, root, bookId) => {
-        let managed = this.toManagedBook(engine, root, engine.book.get());
-        if (managed.bookId !== bookId) throw new Error("Migrated book identity does not match its root");
-        managed = await this.normalizeStoredBookName(managed);
-        if (!this.books.has(bookId)) this.assertUnique(managed);
-        this.books.set(bookId, managed);
-        this.legacyBooks.delete(bookId);
-        this.knownRoots.add(bookId);
-        return managed;
-      },
-      checkpoint: options.onMigrationCheckpoint,
-      published: options.onMigrationPublished,
-      leaseMs: options.migrationLeaseMs,
-    });
   }
 
   get rootDir(): string {
@@ -158,12 +126,6 @@ export class BookManager {
     return sortBooks(books, options.sort ?? "newest");
   }
 
-  listLegacy(): LegacyBookSummary[] {
-    return [...this.legacyBooks.values()].sort((left, right) =>
-      left.slug.localeCompare(right.slug)
-    );
-  }
-
   get(bookId: string): Result<ManagedBook, EngineError> {
     const book = this.books.get(bookId);
     return book
@@ -187,13 +149,7 @@ export class BookManager {
     if (!slug) {
       return err(engineError("INVALID_INPUT", BOOK_SLUG_ERROR));
     }
-    if (
-      this.getByName(slug).ok
-      || this.reservedNames.has(slug)
-      || [...this.legacyBooks.values()].some(
-        (book) => normalizeBookSlug(book.slug) === slug,
-      )
-    ) {
+    if (this.getByName(slug).ok || this.reservedNames.has(slug)) {
       return err(engineError("ALREADY_EXISTS", `Book name already exists: ${slug}`));
     }
 
@@ -260,7 +216,6 @@ export class BookManager {
     if (
       (conflict.ok && conflict.value.bookId !== bookId)
       || this.reservedNames.has(slug)
-      || [...this.legacyBooks.values()].some((book) => normalizeBookSlug(book.slug) === slug)
     ) {
       return err(engineError("ALREADY_EXISTS", `Book name already exists: ${slug}`));
     }
@@ -309,44 +264,12 @@ export class BookManager {
   }
 
   async close(): Promise<void> {
-    await this.stopMigrations();
     for (const book of this.books.values()) book.engine.close();
     this.books.clear();
-    this.legacyBooks.clear();
     this.knownRoots.clear();
     this.opening.clear();
     this.scanPromise = null;
     this.readyPromise = null;
-  }
-
-  async stopMigrations(): Promise<void> {
-    await this.migrations.close();
-  }
-
-  async migrateLegacy(
-    bookId: string,
-    expectedSourceHead: string,
-    options: MigrationOptions = {},
-  ): Promise<Result<MigratedBook, EngineError>> {
-    try {
-      await this.ready();
-      return ok(await this.migrations.perform(bookId, expectedSourceHead, options));
-    } catch (cause) { return err(migrationFailure(cause)); }
-  }
-
-  async enqueueLegacyMigration(bookId: string, sourceHead: string, migrationKey: string) {
-    await this.ready();
-    return this.migrations.enqueue(bookId, sourceHead, migrationKey);
-  }
-
-  async legacyMigrationStatus(bookId: string, migrationKey: string) {
-    await this.ready();
-    return this.migrations.status(bookId, migrationKey);
-  }
-
-  async cancelLegacyMigration(bookId: string, migrationKey: string) {
-    await this.ready();
-    return this.migrations.cancel(bookId, migrationKey);
   }
 
   private async load(): Promise<void> {
@@ -355,7 +278,6 @@ export class BookManager {
     for (const book of [...this.books.values()].sort((left, right) => left.bookId.localeCompare(right.bookId))) {
       this.assertUnique(await this.normalizeStoredBookName(book));
     }
-    await this.migrations.startIfPresent();
   }
 
   private async normalizeStoredBookName(book: ManagedBook): Promise<ManagedBook> {
@@ -363,12 +285,7 @@ export class BookManager {
     if (base === book.name) return book;
     let name = base;
     let suffix = 2;
-    while (
-      this.getByName(name).ok
-      || this.reservedNames.has(name)
-      || [...this.legacyBooks.values()].some((legacy) =>
-        legacy.sourceBookId !== book.bookId && normalizeBookSlug(legacy.slug) === name)
-    ) {
+    while (this.getByName(name).ok || this.reservedNames.has(name)) {
       name = `${base}-${suffix++}`;
     }
     this.reservedNames.add(name);
@@ -389,7 +306,6 @@ export class BookManager {
   }
 
   private async scanOnce(): Promise<void> {
-    await this.migrations.restoreInterruptedArchives();
     await mkdir(this.libraryDir, { recursive: true });
     const entries = await readdir(this.libraryDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -401,7 +317,7 @@ export class BookManager {
   }
 
   private async openRoot(bookId: string): Promise<void> {
-    if (this.books.has(bookId) || this.legacyBooks.has(bookId)) return;
+    if (this.books.has(bookId)) return;
     const inflight = this.opening.get(bookId);
     if (inflight) {
       await inflight;
@@ -417,24 +333,8 @@ export class BookManager {
   }
 
   private async openRootOnce(bookId: string): Promise<void> {
-    if (this.books.has(bookId) || this.legacyBooks.has(bookId)) return;
+    if (this.books.has(bookId)) return;
     const root = this.bookRoot(bookId);
-    const identity = readV4BookIdentity(root);
-    if (identity.ok) {
-      if (identity.value.bookId !== bookId) {
-        throw new Error(`Book root ${bookId} has mismatched legacy book identity`);
-      }
-      const dryRun = dryRunV4Migration(root);
-      if (!dryRun.ok) throw new Error(dryRun.error.message);
-      if (dryRun.value.sourceBookId !== bookId) {
-        throw new Error(`Book root ${bookId} changed identity during inspection`);
-      }
-      this.legacyBooks.set(bookId, { ...dryRun.value, slug: identity.value.slug });
-      return;
-    }
-    if (identity.error.code !== "SCHEMA_INCOMPATIBLE") {
-      throw new Error(identity.error.message);
-    }
     let engine: Engine | undefined;
     try {
       const openedAt = performance.now();
