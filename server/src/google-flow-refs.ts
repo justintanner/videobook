@@ -160,6 +160,23 @@ export function rewriteSeedanceAssetMentions(
   return replaceNotebookMentions(prompt, replacements);
 }
 
+export function rewriteViduReferenceMentions(
+  prompt: string,
+  imageRefs: readonly string[],
+  audioRefs: readonly string[],
+): string {
+  return replaceNotebookMentions(prompt, [
+    ...refMentionEntries(imageRefs).map(({ ref, index }) => ({
+      reference: ref,
+      replacement: `[@reference_image_${index + 1}]`,
+    })),
+    ...refMentionEntries(audioRefs).map(({ ref, index }) => ({
+      reference: ref,
+      replacement: `[reference_audio_${index + 1}]`,
+    })),
+  ]);
+}
+
 /** Free-form multi-ref natural rewrite when the provider has no inline marker
  *  syntax: videos → "reference video N" (or "the source video" for a single
  *  source clip), images → "reference image N", audio → "reference audio N". */

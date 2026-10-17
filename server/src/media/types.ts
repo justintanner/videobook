@@ -43,6 +43,7 @@ export type PromptDialect =
   | "image_ref_reference"
   | "strip_frames"
   | "brackets"
+  | "vidu"
   | "happyhorse_edit";
 
 export type PromptGuide =

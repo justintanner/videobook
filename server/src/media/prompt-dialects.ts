@@ -4,6 +4,7 @@ import {
   rewriteImageRefMentions,
   rewriteImageRefMentionsToBrackets,
   rewriteSeedanceAssetMentions,
+  rewriteViduReferenceMentions,
   stripRefMentions,
 } from "../google-flow-refs.js";
 import type { MediaRefs, PromptDialect, RefRole } from "./types.js";
@@ -76,6 +77,8 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
       return stripRefMentions(prompt, [...frames(refs), ...refsFor(refs, "image")]);
     case "brackets":
       return rewriteImageRefMentionsToBrackets(prompt, refsFor(refs, "image"));
+    case "vidu":
+      return rewriteViduReferenceMentions(prompt, refsFor(refs, "image"), refsFor(refs, "audio"));
     case "happyhorse_edit":
       return replaceHappyHorseAssetMentions(prompt, refsFor(refs, "video")[0] ?? null, refsFor(refs, "image"));
   }

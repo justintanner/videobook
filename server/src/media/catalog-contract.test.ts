@@ -172,6 +172,38 @@ describe("media request building", () => {
     expect(buildWireRequest(nano, {})).toMatchObject({ ok: false, error: expect.stringContaining("requires a prompt") });
   });
 
+  it("sets the Seedance US task from the chosen mode", () => {
+    const model = resolveModel("fal:bytedance/seedance-2.5/us/reference-to-video");
+    const video = { video: ["https://example.com/clip.mp4"] };
+    expect(buildWireRequest(model, { prompt: "x", refUrls: video })).toMatchObject({ ok: true, request: { task: "reference" } });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: video, mode: "v2v" })).toMatchObject({ ok: true, request: { task: "editing" } });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: video, mode: "extend" })).toMatchObject({ ok: true, request: { task: "extension" } });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: ["https://example.com/a.png"] }, mode: "v2v" }))
+      .toMatchObject({ ok: false, error: expect.stringContaining("needs one of: video") });
+  });
+
+  it("sends start images as first frames and keeps catalog request defaults", () => {
+    expect(buildWireRequest(resolveModel("fal:bytedance/seedance-2.0/us/image-to-video"), {
+      prompt: "x",
+      refUrls: { first_frame: ["https://example.com/a.png"], last_frame: ["https://example.com/b.png"] },
+    })).toMatchObject({ ok: true, request: { image_url: "https://example.com/a.png", end_image_url: "https://example.com/b.png" } });
+    expect(buildWireRequest(resolveModel("fal:mirelo-ai/sfx2.0/video-to-video"), {
+      prompt: "rain on a tin roof",
+      refUrls: { video: ["https://example.com/clip.mp4"] },
+    })).toMatchObject({ ok: true, request: { text_prompt: "rain on a tin roof", num_samples: 1 } });
+    expect(buildWireRequest(resolveModel("fal:pixverse/music-video/vibemv"), {
+      refUrls: { audio: ["https://example.com/song.mp3"], image: ["https://example.com/hero.png", "https://example.com/style.png"] },
+      options: { style: "Custom" },
+    })).toMatchObject({ ok: true, request: { image_url: "https://example.com/hero.png", style_image_url: "https://example.com/style.png" } });
+  });
+
+  it("requires a source image for Bria guided background removal", () => {
+    const model = resolveModel("fal:bria/guided-remove-background");
+    expect(buildWireRequest(model, {})).toMatchObject({ ok: false, error: expect.stringContaining("needs one of: image") });
+    expect(buildWireRequest(model, { refUrls: { image: ["https://example.com/a.png"] } }))
+      .toMatchObject({ ok: true, request: { image_url: "https://example.com/a.png" } });
+  });
+
   it("coerces numeric option strings", () => {
     const built = buildWireRequest(resolveModel("kie:bytedance/seedance-2-5"), { prompt: "x", options: { duration: "13" } });
     expect(built).toMatchObject({ ok: true, request: { input: { duration: 13 } } });

@@ -7,17 +7,20 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.13.2 (2026-10-03). GPT Image 2.5 Sunburst is
-the default image renderer, with Flare available; both choose text-to-image or
-image-to-image according to reference inputs. GPT Image 2 definitions remain
-only for historical records and already queued work. Saved cells explicitly
-configured for a retired GPT model can select either 2.5 renderer before running
-again; their prompts and existing results remain intact.
+Videobook now uses Apicity 0.15.0 (2026-10-17). Image, video and audio
+generation run through the media catalog in `server/src/media/catalog.ts`: each
+entry names one provider endpoint, and its fields, enums, ranges, defaults and
+prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
+Nano Banana 2.1 and Seedance 2.5 through KIE are the default image and video
+models. GPT Image 2.5 Sunburst and Flare remain selectable; GPT Image 2 stays
+hidden for historical records and already queued work.
 
-Published `@apicity/openai` and `@apicity/xai` 0.13.2 still omit Videobook's
-existing server realtime transports. Their vendored 0.13.2 archives carry the
-same transport additions, with reproducible package patches and base URLs in
-`vendor/OPENAI_REVISION.txt` and `vendor/XAI_REVISION.txt`.
+Published `@apicity/openai` and `@apicity/xai` 0.15.0 still omit Videobook's
+server realtime transports, published `@apicity/x` 0.15.0 still lacks tweet
+lookup, and published `@apicity/dropbox` 0.15.0 still lacks upload sessions.
+Each vendored 0.15.0 archive is the published tarball plus an unchanged patch
+from `vendor/`; `vendor/*_REVISION.txt` records its base URL, patch revision and
+checksum.
 
 The new cost tables price Seedance 2.5 by reference-video presence, and count
 input plus output video duration for Seedance, Wan 3.0, MiniMax H3 reference
@@ -304,6 +307,11 @@ Update 2026-08-25 (vb-2erh): all Wan 2.7 fal tools/adapters were retired
 `alibaba/qwen-image-3/edit` are upstream dynamic-pricing (per compute second),
 so they keep the unpriced "—" path with no adapter.
 
+Update 2026-10-17 (0.15.0): `@apicity/cost` replaced the per-second fal
+Seedance 2.0 and 2.5 tables with output-token metering that a request cannot
+determine, so every fal Seedance endpoint, US twins included, now estimates $0
+with a warning. Fal endpoints first catalogued from 0.15.0 are covered in §41.
+
 ## 27. (gap) ~~xAI media generation has no per-unit cost contract~~ — RESOLVED in 0.8.0
 
 Per-second video (`grok-imagine-video*`) and per-generation image
@@ -487,6 +495,80 @@ all preview/submission paths enforce the same restriction.
 
 ---
 
+## 41. (gap) Fal 0.15.0 endpoints without a local rate — OPEN in 0.15.0
+
+Videobook catalogues 32 fal image and video endpoints first published in
+0.15.0. `@apicity/cost` 0.15.0 has no local rate for 17 of them: fal bills
+them by compute seconds, output tokens or delivered output metadata, which a
+request cannot determine. `computeEstimate` returns $0 with a warning that
+points to fal's pricing-estimate API, so estimates, previews and book usage
+show them as unpriced:
+
+- `google/nano-banana-2.1` and `google/nano-banana-2.1/edit`
+- `fal-ai/flux-2-flex`
+- `bytedance/seedance-2.0/us/*` and `bytedance/seedance-2.5/us/*` text, image
+  and reference video, plus `bytedance/seedance-2.5/draft/complete`
+- `fal-ai/kandinsky6-pro/*` and `fal-ai/kandinsky6-lite/*` text and image
+  video, `fal-ai/kandinsky6-vsr` and `fal-ai/kandinsky6-vsr/lite`
+- `mirelo-ai/sfx2.0/video-to-video`
+
+The other 15 are priced: Bria guided background removal ($0.03 per image),
+Bria Fibo Edit 1.5 Expand ($0.04 per image), Marigold V2 ($0.03 per image), the
+five H3 Max styles and H3 Max Relight ($0.08 per second), Kling O3 Standard
+image-to-video, Vidu Q4, PixVerse VibeMV, Pixelcut Looping Video and Creatify
+Boreal. Relight and VibeMV take their seconds from the source video or song,
+which their requests do not carry (the §30 out-of-band duration contract).
+Estimates resolve those durations from local metadata, but fal submissions do
+not yet persist duration hints, so their usage rows stay unpriced, as for the
+existing H3 Max Recast, Insert Video and Turbo Extend entries (vb-t2pr).
+
+---
+
+## 42. (quirk) Fal 0.15.0 request shapes Videobook adapts — CONSUMER REQUIREMENT
+
+- `bria/guided-remove-background` defaults `image_url` to Bria's sample photo,
+  so a request without a source image would still run and bill. Its catalog
+  entry has one mode that requires an image. Models with a single input mode
+  now validate against it even when `generate_image` is called without `mode`.
+- `mirelo-ai/sfx2.0/video-to-video` defaults `num_samples` to 2. Videobook keeps
+  only the first output, so the catalog sends 1. Its prompt field is
+  `text_prompt`.
+- `pixverse/music-video/vibemv` has two optional image fields. The first image
+  reference fills `image_url` (character); the second fills `style_image_url`,
+  which fal only uses with the Custom style.
+- Seedance 2.0/2.5 US and Kling O3 Standard image-to-video name the start frame
+  `image_url`. Videobook maps it to the first-frame role so frame connections
+  work as they do for KIE Seedance.
+- `bytedance/seedance-2.5/us/reference-to-video` selects reference, editing or
+  extension with `task`. Videobook exposes these as the r2v, v2v and extend
+  modes; the mode sets `task`.
+- Fal Vidu Q4 reference-to-video names inputs `[@reference_image_N]` and
+  `[reference_audio_N]` (no `@` for audio). The `vidu` prompt dialect writes
+  exactly that form.
+- `@apicity/cost` `MODEL_DISPLAY` has no titles for most new fal endpoints and
+  one shared "H3 Max Styles" title for all five styles, so their catalog
+  entries carry titles.
+
+---
+
+## 43. (decision) Fal twins and draft completion hidden from the picker — DECIDED 2026-10-17
+
+The fal routes for Nano Banana 2.1, Vidu Q4 and Seedance 2.5 US duplicate
+models the picker already serves through KIE, so they are `hidden` catalog
+entries, like the older fal Nano Banana and Wan 3.0 routes. They remain
+available through `generate_image`, `generate_video` and
+`list_generation_models` with `include_hidden`. `bytedance/seedance-2.5/draft/complete`
+is hidden as well: it needs a `draft_id` from a fal Seedance 2.5 draft request,
+and no catalogued model creates drafts, so callers must pass `draft_id` in
+`options`.
+
+KIE 0.15.0 adds no image or video model. Its Gemini 2.5 Flash and Gemini 3
+Flash chat endpoints were replaced by Gemini 4 Argon (unused by Videobook), and
+`qwen/text-to-image` lost its `image_size` default; Videobook catalogues only
+the versioned Qwen models, so neither change reaches the catalog.
+
+---
+
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
@@ -494,6 +576,9 @@ all preview/submission paths enforce the same restriction.
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | provider-derived resolution adapters                  |
 | **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
 | **OPEN**     | §40 Seedance 2.5 frame aspect ratio                                 | adaptive normalization and mode-aware controls        |
+| **OPEN**     | §41 fal 0.15.0 endpoints without a local rate                       | unpriced estimates; fal usage hints (vb-t2pr)          |
+| **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect, titles  |
+| **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
 | **PARTIAL**  | §14 Flow loose schemas                                              | per-model domains                                      |
 | **PARTIAL**  | §15 Flow estimate semantics                                         | local Gemini API list USD (`google-flow-cost.ts`)      |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
@@ -515,3 +600,11 @@ tools and two kie omni tools with the kie picker route primary; native
 DashScope video is deliberately dropped (§37). Qwen Image 3 edit ships via
 `generate_fal_qwen_3_0_edit_image`; like base Wan 3.0 it is upstream
 dynamic-pricing, so it has no cost adapter (§26 update).
+
+**0.15.0 update (2026-10-17, vb-kqzp):** all 13 Apicity packages resolve
+0.15.0; OpenAI, xAI, X and Dropbox are vendored as the published tarballs plus
+their unchanged patches. The 32 new fal image and video endpoints are catalog
+entries, 24 of them in the picker (§41–§43). The fal audio, 3D, robotics and
+routing endpoints new in 0.15.0 (Mureka, Mirelo SFX audio, VEED Clean Audio,
+Grok Voice, Meshy 6 Lite Retexture, FLUX.3 Action SO-101, OpenRouter decisions)
+are not catalogued.

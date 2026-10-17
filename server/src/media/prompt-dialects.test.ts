@@ -41,6 +41,11 @@ describe("prompt dialects", () => {
     )).toBe("paint @reference_1");
     expect(applyPromptDialect("brackets", "hero @image1 waves", { image: [IMG_ID] }))
       .toBe("hero [Image 1] waves");
+    expect(forModel(
+      "fal:fal-ai/vidu/q4/reference-to-video",
+      `@${IMG_ID} sings along to @${AUD_ID}`,
+      { image: [IMG_ID], audio: [AUD_ID] },
+    )).toBe("[@reference_image_1] sings along to [reference_audio_1]");
   });
 
   it("naturalizes MiniMax H3 references and drops its frame mentions", () => {

@@ -1,7 +1,7 @@
-version: 0.14.2
-base: https://registry.npmjs.org/@apicity/x/-/x-0.14.2.tgz
+version: 0.15.0
+base: https://registry.npmjs.org/@apicity/x/-/x-0.15.0.tgz
 git: https://github.com/justintanner/apicity.git
 patch: vendor/apicity-x-posts.patch
-tarball: vendor/apicity-x-0.14.2-25cff98.tgz
-sha256: 25cff9840d6e3b5eaa2676e21044fb0f86d8d8e5af25105f21b919455034f7f7
+tarball: vendor/apicity-x-0.15.0-b49b517.tgz
+sha256: b49b51766857854189838d2314d5ebaa4216a9dbc6c0ae03871c20abf147d17a
 posts-patch-revision: faf74bef0a5eecae7a2dce74b367a6c2313abe77

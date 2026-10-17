@@ -99,9 +99,10 @@ plan skips AI planning. Every paid stage or revision requires an explicit action
 **Stop goal** stops remaining work; already submitted requests may still finish.
 
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
-model choices and saved producer reruns keep their chosen model. Apicity 0.14.2
+model choices and saved producer reruns keep their chosen model. Apicity 0.15.0
 supplies the NB 2.1 schema and pricing; the OpenAI and xAI packages retain the
-repository's realtime patches.
+repository's realtime patches, and the X and Dropbox packages keep their posting
+patches.
 
 Video generation also includes **Vidu Q4 image-to-video** and **Vidu Q4
 reference-to-video** through KIE. Both support 3–16 seconds, 540p through 4k,
@@ -109,6 +110,22 @@ and optional generated audio. Image-to-video uses one image and inherits its
 aspect ratio. Reference-to-video accepts 1–15 images and up to three MP3 audio
 references, each 3–12 seconds and at most 50 MB. Cost previews use the selected
 duration and resolution from Apicity's published rates.
+
+Apicity 0.15.0 adds these fal models to the picker: **Seedance 2.0 US** text,
+image and reference video; **Kling O3 Standard** image-to-video; **Kandinsky 6
+Pro** and **Lite** text- and image-to-video and **Kandinsky 6 Upscale**, which
+upscales about the first five seconds of a clip; **H3 Max Relight** and the
+16-bit Pixel, Hand-Drawn, Low-Poly, Retro Toon 70s and VHS **H3 Max** styles;
+**PixVerse VibeMV** music videos from a song; **Pixelcut Looping Video**;
+**Creatify Boreal**; **Mirelo SFX 2.0** soundtracks for an existing video;
+**FLUX.2 Flex**; **Bria Guided Remove Background** and **Fibo Edit 1.5 Expand**;
+and **Marigold V2** depth, normal and albedo maps. The fal routes for Nano
+Banana 2.1, Vidu Q4 and Seedance 2.5 US stay out of the picker because KIE
+already serves those models there; they, and Seedance 2.5 draft completion,
+remain available to `generate_image`, `generate_video` and
+`list_generation_models` with `include_hidden`. Several fal models are priced
+dynamically, so their estimates read $0 with a warning; see
+[docs/apicity-gaps.md](docs/apicity-gaps.md).
 
 ## Posts and results
 

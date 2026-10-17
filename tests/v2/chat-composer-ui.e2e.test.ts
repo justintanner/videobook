@@ -4414,6 +4414,46 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('previews new fal video models from an image input without submitting generation', async () => {
+    const page = await openApp()
+    await collapseComposerDock(page)
+    await notebookCellNode(page, directVideoGenerationCellId).click()
+    const editor = page.locator('.generation-cell-inspector .confirm-generation')
+    const model = editor.getByLabel('Generation model')
+    const source = editor.locator('.generation-review-json pre')
+    const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
+    observedCalls.length = 0
+    try {
+      await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
+      await editor.getByRole('button', { name: 'Add input', exact: true }).click()
+      await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
+      await model.selectOption('generation.fal:bytedance/seedance-2.0/us/image-to-video')
+      await prompt.fill('Drift toward the moon from @image1')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"endpoint_id": "bytedance/seedance-2.0/us/image-to-video"')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"prompt": "Drift toward the moon from"')
+      expect(await source.textContent()).toContain('"image_url"')
+      expect(await source.textContent()).not.toContain('"end_image_url"')
+
+      await model.selectOption('generation.fal:minimax/h3-max/styles/vhs')
+      await prompt.fill('A tape-worn walk through the garden')
+      await editor.getByLabel('Damage level', { exact: true }).selectOption('string:heavy')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"endpoint_id": "minimax/h3-max/styles/vhs"')
+      await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
+        .toContain('"damage_level": "heavy"')
+      expect(await source.textContent()).toContain('"image_url"')
+      expect(observedCalls.some(call => call.name === 'run_notebook'
+        || call.name === 'generate_video')).toBe(false)
+    } finally {
+      const addedInput = editor.getByLabel('Remove @c3 input')
+      if (await addedInput.count()) await addedInput.click()
+      await expect.poll(() => addedInput.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
+      notebookDirty = true
+    }
+  }, 60_000)
+
   it('starts cell-level image and video generation without chat review', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()

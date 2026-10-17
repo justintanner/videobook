@@ -49,8 +49,12 @@ function refCount(refs: MediaRefs, role: RefRole): number {
   return refs[role]?.length ?? 0;
 }
 
+function soleMode(model: ResolvedModel): ModeSpec | undefined {
+  return model.modes.length === 1 ? model.modes[0] : undefined;
+}
+
 function checkRefs(model: ResolvedModel, refs: MediaRefs, mode: string | undefined): string | null {
-  const modeSpec = mode ? model.modes.find((candidate) => candidate.id === mode) : undefined;
+  const modeSpec = mode ? model.modes.find((candidate) => candidate.id === mode) : soleMode(model);
   if (mode && !modeSpec) return `${model.id} has no mode ${mode}; modes: ${model.modes.map((m) => m.id).join(", ")}`;
   for (const role of Object.keys(refs) as RefRole[]) {
     const count = refCount(refs, role);
