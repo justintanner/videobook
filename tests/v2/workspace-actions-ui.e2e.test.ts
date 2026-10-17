@@ -279,7 +279,7 @@ describe('workspace action launcher with real endpoints', () => {
 
   it('opens edit forms from slash, cell menus and Library with the same media target', async () => {
     await sendCommand('/crop @a2')
-    await page.getByRole('heading', { level: 3, name: 'Crop image', exact: true }).waitFor()
+    await page.getByRole('heading', { level: 3, name: 'Crop asset', exact: true }).waitFor()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
     await page.keyboard.press('Escape')
     await page.getByLabel('Open @a2 cell menu', { exact: true }).click()
