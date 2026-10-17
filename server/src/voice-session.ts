@@ -21,7 +21,12 @@ import { VoiceReplyProgress } from "./voice-reply-progress.js";
 import { isVoiceTurnContinuation, joinVoiceTranscripts } from "./voice-continuation.js";
 import type { VoiceCaption, VoiceMode, VoiceOutcome, VoiceProvider, VoiceReviewCommand, VoiceSessionDescriptor, VoiceSessionEvent } from "./voice-contract.js";
 
-type VoiceControlEvent = Exclude<OpenAiRealtimeClientEvent, { type: "session.update" }>;
+type VoiceControlItem =
+  | { type: "function_call_output"; call_id: string; output: string }
+  | { type: "message"; role: "user" | "assistant"; content: { type: "input_text"; text: string }[] };
+type VoiceControlEvent =
+  | Exclude<OpenAiRealtimeClientEvent, { type: "session.update" | "conversation.item.create" }>
+  | { type: "conversation.item.create"; item: VoiceControlItem; previous_item_id?: string };
 interface VoiceControl {
   send(event: VoiceControlEvent): void;
   close(): void;
@@ -101,6 +106,8 @@ export class VoiceSession {
   // Provider-specific, because the two realtime APIs take different session
   // shapes. Set once the connection is open.
   private pushSession: ((context: unknown) => void) | null = null;
+  private sendActivation: (() => void) | null = null;
+  private sendContextNote: ((text: string) => void) | null = null;
   private workspaceSignature: string | null = null;
   private callId: string | null = null;
   private negotiation: Promise<OpenAiRealtimeCallResponse> | null = null;
@@ -213,6 +220,8 @@ export class VoiceSession {
         type: "session.update",
         session: { type: "realtime", instructions: voiceInstructions(context) },
       });
+      this.sendActivation = () => connection.send(openAiVoiceActivationEvent());
+      this.sendContextNote = (text) => connection.send({ type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text }] } });
       this.workspaceSignature = this.signature();
       return { id: this.id, token: this.token, provider: "openai", transport: "webrtc", sdp: call.sdp, model: this.model, idleTimeoutMs: this.idleTimeoutMs };
     } finally {
@@ -247,6 +256,8 @@ export class VoiceSession {
       type: "session.update",
       session: xaiVoiceSessionConfig(context, this.inputRate),
     });
+    this.sendActivation = () => connection.send(xaiVoiceActivationEvent());
+    this.sendContextNote = (text) => connection.send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
     this.pushSession(voiceWorkspaceContext(this.engine, this.notebookId));
     this.workspaceSignature = this.signature();
     const deadline = setTimeout(() => { setupError = new XaiError("xAI voice setup timed out", 504); configured.resolve(); }, 10_000);
@@ -293,12 +304,12 @@ export class VoiceSession {
   }
 
   greet(): void {
-    if (this.greeted || this.stopped || !this.control) return;
+    if (this.greeted || this.stopped || !this.control || !this.sendActivation) return;
     this.greeted = true;
     if (this.currentTurn || this.speaking || this.activeResponse || this.needsResponse || this.pendingTools > 0 || this.waitingAction || this.reviewCall) return;
     this.activationPending = true;
     this.activeResponse = true;
-    this.control.send(this.providerName === "xai" ? xaiVoiceActivationEvent() : openAiVoiceActivationEvent());
+    this.sendActivation();
   }
 
   private isLineResponse(responseId: string | undefined): boolean {
@@ -753,7 +764,7 @@ export class VoiceSession {
 
   contextMessage(value: { applicationOutcome?: VoiceOutcome; userText?: string; assistantText?: string }): void {
     if (this.stopped) return;
-    this.control?.send({ type: "conversation.item.create", item: { type: "message", role: this.providerName === "xai" ? "user" : "system", content: [{ type: "input_text", text: `Application update (data): ${JSON.stringify(value)}` }] } });
+    this.sendContextNote?.(`Application update (data): ${JSON.stringify(value)}`);
     if (value.applicationOutcome) {
       this.needsResponse = true;
       this.continueResponse();

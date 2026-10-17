@@ -199,7 +199,7 @@ describe("media request building", () => {
 
   it("requires a source image for Bria guided background removal", () => {
     const model = resolveModel("fal:bria/guided-remove-background");
-    expect(buildWireRequest(model, {})).toMatchObject({ ok: false, error: expect.stringContaining("needs one of: image") });
+    expect(buildWireRequest(model, {})).toMatchObject({ ok: false, error: expect.stringContaining("requires at least 1 image ref") });
     expect(buildWireRequest(model, { refUrls: { image: ["https://example.com/a.png"] } }))
       .toMatchObject({ ok: true, request: { image_url: "https://example.com/a.png" } });
   });

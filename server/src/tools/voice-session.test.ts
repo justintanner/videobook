@@ -196,6 +196,7 @@ describe("voice session boundaries", () => {
     expect(OPENAI_VOICE).toBe("alloy");
     expect(session.audio?.output?.speed).toBe(1);
     expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).voice).toBe(XAI_VOICE);
+    expect(xaiVoiceSessionConfig(context, VOICE_PCM_RATE).audio?.output?.speed).toBe(1);
     expect(XAI_VOICE).toBe("sal");
     // The model read an optional staleness guard as a precondition and asked
     // the speaker to recite a revision hash the cell details never display.

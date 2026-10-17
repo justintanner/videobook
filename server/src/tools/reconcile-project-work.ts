@@ -12,7 +12,7 @@ import { XaiError } from "@apicity/xai";
 import { AlibabaError } from "@apicity/alibaba";
 import { FalError } from "@apicity/fal";
 import { GoogleFlowError } from "@apicity/googleflow";
-import { describeGoogleFlowJobFailure, googleFlowFetch } from "../jobs/_google-flow.js";
+import { describeGoogleFlowJobFailure } from "../jobs/_google-flow.js";
 import {
   EMPTY_TAG_SUMMARY,
   readAssetTagSummaries,
@@ -1226,7 +1226,7 @@ export async function pollPendingProviderTasks(
   const googleFlowTasks = pollableTasks.filter(isGoogleFlowPendingTask);
   const googleFlowKey = getApiKey("GOOGLE_FLOW_API_KEY");
   if (googleFlowKey && googleFlowTasks.length > 0) {
-    const provider = createGoogleFlow({ apiKey: googleFlowKey, timeout: 30_000, fetch: googleFlowFetch });
+    const provider = createGoogleFlow({ apiKey: googleFlowKey, timeout: 30_000 });
 
     await Promise.all(googleFlowTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);

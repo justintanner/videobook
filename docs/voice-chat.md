@@ -39,15 +39,10 @@ captions, and actions. Browser audio transport never contacts xAI directly. Both
 directions have bounded buffers; disconnect closes capture, playback, and the
 provider connection. `XAI_API_KEY` enables xAI; `OPENAI_API_KEY` enables OpenAI.
 
-The vendored provider is `@apicity/openai` 0.11.0 built from Apicity commit
-`828e37730593c8fd069c2302c7ecab772906b4e6`. The package contains the Realtime call,
-hangup, and server control APIs missing from the prior dependency. Its provenance is
-recorded in [`vendor/OPENAI_REVISION.txt`](../vendor/OPENAI_REVISION.txt). No application
-HTTP or WebSocket wrapper bypasses the provider.
-
-The vendored `@apicity/xai` 0.11.0 package includes the server Realtime transport from
-Apicity commit `7c5e2e56`. Its revision and checksum are recorded in
-[`vendor/XAI_REVISION.txt`](../vendor/XAI_REVISION.txt).
+Both providers come from npm: `@apicity/openai` 0.16.1 exports the Realtime call,
+hangup and `./realtime` server control APIs, and `@apicity/xai` 0.16.1 exports the
+`./realtime` server transport with typed `force_message` items and
+`audio.output.speed`. No application HTTP or WebSocket wrapper bypasses the provider.
 
 | Setting | Value |
 | --- | --- |
@@ -72,8 +67,8 @@ interviewing the speaker, so a parameter the discovered schema marks optional
 is omitted rather than asked for. `expected_revision` is such a parameter on
 every tool that accepts it.
 
-xAI uses `grok-voice-think-fast-2.0`, Sal's voice, reasoning effort `none`, and the
-same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model, and
+xAI uses `grok-voice-think-fast-2.0`, Sal's voice at speed 1, reasoning effort `none`,
+and the same 350 ms VAD silence setting. `VIDEOBOOK_XAI_VOICE_MODEL` overrides the xAI model, and
 `VIDEOBOOK_XAI_REALTIME_URL` points the same client at another realtime endpoint — a local
 gateway, or the integration test's server; unset, voice talks to xAI.
 Its native speech model supplies input captions. These settings follow the current

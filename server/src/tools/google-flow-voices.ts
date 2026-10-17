@@ -21,9 +21,8 @@ import {
 // Google Flow custom voices (POST/GET/DELETE /google-flow/voices). A voice is a
 // saved TTS clip built on one of the 30 system presets; its ref feeds
 // referenceAudio_1..5 options of generate_video with model googleflow:omni-flash. Refs carry
-// ':'/'@' that must reach useapi.net raw — the googleFlowFetch hook wired into
-// createGoogleFlowProvider handles the GET/DELETE-by-ref paths
-// (docs/apicity-gaps.md §16).
+// ':'/'@' that must reach useapi.net raw; @apicity/googleflow keeps them raw in
+// the GET/DELETE-by-ref paths (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
 
 type CreateGoogleFlowVoiceInput = {

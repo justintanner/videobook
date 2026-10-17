@@ -35,8 +35,8 @@ import {
 // into a ref that feeds character_1..N options of generate_video with model googleflow:omni-flash
 // (character_refs). Each character costs a flat 2 of omni's 7 reference slots
 // shared with image_refs, regardless of its image count (google-flow-refs.ts).
-// GET/DELETE-by-ref paths ride the googleFlowFetch raw
-// -path hook in createGoogleFlowProvider (docs/apicity-gaps.md §16).
+// @apicity/googleflow keeps ':' and '@' raw in GET/DELETE-by-ref paths
+// (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
 
 type CreateGoogleFlowCharacterInput = {

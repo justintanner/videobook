@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.15.0 (2026-10-17). Image, video and audio
+Videobook now uses Apicity 0.16.1 (2026-10-17). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -15,12 +15,10 @@ Nano Banana 2.1 and Seedance 2.5 through KIE are the default image and video
 models. GPT Image 2.5 Sunburst and Flare remain selectable; GPT Image 2 stays
 hidden for historical records and already queued work.
 
-Published `@apicity/openai` and `@apicity/xai` 0.15.0 still omit Videobook's
-server realtime transports, published `@apicity/x` 0.15.0 still lacks tweet
-lookup, and published `@apicity/dropbox` 0.15.0 still lacks upload sessions.
-Each vendored 0.15.0 archive is the published tarball plus an unchanged patch
-from `vendor/`; `vendor/*_REVISION.txt` records its base URL, patch revision and
-checksum.
+Every `@apicity/*` package installs from npm. The OpenAI and xAI server
+realtime transports, X post metrics lookup and Dropbox upload sessions that
+Videobook vendored as patched 0.15.0 tarballs shipped in 0.16.1 (apicity
+`ac-j3d6ki.10`–`.12`), so `vendor/` holds no Apicity archives or patches.
 
 The new cost tables price Seedance 2.5 by reference-video presence, and count
 input plus output video duration for Seedance, Wan 3.0, MiniMax H3 reference
@@ -146,7 +144,6 @@ an offline fallback.
 | Catalog entry                                          | Videobook                                  | Base Apicity schema                             | Reason                                                              |
 | ------------------------------------------------------ | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
 | `kie:bytedance/seedance-2-5` with a frame              | `aspect_ratio` set to `adaptive`           | rejects fixed ratios for frame tasks            | keeps frame requests valid instead of failing; see §40              |
-| `fal:bria/guided-remove-background`                    | requires one image                         | `image_url` defaults to Bria's sample photo     | a run without a source image would bill for the sample; see §42     |
 | `fal:bytedance/seedance-2.0/us/reference-to-video`     | requires an image or video reference       | references optional; audio needs a visual       | without a visual reference the request is text-to-video             |
 | `fal:bytedance/seedance-2.5/us/reference-to-video`     | v2v and extend modes require a video       | `task` editing/extension with optional videos   | editing and extension continue a reference video; see §42           |
 
@@ -154,7 +151,8 @@ The catalog expresses these with `frameOptions` and mode `requireAny` in
 `server/src/media/catalog.ts`; every other field, enum and range comes straight
 from the apicity schemas. Before the catalog (d8814110) this table listed the
 Grok `spicy` and `index` filters of the removed `generate_grok_imagine_video`
-tool (§2). Google Flow's broader local contract is tracked in §14.
+tool (§2). The Bria guided background removal row ended in 0.16.0, when the
+schema itself started requiring `image_url` (§42). Google Flow's broader local contract is tracked in §14.
 
 ## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 
@@ -216,6 +214,14 @@ are gone. Still loose: the image model accepts an enum or a
 assets, characters and voices do). `server/src/media/adapters/googleflow.ts`
 keeps tolerant response readers.
 
+Update 2026-10-17 (0.16.1): apicity kept the generic `GoogleFlowResponse`
+return types on purpose (`ac-j3d6ki.7`) and documented the exported response
+schemas instead; `GoogleFlowImagesResponseSchema` has shipped since 0.15.0. The
+image adapter now parses the response with it rather than probing
+`media[].image.generatedImage.fifeUrl` untyped, so a shape drift fails with the
+schema's message. The image model's `nano-banana-*` pattern is the remaining
+looseness, and it follows the open model-id convention.
+
 ## 15. (gap) Google Flow package rates are credit×Pro, not Gemini API list USD — PARTIAL in 0.15.0
 
 `@apicity/cost@0.8.0` accepts `provider: "googleflow"` and prices
@@ -239,12 +245,18 @@ package's credit-native estimates. `server/src/media/cost.ts` passes
 $0.80). `googleflow:nano-banana-pro` has no Flow rate at all, so it estimates
 $0 with a "not found in pricing table" warning.
 
+Update 2026-10-17 (0.16.1): `@apicity/cost` prices every Flow image model at 0
+credits on both plans (`ac-j3d6ki.5`), because Flow Pro and Ultra include image
+generation, so `googleflow:nano-banana-pro` estimates $0 without a warning.
+0.16.0 also models the Plus and $99 Ultra plan tiers. Nothing local remains;
+the badge is the package's credit × plan number.
+
 ## 16. (bug) ~~Google Flow path IDs are percent-encoded~~ — RESOLVED in 0.8.0
 
 `@apicity/googleflow@0.8.0` encodes path segments via `encodePathSegment`, which
-restores `:` and `@` after `encodeURIComponent`. Videocity still wires a
-defensive `googleFlowFetch` path decode (no-op when the path is already raw) as
-belt-and-suspenders for residual over-encoding.
+restores `:` and `@` after `encodeURIComponent`. The defensive `googleFlowFetch`
+path decode Videobook kept as belt-and-suspenders was removed with the 0.16.1
+upgrade; every Flow client now uses the package's own fetch.
 
 ## 17. (quirk) Google Flow email requirements are route-specific — CONSUMER REQUIREMENT
 
@@ -460,7 +472,7 @@ therefore fails closed only when the estimate is zero (unknown model or
 underivable units); a positive estimate with warnings is a floor the package
 stands behind and is admitted.
 
-## 36. (gap) KIE MiniMax H3 reference clip duration bounds absent from schema — OPEN in 0.15.0
+## 36. (gap) ~~KIE MiniMax H3 reference clip duration bounds absent from schema~~ — RESOLVED UPSTREAM in 0.16.0
 
 `MiniMaxH3ReferenceToVideoInputSchema` bounds only reference counts (max 9
 images / 3 videos / 3 audios). Kie additionally enforces a per-clip duration
@@ -493,6 +505,13 @@ removed, so `kie:minimax-h3/reference-to-video` currently has no pre-submit
 duration guard and an over-long clip fails at Kie after the paygate OTP.
 Restoring it as catalog data is tracked in vb-6rct.
 
+Update 2026-10-17 (0.16.1): `@apicity/kie` exports
+`MiniMaxH3ReferenceClipDurationMs` (`ac-j3d6ki.2`): 2,000–15,000 ms per file and
+15,000 ms combined, for reference videos and, per Kie's docs, reference audio
+too. The schema descriptions state the same window. A URL carries no duration,
+so the schema still cannot enforce it; vb-6rct should read the constant instead
+of hard-coding 2–15 s. That guard is a Videobook product gap, not an Apicity one.
+
 ---
 
 ## 37. (decision) Native DashScope Wan 3.0 intentionally not carried — DECIDED 2026-08-25 (wontfix)
@@ -520,7 +539,7 @@ not expose, matching the other Qwen tools.
 
 ---
 
-## 39. (gap) xAI realtime fields the vendored types do not model — OPEN in 0.15.0
+## 39. (gap) ~~xAI realtime fields the vendored types do not model~~ — RESOLVED in 0.16.1 (adopted)
 
 `XaiRealtimeSession` and the vendored realtime event types (`@apicity/xai`
 0.15.0, commit recorded in `vendor/XAI_REVISION.txt`) do not model two xAI
@@ -534,6 +553,11 @@ session leaves the pace at the provider default while the OpenAI session
 pins speed 1 explicitly. Add the fields upstream rather than patching the
 vendored tarball; until then the activation path stays dynamically shaped
 and xAI pace is not configurable.
+
+Update 2026-10-17 (0.16.1): the published xAI realtime transport
+(`ac-j3d6ki.11`) types both. `xaiVoiceActivationEvent` returns a typed
+`XaiRealtimeConversationItemCreate` carrying an `XaiRealtimeForceMessageItem`,
+and the xAI session pins `audio.output.speed` to 1 like the OpenAI session.
 
 ---
 
@@ -554,7 +578,7 @@ their supported fixed ratios.
 
 ---
 
-## 41. (gap) Fal 0.15.0 endpoints without a local rate — OPEN in 0.15.0
+## 41. (gap) Fal 0.15.0 endpoints without a local rate — PARTIAL in 0.16.0
 
 Videobook catalogues 32 fal image and video endpoints first published in
 0.15.0. `@apicity/cost` 0.15.0 has no local rate for 17 of them: fal bills
@@ -581,14 +605,30 @@ Estimates resolve those durations from local metadata, but fal submissions do
 not yet persist duration hints, so their usage rows stay unpriced, as for the
 existing H3 Max Recast, Insert Video and Turbo Extend entries (vb-t2pr).
 
+Update 2026-10-17 (0.16.1): `@apicity/cost` prices fal Seedance from ByteDance's
+output sizes (`ac-j3d6ki.3`, 1080p corrected in `ac-i5zo6h`): width × height ×
+frames / 1024 tokens at each card's rate, with frames = 24 × duration + 1. The
+2.0 and 2.5 US text-to-video, 2.0 US image-to-video and 2.5 US
+reference-to-video entries now estimate from resolution, aspect ratio and
+duration. Three Seedance requests remain unpriced, each with a specific
+warning: 2.0 US reference-to-video without `video_urls`, 2.5 US image-to-video
+(the output follows the image), and the draft completion (it keeps the draft's
+aspect ratio). The other ten stay dynamic, and `FAL_DYNAMIC_BILLED_UNITS`
+(`ac-j3d6ki.4`) names each one's billed unit in the warning: Nano Banana 2.1
+and its edit (token-summed $1 units), FLUX.2 Flex (processed megapixels), the
+four Kandinsky 6 text and image models (compute units), both Kandinsky 6 VSR
+models (output megapixels × frames) and Mirelo SFX 2.0 (output seconds ×
+samples). None is a constant a request determines, so this gap stays open by
+design and the usage rows for these runs stay unpriced.
+
 ---
 
 ## 42. (quirk) Fal 0.15.0 request shapes Videobook adapts — CONSUMER REQUIREMENT
 
-- `bria/guided-remove-background` defaults `image_url` to Bria's sample photo,
-  so a request without a source image would still run and bill. Its catalog
-  entry has one mode that requires an image. Models with a single input mode
-  now validate against it even when `generate_image` is called without `mode`.
+- ~~`bria/guided-remove-background` defaults `image_url` to Bria's sample
+  photo~~. Since 0.16.0 the schema requires `image_url` (`ac-j3d6ki.1`), so the
+  catalog entry's image-only mode is gone and a run without a source image fails
+  as an ordinary missing image ref.
 - `mirelo-ai/sfx2.0/video-to-video` defaults `num_samples` to 2. Videobook keeps
   only the first output, so the catalog sends 1. Its prompt field is
   `text_prompt`.
@@ -604,9 +644,11 @@ existing H3 Max Recast, Insert Video and Turbo Extend entries (vb-t2pr).
 - Fal Vidu Q4 reference-to-video names inputs `[@reference_image_N]` and
   `[reference_audio_N]` (no `@` for audio). The `vidu` prompt dialect writes
   exactly that form.
-- `@apicity/cost` `MODEL_DISPLAY` has no titles for most new fal endpoints and
-  one shared "H3 Max Styles" title for all five styles, so their catalog
-  entries carry titles.
+- ~~`@apicity/cost` `MODEL_DISPLAY` has no titles for most new fal endpoints~~.
+  Since 0.16.0 every fal endpoint has a display name and the five H3 Max styles
+  have their own (`ac-j3d6ki.6`), so those catalog entries take the package
+  name. Local titles remain only to add a provider suffix such as "(Kie)" or to
+  tell the Seedance 2.5 draft completion apart from Seedance 2.5.
 
 ---
 
@@ -631,17 +673,17 @@ the versioned Qwen models, so neither change reaches the catalog.
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
-| **OPEN**     | §36 MiniMax H3 reference clip bounds                                | nothing since d8814110; guard tracked in vb-6rct       |
+| **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | nothing; vb-6rct guard should read the constant        |
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
-| **OPEN**     | §39 xAI realtime force_message / audio.output.speed                  | dynamic shapes; xAI pace at provider default           |
+| **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
 | **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
-| **OPEN**     | §41 fal 0.15.0 endpoints without a local rate                       | unpriced estimates; fal usage hints (vb-t2pr)          |
-| **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect, titles  |
+| **PARTIAL**  | §41 fal dynamic endpoints (Seedance priced in 0.16.0)               | 13 unpriced estimates; fal usage hints (vb-t2pr)       |
+| **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **PARTIAL**  | §14 Flow loose image model and generic responses                    | tolerant response readers                              |
-| **PARTIAL**  | §15 Flow estimate semantics                                         | package credit × plan USD; no Flow Nano Banana Pro rate |
+| **PARTIAL**  | §14 Flow loose image model and generic responses                    | images parsed with the exported response schema       |
+| **RESOLVED** | §15 Flow estimate semantics                                         | package credit × plan USD, images included at 0 credits |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
-| **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim (defensive Flow path decode only on §16) |
+| **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
 
 **Deliberate product quirks (not Apicity defects):** §8 table, §17
@@ -668,11 +710,21 @@ routing endpoints new in 0.15.0 (Mureka, Mirelo SFX audio, VEED Clean Audio,
 Grok Voice, Meshy 6 Lite Retexture, FLUX.3 Action SO-101, OpenRouter decisions)
 are not catalogued.
 
-**Upstream tracking (2026-10-17):** apicity epic `ac-j3d6ki` carries the open
+**Upstream tracking (2026-10-17):** apicity epic `ac-j3d6ki` carried the open
 asks: `.1` Bria sample-photo default (§42), `.2` MiniMax H3 clip window (§36),
 `.3` fal Seedance estimates and `.4` the other unpriced fal endpoints (§41),
 `.5` Google Flow image rates (§15), `.6` missing `MODEL_DISPLAY` names (§42),
 `.7` typed Google Flow responses (§14), and `.10`–`.12` publishing the OpenAI
 and xAI realtime transports (with §39's types) and the X and Dropbox changes
-Videobook vendors. `.10`–`.12` wait on the `.8` and `.9` ASKs to push the local
-apicity commits they need.
+Videobook vendored. All of them shipped in 0.16.0 and 0.16.1.
+
+**0.16.1 update (2026-10-17, vb-leqo):** all 13 Apicity packages resolve 0.16.1
+from npm, and the four vendored archives, their patches and revision notes are
+deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
+`./realtime` transports, X post metrics, Dropbox upload sessions, typed xAI
+`force_message` and `audio.output.speed` (§39), `MODEL_DISPLAY` names for the
+fal entries (§42), the schema's required Bria `image_url` (§8, §42),
+`GoogleFlowImagesResponseSchema` for image responses (§14), and the package's
+Flow path encoding (§16). Still open: §18 (service-side), the image-model
+pattern in §14, the 13 unpriced fal requests in §41, and the vb-6rct guard that
+should read §36's constant.

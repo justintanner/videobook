@@ -111,20 +111,22 @@ aspect ratio. Reference-to-video accepts 1–15 images and up to three MP3 audio
 references, each 3–12 seconds and at most 50 MB. Cost previews use the selected
 duration and resolution from Apicity's published rates.
 
-Apicity 0.15.0 adds these fal models to the picker: **Seedance 2.0 US** text,
-image and reference video; **Kling O3 Standard** image-to-video; **Kandinsky 6
-Pro** and **Lite** text- and image-to-video and **Kandinsky 6 Upscale**, which
-upscales about the first five seconds of a clip; **H3 Max Relight** and the
-16-bit Pixel, Hand-Drawn, Low-Poly, Retro Toon 70s and VHS **H3 Max** styles;
-**PixVerse VibeMV** music videos from a song; **Pixelcut Looping Video**;
-**Creatify Boreal**; **Mirelo SFX 2.0** soundtracks for an existing video;
-**FLUX.2 Flex**; **Bria Guided Remove Background** and **Fibo Edit 1.5 Expand**;
-and **Marigold V2** depth, normal and albedo maps. The fal routes for Nano
-Banana 2.1, Vidu Q4 and Seedance 2.5 US stay out of the picker because KIE
-already serves those models there; they, and Seedance 2.5 draft completion,
-remain available to `generate_image`, `generate_video` and
-`list_generation_models` with `include_hidden`. Several fal models are priced
-dynamically, so their estimates read $0 with a warning; see
+Apicity 0.15.0 adds these fal models to the picker, shown under the names
+`@apicity/cost` publishes: **Seedance 2 US** text, image and reference video;
+**Kling o3 Standard** image-to-video; **Kandinsky 6.0 Pro** and **Lite** text-
+and image-to-video and **Kandinsky 6.0 VSR**, which upscales about the first
+five seconds of a clip; **H3 Max Relight** and the 16-bit Pixel, Hand Drawn,
+Low Poly, Retro Toon 70s and VHS **H3 Max** styles; **PixVerse VibeMV** music
+videos from a song; **Pixelcut Looping Video**; **Creatify Boreal**; **Mirelo
+SFX 2.0** soundtracks for an existing video; **Flux 2 Flex**; **Bria Guided
+Remove Background** and **Fibo Edit 1.5 Expand**; and **Marigold V2** depth,
+normal and albedo maps. The fal routes for Nano Banana 2.1, Vidu Q4 and
+Seedance 2.5 US stay out of the picker because KIE already serves those models
+there; they, and Seedance 2.5 draft completion, remain available to
+`generate_image`, `generate_video` and `list_generation_models` with
+`include_hidden`. Since 0.16.0 fal Seedance estimates come from the output size,
+resolution and duration. Several other fal models are priced dynamically, so
+their estimates read $0 with a warning naming the billed unit; see
 [docs/apicity-gaps.md](docs/apicity-gaps.md).
 
 ## Posts and results

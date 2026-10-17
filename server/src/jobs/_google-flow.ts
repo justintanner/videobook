@@ -24,28 +24,13 @@ export const DEFAULT_GOOGLE_FLOW_CAPTCHA_RETRY = 8;
 const CAPTCHA_SUBMIT_RETRY_DELAY_MS = 15_000;
 const CAPTCHA_SUBMIT_MAX_ATTEMPTS = 2;
 
-// @apicity/googleflow@0.8.0 restores `:` and `@` via encodePathSegment.
-// Keep this defensive decode for older package builds and any residual
-// over-encoding; it is a no-op when the path is already raw.
-export function googleFlowFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  if (typeof input === "string") {
-    try {
-      const u = new URL(input);
-      const rawPath = decodeURIComponent(u.pathname);
-      if (rawPath !== u.pathname) input = `${u.origin}${rawPath}${u.search}`;
-    } catch {
-      // not a parseable URL — pass through untouched
-    }
-  }
-  return fetch(input, init);
-}
 // @apicity/googleflow is the dedicated useapi.net Google Flow provider (split
 // out of @apicity/google in 0.7.1, which now hosts only Vertex express-mode
 // / Gemini content calls). It takes a single apiKey — the same useapi.net
 // GOOGLE_FLOW_API_KEY token — for every Flow endpoint.
 export function createGoogleFlowProvider(timeoutMs: number = GOOGLE_FLOW_TIMEOUT_MS): GoogleFlowProvider {
   const apiKey = requireApiKey(GOOGLE_FLOW_ENV_KEY);
-  return createGoogleFlow({ apiKey, timeout: timeoutMs, fetch: googleFlowFetch });
+  return createGoogleFlow({ apiKey, timeout: timeoutMs });
 }
 
 export function resolveGoogleFlowCaptchaRetry(): number {

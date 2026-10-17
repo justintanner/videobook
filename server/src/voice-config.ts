@@ -1,5 +1,5 @@
 import type { OpenAiRealtimeSessionCreateRequest } from "@apicity/openai";
-import type { XaiRealtimeSession } from "@apicity/xai";
+import type { XaiRealtimeConversationItemCreate, XaiRealtimeSession } from "@apicity/xai";
 
 export const DEFAULT_VOICE_MODEL = "gpt-realtime-2.1";
 export const DEFAULT_XAI_VOICE_MODEL = "grok-voice-think-fast-2.0";
@@ -10,7 +10,7 @@ export const VOICE_ACTIVATION_PHRASE = "Voice Chat Activated";
 export const OPENAI_VOICE = "alloy";
 export const XAI_VOICE = "sal";
 
-export function xaiVoiceActivationEvent(): { type: "conversation.item.create"; item: Record<string, unknown> } {
+export function xaiVoiceActivationEvent(): XaiRealtimeConversationItemCreate {
   return {
     type: "conversation.item.create",
     item: {
@@ -44,7 +44,7 @@ export function xaiVoiceSessionConfig(context: unknown, sampleRate: 8000 | 16000
       return [{ type: "function" as const, name: tool.name, description: tool.description ?? "", parameters: tool.parameters ?? {} }];
     }),
     turn_detection: { type: "server_vad", threshold: 0.5, silence_duration_ms: 350, prefix_padding_ms: 300 },
-    audio: { input: { format: { type: "audio/pcm", rate: sampleRate } }, output: { format: { type: "audio/pcm", rate: VOICE_PCM_RATE } } },
+    audio: { input: { format: { type: "audio/pcm", rate: sampleRate } }, output: { format: { type: "audio/pcm", rate: VOICE_PCM_RATE }, speed: 1 } },
   };
 }
 

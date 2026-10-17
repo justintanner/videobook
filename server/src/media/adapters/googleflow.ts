@@ -1,3 +1,4 @@
+import { GoogleFlowImagesResponseSchema } from "@apicity/googleflow";
 import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/googleflow";
 import type { Engine } from "videobook-engine";
 import {
@@ -7,17 +8,12 @@ import {
   uploadAssetToGoogleFlow,
   uploadUrlToGoogleFlow,
 } from "../../jobs/_google-flow.js";
-import { record } from "./pending.js";
 import { MEDIA_TASK_TYPES, type ProviderAdapter, type SubmitContext, type SubmitResult } from "./types.js";
 
 function firstImageUrl(response: unknown): string | null {
-  const media = record(response)?.media;
-  if (!Array.isArray(media)) return null;
-  for (const entry of media) {
-    const url = record(record(record(entry)?.image)?.generatedImage)?.fifeUrl;
-    if (typeof url === "string" && url !== "") return url;
-  }
-  return null;
+  const parsed = GoogleFlowImagesResponseSchema.safeParse(response);
+  if (!parsed.success) throw new Error(`Google Flow image response did not match the apicity schema: ${parsed.error.message}`);
+  return parsed.data.media.map((entry) => entry.image?.generatedImage?.fifeUrl).find((url) => typeof url === "string" && url !== "") ?? null;
 }
 
 async function submitImage(request: Record<string, unknown>): Promise<SubmitResult> {
