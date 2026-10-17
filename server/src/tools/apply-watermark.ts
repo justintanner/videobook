@@ -315,11 +315,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       include_platform_icon: z
         .boolean()
         .optional()
-        .describe("Show the selected platform icon before the plain alias (default true; overrides include_x_icon)"),
-      include_x_icon: z
-        .boolean()
-        .optional()
-        .describe("Legacy alias for include_platform_icon (default true)"),
+        .describe("Show the selected platform icon before the plain alias (default true)"),
       include_handle_border: z
         .boolean()
         .optional()
@@ -345,16 +341,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .max(MAX_HANDLE_ROUNDING)
         .optional()
         .describe(`Handle corner rounding percent (default ${DEFAULT_HANDLE_ROUNDING}; range ${MIN_HANDLE_ROUNDING}-${MAX_HANDLE_ROUNDING})`),
-      start_seconds: z
-        .number()
-        .min(0)
-        .optional()
-        .describe("Legacy shared first visible second, used when a watermark-specific start is omitted"),
-      end_seconds: z
-        .number()
-        .min(0)
-        .optional()
-        .describe("Legacy shared last visible second, used when a watermark-specific end is omitted"),
       qr_start_seconds: z
         .number()
         .min(0)
@@ -381,12 +367,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .max(MAX_WATERMARK_FADE_SECONDS)
         .optional()
         .describe(`Burn-mode fade in/out length in seconds at a watermark edge that falls inside the clip (fresh TikTok ${LIGHTNING_FADE_SECONDS}, X 0.5; 0 keeps hard edges). Whole-clip watermarks never fade`),
-      opacity: z
-        .number()
-        .min(0.05)
-        .max(1)
-        .optional()
-        .describe("Legacy shared opacity, used when a watermark-specific opacity is omitted"),
       qr_opacity: z
         .number()
         .min(0.05)
@@ -432,19 +412,15 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_position: handlePositionArg,
         platform: platformArg,
         include_platform_icon,
-        include_x_icon,
         include_handle_border: borderArg,
         handle_padding: paddingArg,
         handle_padding_y: paddingYArg,
         handle_rounding: roundingArg,
-        start_seconds,
-        end_seconds,
         qr_start_seconds,
         qr_end_seconds,
         handle_start_seconds,
         handle_end_seconds,
         fade_seconds: fadeArg,
-        opacity: opacityArg,
         qr_opacity,
         handle_opacity,
         scale: scaleArg,
@@ -464,14 +440,10 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_position?: WatermarkHandlePlacement;
         platform?: WatermarkPlatform;
         include_platform_icon?: boolean;
-        include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
         handle_padding_y?: number;
         handle_rounding?: number;
-        start_seconds?: number;
-        end_seconds?: number;
-        opacity?: number;
         qr_start_seconds?: number;
         qr_end_seconds?: number;
         handle_start_seconds?: number;
@@ -496,19 +468,16 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const handle_padding_y = paddingYArg ?? profile.handlePaddingY;
       const handle_rounding = roundingArg ?? profile.handleRounding;
       const fade_seconds = fadeArg ?? profile.fadeSeconds;
-      const opacity = opacityArg ?? profile.handleOpacity;
       const scale = scaleArg ?? profile.scale;
       const mode = modeArg ?? profile.mode;
-      const includePlatformIcon = include_platform_icon ?? include_x_icon ?? profile.includePlatformIcon;
-      let resolvedQrStartSeconds = qr_start_seconds ?? start_seconds;
-      let resolvedQrEndSeconds = qr_end_seconds ?? end_seconds;
-      let resolvedHandleStartSeconds = handle_start_seconds ?? start_seconds;
-      let resolvedHandleEndSeconds = handle_end_seconds ?? end_seconds;
-      const resolvedQrOpacity = qr_opacity ?? opacityArg ?? profile.qrOpacity;
-      const resolvedHandleOpacity = handle_opacity ?? opacity;
-      const callerSetTiming = start_seconds !== undefined
-        || end_seconds !== undefined
-        || qr_start_seconds !== undefined
+      const includePlatformIcon = include_platform_icon ?? profile.includePlatformIcon;
+      let resolvedQrStartSeconds = qr_start_seconds;
+      let resolvedQrEndSeconds = qr_end_seconds;
+      let resolvedHandleStartSeconds = handle_start_seconds;
+      let resolvedHandleEndSeconds = handle_end_seconds;
+      const resolvedQrOpacity = qr_opacity ?? profile.qrOpacity;
+      const resolvedHandleOpacity = handle_opacity ?? profile.handleOpacity;
+      const callerSetTiming = qr_start_seconds !== undefined
         || qr_end_seconds !== undefined
         || handle_start_seconds !== undefined
         || handle_end_seconds !== undefined;
@@ -695,7 +664,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         url: resolvedUrl,
         include_qr,
         include_handle,
-        opacity,
         qr_opacity: resolvedQrOpacity,
         handle_opacity: resolvedHandleOpacity,
         scale,
@@ -704,14 +672,11 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         handle_position: include_handle ? resolvedHandlePosition : null,
         platform,
         include_platform_icon: includePlatformIcon,
-        include_x_icon: platform === "x" && includePlatformIcon,
         include_handle_border,
         handle_padding,
         handle_padding_y,
         handle_rounding,
         fade_seconds,
-        start_seconds: start_seconds ?? null,
-        end_seconds: end_seconds ?? null,
         qr_start_seconds: include_qr ? resolvedQrStartSeconds ?? null : null,
         qr_end_seconds: include_qr ? resolvedQrEndSeconds ?? null : null,
         handle_start_seconds: include_handle ? resolvedHandleStartSeconds ?? null : null,
@@ -807,7 +772,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         corner: placement.corner,
         placementSource: placement.placementSource,
         ...(placement.visionRequest ? { placement: placement.visionRequest } : {}),
-        opacity,
         qrOpacity: resolvedQrOpacity,
         handleOpacity: resolvedHandleOpacity,
         userScale: scale,

@@ -70,7 +70,7 @@ describe("create_watermark tool", () => {
     const parsed = JSON.parse(resultText(result)) as { asset_id: string; url: string };
     expect(parsed).toMatchObject({
       platform: "tiktok", handle: "creator.name", url: "https://www.tiktok.com/@creator.name",
-      include_platform_icon: true, include_x_icon: false,
+      include_platform_icon: true,
     });
     const png = await fs.files.read(parsed.asset_id, "original.png");
     if (!png.ok) throw new Error(png.error.message);
@@ -115,7 +115,7 @@ describe("create_watermark tool", () => {
         book_id: PROJECT,
         platform: "x",
         handle: "@someone",
-        include_x_icon: false,
+        include_platform_icon: false,
         include_handle_border: false,
         handle_padding: 64,
         handle_rounding: 25,
@@ -127,7 +127,7 @@ describe("create_watermark tool", () => {
       asset_id: string;
       handle: string;
       url: string;
-      include_x_icon: boolean;
+      include_platform_icon: boolean;
       include_handle_border: boolean;
       handle_padding: number;
       handle_padding_y: number;
@@ -137,7 +137,8 @@ describe("create_watermark tool", () => {
     expect(artifact.ok && artifact.value.kind).toBe("image");
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
-    expect(parsed.include_x_icon).toBe(false);
+    expect(parsed.include_platform_icon).toBe(false);
+    expect(parsed).not.toHaveProperty("include_x_icon");
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
     expect(parsed.handle_padding_y).toBe(32);

@@ -8145,15 +8145,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
       )
       if (!target.ok) return { ok: false, message: target.message }
-      const sharedStartSeconds = asNumber(plan.params.start_seconds)
-      const sharedEndSeconds = asNumber(plan.params.end_seconds)
-      const qrStartSeconds = asNumber(plan.params.qr_start_seconds) ?? sharedStartSeconds
-      const qrEndSeconds = asNumber(plan.params.qr_end_seconds) ?? sharedEndSeconds
-      const handleStartSeconds = asNumber(plan.params.handle_start_seconds) ?? sharedStartSeconds
-      const handleEndSeconds = asNumber(plan.params.handle_end_seconds) ?? sharedEndSeconds
-      const sharedOpacity = asNumber(plan.params.opacity)
-      const qrOpacity = asNumber(plan.params.qr_opacity) ?? sharedOpacity
-      const handleOpacity = asNumber(plan.params.handle_opacity) ?? sharedOpacity
+      const qrStartSeconds = asNumber(plan.params.qr_start_seconds)
+      const qrEndSeconds = asNumber(plan.params.qr_end_seconds)
+      const handleStartSeconds = asNumber(plan.params.handle_start_seconds)
+      const handleEndSeconds = asNumber(plan.params.handle_end_seconds)
+      const qrOpacity = asNumber(plan.params.qr_opacity)
+      const handleOpacity = asNumber(plan.params.handle_opacity)
       const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
       const handlePadding = asNumber(plan.params.handle_padding)
       const handlePaddingY = asNumber(plan.params.handle_padding_y)
@@ -8161,7 +8158,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const fadeSeconds = asNumber(plan.params.fade_seconds)
       const requestedPosition = plan.params.position
       const requestedHandlePlacement = plan.params.handle_position
-      const requestedPlatformIcon = plan.params.include_platform_icon ?? plan.params.include_x_icon
+      const requestedPlatformIcon = plan.params.include_platform_icon
       openWatermarkReview(target.artifactId, target.label, {
         ...(isWatermarkPlatform(plan.params.platform) ? { platform: plan.params.platform } : {}),
         ...(asString(plan.params.handle)

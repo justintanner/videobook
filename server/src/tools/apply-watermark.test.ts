@@ -25,18 +25,16 @@ type ApplyResult = {
   url: string;
   include_qr: boolean;
   include_handle: boolean;
-  opacity: number;
+  opacity?: number;
   qr_opacity: number;
   handle_opacity: number;
   scale: number;
   requested_position: string;
-  include_x_icon: boolean;
+  include_platform_icon: boolean;
   include_handle_border: boolean;
   handle_padding: number;
   handle_padding_y: number;
   handle_rounding: number;
-  start_seconds: number | null;
-  end_seconds: number | null;
   qr_start_seconds: number | null;
   qr_end_seconds: number | null;
   handle_start_seconds: number | null;
@@ -205,15 +203,15 @@ describe("apply_watermark tool", () => {
       handle: "someone",
       include_qr: false,
       position: "middle-center",
-      start_seconds: 0.25,
-      end_seconds: 0.75,
+      handle_start_seconds: 0.25,
+      handle_end_seconds: 0.75,
       mode: "overlay",
     });
 
     expect(parsed.include_qr).toBe(false);
     expect(parsed.requested_position).toBe("middle-center");
-    expect(parsed.start_seconds).toBe(0.25);
-    expect(parsed.end_seconds).toBe(0.75);
+    expect(parsed.handle_start_seconds).toBe(0.25);
+    expect(parsed.handle_end_seconds).toBe(0.75);
     expect(parsed.placement_source).toBe("explicit");
     expect(parsed.positions).toEqual({
       landscape: "middle-center",
@@ -288,7 +286,8 @@ describe("apply_watermark tool", () => {
       asset_id: secondAsset,
       handle: "someone",
       mode: "overlay",
-      opacity: 0.35,
+      qr_opacity: 0.35,
+      handle_opacity: 0.35,
       scale: 1.5,
     });
 
@@ -302,7 +301,7 @@ describe("apply_watermark tool", () => {
     const alternateAppearance = await apply({
       asset_id: firstAsset,
       handle: "someone",
-      include_x_icon: false,
+      include_platform_icon: false,
       include_handle_border: false,
       mode: "overlay",
     });
@@ -335,7 +334,7 @@ describe("apply_watermark tool", () => {
     expect((await apply(args)).card_asset_id).toBe(x.card_asset_id);
     const tiktok = await apply({ ...args, platform: "tiktok", save_default: true });
     expect(tiktok.card_asset_id).not.toBe(x.card_asset_id);
-    expect(tiktok).toMatchObject({ platform: "tiktok", include_platform_icon: true, include_x_icon: false });
+    expect(tiktok).toMatchObject({ platform: "tiktok", include_platform_icon: true });
     expect((await apply({ ...args, platform: "tiktok" })).card_asset_id).toBe(tiktok.card_asset_id);
     const withoutIcon = await apply({ ...args, platform: "tiktok", include_platform_icon: false });
     expect(withoutIcon.card_asset_id).not.toBe(tiktok.card_asset_id);
@@ -357,7 +356,7 @@ describe("apply_watermark tool", () => {
     const result = await apply({ asset_id: assetId, platform: "tiktok", include_qr: false });
     expect(result).toMatchObject({
       status: "completed", platform: "tiktok", handle: "creator.name",
-      url: "https://www.tiktok.com/@creator.name", include_platform_icon: true, include_x_icon: false,
+      url: "https://www.tiktok.com/@creator.name", include_platform_icon: true,
     });
     const after = await fs.files.manifest(assetId);
     if (!after.ok) throw new Error(after.error.message);
@@ -399,7 +398,7 @@ describe("apply_watermark tool", () => {
       handle: "someone",
       position: "top-center",
       handle_vertical_percent: 62,
-      include_x_icon: false,
+      include_platform_icon: false,
       include_handle_border: false,
       handle_padding: 64,
       handle_rounding: 25,
@@ -417,16 +416,14 @@ describe("apply_watermark tool", () => {
     expect(parsed.position).toBe("top-center");
     expect(parsed.placement_source).toBe("explicit");
     expect(parsed.include_qr).toBe(true);
-    expect(parsed.opacity).toBe(0.5);
+    expect(parsed).not.toHaveProperty("opacity");
     expect(parsed.qr_opacity).toBe(0.35);
     expect(parsed.handle_opacity).toBe(0.7);
-    expect(parsed.include_x_icon).toBe(false);
+    expect(parsed.include_platform_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
     expect(parsed.handle_padding_y).toBe(32);
     expect(parsed.handle_rounding).toBe(25);
-    expect(parsed.start_seconds).toBeNull();
-    expect(parsed.end_seconds).toBeNull();
     expect(parsed.qr_start_seconds).toBe(0.1);
     expect(parsed.qr_end_seconds).toBe(0.6);
     expect(parsed.handle_start_seconds).toBe(0.2);

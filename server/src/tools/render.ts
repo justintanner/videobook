@@ -112,11 +112,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         .nullable()
         .optional()
         .describe("OSG visibility window end in seconds; null/omit ⇒ to clip end"),
-      osg_tail_seconds: z
-        .number()
-        .min(0)
-        .optional()
-        .describe("Legacy: show the OSG only during the last N seconds (end-card); omit for full duration"),
       keyword_graphics_enabled: z
         .boolean()
         .optional()
@@ -183,7 +178,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         osg_opacity,
         osg_start_seconds,
         osg_end_seconds,
-        osg_tail_seconds,
         keyword_graphics_enabled,
         keyword_graphics_max_count,
         keyword_graphics_linger_seconds,
@@ -214,7 +208,6 @@ export function renderVideoDef(engine: Engine): ToolDef {
         osg_opacity?: number;
         osg_start_seconds?: number | null;
         osg_end_seconds?: number | null;
-        osg_tail_seconds?: number;
         keyword_graphics_enabled?: boolean;
         keyword_graphics_max_count?: number;
         keyword_graphics_linger_seconds?: number;
@@ -393,9 +386,7 @@ export function renderVideoDef(engine: Engine): ToolDef {
         const osgEndSeconds = osg_end_seconds !== undefined
           ? osg_end_seconds
           : typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null;
-        const osgTailSeconds = osg_tail_seconds !== undefined
-          ? osg_tail_seconds
-          : typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null;
+        const osgTailSeconds = typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null;
 
         const jobId = `render-${asset_id}-${orientation}-${Date.now()}`;
         await queue.enqueue(jobId, {

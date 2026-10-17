@@ -68,12 +68,6 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
         .nullable()
         .optional()
         .describe("Absolute window end in seconds; null ⇒ to clip end. Omit to leave unchanged"),
-      osg_tail_seconds: z
-        .number()
-        .min(0)
-        .nullable()
-        .optional()
-        .describe("Legacy: show the OSG only during the last N seconds; omit to leave unchanged"),
     },
     handler: async (args) => {
       const {
@@ -87,7 +81,6 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
         osg_opacity,
         osg_start_seconds,
         osg_end_seconds,
-        osg_tail_seconds,
       } = args as {
         asset_id: string;
         book_id: string;
@@ -99,7 +92,6 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
         osg_opacity?: number;
         osg_start_seconds?: number | null;
         osg_end_seconds?: number | null;
-        osg_tail_seconds?: number | null;
       };
 
       const clearing = osg_asset_id == null;
@@ -137,11 +129,7 @@ export function setVideoOverlayDef(engine: Engine): ToolDef {
         }
         // An absolute window supersedes the legacy duration-relative tail.
         const windowProvided = osg_start_seconds !== undefined || osg_end_seconds !== undefined;
-        if (osg_tail_seconds !== undefined) {
-          merged.osgTailSeconds = clearing ? null : osg_tail_seconds;
-        } else if (clearing || windowProvided) {
-          merged.osgTailSeconds = null;
-        }
+        if (clearing || windowProvided) merged.osgTailSeconds = null;
         const resolved = { ...base, ...merged };
         const start = typeof resolved.osgStartSeconds === "number" ? resolved.osgStartSeconds : 0;
         if (!clearing && typeof resolved.osgEndSeconds === "number" && resolved.osgEndSeconds <= start) {

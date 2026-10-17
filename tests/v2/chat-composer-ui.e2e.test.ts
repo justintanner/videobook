@@ -3111,7 +3111,7 @@ describe('chat composer browser flow', () => {
           handle: 'justinwtanner',
           include_handle: true,
           handle_vertical_percent: 41,
-          include_x_icon: true,
+          include_platform_icon: true,
           include_handle_border: true,
           handle_padding: 25,
           handle_padding_y: 18,

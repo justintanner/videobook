@@ -34,11 +34,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
       include_platform_icon: z
         .boolean()
         .optional()
-        .describe("Show the selected platform icon before the plain alias (default true; overrides include_x_icon)"),
-      include_x_icon: z
-        .boolean()
-        .optional()
-        .describe("Legacy alias for include_platform_icon (default true)"),
+        .describe("Show the selected platform icon before the plain alias (default true)"),
       include_handle_border: z
         .boolean()
         .optional()
@@ -71,8 +67,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         url,
         save_default,
         platform = "tiktok",
-        include_platform_icon,
-        include_x_icon = true,
+        include_platform_icon = true,
         include_handle_border = true,
         handle_padding = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingX : DEFAULT_HANDLE_PADDING,
         handle_padding_y = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingY : DEFAULT_HANDLE_PADDING,
@@ -84,7 +79,6 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         save_default?: boolean;
         platform?: WatermarkPlatform;
         include_platform_icon?: boolean;
-        include_x_icon?: boolean;
         include_handle_border?: boolean;
         handle_padding?: number;
         handle_padding_y?: number;
@@ -106,7 +100,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
 
       const created = await createWatermarkAsset(engine, resolvedHandle, resolvedUrl, {
         platform,
-        includePlatformIcon: include_platform_icon ?? include_x_icon,
+        includePlatformIcon: include_platform_icon,
         includeHandleBorder: include_handle_border,
         handlePadding: handle_padding,
         handlePaddingY: handle_padding_y,
@@ -130,8 +124,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
             handle: resolvedHandle,
             url: resolvedUrl,
             platform,
-            include_platform_icon: include_platform_icon ?? include_x_icon,
-            include_x_icon: platform === "x" && (include_platform_icon ?? include_x_icon),
+            include_platform_icon,
             include_handle_border,
             handle_padding,
             handle_padding_y,
