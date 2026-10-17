@@ -47,8 +47,8 @@ describe('canonical edit and recovery endpoints over HTTP MCP', () => {
   }
   const queued = async () => call<Record<string, unknown>>('plan_generation_insert', {
     source_surface: 'ui', actor: 'edit-recovery-e2e',
-    generation: { tool: 'generate_kie_nano_banana_pro_text_to_image', input: { prompt: 'A cat' }, provider: 'kie',
-      model: 'NanoBananaProRequestSchema', estimated_cost_usd: 0.1,
+    generation: { tool: 'generate_image', input: { model: 'kie:nano-banana-pro', prompt: 'A cat' }, provider: 'kie',
+      model: 'kie:nano-banana-pro', estimated_cost_usd: 0.1,
       track_id: (await sequence()).tracks.find((track) => track.kind === 'video')!.trackId,
       timeline_start_frame: 180, duration_frames: 90 },
   })

@@ -39,10 +39,13 @@ describe("enqueue status (no red-flash window)", () => {
     if (!asset.ok) return;
 
     await queue.enqueue(`gen-${Date.now()}`, {
-      type: "generate_grok_imagine_video",
+      type: "generate_media",
+      model: "kie:grok-imagine/text-to-video",
       bookId,
-      vidAssetId: asset.value.artifactId,
+      assetId: asset.value.artifactId,
       prompt: "ignored — handler is not registered",
+      refs: {},
+      options: {},
     });
 
     const status = await fs.status.get(asset.value.artifactId);

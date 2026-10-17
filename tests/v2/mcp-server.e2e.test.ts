@@ -746,7 +746,7 @@ describe('v2 MCP server', () => {
         label: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A green city at sunrise',
-        model: 'generate_kie_gpt_image_2_5_sunburst_image',
+        model: 'kie:gpt-image-2-5-sunburst-text-to-image',
       },
     })
     expect(image.output_cell).toBeUndefined()
