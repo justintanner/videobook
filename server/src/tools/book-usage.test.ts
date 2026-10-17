@@ -103,7 +103,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     reply = { jobId: "flow-image", images: [{ url: "https://example.test/image.png" }] };
     await scoped(() => provider.post.v1.images({ model: "nano-banana-pro", prompt: "test" }));
     expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, estimatedUsd: 0.4, unpriced: 0 });
-    expect(engine.usage.find("googleflow", "flow-image")).toMatchObject({ costUsd: 0, model: "nano-banana-pro" });
+    expect(engine.usage.find("googleflow", "flow-image")).toMatchObject({ costUsd: 0, model: "nano-banana-pro", pricingVersion: expect.stringMatching(/^apicity-\d+\.\d+\.\d+:/u) });
   });
 
   it("records fal Alibaba routes and resolves polling by request id rather than output id", async () => {

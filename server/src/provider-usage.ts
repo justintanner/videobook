@@ -1,8 +1,25 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { currentBookContext } from "./book-context.js";
+
+function installedPackageVersion(name: string): string {
+  let dir = dirname(fileURLToPath(import.meta.resolve(name)));
+  while (dir !== dirname(dir)) {
+    try {
+      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { name?: string; version?: string };
+      if (manifest.name === name && manifest.version) return manifest.version;
+    } catch { void 0; }
+    dir = dirname(dir);
+  }
+  return "unknown";
+}
+
+const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
 type Provider = "openai" | "xai" | "kie" | "fal" | "googleflow" | "alibaba" | "elevenlabs";
 type RecordValue = Record<string, unknown>;
@@ -64,7 +81,7 @@ function rateFor(provider: Provider, model: string): ModelPricing | undefined {
 }
 
 function unknownPrice(warnings = ["Price unavailable for this model"]): Price {
-  return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-0.15.0:${PRICING_AS_OF}`, warnings, units: null, unit: null };
+  return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${PRICING_AS_OF}`, warnings, units: null, unit: null };
 }
 
 function tokenPrice(provider: Provider, model: string, tokens: ReturnType<typeof reportedTokens>): Price {
@@ -82,7 +99,7 @@ function priceRequest(provider: Provider, model: string, payload: RecordValue, e
     if (estimate.warnings.length || estimate.source === "tokens-heuristic+table") return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
     return {
       ...unknownPrice([]), costUsd: estimate.usd, basis: estimate.source === "free" ? "free" : "estimated",
-      rateSource: rateFor(provider, model)?.source.url ?? null, pricingVersion: `apicity-0.15.0:${estimate.rateAsOf}`,
+      rateSource: rateFor(provider, model)?.source.url ?? null, pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf}`,
       units: estimate.breakdown.units ?? null, unit: estimate.breakdown.unit ?? null,
     };
   } catch { return unknownPrice(); }

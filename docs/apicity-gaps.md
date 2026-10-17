@@ -191,15 +191,15 @@ Videocity does not yet expose Kie audio/character ID-minting workflows, so its
 Gemini Omni generation tool intentionally omits optional `audio_ids` and
 `character_ids`. That is a Videocity product gap, not an Apicity gap.
 
-## 14. (gap) Google Flow schemas still have loose enums and generic responses — PARTIAL in 0.15.0
+## 14. (gap) ~~Google Flow schemas still have loose enums and generic responses~~ — RESOLVED in 0.16.0 (adopted)
 
 0.8.0 narrows the Veo model escape hatch to versioned aliases
 (`veo-\d+(?:\.\d+)*(?:-[a-z0-9]+)*`) instead of bare `z.string()`. Image/video
 model fields and job/entity responses remain largely loose / untyped. Shared
 video duration still includes 4/6/8/10 while allowed subsets vary by model.
 
-**Workaround:** per-model domains, positional reference mapping, tolerant
-response readers.
+**Former workaround (removed in 0.15.0 and 0.16.1):** per-model domains,
+positional reference mapping, tolerant response readers.
 
 **Ask Apicity:** export strict per-model schemas and typed job/entity responses.
 
@@ -219,8 +219,9 @@ return types on purpose (`ac-j3d6ki.7`) and documented the exported response
 schemas instead; `GoogleFlowImagesResponseSchema` has shipped since 0.15.0. The
 image adapter now parses the response with it rather than probing
 `media[].image.generatedImage.fifeUrl` untyped, so a shape drift fails with the
-schema's message. The image model's `nano-banana-*` pattern is the remaining
-looseness, and it follows the open model-id convention.
+schema's message. The image model's `nano-banana-*` pattern is deliberate:
+apicity keeps model-identifier enums open with a family alias regex so new
+upstream models validate without a release. Nothing local remains.
 
 ## 15. (gap) Google Flow package rates are credit×Pro, not Gemini API list USD — PARTIAL in 0.15.0
 
@@ -230,7 +231,7 @@ credits × Pro ($0.02/credit). Videocity badges still use official Gemini
 Developer API list rates (720p) with plan credits as secondary metadata in
 `server/src/google-flow-cost.ts` (product choice A).
 
-**Workaround:** keep the local estimator for displayed USD; do not route UI
+**Former workaround (removed in d8814110):** keep the local estimator for displayed USD; do not route UI
 estimates through the package googleflow table without an explicit product
 switch to credit-native numbers.
 
@@ -265,8 +266,8 @@ require `email` (no single-account fallback), while generation schemas leave
 `email` optional for load-balancing / reference reuse. Videocity still needs a
 resolved account for the required-email entity calls.
 
-**Workaround:** `resolveGoogleFlowEmail` uses an explicit email or resolves the
-sole account before calling those methods.
+**Consumer requirement (not a workaround):** `resolveGoogleFlowEmail` uses an
+explicit email or resolves the sole account before calling those methods.
 
 The required fields are correct. Unless useapi.net adds a single-account
 default to the entity routes, this is a consumer resolution requirement rather
@@ -277,8 +278,8 @@ than an Apicity gap.
 Singleton character retrieval can return `Untitled Character` and omit
 `personalityNotes` while list/create responses retain them.
 
-**Workaround:** `server/src/tools/google-flow-characters.ts` reconciles singleton
-and list records and reports conflicts/partial success.
+**Former workaround (removed in 0.16.1):** `server/src/tools/google-flow-characters.ts`
+reconciled singleton and list records and reported conflicts/partial success.
 
 This may be a useapi.net service bug rather than an SDK bug; confirm upstream.
 
@@ -500,7 +501,7 @@ OTP, and burns a task attempt before Kie rejects it. Whether an equivalent
 bound applies to reference audio is unverified — no audio rejection has been
 observed.
 
-**Workaround:** `generate_kie_minimax_h3_reference_to_video` checks each plain
+**Former workaround (removed in d8814110, now a catalog rule):** `generate_kie_minimax_h3_reference_to_video` checked each plain
 video ref's local `original` duration metadata before creating the output
 artifact and fails fast outside 2–15s. Unknown durations pass through (Kie
 stays the authority); slashed refs (`@asset/file.mp4`) are skipped because
@@ -593,7 +594,7 @@ their supported fixed ratios.
 
 ---
 
-## 41. (gap) Fal 0.15.0 endpoints without a local rate — PARTIAL in 0.16.0
+## 41. (gap) Fal 0.15.0 endpoints without a local rate — UPSTREAM BY DESIGN in 0.16.0
 
 Videobook catalogues 32 fal image and video endpoints first published in
 0.15.0. `@apicity/cost` 0.15.0 has no local rate for 17 of them: fal bills
@@ -635,6 +636,13 @@ four Kandinsky 6 text and image models (compute units), both Kandinsky 6 VSR
 models (output megapixels × frames) and Mirelo SFX 2.0 (output seconds ×
 samples). None is a constant a request determines, so this gap stays open by
 design and the usage rows for these runs stay unpriced.
+
+`resolveFalDynamicEstimate` can price them through fal's pricing API, but only
+with `FAL_ADMIN_API_KEY` (Videobook's operator env carries `FAL_API_KEY` only)
+and only from a billed-unit count or fal's historical per-call average. fal
+returns `x-fal-billable-units` on synchronous `fal.run` calls, not on the queue
+results Videobook polls, so an exact post-run price is not available either.
+Videobook carries no local workaround: these rows are honestly unpriced.
 
 ---
 
@@ -692,10 +700,10 @@ the versioned Qwen models, so neither change reaches the catalog.
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
 | **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
-| **PARTIAL**  | §41 fal dynamic endpoints (Seedance priced in 0.16.0)               | 13 unpriced estimates; fal usage hints (vb-t2pr)       |
+| **BY DESIGN**| §41 fal dynamic endpoints (Seedance priced in 0.16.0)               | none; 13 dynamic requests stay unpriced                |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **PARTIAL**  | §14 Flow loose image model and generic responses                    | images parsed with the exported response schema       |
+| **RESOLVED** | §14 Flow image model and responses                                  | images parsed with the exported response schema       |
 | **RESOLVED** | §15 Flow estimate semantics                                         | package credit × plan USD, images included at 0 credits |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim                                          |
@@ -741,6 +749,8 @@ deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
 fal entries (§42), the schema's required Bria `image_url` (§8, §42),
 `GoogleFlowImagesResponseSchema` for image responses (§14), and the package's
 Flow path encoding (§16). The §36 clip window is enforced from the
-apicity constant (vb-6rct). The §18 list/singleton reconcile is removed. Still
-open upstream, with no local workaround: §18 on useapi.net, the image-model
-pattern in §14, and the 13 unpriced fal requests in §41.
+apicity constant (vb-6rct). The §18 list/singleton reconcile is removed, and usage
+rows stamp the installed `@apicity/cost` version in `pricingVersion` instead of
+a hard-coded `apicity-0.15.0`. No local Apicity workaround remains. Upstream
+items without a local workaround: §18 on useapi.net (unverified) and the 13
+dynamically billed fal requests in §41.
