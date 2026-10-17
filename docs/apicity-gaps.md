@@ -147,7 +147,7 @@ an offline fallback.
 | ------------------------------------------------------ | ------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
 | `kie:bytedance/seedance-2-5` with a frame              | `aspect_ratio` set to `adaptive`           | rejects fixed ratios for frame tasks            | keeps frame requests valid instead of failing; see §40              |
 | `fal:bria/guided-remove-background`                    | requires one image                         | `image_url` defaults to Bria's sample photo     | a run without a source image would bill for the sample; see §42     |
-| `fal:bytedance/seedance-2.0/us/reference-to-video`     | requires an image or video reference       | every reference array optional                  | fal states the requirement only in the `audio_urls` description     |
+| `fal:bytedance/seedance-2.0/us/reference-to-video`     | requires an image or video reference       | references optional; audio needs a visual       | without a visual reference the request is text-to-video             |
 | `fal:bytedance/seedance-2.5/us/reference-to-video`     | v2v and extend modes require a video       | `task` editing/extension with optional videos   | editing and extension continue a reference video; see §42           |
 
 The catalog expresses these with `frameOptions` and mode `requireAny` in
