@@ -193,7 +193,6 @@ describe("google flow character cores — stubbed provider", () => {
       display_name: "Hero",
       thumbnail_url: "https://example.com/thumb.jpg",
     });
-    expect(result.characters[0].raw).toHaveProperty("_conflict", "singleton-read-disagrees");
   });
 
   it("deletes a character by ref", async () => {
@@ -297,7 +296,7 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
     expect(result.character_ref).toBe(NEW_REF);
     expect(result.status).toBe("replaced");
 
-    const create = calls[2];
+    const create = calls.find((call) => call.method === "POST" && call.url.endsWith("/characters"))!;
     expect(create.body).toMatchObject({
       displayName: "Nigel",
       personalityNotes: "grumpy but loyal",

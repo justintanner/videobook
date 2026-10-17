@@ -272,7 +272,7 @@ The required fields are correct. Unless useapi.net adds a single-account
 default to the entity routes, this is a consumer resolution requirement rather
 than an Apicity gap.
 
-## 18. (bug) Google Flow singleton character reads lose metadata — OPEN in 0.8.0
+## 18. (bug) Google Flow singleton character reads lose metadata — WORKAROUND REMOVED in 0.16.1
 
 Singleton character retrieval can return `Untitled Character` and omit
 `personalityNotes` while list/create responses retain them.
@@ -288,9 +288,14 @@ version number.
 
 Update 2026-10-17 (0.16.1): a read-only live probe resolved the account but
 useapi.net answered `GET characters` with 404 (`flow.projectInitialData`), so
-neither the list nor the singleton read could be compared. The reconcile stays
-until a live comparison shows the singleton keeps its name and notes; nothing
-in `@apicity/googleflow` changed the reads.
+neither the list nor the singleton read could be compared. With the list read
+failing, the reconcile already fell back to the singleton alone, so it was
+removed with the 0.16.1 upgrade: `get_google_flow_character` and
+`replace_google_flow_character` read `GET characters/{ref}` directly, and list
+previews only add the singleton's thumbnail and image count. If useapi.net
+still drops `displayName` or `personalityNotes` on singleton reads, a replace
+without an explicit name or notes carries "Untitled Character" and no notes
+forward; report that to useapi.net rather than restoring a local merge.
 
 ## 19. (bug) ~~ElevenLabs Sound Generation omits the 450-character cap~~ — RESOLVED in 0.8.0
 
@@ -682,7 +687,7 @@ the versioned Qwen models, so neither change reaches the catalog.
 
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| **OPEN**     | §18 character metadata                                              | list/singleton reconcile                               |
+| **WATCH**    | §18 character metadata (service-side, unverified)                   | none; singleton reads used directly                    |
 | **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | catalog rule reads the apicity constant (vb-6rct)      |
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
@@ -736,6 +741,6 @@ deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
 fal entries (§42), the schema's required Bria `image_url` (§8, §42),
 `GoogleFlowImagesResponseSchema` for image responses (§14), and the package's
 Flow path encoding (§16). The §36 clip window is enforced from the
-apicity constant (vb-6rct). Still open: §18 (service-side; the live probe hit a
-404 on the account), the image-model pattern in §14, and the 13 unpriced fal
-requests in §41.
+apicity constant (vb-6rct). The §18 list/singleton reconcile is removed. Still
+open upstream, with no local workaround: §18 on useapi.net, the image-model
+pattern in §14, and the 13 unpriced fal requests in §41.
