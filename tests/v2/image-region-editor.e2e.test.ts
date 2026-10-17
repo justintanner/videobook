@@ -416,10 +416,10 @@ describe('drawn region image editor through real MCP', () => {
       const created = record(await call('create_notebook_cell', {
         cell: {
           type: 'generate_video', slot: { row: 22, column: index }, prompt: 'Pan across the garden',
-          provider: 'kie', model: 'bytedance/seedance-2-5', tool: 'generate_kie_seedance_2_5_video',
+          provider: 'kie', model: 'kie:bytedance/seedance-2-5', tool: 'generate_video',
           inputs: {
             generationMode: frames ? 'i2v' : mode === 'reference' ? 'r2v' : 't2v',
-            generationSettings: { aspect_ratio: '9:16', duration: '10' },
+            generationSettings: { aspect_ratio: '9:16', duration: 10 },
           },
         },
       }))

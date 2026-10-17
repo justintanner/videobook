@@ -344,9 +344,9 @@ describe('rich chat references with real notebook media', () => {
         slot: { row: 1, column: 0 },
         prompt: 'a green lighthouse at dusk',
         provider: 'kie',
-        model: 'NanoBananaProRequestSchema',
+        model: 'kie:nano-banana-pro',
         operation: 'text_to_image',
-        tool: 'generate_kie_nano_banana_pro_text_to_image',
+        tool: 'generate_image',
       },
     }))
     const producerId = String(created?.id)
@@ -384,9 +384,9 @@ describe('rich chat references with real notebook media', () => {
         slot: { row: 2, column: 1 },
         prompt: 'a slow dolly through a pine forest',
         provider: 'kie',
-        model: 'GeminiOmniVideoRequestSchema',
+        model: 'kie:bytedance/seedance-2-5',
         operation: 'text_to_video',
-        tool: 'generate_kie_gemini_omni_text_to_video',
+        tool: 'generate_video',
       },
     }))
     const producerId = String(created?.id)
