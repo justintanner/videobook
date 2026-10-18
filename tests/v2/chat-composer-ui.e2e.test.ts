@@ -4158,6 +4158,53 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
+  it('edits sound-effect duration and keeps the provider payload in sync', async () => {
+    const client = new Client({ name: 'audio-duration-e2e', version: '1.0.0' }, {
+      capabilities: {},
+      supportedProtocolVersions: ['2026-07-28'],
+      versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let cellId = ''
+    try {
+      const created = record(resultValue(await client.callTool({
+        name: 'create_notebook_cell',
+        arguments: {
+          book_id: bookId, notebook_id: notebookId,
+          cell: {
+            type: 'generate_audio', slot: { row: 4, column: 7 },
+            model: 'elevenlabs:sound-generation', tool: 'generate_audio',
+            prompt: 'Thai woodworking ambience, rhythmic chisel taps, no speech or music.',
+            inputs: { generationSettings: { duration_seconds: 28.06 } },
+          },
+        },
+      })))
+      if (typeof created?.id !== 'string') throw new Error('Missing audio generator fixture')
+      cellId = created.id
+      notebookDirty = true
+      const page = await openApp()
+      await collapseComposerDock(page)
+      await notebookCellNode(page, cellId).click()
+      const editor = page.locator('.generation-cell-inspector .confirm-generation')
+      const duration = editor.getByRole('spinbutton', { name: 'Duration seconds', exact: true })
+      await duration.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      expect(await duration.inputValue()).toBe('28.06')
+      expect(await duration.getAttribute('min')).toBe('0.5')
+      expect(await duration.getAttribute('max')).toBe('30')
+      const payload = editor.locator('.generation-review-json pre')
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"duration_seconds": 28.06')
+      observedCalls.length = 0
+      await duration.fill('27.5')
+      await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"duration_seconds": 27.5')
+      await page.screenshot({ path: '/tmp/videobook-audio-duration-editor.png' })
+      expect(observedCalls.some(call => call.name === 'generate_audio' || call.name === 'run_notebook_cell')).toBe(false)
+    } finally {
+      if (cellId) await client.callTool({ name: 'delete_notebook_cell', arguments: { book_id: bookId, notebook_id: notebookId, cell_id: cellId } })
+      notebookDirty = true
+      await client.close()
+    }
+  }, 60_000)
+
   it('opens generation cells in the shared preview editor with live source media', async () => {
     const page = await openApp()
     await collapseComposerDock(page)

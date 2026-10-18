@@ -49,7 +49,7 @@ function resolvePromptField(entry: ModelEntry, input: JsonSchema): string | null
 }
 
 function valueType(schema: JsonSchema): OptionValueType {
-  const types = new Set(schemaTypes(schema));
+  const types = new Set(schemaTypes(schema).filter((type) => type !== "null"));
   if (types.size === 0) return "json";
   if ([...types].every((type) => type === "boolean")) return "boolean";
   if ([...types].every((type) => type === "integer")) return "integer";

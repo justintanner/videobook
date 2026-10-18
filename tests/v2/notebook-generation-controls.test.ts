@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { notebookGenerationControls } from "../../server/src/notebook-generation-controls.js";
+import { controlsForModel, notebookGenerationControls } from "../../server/src/notebook-generation-controls.js";
+import { resolveModel } from "../../server/src/media/descriptor.js";
+import { buildWireRequest } from "../../server/src/media/request.js";
 
 describe("notebook generation controls", () => {
+  it("exposes nullable sound-effect duration and influence as bounded numeric controls", () => {
+    const model = resolveModel("elevenlabs:sound-generation");
+    const controls = controlsForModel(model);
+    expect(controls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "duration_seconds", kind: "number", valueType: "number", minimum: 0.5, maximum: 30, required: false }),
+      expect.objectContaining({ name: "prompt_influence", kind: "number", valueType: "number", minimum: 0, maximum: 1, required: false }),
+    ]));
+    expect(buildWireRequest(model, { prompt: "Woodworking ambience", options: { duration_seconds: "28.06", prompt_influence: "0.3" } }))
+      .toMatchObject({ ok: true, request: { duration_seconds: 28.06, prompt_influence: 0.3 } });
+    expect(buildWireRequest(model, { prompt: "A tap", options: { duration_seconds: null } }))
+      .toMatchObject({ ok: true, request: { duration_seconds: null } });
+  });
+
   it("serializes primitive model settings and omits connection-owned fields", () => {
     expect(notebookGenerationControls({
       properties: {

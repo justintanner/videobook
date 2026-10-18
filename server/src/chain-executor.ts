@@ -8,7 +8,9 @@ import { placeChainGeneration } from "./chain-generation.js";
 import { buildChainStepReview, type ChainStepReview } from "./chain-step-review.js";
 import type { AwaitNotebookOutputPayload } from "./jobs/run-notebook.js";
 import { failNotebookProviderOutput } from "./jobs/run-notebook.js";
+import { tryResolveModel } from "./media/descriptor.js";
 import {
+  isChainRef,
   preflightChainPlan,
   readChainParam,
   revalidatePinnedTargets,
@@ -489,6 +491,50 @@ function audioEditTargetField(step: ChainPreflightStep): string | null {
   return null;
 }
 
+async function withAudioTargetDuration(
+  engine: Engine,
+  notebookId: string | null,
+  step: ChainPreflightStep,
+  params: Record<string, unknown>,
+  laterSteps: readonly ChainPreflightStep[],
+  priorOutputs: Map<string, Record<string, unknown>>,
+): Promise<Record<string, unknown>> {
+  if (step.spec.placement !== "generate_audio") return params;
+  const model = typeof params.model === "string" ? tryResolveModel(params.model) : null;
+  if (!model?.entry.operations.some((operation) => operation === "sfx" || operation === "music")) return params;
+  const durationOption = model.options.find((option) => option.name === "duration_seconds" || option.name === "music_length_ms");
+  if (!durationOption) return params;
+  const options = params.options && typeof params.options === "object" && !Array.isArray(params.options)
+    ? params.options as Record<string, unknown> : {};
+  if (options[durationOption.name] !== undefined && options[durationOption.name] !== null) return params;
+  let seconds = 0;
+  for (const consumer of laterSteps) {
+    const sourceField = consumer.tool === "audio_mix" ? "layer_asset_id"
+      : consumer.tool === "replace_video_audio" ? "audio_asset_id" : null;
+    const source = sourceField ? consumer.params[sourceField] : undefined;
+    if (!isChainRef(source) || source.$ref.step_id !== step.id || source.$ref.output !== "asset_id") continue;
+    const targetField = consumer.tool === "audio_mix" ? "target_asset_id" : "asset_id";
+    const pins = consumer.pins.filter((pin) => pin.field === targetField);
+    const stale = await revalidatePinnedTargets(engine, notebookId, pins);
+    if (stale) throw new Error(stale);
+    const target = applyPins(substituteChainRefs({ [targetField]: consumer.params[targetField] }, priorOutputs), pins)[targetField];
+    if (typeof target !== "string") throw new Error(`Step ${consumer.id} needs a target before matching audio duration`);
+    const metadata = await engine.metadata.artifacts.read<{ duration?: number }>(target, "original");
+    const duration = metadata.ok ? metadata.value.duration : undefined;
+    if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) {
+      throw new Error(`Cannot read the target duration for step ${consumer.id}; specify options.${durationOption.name}`);
+    }
+    seconds = Math.max(seconds, duration);
+  }
+  if (seconds === 0) return params;
+  const duration = durationOption.name === "music_length_ms" ? Math.round(seconds * 1_000) : seconds;
+  if ((durationOption.minimum !== undefined && duration < durationOption.minimum)
+    || (durationOption.maximum !== undefined && duration > durationOption.maximum)) {
+    throw new Error(`The ${seconds.toFixed(2)}-second target is outside ${model.title}'s ${durationOption.name} range (${durationOption.minimum ?? 0}–${durationOption.maximum ?? "unlimited"}). Choose a supported duration or split the audio into sections.`);
+  }
+  return { ...params, options: { ...options, [durationOption.name]: duration } };
+}
+
 /**
  * Everything a step needs before it can be dispatched, and nothing that spends
  * money. Pins are revalidated here, so a step approved after a long pause still
@@ -499,6 +545,7 @@ async function prepareStep(
   bookId: string,
   notebookId: string | null,
   step: ChainPreflightStep,
+  laterSteps: readonly ChainPreflightStep[],
   priorOutputs: Map<string, Record<string, unknown>>,
   lookup: ToolLookup,
 ): Promise<PreparedStep> {
@@ -513,10 +560,10 @@ async function prepareStep(
   if (stale) throw new Error(stale);
   const substituted = substituteChainRefs(step.params, priorOutputs);
   const pinned = applyPins(substituted, step.pins);
-  const params: Record<string, unknown> = {
+  const params = await withAudioTargetDuration(engine, notebookId, step, {
     ...pinned,
     book_id: bookId,
-  };
+  }, laterSteps, priorOutputs);
   if (notebookId && params.notebook_id === undefined) {
     params.notebook_id = notebookId;
   }
@@ -671,6 +718,7 @@ async function runChain(
           plan.bookId,
           plan.notebookId,
           step,
+          plan.steps.slice(index + 1),
           prior,
           lookup,
         );

@@ -6,13 +6,14 @@ import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob, pauseBookQueueForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
-import { runFfmpeg } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { copyVideoFixture, COMMON_VIDEO_FIXTURES } from "../test-media-fixtures.js";
 import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { planStackedChainFromQuery } from "../chain-plan.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { withBookContext } from "../book-context.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./chat.js";
+import { previewGeneration } from "../media/preview.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -29,11 +30,12 @@ async function generateToneVideo(
   outputPath: string,
   frequency: number,
   color: string,
+  durationSec = 1,
 ): Promise<void> {
   await copyVideoFixture({
     width: 160,
     height: 120,
-    durationSec: 1,
+    durationSec,
     fps: 10,
     source: "color",
     color,
@@ -141,7 +143,7 @@ describe("chain MCP tool", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  async function setupBook(label: string): Promise<void> {
+  async function setupBook(label: string, targetDuration = 1): Promise<void> {
     tempDir = await mkdtemp(join(tmpdir(), `videobook-chain-${label}-`));
     engine = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
@@ -166,7 +168,7 @@ describe("chain MCP tool", () => {
     const sourcePath = join(tempDir, "source-440.mp4");
     const targetPath = join(tempDir, "target-880.mp4");
     await generateToneVideo(sourcePath, 440, "0x224466");
-    await generateToneVideo(targetPath, 880, "0x662222");
+    await generateToneVideo(targetPath, 880, "0x662222", targetDuration);
     sourceId = await uploadVideo(client, bookId, sourcePath, "source.mp4");
     targetId = await uploadVideo(client, bookId, targetPath, "target.mp4");
     await client.callTool({
@@ -353,8 +355,12 @@ describe("chain MCP tool", () => {
   });
 
   it.each(["ready", "failed"] as const)("handles a %s generated audio result in a reviewed background and SFX chat chain", async outcome => {
-    await setupBook(`audio-${outcome}`);
+    await setupBook(`audio-${outcome}`, 28);
     const actualBookId = engine.book.get().bookId;
+    const targetMetadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
+    if (!targetMetadata.ok) throw new Error(targetMetadata.error.message);
+    const targetDuration = targetMetadata.value.duration;
+    expect(targetDuration).toBeCloseTo(28, 1);
     const beforeProxy = await objectHash(engine, targetId, "proxy.mp4");
     await waitForBookQueuesIdleForTests();
     await pauseBookQueueForTests(actualBookId);
@@ -367,7 +373,7 @@ describe("chain MCP tool", () => {
       params: {
         action: "run", version: 1,
         steps: [
-          { id: "ambience", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "Rhythmic wood chipping ASMR", options: { duration_seconds: 1 } } },
+          { id: "ambience", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "Rhythmic wood chipping ASMR" } },
           { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: 35 } },
           { id: "sfx", tool: "apply_sfx", params: { asset_id: { $ref: { step_id: "mix", output: "target_asset_id" } }, sfx: [{ timestamp: 0.2, type: "impact", description: "Wooden shoes tap the floor", duration_seconds: 0.5 }] } },
           { id: "inspect", tool: "asset_manifest", params: { asset_id: { $ref: { step_id: "sfx", output: "asset_id" } } } },
@@ -382,6 +388,10 @@ describe("chain MCP tool", () => {
     const paused = await waitForChainRun(engine, chainId, 15_000);
     expect(paused.status).toBe("awaiting-approval");
     expect(paused.awaitingStepId).toBe("ambience");
+    expect(paused.steps[0]?.review?.params.options).toEqual({ duration_seconds: targetDuration });
+    expect(previewGeneration(paused.steps[0]!.review!.params)).toMatchObject({
+      ok: true, preview: { payload: { duration_seconds: targetDuration } },
+    });
     expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
     await chainAction("approve", chainId, { step_id: "ambience" });
     await expect.poll(() => getChainRun(engine, chainId)?.steps[0]?.outputs?.cell_id, { timeout: 15_000 }).toBeTypeOf("string");
@@ -392,6 +402,7 @@ describe("chain MCP tool", () => {
     if (!notebook.ok) throw new Error(notebook.error.message);
     const producer = notebook.value.cells.find(cell => cell.type === "generate_audio");
     expect(producer).toBeDefined();
+    expect(producer?.inputs?.generationSettings).toEqual({ duration_seconds: targetDuration });
     expect(notebook.value.cells.find(cell => cell.id === outputCellId)).toMatchObject({ type: "audio", outputArtifactId: audioId });
     expect(notebook.value.edges).toEqual(expect.arrayContaining([expect.objectContaining({ source: producer!.id, target: outputCellId })]));
     expect(notebook.value.execution?.[producer!.id]?.status).toBe("awaiting-output");
@@ -399,6 +410,7 @@ describe("chain MCP tool", () => {
     expect(engine.jobs.queue.list({ type: "audio_mix" })).toHaveLength(0);
     const providerJob = engine.jobs.queue.dequeue(process.pid, 60_000);
     expect(providerJob).toMatchObject({ type: "generate_media", artifactId: audioId });
+    expect(providerJob?.payload.options).toEqual({ duration_seconds: targetDuration });
     if (!providerJob) throw new Error("Missing queued audio generation");
     if (outcome === "failed") {
       expect(await engine.jobs.queue.fail(providerJob.id, { error: { message: "Audio provider failed" }, allowRetry: false }, providerJob.fence)).toBe(true);
@@ -413,8 +425,9 @@ describe("chain MCP tool", () => {
       return;
     }
     const audioPath = join(tempDir, "generated-ambience.mp3");
-    await runFfmpeg(["-y", "-i", await filePathFor(engine, sourceId, "original.mp4"), "-vn", "-c:a", "libmp3lame", audioPath]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", `sine=frequency=440:sample_rate=48000:duration=${targetDuration}`, "-c:a", "libmp3lame", audioPath]);
     expect((await engine.files.writeFromPath(audioId, "original.mp3", audioPath)).ok).toBe(true);
+    expect(Math.abs((await probeVideo(audioPath)).duration - targetDuration)).toBeLessThan(0.15);
     expect(await engine.jobs.queue.complete(providerJob.id, { result: { success: true } })).toBe(true);
     await resumeBookQueueForTests(actualBookId);
     const mixed = await waitForChainRun(engine, chainId, 60_000);
@@ -438,6 +451,47 @@ describe("chain MCP tool", () => {
     expect(cancelled.steps.map(step => step.status)).toEqual(["completed", "completed", "rejected", "skipped"]);
     expect(engine.jobs.queue.list({ type: "apply_sfx" })).toHaveLength(0);
   }, 90_000);
+
+  it.each([2, null])("matches a missing duration and preserves a concrete duration (%s)", async duration => {
+    await setupBook("explicit-audio-duration");
+    const accepted = await runChain([
+      { id: "sound", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "A wooden knock", options: { duration_seconds: duration } } },
+      { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "sound", output: "asset_id" } }, volume: 50 } },
+    ]);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), 15_000);
+    expect(run.status).toBe("awaiting-approval");
+    const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    expect(run.steps[0]?.review?.params.options).toEqual({ duration_seconds: duration ?? metadata.value.duration });
+    await chainAction("cancel", run.chainId);
+  });
+
+  it("matches music length to a target produced by an earlier edit", async () => {
+    await setupBook("music-duration", 8);
+    const accepted = await runChain([
+      { id: "trim", tool: "trim_video", params: { asset_id: "@c4", trim_start: 0, trim_end: 5 } },
+      { id: "music", tool: "generate_audio", params: { model: "elevenlabs:music", prompt: "Rhythmic woodworking ambience" } },
+      { id: "replace", tool: "replace_video_audio", params: { asset_id: { $ref: { step_id: "trim", output: "asset_id" } }, audio_asset_id: { $ref: { step_id: "music", output: "asset_id" } } } },
+    ]);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), 60_000);
+    expect(run.status, run.error ?? "").toBe("awaiting-approval");
+    const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    expect(run.steps[1]?.review?.params.options).toEqual({ music_length_ms: Math.round(metadata.value.duration * 1_000) });
+    await chainAction("cancel", run.chainId);
+  }, 90_000);
+
+  it("rejects an unsupported target length before audio generation can spend", async () => {
+    await setupBook("long-audio-duration", 31);
+    const accepted = await runChain([
+      { id: "sound", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "Woodworking ambience" } },
+      { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "sound", output: "asset_id" } }, volume: 50 } },
+    ]);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), 15_000);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("duration_seconds range (0.5–30)");
+    expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
+  });
 
   it("mixes into a previous audio output without waiting for a video preview", async () => {
     await setupBook("audio-target");
