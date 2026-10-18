@@ -76,33 +76,3 @@ export async function seedMixedStatusCatalog(
 
   return { ready, error, processing };
 }
-
-export async function seedRetryableFailedImage(
-  engine: Engine,
-  label: string,
-): Promise<string> {
-  const created = await engine.artifacts.create({
-    kind: "image",
-    label,
-  });
-  if (!created.ok) throw new Error(created.error.message);
-  const written = await engine.files.write(
-    created.value.artifactId,
-    "original.png",
-    MINIMAL_PNG,
-  );
-  if (!written.ok) throw new Error(written.error.message);
-  const lease = engine.jobs.artifactWork.begin(created.value.artifactId, {
-    kind: "upload",
-    ownerKind: "job",
-    durationMs: 60_000,
-  });
-  if (!lease) throw new Error("Could not claim retryable artifact");
-  const failed = await engine.jobs.artifactWork.fail(
-    created.value.artifactId,
-    lease.ownerId,
-    { message: "ingest failed" },
-  );
-  if (!failed) throw new Error("Could not fail retryable artifact");
-  return created.value.artifactId;
-}

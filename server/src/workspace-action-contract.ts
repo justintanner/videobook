@@ -47,7 +47,6 @@ export type ActionSurface =
   | "launcher"
   | "button"
   | "cell-menu"
-  | "library-menu"
   | "selection-menu";
 
 type ActionFocusPolicy = "composer" | "opener" | "dialog" | "preserve";

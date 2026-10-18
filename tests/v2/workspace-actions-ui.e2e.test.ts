@@ -66,9 +66,7 @@ describe('workspace action launcher with real endpoints', () => {
   }
 
   async function openActions(command?: string): Promise<void> {
-    const libraryActions = page.getByLabel('Open library actions', { exact: true })
-    if (await libraryActions.isVisible()) await libraryActions.click()
-    else await page.getByRole('button', { name: 'Open actions', exact: true }).click()
+    await page.getByRole('button', { name: 'Open actions', exact: true }).click()
     await expect.poll(() => page.getByRole('option').count()).toBeGreaterThan(100)
     if (!command) return
     await page.getByLabel('Videobook command input', { exact: true }).fill(command)
@@ -240,7 +238,7 @@ describe('workspace action launcher with real endpoints', () => {
     })).toBe(true)
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'hidden' })
-    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Open library actions')
+    await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Videobook command input')
   })
 
   it('traverses the entire slash list and invokes exact aliases and sequence commands', async () => {
@@ -278,7 +276,7 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => JSON.stringify(await call('get_primary_sequence')), { timeout: MCP_ROUNDTRIP_MS }).toContain('Action soundtrack')
   })
 
-  it('opens edit forms from slash, cell menus and Library with the same media target', async () => {
+  it('opens edit forms from slash and cell menus, and keeps actions available while browsing Library', async () => {
     await sendCommand('/crop @a2')
     await page.getByRole('heading', { level: 3, name: 'Crop asset', exact: true }).waitFor()
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
@@ -291,13 +289,9 @@ describe('workspace action launcher with real endpoints', () => {
     expect(labels).not.toContain('More actions')
     await page.keyboard.press('Escape')
     await page.getByLabel('Open Library', { exact: true }).click()
-    const imageCard = page.locator('.library-asset-card').filter({ hasText: 'action-image' }).first()
-    await imageCard.getByRole('button', { name: /^More actions for/u }).click()
-    await page.getByRole('menuitem', { name: 'All media actions', exact: true }).click()
-    await page.getByLabel('Videobook command input', { exact: true }).fill('/rename')
-    await page.locator('[data-action-id="tool.rename_asset"]').click()
-    await page.getByRole('button', { name: 'Send command', exact: true }).click()
-    expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).inputValue()).toBe(imageId)
+    await page.getByRole('region', { name: 'Choose library media' }).waitFor({ state: 'visible' })
+    await openActions('/rename')
+    expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).count()).toBe(1)
   })
 
   it('edits and deletes a saved prompt using its name while preserving its identity', async () => {
@@ -670,33 +664,6 @@ describe('workspace action launcher with real endpoints', () => {
     }
     expect(browserErrors).toEqual([])
   }, 120_000)
-
-  it('keeps library actions scoped to the owning project when labels match', async () => {
-    const foreignBook = record(await call('create_book', { name: 'foreign-action-project' }))!
-    const foreignBookId = String(foreignBook.bookId)
-    const foreign = record(await call('upload_file', { book_id: foreignBookId, filename: 'foreign.png', data: (await readFile(join(rootDir, 'image.png'))).toString('base64') }))!
-    const foreignId = String(foreign.assetId)
-    await call('rename_asset', { asset_id: imageId, new_name: 'Matching media label' })
-    await call('rename_asset', { book_id: foreignBookId, asset_id: foreignId, new_name: 'Matching media label' })
-    await page.getByLabel('Open Library', { exact: true }).click()
-    await page.getByRole('button', { name: 'All books', exact: true }).click()
-    const foreignCard = page.locator('.library-asset-card').filter({ hasText: 'foreign-action-project' })
-    await foreignCard.getByRole('button', { name: 'More actions for Matching media label', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'All media actions', exact: true }).click()
-    await page.getByLabel('Videobook command input', { exact: true }).fill('/rename')
-    await page.locator('[data-action-id="tool.rename_asset"]').click()
-    await page.getByRole('button', { name: 'Send command', exact: true }).click()
-    await expect.poll(() => page.getByRole('combobox', { name: 'Media', exact: true }).inputValue()).toBe(foreignId)
-    await page.getByRole('textbox', { name: 'New name', exact: true }).fill('Foreign media renamed')
-    await page.getByRole('button', { name: 'Run action', exact: true }).click()
-    await expect.poll(async () => {
-      const value = record(await call('list_assets', { book_id: foreignBookId }))!
-      return (value.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === foreignId)?.label
-    }, { timeout: MCP_ROUNDTRIP_MS }).toBe('Foreign media renamed')
-    const original = record(await call('list_assets'))!
-    expect((original.assets as Record<string, unknown>[]).find(asset => asset.artifact_id === imageId)?.label).toBe('Matching media label')
-    expect(browserErrors).toEqual([])
-  })
 
   it('keeps media edits separate from clip edits and exports the reviewed sequence', async () => {
     const timeline = record(await call('set_timeline', { render: 'landscape', slots: [{ artifact_id: videoId }] }))!

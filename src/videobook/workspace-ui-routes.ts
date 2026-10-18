@@ -3,7 +3,8 @@ import type { UiActionId } from '../../server/src/workspace-action-contract.js'
 type UiRoute =
   | { kind: 'form'; tool: string }
   | { kind: 'search'; query: string }
-  | { kind: 'screen'; screen: 'library' | 'jobs' | 'settings' }
+  | { kind: 'screen'; screen: 'jobs' | 'settings' }
+  | { kind: 'library' }
   | { kind: 'special'; action: 'upload' | 'copy' | 'history' | 'open' | 'original' | 'landscape' | 'portrait' | 'close' | 'collapse' | 'expand' | 'save' | 'notebook' | 'play' | 'skeleton' }
   | { kind: 'existing' }
 
@@ -21,7 +22,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   speak_preview: { kind: 'existing' },
   x_connect: { kind: 'existing' },
   open_provider_keys: { kind: 'screen', screen: 'settings' },
-  open_inbox: { kind: 'screen', screen: 'library' },
+  open_inbox: { kind: 'library' },
   open_jobs: { kind: 'screen', screen: 'jobs' },
   open_status: { kind: 'form', tool: 'list_book_actions' },
   open_revisions: { kind: 'form', tool: 'list_book_actions' },

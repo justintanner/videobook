@@ -229,7 +229,7 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
     inputSchema: schema,
     ...(command?.mcpTool?.injectParams ? { initialArgs: { ...command.mcpTool.injectParams } } : {}),
     ...(mediaType ? { generation: { provider: "catalog", operation: tool.name, mediaType } } : {}),
-    surfaces: target.kind === "asset" ? ["slash", "launcher", "cell-menu", "library-menu"]
+    surfaces: target.kind === "asset" ? ["slash", "launcher", "cell-menu"]
       : target.kind === "cell" ? ["slash", "launcher", "cell-menu", "selection-menu"] : ["slash", "launcher"],
     focus: "dialog",
     confirmation: confirmationForTool(tool),

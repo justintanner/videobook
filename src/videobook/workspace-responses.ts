@@ -7,7 +7,7 @@ import {
   asMediaVisionAnalysis,
 } from '@/videobook/media-insights'
 import { type AssetTags, parseAssetTags } from '@/videobook/asset-tags'
-import type { LibraryBrowseResult, LibraryStatusCounts } from '@/videobook/useLibraryBrowse'
+import type { LibraryBrowseResult, LibraryStatusCounts } from '@/videobook/library-browse'
 import { type CommandPlan, validateCommandPlan } from '@/videobook/command-plan'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type {
@@ -679,7 +679,7 @@ export function asForgetAssetOutcome(value: unknown): ForgetAssetOutcome {
   }
 }
 
-export function asIngestStatuses(value: unknown): IngestStatus[] {
+function asIngestStatuses(value: unknown): IngestStatus[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
     const item = recordValue(entry)

@@ -1,7 +1,6 @@
-export type Screen = 'notebook' | 'library' | 'jobs' | 'settings'
+export type Screen = 'notebook' | 'jobs' | 'settings'
 
 const routedScreens: Record<Exclude<Screen, 'notebook'>, { path: string; name: string }> = {
-  library: { path: '/library', name: 'Library' },
   jobs: { path: '/jobs', name: 'Jobs' },
   settings: { path: '/settings', name: 'Settings' },
 }

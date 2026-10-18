@@ -7,15 +7,15 @@ import { ReverseSearchReference } from '@/components/videobook/ReverseSearchRefe
 import type { TagFilterTerm, TagSuggestion } from '@/videobook/asset-tag-editing'
 import type { SearchReferenceDescriptor } from '@/videobook/search-reference'
 import type { SearchReferenceMode } from '@/videobook/search-reference-lifecycle'
-import type { LibraryBrowsePage } from '@/videobook/useLibraryBrowse'
+import type { LibraryBrowsePage } from '@/videobook/library-browse'
 import type { LibraryAssetRecord } from '@/videobook/workspace-responses'
 
-export type MediaLibraryKind = 'audio' | 'image' | 'video'
+export type MediaLibraryKind = 'all' | 'audio' | 'image' | 'video'
 
 export type MediaLibraryPanelState = {
   unindexedVisualAssets: number
   preparingIndex: boolean
-  cellId: string
+  cellId: string | null
   query: string
   draftQuery: string
   assets: LibraryAssetRecord[]
@@ -36,6 +36,7 @@ export type MediaLibraryPanelState = {
 }
 
 type MediaLibraryPanelProps = {
+  disabled: boolean
   state: MediaLibraryPanelState
   kind: MediaLibraryKind
   accept: string
@@ -65,6 +66,7 @@ const searchModes: Array<{ id: SearchReferenceMode; label: string; icon: typeof 
 ]
 
 function kindNoun(kind: MediaLibraryKind): string {
+  if (kind === 'all') return 'media'
   return kind === 'audio' ? 'audio' : `${kind}s`
 }
 
@@ -274,7 +276,7 @@ export function MediaLibraryPanel(props: MediaLibraryPanelProps) {
     onToggleTagFilter,
   } = props
   const uploadRef = useRef<HTMLInputElement>(null)
-  const busy = state.activeArtifactId !== null || state.preparingReference || state.uploading
+  const busy = props.disabled || state.activeArtifactId !== null || state.preparingReference || state.uploading
   const [now] = useState(() => Date.now())
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || busy || event.nativeEvent.isComposing) return
@@ -286,7 +288,7 @@ export function MediaLibraryPanel(props: MediaLibraryPanelProps) {
   return (
     <section
       className="media-library-panel"
-      aria-label={`Choose ${kind} media`}
+      aria-label={kind === 'all' ? 'Choose library media' : `Choose ${kind} media`}
       onKeyDown={handleKeyDown}
     >
       <div className="media-library-toolbar">

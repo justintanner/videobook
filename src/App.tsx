@@ -83,11 +83,8 @@ import {
   Code,
   History,
   Library,
-  Mic,
   Settings,
-  Square,
   Undo2,
-  Upload,
 } from 'lucide-react'
 import { v7 as uuidv7 } from 'uuid'
 import type {
@@ -107,24 +104,13 @@ import {
   forgottenNotice,
 } from './videobook/forget-asset'
 import {
-  LIBRARY_SCOPE_STORAGE_KEY,
-  libraryScopeFromValue,
-  type LibraryBrowseStatus,
-  type LibraryScope,
-} from './videobook/library-scope'
-import {
-  useLibraryBrowse,
-  type LibraryBrowsePage as LibrarySearchPage,
-  type LibraryBrowseRequest,
-} from './videobook/useLibraryBrowse'
-import {
   sameTagFilter,
   tagFilterArgs,
   toggleTagFilter,
   type TagFilterTerm,
   type TagSuggestion,
 } from './videobook/asset-tag-editing'
-import { LibraryScreen } from '@/components/videobook/LibraryScreen'
+import type { LibraryBrowsePage as LibrarySearchPage } from '@/videobook/library-browse'
 import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
@@ -157,10 +143,6 @@ import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
 import { NotebookGridBoard } from '@/components/videobook/NotebookGridBoard'
-import {
-  MomentSearch,
-  type MomentSearchHandle,
-} from '@/components/videobook/MomentSearch'
 import { useGenerationCellPreview } from '@/videobook/use-generation-cell-preview'
 import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import {
@@ -169,7 +151,7 @@ import {
   type CellGenerationAttempt,
   type NotebookCellInspectorAsset,
 } from '@/components/videobook/NotebookCellInspector'
-import { MediaLibraryPanel, type MediaLibraryPanelState } from '@/components/videobook/MediaLibraryPanel'
+import { MediaLibraryPanel, type MediaLibraryKind, type MediaLibraryPanelState } from '@/components/videobook/MediaLibraryPanel'
 import {
   GenerationBody,
   type GenerationReviewSource,
@@ -593,7 +575,6 @@ import {
   asCommands,
   asForgetAssetOutcome,
   asGenerationPlans,
-  asIngestStatuses,
   asInitialWorkspace,
   asJobs,
   asLibrarySearchResult,
@@ -606,7 +587,6 @@ import {
   type AssetRecord,
   type ChatActionPlan,
   type GenerationPlanRecord,
-  type IngestStatus,
   type JobRecord,
   type LibraryAssetRecord,
   type NotebookSnapshot,
@@ -702,7 +682,10 @@ type MediaSearchMode = SearchReferenceMode
 type MediaLibraryPickerState = {
   unindexedVisualAssets: number
   preparingIndex: boolean
-  cellId: string
+  bookId: string
+  notebookId: string
+  cellId: string | null
+  slot?: NotebookGridSlot
   query: string
   draftQuery: string
   assets: LibraryAssetRecord[]
@@ -826,8 +809,6 @@ type CellContextMenuState = {
 const mcpUrl = typeof window === 'undefined'
   ? 'http://localhost/mcp'
   : new URL('/mcp', window.location.origin).toString()
-const ingestPollIntervalMs = 750
-const ingestPollTimeoutMs = 5 * 60_000
 const notebookRunPollIntervalMs = 500
 const notebookRunPollTimeoutMs = 5 * 60_000
 // A watch tolerates this many consecutive poll failures before giving up —
@@ -860,7 +841,6 @@ const screenNavigation: Array<{
   label: string
   icon: typeof BookOpen
 }> = [
-  { id: 'library', label: 'Library', icon: Library },
   { id: 'jobs', label: 'Jobs', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -1224,12 +1204,13 @@ function passiveMediaKindForAsset(type: string): PassiveMediaKind | null {
   return type === 'audio' || type === 'image' || type === 'video' ? type : null
 }
 
-function mediaLibraryKinds(kind: PassiveMediaKind): string[] {
+function mediaLibraryKinds(kind: MediaLibraryKind): string[] {
+  if (kind === 'all') return ['audio', 'image', 'video', 'final']
   return kind === 'video' ? ['video', 'final'] : [kind]
 }
 
 function isCompatibleLibraryAsset(
-  kind: PassiveMediaKind,
+  kind: MediaLibraryKind,
   assetType: string,
 ): boolean {
   return mediaLibraryKinds(kind).includes(assetType)
@@ -1285,13 +1266,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => initialWorkspace?.notebook ?? null,
   )
   const [assets, setAssets] = useState<AssetRecord[]>(() => initialWorkspace?.assets ?? [])
-  const [libraryScope, setLibraryScope] = useState<LibraryScope>(
-    () => libraryScopeFromValue(savedValue(LIBRARY_SCOPE_STORAGE_KEY)))
-  const [libraryBrowseStatus, setLibraryBrowseStatus] = useState<LibraryBrowseStatus>(
-    'ready')
-  const [ingestStatuses, setIngestStatuses] = useState<IngestStatus[]>(
-    () => initialWorkspace?.ingestStatuses ?? [],
-  )
   const [sequence, setSequence] = useState<Sequence | null>(
     () => initialWorkspace?.sequence ?? null,
   )
@@ -1370,7 +1344,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryReference = useSearchReferenceLifecycle()
   const [pendingWatermarkReview, setPendingWatermarkReview] =
     useState<WatermarkReviewState | null>(null)
-  const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
@@ -1408,7 +1381,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [bookMenuLoading, setBookMenuLoading] = useState(false)
   const [bookMenuError, setBookMenuError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [recording, setRecording] = useState(false)
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const voiceOutcomeRef = useRef<((outcome: VoiceOutcome) => void) | null>(null)
@@ -1421,7 +1393,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [previewTurnId, setPreviewTurnId] = useState<number | null>(null)
   const [mcpCalls, setMcpCalls] = useState<McpCallLog>(emptyMcpCallLog)
   const [mcpFlash, setMcpFlash] = useState<McpFlash>(null)
-  const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [notice, setNoticeState] = useState<WorkspaceNotice | null>({
     text: 'Connect to the server, then load your books.',
@@ -1435,9 +1406,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const bookMenuRequestRef = useRef(0)
-  const recorderRef = useRef<MediaRecorder | null>(null)
-  const recorderStreamRef = useRef<MediaStream | null>(null)
-  const recorderChunksRef = useRef<Blob[]>([])
   const mediaLibraryRequestRef = useRef(0)
   const imageSubjectMapRequestRef = useRef(0)
   const bookDataRequestRef = useRef(0)
@@ -1494,14 +1462,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const assetById = useMemo(
     () => new Map(assets.map((asset) => [asset.artifactId, asset])),
-    [assets],
-  )
-  const ingestStatusById = useMemo(
-    () => new Map(ingestStatuses.map((status) => [status.artifactId, status])),
-    [ingestStatuses],
-  )
-  const sourceAssets = useMemo(
-    () => assets.filter((asset) => asset.type !== 'notebook'),
     [assets],
   )
   const commandMentionAssets = useMemo(
@@ -2016,6 +1976,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
 
   const updateSelectedCellIds = useCallback((next: ReadonlySet<string>) => {
+    if (next.size > 0) {
+      setMediaLibraryPicker((current) => current?.cellId === null ? null : current)
+    }
     const current = selectedCellIdsRef.current
     if (
       current.size === next.size
@@ -2098,7 +2061,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       [...selectedCellIdsRef.current].filter((cellId) => cellIds.has(cellId)),
     ))
     setMediaLibraryPicker((current) =>
-      current && cellIds.has(current.cellId) ? current : null)
+      current && current.bookId === owningBookId && current.notebookId === next.id
+        && (current.cellId === null || cellIds.has(current.cellId)) ? current : null)
     setCellContextMenu((current) =>
       !current
       || current.target.kind === 'slot'
@@ -3637,7 +3601,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }, { background: true, chat }),
         call('get_primary_sequence', { book_id: targetBookId }, { background: true, chat }),
         call('list_jobs', { book_id: targetBookId, limit: 200 }, { background: true, chat }),
-        call('list_ingest_status', { book_id: targetBookId, limit: 200 }, { background: true, chat }),
         call('list_notebook_actions', { book_id: targetBookId }, { background: true, chat }),
       ]),
       () => bookDataRequestRef.current === requestId && isCurrent?.() !== false && (!chat || chat.isInScope()),
@@ -3649,7 +3612,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       assetValue,
       sequenceValue,
       jobValue,
-      ingestStatusValue,
       actionValue,
     ] = response.value
     const nextNotebooks = asNotebooks(notebookValue)
@@ -3663,7 +3625,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBookId(targetBookId)
     saveValue('videobook.active-book', targetBookId)
     setAssets(nextAssets)
-    setIngestStatuses(asIngestStatuses(ingestStatusValue))
     setSequence(asSequence(sequenceValue))
     setJobs(nextJobs)
     setGenerationActions(asNotebookGenerationActions(actionValue))
@@ -3733,58 +3694,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!cell) throw new Error('Add a timeline cell to preview the assembled sequence.')
     openTimelinePreview(cell.id, frame)
   }
-
-  const loadLibraryPage = useCallback(async (request: LibraryBrowseRequest) => {
-    const { scope, status, owningBookId, offset, limit } = request
-    const result = await call(scope === 'library' ? 'search_library_assets' : 'list_assets', {
-      ...(scope === 'library'
-        ? { kinds: ['audio', 'image', 'video'] }
-        : { book_id: owningBookId, sort: 'newest', include_referenced: false }),
-      browse_status: status,
-      limit,
-      offset,
-    }, { background: true })
-    return asLibrarySearchResult(result, request)
-  }, [call])
-
-  const {
-    browse: libraryBrowse,
-    refresh: refreshLibraryBrowse,
-    loadMore: loadMoreLibraryBrowse,
-  } = useLibraryBrowse({
-    active: screen === 'library',
-    ready: mcp.state === 'ready',
-    connectionError: mcp.error?.message ?? null,
-    bookId,
-    bookName: activeBook?.name ?? 'this book',
-    scope: libraryScope,
-    status: libraryBrowseStatus,
-    revision: sourceAssets,
-    loadPage: loadLibraryPage,
-  })
-
-  const changeLibraryScope = useCallback((next: LibraryScope) => {
-    setLibraryScope(next)
-    saveValue(LIBRARY_SCOPE_STORAGE_KEY, next)
-  }, [])
-
-  /** Book badge on a library-scope tile: open that book and narrow the grid. */
-  const openLibraryBook = useCallback(async (nextBookId: string) => {
-    if (nextBookId !== bookId) {
-      setBusy(true)
-      try {
-        await refreshBookData(nextBookId)
-        const next = books.find((book) => book.bookId === nextBookId)
-        setNotice(next ? `Opened ${next.name}` : 'Book opened')
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : String(error), 'error')
-        return
-      } finally {
-        setBusy(false)
-      }
-    }
-    changeLibraryScope('book')
-  }, [bookId, books, changeLibraryScope, refreshBookData, setNotice])
 
   const updateFullscreenSubjectMap = useCallback((
     key: string,
@@ -4128,7 +4037,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice(forgottenNotice(name, outcome))
       await refreshBookData(bookId, notebook?.id)
       await refreshBookList()
-      refreshLibraryBrowse()
       return { ok: true, message: forgottenNotice(name, outcome) }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -4142,7 +4050,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     notebook?.id,
     refreshBookData,
     refreshBookList,
-    refreshLibraryBrowse,
     setNotice,
   ])
 
@@ -4306,9 +4213,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [openBookMenu])
 
   const showScreen = useCallback((next: Screen) => {
-    if (next !== 'library') {
-      setLibraryBrowseStatus('ready')
-    }
     setScreen(next)
     const path = pathForScreen(next)
     if (window.location.pathname !== path) {
@@ -4323,9 +4227,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   useEffect(() => {
     const onPopState = () => {
       const next = screenFromPath(window.location.pathname)
-      if (next !== 'library') {
-        setLibraryBrowseStatus('ready')
-      }
       setScreen(next)
     }
     window.addEventListener('popstate', onPopState)
@@ -5038,6 +4939,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         artifact_ref: artifactRef,
       })
       attached = true
+      if (mediaLibraryPicker?.cellId === null) closeMediaLibrary()
       collapseComposerAfterCellCreation()
       rememberLastWorkSlot(slot)
       await refreshBookData(bookId, notebook.id)
@@ -5085,16 +4987,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const loadMediaLibrary = async (
-    cellId: string,
+    cellId: string | null,
     query: string,
     offset: number,
     append: boolean,
     criteria?: MediaLibrarySearchCriteria,
     tagFilters?: readonly TagFilterTerm[],
-    knownKind?: PassiveMediaKind,
+    knownKind?: MediaLibraryKind,
   ) => {
     const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
-    const kind = knownKind ?? (cell && passiveMediaKind(cell.type))
+    const kind = knownKind ?? (cellId === null ? 'all' : cell && passiveMediaKind(cell.type))
     if (!kind) return
     const activeCriteria = criteria
       ?? (mediaLibraryPicker?.cellId === cellId
@@ -5159,7 +5061,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ...(referenceRange
             ? { reference_range: referenceRange }
             : {}),
-          kinds: [kind],
+          kinds: kind === 'all' ? ['audio', 'image', 'video'] : [kind],
           ...tagFilterArgs(activeTagFilters),
           limit: emptyLibraryPage.limit,
           offset,
@@ -5228,13 +5130,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const openMediaLibrary = (
-    cellId: string,
+    cellId: string | null,
     currentNotebook: NotebookDocument | null | undefined = notebook,
+    slot?: NotebookGridSlot,
   ) => {
     if (!currentNotebook || mcp.state !== 'ready') return
-    const kind = emptyMediaSlotKind(cellId, currentNotebook)
+    const kind = cellId === null ? 'all' : emptyMediaSlotKind(cellId, currentNotebook)
     if (!kind) return
-    if (selectedCellIdsRef.current.size !== 1 || !selectedCellIdsRef.current.has(cellId)) {
+    if (cellId === null || selectedCellIdsRef.current.size !== 1 || !selectedCellIdsRef.current.has(cellId)) {
       selectCanvasCell(cellId)
     }
     setSourceViewCellId(null)
@@ -5244,11 +5147,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? document.activeElement
       : null
     mediaLibraryReference.lifecycle.close()
-    setMediaSlotOperation(cellId, null)
+    if (cellId) setMediaSlotOperation(cellId, null)
     setMediaLibraryPicker({
       unindexedVisualAssets: 0,
       preparingIndex: false,
+      bookId,
+      notebookId: currentNotebook.id,
       cellId,
+      slot,
       query: '',
       draftQuery: '',
       assets: [],
@@ -5274,18 +5180,43 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setComposerDockOpen(false)
   }
 
+  const openNotebookLibrary = (slot?: NotebookGridSlot) => {
+    navigate('notebook')
+    openMediaLibrary(null, notebook, slot)
+  }
+
   const attachLibraryAsset = async (asset: LibraryAssetRecord) => {
-    if (!bookId || !notebook || !mediaLibraryPicker) return
-    const cellId = mediaLibraryPicker.cellId
+    if (!bookId || !notebook || !mediaLibraryPicker || mcp.state !== 'ready' || busy) return
+    const picker = mediaLibraryPicker
+    const requestId = mediaLibraryRequestRef.current
+    const isCurrent = () => mediaLibraryRequestRef.current === requestId
+      && watchScopeRef.current.bookId === picker.bookId
+      && watchScopeRef.current.notebookId === picker.notebookId
+    let cellId = picker.cellId
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
-    const kind = cell && passiveMediaKind(cell.type)
-    if (!cell || !kind || !isCompatibleLibraryAsset(kind, asset.type)) return
-    setMediaSlotOperation(cellId, 'attach')
+    const kind = cellId === null ? passiveMediaKindForAsset(asset.type) : cell && passiveMediaKind(cell.type)
+    if (!kind || !isCompatibleLibraryAsset(kind, asset.type)) return
+    if (cellId) setMediaSlotOperation(cellId, 'attach')
     setMediaLibraryPicker((current) =>
-      current && current.cellId === cellId
+      current === picker
         ? { ...current, activeArtifactId: asset.artifactId, error: null }
         : current)
+    let createdCellId: string | null = null
+    let attached = false
+    setBusy(true)
     try {
+      if (cellId === null) {
+        const slot = picker.slot ?? nextNotebookCreationSlot(kind, notebook.cells, lastWorkSlot)
+        const created = recordValue(await call('create_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell: { type: kind, slot },
+        }))
+        createdCellId = created && asString(created.id)
+        if (!createdCellId) throw new Error('The server did not return the new media cell')
+        cellId = createdCellId
+        rememberLastWorkSlot(slot)
+      }
       if (asset.owningBookId === bookId) {
         await call('set_notebook_media_slot', {
           book_id: bookId,
@@ -5300,23 +5231,46 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           target_book_id: bookId,
           notebook_id: notebook.id,
           cell_id: cellId,
-          expected_output_artifact_id: cell.outputArtifactId ?? null,
+          expected_output_artifact_id: cell?.outputArtifactId ?? null,
         })
       }
+      attached = true
+      if (!isCurrent()) return
       await refreshBookData(bookId, notebook.id)
+      if (!isCurrent()) return
       setMediaSlotOperation(cellId, null)
       setNotice(asset.owningBookId === bookId
         ? `Attached @${asset.id}`
         : `Copied and attached @${asset.id} from ${asset.owningBookName}`)
-      closeMediaLibrary()
+      if (picker.cellId !== null || selectedCellIdsRef.current.size === 0) {
+        closeMediaLibrary()
+        if (createdCellId) collapseComposerAfterCellCreation()
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaSlotError(cellId, message)
+      let message = error instanceof Error ? error.message : String(error)
+      if (createdCellId && !attached) {
+        try {
+          await call('delete_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell_id: createdCellId,
+          })
+        } catch (rollbackError) {
+          message += `. The empty cell could not be removed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+        }
+      }
+      if (!isCurrent()) return
+      if (picker.cellId) setMediaSlotError(picker.cellId, message)
       setMediaLibraryPicker((current) =>
-        current && current.cellId === cellId
+        current && current.cellId === picker.cellId
           ? { ...current, activeArtifactId: null, error: message }
           : current)
       setNotice(message, 'error')
+    } finally {
+      if (!isCurrent() && picker.cellId && watchScopeRef.current.bookId === picker.bookId) {
+        setMediaSlotOperation(picker.cellId, null)
+      }
+      setBusy(false)
     }
   }
 
@@ -5742,7 +5696,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const refreshed = await refreshBookData(bookId, notebook?.id)
       if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation()
-      refreshLibraryBrowse()
       setNotice([
         imported > 0 ? `Imported ${imported}` : '',
         reused > 0 ? `reused ${reused} existing` : '',
@@ -5759,117 +5712,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     event.target.value = ''
     void uploadFiles(files)
   }
-
-  const startRecording = async () => {
-    if (!bookId || recording) return
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = [
-        'audio/webm;codecs=opus',
-        'audio/ogg;codecs=opus',
-        'audio/mp4',
-      ].find((type) => MediaRecorder.isTypeSupported(type))
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
-      recorderRef.current = recorder
-      recorderStreamRef.current = stream
-      recorderChunksRef.current = []
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) recorderChunksRef.current.push(event.data)
-      }
-      recorder.onstop = () => {
-        const blob = new Blob(recorderChunksRef.current, {
-          type: recorder.mimeType || mimeType || 'audio/webm',
-        })
-        recorderChunksRef.current = []
-        recorderStreamRef.current?.getTracks().forEach((track) => track.stop())
-        recorderStreamRef.current = null
-        recorderRef.current = null
-        const extension = blob.type.includes('ogg')
-          ? 'ogg'
-          : blob.type.includes('mp4') ? 'm4a' : 'weba'
-        const file = new File(
-          [blob],
-          `recording-${new Date().toISOString().replaceAll(':', '-')}.${extension}`,
-          { type: blob.type },
-        )
-        void uploadFiles([file])
-      }
-      recorder.start(500)
-      setRecording(true)
-      setNotice('Microphone recording started')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    }
-  }
-
-  const stopRecording = () => {
-    const recorder = recorderRef.current
-    if (!recorder || recorder.state === 'inactive') return
-    recorder.stop()
-    setRecording(false)
-    setNotice('Saving microphone recording…')
-  }
-
-  const waitForIngestProcessing = useCallback(async (
-    targetBookId: string,
-    artifactId: string,
-    jobId: number,
-  ): Promise<IngestStatus | null> => {
-    const deadline = Date.now() + ingestPollTimeoutMs
-    let quietPolls = 0
-    let failedPolls = 0
-    let lastError: unknown = null
-    while (Date.now() < deadline) {
-      try {
-        const fetchedAt = performance.now()
-        const [jobValue, ingestValue] = await Promise.all([
-          call('list_jobs', { book_id: targetBookId, limit: 200 }, { background: true }),
-          call('list_ingest_status', { book_id: targetBookId, limit: 200 }, { background: true }),
-        ])
-        const nextJobs = asJobs(jobValue)
-        const nextStatuses = asIngestStatuses(ingestValue)
-        const job = nextJobs.find((candidate) => candidate.id === jobId)
-        const status = nextStatuses.find((candidate) =>
-          candidate.artifactId === artifactId) ?? null
-        const active = nextJobs.some((candidate) =>
-          candidate.artifactId === artifactId
-          && activeJobStates.has(candidate.state))
-        if (fetchedAt >= watchSnapshotClockRef.current) {
-          watchSnapshotClockRef.current = fetchedAt
-          applyJobsSnapshot(nextJobs)
-          setIngestStatuses((current) =>
-            jsonEqual(current, nextStatuses) ? current : nextStatuses)
-        }
-        failedPolls = 0
-        if (job?.state === 'failed' || job?.state === 'aborted') {
-          const error = new Error(
-            job.error?.message ?? `Processing job ${job.id} ${job.state}`,
-          )
-          error.name = 'ProcessingJobError'
-          throw error
-        }
-        if (status?.state === 'ready') return status
-        if (job?.state === 'done' && !active) {
-          quietPolls += 1
-          if (quietPolls >= 2) return status
-        } else {
-          quietPolls = 0
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'ProcessingJobError') {
-          throw error
-        }
-        lastError = error
-        failedPolls += 1
-        if (failedPolls >= 5) throw error
-      }
-      await delay(ingestPollIntervalMs)
-    }
-    if (lastError instanceof Error) throw lastError
-    throw new Error('Processing did not finish within five minutes')
-  }, [applyJobsSnapshot, call])
 
   // A queued watermark burn (apply_watermark wait=false) is tracked here
   // rather than by holding the composer: the burn job anchors the watch and
@@ -5973,37 +5815,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     presentChat(chat, () => setNotice(`${params.targetLabel} watermark is still processing — check the Jobs screen`))
   }, [applyJobsSnapshot, applyNotebook, refreshBookData, setNotice])
-
-  const retryIngest = async (artifactId: string) => {
-    if (!bookId) return
-    setBusy(true)
-    setProcessingArtifactId(artifactId)
-    try {
-      const result = recordValue(await call('retry_ingest', {
-        book_id: bookId,
-        artifact_id: artifactId,
-      }))
-      const jobId = asNumber(result?.jobId)
-      if (!jobId) throw new Error('The server did not return a processing job')
-      setNotice('Processing media…')
-      const status = await waitForIngestProcessing(bookId, artifactId, jobId)
-      const missing = status?.missingOutputs ?? []
-      setNotice(missing.length > 0
-        ? `Processing finished; ${missing.join(', ')} not indexed`
-        : 'Processing complete')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-    } finally {
-      try {
-        await refreshBookData(bookId, notebook?.id)
-        refreshLibraryBrowse()
-      } catch {
-        void 0
-      }
-      setProcessingArtifactId(null)
-      setBusy(false)
-    }
-  }
 
   const cancelJob = async (jobId: number) => {
     if (!bookId) return
@@ -8962,9 +8773,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const uiAction = action.handler.action
     const route = WORKSPACE_UI_ROUTES[uiAction]
     if (route.kind === 'existing') return null
+    if (route.kind === 'library') {
+      openNotebookLibrary()
+      return { ok: true, message: 'Library opened' }
+    }
     if (route.kind === 'screen') {
       navigate(route.screen)
-      return { ok: true, message: `${route.screen === 'library' ? 'Library' : route.screen === 'jobs' ? 'Jobs' : 'Settings'} opened` }
+      return { ok: true, message: `${route.screen === 'jobs' ? 'Jobs' : 'Settings'} opened` }
     }
     const reference = asString(values.asset_id ?? values.asset_ref ?? values.artifact_id)
       ?? workspacePreview?.media?.assetId ?? mediaFullscreen?.asset.artifactId ?? selectedNotebookCell?.outputArtifactId
@@ -9488,7 +9303,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!result.ok) throw new Error(result.error)
       return { message: `${action.title} complete` }
     }
-    const targetBookId = bookId
     const value = await call(tool, values)
     if (recordValue(value)?.kind === 'chat-action-plan') {
       const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''))
@@ -9509,7 +9323,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { message: result.message }
     }
     const completed = await completeWorkspaceToolResult(tool, value, values, action.title)
-    if (targetBookId && watchScopeRef.current.bookId === targetBookId) refreshLibraryBrowse()
     if (!completed.ok) throw new Error(completed.message)
     return { message: completed.message, value }
   }
@@ -9845,16 +9658,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setActionDiscovery(null)
     setActionComposer(null)
     closeCellContextMenu()
+    if (mediaLibraryPicker) closeMediaLibrary()
     showScreen(next)
     if (next === 'settings') void refreshSettings()
-    if ((next === 'library' || next === 'jobs') && bookId) {
+    if (next === 'jobs' && bookId) {
       void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
         setNotice(error instanceof Error ? error.message : String(error), 'error')
       })
     }
-    // Entering the Library re-lists every book: generation and deletions
-    // elsewhere in the app never reach the library-wide page.
-    if (next === 'library') refreshLibraryBrowse()
   }
 
   const mediaSlotContextValue: MediaSlotContextValue = {
@@ -9869,11 +9680,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     : undefined
   const mediaLibraryKind = mediaLibraryCell
     ? passiveMediaKind(mediaLibraryCell.type)
-    : null
+    : mediaLibraryPicker?.cellId === null ? 'all' : null
   const mediaLibraryPanelState: MediaLibraryPanelState | null = mediaLibraryPicker
     ? {
         ...mediaLibraryPicker,
-        uploading: mediaSlotStates[mediaLibraryPicker.cellId]?.operation === 'upload',
+        uploading: mediaLibraryPicker.cellId !== null && mediaSlotStates[mediaLibraryPicker.cellId]?.operation === 'upload',
         mode: mediaLibraryReference.state.mode,
         reference: mediaLibraryReference.state.reference,
         referenceStartSeconds: mediaLibraryReference.state.startSeconds,
@@ -9996,7 +9807,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaLibraryPicker((current) => current ? { ...current, preparingIndex: true, error: null } : current)
     try {
       const result = await repairSearchIndexes({
-        start: () => call('repair_library_search_indexes', { kinds: [mediaLibraryKind] }),
+        start: () => call('repair_library_search_indexes', { kinds: mediaLibraryKind === 'all' ? ['image', 'video'] : [mediaLibraryKind] }),
         listJobs: (bookId, jobIds) => call('list_jobs', { book_id: bookId, job_ids: jobIds }),
         isCancelled: () => mediaLibraryRequestRef.current !== requestId,
       })
@@ -10556,8 +10367,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionComposer = actionComposer?.bookId === bookId && actionComposer.session === composerSession ? actionComposer : null
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const workspaceChatPreview = workspacePreview?.turnId !== undefined && workspacePreview.turnId === chatTurns.at(-1)?.id
-  const temporaryActionComposer = Boolean(currentActionComposer && (screen === 'library' || workspacePreview || mediaFullscreen))
-  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession && (screen !== 'library' || Boolean(currentActionComposer))
+  const temporaryActionComposer = Boolean(currentActionComposer && (workspacePreview || mediaFullscreen))
+  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -11148,10 +10959,58 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     },
   }
   const selectedMediaLibraryState = mediaLibraryPanelState
-    && selectedNotebookCell?.id === mediaLibraryPanelState.cellId
-    && !selectedNotebookCell.outputArtifactId
+    && (mediaLibraryPanelState.cellId === null
+      || (selectedNotebookCell?.id === mediaLibraryPanelState.cellId
+        && !selectedNotebookCell.outputArtifactId))
     ? mediaLibraryPanelState
     : null
+  const mediaLibraryContent = selectedMediaLibraryState && mediaLibraryKind ? (
+    <MediaLibraryPanel
+      disabled={busy || mcp.state !== 'ready'}
+      state={selectedMediaLibraryState}
+      kind={mediaLibraryKind}
+      accept={mediaLibraryKind === 'all' ? Object.values(mediaFileAccept).join(',') : mediaFileAccept[mediaLibraryKind]}
+      targetBookId={bookId}
+      onClose={dismissMediaLibrary}
+      onMode={changeMediaLibraryMode}
+      onDraftQuery={updateMediaLibraryDraft}
+      onSearch={searchMediaLibrary}
+      onLoadMore={loadMoreMediaLibrary}
+      onAttach={(asset) => void attachLibraryAsset(asset)}
+      onUpload={(file) => {
+        if (selectedMediaLibraryState.cellId) {
+          void uploadMediaSlotFile(selectedMediaLibraryState.cellId, file)
+          return
+        }
+        const kind = mediaKindForFile(file)
+        if (!kind || !notebook) return
+        try {
+          const slot = mediaLibraryPicker?.slot ?? nextNotebookCreationSlot(kind, notebook.cells, lastWorkSlot)
+          void createMediaCellFromFile(slot, file)
+        } catch (error) {
+          setNotice(error instanceof Error ? error.message : String(error), 'error')
+        }
+      }}
+      onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
+      onClearReference={clearMediaLibraryReference}
+      onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
+      onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
+      onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
+      onRepairIndexes={() => void repairMediaLibraryIndexes()}
+      onToggleTagFilter={toggleMediaLibraryTagFilter}
+      onClearTagFilters={clearMediaLibraryTagFilters}
+      onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
+    />
+  ) : null
+  const libraryDockContent = selectedMediaLibraryState?.cellId === null && mediaLibraryContent ? (
+    <div className="composer-notebook-dock inspector">
+      <header>
+        <span className="inspector-cell-title"><Library size={15} /><strong>Library</strong></span>
+        <div className="inspector-header-actions"><ComposerDockClose /></div>
+      </header>
+      {mediaLibraryContent}
+    </div>
+  ) : null
   const selectedGoal = selectedNotebookCell?.type === 'goal' ? goalTiles.get(selectedNotebookCell.id) ?? null : null
   const goalDockContent = !timelinePreviewOpen && selectedNotebookCell?.type === 'goal' ? (
     selectedGoal ? (
@@ -11171,7 +11030,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       />
     ) : <GoalPanelPlaceholder />
   ) : null
-  const notebookDockContent = goalDockContent ?? (!timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
+  const notebookDockContent = libraryDockContent ?? goalDockContent ?? (!timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
     <div
       className={[
         'composer-notebook-dock',
@@ -11270,30 +11129,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           />
         </div>
       </header>
-      {selectedMediaLibraryState && mediaLibraryKind ? (
-        <MediaLibraryPanel
-          state={selectedMediaLibraryState}
-          kind={mediaLibraryKind}
-          accept={mediaFileAccept[mediaLibraryKind]}
-          targetBookId={bookId}
-          onClose={dismissMediaLibrary}
-          onMode={changeMediaLibraryMode}
-          onDraftQuery={updateMediaLibraryDraft}
-          onSearch={searchMediaLibrary}
-          onLoadMore={loadMoreMediaLibrary}
-          onAttach={(asset) => void attachLibraryAsset(asset)}
-          onUpload={(file) => void uploadMediaSlotFile(selectedMediaLibraryState.cellId, file)}
-          onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
-          onClearReference={clearMediaLibraryReference}
-          onReferenceStart={mediaLibraryReference.lifecycle.setStartSeconds}
-          onReferenceDuration={mediaLibraryReference.lifecycle.setDurationSeconds}
-          onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
-          onRepairIndexes={() => void repairMediaLibraryIndexes()}
-          onToggleTagFilter={toggleMediaLibraryTagFilter}
-          onClearTagFilters={clearMediaLibraryTagFilters}
-          onTagQuery={(prefix) => void loadMediaLibraryTagSuggestions(prefix)}
-        />
-      ) : selectedPost ? (
+      {mediaLibraryContent ?? (selectedPost ? (
         <PostInspector key={selectedPost.id} post={selectedPost} cells={notebook?.cells ?? []}
           asset={selectedCell.data.asset} bookId={bookId} call={mcp.state === 'ready' ? call : undefined}
           onRefresh={() => refreshBookData(bookId, notebook?.id)} onSelectCell={openCellInspector}
@@ -11368,7 +11204,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onLoadTranscriptJson={loadTranscriptJson}
           onDownloadTranscriptSrt={exportTranscriptSrt}
         />
-      )}
+      ))}
     </div>
   ) : null)
   /* Whichever contextual panel is on screen draws the dock's close control in
@@ -11458,6 +11294,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )}
         <div className="topbar-tools">
           <nav className="header-navigation" aria-label="Workspace navigation">
+            <button
+              type="button"
+              className={mediaLibraryPicker?.cellId === null && composerDockOpen ? 'active' : ''}
+              title="Library"
+              aria-label="Open Library"
+              aria-expanded={mediaLibraryPicker?.cellId === null && composerDockOpen}
+              disabled={busy || mcp.state !== 'ready' || !notebook}
+              onClick={() => openNotebookLibrary()}
+            >
+              <Library size={17} />
+            </button>
             {screenNavigation.map((item) => {
               const Icon = item.icon
               return (
@@ -11682,7 +11529,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                 onUpload={(slot, file) => void createMediaCellFromFile(slot, file)}
                                 onPick={(kind, slot) => void createCell(kind, notebookGridPosition(slot))}
                                 onDownload={downloadClipToSlot}
-                                onBrowseLibrary={() => navigate('library')}
+                                onBrowseLibrary={openNotebookLibrary}
                               />
                             )}
                                 </ReactFlow>
@@ -11701,89 +11548,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 )}
               </section>
             </>
-          )}
-
-          {screen === 'library' && (
-            <LibraryScreen
-              bookId={bookId}
-              bookCount={books.length}
-              scope={libraryScope}
-              status={libraryBrowseStatus}
-              browse={libraryBrowse}
-              busy={busy}
-              ready={mcp.state === 'ready'}
-              actionsOpen={Boolean(currentActionComposer)}
-              onOpenActions={() => void openWorkspaceActions()}
-              notice={notice}
-              processingArtifactId={processingArtifactId}
-              ingestStatuses={ingestStatusById}
-              onStatusChange={setLibraryBrowseStatus}
-              onImport={(files) => void uploadFiles(files)}
-              onRefresh={refreshLibraryBrowse}
-              onLoadMore={loadMoreLibraryBrowse}
-              onOpenBook={(nextBookId) => void openLibraryBook(nextBookId)}
-              onSearchSimilar={(asset) => momentSearchRef.current?.searchSimilar(asset)}
-              onForget={(asset) => void forgetAsset(asset)}
-              onActions={(asset) => {
-                void (async () => {
-                  if (asset.owningBookId !== bookId) {
-                    const result = await chooseBook(asset.owningBookId)
-                    if (!result.ok) { setNotice(result.error, 'error'); return }
-                  }
-                  await openWorkspaceActions(undefined, { asset_id: asset.artifactId, book_id: asset.owningBookId })
-                })()
-              }}
-              onRetry={(artifactId) => void retryIngest(artifactId)}
-            >
-              <MomentSearch
-                ref={momentSearchRef}
-                bookId={bookId}
-                notebookId={notebook?.id}
-                assets={sourceAssets}
-                disabled={busy || mcp.state !== 'ready'}
-                call={call}
-                onNotice={setNotice}
-                onNotebookChanged={async () => {
-                  if (notebook) await refreshNotebook(bookId, notebook.id)
-                  collapseComposerAfterCellCreation()
-                }}
-                onLibraryChanged={async () => {
-                  await refreshBookData(bookId, notebook?.id)
-                  refreshLibraryBrowse()
-                }}
-                scope={libraryScope}
-                onScopeChange={changeLibraryScope}
-                importControls={
-                  <>
-                    <button
-                      type="button"
-                      className={recording
-                        ? 'moment-search-tool recording-active'
-                        : 'moment-search-tool'}
-                      disabled={uploading}
-                      title={recording ? 'Stop recording' : 'Record audio'}
-                      aria-label={recording ? 'Stop recording' : 'Record audio'}
-                      onClick={recording ? stopRecording : () => void startRecording()}
-                    >
-                      {recording ? <Square size={14} /> : <Mic size={15} />}
-                    </button>
-                    <label
-                      className="moment-search-tool"
-                      title={uploading ? 'Importing…' : 'Import files'}
-                    >
-                      <Upload size={15} />
-                      <input
-                        type="file"
-                        multiple
-                        disabled={uploading}
-                        aria-label="Import files"
-                        onChange={upload}
-                      />
-                    </label>
-                  </>
-                }
-              />
-            </LibraryScreen>
           )}
 
           {screen === 'jobs' && (

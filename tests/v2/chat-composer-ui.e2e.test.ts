@@ -5592,14 +5592,14 @@ describe('chat composer browser flow', () => {
     notebookDirty = true
   }, 60_000)
 
-  it('restores workspace navigation history and falls back for removed Timeline links', async () => {
+  it('restores workspace navigation history and falls back for removed Library and Timeline links', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     delayedBootstrap = false
-    await page.goto(`${appUrl}/library`, { waitUntil: 'commit' })
+    await page.goto(`${appUrl}/settings`, { waitUntil: 'commit' })
     appReady = true
-    await page.getByLabel('Search the library')
+    await page.getByRole('heading', { name: 'Settings', exact: true })
       .waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(async () => await page!.title()).toBe('Library · VIDEOBOOK')
+    await expect.poll(async () => await page!.title()).toBe('Settings · VIDEOBOOK')
 
     expect(await page.getByLabel('Open Timeline').count()).toBe(0)
     await page.getByLabel('Open Jobs').click()
@@ -5609,10 +5609,13 @@ describe('chat composer browser flow', () => {
 
     await page.goBack()
     await expect.poll(async () =>
-      await page!.evaluate(() => window.location.pathname)).toBe('/library')
-    await page.getByLabel('Search the library')
+      await page!.evaluate(() => window.location.pathname)).toBe('/settings')
+    await page.getByRole('heading', { name: 'Settings', exact: true })
       .waitFor({ state: 'visible', timeout: 10_000 })
 
+    await page.goto(`${appUrl}/library`, { waitUntil: 'commit' })
+    await page.getByLabel('Add cell').waitFor({ state: 'visible', timeout: 30_000 })
+    expect(await page.locator('.library-drop-zone').count()).toBe(0)
     await page.goto(`${appUrl}/timeline`, { waitUntil: 'commit' })
     await page.getByLabel('Add cell').waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await page!.title()).toBe('VIDEOBOOK')

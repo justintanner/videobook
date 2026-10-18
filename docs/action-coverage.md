@@ -10,9 +10,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | --- | --- | --- |
 | slash | [src/components/videobook/RichComposerEditor.tsx](../src/components/videobook/RichComposerEditor.tsx) | Type / in chat; choose a command or alias |
 | launcher | [src/components/videobook/ComposerActionsPanel.tsx](../src/components/videobook/ComposerActionsPanel.tsx) | Search Actions in the main chat input; choose a command, then submit to continue |
-| button | [src/components/videobook/CommandComposer.tsx](../src/components/videobook/CommandComposer.tsx) | Actions beside the chat input; Ctrl+Shift+K / Cmd+Shift+K; on-demand Actions in Library |
+| button | [src/components/videobook/CommandComposer.tsx](../src/components/videobook/CommandComposer.tsx) | Actions beside the chat input; Ctrl+Shift+K / Cmd+Shift+K |
 | cell-menu | [src/components/videobook/NotebookCellContextMenu.tsx](../src/components/videobook/NotebookCellContextMenu.tsx) | Notebook cell context menu |
-| library-menu | [src/components/videobook/LibraryAssetCard.tsx](../src/components/videobook/LibraryAssetCard.tsx) | Media overflow → All media actions |
 | selection-menu | [src/components/videobook/NotebookToolbar.tsx](../src/components/videobook/NotebookToolbar.tsx) | Selection actions in the notebook toolbar |
 
 ## Actions
@@ -42,17 +41,17 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.collapse` | `/collapse` |  | book | none | `sidebar_collapse` | slash, launcher | composer | none |
 | `command.connect-x` | `/connect-x` |  | global | none | `x_connect` | slash, launcher | composer | none |
 | `command.copy` | `/copy` |  | book | asset: asset_id | `copy_clipboard` | slash, launcher | composer | none |
-| `command.copy-media` | `/copy-media` | /copy-video | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `command.copy-media` | `/copy-media` | /copy-video | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
 | `command.crop` | `/crop` |  | book | asset: asset_id | `open_crop` | slash, launcher | dialog | none |
 | `command.diagnostics` | `/diagnostics` |  | book | none | `open_diagnostics` | slash, launcher | dialog | none |
 | `command.duck` | `/duck` |  | sequence | none | `/duck` | slash, launcher | composer | none |
 | `command.edit-cold-open` | `/edit-cold-open` |  | book | asset: asset_ref | `open_cold_open` | slash, launcher | dialog | none |
 | `command.entities` | `/entities` |  | book | none | `open_entities` | slash, launcher | dialog | none |
 | `command.expand` | `/expand` |  | book | none | `sidebar_expand` | slash, launcher | composer | none |
-| `command.export` | `/export` |  | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `command.export` | `/export` |  | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
 | `command.export-sequence` | `/export-sequence` |  | sequence | none | `/export-sequence` | slash, launcher | composer | none |
-| `command.extract-first-frame` | `/extract-first-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `command.extract-last-frame` | `/extract-last-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `command.extract-first-frame` | `/extract-first-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu | dialog | none |
+| `command.extract-last-frame` | `/extract-last-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu | dialog | none |
 | `command.files` | `/files` |  | book | asset: asset_id | `viewer_focus_file` | slash, launcher | dialog | none |
 | `command.fit` | `/fit` |  | sequence | clip: clip_id | `/fit` | slash, launcher | composer | none |
 | `command.gap` | `/gap` |  | sequence | track: track_id | `/gap` | slash, launcher | composer | none |
@@ -98,7 +97,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.split-clip` | `/split-clip` |  | sequence | clip: clip_id | `/split-clip` | slash, launcher | composer | none |
 | `command.storage` | `/storage` |  | book | none | `open_diagnostics` | slash, launcher | dialog | none |
 | `command.subs` | `/subs` |  | book | asset: asset_id | `settings_subs` | slash, launcher | dialog | none |
-| `command.tldr` | `/tldr` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `command.tldr` | `/tldr` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu | dialog | generation |
 | `command.track-add` | `/track-add` |  | sequence | none | `/track-add` | slash, launcher | composer | none |
 | `command.track-remove` | `/track-remove` |  | sequence | track: track_id | `/track-remove` | slash, launcher | composer | none |
 | `command.upload` | `/upload` |  | book | none | `open_upload` | slash, launcher | dialog | none |
@@ -107,35 +106,35 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.volume` | `/volume` |  | sequence | clip: clip_id | `/volume` | slash, launcher | composer | none |
 | `command.watermark` | `/watermark` |  | book | asset: asset_ref | `open_watermark` | slash, launcher | dialog | none |
 | `tool.add_sequence_track` | `/add-sequence-track` |  | book | none | `add_sequence_track` | slash, launcher | dialog | none |
-| `tool.add_timeline_audio` | `/add-timeline-audio` |  | book | asset: asset_id | `add_timeline_audio` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.alive_captions` | `/alive-captions` |  | book | asset: asset_id | `alive_captions` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.analyze_editing_moments` | `/analyze-editing-moments` |  | book | asset: asset_id | `analyze_editing_moments` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.analyze_image_subjects` | `/analyze-image-subjects` |  | book | asset: artifact_id | `analyze_image_subjects` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.analyze_jokes` | `/analyze-jokes` |  | book | asset: asset_id | `analyze_jokes` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.analyze_music` | `/analyze-music` |  | book | asset: asset_id | `analyze_music` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.analyze_video` | `/analyze-video` |  | book | asset: asset_id | `analyze_video` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.animate_keywords` | `/keywords` |  | book | asset: asset_id | `animate_keywords` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.apply_cuts` | `/apply-cuts` |  | book | asset: asset_id | `apply_cuts` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.apply_sfx` | `/apply-sfx` |  | book | asset: asset_id | `apply_sfx` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.apply_watermark` | `/apply-watermark` |  | book | asset: asset_id | `apply_watermark` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.archive_clip` | `/archive` |  | book | asset: asset_id | `archive_clip` | slash, launcher, cell-menu, library-menu | dialog | external |
-| `tool.asset_history` | `/asset-history` |  | book | asset: asset_id | `asset_history` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.asset_manifest` | `/asset-manifest` |  | book | asset: asset_id | `asset_manifest` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.assign_slot` | `/assign` |  | book | asset: asset_id | `assign_slot` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.add_timeline_audio` | `/add-timeline-audio` |  | book | asset: asset_id | `add_timeline_audio` | slash, launcher, cell-menu | dialog | none |
+| `tool.alive_captions` | `/alive-captions` |  | book | asset: asset_id | `alive_captions` | slash, launcher, cell-menu | dialog | none |
+| `tool.analyze_editing_moments` | `/analyze-editing-moments` |  | book | asset: asset_id | `analyze_editing_moments` | slash, launcher, cell-menu | dialog | none |
+| `tool.analyze_image_subjects` | `/analyze-image-subjects` |  | book | asset: artifact_id | `analyze_image_subjects` | slash, launcher, cell-menu | dialog | generation |
+| `tool.analyze_jokes` | `/analyze-jokes` |  | book | asset: asset_id | `analyze_jokes` | slash, launcher, cell-menu | dialog | generation |
+| `tool.analyze_music` | `/analyze-music` |  | book | asset: asset_id | `analyze_music` | slash, launcher, cell-menu | dialog | none |
+| `tool.analyze_video` | `/analyze-video` |  | book | asset: asset_id | `analyze_video` | slash, launcher, cell-menu | dialog | generation |
+| `tool.animate_keywords` | `/keywords` |  | book | asset: asset_id | `animate_keywords` | slash, launcher, cell-menu | dialog | none |
+| `tool.apply_cuts` | `/apply-cuts` |  | book | asset: asset_id | `apply_cuts` | slash, launcher, cell-menu | dialog | none |
+| `tool.apply_sfx` | `/apply-sfx` |  | book | asset: asset_id | `apply_sfx` | slash, launcher, cell-menu | dialog | generation |
+| `tool.apply_watermark` | `/apply-watermark` |  | book | asset: asset_id | `apply_watermark` | slash, launcher, cell-menu | dialog | none |
+| `tool.archive_clip` | `/archive` |  | book | asset: asset_id | `archive_clip` | slash, launcher, cell-menu | dialog | external |
+| `tool.asset_history` | `/asset-history` |  | book | asset: asset_id | `asset_history` | slash, launcher, cell-menu | dialog | none |
+| `tool.asset_manifest` | `/asset-manifest` |  | book | asset: asset_id | `asset_manifest` | slash, launcher, cell-menu | dialog | none |
+| `tool.assign_slot` | `/assign` |  | book | asset: asset_id | `assign_slot` | slash, launcher, cell-menu | dialog | none |
 | `tool.attach_library_asset` | `/attach-library-asset` |  | notebook | cell: cell_id | `attach_library_asset` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
 | `tool.cancel_job` | `/cancel-job` |  | book | none | `cancel_job` | slash, launcher | dialog | none |
 | `tool.chain` | `/chain` |  | book | notebook: notebook_id | `chain` | slash, launcher | dialog | none |
-| `tool.change_video_speed` | `/speed` |  | book | asset: asset_id | `change_video_speed` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.change_video_speed` | `/speed` |  | book | asset: asset_id | `change_video_speed` | slash, launcher, cell-menu | dialog | none |
 | `tool.chat` | `/chat` |  | book | notebook: notebook_id | `chat` | slash, launcher | dialog | none |
 | `tool.check_kimi_coding_api` | `/check-kimi-coding-api` |  | global | none | `check_kimi_coding_api` | slash, launcher | dialog | none |
 | `tool.clean_failed_assets` | `/clear-failed` |  | book | none | `clean_failed_assets` | slash, launcher | dialog | destructive |
-| `tool.clean_video_audio` | `/clean-audio` |  | book | asset: asset_id | `clean_video_audio` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `tool.clean_video_audio` | `/clean-audio` |  | book | asset: asset_id | `clean_video_audio` | slash, launcher, cell-menu | dialog | generation |
 | `tool.commit_edit_intent` | `/commit-edit-intent` |  | book | none | `commit_edit_intent` | slash, launcher | dialog | none |
 | `tool.commit_music_video` | `/commit-music-video` |  | book | none | `commit_music_video` | slash, launcher | dialog | none |
-| `tool.concat_images` | `/concat` |  | book | asset selection: image_refs | `concat_images` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.concat_images` | `/concat` |  | book | asset selection: image_refs | `concat_images` | slash, launcher, cell-menu | dialog | none |
 | `tool.configure_asset_tagging` | `/configure-asset-tagging` |  | book | none | `configure_asset_tagging` | slash, launcher | dialog | none |
 | `tool.connect_notebook_cells` | `/connect-notebook-cells` |  | notebook | cell: source_cell_id | `connect_notebook_cells` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.connect_service` | `/connect-service` |  | global | none | `connect_service` | slash, launcher | dialog | none |
@@ -147,62 +146,62 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.create_notebook` | `/create-notebook` |  | book | none | `create_notebook` | slash, launcher | dialog | none |
 | `tool.create_notebook_cell` | `/create-notebook-cell` |  | notebook | notebook: notebook_id | `create_notebook_cell` | slash, launcher | dialog | none |
 | `tool.create_post` | `/create-post` |  | notebook | cell: source_cell_id | `create_post` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.create_qart` | `/qart` |  | book | asset: image_ref | `create_qart` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.create_qr_outro` | `/outroqr` |  | book | asset selection: qr_image_refs | `create_qr_outro` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.create_qart` | `/qart` |  | book | asset: image_ref | `create_qart` | slash, launcher, cell-menu | dialog | none |
+| `tool.create_qr_outro` | `/outroqr` |  | book | asset selection: qr_image_refs | `create_qr_outro` | slash, launcher, cell-menu | dialog | none |
 | `tool.create_qrbtf` | `/qrbtf` |  | book | none | `create_qrbtf` | slash, launcher | dialog | none |
 | `tool.create_watermark_card` | `/create-watermark-card` |  | book | none | `create_watermark_card` | slash, launcher | dialog | none |
-| `tool.crop_asset` | `/crop-asset` |  | book | asset: asset_id | `crop_asset` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.delete_asset` | `/delete` |  | book | asset: asset_id | `delete_asset` | slash, launcher, cell-menu, library-menu | dialog | destructive |
+| `tool.crop_asset` | `/crop-asset` |  | book | asset: asset_id | `crop_asset` | slash, launcher, cell-menu | dialog | none |
+| `tool.delete_asset` | `/delete` |  | book | asset: asset_id | `delete_asset` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.delete_book` | `/delete-book` |  | book | none | `delete_book` | slash, launcher | dialog | destructive |
 | `tool.delete_entity` | `/delete-entity` |  | book | none | `delete_entity` | slash, launcher | dialog | destructive |
 | `tool.delete_notebook` | `/delete-notebook` |  | notebook | notebook: notebook_id | `delete_notebook` | slash, launcher | dialog | destructive |
 | `tool.delete_notebook_cell` | `/delete-notebook-cell` |  | notebook | cell: cell_id | `delete_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | destructive |
-| `tool.describe_image` | `/describe` |  | book | asset: asset_id | `describe_image` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `tool.describe_image` | `/describe` |  | book | asset: asset_id | `describe_image` | slash, launcher, cell-menu | dialog | generation |
 | `tool.detect_scenes` | `/detect-scenes` |  | book | none | `detect_scenes` | slash, launcher | dialog | none |
 | `tool.disconnect_notebook_cells` | `/disconnect-notebook-cells` |  | notebook | notebook: notebook_id | `disconnect_notebook_cells` | slash, launcher | dialog | none |
-| `tool.doctor` | `/doctor` |  | book | asset: asset_id | `doctor` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.doctor` | `/doctor` |  | book | asset: asset_id | `doctor` | slash, launcher, cell-menu | dialog | none |
 | `tool.download_video` | `/download` |  | book | none | `download_video` | slash, launcher | dialog | none |
-| `tool.duplicate_asset` | `/duplicate` |  | book | asset: asset_id | `duplicate_asset` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.edit_asset_tag` | `/edit-asset-tag` |  | book | asset: asset_id | `edit_asset_tag` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.duplicate_asset` | `/duplicate` |  | book | asset: asset_id | `duplicate_asset` | slash, launcher, cell-menu | dialog | none |
+| `tool.edit_asset_tag` | `/edit-asset-tag` |  | book | asset: asset_id | `edit_asset_tag` | slash, launcher, cell-menu | dialog | none |
 | `tool.edit_image_subjects` | `/edit-image-subjects` |  | notebook | cell: source_cell_id | `edit_image_subjects` | slash, launcher, cell-menu, selection-menu | dialog | generation |
 | `tool.enqueue_notebook_run` | `/enqueue-notebook-run` |  | notebook | notebook: notebook_id | `enqueue_notebook_run` | slash, launcher | dialog | generation |
 | `tool.enqueue_sequence_export` | `/enqueue-sequence-export` |  | book | none | `enqueue_sequence_export` | slash, launcher | dialog | destructive |
 | `tool.ensure_notebook_workflow_scaffold` | `/ensure-notebook-workflow-scaffold` |  | notebook | notebook: notebook_id | `ensure_notebook_workflow_scaffold` | slash, launcher | dialog | none |
 | `tool.estimate_cost` | `/estimate-cost` |  | global | none | `estimate_cost` | slash, launcher | dialog | none |
-| `tool.export_asset_file` | `/folder` |  | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.export_asset_to_project` | `/export-to` |  | book | asset: asset_id | `export_asset_to_project` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.export_transcript_srt` | `/export-transcript-srt` |  | book | asset: asset_id | `export_transcript_srt` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.extend_audio_asset` | `/extend-audio` |  | book | asset: asset_id | `extend_audio_asset` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.extract_audio` | `/extract-audio` |  | book | asset: asset_id | `extract_audio` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.extract_frame` | `/extract-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.export_asset_file` | `/folder` |  | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
+| `tool.export_asset_to_project` | `/export-to` |  | book | asset: asset_id | `export_asset_to_project` | slash, launcher, cell-menu | dialog | none |
+| `tool.export_transcript_srt` | `/export-transcript-srt` |  | book | asset: asset_id | `export_transcript_srt` | slash, launcher, cell-menu | dialog | none |
+| `tool.extend_audio_asset` | `/extend-audio` |  | book | asset: asset_id | `extend_audio_asset` | slash, launcher, cell-menu | dialog | generation |
+| `tool.extract_audio` | `/extract-audio` |  | book | asset: asset_id | `extract_audio` | slash, launcher, cell-menu | dialog | none |
+| `tool.extract_frame` | `/extract-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu | dialog | none |
 | `tool.extract_notebook_audio` | `/extract-notebook-audio` |  | notebook | cell: source_cell_id | `extract_notebook_audio` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.extract_notebook_frame` | `/extract-notebook-frame` |  | notebook | cell: source_cell_id | `extract_notebook_frame` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.extract_video_clip` | `/extract-video-clip` |  | book | asset: asset_id | `extract_video_clip` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.extract_video_clip` | `/extract-video-clip` |  | book | asset: asset_id | `extract_video_clip` | slash, launcher, cell-menu | dialog | none |
 | `tool.generate_audio` | `/say` |  | book | none | `generate_audio` | slash, launcher | dialog | generation |
 | `tool.generate_image` | `/generate-image` |  | book | none | `generate_image` | slash, launcher | dialog | generation |
 | `tool.generate_video` | `/generate-video` |  | book | none | `generate_video` | slash, launcher | dialog | generation |
 | `tool.get_book` | `/get-book` |  | book | none | `get_book` | slash, launcher | dialog | none |
 | `tool.get_book_usage` | `/get-book-usage` |  | book | none | `get_book_usage` | slash, launcher | dialog | none |
 | `tool.get_edit_action` | `/get-edit-action` |  | book | none | `get_edit_action` | slash, launcher | dialog | none |
-| `tool.get_editing_moments` | `/get-editing-moments` |  | book | asset: asset_id | `get_editing_moments` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.get_editing_moments` | `/get-editing-moments` |  | book | asset: asset_id | `get_editing_moments` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_entity` | `/get-entity` |  | book | none | `get_entity` | slash, launcher | dialog | none |
 | `tool.get_history_action` | `/get-history-action` |  | book | none | `get_history_action` | slash, launcher | dialog | none |
-| `tool.get_image_subject_map` | `/get-image-subject-map` |  | book | asset: artifact_id | `get_image_subject_map` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.get_music_analysis` | `/get-music-analysis` |  | book | asset: asset_id | `get_music_analysis` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.get_image_subject_map` | `/get-image-subject-map` |  | book | asset: artifact_id | `get_image_subject_map` | slash, launcher, cell-menu | dialog | none |
+| `tool.get_music_analysis` | `/get-music-analysis` |  | book | asset: asset_id | `get_music_analysis` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_notebook` | `/get-notebook` |  | notebook | notebook: notebook_id | `get_notebook` | slash, launcher | dialog | none |
 | `tool.get_notebook_cell_details` | `/get-notebook-cell-details` |  | notebook | cell: cell_id | `get_notebook_cell_details` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.get_post` | `/get-post` |  | book | cell: post_cell_id | `get_post` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.get_primary_sequence` | `/get-primary-sequence` |  | book | none | `get_primary_sequence` | slash, launcher | dialog | none |
-| `tool.get_render_settings` | `/get-render-settings` |  | book | asset: asset_id | `get_render_settings` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.get_search_coverage` | `/get-search-coverage` |  | book | asset: artifact_id | `get_search_coverage` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.get_render_settings` | `/get-render-settings` |  | book | asset: asset_id | `get_render_settings` | slash, launcher, cell-menu | dialog | none |
+| `tool.get_search_coverage` | `/get-search-coverage` |  | book | asset: artifact_id | `get_search_coverage` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_search_index_status` | `/get-search-index-status` |  | book | none | `get_search_index_status` | slash, launcher | dialog | none |
 | `tool.get_sequence_rhythm` | `/get-sequence-rhythm` |  | sequence | none | `get_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.get_timeline` | `/get-timeline` |  | book | none | `get_timeline` | slash, launcher | dialog | none |
 | `tool.get_watermark_config` | `/get-watermark-config` |  | book | none | `get_watermark_config` | slash, launcher | dialog | none |
 | `tool.inject_first_frame` | `/inject-first-frame` |  | book | none | `inject_first_frame` | slash, launcher | dialog | none |
-| `tool.inspect_generation_request` | `/inspect-generation-request` |  | book | asset: asset_id | `inspect_generation_request` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.invert_image` | `/invert` |  | book | asset: asset_id | `invert_image` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.isolate_vocals` | `/vocals` |  | book | asset: asset_id | `isolate_vocals` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `tool.inspect_generation_request` | `/inspect-generation-request` |  | book | asset: asset_id | `inspect_generation_request` | slash, launcher, cell-menu | dialog | none |
+| `tool.invert_image` | `/invert` |  | book | asset: asset_id | `invert_image` | slash, launcher, cell-menu | dialog | none |
+| `tool.isolate_vocals` | `/vocals` |  | book | asset: asset_id | `isolate_vocals` | slash, launcher, cell-menu | dialog | generation |
 | `tool.link_post` | `/link-post` |  | book | cell: post_cell_id | `link_post` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.list_assets` | `/list-assets` |  | book | none | `list_assets` | slash, launcher | dialog | none |
 | `tool.list_book_actions` | `/list-book-actions` |  | book | none | `list_book_actions` | slash, launcher | dialog | none |
@@ -215,7 +214,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.list_image_edit_models` | `/list-image-edit-models` |  | book | none | `list_image_edit_models` | slash, launcher | dialog | none |
 | `tool.list_ingest_status` | `/list-ingest-status` |  | book | none | `list_ingest_status` | slash, launcher | dialog | none |
 | `tool.list_jobs` | `/list-jobs` |  | book | none | `list_jobs` | slash, launcher | dialog | none |
-| `tool.list_media_streams` | `/list-media-streams` |  | book | asset: artifact_id | `list_media_streams` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.list_media_streams` | `/list-media-streams` |  | book | asset: artifact_id | `list_media_streams` | slash, launcher, cell-menu | dialog | none |
 | `tool.list_notebook_actions` | `/list-notebook-actions` |  | book | none | `list_notebook_actions` | slash, launcher | dialog | none |
 | `tool.list_notebook_generation_plans` | `/list-notebook-generation-plans` |  | notebook | notebook: notebook_id | `list_notebook_generation_plans` | slash, launcher | dialog | none |
 | `tool.list_notebook_run_plans` | `/list-notebook-run-plans` |  | notebook | notebook: notebook_id | `list_notebook_run_plans` | slash, launcher | dialog | none |
@@ -223,11 +222,11 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.list_posts` | `/list-posts` |  | book | none | `list_posts` | slash, launcher | dialog | none |
 | `tool.list_prompt_history` | `/list-prompt-history` |  | book | none | `list_prompt_history` | slash, launcher | dialog | none |
 | `tool.list_sequence_replace_targets` | `/list-sequence-replace-targets` |  | book | none | `list_sequence_replace_targets` | slash, launcher | dialog | none |
-| `tool.make_cover_song` | `/make-cover-song` | /replicate-song | book | asset: asset_id | `make_cover_song` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.mark_asset_seen` | `/mark-asset-seen` |  | book | asset: asset_id | `mark_asset_seen` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.make_cover_song` | `/make-cover-song` | /replicate-song | book | asset: asset_id | `make_cover_song` | slash, launcher, cell-menu | dialog | generation |
+| `tool.mark_asset_seen` | `/mark-asset-seen` |  | book | asset: asset_id | `mark_asset_seen` | slash, launcher, cell-menu | dialog | none |
 | `tool.move_notebook_cells` | `/move-notebook-cells` |  | notebook | notebook: notebook_id | `move_notebook_cells` | slash, launcher | dialog | none |
 | `tool.move_timeline_audio` | `/move-timeline-audio` |  | book | none | `move_timeline_audio` | slash, launcher | dialog | none |
-| `tool.pad_video` | `/pad` |  | book | asset: asset_id | `pad_video` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.pad_video` | `/pad` |  | book | asset: asset_id | `pad_video` | slash, launcher, cell-menu | dialog | none |
 | `tool.pin_search_moment` | `/pin-search-moment` |  | notebook | cell: cell_id | `pin_search_moment` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.plan_chat_command` | `/plan-chat-command` |  | book | none | `plan_chat_command` | slash, launcher | dialog | none |
 | `tool.plan_generation_insert` | `/plan-generation-insert` |  | book | none | `plan_generation_insert` | slash, launcher | dialog | none |
@@ -239,46 +238,46 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.plan_sequence_edit` | `/plan-sequence-edit` |  | book | none | `plan_sequence_edit` | slash, launcher | dialog | none |
 | `tool.plan_sequence_export` | `/plan-sequence-export` |  | book | none | `plan_sequence_export` | slash, launcher | dialog | none |
 | `tool.plan_sequence_sound_effects` | `/plan-sequence-sound-effects` |  | book | track: track_id | `plan_sequence_sound_effects` | slash, launcher | dialog | none |
-| `tool.post` | `/tool-post` |  | book | asset: asset_id | `post` | slash, launcher, cell-menu, library-menu | dialog | external |
+| `tool.post` | `/tool-post` |  | book | asset: asset_id | `post` | slash, launcher, cell-menu | dialog | external |
 | `tool.prepare_search_reference` | `/prepare-search-reference` |  | global | none | `prepare_search_reference` | slash, launcher | dialog | none |
 | `tool.preview_edit_intent` | `/preview-edit-intent` |  | book | none | `preview_edit_intent` | slash, launcher | dialog | none |
 | `tool.preview_notebook_generation` | `/preview-notebook-generation` |  | notebook | cell: cell_id | `preview_notebook_generation` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.provider_key_status` | `/provider-key-status` |  | global | none | `provider_key_status` | slash, launcher | dialog | none |
-| `tool.read_asset_metadata` | `/read-asset-metadata` |  | book | asset: asset_id | `read_asset_metadata` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.read_file_at_commit` | `/read-file-at-commit` |  | book | asset: asset_id | `read_file_at_commit` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.read_transcript` | `/transcript` |  | book | asset: asset_id | `read_transcript` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.read_asset_metadata` | `/read-asset-metadata` |  | book | asset: asset_id | `read_asset_metadata` | slash, launcher, cell-menu | dialog | none |
+| `tool.read_file_at_commit` | `/read-file-at-commit` |  | book | asset: asset_id | `read_file_at_commit` | slash, launcher, cell-menu | dialog | none |
+| `tool.read_transcript` | `/transcript` |  | book | asset: asset_id | `read_transcript` | slash, launcher, cell-menu | dialog | none |
 | `tool.reconcile_project_work` | `/reconcile-project-work` |  | book | none | `reconcile_project_work` | slash, launcher | dialog | none |
 | `tool.record_post_metrics` | `/record-post-metrics` |  | book | cell: post_cell_id | `record_post_metrics` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.recover_asset` | `/recover` |  | book | asset: asset_id | `recover_asset` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.recover_asset` | `/recover` |  | book | asset: asset_id | `recover_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.refresh_post_metrics` | `/refresh-post-metrics` |  | book | cell: post_cell_id | `refresh_post_metrics` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.register_search_manifest` | `/register-search-manifest` |  | book | none | `register_search_manifest` | slash, launcher | dialog | none |
 | `tool.relayout_notebook` | `/relayout-notebook` |  | notebook | notebook: notebook_id | `relayout_notebook` | slash, launcher | dialog | none |
 | `tool.release_search_reference` | `/release-search-reference` |  | global | none | `release_search_reference` | slash, launcher | dialog | none |
 | `tool.remove_sequence_track` | `/remove-sequence-track` |  | book | track: track_id | `remove_sequence_track` | slash, launcher | dialog | destructive |
-| `tool.remove_sound` | `/remove-sound` |  | book | asset: asset_id | `remove_sound` | slash, launcher, cell-menu, library-menu | dialog | destructive |
+| `tool.remove_sound` | `/remove-sound` |  | book | asset: asset_id | `remove_sound` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.remove_timeline_audio` | `/remove-timeline-audio` |  | book | none | `remove_timeline_audio` | slash, launcher | dialog | destructive |
 | `tool.remove_timeline_slot` | `/remove-slot` | /unassign | book | none | `remove_timeline_slot` | slash, launcher | dialog | destructive |
 | `tool.rename_all` | `/tool-rename-all` |  | book | none | `rename_all` | slash, launcher | dialog | generation |
-| `tool.rename_asset` | `/rename` |  | book | asset: asset_id | `rename_asset` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.rename_asset` | `/rename` |  | book | asset: asset_id | `rename_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.rename_book` | `/rename-book` |  | book | none | `rename_book` | slash, launcher | dialog | none |
 | `tool.rename_notebook` | `/rename-notebook` |  | notebook | notebook: notebook_id | `rename_notebook` | slash, launcher | dialog | none |
 | `tool.render_timeline` | `/final` |  | book | none | `render_timeline` | slash, launcher | dialog | none |
-| `tool.render_video` | `/render-video` | /render | book | asset: asset_id | `render_video` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.reorder_character_images` | `/reorder-character-images` |  | book | asset: asset_id | `reorder_character_images` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.render_video` | `/render-video` | /render | book | asset: asset_id | `render_video` | slash, launcher, cell-menu | dialog | none |
+| `tool.reorder_character_images` | `/reorder-character-images` |  | book | asset: asset_id | `reorder_character_images` | slash, launcher, cell-menu | dialog | none |
 | `tool.repair_library_search_indexes` | `/repair-library-search-indexes` |  | global | none | `repair_library_search_indexes` | slash, launcher | dialog | none |
 | `tool.replace_sequence_clip_with_search_moment` | `/replace-sequence-clip-with-search-moment` |  | book | clip: clip_id | `replace_sequence_clip_with_search_moment` | slash, launcher | dialog | none |
-| `tool.replace_video_audio` | `/replace-audio` |  | book | asset: asset_id | `replace_video_audio` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.replace_video_audio` | `/replace-audio` |  | book | asset: asset_id | `replace_video_audio` | slash, launcher, cell-menu | dialog | none |
 | `tool.restore_archive_clips` | `/archive-restore` |  | book | none | `restore_archive_clips` | slash, launcher | dialog | destructive |
-| `tool.restore_asset_version` | `/restore-asset-version` |  | book | asset: asset_id | `restore_asset_version` | slash, launcher, cell-menu, library-menu | dialog | destructive |
+| `tool.restore_asset_version` | `/restore-asset-version` |  | book | asset: asset_id | `restore_asset_version` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.restore_edit_action` | `/restore-edit-action` |  | book | none | `restore_edit_action` | slash, launcher | dialog | destructive |
-| `tool.retag_asset` | `/retag-asset` |  | book | asset: asset_id | `retag_asset` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.retry_generation` | `/retry-generation` |  | book | asset: asset_id | `retry_generation` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.retry_ingest` | `/retry-ingest` |  | book | asset: artifact_id | `retry_ingest` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.retag_asset` | `/retag-asset` |  | book | asset: asset_id | `retag_asset` | slash, launcher, cell-menu | dialog | generation |
+| `tool.retry_generation` | `/retry-generation` |  | book | asset: asset_id | `retry_generation` | slash, launcher, cell-menu | dialog | generation |
+| `tool.retry_ingest` | `/retry-ingest` |  | book | asset: artifact_id | `retry_ingest` | slash, launcher, cell-menu | dialog | none |
 | `tool.retry_job` | `/retry-job` |  | book | none | `retry_job` | slash, launcher | dialog | generation |
-| `tool.reverse_video` | `/reverse` |  | book | asset: asset_id | `reverse_video` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.reverse_video` | `/reverse` |  | book | asset: asset_id | `reverse_video` | slash, launcher, cell-menu | dialog | none |
 | `tool.revise_notebook_generation_plan` | `/revise-notebook-generation-plan` |  | notebook | notebook: notebook_id | `revise_notebook_generation_plan` | slash, launcher | dialog | none |
-| `tool.rewrite_prompt` | `/rewrite` |  | book | asset: asset_ref | `rewrite_prompt` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.rewrite_script` | `/rewrite-script` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `tool.rewrite_prompt` | `/rewrite` |  | book | asset: asset_ref | `rewrite_prompt` | slash, launcher, cell-menu | dialog | generation |
+| `tool.rewrite_script` | `/rewrite-script` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu | dialog | generation |
 | `tool.run_notebook` | `/run-notebook` |  | notebook | cell selection: cell_ids | `run_notebook` | slash, launcher, cell-menu, selection-menu | dialog | generation |
 | `tool.run_notebook_cell` | `/run-notebook-cell` |  | notebook | cell: cell_id | `run_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | generation |
 | `tool.search_archive` | `/search-archive` |  | global | none | `search_archive` | slash, launcher | dialog | none |
@@ -286,38 +285,38 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.search_moments` | `/search-moments` |  | book | none | `search_moments` | slash, launcher | dialog | none |
 | `tool.send_search_moment_to_sequence` | `/send-search-moment-to-sequence` |  | book | none | `send_search_moment_to_sequence` | slash, launcher | dialog | none |
 | `tool.service_status` | `/service-status` |  | global | none | `service_status` | slash, launcher | dialog | none |
-| `tool.set_alive_captions` | `/set-alive-captions` |  | book | asset: asset_id | `set_alive_captions` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.set_alive_captions` | `/set-alive-captions` |  | book | asset: asset_id | `set_alive_captions` | slash, launcher, cell-menu | dialog | none |
 | `tool.set_character_metadata` | `/set-character-metadata` |  | book | none | `set_character_metadata` | slash, launcher | dialog | none |
 | `tool.set_env_secret` | `/set-env-secret` |  | global | none | `set_env_secret` | slash, launcher | dialog | none |
 | `tool.set_notebook_cell_input` | `/set-notebook-cell-input` |  | notebook | cell: source_cell_id | `set_notebook_cell_input` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.set_notebook_media_slot` | `/set-notebook-media-slot` |  | notebook | cell: cell_id | `set_notebook_media_slot` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.set_timeline` | `/set-timeline` |  | book | none | `set_timeline` | slash, launcher | dialog | none |
-| `tool.set_video_overlay` | `/set-video-overlay` |  | book | asset: asset_id | `set_video_overlay` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.set_video_overlay` | `/set-video-overlay` |  | book | asset: asset_id | `set_video_overlay` | slash, launcher, cell-menu | dialog | none |
 | `tool.smooth_scene_concat` | `/scene-concat` |  | book | none | `smooth_scene_concat` | slash, launcher | dialog | none |
 | `tool.splice_video` | `/splice` |  | book | none | `splice_video` | slash, launcher | dialog | none |
-| `tool.split_video` | `/split-video` |  | book | asset: asset_id | `split_video` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.split_video_by_durations` | `/split-chunks` | /even-split | book | asset: asset_id | `split_video_by_durations` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.split_video` | `/split-video` |  | book | asset: asset_id | `split_video` | slash, launcher, cell-menu | dialog | none |
+| `tool.split_video_by_durations` | `/split-chunks` | /even-split | book | asset: asset_id | `split_video_by_durations` | slash, launcher, cell-menu | dialog | none |
 | `tool.storage_status` | `/storage-status` |  | book | none | `storage_status` | slash, launcher | dialog | none |
 | `tool.storage_sync` | `/sync` |  | book | none | `storage_sync` | slash, launcher | dialog | external |
-| `tool.suggest_asset_tags` | `/suggest-asset-tags` |  | book | asset: asset_id | `suggest_asset_tags` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.suggest_cuts` | `/suggest-cuts` |  | book | asset: asset_id | `suggest_cuts` | slash, launcher, cell-menu, library-menu | dialog | generation |
+| `tool.suggest_asset_tags` | `/suggest-asset-tags` |  | book | asset: asset_id | `suggest_asset_tags` | slash, launcher, cell-menu | dialog | none |
+| `tool.suggest_cuts` | `/suggest-cuts` |  | book | asset: asset_id | `suggest_cuts` | slash, launcher, cell-menu | dialog | generation |
 | `tool.suggest_sequence_coverage` | `/suggest-sequence-coverage` |  | book | none | `suggest_sequence_coverage` | slash, launcher | dialog | none |
-| `tool.suggest_sfx` | `/suggest-sfx` |  | book | asset: asset_id | `suggest_sfx` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.sync_video_to_audio` | `/sync-audio` |  | book | asset: asset_id | `sync_video_to_audio` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.timewarp_video` | `/timewarp` |  | book | asset: asset_id | `timewarp_video` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.transcribe` | `/transcribe` |  | book | asset: asset_id | `transcribe` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.translate_subtitles` | `/translate-subs` |  | book | asset: asset_id | `translate_subtitles` | slash, launcher, cell-menu, library-menu | dialog | generation |
-| `tool.trim_audio` | `/trim-audio` |  | book | asset: asset_id | `trim_audio` | slash, launcher, cell-menu, library-menu | dialog | none |
-| `tool.trim_video` | `/trim-video` | /trim | book | asset: asset_id | `trim_video` | slash, launcher, cell-menu, library-menu | dialog | destructive |
+| `tool.suggest_sfx` | `/suggest-sfx` |  | book | asset: asset_id | `suggest_sfx` | slash, launcher, cell-menu | dialog | generation |
+| `tool.sync_video_to_audio` | `/sync-audio` |  | book | asset: asset_id | `sync_video_to_audio` | slash, launcher, cell-menu | dialog | none |
+| `tool.timewarp_video` | `/timewarp` |  | book | asset: asset_id | `timewarp_video` | slash, launcher, cell-menu | dialog | none |
+| `tool.transcribe` | `/transcribe` |  | book | asset: asset_id | `transcribe` | slash, launcher, cell-menu | dialog | generation |
+| `tool.translate_subtitles` | `/translate-subs` |  | book | asset: asset_id | `translate_subtitles` | slash, launcher, cell-menu | dialog | generation |
+| `tool.trim_audio` | `/trim-audio` |  | book | asset: asset_id | `trim_audio` | slash, launcher, cell-menu | dialog | none |
+| `tool.trim_video` | `/trim-video` | /trim | book | asset: asset_id | `trim_video` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.update_entity` | `/update-entity` |  | book | none | `update_entity` | slash, launcher | dialog | none |
 | `tool.update_notebook_cell` | `/update-notebook-cell` |  | notebook | cell: cell_id | `update_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.update_post` | `/update-post` |  | book | cell: post_cell_id | `update_post` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.update_script` | `/update-script` |  | book | asset: asset_id | `update_script` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.update_script` | `/update-script` |  | book | asset: asset_id | `update_script` | slash, launcher, cell-menu | dialog | none |
 | `tool.update_sequence_rhythm` | `/update-sequence-rhythm` |  | sequence | none | `update_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.update_timeline_audio` | `/update-timeline-audio` |  | book | none | `update_timeline_audio` | slash, launcher | dialog | none |
 | `tool.validate_sequence_export` | `/validate-sequence-export` |  | book | none | `validate_sequence_export` | slash, launcher | dialog | none |
 | `tool.verify_x_mentions` | `/verify-x-mentions` |  | book | none | `verify_x_mentions` | slash, launcher | dialog | generation |
-| `tool.wait_for_asset_ready` | `/wait-for-asset-ready` |  | book | asset: asset_id | `wait_for_asset_ready` | slash, launcher, cell-menu, library-menu | dialog | none |
+| `tool.wait_for_asset_ready` | `/wait-for-asset-ready` |  | book | asset: asset_id | `wait_for_asset_ready` | slash, launcher, cell-menu | dialog | none |
 
 ## Transport and workflow ownership
 

@@ -35,7 +35,7 @@ collisions receive numeric suffixes while existing slugs keep their names.
 Book IDs, notebooks, and media stay attached to the same project.
 
 The frontend is a green notebook-first workspace with book and notebook
-pickers, a typed cell canvas, a music video editor, an asset library, jobs, history,
+pickers, a typed cell canvas, a music video editor, a library picker above chat, jobs, history,
 storage health, and provider settings.
 
 Assets carry editable tags across three automatic facets — people, places and

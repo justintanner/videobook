@@ -6,40 +6,26 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { chromium } from "playwright";
-import type { Browser, Page, Route } from "playwright";
+import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Engine, IndexManifest, Result } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import {
   availablePort,
   record,
-  requestBody,
   resultValue,
   startProcess,
   stopProcess,
-  toolCalls,
   waitForHttp,
   type StartedProcess,
 } from "./e2e-harness.js";
 
-/**
- * PRD section 13: search excerpts and explanations are user content. These
- * fixtures are real indexed data (book name, artifact label, indexed text) that
- * reach the browser through the actual MCP server; the explanation and error
- * variants are injected at the HTTP boundary because the engine writes those
- * strings itself. Every surface must render the literal text and execute none
- * of it.
- */
 const BOOK = '<img src=x onerror="window.__xssBook=1"><i>hostile book</i>';
 const BOOK_SLUG = "img-src-x-onerror-window-xssbook-1-i-hostile-book-i";
 const LABEL =
   '<img src=x onerror="window.__xssLabel=1"><b>hostile label</b> hostile-label-marker';
 const EXCERPT =
   '<script>window.__xssExcerpt=1</script><img src=x onerror="window.__xssExcerpt=2"> hostile-excerpt-marker <a href="javascript:window.__xssExcerpt=3">link</a>';
-const EXPLANATION =
-  '"><svg onload="window.__xssExplanation=1"><img src=x onerror="window.__xssExplanation=2"> hostile explanation';
-const ERROR_TEXT =
-  '<img src=x onerror="window.__xssError=1"><script>window.__xssError=2</script> hostile error text';
 const MCP_ROUNDTRIP_MS = 15_000;
 
 const manifest: IndexManifest = {
@@ -112,56 +98,6 @@ async function seedHostileBook(engine: Engine): Promise<string> {
   return artifact.artifactId;
 }
 
-type Envelope = Record<string, unknown>;
-
-/** Rewrites every tools/call result in a real MCP HTTP response (JSON or SSE body). */
-async function rewriteToolResults(
-  route: Route,
-  rewrite: (result: Envelope) => Envelope,
-): Promise<void> {
-  const response = await route.fetch();
-  const contentType = response.headers()["content-type"] ?? "";
-  const text = await response.text();
-  const rewriteEnvelope = (entry: unknown): unknown => {
-    const envelope = record(entry);
-    const result = record(envelope?.result);
-    return envelope && result
-      ? { ...envelope, result: rewrite(result) }
-      : entry;
-  };
-  let body: string;
-  if (contentType.includes("application/json")) {
-    const parsed = JSON.parse(text) as unknown;
-    body = JSON.stringify(
-      Array.isArray(parsed)
-        ? parsed.map(rewriteEnvelope)
-        : rewriteEnvelope(parsed),
-    );
-  } else if (contentType.includes("text/event-stream")) {
-    body = text
-      .split("\n")
-      .map((line) =>
-        line.startsWith("data:")
-          ? `data: ${JSON.stringify(rewriteEnvelope(JSON.parse(line.slice(5))))}`
-          : line,
-      )
-      .join("\n");
-  } else {
-    throw new Error(`Unexpected MCP response content type: ${contentType}`);
-  }
-  await route.fulfill({
-    status: response.status(),
-    headers: response.headers(),
-    body,
-  });
-}
-
-function toolResultText(result: Envelope): string {
-  const content = Array.isArray(result.content) ? result.content : [];
-  const item = content.map(record).find((entry) => entry?.type === "text");
-  return typeof item?.text === "string" ? item.text : "";
-}
-
 describe("hostile search content across browser surfaces", () => {
   let rootDir = "";
   let mcpProcess: StartedProcess | undefined;
@@ -171,7 +107,6 @@ describe("hostile search content across browser surfaces", () => {
   let appUrl = "";
   let bookId = "";
   let artifactId = "";
-  let interception: "none" | "explanation" | "error" = "none";
   const pageErrors: string[] = [];
 
   beforeAll(async () => {
@@ -258,39 +193,6 @@ describe("hostile search content across browser surfaces", () => {
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on("pageerror", (error) => pageErrors.push(error.message));
-    await page.route("**/mcp", async (route) => {
-      const calls = toolCalls(await requestBody(route));
-      const searching = calls.some(
-        (call) =>
-          call.name === "search_moments",
-      );
-      if (!searching || interception === "none") {
-        await route.continue();
-        return;
-      }
-      await rewriteToolResults(route, (result) => {
-        if (interception === "error") {
-          return {
-            ...result,
-            content: [{ type: "text", text: ERROR_TEXT }],
-            isError: true,
-          };
-        }
-        const page = JSON.parse(toolResultText(result)) as {
-          hits: Array<Record<string, unknown>>;
-        };
-        const hits = page.hits.map((hit) => ({
-          ...hit,
-          signals: (Array.isArray(hit.signals) ? hit.signals : []).map(
-            (signal) => ({ ...record(signal), explanation: EXPLANATION }),
-          ),
-        }));
-        return {
-          ...result,
-          content: [{ type: "text", text: JSON.stringify({ ...page, hits }) }],
-        };
-      });
-    });
   }, 120_000);
 
   afterAll(async () => {
@@ -318,7 +220,7 @@ describe("hostile search content across browser surfaces", () => {
   }
 
   async function search(target: Page, query: string): Promise<void> {
-    const input = target.getByLabel("Search the library");
+    const input = target.getByLabel("Search library", { exact: true });
     await input.waitFor({ state: "visible", timeout: 30_000 });
     await expect
       .poll(async () => await input.isEnabled(), { timeout: MCP_ROUNDTRIP_MS })
@@ -327,54 +229,16 @@ describe("hostile search content across browser surfaces", () => {
     await input.press("Enter");
   }
 
-  it("normalizes hostile project names and renders labels and indexed excerpts without executing them", async () => {
+  it("normalizes hostile project names and safely renders search matches in the chat picker", async () => {
     if (!page) throw new Error("Browser page was not initialized");
-    await page.goto(`${appUrl}/library`, { waitUntil: "commit" });
+    await page.goto(appUrl, { waitUntil: "commit" });
+    await page.getByLabel("Open Library", { exact: true }).click();
     await search(page, "hostile-excerpt-marker");
-    const card = page.locator(".moment-card");
+    const card = page.locator(".media-library-asset");
     await card.first().waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     expect(await card.count()).toBe(1);
-    expect(await card.locator("header strong").textContent()).toBe(
-      `${BOOK_SLUG} · ${LABEL}`,
-    );
-    expect(await card.locator(".moment-card-body > p").textContent()).toBe(
-      EXCERPT,
-    );
-    expect(
-      await card.locator(".reason-chips span").first().getAttribute("title"),
-    ).toBe("Query terms matched indexed text");
-    expect(
-      await card.locator(".moment-card-media img").getAttribute("alt"),
-    ).toBe(LABEL);
-    expect(
-      await page.getByRole("status")
-        .filter({ hasText: "Found 1 moments · ready" }).textContent(),
-    ).toBe("Found 1 moments · ready");
-    expect(await executedMarkers(page)).toEqual([]);
-    expect(await activeInjectedElements(page)).toBe(0);
-    expect(pageErrors).toEqual([]);
-  }, 60_000);
-
-  it("renders hostile signal explanations and search error text literally", async () => {
-    if (!page) throw new Error("Browser page was not initialized");
-    interception = "explanation";
-    await search(page, "hostile-label-marker hostile-excerpt-marker");
-    const chip = page.locator(".moment-card .reason-chips span").first();
-    await expect
-      .poll(async () => await chip.getAttribute("title"), {
-        timeout: MCP_ROUNDTRIP_MS,
-      })
-      .toBe(EXPLANATION);
-    expect(await chip.textContent()).toBe("metadata");
-    interception = "error";
-    await search(page, "hostile-excerpt-marker");
-    const notice = page.getByRole("status").filter({ hasText: ERROR_TEXT });
-    await expect
-      .poll(async () => await notice.textContent(), {
-        timeout: MCP_ROUNDTRIP_MS,
-      })
-      .toContain(ERROR_TEXT);
-    interception = "none";
+    expect(await card.locator("strong").textContent()).toBe(LABEL);
+    expect(await card.locator("small").textContent()).toBe(`${BOOK_SLUG} · this book`);
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);
     expect(pageErrors).toEqual([]);

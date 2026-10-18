@@ -6,7 +6,7 @@ import {
   type Screen,
 } from '../../src/videobook/screen-routes'
 
-const screens: Screen[] = ['notebook', 'library', 'jobs', 'settings']
+const screens: Screen[] = ['notebook', 'jobs', 'settings']
 
 describe('screenFromPath', () => {
   it('maps the root path to the notebook screen', () => {
@@ -14,17 +14,18 @@ describe('screenFromPath', () => {
   })
 
   it('maps each routed path to its screen', () => {
-    expect(screenFromPath('/library')).toBe('library')
     expect(screenFromPath('/jobs')).toBe('jobs')
     expect(screenFromPath('/settings')).toBe('settings')
   })
 
   it('tolerates trailing slashes', () => {
-    expect(screenFromPath('/library/')).toBe('library')
+    expect(screenFromPath('/jobs/')).toBe('jobs')
     expect(screenFromPath('/settings//')).toBe('settings')
   })
 
   it('falls back to the notebook screen for unknown paths', () => {
+    expect(screenFromPath('/library')).toBe('notebook')
+    expect(screenFromPath('/library/')).toBe('notebook')
     expect(screenFromPath('/timeline')).toBe('notebook')
     expect(screenFromPath('/timeline/')).toBe('notebook')
     expect(screenFromPath('/unknown')).toBe('notebook')
@@ -42,7 +43,6 @@ describe('pathForScreen', () => {
 
   it('maps the notebook screen to the root path', () => {
     expect(pathForScreen('notebook')).toBe('/')
-    expect(pathForScreen('library')).toBe('/library')
   })
 })
 
@@ -52,7 +52,6 @@ describe('screenTitle', () => {
   })
 
   it('prefixes routed screens with their name', () => {
-    expect(screenTitle('library')).toBe('Library · VIDEOBOOK')
     expect(screenTitle('jobs')).toBe('Jobs · VIDEOBOOK')
     expect(screenTitle('settings')).toBe('Settings · VIDEOBOOK')
   })

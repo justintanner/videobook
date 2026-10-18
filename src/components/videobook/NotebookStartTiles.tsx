@@ -18,7 +18,7 @@ type NotebookStartTilesProps = {
   onUpload: (slot: NotebookGridSlot, file: File) => void
   onPick: (kind: NotebookStartMediaKind, slot: NotebookGridSlot) => void
   onDownload: (url: string, slot: NotebookGridSlot) => Promise<void>
-  onBrowseLibrary: () => void
+  onBrowseLibrary: (slot: NotebookGridSlot) => void
 }
 
 type StartMediaCopy = {
@@ -193,7 +193,7 @@ function StartDownloadTile({ busy, onDownload }: StartDownloadTileProps) {
 
 type StartLibraryTileProps = {
   busy: boolean
-  onBrowseLibrary: () => void
+  onBrowseLibrary: (slot: NotebookGridSlot) => void
 }
 
 function StartLibraryTile({ busy, onBrowseLibrary }: StartLibraryTileProps) {
@@ -206,7 +206,7 @@ function StartLibraryTile({ busy, onBrowseLibrary }: StartLibraryTileProps) {
           className="notebook-start-tile-secondary"
           aria-label="Browse library"
           disabled={busy}
-          onClick={onBrowseLibrary}
+          onClick={() => onBrowseLibrary(startSlots.library)}
         >
           Browse
         </button>

@@ -58,8 +58,6 @@ export default defineConfig({
       'src/videobook/notebook-review-focus.test.ts',
       'src/videobook/notebook-lane-policy.test.ts',
       'src/videobook/last-work-slot.test.ts',
-      'src/videobook/library-scope.test.ts',
-      'src/videobook/library-presentation.test.ts',
       'src/videobook/forget-asset.test.ts',
       'src/videobook/fullscreen-target.test.ts',
       'src/videobook/notebook-routing.test.ts',

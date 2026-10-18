@@ -261,7 +261,7 @@ describe('notebook chrome tokens', () => {
     const focusRule = [...css.matchAll(
       /([^{}]+?)\s*\{([^{}]*outline:\s*none[^{}]*)\}/g,
     )].find((match) => match[1]?.includes('.notebook-horizontal-scroll:focus'))
-    expect(focusRule?.[1]).toContain('.moment-grid:focus')
+    expect(focusRule?.[1]).toContain('.media-library-results:focus')
     expect(focusRule?.[1]).toContain('.analysis-cell-output-json-scroll:focus')
     expect(focusRule?.[1]).toContain('.inspector-analysis-json-scroll:focus')
     expect(declaration(focusRule?.[2] ?? '', 'outline')).toBe('none')
