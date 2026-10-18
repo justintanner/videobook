@@ -1,4 +1,4 @@
-import { Ellipsis, Image, LayoutGrid, Trash2, Video, X } from 'lucide-react'
+import { Ellipsis, LayoutGrid, Plus, Trash2, X } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 
@@ -41,7 +41,7 @@ export function NotebookToolbar({
           disabled={busy}
           onClick={() => void onAdd('image')}
         >
-          <Image size={15} />
+          <Plus size={15} />
           <span>Image</span>
         </button>
         <button
@@ -52,7 +52,7 @@ export function NotebookToolbar({
           disabled={busy}
           onClick={() => void onAdd('video')}
         >
-          <Video size={15} />
+          <Plus size={15} />
           <span>Video</span>
         </button>
         <button

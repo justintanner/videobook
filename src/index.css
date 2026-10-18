@@ -1672,107 +1672,121 @@ textarea:focus-visible {
   background: #030907;
 }
 
-.canvas-welcome {
+/* The start dock sits in the band the grid already dissolves into above the
+   composer, so an empty notebook shows its whole grid with nothing over it. */
+.canvas-start-dock {
   position: absolute;
-  top: 48%;
-  left: 50%;
+  right: calc(var(--notebook-chrome-inset) + var(--notebook-scrollbar-size));
+  bottom: max(var(--notebook-composer-clearance), calc(var(--notebook-composer-height, 0px) + var(--app-gutter) + var(--app-gap) + 16px));
+  left: var(--notebook-chrome-inset);
   z-index: 8;
-  display: grid;
-  width: min(430px, calc(100% - var(--app-gutter) * 2));
-  min-width: 300px;
-  justify-items: center;
-  padding: 28px 34px 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  padding: 10px 14px;
   border: 1px solid rgba(114, 231, 170, 0.28);
-  color: var(--muted);
-  background:
-    linear-gradient(135deg, rgba(24, 80, 49, 0.18), transparent 55%),
-    rgba(3, 15, 9, 0.92);
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.38),
-    inset 0 0 48px rgba(73, 180, 115, 0.04);
-  text-align: center;
-  transform: translate(-50%, -50%);
+  color: var(--ink);
+  background: rgba(3, 15, 9, 0.94);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
 }
 
-.canvas-welcome::before,
-.canvas-welcome::after {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  content: '';
-  pointer-events: none;
-}
-
-.canvas-welcome::before {
-  top: -1px;
-  left: -1px;
-  border-top: 2px solid var(--green);
-  border-left: 2px solid var(--green);
-}
-
-.canvas-welcome::after {
-  right: -1px;
-  bottom: -1px;
-  border-right: 2px solid var(--green);
-  border-bottom: 2px solid var(--green);
-}
-
-.canvas-welcome-mark {
+.canvas-start-dock-copy {
   display: grid;
-  width: 46px;
-  height: 46px;
-  margin-bottom: 17px;
-  place-items: center;
-  border: 1px solid var(--line-bright);
-  color: var(--green);
-  background: rgba(42, 123, 75, 0.18);
-  transform: rotate(45deg);
+  min-width: 0;
+  gap: 3px;
 }
 
-.canvas-welcome-mark svg {
-  transform: rotate(-45deg);
-}
-
-.canvas-welcome > span {
+.canvas-start-dock-copy > span {
   color: var(--green);
   font-size: 9px;
   letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
-.canvas-welcome > strong {
-  margin-top: 9px;
+.canvas-start-dock-copy > strong {
   color: #bce6cf;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.canvas-welcome > p {
-  max-width: 360px;
-  margin: 10px 0 20px;
-  font-family: system-ui, sans-serif;
   font-size: 12px;
-  line-height: 1.55;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.canvas-welcome > button {
-  display: inline-flex;
+.canvas-start-dock-actions {
+  display: flex;
+  flex: 1 1 560px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.canvas-start-dock-action {
+  display: flex;
+  height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 13px;
+  gap: 5px;
+  padding: 0 9px;
   border: 1px solid var(--control-border);
   color: var(--control-fg);
-  background: rgba(40, 121, 73, 0.32);
+  background: var(--control-bg);
   cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
 }
 
-.canvas-welcome > button:hover,
-.canvas-welcome > button:focus-visible {
+.canvas-start-dock-primary {
+  border-color: var(--line-bright);
+  color: var(--green);
+  background: rgba(40, 121, 73, 0.25);
+}
+
+.canvas-start-dock-action:hover:not(:disabled),
+.canvas-start-dock-action:focus-visible:not(:disabled) {
   border-color: var(--control-border-hover);
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
+}
+
+.canvas-start-dock-action:disabled {
+  color: rgba(139, 177, 155, 0.35);
+  cursor: default;
+  background: rgba(4, 19, 12, 0.78);
+}
+
+.canvas-start-dock-form {
+  display: flex;
+  flex: 1 1 320px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.canvas-start-dock-form input {
+  flex: 1 1 200px;
+  height: 32px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--control-border);
+  color: var(--control-fg);
+  background: var(--control-bg);
+  font: inherit;
+  font-size: 11px;
+}
+
+.canvas-start-dock-form input::placeholder {
+  color: var(--muted);
+}
+
+.canvas-start-dock-form input:focus-visible {
+  border-color: var(--control-border-hover);
+  outline: none;
+}
+
+.canvas-start-dock-form input:disabled {
+  color: rgba(139, 177, 155, 0.35);
 }
 
 .inspector-reopen {
@@ -11328,10 +11342,6 @@ textarea:focus-visible {
     right: var(--app-gutter);
     left: var(--app-gutter);
   }
-
-  .canvas-welcome {
-    width: min(410px, calc(100% - var(--app-gutter) * 2));
-  }
 }
 
 @media (max-width: 720px) {
@@ -11381,9 +11391,10 @@ textarea:focus-visible {
     grid-column: 1;
   }
 
-  .canvas-welcome {
-    width: min(380px, calc(100% - 40px));
-    min-width: 0;
+  .canvas-start-dock {
+    right: var(--app-gutter);
+    left: var(--app-gutter);
+    padding: 10px;
   }
 
   .record-grid,
@@ -11494,13 +11505,12 @@ textarea:focus-visible {
     grid-row: 2;
   }
 
-  .canvas-welcome {
-    top: 54%;
-    padding: 24px 22px 26px;
+  .canvas-start-dock-copy > strong {
+    display: none;
   }
 
-  .canvas-welcome > p {
-    margin-bottom: 16px;
+  .canvas-start-dock-form {
+    flex-basis: 100%;
   }
 
   .moment-search-filters > div {

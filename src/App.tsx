@@ -84,9 +84,7 @@ import {
   History,
   Library,
   Mic,
-  Plus,
   Settings,
-  Sparkles,
   Square,
   Undo2,
   Upload,
@@ -236,6 +234,7 @@ import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewD
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
 import type { WorkspaceAction } from '../server/src/workspace-action-contract'
+import { NotebookStartDock } from '@/components/videobook/NotebookStartDock'
 import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
 import { BookUsageCounter } from '@/components/videobook/BookUsageCounter'
 import { useBookUsage } from '@/videobook/useBookUsage'
@@ -11677,15 +11676,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </div>
                 )}
                 {notebook && nodes.length === 0 && (
-                  <div className="canvas-welcome">
-                    <div className="canvas-welcome-mark"><Sparkles size={22} /></div>
-                    <span>EMPTY NOTEBOOK</span>
-                    <strong>Build your first notebook path.</strong>
-                    <p>Stack Images, Gen, and Videos as lanes, then connect the story as it takes shape.</p>
-                    <button type="button" disabled={busy} onClick={() => void createCell('prompt')}>
-                      <Plus size={15} />Add first prompt
-                    </button>
-                  </div>
+                  <NotebookStartDock
+                    busy={busy || mcp.state !== 'ready'}
+                    onAdd={createCell}
+                    onDownload={async (url) => {
+                      const outcome = await executeComposerCommand(`/download ${url}`)
+                      if (outcome.message) setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+                    }}
+                    onOpenLibrary={() => navigate('library')}
+                  />
                 )}
               </section>
             </>
