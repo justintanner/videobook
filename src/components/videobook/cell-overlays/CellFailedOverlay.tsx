@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { Trash2, Wrench } from 'lucide-react'
+import { RotateCcw, Trash2, Wrench } from 'lucide-react'
 
 function keepPressOnButton(event: ReactPointerEvent<HTMLButtonElement>) {
   event.stopPropagation()
@@ -11,14 +11,18 @@ export function CellFailedOverlay({
   address,
   meta = null,
   onRepair,
+  onRetry,
   onDelete,
+  disabled = false,
 }: {
   error: string
   label: string
   address: string
   meta?: string | null
   onRepair?: () => void
+  onRetry?: () => void
   onDelete?: () => void
+  disabled?: boolean
 }) {
   const act = (action: () => void) =>
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -39,8 +43,22 @@ export function CellFailedOverlay({
         <strong>{label}</strong>
         <p className="cell-state-failed-message">{error}</p>
         {meta && <span className="cell-state-meta" title={meta}>{meta}</span>}
-        {(onRepair || onDelete) && (
+        {(onRepair || onRetry || onDelete) && (
           <div className="cell-state-actions">
+            {onRetry && (
+              <button
+                type="button"
+                className="cell-state-action cell-state-retry nodrag"
+                aria-label={`Retry @${address}`}
+                title="Delete this failed output and generate again with the saved settings"
+                disabled={disabled}
+                onPointerDown={keepPressOnButton}
+                onClick={act(onRetry)}
+              >
+                <RotateCcw size={10} aria-hidden="true" />
+                RETRY
+              </button>
+            )}
             {onRepair && (
               <button
                 type="button"

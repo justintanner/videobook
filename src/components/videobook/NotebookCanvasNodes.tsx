@@ -716,6 +716,10 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           onRepair={generationRun ? () => {
             void cellActions.repairCell(id)
           } : undefined}
+          onRetry={data.inputs?.producerCellId ? () => {
+            void cellActions.retryCell(id)
+          } : undefined}
+          disabled={!cellActions.ready}
           onDelete={() => {
             void cellActions.deleteCell(id)
           }}

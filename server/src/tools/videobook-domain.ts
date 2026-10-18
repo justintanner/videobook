@@ -2085,12 +2085,13 @@ export function videobookDomainDefs(
     },
     {
       name: "run_notebook_cell",
-      description: "Run one selected notebook cell using saved upstream media",
+      description: "Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.",
       scope: "book",
       schema: {
         ...bookSchema,
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid(),
+        retry_failed_cell_id: z.string().uuid().optional().describe("Delete this out-of-credits output when reserving its replacement; requires a generation plan"),
         plan: z.record(z.string(), z.unknown()).optional(),
         actor: z.string().min(1).optional(),
         expected_revision: z.string().min(1).optional(),
@@ -2136,6 +2137,9 @@ export function videobookDomainDefs(
         if (notebookCellIsPaid(cell) && !generationPlan) {
           return failure("Paid notebook cells require a persisted generation plan");
         }
+        if (args.retry_failed_cell_id && !generationPlan) {
+          return failure("Retrying an out-of-credits output requires a persisted generation plan");
+        }
         const runId = uuidv7();
         const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${runId}`;
         try {
@@ -2146,6 +2150,7 @@ export function videobookDomainDefs(
               String(args.cell_id),
               generationPlanRecord.planId,
               runId,
+              typeof args.retry_failed_cell_id === "string" ? args.retry_failed_cell_id : undefined,
             );
           } else {
             await markNotebookCellQueued(

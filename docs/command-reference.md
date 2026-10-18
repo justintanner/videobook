@@ -192,7 +192,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
 - `rewrite_script` — Rewrite a script asset's markdown in place without re-reading the source image: variant full (reproduction prompt and breakdown) or tldr (one or two sentences), with an optional platform preset and custom_prompt instruction. Asynchronous; earlier versions stay in history.
 - `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
-- `run_notebook_cell` — Run one selected notebook cell using saved upstream media
+- `run_notebook_cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.
 - `save_post_to_icloud` — Deliver a Post's frozen media and caption.txt to the shared iCloud Drive Videobook folder (folder is relative to it) so they appear in Files on the phones. A caption saves to the Post first. Repeats are no-ops and never replace different files.
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
@@ -470,7 +470,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/rough-cut` — Review a rough cut built from notebook media; preview or workspace operation
 - `/run` — Save and run the active notebook; UI: `run_notebook`
 - `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
-- `/run-notebook-cell` — Run one selected notebook cell using saved upstream media; MCP: `run_notebook_cell`
+- `/run-notebook-cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
 - `/save-post-to-icloud` — Review a Post's clip and caption, then save them to the shared iCloud Drive Videobook folder so they appear on iPhone; UI: `open_post_icloud`
 - `/say` — Generate speech audio from text with ElevenLabs; MCP: `generate_audio`

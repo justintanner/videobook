@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { NotebookCellType } from 'videobook-engine'
+import { isGenerationCreditError } from '../../../../server/src/generation-credit-error'
 import { isNotebookMediaPresentationCellType } from '@/videobook/notebook-cell-types'
 import {
   notebookCellGenerationPhase,
@@ -18,7 +19,9 @@ export function CellStateOverlay({
   generator = null,
   generation = false,
   onRepair,
+  onRetry,
   onDelete,
+  disabled,
 }: {
   kind: NotebookCellType
   address: string
@@ -29,7 +32,9 @@ export function CellStateOverlay({
   generator?: string | null
   generation?: boolean
   onRepair?: () => void
+  onRetry?: () => void
   onDelete?: () => void
+  disabled?: boolean
 }) {
   const presentation = notebookCellStateFromStatus(kind, status, {
     error: statusError ?? null,
@@ -51,6 +56,7 @@ export function CellStateOverlay({
   }
 
   if (presentation.overlay === 'failed' && presentation.error) {
+    const creditFailure = isGenerationCreditError(presentation.error)
     return (
       <CellFailedOverlay
         error={presentation.error}
@@ -59,8 +65,10 @@ export function CellStateOverlay({
           : 'GENERATION FAILED'}
         address={address}
         meta={generator}
-        onRepair={onRepair}
+        onRepair={creditFailure ? undefined : onRepair}
+        onRetry={creditFailure ? onRetry : undefined}
         onDelete={onDelete}
+        disabled={disabled}
       />
     )
   }

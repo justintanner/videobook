@@ -36,6 +36,8 @@ import type { PostCopyLanguage } from '../server/src/posts/post-copy-format'
 import { coldOpenRangeError } from '../server/src/cold-open-model'
 import { prepareColdOpenReview, renderColdOpenReview, type ColdOpenReview } from '@/videobook/cold-open-review'
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from '../server/src/image-edit-default'
+import { creditRetryProducer } from '../server/src/notebook-credit-retry'
+import { isGenerationCreditError } from '../server/src/generation-credit-error'
 import { presentChat, reviewChat, type ChatExecution } from '@/videobook/chat-turns'
 import {
   addHighlight,
@@ -2546,6 +2548,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     cellId: string,
     providedNotebook?: NotebookSnapshot,
     chat?: ChatExecution,
+    retryFailedCellId?: string,
   ) => {
     if (!bookId || !notebook) return
     let generationWatchStarted = false
@@ -2600,6 +2603,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               notebook_id: plannedNotebookId,
               cell_id: cellId,
               plan,
+              ...(retryFailedCellId ? { retry_failed_cell_id: retryFailedCellId } : {}),
               actor: 'videobook-user',
             }, { chat }),
             onStarting: () => setCellQueued(cellId, true),
@@ -10339,12 +10343,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const outcome = await executeComposerCommand(prompt, { chat })
     if (!outcome.ok) setNotice(outcome.message, 'error')
   }
+  const retryCreditFailedCell = async (cellId: string) => {
+    if (!bookId || !notebook || busy || mcp.state !== 'ready') return
+    const error = presentedNodes.find((node) => node.id === cellId)?.data.statusError
+    if (!isGenerationCreditError(error)) return
+    const producer = creditRetryProducer(notebook, cellId)
+    if (!producer) {
+      setNotice('The generator for this failed output is no longer available', 'error')
+      return
+    }
+    await runCell(producer.id, undefined, undefined, cellId)
+  }
   const cellActionsContextValue: CellActionsContextValue = {
+    ready: !busy && mcp.state === 'ready',
     deleteCell: async (cellId) => {
       const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
       if (cell) await deleteNotebookCells([cell], { confirm: false })
     },
     repairCell,
+    retryCell: retryCreditFailedCell,
   }
   const fullscreenImageEditor = mediaFullscreen?.asset.type === 'image'
     ? mediaFullscreen

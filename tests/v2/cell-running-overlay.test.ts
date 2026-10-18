@@ -2,8 +2,59 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CellStateOverlay } from '../../src/components/videobook/cell-overlays/CellStateOverlay'
+import { isGenerationCreditError } from '../../server/src/generation-credit-error'
 
 describe('CellStateOverlay', () => {
+  it.each([
+    'Kie failed: Insufficient credits',
+    'Out of credits',
+    'No credits left',
+    'Not enough credits to run this request',
+    'Credit balance is too low',
+    'Your credits are exhausted',
+    'User is locked. Reason: Exhausted balance. Top up your balance.',
+    'insufficient_quota',
+    'This exceeds your remaining credits',
+    'You have 10 credits left, while 100 credits are required',
+  ])('offers Retry instead of Repair for %s', (statusError) => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video', address: 'c1', status: 'error', statusError,
+      icon: null, onRepair: () => undefined, onRetry: () => undefined,
+      onDelete: () => undefined,
+    }))
+    expect(html).toContain('aria-label="Retry @c1"')
+    expect(html).toContain('RETRY')
+    expect(html).toContain('DELETE')
+    expect(html).not.toContain('REPAIR')
+  })
+
+  it.each([
+    'Rate limit exceeded. Try again later.',
+    '429 Too Many Requests',
+    'quota exceeded: image_urls + video_list * 2 must be <= 7',
+    'reference_video_urls duration must be between 1 and 15 seconds',
+    'Invalid API key',
+    'Payment method verification failed',
+    'Could not retrieve credit balance',
+    'Provider output failed',
+  ])('keeps unrelated failures out of the credit retry path: %s', (statusError) => {
+    expect(isGenerationCreditError(statusError)).toBe(false)
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video', address: 'c1', status: 'error', statusError,
+      icon: null, onRepair: () => undefined, onRetry: () => undefined,
+    }))
+    expect(html).toContain('REPAIR')
+    expect(html).not.toContain('RETRY')
+  })
+
+  it('disables Retry during a pending action', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video', address: 'c1', status: 'error', statusError: 'Out of credits',
+      icon: null, onRetry: () => undefined, disabled: true,
+    }))
+    expect(html).toContain('disabled=""')
+  })
+
   it.each([
     ['queued', 'QUEUED'],
     ['running', 'GENERATING'],

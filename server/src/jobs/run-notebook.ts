@@ -26,7 +26,9 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { logger } from "../logger.js";
 import { mutateNotebook } from "../notebook-mutations.js";
+import { removeCreditFailedOutput } from "../notebook-credit-retry.js";
 import {
+  allocateGenerateAudioResult,
   allocateGenerateImageResult,
   allocateGenerateVideoResult,
   ensureGenerationMediaOutputs,
@@ -2922,6 +2924,7 @@ export async function claimNotebookGenerationPlan(
   cellId: string,
   planId: string,
   runId: string,
+  retryFailedCellId?: string,
 ): Promise<Record<string, unknown>> {
   let claimedPlan: Record<string, unknown> | null = null;
   const claimedAt = new Date().toISOString();
@@ -2960,22 +2963,27 @@ export async function claimNotebookGenerationPlan(
           `Notebook cell ${notebookGridTag(cell.slot)} is already ${execution.status}`,
         );
       }
-      let working = document;
+      let working = retryFailedCellId
+        ? removeCreditFailedOutput(engine, document, cellId, retryFailedCellId)
+        : document;
       let outputCellId: string | undefined;
-      if (cell.type === "generate_image" || cell.type === "generate_video") {
-        const allocated = cell.type === "generate_image"
-          ? allocateGenerateImageResult(engine, working, cell.id, {
-              runId,
-              planId,
-              acceptedAt: claimedAt,
-            })
-          : allocateGenerateVideoResult(engine, working, cell.id, {
-              runId,
-              planId,
-              acceptedAt: claimedAt,
-            });
+      if (cell.type === "generate_image" || cell.type === "generate_video"
+        || (cell.type === "generate_audio" && retryFailedCellId)) {
+        const allocate = cell.type === "generate_image" ? allocateGenerateImageResult
+          : cell.type === "generate_audio" ? allocateGenerateAudioResult
+            : allocateGenerateVideoResult;
+        const allocated = allocate(engine, working, cell.id, { runId, planId, acceptedAt: claimedAt });
         working = allocated.document;
         outputCellId = allocated.outputCell.id;
+        const retrySlot = document.cells.find((candidate) => candidate.id === retryFailedCellId)?.slot;
+        if (retrySlot) {
+          working = {
+            ...working,
+            cells: working.cells.map((candidate) => candidate.id === outputCellId
+              ? { ...candidate, slot: retrySlot }
+              : candidate),
+          };
+        }
       }
       claimedPlan = {
         ...record.plan,
@@ -2993,7 +3001,7 @@ export async function claimNotebookGenerationPlan(
         updatedAt: claimedAt,
         tool: cell.tool || cell.model || cell.operation,
       };
-      const queued = outputCellId
+      let queued = outputCellId
         ? withExecution(working, outputCellId, state)
         : withExecution(working, cellId, {
             ...state,
@@ -3001,6 +3009,7 @@ export async function claimNotebookGenerationPlan(
               ? { outputArtifactId: cell.outputArtifactId }
               : {}),
           });
+      if (outputCellId && !concurrent) queued = withExecution(queued, cellId, state);
       return {
         ...queued,
         generationPlans: (queued.generationPlans ?? []).map((candidate) =>

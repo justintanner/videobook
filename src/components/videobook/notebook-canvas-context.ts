@@ -43,13 +43,17 @@ export const CellRunContext = createContext<(
 )
 
 export type CellActionsContextValue = {
+  ready: boolean
   deleteCell: (cellId: string) => Promise<void>
   repairCell: (cellId: string) => Promise<void>
+  retryCell: (cellId: string) => Promise<void>
 }
 
 export const CellActionsContext = createContext<CellActionsContextValue>({
+  ready: false,
   deleteCell: async () => undefined,
   repairCell: async () => undefined,
+  retryCell: async () => undefined,
 })
 
 export const PrimaryCellContext = createContext<string | null>(null)

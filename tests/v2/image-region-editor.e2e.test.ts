@@ -7,7 +7,8 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import express from 'express'
 import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, Request } from 'playwright'
+import type { NotebookCell } from 'videobook-engine'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
@@ -15,6 +16,7 @@ import { scopedBookEngine } from '../../server/src/book-context.js'
 import { createHttpHandler } from '../../server/src/server.js'
 import { resolveImageSubjectSource } from '../../server/src/image-subject-map.js'
 import { reconcileImageSubjectJobFailures } from '../../server/src/jobs/image-subjects.js'
+import { failPendingTaskAndLog } from '../../server/src/jobs/task-failure.js'
 import { abortActiveBookJobsForTests, pauseBookQueueForTests, queue, setEngineRoot } from '../../server/src/queue.js'
 import { availablePort, record, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { ObservedToolCall, StartedProcess } from './e2e-harness.js'
@@ -125,6 +127,89 @@ describe('drawn region image editor through real MCP', () => {
     await books?.close()
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
+
+  it('retries only credit failures from the media tile without routing through chat', async () => {
+    await pauseBookQueueForTests(bookId)
+    const book = books.get(bookId)
+    if (!book.ok) throw new Error(book.error.message)
+    const engine = book.value.engine
+    const read = engine.notebooks.read(notebookId)
+    if (!read.ok) throw new Error(read.error.message)
+    const original = read.value
+    const producer = engine.notebooks.createCell({
+      type: 'generate_image', slot: { row: 1, column: 0 }, prompt: 'A carved wooden dragon',
+      provider: 'kie', model: 'kie:nano-banana-2-1', tool: 'generate_image', operation: 'text_to_image',
+    })
+    let document = { ...original, cells: [...original.cells, producer] }
+    const failures: NotebookCell[] = []
+    for (const [column, message] of ['Insufficient credits', 'Invalid image size'].entries()) {
+      const asset = await engine.artifacts.create('image', `Failure ${column}`)
+      if (!asset.ok) throw new Error(asset.error.message)
+      const lease = await engine.jobs.artifactWork.begin(asset.value.artifactId, {
+        kind: 'generate', ownerKind: 'job', durationMs: 60_000,
+      })
+      if (!lease) throw new Error('Could not claim failed artifact')
+      const taskId = `failed-image-${column}`
+      const pending = await engine.jobs.pending.write({
+        taskId, taskType: 'generate_media', artifactId: asset.value.artifactId, meta: {},
+      }, lease.ownerId)
+      if (!pending.ok) throw new Error(pending.error.message)
+      await failPendingTaskAndLog(engine, asset.value.artifactId, taskId, { message })
+      const output = engine.notebooks.createCell({
+        type: 'image', slot: { row: 2, column }, outputArtifactId: asset.value.artifactId,
+        inputs: { mediaRole: 'generate-image-output', producerCellId: producer.id, state: 'error' },
+      })
+      document = {
+        ...document, cells: [...document.cells, output],
+        edges: [...document.edges, engine.notebooks.createEdge({ source: producer.id, target: output.id, targetInput: 'media' })],
+        execution: { ...document.execution, [output.id]: { fingerprint: 'failed', status: 'error', error: message, providerArtifactId: asset.value.artifactId } },
+      }
+      failures.push(output)
+    }
+    const written = await engine.notebooks.write(document)
+    if (!written.ok) throw new Error(written.error.message)
+    const requests: ObservedToolCall[] = []
+    const observe = (request: Request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/mcp')) requests.push(...toolCalls(request.postDataJSON()))
+    }
+    page.on('request', observe)
+    try {
+      await page.reload()
+      const failed = page.locator(`.react-flow__node[data-id="${failures[0]!.id}"]`)
+      const other = page.locator(`.react-flow__node[data-id="${failures[1]!.id}"]`)
+      const retry = failed.getByRole('button', { name: 'Retry @c1', exact: true })
+      await retry.waitFor({ state: 'visible' })
+      expect(await retry.textContent()).toContain('RETRY')
+      expect(await failed.getByRole('button', { name: /Repair/ }).count()).toBe(0)
+      expect(await other.getByRole('button', { name: /Retry/ }).count()).toBe(0)
+      expect(await other.getByRole('button', { name: 'Repair @c2 in chat' }).count()).toBe(1)
+      await expect.poll(() => retry.isEnabled()).toBe(true)
+      await page.screenshot({ path: '/tmp/videobook-credit-retry-before.png' })
+      await retry.click()
+      await expect.poll(() => requests.some((request) => request.name === 'run_notebook_cell'), { timeout: 15_000 }).toBe(true)
+      expect(requests.find((request) => request.name === 'run_notebook_cell')?.arguments).toMatchObject({
+        cell_id: producer.id, retry_failed_cell_id: failures[0]!.id,
+      })
+      await expect.poll(() => failed.count(), { timeout: 15_000 }).toBe(0)
+      const updated = engine.notebooks.read(notebookId)
+      if (!updated.ok) throw new Error(updated.error.message)
+      expect(updated.value.cells.find((cell) => cell.id === failures[1]!.id)).toMatchObject(failures[1]!)
+      expect(updated.value.cells.find((cell) => cell.id === sourceCellId)?.outputArtifactId)
+        .toBe(original.cells.find((cell) => cell.id === sourceCellId)?.outputArtifactId)
+      const replacement = updated.value.cells.find((cell) => cell.slot.row === 2 && cell.slot.column === 0)!
+      expect(replacement.id).not.toBe(failures[0]!.id)
+      expect(updated.value.execution?.[replacement.id]?.status).toBe('queued')
+      expect(requests.some((request) => request.name === 'chat')).toBe(false)
+      expect(engine.jobs.queue.list({ type: 'run_notebook' })).toHaveLength(1)
+      await page.screenshot({ path: '/tmp/videobook-credit-retry-after.png' })
+    } finally {
+      page.off('request', observe)
+      await abortActiveBookJobsForTests()
+      const restored = await engine.notebooks.write(original)
+      expect(restored.ok).toBe(true)
+      await page.reload()
+    }
+  }, 60_000)
 
   it('routes prompt edits, removal and replacement to the drawn selection without subject analysis', async () => {
     await page.locator(`.react-flow__node[data-id="${sourceCellId}"] .cell-node`).click()

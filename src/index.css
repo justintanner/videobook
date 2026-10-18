@@ -2525,17 +2525,25 @@ textarea:focus-visible {
     background 120ms ease;
 }
 
-.cell-state-repair {
+.cell-state-repair,
+.cell-state-retry {
   border-color: color-mix(in srgb, var(--cell-state-color) 85%, black);
   color: #fff;
   background: color-mix(in srgb, var(--cell-state-color) 85%, black);
 }
 
 .cell-state-repair:hover,
-.cell-state-repair:focus-visible {
+.cell-state-repair:focus-visible,
+.cell-state-retry:hover,
+.cell-state-retry:focus-visible {
   border-color: color-mix(in srgb, var(--cell-state-color) 95%, black);
   background: color-mix(in srgb, var(--cell-state-color) 95%, black);
   outline: 0;
+}
+
+.cell-state-retry:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 .cell-state-delete {
