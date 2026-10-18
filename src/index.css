@@ -1672,121 +1672,183 @@ textarea:focus-visible {
   background: #030907;
 }
 
-/* The start dock sits in the band the grid already dissolves into above the
-   composer, so an empty notebook shows its whole grid with nothing over it. */
-.canvas-start-dock {
+.notebook-start-tiles {
   position: absolute;
-  right: calc(var(--notebook-chrome-inset) + var(--notebook-scrollbar-size));
-  bottom: max(var(--notebook-composer-clearance), calc(var(--notebook-composer-height, 0px) + var(--app-gutter) + var(--app-gap) + 16px));
-  left: var(--notebook-chrome-inset);
-  z-index: 8;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.notebook-start-tiles[data-dimmed='true'] {
+  opacity: 0.16;
+}
+
+.notebook-start-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: calc(5px * var(--notebook-detail-scale, 1));
+  box-sizing: border-box;
+  padding: calc(9px * var(--notebook-detail-scale, 1));
+  overflow: hidden;
+  border: calc(1px * var(--notebook-detail-scale, 1)) solid var(--line-bright);
+  border-radius: 3px;
+  color: var(--ink);
+  background: var(--panel);
+  font-family: var(--mono);
+  font-size: calc(10px * var(--notebook-detail-scale, 1));
+  line-height: 1.35;
+}
+
+.notebook-start-tile-download {
+  border-color: rgba(99, 199, 216, 0.42);
+}
+
+.notebook-start-tile-head {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 18px;
-  padding: 10px 14px;
-  border: 1px solid rgba(114, 231, 170, 0.28);
-  color: var(--ink);
-  background: rgba(3, 15, 9, 0.94);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  color: #7fae92;
+  font-size: calc(11px * var(--notebook-detail-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
-.canvas-start-dock-copy {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
+.notebook-start-tile svg {
+  flex: none;
+  width: calc(14px * var(--notebook-detail-scale, 1));
+  height: calc(14px * var(--notebook-detail-scale, 1));
 }
 
-.canvas-start-dock-copy > span {
+.notebook-start-tile-head svg {
   color: var(--green);
-  font-size: 9px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
 }
 
-.canvas-start-dock-copy > strong {
-  color: #bce6cf;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
+.notebook-start-tile-download .notebook-start-tile-head svg {
+  color: var(--cyan);
 }
 
-.canvas-start-dock-actions {
-  display: flex;
-  flex: 1 1 560px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-}
-
-.canvas-start-dock-action {
-  display: flex;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 9px;
-  border: 1px solid var(--control-border);
-  color: var(--control-fg);
-  background: var(--control-bg);
-  cursor: pointer;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+.notebook-start-tile > strong {
+  overflow: hidden;
+  color: #e1ffed;
+  font-size: calc(11px * var(--notebook-detail-scale, 1));
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.canvas-start-dock-primary {
-  border-color: var(--line-bright);
-  color: var(--green);
-  background: rgba(40, 121, 73, 0.25);
+.notebook-start-tile-hint {
+  overflow: hidden;
+  color: #7fae92;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.canvas-start-dock-action:hover:not(:disabled),
-.canvas-start-dock-action:focus-visible:not(:disabled) {
+.notebook-start-tiles[data-compact='true'] .notebook-start-tile-hint-optional {
+  display: none;
+}
+
+.notebook-start-tile-actions,
+.notebook-start-tile-form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--notebook-detail-scale, 1));
+  margin-top: auto;
+}
+
+.notebook-start-tile button,
+.notebook-start-tile input {
+  box-sizing: border-box;
+  min-width: 0;
+  pointer-events: auto;
+  font: inherit;
+}
+
+.notebook-start-tiles[data-dimmed='true'] .notebook-start-tile button,
+.notebook-start-tiles[data-dimmed='true'] .notebook-start-tile input {
+  pointer-events: none;
+}
+
+.notebook-start-tile button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--notebook-detail-scale, 1));
+  padding: 0 calc(8px * var(--notebook-detail-scale, 1));
+  border: calc(1px * var(--notebook-detail-scale, 1)) solid var(--control-border);
+  color: var(--control-fg);
+  background: var(--control-bg);
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.notebook-start-tile .notebook-start-tile-primary {
+  height: calc(28px * var(--notebook-detail-scale, 1));
+  border-color: transparent;
+  color: #04120c;
+  background: var(--green);
+}
+
+.notebook-start-tile-download .notebook-start-tile-primary {
+  background: var(--cyan);
+}
+
+.notebook-start-tile .notebook-start-tile-secondary {
+  height: calc(24px * var(--notebook-detail-scale, 1));
+}
+
+.notebook-start-tile button:hover:not(:disabled),
+.notebook-start-tile button:focus-visible:not(:disabled) {
   border-color: var(--control-border-hover);
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
 }
 
-.canvas-start-dock-action:disabled {
-  color: rgba(139, 177, 155, 0.35);
+.notebook-start-tile .notebook-start-tile-primary:hover:not(:disabled),
+.notebook-start-tile .notebook-start-tile-primary:focus-visible:not(:disabled) {
+  border-color: transparent;
+  color: #04120c;
+  background: #a6f3c9;
+}
+
+.notebook-start-tile-download .notebook-start-tile-primary:hover:not(:disabled),
+.notebook-start-tile-download .notebook-start-tile-primary:focus-visible:not(:disabled) {
+  background: #a8e4f0;
+}
+
+.notebook-start-tile button:focus-visible,
+.notebook-start-tile input:focus-visible {
+  outline: calc(2px * var(--notebook-detail-scale, 1)) solid var(--green);
+  outline-offset: calc(2px * var(--notebook-detail-scale, 1));
+}
+
+.notebook-start-tile button:disabled,
+.notebook-start-tile input:disabled {
   cursor: default;
-  background: rgba(4, 19, 12, 0.78);
+  opacity: 0.45;
 }
 
-.canvas-start-dock-form {
-  display: flex;
-  flex: 1 1 320px;
-  gap: 6px;
-  min-width: 0;
+.notebook-start-tile input {
+  height: calc(26px * var(--notebook-detail-scale, 1));
+  padding: 0 calc(8px * var(--notebook-detail-scale, 1));
+  border: calc(1px * var(--notebook-detail-scale, 1)) solid rgba(99, 199, 216, 0.42);
+  color: #e1ffed;
+  background: var(--surface);
+  font-size: calc(11px * var(--notebook-detail-scale, 1));
 }
 
-.canvas-start-dock-form input {
-  flex: 1 1 200px;
-  height: 32px;
-  min-width: 0;
-  padding: 0 9px;
-  border: 1px solid var(--control-border);
-  color: var(--control-fg);
-  background: var(--control-bg);
-  font: inherit;
-  font-size: 11px;
+.notebook-start-tile input::placeholder {
+  color: #7fae92;
 }
 
-.canvas-start-dock-form input::placeholder {
-  color: var(--muted);
-}
-
-.canvas-start-dock-form input:focus-visible {
-  border-color: var(--control-border-hover);
-  outline: none;
-}
-
-.canvas-start-dock-form input:disabled {
-  color: rgba(139, 177, 155, 0.35);
+.notebook-start-tile input:focus-visible {
+  border-color: var(--cyan);
 }
 
 .inspector-reopen {
@@ -11391,12 +11453,6 @@ textarea:focus-visible {
     grid-column: 1;
   }
 
-  .canvas-start-dock {
-    right: var(--app-gutter);
-    left: var(--app-gutter);
-    padding: 10px;
-  }
-
   .record-grid,
   .library-status-list,
   .settings-grid,
@@ -11503,14 +11559,6 @@ textarea:focus-visible {
   .canvas,
   .workspace-screen {
     grid-row: 2;
-  }
-
-  .canvas-start-dock-copy > strong {
-    display: none;
-  }
-
-  .canvas-start-dock-form {
-    flex-basis: 100%;
   }
 
   .moment-search-filters > div {

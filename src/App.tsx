@@ -234,7 +234,7 @@ import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewD
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
 import type { WorkspaceAction } from '../server/src/workspace-action-contract'
-import { NotebookStartDock } from '@/components/videobook/NotebookStartDock'
+import { NotebookStartTiles } from '@/components/videobook/NotebookStartTiles'
 import { NotebookToolbar } from '@/components/videobook/NotebookToolbar'
 import { BookUsageCounter } from '@/components/videobook/BookUsageCounter'
 import { useBookUsage } from '@/videobook/useBookUsage'
@@ -374,6 +374,7 @@ import {
   notebookGridDropSlot,
   notebookGridFrameSize,
   notebookGridMetrics,
+  notebookGridPosition,
   notebookGridSlot,
   notebookGridSlotKey,
   notebookGridSquareAt,
@@ -6991,6 +6992,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     sourceUrl: string,
     isCurrent?: () => boolean,
     chat?: ChatExecution,
+    slot?: NotebookGridSlot,
   ): Promise<ComposerOutcome> => {
     if (!notebook) {
       await refreshBookData(bookId, undefined, isCurrent, chat)
@@ -6999,7 +7001,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const cell = downloadVideoCellInput(
       result,
       sourceUrl,
-      nextNotebookCreationSlot('video', notebook.cells, lastWorkSlot),
+      slot ?? nextNotebookCreationSlot('video', notebook.cells, lastWorkSlot),
     )
     let createdCellId: string
     try {
@@ -7035,6 +7037,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return {
       ok: true,
       message: messageFor(result, `Download queued as ${notebookGridTag(cell.slot)}`),
+    }
+  }
+
+  const downloadClipToSlot = async (url: string, slot: NotebookGridSlot) => {
+    if (!bookId || !notebook) return
+    try {
+      const result = await call('download_video', { book_id: bookId, url })
+      const outcome = await completeVideoDownload(result, url, undefined, undefined, slot)
+      setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     }
   }
 
@@ -11661,6 +11674,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               mediaDropSlot={mediaDropSlot}
                               reviewRoles={pendingReviewRoles}
                             />
+                            {nodes.length === 0 && (
+                              <NotebookStartTiles
+                                busy={busy || mcp.state !== 'ready'}
+                                compact={notebookGridDetailScale(notebookZoom) > 1.8}
+                                dimmed={mediaDropActive || previewSlot !== null}
+                                onUpload={(slot, file) => void createMediaCellFromFile(slot, file)}
+                                onPick={(kind, slot) => void createCell(kind, notebookGridPosition(slot))}
+                                onDownload={downloadClipToSlot}
+                                onBrowseLibrary={() => navigate('library')}
+                              />
+                            )}
                                 </ReactFlow>
                                 </GoalMarksContext.Provider>
                                 </GoalMediaContext.Provider>
@@ -11674,17 +11698,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       </TimelineContext.Provider>
                     </div>
                   </div>
-                )}
-                {notebook && nodes.length === 0 && (
-                  <NotebookStartDock
-                    busy={busy || mcp.state !== 'ready'}
-                    onAdd={createCell}
-                    onDownload={async (url) => {
-                      const outcome = await executeComposerCommand(`/download ${url}`)
-                      if (outcome.message) setNotice(outcome.message, outcome.ok ? 'info' : 'error')
-                    }}
-                    onOpenLibrary={() => navigate('library')}
-                  />
                 )}
               </section>
             </>
