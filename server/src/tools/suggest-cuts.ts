@@ -8,13 +8,14 @@ export function suggestCutsDef(engine: Engine): ToolDef {
   return {
     name: "suggest_cuts",
     description:
-      "Suggest trims for a video (dead air, filler words, awkward sections) from its frames and transcript in a background job. Needs a transcript; apply the result with apply_cuts.",
+      "Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts.",
     schema: {
-      asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
+      asset_id: z.string().describe("Video artifact ID"),
       book_id: z.string().describe("Book id"),
+      instructions: z.string().trim().min(1).optional().describe("Requested editing goal, such as smoother transitions and better timing"),
     },
     handler: async (args) => {
-      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
+      const { asset_id, book_id, instructions } = args as { asset_id: string; book_id: string; instructions?: string };
       const assetId = asset_id.replace(/^@/, "");
 
       if (!process.env.OPENAI_API_KEY) {
@@ -24,7 +25,7 @@ export function suggestCutsDef(engine: Engine): ToolDef {
         };
       }
 
-      const loaded = await loadAssetForAnalysis(engine, assetId);
+      const loaded = await loadAssetForAnalysis(engine, assetId, { requireTranscript: false });
       if (!loaded.ok) {
         return {
           isError: true as const,
@@ -38,6 +39,7 @@ export function suggestCutsDef(engine: Engine): ToolDef {
         assetId,
         assetDir: loaded.value.manifest.path,
         bookId: book_id,
+        instructions,
       });
 
       return {

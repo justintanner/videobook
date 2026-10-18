@@ -256,6 +256,7 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("use save_post_to_icloud");
     expect(prompt).toContain("Use upload_post_to_dropbox only when the user says Dropbox");
     expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
+    expect(prompt).toContain("use suggest_cuts and preserve the editing goal in instructions");
     expect(prompt).toContain("For splice_video:");
     expect(prompt).toContain('{"id","tool","params"}');
     expect(prompt).toContain("id is required and unique");

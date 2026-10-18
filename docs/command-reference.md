@@ -214,7 +214,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
 - `suggest_asset_tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.
-- `suggest_cuts` — Suggest trims for a video (dead air, filler words, awkward sections) from its frames and transcript in a background job. Needs a transcript; apply the result with apply_cuts.
+- `suggest_cuts` — Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts.
 - `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
 - `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
@@ -506,7 +506,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` — Subtitle settings; UI: `settings_subs`
 - `/suggest-asset-tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.; MCP: `suggest_asset_tags`
-- `/suggest-cuts` — Suggest trim cuts for a video (dead air, fillers, awkward sections); MCP: `suggest_cuts`
+- `/suggest-cuts` — Suggest video trims for pacing and transitions, using dialogue when available; MCP: `suggest_cuts`
 - `/suggest-sequence-coverage` — Rank existing visual moments for a sequence range before offering generation; MCP: `suggest_sequence_coverage`
 - `/suggest-sfx` — Suggest sound-effect placements for a video; MCP: `suggest_sfx`
 - `/sync` — Publish pending content-addressed objects; MCP: `storage_sync`

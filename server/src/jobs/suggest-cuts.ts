@@ -28,9 +28,10 @@ type SuggestCutsPayload = {
   assetId: string;
   assetDir: string;
   bookId: string;
+  instructions?: string;
 };
 
-const SYSTEM_PROMPT_CUTS = `You are a senior video editor reviewing a short clip. From the frames, transcript, and metadata you receive, return a strict JSON object suggesting sections to cut.
+const SYSTEM_PROMPT_CUTS = `You are a senior video editor reviewing a short clip. From the timestamped frames, optional transcript, and metadata you receive, return a strict JSON object suggesting sections to cut. Follow the user's editing request when provided.
 
 TRIM RULES (read carefully — most failures come from breaking these):
 
@@ -41,12 +42,15 @@ TRIM RULES (read carefully — most failures come from breaking these):
    - If the user message says "no silence candidates", do not suggest any "high" severity trims.
 
 2. Filler-cluster trims (severity "med"):
+   - Require a word-timed transcript. Without word timings, do not suggest any "med" trims.
    - The transcript MUST contain the filler verbatim ("um", "uh", "like", "you know") at the proposed timestamp range.
    - Range MUST be tight around the filler word(s), typically < 1.5s.
    - Do not propose a "med" trim spanning meaningful content.
 
-3. Borderline / minor trims (severity "low"):
-   - Reserved for tiny tightening (e.g. a 0.3s repeated word). Use sparingly.
+3. Visual pacing / minor trims (severity "low"):
+   - Use timestamped frames to identify clearly redundant visual holds or awkward lead-ins and tails. Explain the visible evidence and keep the ranges conservative.
+   - Without a transcript, only these visually supported "low" trims are allowed. Missing transcription is not evidence of silence or absence of dialogue. State in the summary that dialogue and audio timing were not assessed.
+   - Sparse frames do not prove what happens between them. Do not invent precise action boundaries; omit uncertain cuts.
 
 4. Hard limits:
    - Total trim duration (sum of all cut_end - cut_start) MUST be <= the budget given in the user message.
@@ -90,21 +94,22 @@ const ModelOutputSchema = z.object({
 
 export function registerSuggestCutsJob(engine: Engine): void {
   registerJobHandler("suggest_cuts", async (payload, ctx) => {
-    const { assetId } = payload as SuggestCutsPayload;
+    const { assetId, instructions } = payload as SuggestCutsPayload;
 
     return withLocalLease(engine, assetId, ctx, "analyze", async () => {
       const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
-      const loaded = await loadAssetForAnalysis(engine, assetId);
+      const loaded = await loadAssetForAnalysis(engine, assetId, { requireTranscript: false });
       if (!loaded.ok) throw new Error(loaded.error.message);
       const { frameNames, transcript, meta, prior } = loaded.value;
 
       const candidates = transcript.source === "elevenlabs"
         ? extractSilenceCandidates(transcript.words, DEAD_AIR_THRESHOLD_S)
         : [];
-      const duration = typeof meta?.duration === "number" ? meta.duration : 0;
-      const trimBudgetS = duration > 0 ? duration * TRIM_BUDGET_FRACTION : Infinity;
+      const duration = typeof meta?.duration === "number" && Number.isFinite(meta.duration) && meta.duration > 0
+        ? meta.duration : null;
+      const trimBudgetS = duration !== null ? duration * TRIM_BUDGET_FRACTION : Infinity;
 
       const sampled = sampleFrames(frameNames);
       const frameParts: OpenAiResponseInputContent[] = [];
@@ -121,7 +126,7 @@ export function registerSuggestCutsJob(engine: Engine): void {
         );
       }
 
-      const contextString = buildCutsContext(meta, prior, transcript, sampled.length, candidates, trimBudgetS);
+      const contextString = buildCutsContext(meta, prior, transcript, sampled.length, candidates, trimBudgetS, instructions);
       const userContent: OpenAiResponseInputContent[] = [
         { type: "input_text", text: contextString },
         ...frameParts,
@@ -151,7 +156,9 @@ export function registerSuggestCutsJob(engine: Engine): void {
         throw new Error(`Model output failed schema validation: ${msg}`);
       }
 
-      const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS);
+      const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS, {
+        duration, transcriptSource: transcript.source,
+      });
       if (dropped.length > 0) {
         logger.warn("suggest-cuts-dropped", { assetId, count: dropped.length });
       }

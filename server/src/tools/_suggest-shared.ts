@@ -41,7 +41,8 @@ type PriorAnalysis = {
 
 type TranscriptResult =
   | { source: "elevenlabs"; words: ElevenLabsWord[]; text: string }
-  | { source: "gpt4otrans"; text: string };
+  | { source: "gpt4otrans"; text: string }
+  | { source: "none" };
 
 type SilenceCandidate = { start: number; end: number; duration: number };
 
@@ -197,6 +198,7 @@ export function filterValidTrims(
   trims: Trim[],
   candidates: SilenceCandidate[],
   trimBudgetS: number,
+  evidence: { duration: number | null; transcriptSource: TranscriptResult["source"] },
 ): { kept: Trim[]; dropped: Array<{ trim: Trim; reason: string }> } {
   const dropped: Array<{ trim: Trim; reason: string }> = [];
   const sorted = [...trims].sort((a, b) => a.cut_start - b.cut_start);
@@ -205,6 +207,10 @@ export function filterValidTrims(
   let lastEnd = -Infinity;
 
   for (const t of sorted) {
+    if (evidence.duration !== null && t.cut_end > evidence.duration) {
+      dropped.push({ trim: t, reason: "cut_end exceeds video duration" });
+      continue;
+    }
     if (t.cut_end <= t.cut_start) {
       dropped.push({ trim: t, reason: "cut_end <= cut_start" });
       continue;
@@ -218,6 +224,10 @@ export function filterValidTrims(
         trim: t,
         reason: `severity:"high" trim ${t.cut_start.toFixed(2)}->${t.cut_end.toFixed(2)} is not contained in any silence candidate`,
       });
+      continue;
+    }
+    if (t.severity === "med" && evidence.transcriptSource !== "elevenlabs") {
+      dropped.push({ trim: t, reason: "filler trims require a word-timed transcript" });
       continue;
     }
     if (t.severity === "med" && t.cut_end - t.cut_start > 1.5) {
@@ -258,6 +268,9 @@ function priorLine(prior: PriorAnalysis | null): string | null {
 }
 
 function transcriptLine(transcript: TranscriptResult): string {
+  if (transcript.source === "none") {
+    return "Transcript: unavailable. Assess visual pacing only; do not infer speech, silence, filler words, or audio events from missing transcription.";
+  }
   if (transcript.source === "elevenlabs") {
     return `Transcript (word-level, with silence markers):\n${condenseElevenLabsWords(transcript.words)}`;
   }
@@ -271,20 +284,24 @@ export function buildCutsContext(
   frameCount: number,
   candidates: SilenceCandidate[],
   trimBudgetS: number,
+  instructions?: string,
 ): string {
   const parts: string[] = [];
+  if (instructions?.trim()) parts.push(`Editing request: ${instructions.trim()}`);
   const m = metaLine(meta);
   if (m) parts.push(m);
   parts.push(`Trim budget: total trim duration must be <= ${trimBudgetS.toFixed(1)}s.`);
   if (transcript.source === "elevenlabs") {
     parts.push(formatCandidatesBlock(candidates));
+  } else if (transcript.source === "gpt4otrans") {
+    parts.push("Silence candidates: none (transcript has no word timings; only visually supported severity \"low\" trims are allowed).");
   } else {
-    parts.push("Silence candidates: none (transcript has no word timings; do not propose severity \"high\" trims).");
+    parts.push("Silence candidates: none (no transcript; only visually supported severity \"low\" trims are allowed).");
   }
   const p = priorLine(prior);
   if (p) parts.push(p);
   parts.push(transcriptLine(transcript));
-  parts.push(`${frameCount} frames at low detail follow.`);
+  parts.push(`${frameCount} timestamped frames follow.`);
   return parts.join("\n\n");
 }
 
@@ -321,6 +338,7 @@ type AssetForAnalysisError =
 export async function loadAssetForAnalysis(
   engine: Engine,
   assetId: string,
+  options: { requireTranscript?: boolean } = {},
 ): Promise<{ ok: true; value: AssetForAnalysis } | { ok: false; error: AssetForAnalysisError }> {
   const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) {
@@ -330,7 +348,7 @@ export async function loadAssetForAnalysis(
 
   const videoFile = findVideoFile(manifest.files);
   if (!videoFile) {
-    return { ok: false, error: { kind: "no-video", message: `No video file found in asset ${assetId}` } };
+    return { ok: false, error: { kind: "no-video", message: "No video file found. Wait for the selected video's generation or upload to finish." } };
   }
 
   const frameNames = (manifest.directories?.["original_frames"] ?? [])
@@ -339,15 +357,15 @@ export async function loadAssetForAnalysis(
   if (frameNames.length === 0) {
     return {
       ok: false,
-      error: { kind: "no-frames", message: `${assetId} has no frames in original_frames/; run /process-video first.` },
+      error: { kind: "no-frames", message: "The selected video has no frames yet. Run /process-video for its notebook cell first." },
     };
   }
 
   const transcript = await loadTranscript(engine, assetId);
-  if (!transcript) {
+  if (!transcript && options.requireTranscript !== false) {
     return {
       ok: false,
-      error: { kind: "no-transcript", message: `No transcript found for ${assetId}. Run /transcribe @${assetId} first.` },
+      error: { kind: "no-transcript", message: "No transcript found. Run /transcribe for the selected video's notebook cell first." },
     };
   }
 
@@ -360,7 +378,7 @@ export async function loadAssetForAnalysis(
     value: {
       manifest,
       frameNames,
-      transcript,
+      transcript: transcript ?? { source: "none" },
       meta,
       prior,
     },

@@ -198,7 +198,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/suggest-cuts",
-    description: "Suggest trim cuts for a video (dead air, fillers, awkward sections)",
+    description: "Suggest video trims for pacing and transitions, using dialogue when available",
     example: "/suggest-cuts @a1",
     category: "context_menu",
     icon: "Scissors",
