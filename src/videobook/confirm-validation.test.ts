@@ -101,6 +101,8 @@ describe('generation validation', () => {
       notice: 'No cost estimate is available for this model.',
     })
     expect(generationValidation(base)).toEqual(VALID_CONFIRMATION)
+    expect(generationValidation({ ...base, previewStale: true, settingsError: 'Resume original must be after Replace from.' }).blocking)
+      .toBe('Resume original must be after Replace from.')
   })
 })
 

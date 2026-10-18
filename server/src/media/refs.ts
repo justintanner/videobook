@@ -1,4 +1,6 @@
 import type { Engine } from "videobook-engine";
+import { referenceVideoDuration } from "../reference-video-duration.js";
+import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
 import { REF_ROLES, type MediaRefs, type RefDurationWindowMs, type RefRole, type ResolvedModel } from "./types.js";
@@ -132,4 +134,11 @@ export async function checkRefDurations(engine: Engine, model: ResolvedModel, re
     if (error) return error;
   }
   return null;
+}
+
+export async function checkInsertVideoTiming(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown>): Promise<string | null> {
+  if (!isInsertVideoModel(model.id)) return null;
+  const source = refs.video?.[0];
+  const duration = source ? await referenceVideoDuration(engine, [source]) : undefined;
+  return insertVideoTimingError(options, duration);
 }

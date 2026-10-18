@@ -87,6 +87,7 @@ interface GenerationValidationInput {
   prompt: string | null | undefined
   previewLoading: boolean
   previewError: string | null
+  settingsError?: string | null
   previewStale: boolean
   promptLeaks: readonly { token: string; message: string }[]
   estimateUnknown: boolean
@@ -96,6 +97,7 @@ export function generationValidation(input: GenerationValidationInput): ConfirmV
   if (!input.prompt?.trim()) {
     return blocking('Write a prompt before applying.')
   }
+  if (input.settingsError) return blocking(input.settingsError)
   if (input.previewStale) {
     return VALID_CONFIRMATION
   }

@@ -46,6 +46,7 @@ import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
 import { spliceVideoDef } from "../tools/splice-video.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { previewGeneration } from "../media/preview.js";
+import { checkInsertVideoTiming, normalizeRefs } from "../media/refs.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 import {
   captureFrame,
@@ -1147,14 +1148,14 @@ function referenceIssueError(cell: NotebookCell, mentions: NotebookPromptResolut
     : null;
 }
 
-function prepareMediaGeneration(
+async function prepareMediaGeneration(
   model: ResolvedModel,
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
   engine: Engine,
   options: { allowReferenceIssues?: boolean },
-): PreparedNotebookGeneration {
+): Promise<PreparedNotebookGeneration> {
   const expected = cell.type.replace(/^generate_/u, "");
   if (model.media !== expected) {
     throw new Error(`${model.id} generates ${model.media}, not ${cell.type}`);
@@ -1173,6 +1174,9 @@ function prepareMediaGeneration(
   if (!referenceError) {
     const preview = previewGeneration(prepared.input);
     if (!preview.ok) throw new Error(preview.error);
+    const timingError = await checkInsertVideoTiming(engine, model, normalizeRefs(prepared.input.refs),
+      preview.preview.payload.input as Record<string, unknown> ?? {});
+    if (timingError) throw new Error(timingError);
   }
   return {
     tool: `generate_${model.media}`,

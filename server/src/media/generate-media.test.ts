@@ -289,4 +289,29 @@ describe("generic media generation", () => {
     });
     expect(toolError(result)).toMatch(/requires at least 1 image ref/);
   });
+
+  it("rejects invalid H3 insertion windows before creating or uploading media", async () => {
+    const book_id = engine.book.get().bookId;
+    const source = await probedVideoArtifact(shortClip);
+    const model = "fal:minimax/h3-max/insert-video";
+    const before = engine.artifacts.list().length;
+    for (const options of [
+      { start_time: 14, resume_time: 6, duration: 13 },
+      { start_time: 2, resume_time: 7, duration: 13 },
+      { start_time: 7, resume_time: 8, duration: 13 },
+      { start_time: "2", resume_time: "7", duration: "13" },
+    ]) {
+      const result = await client.callTool({ name: "generate_video", arguments: { book_id, model, refs: { video: [source] }, options } });
+      expect(toolError(result)).toMatch(/Resume original|Replace from/);
+    }
+    expect(engine.artifacts.list()).toHaveLength(before);
+    expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
+    const accepted = toolJson(await client.callTool({ name: "generate_video", arguments: {
+      book_id, model, refs: { video: [source] }, options: { start_time: 2, resume_time: 4, duration: 13 },
+    } }));
+    const job = queuedJob(String(accepted.asset_id));
+    await expect(runGenerateMedia(engine, { ...job, options: { ...job.options, start_time: 14 } }, await ownerContext(job.assetId)))
+      .rejects.toThrow(/Replace from/);
+    expect(requests).toHaveLength(0);
+  });
 });

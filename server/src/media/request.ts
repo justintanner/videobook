@@ -1,4 +1,5 @@
 import type { ZodError } from "zod";
+import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
 export interface WireRequestInput {
@@ -185,6 +186,8 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   if (model.promptField && prompt) setPath(value, model.promptField, prompt);
   const input = model.wire.input.safeParse(value);
   if (!input.success) return { ok: false, error: formatIssues(model, input.error) };
+  const timingError = isInsertVideoModel(model.id) ? insertVideoTimingError(input.data as Record<string, unknown>) : null;
+  if (timingError) return { ok: false, error: timingError };
   const parsed = model.wire.request.safeParse(model.wire.wrap(input.data as Record<string, unknown>));
   if (!parsed.success) return { ok: false, error: formatIssues(model, parsed.error) };
   return { ok: true, request: parsed.data as Record<string, unknown>, input: input.data as Record<string, unknown> };

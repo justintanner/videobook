@@ -82,6 +82,35 @@ describe("pollPendingProviderTasks", () => {
     if (stillPending.ok) expect(stillPending.value).toEqual([]);
   });
 
+  it("keeps structured Fal result validation details on the failed artifact", async () => {
+    const { assetSlug } = await seedPendingTask(fs, "fal_media", "invalid-insert", { falEndpointId: "minimax/h3-max/insert-video" });
+    const server = createServer((request, response) => {
+      request.resume();
+      const status = request.url?.endsWith("/status");
+      response.writeHead(status ? 200 : 422, { "content-type": "application/json" });
+      response.end(JSON.stringify(status ? { status: "COMPLETED" } : {
+        detail: [{ loc: ["body", "start_time"], msg: "Start time must be within the source video" }],
+      }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+    const previousKey = process.env.FAL_API_KEY;
+    process.env.FAL_API_KEY = "local-poll-key";
+    try {
+      const result = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: `http://127.0.0.1:${address.port}` });
+      const expected = "Fal API error: 422: start_time: Start time must be within the source video";
+      expect(result.failed[0]?.failMsg).toBe(expected);
+      const failure = fs.jobs.failures.read(assetSlug);
+      expect(failure.ok && failure.value?.message).toBe(expected);
+    } finally {
+      if (previousKey === undefined) delete process.env.FAL_API_KEY;
+      else process.env.FAL_API_KEY = previousKey;
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it.each([
     { taskType: "media_removed", meta: {} },
     { taskType: "seedance2_video", meta: { model: "retired:video-model" } },

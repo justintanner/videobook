@@ -1,4 +1,5 @@
 import { createKie, createXai, createAlibaba, createFal } from "../usage-providers.js";
+import { describeFalError } from "../jobs/_fal-shared.js";
 import { currentBookContext, withBookContext } from "../book-context.js";
 import { settleFinishedUsage } from "../provider-usage.js";
 import { legacyMediaForTaskType } from "../media/legacy-task-types.js";
@@ -1399,7 +1400,7 @@ export async function pollPendingProviderTasks(
           });
         }
       } catch (e) {
-        const failMsg = e instanceof Error ? e.message : "Poll failed";
+        const failMsg = describeFalError(e);
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof FalError) {
           const falErr = e as FalError;

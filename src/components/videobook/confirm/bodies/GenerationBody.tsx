@@ -8,6 +8,8 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { GenerationControlField } from '@/components/videobook/GenerationControlField'
+import { InsertVideoEditor } from '@/components/videobook/InsertVideoEditor'
+import { isInsertVideoModel } from '../../../../../server/src/media/insert-video-timing'
 import { PromptHistoryControls } from '@/components/videobook/PromptHistoryControls'
 import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
@@ -205,9 +207,13 @@ export function GenerationBody({
   const selectedVoiceId = typeof settings.voice_id === 'string'
     ? settings.voice_id
     : ''
+  const insertVideo = isInsertVideoModel(draft.action.model)
+  const visibleControls = insertVideo
+    ? draft.action.controls.filter((control) => !['start_time', 'resume_time', 'duration'].includes(control.name))
+    : draft.action.controls
   const generalControls = showVoicePicker
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
-    : draft.action.controls
+    : visibleControls
   const fieldControls = generalControls.filter((control) => control.kind !== 'boolean')
   const toggleControls = generalControls.filter((control) => control.kind === 'boolean')
   const previewValue = recordValue(preview)
@@ -334,6 +340,8 @@ export function GenerationBody({
             </label>
           )}
         </section>
+
+        {insertVideo && <InsertVideoEditor sources={sources} settings={settings} controls={draft.action.controls} busy={busy} onChange={onSettingChange} />}
 
         <section className="generation-review-settings-section" aria-label="Settings">
           {frameAspectRatio && <p className="muted">{FRAME_ASPECT_DESCRIPTION}</p>}

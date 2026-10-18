@@ -1,3 +1,4 @@
+import { insertVideoReviewError } from '@/videobook/insert-video-review'
 import {
   ArrowRight,
   Ban,
@@ -2640,7 +2641,11 @@ function ExecutableCellInspector({
   const generationSettingsMessage = generationSettingsError(
     generationControls,
     draft.generationSettings,
-  )
+  ) ?? insertVideoReviewError(draft.model, draft.generationSettings, edges.filter((edge) => edge.target === cell.id).map((edge) => ({
+    type: cells.find((source) => source.id === edge.source)?.type ?? '',
+    targetInput: edge.targetInput,
+    asset: cellAssets?.get(edge.source) ?? null,
+  })))
   const generationSettingsValid = generationSettingsMessage === null
   const generationCompatible = generationActionCompatible
     && generationModeCompatible

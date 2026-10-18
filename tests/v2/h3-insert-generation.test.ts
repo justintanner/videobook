@@ -111,7 +111,7 @@ describe("MiniMax H3 Max insert video settings", () => {
       await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     });
 
-    async function preview(settings: Record<string, unknown>) {
+    async function preview(settings: Record<string, unknown>, duration = 9.04, plan = false) {
       const defs = videobookDomainDefs(scopedBookEngine, books);
       const byName = new Map(defs.map((def) => [def.name, def]));
       const created = JSON.parse(resultText(await byName.get("create_book")!.handler({
@@ -133,6 +133,7 @@ describe("MiniMax H3 Max insert video settings", () => {
       }>)[0]!.id;
       const source = await engine.artifacts.create("video", "source-clip");
       if (!source.ok) throw new Error(source.error.message);
+      await engine.metadata.artifacts.write(source.value.artifactId, "original", { duration });
       const notebook = engine.notebooks.read(notebookId);
       if (!notebook.ok) throw new Error(notebook.error.message);
       const video = engine.notebooks.createCell({
@@ -148,6 +149,7 @@ describe("MiniMax H3 Max insert video settings", () => {
         model: "fal:minimax/h3-max/insert-video",
         operation: "edit_video",
         tool: "generate_video",
+        inputs: { generationMode: "default", generationSettings: settings },
       });
       const written = await engine.notebooks.write({
         ...notebook.value,
@@ -159,6 +161,14 @@ describe("MiniMax H3 Max insert video settings", () => {
         })],
       });
       if (!written.ok) throw new Error(written.error.message);
+      if (plan) {
+        const before = engine.notebooks.read(notebookId);
+        const result = await invoke("plan_notebook_generation", { notebook_id: notebookId, cell_id: generation.id, timeline_start_frame: 0 });
+        const after = engine.notebooks.read(notebookId);
+        expect(after.ok && after.value.cells).toEqual(before.ok && before.value.cells);
+        expect(engine.jobs.queue.list({ type: "run_notebook" })).toHaveLength(0);
+        return result;
+      }
       return invoke("preview_notebook_generation", {
         notebook_id: notebookId,
         cell_id: generation.id,
@@ -195,6 +205,29 @@ describe("MiniMax H3 Max insert video settings", () => {
         duration: 5,
         resolution: "768p",
       });
+    });
+
+    it.each([
+      [{ start_time: 14, resume_time: 6, duration: 13 }, /Resume original must be after/],
+      [{ start_time: 14, resume_time: 16, duration: 13 }, /source video ends at 9.04s/],
+      [{ start_time: 2, resume_time: 12, duration: 13 }, /within the 9.04s source video/],
+      [{ start_time: 4, resume_time: 4, duration: 5 }, /Resume original must be after/],
+    ])("rejects invalid insertion timing %j during preview", async (settings, message) => {
+      const result = await preview(settings);
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toMatch(message);
+    });
+
+    it("allows a new scene longer than the replaced section", async () => {
+      const result = await preview({ start_time: 2, resume_time: 6, duration: 13 });
+      expect(result.isError, resultText(result)).toBeUndefined();
+      expect(JSON.parse(resultText(result)).payload.input).toMatchObject({ start_time: 2, resume_time: 6, duration: 13 });
+    });
+
+    it("refuses an out-of-bounds generation plan before reserving output cells", async () => {
+      const result = await preview({ start_time: 2, resume_time: 12, duration: 13 }, 9.04, true);
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain("within the 9.04s source video");
     });
   });
 });

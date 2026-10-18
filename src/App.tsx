@@ -1,4 +1,5 @@
 import { PostInspector } from '@/components/videobook/PostInspector'
+import { insertVideoReviewError } from '@/videobook/insert-video-review'
 import type { PostView } from '../server/src/posts/post-contract'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
@@ -10613,6 +10614,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             prompt: action.draft.cell.prompt,
             previewLoading: action.previewLoading,
             previewError: action.previewError,
+            settingsError: insertVideoReviewError(action.draft.action.model, notebookChatGenerationSettings(action.draft), pendingGenerationSources),
             previewStale: action.previewStale,
             promptLeaks: providerPayloadPreviewMentions(action.preview).promptLeaks,
             estimateUnknown: generationEstimate(action.preview).unknown,

@@ -5,7 +5,7 @@ import { generationLabel } from "../artifact-label.js";
 import { previewPlaceholderUrl } from "../preview-payload.js";
 import { resolveModel, UnknownModelError } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
-import { checkRefDurations, checkRefs, normalizeRefs } from "../media/refs.js";
+import { checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeRefs } from "../media/refs.js";
 import { PROVIDER_ENV_KEYS } from "../media/adapters/index.js";
 import { listModels, modelListing } from "../media/listing.js";
 import { OPERATIONS_BY_MEDIA, REF_ROLES, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
@@ -86,7 +86,9 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
     mode: optionalString(args.mode),
   });
   if (!built.ok) return built.error;
-  return (await checkRefs(engine, refs)) ?? checkRefDurations(engine, model, refs);
+  return (await checkRefs(engine, refs))
+    ?? (await checkInsertVideoTiming(engine, model, refs, optionsOf(args.options)))
+    ?? checkRefDurations(engine, model, refs);
 }
 
 async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Record<string, unknown>, refs: MediaRefs): Promise<ToolResult> {

@@ -10,6 +10,7 @@ import { chromium } from 'playwright'
 import type { Browser, Page, Request } from 'playwright'
 import type { NotebookCell } from 'videobook-engine'
 import sharp from 'sharp'
+import { runFfmpeg } from '../../server/src/ffmpeg.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -65,6 +66,15 @@ describe('drawn region image editor through real MCP', () => {
       if (!book.ok) { response.sendStatus(404); return }
       const file = await book.value.engine.files.read(String(request.params[1]), String(request.params[2]))
       if (!file.ok) { response.sendStatus(404); return }
+      response.setHeader('Accept-Ranges', 'bytes')
+      const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range ?? '')
+      if (range) {
+        const start = Number(range[1])
+        const end = Math.min(Number(range[2] || file.value.length - 1), file.value.length - 1)
+        response.status(206).setHeader('Content-Range', `bytes ${start}-${end}/${file.value.length}`)
+        response.type(String(request.params[2])).send(file.value.subarray(start, end + 1))
+        return
+      }
       response.type(String(request.params[2])).send(file.value)
     })
     server = createServer(app)
@@ -128,11 +138,102 @@ describe('drawn region image editor through real MCP', () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
   })
 
+  it('explains H3 insertion with source and result tracks and prevents invalid timing', async () => {
+    const book = books.get(bookId)
+    if (!book.ok) throw new Error(book.error.message)
+    const engine = book.value.engine
+    const read = engine.notebooks.read(notebookId)
+    if (!read.ok) throw new Error(read.error.message)
+    const original = read.value
+    const file = join(rootDir, 'insert-source.mp4')
+    await runFfmpeg(['-y', '-f', 'lavfi', '-i', 'testsrc2=s=320x180:r=25:d=9.04', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', file])
+    const asset = await engine.artifacts.create('video', 'Original clip')
+    if (!asset.ok) throw new Error(asset.error.message)
+    expect((await engine.files.writeFromPath(asset.value.artifactId, 'original.mp4', file)).ok).toBe(true)
+    await engine.metadata.artifacts.write(asset.value.artifactId, 'original', { duration: 9.04, width: 320, height: 180, fps: 25, hasAudio: false })
+    const poster = await sharp({ create: { width: 320, height: 180, channels: 3, background: '#345a42' } }).jpeg().toBuffer()
+    await engine.files.write(asset.value.artifactId, 'original.jpg', poster)
+    const source = engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 0 }, outputArtifactId: asset.value.artifactId })
+    const producer = engine.notebooks.createCell({
+      type: 'generate_video', slot: { row: 1, column: 1 }, provider: 'fal', model: 'fal:minimax/h3-max/insert-video',
+      operation: 'edit_video', tool: 'generate_video', prompt: 'The craftsman tries on the wooden shoes',
+      inputs: { generationMode: 'default', generationSettings: { start_time: 14, resume_time: 6, duration: 13 } },
+    })
+    const written = await engine.notebooks.write({ ...original, cells: [...original.cells, source, producer], edges: [
+      ...original.edges, engine.notebooks.createEdge({ source: source.id, target: producer.id, targetInput: 'video' }),
+    ] })
+    expect(written.ok).toBe(true)
+    const requests: ObservedToolCall[] = []
+    const observe = (request: Request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/mcp')) requests.push(...toolCalls(request.postDataJSON()))
+    }
+    page.on('request', observe)
+    try {
+      await page.reload()
+      await page.locator(`.react-flow__node[data-id="${producer.id}"] .cell-node`).click()
+      const editor = page.getByRole('region', { name: 'Insert scene timing' })
+      await editor.waitFor({ state: 'visible' })
+      const generate = page.getByRole('button', { name: /^Generate/ }).first()
+      await expect.poll(() => editor.getByRole('alert').textContent()).toContain('source video ends at 9.04s')
+      expect(await generate.isDisabled()).toBe(true)
+      const start = editor.getByRole('spinbutton', { name: 'Replace from (seconds)' })
+      const resume = editor.getByRole('spinbutton', { name: 'Resume original at (seconds)' })
+      await start.fill('2')
+      await expect.poll(() => editor.getByRole('status').textContent()).toContain('Result: 18.04s')
+      expect(await editor.getByRole('img', { name: 'Original: keep 0 to 2s, replace 2 to 6s, keep 6 to 9.04s' }).count()).toBe(1)
+      const openingWidths = await editor.locator('.insert-video-track .kept:first-child').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().width))
+      expect(Math.abs(openingWidths[0]! - openingWidths[1]!)).toBeLessThan(1)
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      const payload = page.getByLabel('Generation payload preview', { exact: true })
+      await expect.poll(() => payload.textContent()).toContain('"start_time": 2')
+      await editor.getByRole('slider', { name: 'Replace from slider' }).focus()
+      await page.keyboard.press('ArrowRight')
+      expect(await start.inputValue()).toBe('2.001')
+      await start.fill('2')
+      const video = editor.getByLabel('Original video for insert')
+      await expect.poll(() => video.evaluate((node) => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+      await video.evaluate((node) => { (node as HTMLVideoElement).currentTime = 3 })
+      await expect.poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime)).toBe(3)
+      await editor.getByRole('button', { name: 'Replace from here' }).click()
+      expect(await start.inputValue()).toBe('3')
+      await resume.fill('2')
+      await expect.poll(() => editor.getByRole('alert').textContent()).toContain('Resume original must be after')
+      expect(await generate.isDisabled()).toBe(true)
+      await resume.press('Control+Enter')
+      expect(requests.filter((request) => request.name === 'run_notebook_cell')).toHaveLength(0)
+      await resume.fill('6')
+      await start.fill('2')
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 })
+        await editor.scrollIntoViewIfNeeded()
+        const bounds = await editor.boundingBox()
+        expect(bounds?.width).toBeLessThanOrEqual(width)
+        expect(await editor.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true)
+        await page.screenshot({ path: `/tmp/videobook-insert-tracks-${width}.png` })
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      await generate.click()
+      await expect.poll(() => requests.filter((request) => request.name === 'run_notebook_cell').length, { timeout: 15_000 }).toBe(1)
+      const saved = engine.notebooks.read(notebookId)
+      expect(saved.ok && saved.value.cells.find((cell) => cell.id === producer.id)?.inputs?.generationSettings)
+        .toMatchObject({ start_time: 2, resume_time: 6, duration: 13 })
+    } finally {
+      page.off('request', observe)
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await abortActiveBookJobsForTests()
+      expect((await engine.notebooks.write(original)).ok).toBe(true)
+      expect((await engine.artifacts.delete(asset.value.artifactId)).ok).toBe(true)
+      await page.reload()
+    }
+  }, 60_000)
+
   it('retries only credit failures from the media tile without routing through chat', async () => {
     await pauseBookQueueForTests(bookId)
     const book = books.get(bookId)
     if (!book.ok) throw new Error(book.error.message)
     const engine = book.value.engine
+    const previousRuns = engine.jobs.queue.list({ type: 'run_notebook' }).length
     const read = engine.notebooks.read(notebookId)
     if (!read.ok) throw new Error(read.error.message)
     const original = read.value
@@ -200,7 +301,7 @@ describe('drawn region image editor through real MCP', () => {
       expect(replacement.id).not.toBe(failures[0]!.id)
       expect(updated.value.execution?.[replacement.id]?.status).toBe('queued')
       expect(requests.some((request) => request.name === 'chat')).toBe(false)
-      expect(engine.jobs.queue.list({ type: 'run_notebook' })).toHaveLength(1)
+      expect(engine.jobs.queue.list({ type: 'run_notebook' })).toHaveLength(previousRuns + 1)
       await page.screenshot({ path: '/tmp/videobook-credit-retry-after.png' })
     } finally {
       page.off('request', observe)
