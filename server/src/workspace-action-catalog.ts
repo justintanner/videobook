@@ -66,8 +66,7 @@ function title(value: string): string {
   const words = value.replace(/^\//u, "").replaceAll(/[_-]/gu, " ");
   return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
     .replace(/\bqr\b/gu, "QR")
-    .replace(/\bsfx\b/gu, "sound effects")
-    .replace(/\bgf\b/gu, "Google Flow");
+    .replace(/\bsfx\b/gu, "sound effects");
 }
 
 function groupForTool(name: string): ActionGroup {
@@ -77,7 +76,7 @@ function groupForTool(name: string): ActionGroup {
 }
 
 function uiGroup(action: UiActionId): ActionGroup {
-  if (/provider|gf_characters|x_connect/u.test(action)) return "Providers";
+  if (/provider|x_connect/u.test(action)) return "Providers";
   if (/archive|diagnostic|storage|jobs|inbox/u.test(action)) return "Recovery";
   if (/histor|revision|status|rewind/u.test(action)) return "History";
   if (/entities/u.test(action)) return "Entities";

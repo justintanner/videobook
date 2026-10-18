@@ -16,7 +16,7 @@ function imageFrame(prompt: string | null): string {
     width: 768,
     height: 1344,
     tool: 'Nano Banana Pro Text to Image',
-    model: 'googleflow/image/nano-banana-pro',
+    model: 'kie:nano-banana-pro',
     provenance: null,
   })
   return renderToStaticMarkup(createElement(CellMediaFrame, {

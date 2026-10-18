@@ -113,8 +113,8 @@ describe("Dancing workflow fixture", () => {
     expect(kittens).toEqual(expect.objectContaining({
       type: "generate_image",
       tool: "generate_image",
-      provider: "googleflow",
-      model: "googleflow:nano-banana-pro",
+      provider: "kie",
+      model: "kie:nano-banana-pro",
     }));
     expect(kittens?.prompt).toContain("two kittens");
     expect(kittens?.prompt).toContain("freeway");

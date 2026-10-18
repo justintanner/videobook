@@ -527,8 +527,8 @@ describe('chat composer browser flow', () => {
       label: 'generate-image-fullscreen',
       slot: { row: 2, column: 1 },
       prompt: 'A fullscreen image fixture',
-      provider: 'googleflow',
-      model: 'googleflow:nano-banana-pro',
+      provider: 'kie',
+      model: 'kie:nano-banana-pro',
       operation: 'text_to_image',
       tool: 'generate_image',
     })
@@ -537,8 +537,8 @@ describe('chat composer browser flow', () => {
       label: 'generate-image-fullscreen image',
       slot: { row: 2, column: 2 },
       prompt: 'A fullscreen image fixture',
-      provider: 'googleflow',
-      model: 'googleflow:nano-banana-pro',
+      provider: 'kie',
+      model: 'kie:nano-banana-pro',
       tool: 'generate_image',
       output_artifact_id: fullscreenImageArtifactId,
       inputs: {
@@ -2173,7 +2173,7 @@ describe('chat composer browser flow', () => {
     await generationNode.waitFor({ state: 'visible' })
     expect(await generationNode.locator('.cell-media').count()).toBe(0)
     expect((await generationNode.locator('.cell-model-line').textContent())?.trim())
-      .toBe('Nano Banana Pro (Google Flow)')
+      .toBe('Nano Banana Pro')
     expect((await generationNode.locator('.cell-copy-text p').textContent())?.trim())
       .toBe('A fullscreen image fixture')
     const fullscreenNode = page.locator(

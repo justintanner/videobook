@@ -412,7 +412,7 @@ describe('notebook chat generation', () => {
       command,
       document: current.value,
       fallbackSlot: { row: 1, column: 0 },
-      preferredModel: 'googleflow:nano-banana-pro',
+      preferredModel: 'kie:nano-banana-pro',
     })
     const selectedCells = draft.sourceCellIds.flatMap((cellId) => {
       const cell = current.value.cells.find((candidate) => candidate.id === cellId)
@@ -478,15 +478,19 @@ describe('notebook chat generation', () => {
       })),
     }) as {
       payload: {
-        prompt: string
-        reference_1: string
-        reference_2: string
+        model: string
+        input: { prompt: string; image_input: string[] }
       }
     }
     expect(preview.payload).toMatchObject({
-      prompt: 'scene @reference_1, character @reference_2, fluffy kitten standing',
-      reference_1: `http://url.resolved.later.for/${firstArtifact.value.artifactId}`,
-      reference_2: `http://url.resolved.later.for/${secondArtifact.value.artifactId}`,
+      model: 'nano-banana-pro',
+      input: {
+        prompt: 'scene reference image 1, character reference image 2, fluffy kitten standing',
+        image_input: [
+          `http://url.resolved.later.for/${firstArtifact.value.artifactId}`,
+          `http://url.resolved.later.for/${secondArtifact.value.artifactId}`,
+        ],
+      },
     })
     const materialized = await materializeNotebookChatGeneration({
       bookId: created.bookId,
@@ -594,7 +598,7 @@ describe('notebook chat generation', () => {
       },
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
-      preferredModel: 'googleflow:nano-banana-pro',
+      preferredModel: 'kie:nano-banana-pro',
     })
     expect(draft.sourceCellIds).toEqual([firstSource.id])
 

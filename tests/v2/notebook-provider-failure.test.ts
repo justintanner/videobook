@@ -77,14 +77,14 @@ describe("notebook provider failures", () => {
     };
   }
 
-  it("persists a real Google Flow failure and actionable guidance on the cell", async () => {
+  it("persists a provider failure and its error code on the cell", async () => {
     const { input, cellId } = await setupFailure(
-      "google_flow",
-      "generate_google_flow_omni_flash_video",
+      "kie",
+      "generate_video",
     );
     const failure = await engine.jobs.failures.write(input.providerArtifactId, {
-      message: "All operations failed: PUBLIC_ERROR_REPUTATIONAL (REPUTATIONAL)",
-      failCode: "PUBLIC_ERROR_REPUTATIONAL",
+      message: "Generation failed: quota exhausted",
+      failCode: "QUOTA_EXCEEDED",
     });
     expect(failure.ok).toBe(true);
 
@@ -97,11 +97,11 @@ describe("notebook provider failures", () => {
       status: "error",
       providerArtifactId: input.providerArtifactId,
       error: expect.stringContaining(
-        "Google Flow failed: All operations failed: PUBLIC_ERROR_REPUTATIONAL (REPUTATIONAL)",
+        "Kie failed: Generation failed: quota exhausted",
       ),
     });
     expect(String(notebook.value.execution?.[cellId]?.error))
-      .toContain("Use fictional or stylized subjects");
+      .toContain("QUOTA_EXCEEDED");
   });
 
   it("shows generic provider details while redacting secrets", async () => {

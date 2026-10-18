@@ -31,16 +31,6 @@ const GUIDE_FILES: Record<string, string> = {
 
 const SUPPORTED_MODELS = Object.keys(GUIDE_FILES).sort();
 
-const MODEL_CONTEXT: Record<string, string> = {
-  gemini_omni: "omni-flash (Gemini Omni video via Google Flow)",
-};
-
-// Provider API documentation (useapi.net Google Flow v1). Used by the
-// provider_docs rewrite mode, which follows the provider's own request contract
-// (@-mention syntax, model vocab, reference budgets) instead of a social
-// platform aesthetic. Covers Veo, Gemini Omni Flash, and Nano Banana models.
-const USEAPI_GUIDE_FILE = "useapi_google_flow_v1_prompting_guide.md";
-
 // --- Pure helpers ---
 
 export function loadGuide(model: string): Promise<string> {
@@ -51,10 +41,6 @@ export function loadGuide(model: string): Promise<string> {
     );
   }
   return readFile(join(GUIDES_DIR, filename), "utf-8");
-}
-
-export function loadUseapiGuide(): Promise<string> {
-  return readFile(join(GUIDES_DIR, USEAPI_GUIDE_FILE), "utf-8");
 }
 
 function guideFilename(model: string): string {
@@ -71,13 +57,6 @@ interface BuildRewriteExtras {
   platform?: Platform;
   customPrompt?: string;
   hasImages?: boolean;
-  /** Provider-docs mode: rewrite against the useapi.net API documentation
-   *  instead of a model guide + platform overlay. Mutually exclusive with
-   *  `platform` (the platform section is omitted when true). */
-  providerDocs?: boolean;
-  /** Target model name surfaced to the rewriter in provider-docs mode so it can
-   *  tailor to image (Nano Banana) vs video (Veo/Omni) vocabulary. */
-  modelContext?: string;
   /** Previous generation error to adapt the rewritten prompt around. */
   previousError?: PreviousError;
 }
@@ -88,21 +67,6 @@ const IMAGE_CLEANUP_DIRECTIVE =
   "or low-resolution noise (blocking, chroma banding, jpeg ringing). Describe the intended " +
   "subject/scene rather than replicating these artifacts. Produce a prompt that guides the " +
   "target model to render the scene cleanly at full fidelity, honoring the platform aesthetic above.";
-
-const PROVIDER_DOCS_SYSTEM =
-  "You are a prompt engineering expert. Using the provider's API documentation below " +
-  "(useapi.net Google Flow v1), rewrite the user's prompt so it matches how this provider " +
-  "expects prompts to be structured for the target model.\n\n" +
-  "RULES:\n" +
-  "- Output ONLY the rewritten prompt text, nothing else\n" +
-  "- Do not include explanations, labels, or commentary\n" +
-  "- Preserve the user's creative intent while improving structure and detail\n" +
-  "- Follow the provider's @-mention grammar exactly: keep existing @character_N, " +
-  "@referenceImage_N (video), @reference_N (image), and @referenceAudio_N markers in place; " +
-  "do NOT invent markers that have no matching supplied reference (the API returns 400)\n" +
-  "- Do NOT add a negative prompt — the field does not exist on this provider\n" +
-  "- Use concrete subject/action/setting/camera/lighting language; keep it a single plain-text description\n" +
-  "- If images are provided, incorporate visual details you observe into the prompt\n\n";
 
 function previousErrorSection(error: PreviousError): string {
   const failCodeLine = error.failCode
@@ -126,37 +90,7 @@ export function buildRewritePromptText(
   prompt: string,
   extras: BuildRewriteExtras = {},
 ): string {
-  const { maxChars, platform, customPrompt, hasImages, providerDocs, modelContext, previousError } = extras;
-
-  // Provider-docs mode: rewrite against the useapi.net docs. No platform overlay
-  // (this mode is the alternative to the IG/TikTok/YouTube aesthetic).
-  if (providerDocs) {
-    let charLimitRule = "";
-    if (maxChars) {
-      charLimitRule =
-        `- HARD LIMIT: The rewritten prompt MUST be under ${maxChars} characters\n` +
-        "- Be concise and visually specific — cut filler words, focus on key actions and details\n";
-    }
-    const modelLine = modelContext
-      ? `TARGET MODEL: ${modelContext}\n\n`
-      : "";
-    const instructionSection = customPrompt
-      ? `\nADDITIONAL INSTRUCTION: ${customPrompt}\n`
-      : "";
-    const errorSection = previousError ? previousErrorSection(previousError) : "";
-    const userPromptBlock = prompt
-      ? `USER PROMPT TO REWRITE:\n${prompt}`
-      : "USER PROMPT TO REWRITE: (none — describe the reference image(s) directly, applying the documentation above)";
-    return (
-      PROVIDER_DOCS_SYSTEM +
-      charLimitRule +
-      `--- PROVIDER API DOCUMENTATION ---\n${guide}\n--- END DOCUMENTATION ---\n` +
-      modelLine +
-      instructionSection +
-      errorSection +
-      `\n${userPromptBlock}`
-    );
-  }
+  const { maxChars, platform, customPrompt, hasImages, previousError } = extras;
 
   let charLimitRule = "";
   if (maxChars) {
@@ -391,7 +325,7 @@ export function rewritePromptDef(engine: Engine): ToolDef {
     schema: {
       prompt: z.string().optional().describe("Prompt to rewrite. In scene mode, serves as optional creative direction."),
       model: z
-        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "seedance25", "gemini_omni"])
+        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "seedance25"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
       image_refs: z
@@ -410,14 +344,6 @@ export function rewritePromptDef(engine: Engine): ToolDef {
         .max(500)
         .optional()
         .describe("Optional free-form additional instruction (max 500 chars)"),
-      provider_docs: z
-        .boolean()
-        .optional()
-        .describe(
-          "Provider-docs mode: rewrite against the useapi.net Google Flow API documentation " +
-            "(@-mention grammar, model vocab, reference budgets) instead of a model guide + " +
-            "platform overlay. Mutually exclusive with platform.",
-        ),
       previous_error: z
         .string()
         .max(2000)
@@ -431,7 +357,7 @@ export function rewritePromptDef(engine: Engine): ToolDef {
     handler: async (args) => {
       const {
         prompt, model, image_refs,
-        asset_ref, scene_index, platform, custom_prompt, provider_docs, previous_error,
+        asset_ref, scene_index, platform, custom_prompt, previous_error,
       } = args as {
         prompt?: string;
         model: string;
@@ -441,7 +367,6 @@ export function rewritePromptDef(engine: Engine): ToolDef {
         scene_index?: number;
         platform?: Platform;
         custom_prompt?: string;
-        provider_docs?: boolean;
         previous_error?: string;
       };
 
@@ -492,7 +417,7 @@ export function rewritePromptDef(engine: Engine): ToolDef {
         expandedPrompt = expandTimelineSlotRefs(expandedPrompt, timelineSlotArtifactIds(engine));
       }
 
-      return handleStandardRewrite(engine, apiKey, expandedPrompt, model, image_refs, platform, custom_prompt, provider_docs, previousError);
+      return handleStandardRewrite(engine, apiKey, expandedPrompt, model, image_refs, platform, custom_prompt, previousError);
     },
   };
 }
@@ -505,21 +430,13 @@ async function handleStandardRewrite(
   imageRefs: string[] | undefined,
   platform: Platform | undefined,
   customPrompt: string | undefined,
-  providerDocs: boolean | undefined,
   previousError: PreviousError | undefined,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
-  const effectiveProviderDocs = providerDocs || model === "gemini_omni";
-
   let guide: string;
   let guideFile: string;
   try {
-    if (effectiveProviderDocs) {
-      guide = await loadUseapiGuide();
-      guideFile = USEAPI_GUIDE_FILE;
-    } else {
-      guide = await loadGuide(model);
-      guideFile = guideFilename(model);
-    }
+    guide = await loadGuide(model);
+    guideFile = guideFilename(model);
   } catch (e) {
     return {
       isError: true as const,
@@ -529,9 +446,7 @@ async function handleStandardRewrite(
 
   const maxChars = model === "kling30" ? 400 : undefined;
   const responses = buildIntelligenceResponses(apiKey, { timeout: 60_000 });
-  const extras: BuildRewriteExtras = effectiveProviderDocs
-    ? { maxChars, customPrompt, providerDocs: true, modelContext: MODEL_CONTEXT[model] ?? model, previousError }
-    : { maxChars, platform, customPrompt, previousError };
+  const extras: BuildRewriteExtras = { maxChars, platform, customPrompt, previousError };
 
   let messages: OpenAiMessage[];
   if (imageRefs && imageRefs.length > 0) {

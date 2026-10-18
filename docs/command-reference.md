@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (233)
+## MCP endpoints (225)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -50,8 +50,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_entity` — Create a reusable prompt, scene or character
-- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.
-- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.
 - `create_notebook` — Create an empty notebook
 - `create_notebook_cell` — Create a UUIDv7 notebook cell
 - `create_post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.
@@ -63,8 +61,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `delete_asset` — Delete an asset, dropping its sequence clips. forget also destroys its stored bytes (bytes another asset shares are kept)
 - `delete_book` — Permanently delete a book after typed name confirmation
 - `delete_entity` — Delete a reusable prompt, scene or character
-- `delete_google_flow_character` — Delete a Google Flow character by its ref.
-- `delete_google_flow_voice` — Delete a Google Flow custom voice by its ref.
 - `delete_notebook` — Delete a notebook and its cells, edges, and runs
 - `delete_notebook_cell` — Delete one notebook cell and incident edges
 - `describe_image` — Write a reproduction-ready prompt for an image asset into a new script asset using vision (asynchronous).
@@ -98,7 +94,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
 - `get_editing_moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source
 - `get_entity` — Read a reusable prompt, scene or character
-- `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
 - `get_music_analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio
@@ -125,8 +120,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_entities` — List reusable prompts, scenes and characters, optionally of one kind
 - `list_generation_models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity
-- `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
-- `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
 - `list_image_edit_models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model
 - `list_ingest_status` — List independent ingest and search-index phase states
 - `list_jobs` — List persistent jobs for a book
@@ -185,7 +178,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `render_video` — Render a video artifact into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.
 - `reorder_character_images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).
 - `repair_library_search_indexes` — Index ready visual media that is missing Similar-search coverage across books
-- `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
 - `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace a video's audio track in place with an audio asset, or with one file of another asset given as <artifactId>/<filename>. Existing renders become stale.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current Videobook as new assets.
@@ -244,7 +236,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (308; 146 dedicated command routes)
+## Slash actions (299; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -306,8 +298,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/copy` — Copy asset name; UI: `copy_clipboard`
 - `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `export_asset_file`
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
-- `/create-google-flow-character` — Create a reusable Google Flow character from 1-2 image assets with optional personality notes and voice (spends plan credits); pass the returned ref as options.character_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_character`
-- `/create-google-flow-voice` — Create a reusable Google Flow custom voice from a system preset (spends plan credits); pass the returned ref as options.referenceAudio_N to generate_video with googleflow:omni-flash.; MCP: `create_google_flow_voice`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
 - `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
 - `/create-post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.; MCP: `create_post`
@@ -317,8 +307,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/delete` — Delete an asset; MCP: `delete_asset`
 - `/delete-book` — Permanently delete a book after typed name confirmation; MCP: `delete_book`
 - `/delete-entity` — Delete a reusable prompt, scene or character; MCP: `delete_entity`
-- `/delete-google-flow-character` — Delete a Google Flow character by its ref.; MCP: `delete_google_flow_character`
-- `/delete-google-flow-voice` — Delete a Google Flow custom voice by its ref.; MCP: `delete_google_flow_voice`
 - `/delete-notebook` — Delete a notebook and its cells, edges, and runs; MCP: `delete_notebook`
 - `/delete-notebook-cell` — Delete one notebook cell and incident edges; MCP: `delete_notebook_cell`
 - `/describe` — Describe image into a reproduction-ready prompt; MCP: `describe_image`
@@ -363,7 +351,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`
 - `/get-editing-moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source; MCP: `get_editing_moments`
 - `/get-entity` — Read a reusable prompt, scene or character; MCP: `get_entity`
-- `/get-google-flow-character` — Retrieve normalized details for a single Google Flow character by ref.; MCP: `get_google_flow_character`
 - `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
 - `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
 - `/get-music-analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio; MCP: `get_music_analysis`
@@ -377,7 +364,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-sequence-rhythm` — Read the selected master soundtrack and editable beat map with its revision and undo state; MCP: `get_sequence_rhythm`
 - `/get-timeline` — Get the selected book's typed v2 timeline; MCP: `get_timeline`
 - `/get-watermark-config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.; MCP: `get_watermark_config`
-- `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
 - `/goal` — Build a portrait video in Cinematic or IG Influencer style; choose format, delivery, camera and light before the frame, then review each stage; UI: `start_goal`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
@@ -400,8 +386,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-elevenlabs-voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them; MCP: `list_elevenlabs_voices`
 - `/list-entities` — List reusable prompts, scenes and characters, optionally of one kind; MCP: `list_entities`
 - `/list-generation-models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity; MCP: `list_generation_models`
-- `/list-google-flow-characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).; MCP: `list_google_flow_characters`
-- `/list-google-flow-voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.; MCP: `list_google_flow_voices`
 - `/list-image-edit-models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model; MCP: `list_image_edit_models`
 - `/list-ingest-status` — List independent ingest and search-index phase states; MCP: `list_ingest_status`
 - `/list-jobs` — List persistent jobs for a book; MCP: `list_jobs`
@@ -470,7 +454,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
 - `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
-- `/replace-google-flow-character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.; MCP: `replace_google_flow_character`
 - `/replace-sequence-clip-with-search-moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment; MCP: `replace_sequence_clip_with_search_moment`
 - `/restore-asset-version` — Restore an asset from an immutable revision as a new revision; MCP: `restore_asset_version`
 - `/restore-edit-action` — Create a forward revision restoring a prior edit action or revision; MCP: `restore_edit_action`

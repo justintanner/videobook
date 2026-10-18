@@ -58,10 +58,7 @@ export async function uploadBytesToFreeHost(
   });
 }
 
-// Re-encode bytes (if applicable), upscale small images, and hash the final
-// bytes for a collision-free remote filename. Shared preamble for both asset
-// and raw-bytes provider upload wrappers.
-export async function prepareBytesForUpload(
+async function prepareBytesForUpload(
   bytes: Uint8Array | Buffer,
   filename: string,
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {

@@ -7,7 +7,6 @@ const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
     "first_frame_image_url",
     "start_image_url",
     "first_frame",
-    "startImage",
   ],
   last_frame: [
     "last_frame_url",
@@ -15,7 +14,6 @@ const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
     "end_image_url",
     "tail_image_url",
     "last_frame",
-    "endImage",
   ],
   image: [
     "image_urls",
@@ -30,8 +28,6 @@ const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
     "reference_image_url",
     "image",
     "images",
-    "referenceImage_{n}",
-    "reference_{n}",
   ],
   video: [
     "video_urls",
@@ -42,27 +38,16 @@ const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
     "first_clip_url",
     "video",
     "videos",
-    "referenceVideo_{n}",
   ],
   audio: [
     "audio_urls",
     "reference_audio_urls",
     "audio_url",
     "driving_audio_url",
-    "referenceAudio_{n}",
   ],
 };
 
-export function numberedFields(input: JsonSchema, template: string): string[] {
-  const [prefix, suffix] = template.split("{n}") as [string, string];
-  const properties = input.properties ?? {};
-  const fields: string[] = [];
-  for (let n = 1; `${prefix}${n}${suffix}` in properties; n += 1) fields.push(`${prefix}${n}${suffix}`);
-  return fields;
-}
-
 function fieldPresent(input: JsonSchema, field: string): boolean {
-  if (field.includes("{n}")) return numberedFields(input, field).length > 0;
   return propertyAt(input, field) !== null;
 }
 
@@ -75,15 +60,6 @@ interface ExpandedField extends SlotField {
 }
 
 function expandField(input: JsonSchema, field: string): ExpandedField[] {
-  if (field.includes("{n}")) {
-    return numberedFields(input, field).map((path) => ({
-      path,
-      multi: false,
-      max: 1,
-      min: isRequired(input, path) ? 1 : 0,
-      urlObject: false,
-    }));
-  }
   const schema = propertyAt(input, field)!;
   const required = isRequired(input, field);
   if (isArraySchema(schema)) {

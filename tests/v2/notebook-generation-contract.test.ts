@@ -115,17 +115,6 @@ describe("notebook generation input contracts", () => {
     expect(references?.requiredGroups).toEqual([["image", "video", "audio"]]);
   });
 
-  it("publishes Google Omni modes with their required input roles", () => {
-    const contract = contractFor("googleflow:omni-flash");
-    expect(contract.modes.map((mode) => ({
-      id: mode.id,
-      fields: mode.slots.map((slot) => slot.field),
-      requiredGroups: mode.requiredGroups,
-    }))).toEqual([
-      { id: "i2v", fields: ["first_frame", "image", "replace_audio"], requiredGroups: [] },
-      { id: "v2v", fields: ["image", "video", "replace_audio"], requiredGroups: [["video"]] },
-    ]);
-  });
 
   it("publishes Kie Gemini image and video modes", () => {
     const contract = contractFor("kie:gemini-omni-video");

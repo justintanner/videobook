@@ -375,8 +375,8 @@ export async function seedDancingWorkflow(
     label: "Generate kittens freeway image",
     slot: { row: 2, column: 1 },
     prompt: IMAGE_PROMPT,
-    provider: "googleflow",
-    model: "googleflow:nano-banana-pro",
+    provider: "kie",
+    model: "kie:nano-banana-pro",
     operation: "text_to_image",
     tool: "generate_image",
     inputs: {

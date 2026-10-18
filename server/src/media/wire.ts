@@ -2,7 +2,6 @@ import { z, type ZodObject, type ZodRawShape, type ZodType } from "zod";
 import { MediaGenerationRequestSchema, SunoGenerateRequestSchema, SunoSoundsRequestSchema, VeoGenerateRequestSchema } from "@apicity/kie/zod";
 import { FAL_ENDPOINT_REQUEST_SCHEMAS } from "@apicity/fal/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
-import { GoogleFlowImagesRequestSchema, GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import {
   AlibabaMultimodalGenerationParametersSchema,
   AlibabaQwenImageEditStableModelSchema,
@@ -14,7 +13,6 @@ import {
   ElevenLabsTextToSpeechRequestSchema,
   ElevenLabsVideoToMusicRequestSchema,
 } from "@apicity/elevenlabs/zod";
-import { toJsonSchema } from "./json-schema.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 
 type AnyObject = ZodObject<ZodRawShape>;
@@ -118,36 +116,6 @@ function xaiWire(apiId: string): WireSpec | null {
   };
 }
 
-function googleFlowVideoOption(apiId: string): AnyObject | null {
-  for (const option of (GoogleFlowVideosRequestSchema as unknown as { options: unknown[] }).options) {
-    const model = objectShape(option)?.model;
-    if (model && toJsonSchema(model as unknown as ZodType).const === apiId) return option as AnyObject;
-  }
-  return null;
-}
-
-const GOOGLE_FLOW_INTERNAL = ["model", "email", "async", "replyUrl", "replyRef", "captchaToken", "captchaRetry", "captchaOrder"];
-
-function googleFlowWire(apiId: string): WireSpec | null {
-  if (apiId === "nano-banana-pro") {
-    const request = GoogleFlowImagesRequestSchema as unknown as AnyObject;
-    return {
-      input: omitShape(request, GOOGLE_FLOW_INTERNAL),
-      fixed: { model: apiId },
-      wrap: (value) => ({ ...value, model: apiId }),
-      request,
-    };
-  }
-  const option = googleFlowVideoOption(apiId);
-  if (!option) return null;
-  return {
-    input: omitShape(option, GOOGLE_FLOW_INTERNAL),
-    fixed: { model: apiId, async: true },
-    wrap: (value) => ({ ...value, model: apiId, async: true }),
-    request: GoogleFlowVideosRequestSchema,
-  };
-}
-
 const ALIBABA_MODELS = new Set<string>([
   ...Object.values((AlibabaQwenImageGenerationStableModelSchema as unknown as { _def: { entries: Record<string, string> } })._def.entries),
   ...Object.values((AlibabaQwenImageEditStableModelSchema as unknown as { _def: { entries: Record<string, string> } })._def.entries),
@@ -212,8 +180,6 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
       return falWire(parsed.apiId);
     case "xai":
       return xaiWire(parsed.apiId);
-    case "googleflow":
-      return googleFlowWire(parsed.apiId);
     case "alibaba":
       return alibabaWire(parsed.apiId);
     case "elevenlabs":

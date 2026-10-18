@@ -95,9 +95,6 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   Publishing: ["create_post", "update_post", "get_post", "list_posts", "link_post", "upload_post_to_dropbox", "save_post_to_icloud", "refresh_post_metrics", "record_post_metrics", "connect_service", "service_status", "post_icloud_sync_status", "draft_post_copy", "post", "verify_x_mentions"],
   Providers: [
     "check_kimi_coding_api", "list_chat_models", "provider_key_status", "set_env_secret",
-    "list_elevenlabs_voices", "create_google_flow_voice", "list_google_flow_voices",
-    "delete_google_flow_voice", "create_google_flow_character",
-    "get_google_flow_character", "replace_google_flow_character",
-    "list_google_flow_characters", "delete_google_flow_character",
+    "list_elevenlabs_voices",
   ],
 };

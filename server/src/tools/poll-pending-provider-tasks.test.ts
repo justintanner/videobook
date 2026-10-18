@@ -21,6 +21,7 @@ async function seedPendingTask(
   fs: Engine,
   taskType = "gpt_image",
   taskId = "synthetic-provider-task",
+  meta: Record<string, unknown> = {},
 ): Promise<{ assetSlug: string; taskId: string }> {
   const asset = await fs.artifacts.create("img", "poll-seed");
   if (!asset.ok) throw new Error(asset.error.message);
@@ -37,7 +38,7 @@ async function seedPendingTask(
       artifactId: asset.value.artifactId,
       taskId,
       taskType,
-      meta: { prompt: "a test image" },
+      meta: { prompt: "a test image", ...meta },
     },
     lease.ownerId,
   );
@@ -79,6 +80,38 @@ describe("pollPendingProviderTasks", () => {
     const stillPending = await fs.jobs.pending.findAll();
     expect(stillPending.ok).toBe(true);
     if (stillPending.ok) expect(stillPending.value).toEqual([]);
+  });
+
+  it.each([
+    { taskType: "media_removed", meta: {} },
+    { taskType: "seedance2_video", meta: { model: "retired:video-model" } },
+  ])("does not poll unsupported $taskType records through Kie", async ({ taskType, meta }) => {
+    const { assetSlug } = await seedPendingTask(fs, taskType, "unsupported-task", meta);
+    let requests = 0;
+    const server = createServer((request, response) => {
+      requests += 1;
+      request.resume();
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ code: 200, data: { taskId: "unsupported-task", state: "waiting" } }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+    const previousKey = process.env.KIE_API_KEY;
+    process.env.KIE_API_KEY = "local-poll-key";
+    try {
+      const result = await pollPendingProviderTasks(fs, bookId, { kieBaseURL: `http://127.0.0.1:${address.port}` });
+      expect(requests).toBe(0);
+      expect(result.completed).toEqual([]);
+      expect(result.failed).toEqual([]);
+      const pending = fs.jobs.pending.read(assetSlug);
+      expect(pending.ok && pending.value?.taskId).toBe("unsupported-task");
+    } finally {
+      if (previousKey === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = previousKey;
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("ages out stale non-completing tasks via injectable timeout", async () => {

@@ -18,18 +18,6 @@ import { providerKeyStatusDef } from "./provider-key-status.js";
 import { setEnvSecretDef } from "./set-env-secret.js";
 import { mediaLibraryDefs } from "./media-library.js";
 import { listElevenLabsVoicesDef } from "./list-elevenlabs-voices.js";
-import {
-  createGoogleFlowVoiceDef,
-  listGoogleFlowVoicesDef,
-  deleteGoogleFlowVoiceDef,
-} from "./google-flow-voices.js";
-import {
-  createGoogleFlowCharacterDef,
-  listGoogleFlowCharactersDef,
-  deleteGoogleFlowCharacterDef,
-  getGoogleFlowCharacterDef,
-  replaceGoogleFlowCharacterDef,
-} from "./google-flow-characters.js";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
 import { reorderCharacterImagesDef } from "./reorder-character-images.js";
@@ -301,14 +289,6 @@ export function getAllToolDefs(
     providerKeyStatusDef(),
     setEnvSecretDef(),
     listElevenLabsVoicesDef(),
-    createGoogleFlowVoiceDef(),
-    listGoogleFlowVoicesDef(),
-    deleteGoogleFlowVoiceDef(),
-    createGoogleFlowCharacterDef(engine),
-    getGoogleFlowCharacterDef(),
-    replaceGoogleFlowCharacterDef(engine),
-    listGoogleFlowCharactersDef(),
-    deleteGoogleFlowCharacterDef(),
     estimateCostDef(engine, books),
     bookUsageDef(engine),
     createCharacterDef(engine),

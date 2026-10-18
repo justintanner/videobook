@@ -1,4 +1,4 @@
-import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie";
+import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import type { ModeSpec, ModelEntry } from "./types.js";
 
@@ -6,16 +6,6 @@ const SEEDANCE_MODES: readonly ModeSpec[] = [
   { id: "t2v", label: "Text to video", roles: [] },
   { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame", "last_frame"] },
   { id: "r2v", label: "References", roles: ["image", "video", "audio"], requireAny: ["image", "video", "audio"] },
-];
-
-const OMNI_MODES: readonly ModeSpec[] = [
-  { id: "i2v", label: "Image to video", roles: ["first_frame", "image"] },
-  { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] },
-];
-
-const VEO_MODES: readonly ModeSpec[] = [
-  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
-  { id: "r2v", label: "References", roles: ["image"] },
 ];
 
 const FRAME_MODES: readonly ModeSpec[] = [
@@ -99,7 +89,6 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:seedream/5-flash-text-to-image", media: "image", operations: ["text_to_image"] },
   { id: "kie:seedream/5-flash-image-to-image", media: "image", operations: ["edit_image"] },
   { id: "kie:seedream/5-flash-layer-decomposition", media: "image", operations: ["layer_image"] },
-  { id: "googleflow:nano-banana-pro", media: "image", operations: ["text_to_image", "edit_image"], guide: "nano_banana", title: "Nano Banana Pro (Google Flow)", dialect: "image_ref_reference" },
   { id: "alibaba:qwen-image-2.0-pro", media: "image", operations: ["text_to_image"], title: "Qwen Image 2.0 Pro (Alibaba)" },
   { id: "alibaba:qwen-image-edit-plus", media: "image", operations: ["edit_image"], title: "Qwen Image Edit Plus (Alibaba)" },
   { id: "fal:fal-ai/nano-banana", media: "image", operations: ["text_to_image"], guide: "nano_banana", hidden: true },
@@ -164,7 +153,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     ],
   },
   { id: "kie:kling-3.0/motion-control", media: "video", operations: ["motion_control"], guide: "kling30", dialect: "natural", defaults: { mode: "720p" } },
-  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, OMNI_MODES[1]!], refItem: { video: { start: 0, ends: 8 } }, aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
+  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
   { id: "kie:wan/3-0-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:wan/3-0-video-prime", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:happyhorse-1-1/text-to-video", media: "video", operations: ["text_to_video"] },
@@ -181,11 +170,6 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:veo3", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 (Kie)" },
   { id: "kie:veo3_fast", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 Fast (Kie)" },
   { id: "xai:grok-imagine-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video (xAI)", dialect: "natural", refs: { first_frame: "image", audio: null }, modes: XAI_MODES },
-  { id: "googleflow:veo-3.1-quality", media: "video", operations: ["text_to_video", "image_to_video"], dialect: "image_ref" },
-  { id: "googleflow:veo-3.1-fast", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES, refs: { audio: null } },
-  { id: "googleflow:veo-3.1-lite", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES, refs: { audio: null } },
-  { id: "googleflow:veo-3.1-lite-low-priority", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "image_ref", modes: VEO_MODES, refs: { audio: null } },
-  { id: "googleflow:omni-flash", media: "video", operations: ["image_to_video", "edit_video"], dialect: "image_ref", modes: OMNI_MODES, refs: { audio: null } },
   { id: "fal:xai/grok-imagine-video/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine", hidden: true },
   { id: "fal:xai/grok-imagine-video/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "grok_imagine", hidden: true },
   { id: "fal:xai/grok-imagine-video/extend-video", media: "video", operations: ["extend_video"], hidden: true },

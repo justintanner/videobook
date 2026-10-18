@@ -9,7 +9,7 @@ export const UI_ACTION_IDS = [
   "close_viewer", "sidebar_collapse", "sidebar_expand", "sidebar_sort",
   "open_provider_keys", "open_archive", "timeline_audio_add", "timeline_audio_move",
   "timeline_audio_remove", "timeline_audio_update", "extract_skeleton",
-  "rewind_activity", "open_slot_player", "open_gf_characters", "open_diagnostics",
+  "rewind_activity", "open_slot_player", "open_diagnostics",
   "open_entities", "open_jobs", "open_revisions", "run_notebook", "save_notebook",
   "speak_preview", "x_connect", "open_actions",
 ] as const;

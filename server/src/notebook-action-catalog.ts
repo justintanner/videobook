@@ -324,7 +324,6 @@ const providerLabels: Record<ResolvedModel["provider"], string> = {
   kie: "Kie",
   fal: "Fal",
   xai: "xAI",
-  googleflow: "Google Flow",
   alibaba: "Alibaba",
   elevenlabs: "ElevenLabs",
 };

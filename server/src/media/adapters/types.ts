@@ -32,5 +32,4 @@ export const MEDIA_TASK_TYPES = {
   kie: "media_kie",
   fal: "fal_media",
   xai: "xai_media",
-  googleflow: "media_googleflow",
 } as const;

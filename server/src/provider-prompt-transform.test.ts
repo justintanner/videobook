@@ -12,7 +12,7 @@ const VID_ID = "01890f1c-0000-7000-8000-0000000000bb";
 describe("provider payload mention guards", () => {
   it("rejects unresolved grid and artifact-id mentions", () => {
     expect(unresolvedProviderMentions(
-      `@a2 @${IMG_ID} @element_1 @referenceImage_1 @Image1 @image1`,
+      `@a2 @${IMG_ID} @element_1 [Image 1] @Image1 @image1`,
     )).toEqual(["@a2", `@${IMG_ID}`]);
     expect(unresolvedProviderMentions(
       "keep @some-handle and plain @words alone",

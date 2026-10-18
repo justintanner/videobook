@@ -26,7 +26,6 @@ describe("provider completion routing", () => {
     ["media_kie", "media"],
     ["fal_media", "media"],
     ["xai_media", "media"],
-    ["media_googleflow", "media"],
     ["isolate_vocals", "isolateVocals"],
     ["seedance2_video", "media"],
     ["kling30_video", "media"],

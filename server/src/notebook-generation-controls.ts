@@ -53,8 +53,6 @@ const connectionOwnedFields = new Set([
   "audio_ref",
   "driving_audio_ref",
   "replace_audio_with",
-  "character_refs",
-  "voice_refs",
   "_provider",
 ]);
 

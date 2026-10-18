@@ -85,7 +85,7 @@ describe('workspace action launcher with real endpoints', () => {
     appUrl = `http://127.0.0.1:${vitePort}`
     const env = {
       ...process.env, PORT: String(mcpPort), OPENAI_API_KEY: '', KIE_API_KEY: '', FAL_API_KEY: '',
-      KIMI_CODING_API_KEY: '', DASHSCOPE_API_KEY: '', ELEVENLABS_API_KEY: '', GOOGLE_FLOW_API_KEY: '',
+      KIMI_CODING_API_KEY: '', DASHSCOPE_API_KEY: '', ELEVENLABS_API_KEY: '',
       VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'), VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime/app-state.json'),
       VIDEOBOOK_DOWNLOADS_DIR: join(rootDir, 'downloads'), X_CLIENT_ID: '', X_CLIENT_SECRET: '', XAI_API_KEY: '',
     }
@@ -246,7 +246,8 @@ describe('workspace action launcher with real endpoints', () => {
   it('traverses the entire slash list and invokes exact aliases and sequence commands', async () => {
     const input = page.getByLabel('Videobook command input', { exact: true })
     await input.fill('/')
-    await expect.poll(() => page.locator('.command-suggestions [role="option"]').count()).toBeGreaterThan(300)
+    await expect.poll(async () => (await page.locator('.command-suggestions strong').allTextContents()).sort())
+      .toEqual([...catalog.actions.map(action => action.command), '/action-ui-project'].sort())
     expect(await input.getAttribute('role')).toBe('combobox')
     const visited = new Set<string>()
     for (let index = 0; index < 30; index += 1) {

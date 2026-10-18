@@ -1,12 +1,11 @@
 import {
   replaceHappyHorseAssetMentions,
   replaceNaturalAssetMentions,
-  rewriteImageRefMentions,
   rewriteImageRefMentionsToBrackets,
   rewriteSeedanceAssetMentions,
   rewriteViduReferenceMentions,
   stripRefMentions,
-} from "../google-flow-refs.js";
+} from "../generation-reference-mentions.js";
 import type { MediaRefs, PromptDialect, RefRole } from "./types.js";
 
 const SLOT_TOKEN = /@((image|video|audio)(\d+)|firstframe|lastframe)(?![\w-])/giu;
@@ -66,13 +65,6 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
       });
     case "seedance":
       return stripRefMentions(seedance(prompt, refs), frames(refs));
-    case "image_ref":
-      return stripRefMentions(
-        rewriteImageRefMentions(prompt, refsFor(refs, "image")),
-        [...frames(refs), ...refsFor(refs, "video")],
-      );
-    case "image_ref_reference":
-      return rewriteImageRefMentions(prompt, refsFor(refs, "image"), "reference");
     case "strip_frames":
       return stripRefMentions(prompt, [...frames(refs), ...refsFor(refs, "image")]);
     case "brackets":

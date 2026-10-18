@@ -42,18 +42,6 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "create_character", autoInject: ["book_id"] },
   },
   {
-    command: "/gf-characters",
-    description: "Manage Google Flow characters",
-    category: "action",
-    icon: "Users",
-    size: "default",
-    variant: "emerald",
-    chevron: "right",
-    params: [],
-    uiAction: "open_gf_characters",
-  },
-
-  {
     command: "/crop",
     description: "Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
     example: "/crop @a1 9:16",

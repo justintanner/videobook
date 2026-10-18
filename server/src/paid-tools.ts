@@ -8,7 +8,7 @@ export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "make_cover_song", "extend_audio_asset", "rewrite_prompt", "rewrite_script",
   "describe_image", "analyze_image_subjects", "edit_image_subjects", "rename_all",
   "retag_asset", "verify_x_mentions",
-  "create_google_flow_voice", "backfill_asset_tags", "retry_generation", "retry_job",
+  "backfill_asset_tags", "retry_generation", "retry_job",
   "run_notebook", "run_notebook_cell", "enqueue_notebook_run", "continue_notebook_generation",
   "generate_image", "generate_video", "generate_audio",
 ]);

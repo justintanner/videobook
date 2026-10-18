@@ -11,9 +11,6 @@ const PROVIDER_LABELS: Record<string, string> = {
   alibaba: "Alibaba",
   elevenlabs: "ElevenLabs",
   fal: "Fal",
-  google: "Google Flow",
-  google_flow: "Google Flow",
-  googleflow: "Google Flow",
   kie: "Kie",
   openai: "OpenAI",
   workflow: "Workflow",
@@ -23,8 +20,6 @@ const PROVIDER_LABELS: Record<string, string> = {
 const SENSITIVE_ENV_KEY = /(?:^|_)(?:api_key|access_key_id|secret_access_key|token|secret|password|authorization|credential)(?:_|$)/i;
 const SENSITIVE_FIELD = /((?:api[_-]?key|secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|access[_-]?token|refresh[_-]?token|token|secret|password|authorization|credential)\s*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|Bearer\s+[^\s,;}\]]+|[^\s,;}\]]+)/gi;
 const SENSITIVE_QUERY = /([?&](?:api[_-]?key|key|token|access[_-]?token|refresh[_-]?token|signature|sig|credential|x-amz-credential|x-amz-signature|x-goog-signature)=)[^&\s"'<>]*/gi;
-const REPUTATIONAL_FAILURE = /(?:PUBLIC_ERROR_REPUTATIONAL|\bREPUTATIONAL\b)/i;
-const REPUTATIONAL_GUIDANCE = "Google's safety system flagged this as reputation-sensitive, often involving an identifiable person. Use fictional or stylized subjects, remove real-person references, reword the edit, or try a different provider.";
 
 function providerCell(
   engine: Engine,
@@ -83,12 +78,6 @@ export function notebookProviderFailureMessage(
     ? `${technical} (${failCode})`
     : technical;
   const prefix = `${providerLabel(providerCell(engine, reference))} failed: ${detail}`;
-  if (
-    REPUTATIONAL_FAILURE.test(`${failCode} ${message}`)
-    && !prefix.includes(REPUTATIONAL_GUIDANCE)
-  ) {
-    return `${prefix} — ${REPUTATIONAL_GUIDANCE}`;
-  }
   return prefix;
 }
 

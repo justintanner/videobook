@@ -63,13 +63,13 @@ const actions: NotebookGenerationAction[] = [
     }],
   },
   {
-    id: 'generation.generate_google_flow_nano_banana_pro_image',
+    id: 'generation.fal:fal-ai/nano-banana-pro/edit',
     cellTypes: ['generate_image'],
-    provider: 'google_flow',
-    providerLabel: 'Google Flow',
-    model: 'googleflow/image/nano-banana-pro',
-    operation: 'text_to_image',
-    tool: 'generate_google_flow_nano_banana_pro_image',
+    provider: 'fal',
+    providerLabel: 'Fal',
+    model: 'fal:fal-ai/nano-banana-pro/edit',
+    operation: 'edit_image',
+    tool: 'generate_image',
     title: 'Nano Banana Pro',
     isDefault: false,
     defaultPriority: null,
@@ -278,13 +278,13 @@ describe('notebook generation actions', () => {
       imageInput,
     ).map((action) => action.tool)).toEqual([
       'generate_kie_nano_banana_pro_text_to_image',
-      'generate_google_flow_nano_banana_pro_image',
+      'generate_image',
     ])
     expect(generationSelectionForAction(actions[1]!)).toEqual({
-      provider: 'google_flow',
-      model: 'googleflow/image/nano-banana-pro',
-      operation: 'text_to_image',
-      tool: 'generate_google_flow_nano_banana_pro_image',
+      provider: 'fal',
+      model: 'fal:fal-ai/nano-banana-pro/edit',
+      operation: 'edit_image',
+      tool: 'generate_image',
     })
   })
 

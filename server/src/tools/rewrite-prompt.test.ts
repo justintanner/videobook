@@ -8,7 +8,6 @@ import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import {
   loadGuide,
-  loadUseapiGuide,
   buildRewritePromptText,
   buildRewriteMessages,
   buildVisionMessages,
@@ -67,15 +66,6 @@ describe("loadGuide", () => {
   });
 });
 
-describe("loadUseapiGuide", () => {
-  it("loads the useapi.net provider guide", async () => {
-    const guide = await loadUseapiGuide();
-    expect(guide.length).toBeGreaterThan(0);
-    expect(guide).toContain("useapi.net");
-    expect(guide).toContain("@referenceImage");
-  });
-});
-
 describe("buildRewritePromptText", () => {
   it("includes guide and prompt text", () => {
     const text = buildRewritePromptText("guide content here", "user prompt here");
@@ -118,39 +108,8 @@ describe("buildRewritePromptText", () => {
     expect(text).toContain("USER PROMPT TO REWRITE: (none");
   });
 
-  it("provider-docs mode uses provider framing and the provider documentation", () => {
-    const text = buildRewritePromptText("useapi doc body", "user prompt", {
-      providerDocs: true,
-      modelContext: "nano_banana",
-    });
-    expect(text).toContain("PROVIDER API DOCUMENTATION");
-    expect(text).toContain("useapi doc body");
-    expect(text).toContain("TARGET MODEL: nano_banana");
-    expect(text).toContain("@referenceImage");
-    // provider-docs mode never emits a platform section
-    expect(text).not.toContain("PLATFORM STYLE");
-    expect(text).not.toContain("PROMPTING GUIDE");
-  });
 
-  it("provider-docs mode omits the platform overlay even if platform is passed", () => {
-    const text = buildRewritePromptText("doc", "prompt", {
-      providerDocs: true,
-      platform: "ig",
-    });
-    expect(text).not.toContain("PLATFORM STYLE");
-    expect(text).not.toContain("Instagram");
-  });
 
-  it("provider-docs mode still applies maxChars and customPrompt", () => {
-    const text = buildRewritePromptText("doc", "prompt", {
-      providerDocs: true,
-      maxChars: 400,
-      customPrompt: "keep it short",
-    });
-    expect(text).toContain("HARD LIMIT");
-    expect(text).toContain("400");
-    expect(text).toContain("ADDITIONAL INSTRUCTION: keep it short");
-  });
 
   it("injects previous-error section in standard mode", () => {
     const text = buildRewritePromptText("guide", "user prompt", {
@@ -162,9 +121,8 @@ describe("buildRewritePromptText", () => {
     expect(text).toContain("END PREVIOUS GENERATION ERROR");
   });
 
-  it("injects previous-error section in provider-docs mode", () => {
+  it("includes a previous error without a failure code", () => {
     const text = buildRewritePromptText("doc", "user prompt", {
-      providerDocs: true,
       previousError: { message: "safety filter" },
     });
     expect(text).toContain("PREVIOUS GENERATION ERROR");
@@ -175,8 +133,6 @@ describe("buildRewritePromptText", () => {
   it("omits previous-error section when previousError is not set", () => {
     const std = buildRewritePromptText("guide", "prompt");
     expect(std).not.toContain("PREVIOUS GENERATION ERROR");
-    const docs = buildRewritePromptText("doc", "prompt", { providerDocs: true });
-    expect(docs).not.toContain("PREVIOUS GENERATION ERROR");
   });
 
   it("places previous-error section between instruction and user prompt", () => {
@@ -256,7 +212,7 @@ describe("buildResult", () => {
 
   it("emits previous_error without fail_code when failCode is absent", () => {
     const err: PreviousError = { message: "something went wrong" };
-    const result = buildResult("gemini_omni", "p", "r", "useapi.md", err);
+    const result = buildResult("nano_banana", "p", "r", "nano_banana_pro_prompting_guide.md", err);
     expect(result.previous_error).toEqual({ message: "something went wrong" });
     expect(result.previous_error).not.toHaveProperty("fail_code");
   });
@@ -625,26 +581,6 @@ describe("rewrite_prompt tool", () => {
     expect(content[0].text).toContain("Could not resolve any image files");
   });
 
-  it("accepts model=gemini_omni and forces provider-docs mode", async () => {
-    process.env.OPENAI_API_KEY = "test-key-for-validation";
-    // gemini_omni forces provider-docs mode even without provider_docs=true.
-    // With unresolvable image_refs, provider-docs branch returns "Could not
-    // resolve any image files" — the standard branch would return "No prompting
-    // guide available for model: gemini_omni".
-    const result = await client.callTool({
-      name: "rewrite_prompt",
-      arguments: {
-        prompt: "a cat",
-        model: "gemini_omni",
-        image_refs: ["nonexistent-slug"],
-        book_id: "test-proj",
-      },
-    });
-    expect(result.isError).toBe(true);
-    const content = result.content as TextContent;
-    expect(content[0].text).toContain("Could not resolve any image files");
-    expect(content[0].text).not.toContain("No prompting guide available");
-  });
 
   it("accepts previous_error in the schema", async () => {
     delete process.env.OPENAI_API_KEY;
@@ -652,7 +588,7 @@ describe("rewrite_prompt tool", () => {
       name: "rewrite_prompt",
       arguments: {
         prompt: "a cat",
-        model: "gemini_omni",
+        model: "nano_banana",
         previous_error: "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED",
         book_id: "test-proj",
       },
@@ -679,24 +615,4 @@ describe("rewrite_prompt tool", () => {
     expect(content[0].text).toContain("Too small");
   });
 
-  it("returns isError when provider-docs guide is unreadable (does not throw)", async () => {
-    process.env.OPENAI_API_KEY = "test-key-for-validation";
-    // gemini_omni forces provider-docs mode which calls loadUseapiGuide().
-    // With unresolvable image_refs, we get "Could not resolve" which proves
-    // the guide loaded past the try/catch. This test documents that the
-    // try/catch returns isError instead of throwing on guide load failure.
-    const result = await client.callTool({
-      name: "rewrite_prompt",
-      arguments: {
-        prompt: "a cat",
-        model: "gemini_omni",
-        image_refs: ["nonexistent-slug"],
-        book_id: "test-proj",
-      },
-    });
-    expect(result.isError).toBe(true);
-    const content = result.content as TextContent;
-    expect(content[0].text).toContain("Could not resolve any image files");
-    expect(content[0].text).not.toContain("No prompting guide available");
-  });
 });

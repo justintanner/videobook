@@ -79,4 +79,18 @@ describe("provider status details", () => {
     expect(providerStatusUrl("fal", "fal-ai/../settings")).toBeNull();
     expect(providerStatusUrl("fal", "fal-ai/model?key=secret")).toBeNull();
   });
+
+  it.each([
+    { taskType: "media_removed", meta: {} },
+    { taskType: "seedance2_video", meta: { model: "retired:video-model" } },
+  ])("does not assign a Kie status page to unsupported $taskType records", async ({ taskType, meta }) => {
+    const asset = await engine.artifacts.create("video", "unsupported output");
+    if (!asset.ok) throw new Error(asset.error.message);
+    const artifactId = asset.value.artifactId;
+    const stored = await engine.metadata.artifacts.write(artifactId, "provider-task", {
+      taskId: "unsupported-task", taskType, createdAt: Date.now(), meta,
+    });
+    expect(stored.ok).toBe(true);
+    expect(await readProviderTaskStatus(engine, artifactId)).toBeNull();
+  });
 });

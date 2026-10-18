@@ -34,11 +34,6 @@ describe("prompt dialects", () => {
       `@${IMG_ID} follows @${VID_ID} with @${AUD_ID}`,
       { image: [IMG_ID], video: [VID_ID], audio: [AUD_ID] },
     )).toBe("@Image1 follows @Video1 with @Audio1");
-    expect(forModel(
-      "googleflow:nano-banana-pro",
-      `paint @${IMG_ID}`,
-      { image: [IMG_ID] },
-    )).toBe("paint @reference_1");
     expect(applyPromptDialect("brackets", "hero @image1 waves", { image: [IMG_ID] }))
       .toBe("hero [Image 1] waves");
     expect(forModel(

@@ -1,4 +1,3 @@
-/** Short character names derived from source image labels (Google Flow display_name). */
 
 const MIN_STEM_LEN = 3;
 

@@ -131,7 +131,7 @@ export default defineConfig({
       'server/src/chain-executor.test.ts',
       'server/src/dialog-quality.test.ts',
       'server/src/downloads-dest.test.ts',
-      'server/src/google-flow-refs.test.ts',
+      'server/src/generation-reference-mentions.test.ts',
       'server/src/image.test.ts',
       'server/src/http-byte-range.test.ts',
       'server/src/job-deadline.test.ts',

@@ -94,7 +94,7 @@ const ENUM_FIELDS = {
   status: ["ok", "error"],
   modality: ["visual", "audio", "metadata"],
   reason: ["unbounded", "zero", "missing-adapter", "missing-rates", "missing-selector", "estimator-threw", "estimate-error"],
-  provider: ["kie", "fal", "alibaba", "elevenlabs", "googleflow", "openai", "kimicoding", "xai", "acestep"],
+  provider: ["kie", "fal", "alibaba", "elevenlabs", "openai", "kimicoding", "xai", "acestep"],
   stage: ["submit-kie", "submit-queued-kie", "submit-veo", "index-progressive"],
   signal: ["SIGTERM", "SIGKILL", "SIGINT", "SIGABRT", "SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGHUP"],
 } as const;

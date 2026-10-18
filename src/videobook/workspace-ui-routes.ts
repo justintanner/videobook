@@ -27,7 +27,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_revisions: { kind: 'form', tool: 'list_book_actions' },
   open_diagnostics: { kind: 'form', tool: 'doctor' },
   open_entities: { kind: 'search', query: 'Entities' },
-  open_gf_characters: { kind: 'search', query: 'google flow character' },
   open_archive: { kind: 'form', tool: 'search_archive' },
   open_rename_all: { kind: 'form', tool: 'rename_all' },
   open_crop: { kind: 'form', tool: 'crop_asset' },

@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "../../..");
-const LEGACY_TOOL_NAME = /\b(?:generate|extend|upscale)_(?:kie|fal|google_flow|xai|alibaba|elevenlabs)_\w+/u;
+const LEGACY_TOOL_NAME = /\b(?:generate|extend|upscale)_(?:kie|fal|xai|alibaba|elevenlabs)_\w+/u;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

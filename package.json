@@ -52,7 +52,6 @@
     "@apicity/elevenlabs": "^0.16.1",
     "@apicity/fal": "^0.16.1",
     "@apicity/free-media-upload": "^0.16.1",
-    "@apicity/googleflow": "^0.16.1",
     "@apicity/kie": "^0.16.1",
     "@apicity/kimicoding": "^0.16.1",
     "@apicity/openai": "^0.16.1",

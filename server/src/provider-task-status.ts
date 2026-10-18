@@ -1,5 +1,6 @@
 import type { Engine, Job } from "videobook-engine";
 import { parseModelId } from "./media/model-id.js";
+import { legacyMediaForTaskType } from "./media/legacy-task-types.js";
 import { readProviderTaskRecord } from "./provider-task-record.js";
 import type { ProviderTaskStatus } from "./provider-status-link.js";
 
@@ -24,11 +25,14 @@ export async function readProviderTaskStatus(
   const payload = payloadResult?.ok ? record(payloadResult.value) : {};
   const storedId = idResult?.ok ? record(idResult.value) : {};
   const endpoint = firstString(payload.endpoint_id, saved?.meta.falEndpointId, saved?.meta.endpointId, saved?.meta.endpoint_id);
-  const catalogModel = parseModelId(firstString(saved?.meta.model, hints.model) ?? "");
+  const catalogModelId = firstString(saved?.meta.model, hints.model) ?? "";
+  const catalogModel = parseModelId(catalogModelId);
+  if (catalogModelId.includes(":") && !catalogModel) return null;
   const model = firstString(endpoint, payload.model, catalogModel?.apiId, saved?.meta.apiModel, saved?.meta.model, hints.model);
   const taskId = firstString(saved?.taskId, storedId.taskId, hints.taskId);
-  if (saved && (saved.meta.googleFlow === true
-    || /^(?:xai|alibaba)_/u.test(saved.taskType))) return null;
+  if (saved && /^(?:xai|alibaba)_/u.test(saved.taskType)) return null;
+  if (saved && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
+    && !saved.taskType.startsWith("fal_") && legacyMediaForTaskType(saved.taskType) === null) return null;
   const provider = endpoint || saved?.taskType.startsWith("fal_") ? "fal"
     : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
   if (provider !== "kie" && provider !== "fal") return null;

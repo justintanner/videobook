@@ -33,8 +33,7 @@ including xAI's `usage.cost_in_usd_ticks` ([cost tracking](https://docs.x.ai/dev
 Supported rates are saved as estimates with their pricing version. Requests
 without a reported charge or supported rate stay unpriced. The bundled tables do not yet price the current chat
 and realtime defaults (`gpt-5.6-sol`, `gpt-realtime-2.1`, and
-`grok-voice-think-fast-2.0`). Google Flow estimates use the package's Flow
-credit × plan rates (§15). Accounting starts at rollout and does not
+`grok-voice-think-fast-2.0`). Accounting starts at rollout and does not
 reconstruct older usage.
 
 Sections written before 2026-10-16 name per-model tools (`generate_kie_*`,
@@ -152,7 +151,7 @@ The catalog expresses these with `frameOptions` and mode `requireAny` in
 from the apicity schemas. Before the catalog (d8814110) this table listed the
 Grok `spicy` and `index` filters of the removed `generate_grok_imagine_video`
 tool (§2). The Bria guided background removal row ended in 0.16.0, when the
-schema itself started requiring `image_url` (§42). Google Flow's broader local contract is tracked in §14.
+schema itself started requiring `image_url` (§42).
 
 ## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 
@@ -190,113 +189,6 @@ cost adapter. String-duration and V2V selector defects from 0.7.3 were fixed in
 Videocity does not yet expose Kie audio/character ID-minting workflows, so its
 Gemini Omni generation tool intentionally omits optional `audio_ids` and
 `character_ids`. That is a Videocity product gap, not an Apicity gap.
-
-## 14. (gap) ~~Google Flow schemas still have loose enums and generic responses~~ — RESOLVED in 0.16.0 (adopted)
-
-0.8.0 narrows the Veo model escape hatch to versioned aliases
-(`veo-\d+(?:\.\d+)*(?:-[a-z0-9]+)*`) instead of bare `z.string()`. Image/video
-model fields and job/entity responses remain largely loose / untyped. Shared
-video duration still includes 4/6/8/10 while allowed subsets vary by model.
-
-**Former workaround (removed in 0.15.0 and 0.16.1):** per-model domains,
-positional reference mapping, tolerant response readers.
-
-**Ask Apicity:** export strict per-model schemas and typed job/entity responses.
-
-Update 2026-10-17 (0.15.0): `GoogleFlowVideosRequestSchema` is now a union of
-per-model schemas with literal model ids and per-model durations (`veo-3.1-fast`,
-`-lite` and `-lite-low-priority` 4/6/8 s, `veo-3.1-quality` 8 s, `omni-flash`
-4/6/8/10 s); only the versioned `veo-*` escape hatch keeps 4/6/8/10. The
-catalog reads those per-model schemas directly, so the local per-model domains
-are gone. Still loose: the image model accepts an enum or a
-`nano-banana-*` pattern, every provider method returns the generic
-`GoogleFlowResponse`, and images have no response schema (videos, jobs,
-assets, characters and voices do). `server/src/media/adapters/googleflow.ts`
-keeps tolerant response readers.
-
-Update 2026-10-17 (0.16.1): apicity kept the generic `GoogleFlowResponse`
-return types on purpose (`ac-j3d6ki.7`) and documented the exported response
-schemas instead; `GoogleFlowImagesResponseSchema` has shipped since 0.15.0. The
-image adapter now parses the response with it rather than probing
-`media[].image.generatedImage.fifeUrl` untyped, so a shape drift fails with the
-schema's message. The image model's `nano-banana-*` pattern is deliberate:
-apicity keeps model-identifier enums open with a family alias regex so new
-upstream models validate without a release. Nothing local remains.
-
-## 15. (gap) Google Flow package rates are credit×Pro, not Gemini API list USD — PARTIAL in 0.15.0
-
-`@apicity/cost@0.8.0` accepts `provider: "googleflow"` and prices
-`veo-3.1-quality` / `fast` / `lite` / `lite-low-priority` / `omni-flash` as Flow
-credits × Pro ($0.02/credit). Videocity badges still use official Gemini
-Developer API list rates (720p) with plan credits as secondary metadata in
-`server/src/google-flow-cost.ts` (product choice A).
-
-**Former workaround (removed in d8814110):** keep the local estimator for displayed USD; do not route UI
-estimates through the package googleflow table without an explicit product
-switch to credit-native numbers.
-
-**Ask Apicity:** optionally expose Gemini API list-rate USD alongside Flow
-credit estimates, or document plan-tier selection so credit×USD matches Ultra.
-
-Update 2026-10-17 (0.15.0): `server/src/google-flow-cost.ts` was removed with
-the per-model tools in d8814110, so the displayed numbers are now the
-package's credit-native estimates. `server/src/media/cost.ts` passes
-`GOOGLE_FLOW_PLAN_TIER` as `costHints.googleFlowPlan`; unset means Pro
-(`veo-3.1-fast` $0.40, `veo-3.1-quality` $2.00 per generation; Ultra $0.08 and
-$0.80). `googleflow:nano-banana-pro` has no Flow rate at all, so it estimates
-$0 with a "not found in pricing table" warning.
-
-Update 2026-10-17 (0.16.1): `@apicity/cost` prices every Flow image model at 0
-credits on both plans (`ac-j3d6ki.5`), because Flow Pro and Ultra include image
-generation, so `googleflow:nano-banana-pro` estimates $0 without a warning.
-0.16.0 also models the Plus and $99 Ultra plan tiers. Nothing local remains;
-the badge is the package's credit × plan number.
-
-## 16. (bug) ~~Google Flow path IDs are percent-encoded~~ — RESOLVED in 0.8.0
-
-`@apicity/googleflow@0.8.0` encodes path segments via `encodePathSegment`, which
-restores `:` and `@` after `encodeURIComponent`. The defensive `googleFlowFetch`
-path decode Videobook kept as belt-and-suspenders was removed with the 0.16.1
-upgrade; every Flow client now uses the package's own fetch.
-
-## 17. (quirk) Google Flow email requirements are route-specific — CONSUMER REQUIREMENT
-
-0.8.0 documents that voice create/list and character/account path operations
-require `email` (no single-account fallback), while generation schemas leave
-`email` optional for load-balancing / reference reuse. Videocity still needs a
-resolved account for the required-email entity calls.
-
-**Consumer requirement (not a workaround):** `resolveGoogleFlowEmail` uses an
-explicit email or resolves the sole account before calling those methods.
-
-The required fields are correct. Unless useapi.net adds a single-account
-default to the entity routes, this is a consumer resolution requirement rather
-than an Apicity gap.
-
-## 18. (bug) Google Flow singleton character reads lose metadata — WORKAROUND REMOVED in 0.16.1
-
-Singleton character retrieval can return `Untitled Character` and omit
-`personalityNotes` while list/create responses retain them.
-
-**Former workaround (removed in 0.16.1):** `server/src/tools/google-flow-characters.ts`
-reconciled singleton and list records and reported conflicts/partial success.
-
-This may be a useapi.net service bug rather than an SDK bug; confirm upstream.
-
-Not re-verified for 0.15.0: the behavior is service-side and needs a live
-Google Flow call. `@apicity/googleflow` 0.15.0 differs from 0.14.2 only in its
-version number.
-
-Update 2026-10-17 (0.16.1): a read-only live probe resolved the account but
-useapi.net answered `GET characters` with 404 (`flow.projectInitialData`), so
-neither the list nor the singleton read could be compared. With the list read
-failing, the reconcile already fell back to the singleton alone, so it was
-removed with the 0.16.1 upgrade: `get_google_flow_character` and
-`replace_google_flow_character` read `GET characters/{ref}` directly, and list
-previews only add the singleton's thumbnail and image count. If useapi.net
-still drops `displayName` or `personalityNotes` on singleton reads, a replace
-without an explicit name or notes carries "Untitled Character" and no notes
-forward; report that to useapi.net rather than restoring a local merge.
 
 ## 19. (bug) ~~ElevenLabs Sound Generation omits the 450-character cap~~ — RESOLVED in 0.8.0
 
@@ -695,7 +587,6 @@ the versioned Qwen models, so neither change reaches the catalog.
 
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| **WATCH**    | §18 character metadata (service-side, unverified)                   | none; singleton reads used directly                    |
 | **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | catalog rule reads the apicity constant (vb-6rct)      |
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
@@ -703,19 +594,15 @@ the versioned Qwen models, so neither change reaches the catalog.
 | **BY DESIGN**| §41 fal dynamic endpoints (Seedance priced in 0.16.0)               | none; 13 dynamic requests stay unpriced                |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **RESOLVED** | §14 Flow image model and responses                                  | images parsed with the exported response schema       |
-| **RESOLVED** | §15 Flow estimate semantics                                         | package credit × plan USD, images included at 0 credits |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
-| **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §16, §19–21, §25, §27, §29              | no local shim                                          |
+| **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
 
-**Deliberate product quirks (not Apicity defects):** §8 table, §17
-route-specific Flow email resolution, §42 fal request shapes. The §2 Grok
+**Deliberate product quirks (not Apicity defects):** §8 table and §42 fal request shapes. The §2 Grok
 `spicy` filter and the §23 `return_byteplus_urls` omission ended with the
 per-model tools (d8814110).
 
-**Deferred upstream verification:** §18 appears service-side. §14–15 remain
-broader Google Flow product and schema work. The §3 Qwen edit key note was
+**Upstream verification:** The §3 Qwen edit key note was
 checked against fal's live OpenAPI on 2026-10-17: the apicity key is correct.
 
 **0.11.0 Wan 3.0 / Qwen 3 update (2026-08-25, vb-2erh):** all Wan 2.x surfaces
@@ -736,8 +623,7 @@ are not catalogued.
 **Upstream tracking (2026-10-17):** apicity epic `ac-j3d6ki` carried the open
 asks: `.1` Bria sample-photo default (§42), `.2` MiniMax H3 clip window (§36),
 `.3` fal Seedance estimates and `.4` the other unpriced fal endpoints (§41),
-`.5` Google Flow image rates (§15), `.6` missing `MODEL_DISPLAY` names (§42),
-`.7` typed Google Flow responses (§14), and `.10`–`.12` publishing the OpenAI
+`.6` missing `MODEL_DISPLAY` names (§42), and `.10`–`.12` publishing the OpenAI
 and xAI realtime transports (with §39's types) and the X and Dropbox changes
 Videobook vendored. All of them shipped in 0.16.0 and 0.16.1.
 
@@ -746,11 +632,8 @@ from npm, and the four vendored archives, their patches and revision notes are
 deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
 `./realtime` transports, X post metrics, Dropbox upload sessions, typed xAI
 `force_message` and `audio.output.speed` (§39), `MODEL_DISPLAY` names for the
-fal entries (§42), the schema's required Bria `image_url` (§8, §42),
-`GoogleFlowImagesResponseSchema` for image responses (§14), and the package's
-Flow path encoding (§16). The §36 clip window is enforced from the
-apicity constant (vb-6rct). The §18 list/singleton reconcile is removed, and usage
+fal entries (§42), and the schema's required Bria `image_url` (§8, §42).
+The §36 clip window is enforced from the apicity constant (vb-6rct). Usage
 rows stamp the installed `@apicity/cost` version in `pricingVersion` instead of
 a hard-coded `apicity-0.15.0`. No local Apicity workaround remains. Upstream
-items without a local workaround: §18 on useapi.net (unverified) and the 13
-dynamically billed fal requests in §41.
+items without a local workaround: the 13 dynamically billed fal requests in §41.

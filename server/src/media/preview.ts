@@ -36,8 +36,6 @@ export function providerPath(model: ResolvedModel): string {
       return "fal.post.v1.queue.submit()";
     case "xai":
       return "xai.post.v1.videos.generations(request, { otp })";
-    case "googleflow":
-      return model.media === "image" ? "googleflow.v1.images(request)" : "googleflow.v1.videos(request)";
     case "alibaba":
       return "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation(request)";
     case "elevenlabs":

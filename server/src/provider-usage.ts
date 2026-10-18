@@ -21,7 +21,7 @@ function installedPackageVersion(name: string): string {
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
-type Provider = "openai" | "xai" | "kie" | "fal" | "googleflow" | "alibaba" | "elevenlabs";
+type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs";
 type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
@@ -142,7 +142,7 @@ function remoteId(body: RecordValue, url: URL, method: string): string | null {
   const pathId = url.searchParams.get("taskId") ?? url.searchParams.get("task_id")
     ?? (/\/(requests|tasks|jobs|videos)\/([^/]+)(?:\/status)?$/u.exec(url.pathname)?.[2] ?? null);
   if (method === "GET" && pathId) return decodeURIComponent(pathId);
-  return text(data.taskId) ?? text(data.task_id) ?? text(body.request_id) ?? text(body.jobid) ?? text(body.jobId) ?? text(body.job_id)
+  return text(data.taskId) ?? text(data.task_id) ?? text(body.request_id) ?? text(body.job_id)
     ?? text(output.task_id) ?? text(body.id);
 }
 
@@ -224,7 +224,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const body = json ? object(await response.clone().json()) : {};
       const externalId = remoteId(body, url, method);
       if (entry) {
-        const accepted = !!externalId && (provider === "googleflow" ? !!body.jobid || response.status === 201 : provider === "kie" || provider === "fal" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
+        const accepted = !!externalId && (provider === "kie" || provider === "fal" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...observedPatch(provider, entry, body, status) });
       } else if (method === "GET" && externalId && response.ok && json) {

@@ -87,16 +87,6 @@ export async function loadWorkspaceActionResources(
   if (fields.voice_id) requests.push((async () => {
     result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])
   })())
-  if (fields.character_refs || (fields.ref && tool.includes('google_flow_character'))) requests.push((async () => {
-    const characters = choices(rows(await call('list_google_flow_characters', { include_previews: false }), 'characters'), ['ref'], ['displayName', 'name'])
-    result.choices.character_refs = characters
-    if (fields.ref) result.choices.ref = characters
-  })())
-  if (fields.voice_refs || (fields.ref && tool.includes('google_flow_voice'))) requests.push((async () => {
-    const voices = choices(rows(await call('list_google_flow_voices', {}), 'voices'), ['ref'], ['displayName', 'name'])
-    result.choices.voice_refs = voices
-    if (fields.ref) result.choices.ref = voices
-  })())
   if ((fields.subject_ids || fields.subject_id) && assetId && typeof values.object_hash === 'string') requests.push((async () => {
     const subjects = rows(await call('get_image_subject_map', { artifact_id: assetId, object_hash: values.object_hash }), 'subjects')
     result.choices.subject_id = choices(subjects, ['id', 'subjectId'], ['label', 'name'])

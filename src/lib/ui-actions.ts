@@ -42,7 +42,6 @@ type UiActionCallbacks = {
   extract_skeleton: (assetId: string) => void
   rewind_activity: (commitHash: string) => void
   open_slot_player: (slot: string) => void
-  open_gf_characters: () => void
   open_diagnostics: () => void
   open_entities: () => void
   open_jobs: () => void

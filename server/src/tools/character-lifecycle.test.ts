@@ -70,12 +70,12 @@ describe("Character lifecycle (create + metadata)", () => {
     const objResult = await setTool.handler({
       book_id: slug,
       char_asset_id: charId,
-      metadata: { google_flow_character_ref: "character:abc", display_name: "Ada" },
+      metadata: { external_character_ref: "character:abc", display_name: "Ada" },
     });
     expect(objResult.isError).toBeFalsy();
     const objRead = await fs.metadata.artifacts.read(charId, "character");
     expect(objRead.ok && objRead.value).toMatchObject({
-      google_flow_character_ref: "character:abc",
+      external_character_ref: "character:abc",
       display_name: "Ada",
     });
 

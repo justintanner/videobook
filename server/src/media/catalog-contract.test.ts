@@ -148,17 +148,12 @@ describe("media request building", () => {
     });
   });
 
-  it("wraps url objects and numbered fields", () => {
+  it("wraps reference URLs in provider objects", () => {
     const xai = buildWireRequest(resolveModel("xai:grok-imagine-video"), {
       prompt: "move",
       refUrls: { first_frame: ["https://example.com/a.png"] },
     });
     expect(xai).toMatchObject({ ok: true, request: { model: "grok-imagine-video", image: { url: "https://example.com/a.png" } } });
-    const flow = buildWireRequest(resolveModel("googleflow:veo-3.1-fast"), {
-      prompt: "move",
-      refUrls: { image: ["media-1", "media-2"] },
-    });
-    expect(flow).toMatchObject({ ok: true, request: { model: "veo-3.1-fast", referenceImage_1: "media-1", referenceImage_2: "media-2" } });
   });
 
   it("rejects refs, options and prompts the model cannot take", () => {

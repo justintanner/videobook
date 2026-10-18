@@ -6,11 +6,6 @@ X_CLIENT_SECRET=op://Apicity/X_CLIENT_SECRET/password
 KIMI_CODING_API_KEY=op://Apicity/KIMI_CODING_API_KEY/password
 FAL_API_KEY=op://Apicity/FAL_API_KEY/password
 DASHSCOPE_API_KEY=op://Apicity/DASHSCOPE_API_KEY/password
-GOOGLE_FLOW_API_KEY=op://Apicity/GOOGLE_FLOW_API_KEY/password
-# Optional: Google AI plan tier for Flow *credit* tooltips only (badge USD
-# uses official Gemini API list rates). plus | pro | ultra99 | ultra199
-# (default ultra99)
-# GOOGLE_FLOW_PLAN_TIER=ultra99
 ELEVENLABS_API_KEY=op://Apicity/ELEVENLABS_API_KEY/password
 B2_ACCESS_KEY_ID=op://Apicity/B2_ACCESS_KEY_ID/password
 B2_SECRET_ACCESS_KEY=op://Apicity/B2_SECRET_ACCESS_KEY/password

@@ -50,7 +50,7 @@ describe("retry_generation tool", () => {
 
     const payload = {
       type: "generate_media",
-      model: "googleflow:omni-flash",
+      model: "kie:gemini-omni-video",
       assetId,
       assetDir: assetResult.value.path,
       bookId: fs.book.get().bookId,
@@ -115,7 +115,7 @@ describe("retry_generation tool", () => {
     const assetResult = await fs.artifacts.create("vid", "legacy");
     if (!assetResult.ok) throw new Error("createAsset failed");
     await fs.metadata.artifacts.write(assetResult.value.artifactId, "generation-request", {
-      type: "generate_google_omni_video",
+      type: "generate_kie_kling30_video",
       vidAssetId: assetResult.value.artifactId,
       prompt: "x",
     });
