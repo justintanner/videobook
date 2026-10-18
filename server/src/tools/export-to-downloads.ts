@@ -43,7 +43,7 @@ export function exportToDownloadsDef(engine: Engine): ToolDef {
       const ext = extname(file.name);
       let dest: string;
       try {
-        dest = await copyToDownloads(source, artifactResult.value.label ?? asset_id, ext);
+        dest = await copyToDownloads(source, engine.book.get().name, ext);
       } catch (err) {
         return {
           isError: true as const,

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
@@ -492,6 +492,7 @@ describe('composer focus through real workspace interactions', () => {
       await expect.poll(() => fileActions.getByRole('status').textContent()).toContain(`Saved ${downloadsDir}/`)
       const savedPath = (await fileActions.getByRole('status').textContent())!.replace(/^Saved /u, '')
       const sourcePath = id === imageCellId ? portraitPath : id === audioCellId ? audioPath : join(rootDir, 'video.mp4')
+      expect(savedPath).toBe(join(downloadsDir, `focus-primary${extname(sourcePath)}`))
       expect(await readFile(savedPath)).toEqual(await readFile(sourcePath))
       expect(await dock.locator('.inspector-media-row-meta > :last-child').getAttribute('aria-label')).toBe('Cell cleanup actions')
       for (const viewport of [
@@ -694,6 +695,7 @@ describe('composer focus through real workspace interactions', () => {
       await expect.poll(() => actions.getByRole('status').textContent()).toContain(`Saved ${downloadsDir}/`)
       expect(await actions.getByRole('alert').count()).toBe(0)
       const savedPath = (await actions.getByRole('status').textContent())!.replace(/^Saved /u, '')
+      expect(savedPath).toBe(join(downloadsDir, `focus-primary${index === 0 ? '' : ' (2)'}.png`))
       expect(await readFile(savedPath)).toEqual(await readFile(path))
     }
     await cell(videoCellId).click({ position: { x: 20, y: 20 } })

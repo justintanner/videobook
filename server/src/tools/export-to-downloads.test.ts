@@ -17,6 +17,8 @@ describe("original media file actions", () => {
     root = await mkdtemp(join(tmpdir(), "export-media-"));
     downloads = await mkdtemp(join(tmpdir(), "export-media-downloads-"));
     engine = createEngineForTest(root);
+    const renamed = await engine.book.rename("wood");
+    if (!renamed.ok) throw new Error(renamed.error.message);
     previousDownloads = process.env.VIDEOBOOK_DOWNLOADS_DIR;
     process.env.VIDEOBOOK_DOWNLOADS_DIR = downloads;
   });
@@ -44,7 +46,7 @@ describe("original media file actions", () => {
     ["image", "png"], ["image", "jpg"], ["image", "webp"],
     ["audio", "mp3"], ["audio", "wav"], ["audio", "m4a"], ["audio", "aac"],
     ["audio", "ogg"], ["audio", "flac"], ["audio", "weba"], ["audio", "webm"],
-  ])("exports the original %s .%s bytes with collision-safe filenames", async (kind, ext) => {
+  ])("exports the original %s .%s bytes using the book name with collision-safe filenames", async (kind, ext) => {
     const bytes = `original ${kind} ${ext}`;
     const artifactId = await asset(kind, {
       "thumbnail.jpg": "thumbnail",
@@ -60,18 +62,21 @@ describe("original media file actions", () => {
       expect(result.isError).toBeFalsy();
       const text = result.content as Array<{ text: string }>;
       const payload = JSON.parse(text[0]!.text) as { status: string; path: string };
-      expect(payload).toEqual({ status: "exported", path: join(downloads, `media - take${suffix}.${ext}`) });
+      expect(payload).toEqual({ status: "exported", path: join(downloads, `wood${suffix}.${ext}`) });
       expect(await readFile(payload.path, "utf8")).toBe(bytes);
     }
     const original = await engine.files.read(artifactId, `original.${ext}`);
     expect(original.ok && original.value.toString()).toBe(bytes);
   });
 
-  it("retains final render export selection", async () => {
+  it("exports the final render using the current name after renaming the book", async () => {
     const artifactId = await asset("final", { "timeline_portrait.mp4": "render" });
-    const result = await exportAssetFileDef(engine).handler({ asset_id: artifactId, to: "downloads" });
+    const definition = exportAssetFileDef(engine);
+    const renamed = await engine.book.rename("forest");
+    if (!renamed.ok) throw new Error(renamed.error.message);
+    const result = await definition.handler({ asset_id: artifactId, to: "downloads" });
     expect(result.isError).toBeFalsy();
-    expect(await readFile(join(downloads, "media - take.mp4"), "utf8")).toBe("render");
+    expect(await readFile(join(downloads, "forest.mp4"), "utf8")).toBe("render");
   });
 
   it.each(["video", "audio", "image"] as const)("rejects missing %s originals for download and copy", async (kind) => {
