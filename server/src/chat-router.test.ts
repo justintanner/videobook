@@ -260,6 +260,10 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("For splice_video:");
     expect(prompt).toContain('{"id","tool","params"}');
     expect(prompt).toContain("id is required and unique");
+    expect(prompt).toContain("generate_audio -> asset_id");
+    expect(prompt).toContain("audio_mix -> target_asset_id, layer_asset_id");
+    expect(prompt).toContain("apply_sfx -> asset_id");
+    expect(prompt).toContain("chain generate_audio with audio_mix");
     expect(prompt).toContain("additional_asset_ids");
     expect(prompt).toContain("media_context is an optional single object");
     expect(prompt).not.toContain("\n- chat:");

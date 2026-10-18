@@ -28,12 +28,14 @@ type ChainCompletionKind =
   | "sync"
   | "extract_audio"
   | "replace_video_audio"
+  | "audio_mix"
+  | "apply_sfx"
   | "trim_video"
   | "extract_frame"
   | "generation";
 
 /** Which producer/output cell pair the executor builds for a chained generation. */
-export type ChainPlacementKind = "generate_video" | "generate_image";
+export type ChainPlacementKind = "generate_video" | "generate_image" | "generate_audio";
 
 export type ChainToolSpec = {
   outputs: Record<string, ChainOutputType>;
@@ -82,6 +84,14 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
     placement: "generate_video",
     artifactOutput: "asset_id",
   },
+  generate_audio: {
+    outputs: GENERATION_OUTPUTS,
+    completion: "generation",
+    gridFields: ["refs.video", "refs.audio"],
+    inputTypes: { model: "string", prompt: "string", video: "artifact", audio: "artifact", options: "json" },
+    placement: "generate_audio",
+    artifactOutput: "asset_id",
+  },
   assemble_goal: {
     outputs: { sequence_id: "string", status: "string" },
     completion: "sync",
@@ -112,6 +122,24 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
       asset_id: "artifact",
       audio_asset_id: "artifact",
     },
+  },
+  audio_mix: {
+    outputs: {
+      target_asset_id: "artifact",
+      layer_asset_id: "artifact",
+      volume: "number",
+      job_id: "string",
+      status: "string",
+    },
+    completion: "audio_mix",
+    gridFields: ["target_asset_id", "layer_asset_id"],
+    inputTypes: { target_asset_id: "artifact", layer_asset_id: "artifact", volume: "number" },
+  },
+  apply_sfx: {
+    outputs: { asset_id: "artifact", job_id: "string", status: "string", applied: "number", dropped: "number" },
+    completion: "apply_sfx",
+    gridFields: ["asset_id"],
+    inputTypes: { asset_id: "artifact", sfx: "json" },
   },
   trim_video: {
     outputs: {

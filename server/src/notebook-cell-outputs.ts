@@ -646,6 +646,15 @@ export function allocateGenerateVideoResult(
   );
 }
 
+export function allocateGenerateAudioResult(
+  engine: Engine,
+  document: NotebookDocument,
+  generateAudioCellId: string,
+  identity: Parameters<typeof allocateGenerationResult>[4],
+): AllocatedGenerationResult {
+  return allocateGenerationResult(engine, document, generateAudioCellId, AUDIO_OUTPUT_SPEC, identity);
+}
+
 function existingResultForArtifact(
   matches: GenerationResultMatch[],
   artifactId: string,

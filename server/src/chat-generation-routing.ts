@@ -1,5 +1,6 @@
 import { LIGHTNING_SCENE_MODEL, LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import { listElevenLabsVoices } from "./tools/list-elevenlabs-voices.js";
+import { isChainRef } from "./chain-plan.js";
 
 export const CHAT_DEFAULT_MODELS: Readonly<Record<string, string>> = {
   generate_image: LIGHTNING_SCENE_MODEL,
@@ -22,13 +23,13 @@ function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function list(value: unknown): string[] {
+function list(value: unknown): unknown[] {
   const values = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
-  return values.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
+  return values.filter((entry) => (typeof entry === "string" && entry.trim() !== "") || isChainRef(entry));
 }
 
 function foldFlatRefs(params: Record<string, unknown>): Record<string, unknown> {
-  const refs: Record<string, string[]> = Object.fromEntries(
+  const refs: Record<string, unknown[]> = Object.fromEntries(
     Object.entries(record(params.refs)).map(([role, value]) => [role, list(value)]),
   );
   const next: Record<string, unknown> = { ...params };
@@ -59,6 +60,15 @@ export async function applyGenerationRoutingDefaults(
   tool: string,
   params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (tool === "chain" && Array.isArray(params.steps)) {
+    const steps = await Promise.all(params.steps.map(async (entry: unknown) => {
+      const step = record(entry);
+      if (typeof step.tool !== "string" || !CHAT_DEFAULT_MODELS[step.tool]) return entry;
+      if (!step.params || typeof step.params !== "object" || Array.isArray(step.params)) return entry;
+      return { ...step, params: await applyGenerationRoutingDefaults(step.tool, record(step.params)) };
+    }));
+    return { ...params, steps };
+  }
   const defaultModel = CHAT_DEFAULT_MODELS[tool];
   if (!defaultModel) return params;
   const folded = foldFlatRefs(params);

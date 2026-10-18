@@ -5,12 +5,14 @@ import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../engine.js";
 import { createTestClient } from "../test-client.js";
-import { queue, waitForJob } from "../queue.js";
+import { queue, waitForJob, pauseBookQueueForTests, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { copyVideoFixture, COMMON_VIDEO_FIXTURES } from "../test-media-fixtures.js";
-import { waitForChainRun } from "../chain-executor.js";
+import { getChainRun, waitForChainRun } from "../chain-executor.js";
 import { planStackedChainFromQuery } from "../chain-plan.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { withBookContext } from "../book-context.js";
+import { chatActionPlanSchema, prepareVoiceChatAction } from "./chat.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -97,6 +99,23 @@ async function objectHash(
   return file.objectHash;
 }
 
+async function toneAmplitudes(filePath: string, workDir: string): Promise<number[]> {
+  const pcmPath = join(workDir, "mixed-audio.f32");
+  await runFfmpeg(["-y", "-i", filePath, "-vn", "-ac", "1", "-ar", "8000", "-f", "f32le", pcmPath]);
+  const bytes = await readFile(pcmPath);
+  const samples = new Float32Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 4));
+  return [440, 880].map(frequency => {
+    let real = 0;
+    let imaginary = 0;
+    for (let index = 0; index < samples.length; index += 1) {
+      const angle = 2 * Math.PI * frequency * index / 8000;
+      real += samples[index]! * Math.cos(angle);
+      imaginary += samples[index]! * Math.sin(angle);
+    }
+    return 2 * Math.hypot(real, imaginary) / samples.length;
+  });
+}
+
 describe("chain MCP tool", () => {
   let client: Client;
   let tempDir: string;
@@ -105,6 +124,7 @@ describe("chain MCP tool", () => {
   let notebookId: string;
   let sourceId: string;
   let targetId: string;
+  const originalElevenLabsKey = process.env.ELEVENLABS_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -115,6 +135,8 @@ describe("chain MCP tool", () => {
   });
 
   afterEach(async () => {
+    if (originalElevenLabsKey === undefined) delete process.env.ELEVENLABS_API_KEY;
+    else process.env.ELEVENLABS_API_KEY = originalElevenLabsKey;
     await client?.close();
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -329,6 +351,109 @@ describe("chain MCP tool", () => {
     expect(after.status).toBe("awaiting-approval");
     expect(publicSteps(after)[1]?.status).toBe("awaiting-approval");
   });
+
+  it.each(["ready", "failed"] as const)("handles a %s generated audio result in a reviewed background and SFX chat chain", async outcome => {
+    await setupBook(`audio-${outcome}`);
+    const actualBookId = engine.book.get().bookId;
+    const beforeProxy = await objectHash(engine, targetId, "proxy.mp4");
+    await waitForBookQueuesIdleForTests();
+    await pauseBookQueueForTests(actualBookId);
+    process.env.ELEVENLABS_API_KEY = "test-key";
+    const routed = await withBookContext({ bookId: actualBookId, engine }, () => prepareVoiceChatAction(engine, {
+      book_id: actualBookId, notebook_id: notebookId,
+      prompt: "add background and sfx to @c4 wood chipping ASMR rhythmic realistic sounds",
+    }, {
+      tool: "chain", message: "Add wood-chipping ambience and timed sound effects.",
+      params: {
+        action: "run", version: 1,
+        steps: [
+          { id: "ambience", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "Rhythmic wood chipping ASMR", options: { duration_seconds: 1 } } },
+          { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: 35 } },
+          { id: "sfx", tool: "apply_sfx", params: { asset_id: { $ref: { step_id: "mix", output: "target_asset_id" } }, sfx: [{ timestamp: 0.2, type: "impact", description: "Wooden shoes tap the floor", duration_seconds: 0.5 }] } },
+          { id: "inspect", tool: "asset_manifest", params: { asset_id: { $ref: { step_id: "sfx", output: "asset_id" } } } },
+        ],
+      },
+    }));
+    expect(routed.isError, routed.content[0]?.text).toBeFalsy();
+    const plan = chatActionPlanSchema.parse(parseText(routed));
+    const applied = await client.callTool({ name: "chat", arguments: { book_id: bookId, action_plan: plan } });
+    expect(applied.isError, JSON.stringify(applied.content)).toBeFalsy();
+    const chainId = String(parseText(applied).chain_id);
+    const paused = await waitForChainRun(engine, chainId, 15_000);
+    expect(paused.status).toBe("awaiting-approval");
+    expect(paused.awaitingStepId).toBe("ambience");
+    expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
+    await chainAction("approve", chainId, { step_id: "ambience" });
+    await expect.poll(() => getChainRun(engine, chainId)?.steps[0]?.outputs?.cell_id, { timeout: 15_000 }).toBeTypeOf("string");
+    const pending = getChainRun(engine, chainId)!;
+    const audioId = String(pending.steps[0]?.outputs?.asset_id);
+    const outputCellId = String(pending.steps[0]?.outputs?.cell_id);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const producer = notebook.value.cells.find(cell => cell.type === "generate_audio");
+    expect(producer).toBeDefined();
+    expect(notebook.value.cells.find(cell => cell.id === outputCellId)).toMatchObject({ type: "audio", outputArtifactId: audioId });
+    expect(notebook.value.edges).toEqual(expect.arrayContaining([expect.objectContaining({ source: producer!.id, target: outputCellId })]));
+    expect(notebook.value.execution?.[producer!.id]?.status).toBe("awaiting-output");
+    expect(pending.steps.map(step => step.status)).toEqual(["running", "pending", "pending", "pending"]);
+    expect(engine.jobs.queue.list({ type: "audio_mix" })).toHaveLength(0);
+    const providerJob = engine.jobs.queue.dequeue(process.pid, 60_000);
+    expect(providerJob).toMatchObject({ type: "generate_media", artifactId: audioId });
+    if (!providerJob) throw new Error("Missing queued audio generation");
+    if (outcome === "failed") {
+      expect(await engine.jobs.queue.fail(providerJob.id, { error: { message: "Audio provider failed" }, allowRetry: false }, providerJob.fence)).toBe(true);
+      const failed = await waitForChainRun(engine, chainId, 15_000);
+      expect(failed.status).toBe("failed");
+      expect(failed.steps.map(step => step.status)).toEqual(["failed", "skipped", "skipped", "skipped"]);
+      const failedNotebook = engine.notebooks.read(notebookId);
+      if (!failedNotebook.ok) throw new Error(failedNotebook.error.message);
+      expect(failedNotebook.value.execution?.[producer!.id]?.status).toBe("error");
+      expect(await objectHash(engine, targetId, "proxy.mp4")).toBe(beforeProxy);
+      expect(engine.jobs.queue.list({ type: "audio_mix" })).toHaveLength(0);
+      return;
+    }
+    const audioPath = join(tempDir, "generated-ambience.mp3");
+    await runFfmpeg(["-y", "-i", await filePathFor(engine, sourceId, "original.mp4"), "-vn", "-c:a", "libmp3lame", audioPath]);
+    expect((await engine.files.writeFromPath(audioId, "original.mp3", audioPath)).ok).toBe(true);
+    expect(await engine.jobs.queue.complete(providerJob.id, { result: { success: true } })).toBe(true);
+    await resumeBookQueueForTests(actualBookId);
+    const mixed = await waitForChainRun(engine, chainId, 60_000);
+    expect(mixed.status, mixed.error ?? "").toBe("awaiting-approval");
+    expect(mixed.awaitingStepId).toBe("sfx");
+    expect(mixed.steps.map(step => step.status)).toEqual(["completed", "completed", "awaiting-approval", "pending"]);
+    expect(mixed.steps[1]?.outputs).toMatchObject({ target_asset_id: targetId, layer_asset_id: audioId });
+    expect(mixed.steps[2]?.review?.params.asset_id).toBe(targetId);
+    const settled = engine.notebooks.read(notebookId);
+    if (!settled.ok) throw new Error(settled.error.message);
+    expect(settled.value.execution?.[producer!.id]?.status).toBe("completed");
+    expect(settled.value.execution?.[outputCellId]?.status).toBe("completed");
+    expect(engine.jobs.queue.list({ type: "run_notebook" })).toHaveLength(0);
+    expect(engine.jobs.queue.list({ type: "process_video", artifactId: targetId, states: ["queued", "running", "completing"] })).toHaveLength(0);
+    expect(await objectHash(engine, targetId, "proxy.mp4")).not.toBe(beforeProxy);
+    for (const amplitude of await toneAmplitudes(await filePathFor(engine, targetId, "original.mp4"), tempDir)) {
+      expect(amplitude).toBeGreaterThan(0.015);
+    }
+    await chainAction("cancel", chainId);
+    const cancelled = await waitForChainRun(engine, chainId, 15_000);
+    expect(cancelled.steps.map(step => step.status)).toEqual(["completed", "completed", "rejected", "skipped"]);
+    expect(engine.jobs.queue.list({ type: "apply_sfx" })).toHaveLength(0);
+  }, 90_000);
+
+  it("mixes into a previous audio output without waiting for a video preview", async () => {
+    await setupBook("audio-target");
+    const accepted = await runChain([
+      { id: "extract", tool: "extract_audio", params: { asset_id: "@b2" } },
+      { id: "mix", tool: "audio_mix", params: { target_asset_id: { $ref: { step_id: "extract", output: "audio_asset_id" } }, layer_asset_id: "@c4", volume: 35 } },
+    ]);
+    const finished = await waitForChainRun(engine, String(accepted.chain_id), 60_000);
+    expect(finished.status, finished.error ?? "").toBe("completed");
+    const audioId = String(finished.steps[0]?.outputs?.audio_asset_id);
+    expect(finished.steps[1]?.outputs?.target_asset_id).toBe(audioId);
+    expect(engine.jobs.queue.list({ type: "process_video", artifactId: audioId })).toHaveLength(0);
+    for (const amplitude of await toneAmplitudes(await filePathFor(engine, audioId, "original.mp3"), tempDir)) {
+      expect(amplitude).toBeGreaterThan(0.015);
+    }
+  }, 90_000);
 
   it("lists chain as a public MCP tool", async () => {
     await setupBook("list");

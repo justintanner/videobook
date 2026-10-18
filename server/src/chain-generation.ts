@@ -5,6 +5,7 @@ import { mutateNotebook } from "./notebook-mutations.js";
 import {
   allocateGenerateImageResult,
   allocateGenerateVideoResult,
+  allocateGenerateAudioResult,
 } from "./notebook-cell-outputs.js";
 import { lastCreatedCellSlot, nextGenerationOutputSlot } from "./notebook-placement.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
@@ -40,7 +41,7 @@ function producerLabel(
   placement: ChainPlacementKind,
 ): string {
   const title = producerModel(params)?.title
-    ?? (placement === "generate_video" ? "Generate video" : "Generate image");
+    ?? { generate_video: "Generate video", generate_image: "Generate image", generate_audio: "Generate audio" }[placement];
   return generationLabel(title, typeof params.prompt === "string" ? params.prompt : undefined);
 }
 
@@ -108,9 +109,11 @@ export async function placeChainGeneration(
         cells: [...notebook.cells, producer],
         edges: [...notebook.edges, ...provenance],
       };
-      const allocate = input.placement === "generate_video"
-        ? allocateGenerateVideoResult
-        : allocateGenerateImageResult;
+      const allocate = {
+        generate_video: allocateGenerateVideoResult,
+        generate_image: allocateGenerateImageResult,
+        generate_audio: allocateGenerateAudioResult,
+      }[input.placement];
       const allocated = allocate(input.engine, withProducer, producer.id, {
         runId: input.runId,
         acceptedAt,
@@ -124,7 +127,7 @@ export async function placeChainGeneration(
         ...arranged,
         execution: {
           ...(arranged.execution ?? {}),
-          [allocated.outputCell.id]: {
+          [input.placement === "generate_audio" ? producer.id : allocated.outputCell.id]: {
             fingerprint: notebookCellFingerprint(arranged, produced.producer),
             status: "awaiting-output",
             runId: input.runId,

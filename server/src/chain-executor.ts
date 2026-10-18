@@ -324,12 +324,13 @@ async function completeExtractAudio(
   return { ...outputs, status: "completed" };
 }
 
-async function completeReplaceVideoAudio(
+async function completeVideoAudioEdit(
   engine: Engine,
   assetId: string,
   beforeIds: Set<number>,
   outputs: Record<string, unknown>,
   signal: AbortSignal,
+  tool: string,
 ): Promise<Record<string, unknown>> {
   const after = engine.jobs.queue.list({
     type: "process_video",
@@ -347,8 +348,8 @@ async function completeReplaceVideoAudio(
       artifactId: assetId,
       states: ["queued", "running", "completing"],
     }).length > 0;
-  }, "replace_video_audio preview");
-  await waitForFile(engine, assetId, "proxy.mp4", signal, "replace_video_audio");
+  }, `${tool} preview`);
+  await waitForFile(engine, assetId, "proxy.mp4", signal, tool);
   return { ...outputs, status: "completed" };
 }
 
@@ -482,6 +483,12 @@ type PreparedStep = {
   beforeProcess: Set<number>;
 };
 
+function audioEditTargetField(step: ChainPreflightStep): string | null {
+  if (step.spec.completion === "audio_mix") return "target_asset_id";
+  if (step.spec.completion === "replace_video_audio" || step.spec.completion === "apply_sfx") return "asset_id";
+  return null;
+}
+
 /**
  * Everything a step needs before it can be dispatched, and nothing that spends
  * money. Pins are revalidated here, so a step approved after a long pause still
@@ -519,12 +526,10 @@ async function prepareStep(
   if (!validated.success) {
     throw new Error(`Invalid parameters for ${step.tool}: ${z.prettifyError(validated.error)}`);
   }
-  const targetAssetId = typeof (validated.data as { asset_id?: unknown }).asset_id
-    === "string"
-    ? (validated.data as { asset_id: string }).asset_id
-    : undefined;
+  const targetField = audioEditTargetField(step);
+  const targetAssetId = targetField ? validated.data[targetField] : undefined;
   const beforeProcess = new Set(
-    step.spec.completion === "replace_video_audio" && targetAssetId
+    typeof targetAssetId === "string"
       ? engine.jobs.queue.list({
         type: "process_video",
         artifactId: targetAssetId,
@@ -552,22 +557,17 @@ async function dispatchStep(
   const childJobIds = childJobIdFromOutputs(outputs);
   onDispatched(outputs, childJobIds);
   if (signal.aborted) throw new Error("Cancelled");
+  const targetField = audioEditTargetField(step);
   if (step.spec.completion === "extract_audio") {
     outputs = await completeExtractAudio(engine, outputs, signal);
-  } else if (step.spec.completion === "replace_video_audio") {
-    const assetId = typeof outputs.asset_id === "string"
-      ? outputs.asset_id
-      : typeof prepared.params.asset_id === "string"
-        ? prepared.params.asset_id
-        : null;
-    if (!assetId) throw new Error("replace_video_audio did not return asset_id");
-    outputs = await completeReplaceVideoAudio(
-      engine,
-      assetId,
-      prepared.beforeProcess,
-      outputs,
-      signal,
-    );
+  } else if (targetField) {
+    const assetId = outputs[targetField] ?? prepared.params[targetField];
+    if (typeof assetId !== "string") throw new Error(`${step.tool} did not return ${targetField}`);
+    const artifact = engine.artifacts.get(assetId);
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    if (artifact.value.kind === "video") {
+      outputs = await completeVideoAudioEdit(engine, assetId, prepared.beforeProcess, outputs, signal, step.tool);
+    }
   } else if (step.spec.completion === "extract_frame") {
     outputs = await completeExtractFrame(engine, outputs, signal);
   } else if (step.spec.completion === "generation") {

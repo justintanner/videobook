@@ -555,6 +555,31 @@ describe("applyGenerationRoutingDefaults", () => {
     );
     expect(result).toEqual({ model: "elevenlabs:sound-generation", prompt: "door slam" });
   });
+
+  it("fills generation defaults inside chains and preserves previous-output refs", async () => {
+    process.env.ELEVENLABS_CUSTOM_VOICE_IDS = "Narrator=custom-chain-voice";
+    const frameRef = { $ref: { step_id: "frame", output: "image_asset_id" } };
+    const videoRef = { $ref: { step_id: "animate", output: "asset_id" } };
+    const mix = { tool: "audio_mix", params: { target_asset_id: videoRef, volume: 35 } };
+    const result = await applyGenerationRoutingDefaults("chain", {
+      action: "run",
+      steps: [
+        { id: "animate", tool: "generate_video", params: { prompt: "Carve wood", refs: { first_frame: frameRef }, image_ref: frameRef } },
+        { id: "music", tool: "generate_audio", params: { model: "elevenlabs:video-to-music", refs: { video: [videoRef] } } },
+        { id: "narration", tool: "generate_audio", params: { prompt: "Handmade wooden shoes" } },
+        mix,
+      ],
+    });
+    expect(result).toEqual({
+      action: "run",
+      steps: [
+        { id: "animate", tool: "generate_video", params: { model: CHAT_DEFAULT_MODELS.generate_video, prompt: "Carve wood", refs: { first_frame: [frameRef], image: [frameRef] } } },
+        { id: "music", tool: "generate_audio", params: { model: "elevenlabs:video-to-music", refs: { video: [videoRef] } } },
+        { id: "narration", tool: "generate_audio", params: { model: "elevenlabs:text-to-speech", prompt: "Handmade wooden shoes", options: { voice_id: "custom-chain-voice" } } },
+        mix,
+      ],
+    });
+  });
 });
 
 describe("parseChatDecision / repairChatRoutingJson", () => {

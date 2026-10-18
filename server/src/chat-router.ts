@@ -1,6 +1,6 @@
 import { LIGHTNING_VIDEO_MODEL } from "./lightning-defaults.js";
 import type { ToolDef } from "./tools/tool-def.js";
-import { planStackedChainFromQuery } from "./chain-plan.js";
+import { CHAIN_TOOL_CATALOG, planStackedChainFromQuery } from "./chain-plan.js";
 import { CHAT_VIEW_ACTIONS } from "./chat-view-actions.js";
 import {
   zodEnumOptionsOrNull,
@@ -608,6 +608,9 @@ function buildChatRoutingPrompt(
   historyContext?: string,
 ): string {
   const toolLines = tools.map(routingToolLine).join("\n");
+  const chainTools = tools.filter((tool) => CHAIN_TOOL_CATALOG[tool.name])
+    .map((tool) => `${tool.name} -> ${Object.keys(CHAIN_TOOL_CATALOG[tool.name]!.outputs).join(", ")}`)
+    .join("; ");
 
   const historyBlock = historyContext
     ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
@@ -657,6 +660,8 @@ Parameter guidelines:
 - For concat_images: use image_refs for the referenced image assets; a single ref leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - For splice_video: join two or more videos into one new asset. Use this for splice, concat, or stitch requests, not plan_chat_command. Pass first_asset_id and second_asset_id in playback order, additional_asset_ids for any further clips in that same order, and overlap 0 to concatenate complete clips
 - For chain: use when one request stacks two or more supported actions in order, including extract audio then replace another clip's soundtrack. Pass action "run", version 1, and ordered steps. Each step is {"id","tool","params"}. id is required and unique, starts with a letter (extract, replace, step1). Point a later step at an earlier output with {"$ref":{"step_id":"<that id>","output":"<field>"}} and never interpolate a ref inside a string. Do not nest chain or chat. Leave book_id out of step params
+- Use only these chain step tools and their listed output fields: ${chainTools}
+- To add background ambience or generated sound to an existing video, chain generate_audio with audio_mix; pass the generated asset_id as layer_asset_id and preserve the target's existing sound. Use replace_video_audio only when replacing the soundtrack is requested. Use apply_sfx for additional timed cues, taking asset_id from the preceding edit's output (audio_mix returns target_asset_id). After editing an asset, reference that step's output for further edits instead of the original grid address
 - For show_media_fullscreen: use when the user asks to show, open, view, or enlarge one cell's image or video (full screen, fullscreen, bigger). Pass that cell's resolved asset ID as asset_id
 - plan_chat_command is only for timeline sequence edits such as trim, move, split, insert at a frame, or captions. media_context is an optional single object {notebook_id, cell_id, artifact_id} for one fullscreen clip — never an array of clips
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)

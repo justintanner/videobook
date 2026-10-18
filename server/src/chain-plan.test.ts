@@ -73,6 +73,11 @@ describe("chain catalog and refs", () => {
     expect(image?.placement).toBe("generate_image");
     expect(image?.artifactOutput).toBe("asset_id");
     expect(image?.gridFields).toEqual(["refs.image"]);
+    const audio = supportedChainTool("generate_audio");
+    expect(audio?.completion).toBe("generation");
+    expect(audio?.placement).toBe("generate_audio");
+    expect(audio?.artifactOutput).toBe("asset_id");
+    expect(audio?.gridFields).toEqual(["refs.video", "refs.audio"]);
     expect(supportedChainTool("generate_kie_seedance_2_5_video")).toBeNull();
   });
 
@@ -409,6 +414,40 @@ describe("preflightChainPlan", () => {
     expect(result.plan.effect).toBe("mutation");
     expect(result.plan.steps[0]?.pins[0]?.address.replace(/^@/, "")).toBe("b2");
     expect(result.plan.steps[1]?.pins[0]?.address.replace(/^@/, "")).toBe("c4");
+  });
+
+  it("pins audio generation inputs and reviews each paid step in an ambience and SFX chain", async () => {
+    const ctx = await context();
+    await seedVideos(ctx);
+    const result = await preflightChainPlan({
+      action: "run",
+      version: 1,
+      book_id: ctx.bookId,
+      notebook_id: ctx.notebookId,
+      steps: [
+        {
+          id: "ambience", tool: "generate_audio",
+          params: { model: "elevenlabs:video-to-music", prompt: "Rhythmic wood chipping", refs: { video: ["@b2"] } },
+        },
+        {
+          id: "mix", tool: "audio_mix",
+          params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: 35 },
+        },
+        {
+          id: "sfx", tool: "apply_sfx",
+          params: {
+            asset_id: { $ref: { step_id: "mix", output: "target_asset_id" } },
+            sfx: [{ timestamp: 0.2, type: "impact", description: "A wooden shoe taps the floor" }],
+          },
+        },
+      ],
+    }, ctx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.steps.map(step => step.requiresApproval)).toEqual([true, false, true]);
+    expect(result.plan.steps[0]?.pins).toMatchObject([{ field: "refs.video", index: 0 }]);
+    expect(result.plan.steps[1]?.pins).toMatchObject([{ field: "target_asset_id" }]);
+    expect(result.plan.steps[2]?.pins).toHaveLength(0);
   });
 
   it("accepts a third local media tool in the same contract", async () => {
