@@ -3879,6 +3879,47 @@ describe('chat composer browser flow', () => {
       .toBe('none')
   }, 60_000)
 
+  it('takes a background sound request from Send to the measured-duration review', async () => {
+    expect(mockedChatActionPlan).toBeNull()
+    const page = await openApp()
+    const client = new Client({ name: 'background-audio-chat-e2e', version: '1.0.0' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    const call = async (name: string, args: Record<string, unknown> = {}) => resultValue(await client.callTool({
+      name, arguments: { book_id: bookId, notebook_id: notebookId, ...args },
+    }))
+    try {
+      const before = record(await call('get_notebook'))!
+      observedCalls.length = 0
+      await page.getByLabel('Videobook command input').fill('add background and sfx to @a1 thai woodwords chipping away, ASMR, rythmic, cut to man sitting, dragon shoes make realistic sounds')
+      await page.getByLabel('Send command').click()
+      const plan = page.getByLabel('Chat action review')
+      await plan.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      expect(await plan.innerText()).toContain('Generate audio')
+      expect(await plan.innerText()).toContain('Audio mix')
+      await plan.getByRole('button', { name: /^Apply/ }).click()
+      const review = page.getByLabel('Chain step review')
+      await review.waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
+      expect(await review.innerText()).toContain('elevenlabs:sound-generation')
+      expect(await review.innerText()).toContain('"duration_seconds":3')
+      const turn = page.locator('.chat-turn').last()
+      expect(await turn.getAttribute('data-status')).toBe('review')
+      expect(await turn.innerText()).not.toContain('Command complete')
+      const after = record(await call('get_notebook'))!
+      expect(after).toEqual({ ...before, revision: after.revision })
+      const jobs = await call('list_jobs') as Array<{ type: string }>
+      expect(jobs.some(job => job.type === 'generate_media')).toBe(false)
+      await page.screenshot({ path: '/tmp/videobook-background-audio-chat-e2e.png' })
+      await review.getByRole('button', { name: /Cancel/ }).click()
+      await expect.poll(() => observedCalls.some(call => call.name === 'chain' && call.arguments.action === 'cancel'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      const cancelled = observedCalls.filter(call => call.name === 'chain' && call.arguments.action === 'cancel').at(-1)!
+      await expect.poll(async () => record(await call('chain', { action: 'status', chain_id: cancelled.arguments.chain_id }))?.status, { timeout: MCP_ROUNDTRIP_MS }).toBe('cancelled')
+    } finally {
+      await client.close()
+    }
+  }, 60_000)
+
   it('reviews a stacked extract-then-replace chain as one apply', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const prompt = 'extract audio from b2 and use it to replace the audio on the video in c4'

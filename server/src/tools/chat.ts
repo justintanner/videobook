@@ -9,6 +9,8 @@ import type {
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
+  applyBackgroundAudioRoute,
+  planBackgroundAudioFromQuery,
   applyBytedanceNamedModelRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,
@@ -727,8 +729,11 @@ async function handleChatRequest(
   }) as unknown as ChatLogEntry[];
   const historyContext = formatHistoryForPrompt(historyLines);
 
+  const initialDecision = proposedDecision ?? planBackgroundAudioFromQuery({
+    query: expandedPrompt, assetContext, notebookContext,
+  });
   const apiKey = getApiKey("OPENAI_API_KEY");
-  if (!apiKey && !proposedDecision) {
+  if (!apiKey && !initialDecision) {
     return error("OPENAI_API_KEY environment variable is not set");
   }
 
@@ -750,8 +755,8 @@ async function handleChatRequest(
   });
 
   let decision: ChatDecision;
-  if (proposedDecision) {
-    decision = proposedDecision;
+  if (initialDecision) {
+    decision = initialDecision;
   } else try {
     const responses = buildIntelligenceResponses(apiKey ?? undefined, {
       timeout: CHAT_ROUTING_TIMEOUT_MS,
@@ -816,12 +821,22 @@ async function handleChatRequest(
       assetContext,
       notebookContext,
     });
+  const audioRoute = stackedRoute.substituted
+    ? stackedRoute
+    : applyBackgroundAudioRoute({
+      query: expandedPrompt,
+      tool: stackedRoute.tool,
+      params: stackedRoute.params,
+      message: stackedRoute.message,
+      assetContext,
+      notebookContext,
+    });
   decision = {
-    tool: stackedRoute.tool,
-    params: stackedRoute.params,
+    tool: audioRoute.tool,
+    params: audioRoute.params,
     // The voice path routes the spoken sentence here, so the sheet's title
     // reads in the same vocabulary as the prompt beneath it.
-    message: tagNotebookGridAddresses(stackedRoute.message, notebookAddresses),
+    message: tagNotebookGridAddresses(audioRoute.message, notebookAddresses),
   };
 
   // 6. Validate tool exists in routable registry

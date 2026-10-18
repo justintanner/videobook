@@ -452,6 +452,40 @@ describe("chain MCP tool", () => {
     expect(engine.jobs.queue.list({ type: "apply_sfx" })).toHaveLength(0);
   }, 90_000);
 
+  it.each(["chat", "list_jobs", "analyze_video"])("continues a background audio request to review through %s", async tool => {
+    await setupBook(`audio-routing-${tool}`, 28);
+    const actualBookId = engine.book.get().bookId;
+    const prompt = "add background and sfx to @c4 thai woodwords chipping away, ASMR, rythmic, cut to man sitting, dragon shoes make realistic sounds";
+    await engine.logs.append("chat", { role: "assistant", tool: "list_jobs", message: "Checking sound-design analysis.", params: {}, ts: Date.now() });
+    const routed = tool === "chat"
+      ? await client.callTool({ name: "chat", arguments: { book_id: bookId, notebook_id: notebookId, prompt } })
+      : await withBookContext({ bookId: actualBookId, engine }, () => prepareVoiceChatAction(engine, {
+        book_id: actualBookId, notebook_id: notebookId, prompt,
+      }, { tool, params: tool === "analyze_video" ? { asset_id: targetId } : {}, message: "Checking sound-design analysis." }));
+    expect(routed.isError, JSON.stringify(routed.content)).toBeFalsy();
+    const plan = chatActionPlanSchema.parse(parseText(routed));
+    expect(plan).toMatchObject({ tool: "chain", effect: "mutation", confirmation: { required: true } });
+    expect(plan.params.steps).toEqual([
+      {
+        id: "ambience", tool: "generate_audio", params: {
+          model: "elevenlabs:sound-generation",
+          prompt: "add background and sfx thai woodwords chipping away, ASMR, rythmic, cut to man sitting, dragon shoes make realistic sounds",
+        },
+      },
+      { id: "mix", tool: "audio_mix", params: { target_asset_id: targetId, layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: 50 } },
+    ]);
+    const applied = await client.callTool({ name: "chat", arguments: { book_id: bookId, action_plan: plan } });
+    expect(applied.isError, JSON.stringify(applied.content)).toBeFalsy();
+    const run = await waitForChainRun(engine, String(parseText(applied).chain_id), 15_000);
+    expect(run.status, run.error ?? "").toBe("awaiting-approval");
+    expect(run.awaitingStepId).toBe("ambience");
+    const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    expect(run.steps[0]?.review?.params.options).toEqual({ duration_seconds: metadata.value.duration });
+    expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
+    await chainAction("cancel", run.chainId);
+  });
+
   it.each([2, null])("matches a missing duration and preserves a concrete duration (%s)", async duration => {
     await setupBook("explicit-audio-duration");
     const accepted = await runChain([

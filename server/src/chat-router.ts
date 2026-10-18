@@ -467,7 +467,7 @@ function notebookVideoAssetId(
 
 function resolveVideoAssetId(
   token: string,
-  input: VideoJoinRouteInput,
+  input: Pick<VideoJoinRouteInput, "assetContext" | "notebookContext">,
 ): string | null {
   const mention = mentionWithAt(token);
   const mentionedType = mediaTypeForMention(mention, input.assetContext);
@@ -523,6 +523,58 @@ function collectJoinAssetIds(input: VideoJoinRouteInput): string[] {
   if (fromAssetIds.length >= 2) return fromAssetIds;
   if (fromPair.length >= 2) return fromPair;
   return [];
+}
+
+function planBackgroundAudioFromQuery(
+  input: Pick<VideoJoinRouteInput, "query" | "assetContext" | "notebookContext">,
+): BytedanceRouteResult | null {
+  if (!/^(?:(?:please|can you|could you|would you)\s+)*(?:add|mix|layer|overlay|put)\b/iu.test(input.query.trim())) return null;
+  if (!/\b(?:ambience|ambient|foley|sfx|sound effects?|asmr)\b/iu.test(input.query)) return null;
+  if (/\b(?:replace|remove|delete|trim|crop|speed|reverse|narration|voiceover|using|model)\b|\b(?:at|after|from|until)\s+\d/iu.test(input.query)) return null;
+  const soundRequest = input.query.replace(/\b(?:no|without)\s+(?:any\s+)?(?:music|speech)\b/giu, "");
+  if (/\b(?:music|speech|score|fal|kie|acestep)\b/iu.test(soundRequest)) return null;
+  const mentions = uniqueMentions(queryMentions(input.query));
+  if (mentions.length === 0 || mentions.some((mention) => mediaTypeForMention(mention, input.assetContext) !== "video")) return null;
+  const targets = uniqueAssetIds(mentions.flatMap((mention) => {
+    const asset = resolveVideoAssetId(mention, input);
+    return asset ? [asset] : [];
+  }));
+  if (targets.length !== 1) return null;
+  const prompt = input.query.replace(/\b(?:to|on|onto|for)\s+(?=@)/giu, "")
+    .replace(MENTION_PATTERN, "").replace(/\s+/gu, " ").replace(/\s+([,.;:])/gu, "$1").trim();
+  const durationMatch = input.query.match(/\b(?:for|lasting|duration(?: of)?)\s+(\d+(?:\.\d+)?)\s*(seconds?|secs?|s|minutes?|mins?)\b/iu)
+    ?? input.query.match(/\b(\d+(?:\.\d+)?)[\s-]*(seconds?|secs?|s|minutes?|mins?)[\s-]+(?:of\s+)?(?:background|ambience|ambient|foley|sfx|sound|asmr)\b/iu);
+  const duration = durationMatch ? Number(durationMatch[1]) * (/^m/iu.test(durationMatch[2]!) ? 60 : 1) : undefined;
+  const volumeMatch = input.query.match(/\b(?:volume|at)\s+(\d+(?:\.\d+)?)\s*%/iu)
+    ?? input.query.match(/\b(\d+(?:\.\d+)?)\s*%\s*(?:volume|level)\b/iu);
+  return {
+    tool: "chain",
+    params: {
+      action: "run",
+      version: 1,
+      steps: [
+        {
+          id: "ambience", tool: "generate_audio",
+          params: {
+            model: "elevenlabs:sound-generation", prompt,
+            ...(duration !== undefined ? { options: { duration_seconds: duration } } : {}),
+          },
+        },
+        {
+          id: "mix", tool: "audio_mix",
+          params: { target_asset_id: targets[0], layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: volumeMatch ? Number(volumeMatch[1]) : 50 },
+        },
+      ],
+    },
+    message: "Adding ambience and sound effects.",
+    substituted: true,
+  };
+}
+
+function applyBackgroundAudioRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
+  const unchanged = { tool: input.tool, params: input.params, message: input.message, substituted: false };
+  if (input.tool !== "analyze_video" && effectForTool(input.tool, categoryForTool(input.tool)) !== "read") return unchanged;
+  return planBackgroundAudioFromQuery(input) ?? unchanged;
 }
 
 function applyStackedChainRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
@@ -629,6 +681,7 @@ Given a user query (possibly with @asset references), determine:
 3. message: A brief present-progressive status message (2-5 words, e.g. "Trimming video.")
 
 Parameter guidelines:
+- Route the current request to the action or chain that delivers its requested result. This is a single routing decision, not an agent loop: an exploratory read will end the turn. Use list_jobs only when the user asks about jobs or progress, and analyze_video only when analysis itself is requested. Repeating an edit request asks for that edit again, not a status check on an earlier attempt
 - Generate images, video and audio with generate_image, generate_video and generate_audio. Omit model unless the user names a model or provider; the default model is applied automatically. When the user names one, pick its id from list_generation_models (for example kie:bytedance/seedance-2-5, kie:nano-banana-2-1, fal:fal-ai/nano-banana-pro). Put media inputs in refs by role (image, first_frame, last_frame, video, audio) and model settings in options
 - Include every required parameter. Omit optional parameters unless the user explicitly requests them so the tool can apply its defaults
 - For parameters with listed allowed values, use exactly one listed value and never borrow an option from another tool
@@ -662,7 +715,7 @@ Parameter guidelines:
 - For chain: use when one request stacks two or more supported actions in order, including extract audio then replace another clip's soundtrack. Pass action "run", version 1, and ordered steps. Each step is {"id","tool","params"}. id is required and unique, starts with a letter (extract, replace, step1). Point a later step at an earlier output with {"$ref":{"step_id":"<that id>","output":"<field>"}} and never interpolate a ref inside a string. Do not nest chain or chat. Leave book_id out of step params
 - Use only these chain step tools and their listed output fields: ${chainTools}
 - To add background ambience or generated sound to an existing video, chain generate_audio with audio_mix; pass the generated asset_id as layer_asset_id and preserve the target's existing sound. Use replace_video_audio only when replacing the soundtrack is requested. Use apply_sfx for additional timed cues, taking asset_id from the preceding edit's output (audio_mix returns target_asset_id). After editing an asset, reference that step's output for further edits instead of the original grid address
-- Background ambience should cover the target clip: use its measured duration in options.duration_seconds for sound effects or options.music_length_ms for music. Preserve an explicitly requested shorter cue. Never leave full-clip ambience length to a provider guess
+- Background ambience should cover the target clip. A generate_audio step consumed by audio_mix or replace_video_audio automatically inherits the target duration when omitted; do not add a metadata lookup or invent duration references. Use options.duration_seconds or options.music_length_ms only for an explicitly requested length, preserving shorter cues
 - For show_media_fullscreen: use when the user asks to show, open, view, or enlarge one cell's image or video (full screen, fullscreen, bigger). Pass that cell's resolved asset ID as asset_id
 - plan_chat_command is only for timeline sequence edits such as trim, move, split, insert at a frame, or captions. media_context is an optional single object {notebook_id, cell_id, artifact_id} for one fullscreen clip — never an array of clips
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
@@ -711,6 +764,8 @@ export {
   READ_ONLY_TOOL_NAMES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,
+  applyBackgroundAudioRoute,
+  planBackgroundAudioFromQuery,
   applyBytedanceNamedModelRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,

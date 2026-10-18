@@ -7,6 +7,7 @@ import {
   AUTO_APPLY_TOOL_NAMES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
+  applyBackgroundAudioRoute,
   applyBytedanceNamedModelRoute,
   applyStackedChainRoute,
   applyVideoJoinRoute,
@@ -264,9 +265,58 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("audio_mix -> target_asset_id, layer_asset_id");
     expect(prompt).toContain("apply_sfx -> asset_id");
     expect(prompt).toContain("chain generate_audio with audio_mix");
+    expect(prompt).toContain("an exploratory read will end the turn");
     expect(prompt).toContain("additional_asset_ids");
     expect(prompt).toContain("media_context is an optional single object");
     expect(prompt).not.toContain("\n- chat:");
+  });
+
+  it("preserves an explicitly shorter sound bed when correcting a status lookup", () => {
+    const route = applyBackgroundAudioRoute({
+      query: "please add 2-second background ambience to @d1, no music",
+      tool: "list_jobs", params: {}, message: "Checking progress.",
+      assetContext: [{ asset_id: "video-1", type: "video", notebook_references: ["@d1"] }],
+    });
+    expect(route.tool).toBe("chain");
+    expect(route.params.steps).toEqual([
+      {
+        id: "ambience", tool: "generate_audio",
+        params: { model: "elevenlabs:sound-generation", prompt: "please add 2-second background ambience, no music", options: { duration_seconds: 2 } },
+      },
+      { id: "mix", tool: "audio_mix", params: { target_asset_id: "video-1", layer_asset_id: { $ref: { step_id: "ambience", output: "asset_id" } }, volume: 50 } },
+    ]);
+  });
+
+  it.each([
+    "check the status of adding sound effects to @d1",
+    "how do I add sound effects to @d1?",
+    "do not add sound effects to @d1",
+    "analyze @d1 for sound effects",
+    "add sound effects from @a1 to @d1",
+    "add sound effects to @d1 and @d2",
+    "add sound effects at 5 seconds to @d1",
+    "add background music and sfx to @d1",
+    "add ambience using another model to @d1",
+    "add ambience to @d1 and trim it",
+  ])("does not reinterpret a status, analysis, ambiguous or existing-media request: %s", query => {
+    const input = {
+      query, tool: "list_jobs", params: {}, message: "Checking progress.",
+      assetContext: [
+        { asset_id: "video-1", type: "video", notebook_references: ["@d1"] },
+        { asset_id: "video-2", type: "video", notebook_references: ["@d2"] },
+        { asset_id: "audio-1", type: "audio", notebook_references: ["@a1"] },
+      ],
+    };
+    expect(applyBackgroundAudioRoute(input)).toEqual({ tool: input.tool, params: input.params, message: input.message, substituted: false });
+  });
+
+  it("preserves an existing sound-design chain and its reviewed settings", () => {
+    const params = { action: "run", version: 1, steps: [{ id: "cue", tool: "apply_sfx", params: { timestamp: 8 } }] };
+    expect(applyBackgroundAudioRoute({
+      query: "add background and sfx to @d1",
+      tool: "chain", params, message: "Adding timed foley.",
+      assetContext: [{ asset_id: "video-1", type: "video", notebook_references: ["@d1"] }],
+    })).toEqual({ tool: "chain", params, message: "Adding timed foley.", substituted: false });
   });
 
   it("requests JSON in the Responses API input message", () => {
