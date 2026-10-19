@@ -13,15 +13,7 @@
     "cli"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/justintanner/videobook#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/justintanner/videobook.git",
-    "directory": "server"
-  },
-  "bugs": {
-    "url": "https://github.com/justintanner/videobook/issues"
-  },
+  "homepage": "https://www.npmjs.com/package/videobook",
   "type": "module",
   "bin": {
     "videobook": "bin/videobook.js"

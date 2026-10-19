@@ -26,6 +26,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
   for every platform. Apple Silicon and Linux arm64 get a bundled ffprobe, and
   the install is about 300 MB smaller. When npm skips the package's chmod
   script, videobook marks the binary executable itself.
+- The npm page no longer links to the private source repository, which
+  anonymous visitors cannot open; its homepage is the npm package page.
 
 ### Fixed
 

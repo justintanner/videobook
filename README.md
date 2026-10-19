@@ -427,7 +427,7 @@ npm run build
 npm run build:server
 ```
 
-The pack-and-install gate exports the current commit into a temporary directory, runs `npm ci`, checks that the engine comes from npm, builds and packs the `videobook` package, and checks the tarball's size and contents. It then installs the tarball globally into a temporary prefix and checks that every dependency with an install script is on the documented `--allow-scripts` list, that one Sharp copy loads, and that `videobook --version` and `videobook doctor` pass. It runs `videobook serve --headless` (health, MCP book creation/listing, the library lock, graceful shutdown), `videobook serve` (web UI shell, assets, deep links), and `videobook mcp` over stdio. Finally it repeats the install with install scripts skipped and expects `doctor` to name the `--allow-scripts` remedy. It uses an isolated data home and caches without provider credentials. `npm run test:pack-install -- --worktree` validates pending changes; `--npm12` also checks npm 12's strict install-script policy; `--artifact-dir <dir>` keeps the tested tarball. `npm run test:clean-install` is an alias.
+The pack-and-install gate exports the current commit into a temporary directory, runs `npm ci`, checks that the engine comes from npm, builds and packs the `videobook` package, and checks the tarball's size and contents. It then installs the tarball globally into a temporary prefix and checks that every dependency with an install script is on the documented `--allow-scripts` list, that one Sharp copy loads, and that `videobook --version` and `videobook doctor` pass. It prints the installed footprint and the largest packages. It runs `videobook serve --headless` (health, MCP book creation/listing, the library lock, graceful shutdown), `videobook serve` (web UI shell, assets, deep links), and `videobook mcp` over stdio. Finally it repeats the install with install scripts skipped and expects `doctor` to name the `--allow-scripts` remedy, the bundled ffprobe to run, and yt-dlp to resolve from `PATH` or `VIDEOBOOK_YTDLP_PATH`. It uses an isolated data home and caches without provider credentials. `npm run test:pack-install -- --worktree` validates pending changes; `--npm12` also checks npm 12's strict install-script policy; `--artifact-dir <dir>` keeps the tested tarball. `npm run test:clean-install` is an alias.
 
 Releases publish from a machine signed in to the 1Password CLI, with the same
 npm credential Apicity and the engine use, `op://apicity/NPM_TOKEN/password`.
@@ -447,6 +447,11 @@ afterwards; the token never goes into `.env` or GitHub. After publishing it
 checks the registry's integrity against the tested tarball and installs the
 release back from npm. The Release check workflow reruns the gates and the npm
 12 smoke for every pushed `v*` tag.
+
+Releases carry no npm provenance attestation. npm creates one only for a
+package published from a CI provider through trusted publishing, and these
+releases publish locally while the source repository is private. For the same
+reason the npm package lists no repository or issue tracker links.
 
 For the engine:
 
