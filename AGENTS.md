@@ -22,6 +22,9 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:e2e` | E2E tests with vitest.e2e.config.ts |
 | `npm run preview` | Preview the production build locally |
+| `npx tsx server/src/cli/entry.ts <command>` | Run the `videobook` CLI from source: `serve [--headless]`, `mcp`, `run <tool> k=v`, `tools`, `gc-books`, `doctor`, `--version` |
+| `npm run use <tool> key=value` | `videobook run` with 1Password credentials |
+| `npm run test:pack-install` | Pack the `videobook` package, install it globally into a temp prefix, and smoke-test the CLI, UI, and stdio MCP (`--worktree` for uncommitted changes) |
 | `npm run benchmark:startup` | Replicate server `start()` phase by phase (skips `queue.start()`); print a per-phase table and write JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` fail when those budgets are exceeded |
 
 ### Running a Single Test
@@ -41,7 +44,7 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 ## Architecture
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `index.html` → `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned. Vite proxies `/mcp` to the server in dev.
-- **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
+- **Backend (`server/src/`)**: Express MCP server on port 3001. `server/src/index.ts` is a thin entry over `server/src/serve.ts` (`startServer`: listen, library lock, hydration, shutdown) and `server/src/app.ts` (routes and built-UI serving from `server/ui`). `server/src/cli/` is the published `videobook` command (serve, mcp, run, tools, gc-books, doctor); only one process owns a library at a time (`<library>/.videobook-server.json`), so `mcp` and `run` relay to a running server. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
 - **Domain/storage (`videobook-engine` 5.7.0, schema 28)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`. Project names are lowercase ASCII slugs with single hyphens, normalized with `videobook-engine/book-slug` before persistence and uniqueness checks. Artifacts and cells carry no slugs — identity is `artifact_id`/`cell_id` (UUIDv7) plus content-addressed `object_hash`, the user-facing handle is the grid address `@a1`-`@bl8` (lettered rows a-z, aa-az, ba-bl; numbered columns 1-8, so the top row reads `@a1` through `@a8`), and `label` is display-only text that is never parsed or looked up.
 - Generation-cell prompts name connected inputs by slot (`@image1`, `@video1`, `@audio1`, `@firstframe`, `@lastframe`; see `server/src/generation-input-mentions.ts`), never by grid address, so moving cells never changes a prompt.
 - Book roots live under `VIDEOBOOK_LIBRARY_DIR`. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
@@ -188,6 +191,7 @@ Treat each `useEffect` as technical debt. **No MCP tool calls in effects** — u
 ## Environment Variables
 
 - `PORT` (defaults to 3001)
+- `VIDEOBOOK_HOME` (installed data home, default `~/.videobook`; a source checkout keeps repo-relative data)
 - `KIMI_CODING_API_KEY`
 - `DASHSCOPE_API_KEY`
 - Never commit secrets

@@ -7,6 +7,22 @@ while every book mutation is recorded as an immutable DoltLite revision.
 The coordinated application requirements for the searchable audio-notebook MVP
 are in [docs/mvp-prd.md](docs/mvp-prd.md).
 
+## Install and run
+
+Videobook ships on npm as the `videobook` command (Node.js 22 or newer):
+
+```bash
+npm install -g videobook
+videobook                     # MCP server and web UI at http://127.0.0.1:3001/
+videobook serve --headless    # MCP and HTTP API only
+videobook mcp                 # stdio MCP for agent hosts
+claude mcp add videobook -- videobook mcp
+```
+
+[server/README.md](server/README.md) is the package documentation: install
+scripts under npm 12, every command, the `~/.videobook` data home, agent
+setup, and platform notes.
+
 ## Repositories
 
 - `~/videobook` — React frontend, MCP server, providers, and job workers
@@ -222,6 +238,19 @@ npm run dev
 
 The frontend is served on port 5173 and the MCP server on port 3001.
 
+The same CLI the package ships runs from a checkout. A checkout keeps its data
+in the repository (`books/`, `runtime/app-state.json`, `.env`) instead of
+`~/.videobook`, unless `VIDEOBOOK_HOME` or `--home` says otherwise:
+
+```bash
+npx tsx server/src/cli/entry.ts serve --headless
+npx tsx server/src/cli/entry.ts doctor
+npm run build:package && node server/bin/videobook.js serve   # with the built UI
+```
+
+`npm run use <tool> key=value` runs one tool through the same CLI with
+credentials from 1Password.
+
 The HTTP server binds to `127.0.0.1`. Every route, including MCP, uploads,
 media files, manifests, and archive files, checks the request Host and Origin
 before reading a body or accessing data. Only loopback hosts (`localhost`,
@@ -387,13 +416,13 @@ applies to newly written diagnostics; existing log files are not rewritten.
 ```bash
 npm run lint
 npm run test
-npm run test:clean-install
+npm run test:pack-install
 npm run test:e2e
 npm run build
 npm run build:server
 ```
 
-The clean-install gate exports the current commit into a temporary directory, runs one workspace install, builds both surfaces, and checks health, MCP book creation/listing, client delivery, a shared Sharp/libvips image round-trip, and graceful server shutdown. It uses isolated books, app state, and model cache without provider credentials or a sibling engine checkout. Use `npm run test:clean-install -- --worktree` to validate pending changes before committing; the default verifies committed source.
+The pack-and-install gate exports the current commit into a temporary directory, runs `npm ci`, checks that the engine comes from npm, builds and packs the `videobook` package, and checks the tarball's size and contents. It then installs the tarball globally into a temporary prefix and checks that every dependency with an install script is on the documented `--allow-scripts` list, that one Sharp copy loads, and that `videobook --version` and `videobook doctor` pass. It runs `videobook serve --headless` (health, MCP book creation/listing, the library lock, graceful shutdown), `videobook serve` (web UI shell, assets, deep links), and `videobook mcp` over stdio. Finally it repeats the install with install scripts skipped and expects `doctor` to name the `--allow-scripts` remedy. It uses an isolated data home and caches without provider credentials. `npm run test:pack-install -- --worktree` validates pending changes; `--npm12` also checks npm 12's strict install-script policy; `--artifact-dir <dir>` keeps the tested tarball. `npm run test:clean-install` is an alias.
 
 For the engine:
 
