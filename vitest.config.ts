@@ -90,6 +90,7 @@ export default defineConfig({
       'src/videobook/timeline-audio-command.test.ts',
       'scripts/search-benchmark-corpus.test.ts',
       'scripts/benchmark-startup.test.ts',
+      'scripts/changelog-section.test.ts',
       'src/videobook/watermark-target.test.ts',
       'src/videobook/watermark-burn.test.ts',
       'src/videobook/watermark-review.test.ts',
