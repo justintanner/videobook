@@ -1,6 +1,7 @@
 import { Client, StreamableHTTPClientTransport, type CallToolResult, type Tool } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import type { RunFlags } from "./args.js";
+import { onePasswordWarnings } from "./key-report.js";
 import { gcLibraryCatalogs } from "../catalog-gc.js";
 import { bookManager, scopedEngine } from "../engine.js";
 import { waitForJob } from "../queue.js";
@@ -45,6 +46,7 @@ function refuseUnresponsive(owner: ServerOwner): void {
 
 async function temporaryOwner(): Promise<OwnerSession> {
   const running: RunningServer = await startServer({ port: 0, ui: false });
+  for (const warning of onePasswordWarnings()) process.stderr.write(`videobook: ${warning}\n`);
   await running.ready;
   const client = await connect(running.mcpUrl);
   return {

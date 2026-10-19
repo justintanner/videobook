@@ -119,6 +119,8 @@ export default defineConfig({
       'server/src/ffprobe-binary.test.ts',
       'server/src/ffmpeg-binary.test.ts',
       'server/src/data-home.test.ts',
+      'server/src/one-password.test.ts',
+      'server/src/env-file.test.ts',
       'server/src/server-lock.test.ts',
       'server/src/package-manifest.test.ts',
       'server/src/cli/**/*.test.ts',

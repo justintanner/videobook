@@ -5,6 +5,7 @@ import { stopAceServer } from "./acestep/process.js";
 import { createApp, type UiStatus, type VideobookApp } from "./app.js";
 import type { BookManager, ManagedBook } from "./book-manager.js";
 import { bookManager, scopedEngine } from "./engine.js";
+import { getDefaultSecretStore } from "./env-secrets.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { logger } from "./logger.js";
 import { startPostMetricsScheduler, stopPostMetricsScheduler } from "./posts/post-metrics.js";
@@ -148,6 +149,7 @@ async function claimLibrary(server: Server, libraryDir: string, port: number, ur
 export async function startServer(options: ServeOptions): Promise<RunningServer> {
   const libraryDir = bookManager.rootDir;
   await refuseRunningOwner(libraryDir);
+  getDefaultSecretStore().resolveOnePassword();
   registerAllJobHandlers(scopedEngine);
   const services = createApp({ ui: options.ui, uiDir: options.uiDir });
   const server = services.app.listen(options.port, LOOPBACK_HOST);

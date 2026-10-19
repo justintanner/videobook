@@ -33,6 +33,9 @@ if (testRoot) {
  */
 
 const SECRET_ENV_VARS = [
+  "OP_SERVICE_ACCOUNT_TOKEN",
+  "VIDEOBOOK_OP_VAULT",
+  "VIDEOBOOK_OP_SERVICE_TOKEN",
   "DASHSCOPE_API_KEY",
   "ELEVENLABS_API_KEY",
   "FAL_API_KEY",
@@ -58,6 +61,10 @@ const ACESTEP_ENV_VARS = [
 
 for (const name of [...SECRET_ENV_VARS, ...ACESTEP_ENV_VARS]) {
   delete process.env[name];
+}
+
+for (const [name, value] of Object.entries(process.env)) {
+  if (value?.trim().startsWith("op://")) delete process.env[name];
 }
 
 function isLocalHost(hostname: string): boolean {

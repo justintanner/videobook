@@ -1,5 +1,6 @@
 import type { ServeFlags } from "./args.js";
 import { resolvePort } from "./args.js";
+import { onePasswordSummary, onePasswordWarnings } from "./key-report.js";
 import { openInBrowser } from "./open-browser.js";
 import { logger } from "../logger.js";
 import { SERVER_VERSION } from "../server.js";
@@ -13,14 +14,17 @@ function uiLine(running: RunningServer): string {
 }
 
 function printBanner(running: RunningServer): void {
+  const keys = onePasswordSummary();
   process.stdout.write([
     `videobook ${SERVER_VERSION}`,
     `Library  ${running.libraryDir}`,
     `UI       ${uiLine(running)}`,
     `MCP      ${running.mcpUrl}`,
+    ...(keys ? [`Keys     ${keys}`] : []),
     "Agents   claude mcp add videobook -- videobook mcp",
     "",
   ].join("\n"));
+  for (const warning of onePasswordWarnings()) process.stderr.write(`videobook: ${warning}\n`);
 }
 
 function reportStartupFailure(error: unknown, port: number): number {

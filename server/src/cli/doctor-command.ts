@@ -8,10 +8,11 @@ import type { DoctorFlags } from "./args.js";
 import { resolvePort } from "./args.js";
 import { dataLayout } from "../data-home.js";
 import { bookManager } from "../engine.js";
-import { MANAGED_ENV_KEYS, getDefaultSecretStore, isSecretEnvKey, maskEnvValue } from "../env-secrets.js";
+import { MANAGED_ENV_KEYS, getDefaultSecretStore } from "../env-secrets.js";
 import { FFMPEG } from "../ffmpeg-binary.js";
 import { FFPROBE } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
+import { readOnePasswordSettings, type OnePasswordResolution } from "../one-password.js";
 import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
 
 export type CheckStatus = "ok" | "warn" | "fail";
@@ -207,6 +208,46 @@ async function renderBrowserCheck(): Promise<DoctorCheck> {
   }
 }
 
+async function opVersion(): Promise<string | null> {
+  try {
+    return (await execFileAsync("op", ["--version"], { timeout: 10_000 })).stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
+function describeResolution(resolution: OnePasswordResolution): string {
+  const filled = resolution.fromReferences.length + resolution.fromVault.length;
+  const vault = resolution.vault ? `vault ${resolution.vault}` : "op:// references";
+  const token = resolution.tokenSource ? `token ${resolution.tokenSource}` : "op's own sign-in";
+  return `${vault}, ${token}: ${filled} key(s) from 1Password`;
+}
+
+function unresolvedDetail(resolution: OnePasswordResolution): string {
+  const failures = resolution.unresolved.map((item) => `${item.key} from ${item.reference} (${item.reason})`);
+  return [resolution.error, ...failures].filter((part): part is string => Boolean(part)).join("; ");
+}
+
+async function onePasswordCheck(): Promise<DoctorCheck> {
+  const resolution = getDefaultSecretStore().onePasswordResolution();
+  const version = await opVersion();
+  const cli = version ? `op ${version}` : "op not on PATH";
+  if (!resolution?.attempted) {
+    const tokenSource = readOnePasswordSettings(process.env).token.source;
+    const token = tokenSource ? `token ${tokenSource}, ` : "";
+    return check({ id: "one-password", label: "1Password", status: "ok", detail: `not used (${token}${cli}); to read keys from a vault: videobook setup 1password --op-vault <vault>`, required: false });
+  }
+  const problems = unresolvedDetail(resolution);
+  return check({
+    id: "one-password",
+    label: "1Password",
+    status: problems ? "warn" : "ok",
+    detail: `${describeResolution(resolution)}${problems ? `; unresolved: ${problems}` : ""} (${cli})`,
+    ...(problems ? { remedy: "Check the references and the service-account token, or run videobook setup 1password again." } : {}),
+    required: false,
+  });
+}
+
 function providerKeysCheck(): DoctorCheck {
   const store = getDefaultSecretStore();
   const configured = MANAGED_ENV_KEYS.filter((key) => key.endsWith("_API_KEY") && store.getSource(key) !== "missing");
@@ -220,10 +261,7 @@ function providerKeysCheck(): DoctorCheck {
       required: false,
     });
   }
-  const shown = configured.map((key) => {
-    const value = store.getValue(key) ?? "";
-    return `${key}=${isSecretEnvKey(key) ? maskEnvValue(value) : value} (${store.getSource(key)})`;
-  });
+  const shown = configured.map((key) => `${key} (${store.getSource(key)})`);
   return check({ id: "provider-keys", label: "Provider keys", status: "ok", detail: shown.join(", "), required: false });
 }
 
@@ -249,6 +287,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
     nativeCoreCheck(),
     searchRuntimeCheck(),
     await renderBrowserCheck(),
+    await onePasswordCheck(),
     providerKeysCheck(),
     await ownerCheck(resolvePort(process.env)),
   ];
@@ -271,6 +310,7 @@ function doctorExitCode(checks: DoctorCheck[]): number {
 }
 
 export async function runDoctorCommand(flags: DoctorFlags): Promise<number> {
+  getDefaultSecretStore().resolveOnePassword();
   const checks = await collectDoctorChecks();
   const code = doctorExitCode(checks);
   process.stdout.write(flags.json ? `${JSON.stringify({ ok: code === 0, checks }, null, 2)}\n` : renderText(checks));

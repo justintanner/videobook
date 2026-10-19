@@ -20,8 +20,8 @@ claude mcp add videobook -- videobook mcp
 ```
 
 [server/README.md](server/README.md) is the package documentation: install
-scripts under npm 12, every command, the `~/.videobook` data home, agent
-setup, and platform notes.
+scripts under npm 12, every command, the `~/.videobook` data home, provider
+keys and 1Password, agent setup, and platform notes.
 
 ## Repositories
 
@@ -326,6 +326,10 @@ In a source checkout it defaults to the repository's `.env`, books default to
 package keeps all three in `~/.videobook` instead; `VIDEOBOOK_HOME` moves that
 data home. Set `VIDEOBOOK_HOME` and `VIDEOBOOK_ENV_PATH` in the shell, because
 they choose which `.env` is read. These also allow isolated application fixtures.
+Outside `op run`, values that are `op://` references and the vault named by
+`VIDEOBOOK_OP_VAULT` resolve through the 1Password CLI when a server starts;
+`VIDEOBOOK_OP_SERVICE_TOKEN` names the service-account token, for example
+`env:OP_SERVICE_ACCOUNT_TOKEN`.
 `VIDEOBOOK_FFMPEG_PATH` and `VIDEOBOOK_FFPROBE_PATH` override the bundled media
 binaries; without them the server falls back to `ffmpeg` and `ffprobe` on PATH
 when a bundled binary is missing or built for another CPU.

@@ -57,6 +57,9 @@ videobook run create_book name=demo
 videobook tools                # list tools and their parameters
 videobook gc-books             # reclaim catalog storage in every book
 videobook doctor               # check Node, binaries, native modules and keys
+videobook config               # show where each provider key comes from
+videobook config set FAL_API_KEY op://Private/FAL_API_KEY/password
+videobook setup 1password --op-vault Private
 videobook --version
 ```
 
@@ -101,16 +104,63 @@ overrides any of them inherited from your shell. Set `VIDEOBOOK_HOME` and
 `VIDEOBOOK_ENV_PATH` in the environment, not in `.env`, because they decide
 which `.env` is read.
 
-Provider keys: `OPENAI_API_KEY`, `KIE_API_KEY`, `XAI_API_KEY`, `FAL_API_KEY`,
+Caches live in `~/.cache/videobook`. Other settings: `PORT`,
+`VIDEOBOOK_FFMPEG_PATH`, `VIDEOBOOK_FFPROBE_PATH`,
+`VIDEOBOOK_REMOTION_CACHE_DIR`, `VIDEOBOOK_MODEL_CACHE_DIR`,
+`VIDEOBOOK_DOWNLOADS_DIR` and `VIDEOBOOK_LOG_LEVEL`.
+
+## Provider keys
+
+The keys are `OPENAI_API_KEY`, `KIE_API_KEY`, `XAI_API_KEY`, `FAL_API_KEY`,
 `DASHSCOPE_API_KEY`, `ELEVENLABS_API_KEY`, `KIMI_CODING_API_KEY`,
 `X_CLIENT_ID` and `X_CLIENT_SECRET`, `DROPBOX_CLIENT_ID` and
 `DROPBOX_CLIENT_SECRET`, and the `B2_*` storage settings. The server starts
 without any of them; tools that need one report which.
 
-Caches live in `~/.cache/videobook`. Other settings: `PORT`,
-`VIDEOBOOK_FFMPEG_PATH`, `VIDEOBOOK_FFPROBE_PATH`,
-`VIDEOBOOK_REMOTION_CACHE_DIR`, `VIDEOBOOK_MODEL_CACHE_DIR`,
-`VIDEOBOOK_DOWNLOADS_DIR` and `VIDEOBOOK_LOG_LEVEL`.
+A key can come from four places. The first one that has it wins:
+
+1. The environment of the videobook process.
+2. A value in `.env`, set with `videobook config set <KEY> <value>` or from
+   Settings in the web UI.
+3. A 1Password secret reference in `.env`, such as
+   `op://Private/FAL_API_KEY/password`.
+4. A 1Password vault whose items are named after the keys.
+
+`videobook config` lists every key with its source and masks secret values.
+`config get`, `config set` and `config unset` work on one key and edit
+`.env` atomically. `config set` refuses a key that your shell already
+exports, because the exported value would win.
+
+### 1Password
+
+References and vaults need the [1Password CLI](https://developer.1password.com/docs/cli/)
+(`op`). When a server starts, videobook resolves every `op://` value in the
+environment and `.env`, and every key the vault has, in one `op inject` run.
+`videobook run` and `videobook mcp` skip this when they relay to a running
+server.
+
+```bash
+videobook setup 1password --op-vault Private      # use op's own sign-in
+videobook setup 1password --op-vault Apicity --op-token env:OP_SERVICE_ACCOUNT_TOKEN
+videobook doctor                                  # shows which keys came from 1Password
+videobook setup 1password --remove
+```
+
+`setup 1password` saves `VIDEOBOOK_OP_VAULT` and `VIDEOBOOK_OP_SERVICE_TOKEN`
+in `.env`, then lists the vault to report which keys it holds; `--no-verify`
+skips the listing. A vault item supplies a key when its title is the key name,
+and the value is read from its `password` field, for example
+`op://Apicity/OPENAI_API_KEY/password`.
+
+The token setting takes `env:VAR`, `$VAR` or a literal service-account
+token. Prefer `env:VAR`, which keeps the token out of the file. When
+`OP_SERVICE_ACCOUNT_TOKEN` is exported, setup records
+`env:OP_SERVICE_ACCOUNT_TOKEN`. Without a token, `op` uses its own sign-in.
+The token reaches `op` only through its environment, never its arguments.
+
+A reference that does not resolve is left unset, so it is never sent to a
+provider as a key. The server and `videobook doctor` report it. Keys that
+come from 1Password are read-only in Settings.
 
 ## Platform notes
 

@@ -24,6 +24,19 @@ export interface DoctorFlags extends GlobalFlags {
   json: boolean;
 }
 
+export interface SetupFlags extends GlobalFlags {
+  vault?: string;
+  token?: string;
+  verify: boolean;
+  remove: boolean;
+}
+
+export interface ConfigFlags extends GlobalFlags {
+  json: boolean;
+}
+
+export type ConfigAction = "list" | "get" | "set" | "unset";
+
 export type ParsedCli =
   | { command: "serve"; flags: ServeFlags }
   | { command: "mcp"; flags: GlobalFlags }
@@ -31,6 +44,8 @@ export type ParsedCli =
   | { command: "tools"; flags: GlobalFlags }
   | { command: "gc-books"; flags: GlobalFlags }
   | { command: "doctor"; flags: DoctorFlags }
+  | { command: "setup"; target: "1password"; flags: SetupFlags }
+  | { command: "config"; action: ConfigAction; key: string | null; value: string | null; flags: ConfigFlags }
   | { command: "version" }
   | { command: "help" };
 
@@ -46,7 +61,9 @@ export class CliUsageError extends Error {
 type OptionSpec = { type: "string" | "boolean"; short?: string };
 
 const LOG_LEVELS: ReadonlySet<string> = new Set(["silent", "error", "warn", "info", "debug"]);
-const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "version", "help"]);
+const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "setup", "config", "version", "help"]);
+const CONFIG_ACTIONS: ReadonlySet<string> = new Set(["list", "get", "set", "unset"]);
+const POSITIONAL_COMMANDS: ReadonlySet<string> = new Set(["run", "setup", "config"]);
 const DEFAULT_RUN_TIMEOUT_SECONDS = 600;
 
 const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
@@ -65,6 +82,8 @@ const COMMAND_OPTIONS: Record<CommandName, Record<string, OptionSpec>> = {
   tools: {},
   "gc-books": {},
   doctor: { json: { type: "boolean" } },
+  setup: { "op-vault": { type: "string" }, "op-token": { type: "string" }, "no-verify": { type: "boolean" }, remove: { type: "boolean" } },
+  config: { json: { type: "boolean" } },
 };
 
 type ParsedValues = Record<string, string | boolean | undefined>;
@@ -136,13 +155,49 @@ function parseCommandArgs(command: CommandName, rest: string[]): { values: Parse
     const parsed = parseArgs({
       args: rest,
       options: { ...GLOBAL_OPTIONS, ...COMMAND_OPTIONS[command] },
-      allowPositionals: command === "run",
+      allowPositionals: POSITIONAL_COMMANDS.has(command),
       strict: true,
     });
     return { values: parsed.values as ParsedValues, positionals: parsed.positionals };
   } catch (error) {
     throw new CliUsageError(error instanceof Error ? error.message : String(error));
   }
+}
+
+function buildSetup(values: ParsedValues, positionals: string[], flags: GlobalFlags): ParsedCli {
+  const [target, ...extra] = positionals;
+  if (target !== "1password" || extra.length > 0) throw new CliUsageError("setup needs a target: videobook setup 1password --op-vault <vault> [--op-token env:OP_SERVICE_ACCOUNT_TOKEN]");
+  const vault = stringValue(values["op-vault"]);
+  const token = stringValue(values["op-token"]);
+  return {
+    command: "setup",
+    target,
+    flags: {
+      ...flags,
+      ...(vault === undefined ? {} : { vault }),
+      ...(token === undefined ? {} : { token }),
+      verify: values["no-verify"] !== true,
+      remove: values.remove === true,
+    },
+  };
+}
+
+function buildConfig(values: ParsedValues, positionals: string[], flags: GlobalFlags): ParsedCli {
+  const [action = "list", key, value, ...extra] = positionals;
+  if (!CONFIG_ACTIONS.has(action)) throw new CliUsageError(`Unknown config action "${action}". Use list, get, set or unset.`);
+  const needsKey = action !== "list";
+  const needsValue = action === "set";
+  const expected = 1 + (needsKey ? 1 : 0) + (needsValue ? 1 : 0);
+  if (positionals.length > Math.max(expected, 1) || extra.length > 0 || (needsKey && !key) || (needsValue && value === undefined)) {
+    throw new CliUsageError("Usage: videobook config list | get <KEY> | set <KEY> <VALUE> | unset <KEY>");
+  }
+  return {
+    command: "config",
+    action: action as ConfigAction,
+    key: key ?? null,
+    value: value ?? null,
+    flags: { ...flags, json: values.json === true },
+  };
 }
 
 function buildCommand(command: CommandName, values: ParsedValues, positionals: string[]): ParsedCli {
@@ -157,6 +212,10 @@ function buildCommand(command: CommandName, values: ParsedValues, positionals: s
     }
     case "doctor":
       return { command, flags: { ...flags, json: values.json === true } };
+    case "setup":
+      return buildSetup(values, positionals, flags);
+    case "config":
+      return buildConfig(values, positionals, flags);
     default:
       return { command, flags };
   }
@@ -204,6 +263,8 @@ export function helpText(): string {
     "  tools              List the MCP tools and their parameters",
     "  gc-books           Reclaim catalog storage in every book",
     "  doctor             Check Node, media binaries, native modules and keys",
+    "  config [action]    list | get <KEY> | set <KEY> <VALUE> | unset <KEY> in the data-home .env",
+    "  setup 1password    Read keys from a 1Password vault (--op-vault, --op-token)",
     "  version            Print versions",
     "  help               Print this help",
     "",
@@ -216,7 +277,11 @@ export function helpText(): string {
     "  --open             serve: open the web UI in a browser",
     "  --no-wait          run: do not wait for queued jobs",
     "  --timeout <s>      run: seconds to wait for jobs (default 600)",
-    "  --json             doctor: print machine-readable results",
+    "  --json             doctor, config: print machine-readable results",
+    "  --op-vault <name>  setup 1password: vault whose items are named after the keys",
+    "  --op-token <tok>   setup 1password: service-account token, best as env:VAR",
+    "  --no-verify        setup 1password: skip the op item list check",
+    "  --remove           setup 1password: remove the saved 1Password settings",
     "  -v, --version      Print versions",
     "  -h, --help         Print this help",
     "",

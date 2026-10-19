@@ -1,5 +1,6 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { resolvePort } from "./args.js";
+import { onePasswordSummary, onePasswordWarnings } from "./key-report.js";
 import { connectUpstream, createRelayServer } from "./mcp-relay.js";
 import { bookManager, scopedEngine } from "../engine.js";
 import { logger } from "../logger.js";
@@ -59,6 +60,9 @@ async function serveInProcess(running: RunningServer): Promise<number> {
   const instructions = serverInstructions(running.url);
   const handle = serveStdio(() => createServer(scopedEngine, bookManager, { instructions }), { onerror: reportStdioError });
   process.stderr.write(`videobook mcp: serving stdio; web UI and HTTP MCP at ${running.url}/ for library ${running.libraryDir}\n`);
+  const keys = onePasswordSummary();
+  if (keys) process.stderr.write(`videobook mcp: ${keys}\n`);
+  for (const warning of onePasswordWarnings()) process.stderr.write(`videobook mcp: ${warning}\n`);
   const code = await Promise.race([stdinEnded(), signalled(), hydrationFailure(running)]);
   await handle.close();
   await running.close();

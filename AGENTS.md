@@ -193,6 +193,7 @@ Treat each `useEffect` as technical debt. **No MCP tool calls in effects** — u
 
 - `PORT` (defaults to 3001)
 - `VIDEOBOOK_HOME` (installed data home, default `~/.videobook`; a source checkout keeps repo-relative data)
+- `VIDEOBOOK_OP_VAULT`, `VIDEOBOOK_OP_SERVICE_TOKEN` (optional 1Password vault and token; `op://` values resolve through `op` when a server starts, see `server/src/one-password.ts`)
 - `KIMI_CODING_API_KEY`
 - `DASHSCOPE_API_KEY`
 - Never commit secrets

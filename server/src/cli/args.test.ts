@@ -31,6 +31,26 @@ describe("parseCli", () => {
       .toMatchObject({ command: "run", tool: "list_books", flags: { wait: false, timeoutSeconds: 30 } });
   });
 
+  it("parses setup 1password with its vault and token flags", () => {
+    expect(parseCli(["setup", "1password", "--op-vault", "Apicity", "--op-token", "env:OP_SERVICE_ACCOUNT_TOKEN", "--home", "h"])).toEqual({
+      command: "setup",
+      target: "1password",
+      flags: { home: "h", vault: "Apicity", token: "env:OP_SERVICE_ACCOUNT_TOKEN", verify: true, remove: false },
+    });
+    expect(parseCli(["setup", "1password", "--no-verify", "--remove"]))
+      .toEqual({ command: "setup", target: "1password", flags: { verify: false, remove: true } });
+  });
+
+  it("parses config actions and defaults to list", () => {
+    expect(parseCli(["config"])).toEqual({ command: "config", action: "list", key: null, value: null, flags: { json: false } });
+    expect(parseCli(["config", "list", "--json"])).toEqual({ command: "config", action: "list", key: null, value: null, flags: { json: true } });
+    expect(parseCli(["config", "get", "FAL_API_KEY"])).toMatchObject({ action: "get", key: "FAL_API_KEY", value: null });
+    expect(parseCli(["config", "set", "FAL_API_KEY", "op://Apicity/FAL_API_KEY/password"]))
+      .toMatchObject({ action: "set", key: "FAL_API_KEY", value: "op://Apicity/FAL_API_KEY/password" });
+    expect(parseCli(["config", "set", "KIE_API_KEY", "--", "-starts-with-a-dash"])).toMatchObject({ action: "set", value: "-starts-with-a-dash" });
+    expect(parseCli(["config", "unset", "FAL_API_KEY"])).toMatchObject({ action: "unset", key: "FAL_API_KEY", value: null });
+  });
+
   it("answers help and version from any position", () => {
     expect(parseCli(["help"])).toEqual({ command: "help" });
     expect(parseCli(["--help"])).toEqual({ command: "help" });
@@ -49,6 +69,15 @@ describe("parseCli", () => {
     expect(() => parseCli(["--log-level", "loud"])).toThrow("--log-level must be one of");
     expect(() => parseCli(["run"])).toThrow("run needs a tool name");
     expect(() => parseCli(["run", "x", "--timeout", "0"])).toThrow("--timeout must be a positive number");
+    expect(() => parseCli(["setup"])).toThrow("setup needs a target");
+    expect(() => parseCli(["setup", "vault"])).toThrow("setup needs a target");
+    expect(() => parseCli(["setup", "1password", "extra"])).toThrow("setup needs a target");
+    expect(() => parseCli(["config", "frob"])).toThrow("Unknown config action");
+    expect(() => parseCli(["config", "list", "extra"])).toThrow("Usage: videobook config");
+    expect(() => parseCli(["config", "get"])).toThrow("Usage: videobook config");
+    expect(() => parseCli(["config", "set", "KIE_API_KEY"])).toThrow("Usage: videobook config");
+    expect(() => parseCli(["config", "unset", "KIE_API_KEY", "extra"])).toThrow("Usage: videobook config");
+    expect(() => parseCli(["config", "--op-vault", "x"])).toThrow(CliUsageError);
   });
 });
 
@@ -107,7 +136,7 @@ describe("resolvePort", () => {
 describe("helpText", () => {
   it("documents every command and the agent setup line", () => {
     const text = helpText();
-    for (const command of ["serve", "mcp", "run", "tools", "gc-books", "doctor", "version", "help"]) {
+    for (const command of ["serve", "mcp", "run", "tools", "gc-books", "doctor", "config", "setup 1password", "version", "help"]) {
       expect(text).toContain(`  ${command}`);
     }
     expect(text).toContain("claude mcp add videobook -- videobook mcp");

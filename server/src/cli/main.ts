@@ -56,7 +56,20 @@ async function runCommand(parsed: RunnableCli): Promise<number> {
       const { runDoctorCommand } = await import("./doctor-command.js");
       return runDoctorCommand(parsed.flags);
     }
+    case "setup": {
+      const { runSetupCommand } = await import("./setup-command.js");
+      return runSetupCommand(parsed.flags);
+    }
+    case "config": {
+      const { runConfigCommand } = await import("./config-command.js");
+      return runConfigCommand(parsed);
+    }
   }
+}
+
+async function loadDotenv(): Promise<void> {
+  const { getDefaultSecretStore } = await import("../env-secrets.js");
+  getDefaultSecretStore().loadDotenv();
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -72,7 +85,7 @@ async function main(argv: string[]): Promise<number> {
   }
   applyFlagsToEnv(parsed.flags, process.env, process.cwd());
   if (parsed.command !== "serve") redirectConsoleToStderr();
-  await import("../load-env.js");
+  if (parsed.command !== "setup" && parsed.command !== "config") await loadDotenv();
   return runCommand(parsed);
 }
 
