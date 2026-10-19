@@ -29,6 +29,7 @@ function isSafeSourcePath(relativePath) {
     || relativePath.startsWith('dist/')
     || relativePath.startsWith('node_modules/')
     || relativePath.startsWith('runtime/')
+    || relativePath.startsWith('server/ui/')
     || relativePath === 'vancat.mp4'
     || relativePath === 'vancat_profile.jpg'
   ) return false

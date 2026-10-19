@@ -70,7 +70,7 @@ describe("Dancing workflow fixture", () => {
 
     const seeded = await seedDancingWorkflow(engine, {
       sourceVideoPath: sourcePath,
-      kittenImagePath: resolve("public/dancing-kittens-first-frame.png"),
+      kittenImagePath: resolve("tests/fixtures/images/dancing-kittens-first-frame.png"),
     });
     const owned = seeded.cells.filter((cell) =>
       cell.inputs?.fixtureOwner === DANCING_FIXTURE_OWNER);
@@ -243,7 +243,7 @@ describe("Dancing workflow fixture", () => {
     const firstHead = engine.head;
     const repeated = await seedDancingWorkflow(engine, {
       sourceVideoPath: sourcePath,
-      kittenImagePath: resolve("public/dancing-kittens-first-frame.png"),
+      kittenImagePath: resolve("tests/fixtures/images/dancing-kittens-first-frame.png"),
     });
     expect(repeated.cells.filter((cell) =>
       cell.inputs?.fixtureOwner === DANCING_FIXTURE_OWNER).map((cell) => cell.id))

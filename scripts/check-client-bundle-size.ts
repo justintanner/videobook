@@ -2,7 +2,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const chunkLimitBytes = 500_000
-const assetsDir = join(process.cwd(), 'dist', 'assets')
+const assetsDir = join(process.cwd(), 'server', 'ui', 'assets')
 const chunkNames = (await readdir(assetsDir))
   .filter((name) => name.endsWith('.js'))
   .sort()

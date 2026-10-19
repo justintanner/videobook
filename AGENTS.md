@@ -13,8 +13,10 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run dev` | Start Vite dev + MCP server concurrently |
 | `npm run dev:client` | Start Vite only (port 5173) |
 | `npm run dev:server` | Start MCP server only (port 3001) |
-| `npm run build` | Type-check + Vite build |
-| `npm run build:server` | Compile server TS to server/dist/ |
+| `npm run build` | Lint, type-check, and build the web UI into server/ui/ |
+| `npm run build:server` | Clean-compile shippable server TS to server/dist/ (no tests or test helpers) and copy guides, Remotion assets, and LICENSE |
+| `npm run build:package` | Build both; `npm pack -w server` runs it through `prepack` |
+| `npm run pack:package` | Pack the publishable `videobook` package into .artifacts/ |
 | `npm run lint` | ESLint all *.ts/*.tsx files |
 | `npm run test` | Run all vitest integration tests |
 | `npm run test:watch` | Vitest watch mode |
@@ -83,7 +85,7 @@ This repository explicitly opts into the Beads **team-maintainer** profile (`age
 
 ### Linting
 - ESLint 9 flat config with typescript-eslint, react-hooks, react-refresh
-- Ignores: `dist/` directories
+- Ignores: `dist/` directories and `server/ui/`
 - Only lints `*.ts` and `*.tsx` files
 
 **IMPORTANT:** DO NOT ADD COMMENTS unless asked. Never log or commit secrets.

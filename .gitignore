@@ -11,6 +11,9 @@ node_modules
 dist
 dist-extension
 dist-ssr
+server/ui
+server/LICENSE
+.artifacts/
 *.local
 
 # Editor directories and files

@@ -28,7 +28,7 @@ export const DANCING_MOTION_DURATION_SECONDS = 10;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_KITTEN_IMAGE_PATH = resolve(
   __dirname,
-  "../../public/dancing-kittens-first-frame.png",
+  "../../tests/fixtures/images/dancing-kittens-first-frame.png",
 );
 const SOURCE_LABEL = "Dancing motion reference";
 const FIRST_FRAME_LABEL = "Dancing first frame";

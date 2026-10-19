@@ -184,7 +184,7 @@ export default defineConfig({
       'server/src/x/x-tokens.test.ts',
       'server/src/zod-slots.test.ts',
     ],
-    exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
+    exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', 'server/ui/**', ...configDefaults.exclude],
     setupFiles: ['./vitest.setup.ts'],
     // Hide console output from passing tests. Failing tests still print
     // logs; onConsoleLog only strips a tiny allowlist of known-benign lines.

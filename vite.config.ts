@@ -84,6 +84,8 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: 'server/ui',
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: clientManualChunk,
