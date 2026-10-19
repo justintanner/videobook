@@ -25,7 +25,8 @@
         "scripts/**/*.ts",
         "src/remotion/index.tsx",
         "src/rhythm/worker.ts",
-        "src/quiet-probes/**"
+        "src/quiet-probes/**",
+        "src/cli/entry.ts"
       ]
     }
   }

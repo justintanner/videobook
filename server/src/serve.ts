@@ -2,7 +2,7 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { stopAceServer } from "./acestep/process.js";
-import { createApp, type VideobookApp } from "./app.js";
+import { createApp, type UiStatus, type VideobookApp } from "./app.js";
 import type { BookManager, ManagedBook } from "./book-manager.js";
 import { bookManager, scopedEngine } from "./engine.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
@@ -10,6 +10,13 @@ import { logger } from "./logger.js";
 import { startPostMetricsScheduler, stopPostMetricsScheduler } from "./posts/post-metrics.js";
 import { queue } from "./queue.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
+import { SERVER_VERSION } from "./server.js";
+import {
+  ServerAlreadyRunningError,
+  acquireServerLock,
+  inspectServerOwner,
+  type ServerLockHandle,
+} from "./server-lock.js";
 import { attachVoiceAudio } from "./voice-audio.js";
 
 const LOOPBACK_HOST = "127.0.0.1";
@@ -18,12 +25,17 @@ const HTTP_CLOSE_GRACE_MS = 2_000;
 
 export interface ServeOptions {
   port: number;
+  ui: boolean;
+  uiDir?: string;
 }
 
 export interface RunningServer {
   port: number;
   url: string;
   mcpUrl: string;
+  libraryDir: string;
+  uiDir: string;
+  uiStatus: UiStatus;
   ready: Promise<void>;
   close(): Promise<void>;
 }
@@ -76,7 +88,12 @@ async function finishHttpClose(server: Server, closed: Promise<void>): Promise<v
   await Promise.race([closed, delay(HTTP_CLOSE_GRACE_MS, undefined, { ref: false })]);
 }
 
-function closer(server: Server, services: VideobookApp, onClosing: () => void): () => Promise<void> {
+function closer(
+  server: Server,
+  services: VideobookApp,
+  lock: ServerLockHandle,
+  onClosing: () => void,
+): () => Promise<void> {
   let closing: Promise<void> | undefined;
   async function run(): Promise<void> {
     onClosing();
@@ -89,6 +106,7 @@ function closer(server: Server, services: VideobookApp, onClosing: () => void): 
       throw error;
     } finally {
       await finishHttpClose(server, closed);
+      await lock.release();
     }
   }
   return () => {
@@ -112,23 +130,44 @@ function startHydration(isClosing: () => boolean): Promise<void> {
   return ready;
 }
 
+async function refuseRunningOwner(libraryDir: string): Promise<void> {
+  const owner = await inspectServerOwner(libraryDir);
+  if (owner.kind === "none") return;
+  throw new ServerAlreadyRunningError(owner.record, libraryDir, owner.kind === "running");
+}
+
+async function claimLibrary(server: Server, libraryDir: string, port: number, url: string): Promise<ServerLockHandle> {
+  try {
+    return await acquireServerLock(libraryDir, { pid: process.pid, port, url, version: SERVER_VERSION });
+  } catch (error) {
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    throw error;
+  }
+}
+
 export async function startServer(options: ServeOptions): Promise<RunningServer> {
+  const libraryDir = bookManager.rootDir;
+  await refuseRunningOwner(libraryDir);
   registerAllJobHandlers(scopedEngine);
-  const services = createApp();
+  const services = createApp({ ui: options.ui, uiDir: options.uiDir });
   const server = services.app.listen(options.port, LOOPBACK_HOST);
   await once(server, "listening");
   const port = boundPort(server, options.port);
+  const url = `http://${LOOPBACK_HOST}:${port}`;
+  const lock = await claimLibrary(server, libraryDir, port, url);
   logger.info("server-listening", { port });
   attachVoiceAudio(server, services.voiceSessions);
   let closing = false;
-  const close = closer(server, services, () => {
+  const close = closer(server, services, lock, () => {
     closing = true;
   });
-  const url = `http://${LOOPBACK_HOST}:${port}`;
   return {
     port,
     url,
     mcpUrl: `${url}/mcp`,
+    libraryDir,
+    uiDir: services.uiDir,
+    uiStatus: services.uiStatus,
     ready: startHydration(() => closing),
     close,
   };

@@ -1,13 +1,14 @@
 import cors from "cors";
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import type { McpHttpHandler } from "@modelcontextprotocol/server";
 import { SCHEMA_VERSION } from "videobook-engine";
@@ -23,16 +24,31 @@ import { SERVER_VERSION, createHttpHandler } from "./server.js";
 import { VoiceSessions } from "./voice-session.js";
 import { voiceRouter } from "./voice-http.js";
 
+export type UiStatus = "served" | "missing" | "disabled";
+
+export interface AppOptions {
+  ui: boolean;
+  uiDir?: string;
+}
+
 export interface VideobookApp {
   app: Express;
   mcpHandler: McpHttpHandler;
   voiceSessions: VoiceSessions;
+  uiDir: string;
+  uiStatus: UiStatus;
 }
 
 const enginePackage = createRequire(import.meta.url)("videobook-engine/package.json") as {
   version: string;
 };
 const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
+const RESERVED_ROOTS: ReadonlySet<string> = new Set(["mcp", "api", "files", "archive-files", "healthz", "assets"]);
+
+function defaultUiDir(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.VIDEOBOOK_UI_DIR?.trim();
+  return override ? resolve(override) : fileURLToPath(new URL("../ui/", import.meta.url));
+}
 
 function limitUploadBytes(maxBytes: number): Transform {
   let received = 0;
@@ -246,7 +262,35 @@ function registerMcpRoute(app: Express, mcpHandler: McpHttpHandler): void {
   });
 }
 
-export function createApp(): VideobookApp {
+function isAppRoute(path: string): boolean {
+  return !RESERVED_ROOTS.has(path.split("/")[1] ?? "");
+}
+
+function spaFallback(indexPath: string): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    if ((req.method !== "GET" && req.method !== "HEAD") || !isAppRoute(req.path) || !req.accepts("html")) {
+      next();
+      return;
+    }
+    res.set("Cache-Control", "no-cache");
+    res.sendFile(indexPath);
+  };
+}
+
+function registerUi(app: Express, uiDir: string): void {
+  app.use("/assets", express.static(join(uiDir, "assets"), { immutable: true, maxAge: "1y", index: false }));
+  app.use(express.static(uiDir, { index: false }));
+  app.use(spaFallback(join(uiDir, "index.html")));
+}
+
+function mountUi(app: Express, options: AppOptions, uiDir: string): UiStatus {
+  if (!options.ui) return "disabled";
+  if (!existsSync(join(uiDir, "index.html"))) return "missing";
+  registerUi(app, uiDir);
+  return "served";
+}
+
+export function createApp(options: AppOptions): VideobookApp {
   const app = express();
   const voiceSessions = new VoiceSessions(bookManager);
   const mcpHandler = createHttpHandler(scopedEngine, bookManager);
@@ -254,5 +298,7 @@ export function createApp(): VideobookApp {
   registerMediaRoutes(app);
   registerApiRoutes(app, voiceSessions);
   registerMcpRoute(app, mcpHandler);
-  return { app, mcpHandler, voiceSessions };
+  const uiDir = options.uiDir ?? defaultUiDir();
+  const uiStatus = mountUi(app, options, uiDir);
+  return { app, mcpHandler, voiceSessions, uiDir, uiStatus };
 }

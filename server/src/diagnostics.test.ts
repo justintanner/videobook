@@ -153,9 +153,10 @@ describe("private runtime diagnostics", () => {
         function visit(node: ts.Node): void {
           if (ts.isCallExpression(node)) {
             const callee = node.expression.getText(source);
-            if (/^console\./.test(callee) && !["logger.ts", "cli.ts"].includes(file)) violations.push(`${file}: console`);
+            const processOutputBoundary = file === "cli.ts" || file.startsWith("cli/");
+            if (/^console\./.test(callee) && file !== "logger.ts" && !processOutputBoundary) violations.push(`${file}: console`);
             if (/\.logs\.append$/.test(callee) && !["diagnostics.ts", "tools/chat-history.ts"].includes(file)) violations.push(`${file}: persistent log`);
-            if (/^process\.(stdout|stderr)\.write$/.test(callee) && file !== "cli.ts") violations.push(`${file}: process output`);
+            if (/^process\.(stdout|stderr)\.write$/.test(callee) && !processOutputBoundary) violations.push(`${file}: process output`);
             if (callee === "registerDiagnosticName" && !["queue.ts", "tools/log-wrapper.ts"].includes(file)) violations.push(`${file}: name registration`);
             if (/^logger\./.test(callee) && !ts.isStringLiteral(node.arguments[0])) violations.push(`${file}: dynamic event`);
           }
