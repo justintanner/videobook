@@ -21,6 +21,7 @@
     "build:server": "node scripts/build-server.mjs",
     "build:package": "npm run build && npm run build:server",
     "pack:package": "npm pack -w server --pack-destination .artifacts",
+    "release": "node scripts/release.mjs",
     "lint": "eslint . --max-warnings 0",
     "typecheck:test": "tsc -p tsconfig.vitest.json --noEmit && tsc -p tsconfig.v2-test.json --noEmit && tsc -p tsconfig.v2-e2e.json --noEmit && tsc -p server/tsconfig.test.json --noEmit",
     "preview": "vite preview",

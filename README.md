@@ -424,6 +424,25 @@ npm run build:server
 
 The pack-and-install gate exports the current commit into a temporary directory, runs `npm ci`, checks that the engine comes from npm, builds and packs the `videobook` package, and checks the tarball's size and contents. It then installs the tarball globally into a temporary prefix and checks that every dependency with an install script is on the documented `--allow-scripts` list, that one Sharp copy loads, and that `videobook --version` and `videobook doctor` pass. It runs `videobook serve --headless` (health, MCP book creation/listing, the library lock, graceful shutdown), `videobook serve` (web UI shell, assets, deep links), and `videobook mcp` over stdio. Finally it repeats the install with install scripts skipped and expects `doctor` to name the `--allow-scripts` remedy. It uses an isolated data home and caches without provider credentials. `npm run test:pack-install -- --worktree` validates pending changes; `--npm12` also checks npm 12's strict install-script policy; `--artifact-dir <dir>` keeps the tested tarball. `npm run test:clean-install` is an alias.
 
+Releases publish from a machine signed in to the 1Password CLI, with the same
+npm credential Apicity and the engine use, `op://apicity/NPM_TOKEN/password`.
+Set the version in `server/package.json`, rename the changelog's Unreleased
+section to that version, and commit on `main`. Then:
+
+```bash
+npm run release -- 0.1.0 --dry-run   # every gate, then npm publish --dry-run
+npm run release -- 0.1.0             # publish the tested tarball, verify it, tag locally
+npm run release -- 0.1.0 --push      # push main and the tag, create the GitHub release
+```
+
+The release script runs lint, the dead-code check, the type checks, the full
+suite, and the pack-and-install gate, then publishes exactly the tarball that
+gate tested. It reads the token into a temporary npmrc and deletes it
+afterwards; the token never goes into `.env` or GitHub. After publishing it
+checks the registry's integrity against the tested tarball and installs the
+release back from npm. The Release check workflow reruns the gates and the npm
+12 smoke for every pushed `v*` tag.
+
 For the engine:
 
 ```bash

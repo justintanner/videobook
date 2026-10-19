@@ -24,6 +24,7 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run preview` | Preview the production build locally |
 | `npx tsx server/src/cli/entry.ts <command>` | Run the `videobook` CLI from source: `serve [--headless]`, `mcp`, `run <tool> k=v`, `tools`, `gc-books`, `doctor`, `--version` |
 | `npm run use <tool> key=value` | `videobook run` with 1Password credentials |
+| `npm run release -- <version> [--dry-run] [--push]` | Publish the gated, smoke-tested tarball to npm with `op://apicity/NPM_TOKEN/password` via a temporary npmrc, verify it, and tag locally; `--push` also pushes main and the tag and creates the GitHub release |
 | `npm run test:pack-install` | Pack the `videobook` package, install it globally into a temp prefix, and smoke-test the CLI, UI, and stdio MCP (`--worktree` for uncommitted changes) |
 | `npm run benchmark:startup` | Replicate server `start()` phase by phase (skips `queue.start()`); print a per-phase table and write JSON to argv[2]; `--assert-listen-ms` / `--assert-ready-ms` fail when those budgets are exceeded |
 
