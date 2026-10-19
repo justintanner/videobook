@@ -3,6 +3,7 @@ import {
   McpServer,
   type McpHttpHandler,
 } from "@modelcontextprotocol/server";
+import { createRequire } from "node:module";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "./book-manager.js";
 import { registerAllTools } from "./tools/index.js";
@@ -10,6 +11,7 @@ import { bookManager, scopedEngine as defaultFs } from "./engine.js";
 import { allowsHttpRequest } from "./http-access.js";
 
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
+export const SERVER_VERSION: string = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 function createServer(
   engine: Engine = defaultFs,
@@ -17,7 +19,7 @@ function createServer(
 ): McpServer {
   const server = new McpServer({
     name: "videobook",
-    version: "0.1.0",
+    version: SERVER_VERSION,
   }, {
     supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
   });

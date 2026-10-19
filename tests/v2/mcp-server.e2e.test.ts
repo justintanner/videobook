@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { EXTENSION_ORIGIN } from '../../server/src/http-access.js'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { isUuidV7 } from 'videobook-engine'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+
+const SERVER_VERSION = (createRequire(import.meta.url)('../../server/package.json') as { version: string }).version
 
 const execFileAsync = promisify(execFile)
 
@@ -641,7 +644,7 @@ describe('v2 MCP server', () => {
       supportedVersions: ['2026-07-28'],
       capabilities: { tools: { listChanged: true } },
     })
-    expect(client.getServerVersion()).toEqual({ name: 'videobook', version: '0.1.0' })
+    expect(client.getServerVersion()).toEqual({ name: 'videobook', version: SERVER_VERSION })
 
     const tools = await client.listTools()
     expect(tools.ttlMs).toBe(0)
