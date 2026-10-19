@@ -40,9 +40,22 @@ async function runCommand(parsed: RunnableCli): Promise<number> {
       const { runMcpCommand } = await import("./mcp-command.js");
       return runMcpCommand();
     }
-    default:
-      process.stderr.write(`videobook ${parsed.command} is not available yet.\n`);
-      return 2;
+    case "run": {
+      const { runToolCommand } = await import("./run-command.js");
+      return runToolCommand(parsed.flags, parsed.tool, parsed.toolArgs);
+    }
+    case "tools": {
+      const { runToolsCommand } = await import("./run-command.js");
+      return runToolsCommand();
+    }
+    case "gc-books": {
+      const { runGcBooksCommand } = await import("./run-command.js");
+      return runGcBooksCommand();
+    }
+    case "doctor": {
+      const { runDoctorCommand } = await import("./doctor-command.js");
+      return runDoctorCommand(parsed.flags);
+    }
   }
 }
 
@@ -58,7 +71,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   applyFlagsToEnv(parsed.flags, process.env, process.cwd());
-  if (parsed.command === "mcp") redirectConsoleToStderr();
+  if (parsed.command !== "serve") redirectConsoleToStderr();
   await import("../load-env.js");
   return runCommand(parsed);
 }
@@ -67,7 +80,15 @@ function flushed(stream: NodeJS.WriteStream): Promise<void> {
   return new Promise((resolveFlush) => stream.write("", () => resolveFlush()));
 }
 
+function exitOnBrokenPipe(stream: NodeJS.WriteStream): void {
+  stream.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code !== "EPIPE") throw error;
+    process.exit(0);
+  });
+}
+
 export async function runCli(argv: string[]): Promise<void> {
+  exitOnBrokenPipe(process.stdout);
   let code: number;
   try {
     code = await main(argv);

@@ -153,7 +153,7 @@ describe("private runtime diagnostics", () => {
         function visit(node: ts.Node): void {
           if (ts.isCallExpression(node)) {
             const callee = node.expression.getText(source);
-            const processOutputBoundary = file === "cli.ts" || file.startsWith("cli/");
+            const processOutputBoundary = file.startsWith("cli/");
             if (/^console\./.test(callee) && file !== "logger.ts" && !processOutputBoundary) violations.push(`${file}: console`);
             if (/\.logs\.append$/.test(callee) && !["diagnostics.ts", "tools/chat-history.ts"].includes(file)) violations.push(`${file}: persistent log`);
             if (/^process\.(stdout|stderr)\.write$/.test(callee) && !processOutputBoundary) violations.push(`${file}: process output`);
