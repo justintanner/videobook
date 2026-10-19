@@ -12,6 +12,7 @@ import {
   registerLocalClapSearchProvider,
   registerLocalClipSearchProvider,
 } from "./local-search-models.js";
+import { FFMPEG } from "./ffmpeg-binary.js";
 import { indexArtifact, registerSemanticIndexJob } from "./jobs/semantic-index.js";
 import { registerPrepareSearchReferenceJob } from "./jobs/prepare-search-reference.js";
 import { queue, setEngineRoot, stopBookQueue } from "./queue.js";
@@ -237,7 +238,7 @@ describe("local search provider registration", () => {
     const created = await engine.artifacts.create("audio", "Tone");
     if (!created.ok) throw new Error(created.error.message);
     const artifactId = created.value.artifactId;
-    const { stdout: audio } = await promisify(execFile)("ffmpeg", [
+    const { stdout: audio } = await promisify(execFile)(FFMPEG, [
       "-nostdin", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=48000", "-f", "wav", "pipe:1",
     ], { encoding: "buffer" });
     expect((await engine.files.write(artifactId, "original.wav", audio)).ok).toBe(true);
