@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
 - `videobook config` lists where every provider key comes from, with secret
