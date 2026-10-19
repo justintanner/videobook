@@ -627,6 +627,11 @@ export function enqueueOptions(jobId: string, payload: JobPayload) {
   };
 }
 
+export function jobIdForKey(jobKey: string, bookId: string): number | null {
+  const entry = jobIdIndex.get(jobKey);
+  return entry && entry.bookId === bookId ? entry.internalId : null;
+}
+
 function rememberJob(jobId: string, entry: QueueIndexEntry): void {
   jobIdIndex.set(jobId, entry);
   while (jobIdIndex.size > JOB_INDEX_MAX) {

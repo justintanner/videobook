@@ -17,6 +17,7 @@ and the package uses [Semantic Versioning](https://semver.org/).
   whose items are named after the keys. `videobook doctor` reports the setup
   and which keys 1Password supplied.
 - `VIDEOBOOK_YTDLP_PATH` selects the yt-dlp binary.
+- `list_jobs` accepts `job_keys`, the `job_id` strings other tools return.
 
 ### Fixed
 
@@ -24,6 +25,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
   videobook falls back to `yt-dlp` on `PATH`, passes yt-dlp the resolved
   ffmpeg so format merges work, and fails with install instructions when no
   yt-dlp exists. `videobook doctor` shows which yt-dlp is used.
+- `videobook run` waits for queued jobs on an already running server too,
+  instead of returning while the job runs, and reports how the job ended.
 
 ## [0.1.0] - 2026-10-19
 

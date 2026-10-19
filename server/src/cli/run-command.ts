@@ -1,10 +1,10 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { Client, StreamableHTTPClientTransport, type CallToolResult, type Tool } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import type { RunFlags } from "./args.js";
 import { onePasswordWarnings } from "./key-report.js";
 import { gcLibraryCatalogs } from "../catalog-gc.js";
 import { bookManager, scopedEngine } from "../engine.js";
-import { waitForJob } from "../queue.js";
 import { MCP_PROTOCOL_VERSION, SERVER_VERSION } from "../server.js";
 import { inspectServerOwner, type ServerOwner } from "../server-lock.js";
 import { startServer, type RunningServer } from "../serve.js";
@@ -24,6 +24,16 @@ interface ToolListing {
 }
 
 const REQUEST_GRACE_MS = 60_000;
+const JOB_POLL_MS = 1_000;
+const FINISHED_JOB_STATES: ReadonlySet<string> = new Set(["done", "failed", "aborted"]);
+const SETTLED_STATUSES: ReadonlySet<string> = new Set(["completed", "done"]);
+
+type JobReference = { job_ids: number[] } | { job_keys: string[] };
+
+interface JobSnapshot {
+  state: string;
+  error: string | null;
+}
 
 function newClient(): Client {
   return new Client({ name: "videobook-cli", version: SERVER_VERSION }, {
@@ -86,16 +96,50 @@ function stringField(record: Record<string, unknown> | null, key: string): strin
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-async function waitInProcess(jobId: string, timeoutSeconds: number): Promise<number> {
-  process.stderr.write(`Waiting for job ${jobId}...\n`);
-  try {
-    await waitForJob(jobId, timeoutSeconds * 1000);
-  } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+function jobReference(first: Record<string, unknown> | null): JobReference | null {
+  const value = first?.job_id;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return { job_ids: [value] };
+  if (typeof value === "string" && value !== "") return { job_keys: [value] };
+  return null;
+}
+
+function parseSnapshot(result: CallToolResult): JobSnapshot | null {
+  if (result.isError) return null;
+  const rows = JSON.parse(textOf(result)[0] ?? "[]") as unknown;
+  const job = Array.isArray(rows) ? rows[0] as { state?: unknown; error?: { message?: unknown } | null } | undefined : undefined;
+  if (!job || typeof job.state !== "string") return null;
+  return { state: job.state, error: typeof job.error?.message === "string" ? job.error.message : null };
+}
+
+async function jobSnapshot(client: Client, bookId: string, reference: JobReference): Promise<JobSnapshot | null> {
+  const result = await client.callTool({ name: "list_jobs", arguments: { book_id: bookId, ...reference } }) as CallToolResult;
+  return parseSnapshot(result);
+}
+
+function reportJob(label: string, job: JobSnapshot): number {
+  if (job.state === "done") {
+    process.stderr.write(`Job ${label} completed.\n`);
+    return 0;
   }
-  process.stderr.write(`Job ${jobId} completed.\n`);
-  return 0;
+  process.stderr.write(`Job ${label} ${job.state}${job.error ? `: ${job.error}` : ""}\n`);
+  return 1;
+}
+
+async function waitForJob(client: Client, bookId: string, reference: JobReference, label: string, timeoutSeconds: number): Promise<number> {
+  process.stderr.write(`Waiting for job ${label}...\n`);
+  const deadline = Date.now() + timeoutSeconds * 1000;
+  let job = await jobSnapshot(client, bookId, reference);
+  while (job && !FINISHED_JOB_STATES.has(job.state) && Date.now() < deadline) {
+    await delay(JOB_POLL_MS);
+    job = await jobSnapshot(client, bookId, reference);
+  }
+  if (!job) {
+    process.stderr.write(`Job ${label} is not tracked by the server; check it with list_jobs.\n`);
+    return 0;
+  }
+  if (FINISHED_JOB_STATES.has(job.state)) return reportJob(label, job);
+  process.stderr.write(`Job ${label} did not finish within ${timeoutSeconds} s.\n`);
+  return 1;
 }
 
 async function waitForAsset(client: Client, bookId: string, assetId: string, timeoutSeconds: number): Promise<number> {
@@ -114,14 +158,18 @@ async function waitForOutcome(
   args: Record<string, unknown>,
   first: Record<string, unknown> | null,
 ): Promise<number> {
-  const jobId = stringField(first, "job_id");
+  const reference = jobReference(first);
   const assetId = stringField(first, "asset_id");
   const bookId = typeof args.book_id === "string" ? args.book_id : null;
-  if (session.temporary && jobId) return waitInProcess(jobId, flags.timeoutSeconds);
-  if (!flags.wait || !jobId) return 0;
+  const status = stringField(first, "status");
+  if (!reference || (status && SETTLED_STATUSES.has(status))) return 0;
+  if (!flags.wait && !session.temporary) return 0;
   if (assetId && bookId) return waitForAsset(session.client, bookId, assetId, flags.timeoutSeconds);
-  process.stderr.write(`Job ${jobId} is queued on the running server; follow it with list_jobs.\n`);
-  return 0;
+  if (!bookId) {
+    process.stderr.write(`Job ${String(first?.job_id)} was queued; pass book_id to wait for it.\n`);
+    return 0;
+  }
+  return waitForJob(session.client, bookId, reference, String(first?.job_id), flags.timeoutSeconds);
 }
 
 async function callOnce(

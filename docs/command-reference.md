@@ -122,7 +122,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_generation_models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity
 - `list_image_edit_models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model
 - `list_ingest_status` — List independent ingest and search-index phase states
-- `list_jobs` — List persistent jobs for a book
+- `list_jobs` — List persistent jobs for a book. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.
 - `list_media_streams` — List typed media streams for a source artifact
 - `list_notebook_actions` — List the deterministic notebook action catalog for runnable cells
 - `list_notebook_generation_plans` — List durable generation plans and their retryable lifecycle state
@@ -388,7 +388,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-generation-models` — List the image, video and audio generation models with their input roles, modes and options, read from apicity; MCP: `list_generation_models`
 - `/list-image-edit-models` — List the image-edit models available to edit_image_subjects, with per-model capabilities, input caps, key availability and the book's last-used model; MCP: `list_image_edit_models`
 - `/list-ingest-status` — List independent ingest and search-index phase states; MCP: `list_ingest_status`
-- `/list-jobs` — List persistent jobs for a book; MCP: `list_jobs`
+- `/list-jobs` — List persistent jobs for a book. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.; MCP: `list_jobs`
 - `/list-media-streams` — List typed media streams for a source artifact; MCP: `list_media_streams`
 - `/list-notebook-actions` — List the deterministic notebook action catalog for runnable cells; MCP: `list_notebook_actions`
 - `/list-notebook-generation-plans` — List durable generation plans and their retryable lifecycle state; MCP: `list_notebook_generation_plans`

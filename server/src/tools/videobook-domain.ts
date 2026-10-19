@@ -3,6 +3,7 @@ import { notebookCellOccupiedSlots, notebookOccupiedSlots } from "videobook-engi
 import type {
   Engine,
   EntityDocument,
+  Job,
   EntityType,
   NotebookCell,
   NotebookCellReference,
@@ -27,7 +28,7 @@ import {
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
-import { queue, stopBookQueue } from "../queue.js";
+import { jobIdForKey, queue, stopBookQueue } from "../queue.js";
 import {
   claimNotebookGenerationPlan,
   failQueuedNotebookCells,
@@ -365,6 +366,30 @@ function pinnedResultFromInput(
     ordinal: input.ordinal,
     createdAt: input.created_at,
   };
+}
+
+interface SelectedJob {
+  job: Job;
+  jobKey: string | null;
+}
+
+function jobsByIdOrKey(engine: Engine, bookId: string, ids: number[], keys: string[]): SelectedJob[] {
+  const byId = ids.map((id) => ({ id, jobKey: null }));
+  const byKey = keys.flatMap((jobKey) => {
+    const id = jobIdForKey(jobKey, bookId);
+    return id === null ? [] : [{ id, jobKey }];
+  });
+  return [...byId, ...byKey].flatMap(({ id, jobKey }) => {
+    const job = engine.jobs.queue.get(id);
+    return job ? [{ job, jobKey }] : [];
+  });
+}
+
+function selectJobs(engine: Engine, args: Record<string, unknown>): SelectedJob[] {
+  const ids = Array.isArray(args.job_ids) ? args.job_ids.map(Number) : null;
+  const keys = Array.isArray(args.job_keys) ? args.job_keys.map(String) : null;
+  if (!ids && !keys) return engine.jobs.queue.list({ limit: Number(args.limit) || 200 }).map((job) => ({ job, jobKey: null }));
+  return jobsByIdOrKey(engine, String(args.book_id), ids ?? [], keys ?? []);
 }
 
 function json(value: unknown): ToolResult {
@@ -2274,21 +2299,18 @@ export function videobookDomainDefs(
     },
     {
       name: "list_jobs",
-      description: "List persistent jobs for a book",
+      description: "List persistent jobs for a book. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.",
       scope: "book",
       schema: {
         ...bookSchema,
         limit: z.number().int().positive().max(500).optional(),
         job_ids: z.array(z.number().int().positive()).min(1).max(100).optional(),
+        job_keys: z.array(z.string().min(1).max(500)).min(1).max(100).optional(),
       },
       handler: async (args) => {
-        const jobs = Array.isArray(args.job_ids) ? args.job_ids.flatMap((id) => {
-            const job = engine.jobs.queue.get(Number(id));
-            return job ? [job] : [];
-          })
-          : engine.jobs.queue.list({ limit: Number(args.limit) || 200 });
-        return json(await Promise.all(jobs.map(async (job) => ({
-          ...job, providerTask: await jobProviderTaskStatus(engine, job),
+        const jobs = selectJobs(engine, args);
+        return json(await Promise.all(jobs.map(async ({ job, jobKey }) => ({
+          ...job, ...(jobKey ? { jobKey } : {}), providerTask: await jobProviderTaskStatus(engine, job),
         }))));
       },
     },

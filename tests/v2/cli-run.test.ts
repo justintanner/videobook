@@ -60,6 +60,32 @@ describe('videobook run, tools and gc-books', () => {
     expect(invalid.stdout).toBe('')
   }, 120_000)
 
+  it('waits for a job queued on a running owner and reports how it ended', async () => {
+    const home = join(await tempDir(), 'home')
+    const port = await availablePort()
+    const owner = spawnCli(['serve', '--headless', '--port', String(port), '--home', home])
+    await waitForHealth(`http://127.0.0.1:${port}`, owner)
+    const created = await runCli(['run', 'create_book', 'name=jobs', '--home', home])
+    const book = JSON.parse(created.stdout) as { bookId: string }
+    const closedPort = await availablePort()
+    const download = await runCli([
+      'run', 'download_video', `book_id=${book.bookId}`, `url=http://127.0.0.1:${closedPort}/missing.mp4`, '--timeout', '100', '--home', home,
+    ])
+    expect(download.code, download.stdout + download.stderr).toBe(1)
+    const queued = JSON.parse(download.stdout) as { job_id: string; status: string }
+    expect(queued.status).toBe('enqueued')
+    expect(download.stderr).toContain(`Waiting for job ${queued.job_id}...`)
+    expect(download.stderr).toContain(`Job ${queued.job_id} failed`)
+    const http = await connectMcp(`http://127.0.0.1:${port}/mcp`)
+    try {
+      const jobs = await callTool<Array<{ jobKey: string; state: string }>>(http, 'list_jobs', { book_id: book.bookId, job_keys: [queued.job_id, 'unknown-job'] })
+      expect(jobs).toEqual([expect.objectContaining({ jobKey: queued.job_id, state: 'failed' })])
+    } finally {
+      await http.close()
+    }
+    expect(await stopCli(owner)).toBe(0)
+  }, 180_000)
+
   it('lists tools without opening the library', async () => {
     const home = join(await tempDir(), 'home')
     const result = await runCli(['tools', '--home', home])

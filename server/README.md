@@ -66,8 +66,11 @@ videobook --version
 
 Every command accepts `--port <n>` (default 3001), `--library <dir>`,
 `--home <dir>` and `--log-level <silent|error|warn|info|debug>`. Tool
-arguments are `key=value`; values that parse as JSON are passed as JSON. Exit
-codes are 0 for success, 1 for a failure and 2 for a usage error.
+arguments are `key=value`; values that parse as JSON are passed as JSON. When
+a tool queues a job, `run` waits for it to finish, up to `--timeout <s>`
+(default 600), and exits 1 if the job fails. `--no-wait` returns at once,
+except on a server that `run` started for itself, which stops when `run`
+exits. Exit codes are 0 for success, 1 for a failure and 2 for a usage error.
 
 ## Agent hosts
 
