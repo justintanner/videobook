@@ -330,9 +330,10 @@ Outside `op run`, values that are `op://` references and the vault named by
 `VIDEOBOOK_OP_VAULT` resolve through the 1Password CLI when a server starts;
 `VIDEOBOOK_OP_SERVICE_TOKEN` names the service-account token, for example
 `env:OP_SERVICE_ACCOUNT_TOKEN`.
-`VIDEOBOOK_FFMPEG_PATH` and `VIDEOBOOK_FFPROBE_PATH` override the bundled media
-binaries; without them the server falls back to `ffmpeg` and `ffprobe` on PATH
-when a bundled binary is missing or built for another CPU.
+`VIDEOBOOK_FFMPEG_PATH`, `VIDEOBOOK_FFPROBE_PATH` and `VIDEOBOOK_YTDLP_PATH`
+override the bundled media binaries; without them the server falls back to
+`ffmpeg`, `ffprobe` and `yt-dlp` on PATH when a bundled binary is missing or
+built for another CPU.
 
 ### Voice chat
 

@@ -16,6 +16,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   `videobook setup 1password --op-vault <vault>` reads every key from a vault
   whose items are named after the keys. `videobook doctor` reports the setup
   and which keys 1Password supplied.
+- `VIDEOBOOK_YTDLP_PATH` selects the yt-dlp binary.
+
+### Fixed
+
+- Downloading videos from URLs works when npm blocked the yt-dlp download:
+  videobook falls back to `yt-dlp` on `PATH`, passes yt-dlp the resolved
+  ffmpeg so format merges work, and fails with install instructions when no
+  yt-dlp exists. `videobook doctor` shows which yt-dlp is used.
 
 ## [0.1.0] - 2026-10-19
 

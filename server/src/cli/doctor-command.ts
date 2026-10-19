@@ -14,6 +14,7 @@ import { FFPROBE } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
 import { readOnePasswordSettings, type OnePasswordResolution } from "../one-password.js";
 import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
+import { resolveYtdlp } from "../ytdlp-binary.js";
 
 export type CheckStatus = "ok" | "warn" | "fail";
 
@@ -124,19 +125,17 @@ async function binaryCheck(id: string, label: string, binary: string, bundled: s
 }
 
 function ytdlpCheck(): DoctorCheck {
-  try {
-    const { helpers } = require("ytdlp-nodejs") as { helpers: { findYtdlpBinary(): string | undefined } };
-    const binary = helpers.findYtdlpBinary();
-    if (binary) return check({ id: "yt-dlp", label: "yt-dlp", status: "ok", detail: binary, required: false });
-  } catch (error) {
-    return check({ id: "yt-dlp", label: "yt-dlp", status: "warn", detail: message(error), remedy: INSTALL_REMEDY, required: false });
+  const binary = resolveYtdlp();
+  if (binary) {
+    const origin = binary.source === "PATH" ? "from PATH" : binary.source;
+    return check({ id: "yt-dlp", label: "yt-dlp", status: "ok", detail: `${binary.path} (${origin})`, required: false });
   }
   return check({
     id: "yt-dlp",
     label: "yt-dlp",
     status: "warn",
-    detail: "not downloaded; download_video and archive_clip from URLs will fail",
-    remedy: INSTALL_REMEDY,
+    detail: "not found; download_video and archive_clip from URLs will fail",
+    remedy: `${INSTALL_REMEDY}, install yt-dlp on PATH, or set VIDEOBOOK_YTDLP_PATH.`,
     required: false,
   });
 }

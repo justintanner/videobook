@@ -14,6 +14,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join, posix } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
+import { ytdlpRunOptions } from "../ytdlp-binary.js";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
@@ -202,7 +203,7 @@ async function prepareUrlMedia(payload: ArchiveClipPayload): Promise<PreparedMed
   if (!payload.url) throw new Error("url archive requires url");
   const dir = await mkdtemp(join(tmpdir(), "videocity-archive-"));
   const outputPath = join(dir, "original.mp4");
-  const ytdlp = new YtDlp();
+  const ytdlp = new YtDlp(ytdlpRunOptions());
   try {
     await ytdlp
       .download(payload.url)

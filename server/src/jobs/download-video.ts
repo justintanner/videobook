@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
+import { ytdlpRunOptions } from "../ytdlp-binary.js";
 import { extractOpenGraph } from "@devmehq/open-graph-extractor";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
@@ -237,9 +238,8 @@ export function imageExtension(info: InfoResult): string {
 }
 
 export function registerDownloadVideoJob(engine: Engine): void {
-  const ytdlp = new YtDlp();
-
   registerJobHandler("download_video", async (payload, ctx) => {
+    const ytdlp = new YtDlp(ytdlpRunOptions());
     const {
       url,
       assetId, assetDir, exportVideos,

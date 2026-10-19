@@ -39,6 +39,7 @@ npm config set allow-scripts=ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearc
 
 - `ffmpeg-static` downloads ffmpeg, which every media operation needs.
 - `ytdlp-nodejs` downloads yt-dlp, which downloading videos from URLs needs.
+  Without it, videobook uses `yt-dlp` on `PATH` or `VIDEOBOOK_YTDLP_PATH`.
 - `@dolthub/doltlite`, `usearch` and `onnxruntime-node` use prebuilt native
   binaries and only compile or fetch extras on unusual platforms.
 - `esbuild` checks its platform binary for the Remotion renderer.
@@ -105,7 +106,7 @@ overrides any of them inherited from your shell. Set `VIDEOBOOK_HOME` and
 which `.env` is read.
 
 Caches live in `~/.cache/videobook`. Other settings: `PORT`,
-`VIDEOBOOK_FFMPEG_PATH`, `VIDEOBOOK_FFPROBE_PATH`,
+`VIDEOBOOK_FFMPEG_PATH`, `VIDEOBOOK_FFPROBE_PATH`, `VIDEOBOOK_YTDLP_PATH`,
 `VIDEOBOOK_REMOTION_CACHE_DIR`, `VIDEOBOOK_MODEL_CACHE_DIR`,
 `VIDEOBOOK_DOWNLOADS_DIR` and `VIDEOBOOK_LOG_LEVEL`.
 

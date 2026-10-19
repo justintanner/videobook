@@ -1,10 +1,10 @@
 import { execFile, spawn } from 'node:child_process'
-import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -363,12 +363,48 @@ async function verifyStdio(packageDir, sdk) {
   log(`mcp over stdio: ${tools.tools.length} tools, list_books passed`)
 }
 
+function workspaceYtdlp() {
+  try {
+    return createRequire(join(appRoot, 'package.json'))('ytdlp-nodejs').helpers.findYtdlpBinary() ?? null
+  } catch {
+    return null
+  }
+}
+
+async function doctorYtdlpCheck(packageDir, env) {
+  const doctor = await capture(process.execPath, [join(packageDir, 'bin', 'videobook.js'), 'doctor', '--json'], runtimeRoot, env)
+  return JSON.parse(doctor.stdout).checks.find((check) => check.id === 'yt-dlp')
+}
+
+async function verifyYtdlpFallback(packageDir, env, label) {
+  const blocked = await doctorYtdlpCheck(packageDir, env)
+  if (blocked?.status === 'ok') {
+    log(`${label}: yt-dlp present despite blocked scripts (${blocked.detail}); skipping the fallback check`)
+    return
+  }
+  expect(blocked?.status === 'warn' && blocked.detail.startsWith('not found'), `${label}: doctor did not report the missing yt-dlp: ${JSON.stringify(blocked)}`)
+  const real = workspaceYtdlp()
+  if (!real) {
+    log(`${label}: no yt-dlp in the exported checkout; skipping the PATH fallback check`)
+    return
+  }
+  const binDir = join(temporaryRoot, `yt-dlp-${label}`)
+  await mkdir(binDir, { recursive: true })
+  await symlink(real, join(binDir, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'))
+  const onPath = await doctorYtdlpCheck(packageDir, { ...env, PATH: `${env.PATH}${delimiter}${binDir}` })
+  expect(onPath?.status === 'ok' && onPath.detail.endsWith('(from PATH)'), `${label}: yt-dlp on PATH was not used: ${JSON.stringify(onPath)}`)
+  const override = await doctorYtdlpCheck(packageDir, { ...env, VIDEOBOOK_YTDLP_PATH: real })
+  expect(override?.status === 'ok' && override.detail === `${real} (VIDEOBOOK_YTDLP_PATH)`, `${label}: VIDEOBOOK_YTDLP_PATH was not used: ${JSON.stringify(override)}`)
+  log(`${label}: yt-dlp download blocked; doctor resolves yt-dlp from PATH and VIDEOBOOK_YTDLP_PATH`)
+}
+
 async function verifyBlockedScripts(npmCommand, tarball, label, blockArgs) {
   const prefix = join(temporaryRoot, `blocked-${label}`)
   const packageDir = await globalInstall(npmCommand, tarball, prefix, blockArgs)
   const env = isolatedEnvironment({ PATH: dirname(process.execPath) })
   const version = await capture(process.execPath, [join(packageDir, 'bin', 'videobook.js'), '--version'], runtimeRoot, env)
   expect(version.code === 0, `videobook --version failed with install scripts blocked:\n${version.stderr}`)
+  await verifyYtdlpFallback(packageDir, env, label)
   const tree = await verifyInstalledTree(packageDir)
   if (tree.ffmpegBundled) {
     log(`${label}: ffmpeg-static binary present despite blocked scripts; skipping the remedy check`)

@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { YtDlp } from "ytdlp-nodejs";
+import { ytdlpRunOptions } from "./ytdlp-binary.js";
 import {
   findVideoFile,
   resolveNotebookCellArtifactId,
@@ -110,7 +111,7 @@ async function hasFile(
 }
 
 async function downloadDancingVideo(destination: string): Promise<void> {
-  const ytdlp = new YtDlp();
+  const ytdlp = new YtDlp(ytdlpRunOptions());
   await ytdlp
     .download(DANCING_SOURCE_URL)
     .setOutputTemplate(destination)
