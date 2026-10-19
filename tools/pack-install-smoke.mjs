@@ -221,6 +221,7 @@ function verifyTarball(pack) {
 }
 
 async function globalInstall(npmCommand, tarball, prefix, extraArgs) {
+  await mkdir(join(prefix, 'lib', 'node_modules'), { recursive: true })
   await run(npmCommand[0], [...npmCommand.slice(1), 'install', '-g', tarball, '--prefix', prefix, '--no-audit', '--no-fund', ...extraArgs], runtimeRoot)
   const packageDir = join(prefix, 'lib', 'node_modules', 'videobook')
   expect(existsSync(join(packageDir, 'package.json')), `global install did not create ${packageDir}`)
@@ -378,6 +379,13 @@ async function verifyBlockedScripts(npmCommand, tarball, label, blockArgs) {
   log(`${label}: install scripts blocked; CLI starts and doctor names the --allow-scripts remedy`)
 }
 
+function nodeRunsNpm12(version) {
+  const [major, minor, patch] = version.replace(/^v/, '').split('.').map(Number)
+  if (major === 22) return minor > 22 || (minor === 22 && patch >= 2)
+  if (major === 24) return minor >= 15
+  return major >= 26
+}
+
 async function npm12Command() {
   const prefix = join(temporaryRoot, 'npm12')
   await run('npm', ['install', '-g', 'npm@12', '--prefix', prefix, '--no-audit', '--no-fund'], runtimeRoot)
@@ -386,14 +394,19 @@ async function npm12Command() {
 
 async function verifyNpm12(tarball) {
   const npm12 = await npm12Command()
-  const strict = await capture(npm12[0], [...npm12.slice(1), 'install', '-g', tarball, '--prefix', join(temporaryRoot, 'strict'), '--strict-allow-scripts', '--no-audit', '--no-fund'], runtimeRoot)
+  const strictPrefix = join(temporaryRoot, 'strict')
+  await mkdir(join(strictPrefix, 'lib', 'node_modules'), { recursive: true })
+  const strict = await capture(npm12[0], [...npm12.slice(1), 'install', '-g', tarball, '--prefix', strictPrefix, '--strict-allow-scripts', '--no-audit', '--no-fund'], runtimeRoot)
+  const strictOutput = `${strict.stdout}${strict.stderr}`
   expect(strict.code !== 0, 'npm 12 --strict-allow-scripts accepted unapproved install scripts')
+  expect(/allow-?scripts|install scripts?|lifecycle scripts?/i.test(strictOutput) && ALLOW_SCRIPTS.some((name) => strictOutput.includes(name)), `npm 12 strict install failed for another reason:\n${strictOutput}`)
   await globalInstall(npm12, tarball, join(temporaryRoot, 'approved'), ['--strict-allow-scripts', `--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
   log('npm 12: strict install fails without the list and succeeds with the documented --allow-scripts list')
   await verifyBlockedScripts(npm12, tarball, 'npm12', [])
 }
 
 try {
+  expect(!options.npm12 || nodeRunsNpm12(process.version), `--npm12 needs Node ^22.22.2 || ^24.15.0 || >=26 to run npm 12; this is ${process.version}`)
   await mkdir(join(runtimeRoot, 'home'), { recursive: true })
   await writeFile(join(runtimeRoot, 'npmrc'), '', 'utf8')
   if (options.worktree) await exportWorktree(appRoot)
