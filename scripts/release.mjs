@@ -153,13 +153,14 @@ async function publishTarball(tarball, dryRun) {
 }
 
 async function waitForRegistry(version, expected) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  log('waiting for the registry; npm can take several minutes to process a publish')
+  for (let attempt = 0; attempt < 180; attempt += 1) {
     const integrity = await publishedIntegrity(version)
     if (integrity === expected) return
     if (integrity) fail(`The registry has ${PACKAGE}@${version} with integrity ${integrity}, not the tested ${expected}.`)
     await new Promise((resolveWait) => setTimeout(resolveWait, 5_000))
   }
-  fail(`${PACKAGE}@${version} did not appear on the registry within 150 seconds.`)
+  fail(`${PACKAGE}@${version} did not appear on the registry within 15 minutes. Rerun npm run release -- ${version} to finish once it does.`)
 }
 
 async function installFromRegistry(version) {
@@ -200,24 +201,43 @@ function printNextSteps(version, pushed) {
   log(`to publish the tag and GitHub release: npm run release -- ${version} --push`)
 }
 
-async function releaseAlreadyPublished(options, commit, artifactDir) {
-  const tagged = await localTag(options.version)
-  if (tagged !== commit) fail(`${PACKAGE}@${options.version} is already on npm and v${options.version} is not tagged at HEAD; bump the version instead.`)
-  if (!options.push) fail(`${PACKAGE}@${options.version} is already published and tagged. Use --push to publish the tag and GitHub release.`)
+async function recordedCommit(artifactDir, head) {
+  const path = join(artifactDir, 'release-commit')
+  if (!existsSync(path)) return head
+  const recorded = (await readFile(path, 'utf8')).trim()
+  if (await outputOrNull('git', ['merge-base', '--is-ancestor', recorded, head]) === null) {
+    fail(`The tested tarball came from ${recorded}, which is not an ancestor of HEAD.`)
+  }
+  return recorded
+}
+
+async function finishPublishedRelease(options, head, artifactDir, published) {
+  if (options.dryRun) fail(`${PACKAGE}@${options.version} is already published; there is nothing to dry-run.`)
   const tarball = join(artifactDir, `${PACKAGE}-${options.version}.tgz`)
-  await pushRelease(options.version, existsSync(tarball) ? tarball : null)
-  printNextSteps(options.version, true)
+  const tested = existsSync(tarball) ? await tarballIntegrity(tarball) : null
+  const commit = tested === published ? await recordedCommit(artifactDir, head) : head
+  const tagged = await localTag(options.version)
+  if (tested !== published && !tagged) {
+    fail(`${PACKAGE}@${options.version} is already on npm but matches neither a tested tarball nor a v${options.version} tag; bump the version instead.`)
+  }
+  log(`${PACKAGE}@${options.version} is already on npm (${published}); finishing the release`)
+  await installFromRegistry(options.version)
+  await tagRelease(options.version, tagged ?? commit)
+  if (options.push) await pushRelease(options.version, tested === published ? tarball : null)
+  printNextSteps(options.version, options.push)
 }
 
 async function release(options) {
   const commit = await verifyRepository(options.version)
   const artifactDir = join(root, '.artifacts', `release-${options.version}`)
-  if (await publishedIntegrity(options.version)) {
-    await releaseAlreadyPublished(options, commit, artifactDir)
+  const published = await publishedIntegrity(options.version)
+  if (published) {
+    await finishPublishedRelease(options, commit, artifactDir, published)
     return
   }
   await verifyNpmCredential()
   await runGates(artifactDir)
+  await writeFile(join(artifactDir, 'release-commit'), `${commit}\n`)
   const tarball = await testedTarball(artifactDir, options.version)
   const integrity = await tarballIntegrity(tarball)
   await publishTarball(tarball, options.dryRun)
