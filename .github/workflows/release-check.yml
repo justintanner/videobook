@@ -51,3 +51,18 @@ jobs:
         with:
           name: videobook-npm-package
           path: ${{ runner.temp }}/pack/*.tgz
+
+  windows-smoke:
+    name: Smoke-test the videobook package on Windows (not yet supported)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Pack, install globally, and smoke-test the CLI under npm 12
+        run: npm run test:pack-install -- --npm12

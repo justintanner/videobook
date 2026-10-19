@@ -28,6 +28,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
   script, videobook marks the binary executable itself.
 - The npm page no longer links to the private source repository, which
   anonymous visitors cannot open; its homepage is the npm package page.
+- The README states that Windows is not supported yet, and why, instead of
+  calling it untested.
 
 ### Fixed
 

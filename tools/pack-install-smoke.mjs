@@ -16,6 +16,8 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), 'videobook-pack-install-'))
 const appRoot = join(temporaryRoot, 'videobook')
 const runtimeRoot = join(temporaryRoot, 'runtime')
 const children = new Set()
+const WINDOWS = process.platform === 'win32'
+const NPM = npmInvocation()
 
 const ALLOW_SCRIPTS = ['ffmpeg-static', 'ytdlp-nodejs', '@dolthub/doltlite', 'usearch', 'onnxruntime-node', 'esbuild']
 const FFPROBE_PLATFORM_PACKAGE = `@ffprobe-installer/${process.platform}-${process.arch}`
@@ -50,6 +52,21 @@ function parseOptions(args) {
     else throw new Error('Usage: pack-install-smoke.mjs [--worktree] [--npm12] [--artifact-dir <dir>]')
   }
   return parsed
+}
+
+function npmInvocation() {
+  if (!WINDOWS) return ['npm']
+  const execPath = process.env.npm_execpath
+  const cli = execPath?.endsWith('npm-cli.js') ? execPath : join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  return [process.execPath, cli]
+}
+
+function globalModulesDir(prefix) {
+  return WINDOWS ? join(prefix, 'node_modules') : join(prefix, 'lib', 'node_modules')
+}
+
+function globalBinDir(prefix) {
+  return WINDOWS ? prefix : join(prefix, 'bin')
 }
 
 function log(message) {
@@ -135,6 +152,11 @@ function capture(command, args, cwd, env = isolatedEnvironment()) {
   })
 }
 
+function captureShim(binDir, args, env) {
+  if (!WINDOWS) return capture(join(binDir, 'videobook'), args, runtimeRoot, env)
+  return capture(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', join(binDir, 'videobook.cmd'), ...args], runtimeRoot, env)
+}
+
 function start(command, args, env) {
   const child = spawn(command, args, { cwd: runtimeRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
   child.output = ''
@@ -198,10 +220,10 @@ async function verifyWorkspaceLock() {
 }
 
 async function packPackage() {
-  await run('npm', ['run', 'build:package'], appRoot)
+  await run(NPM[0], [...NPM.slice(1), 'run', 'build:package'], appRoot)
   const packDir = join(temporaryRoot, 'pack')
   await mkdir(packDir, { recursive: true })
-  const { code, stdout, stderr } = await capture('npm', ['pack', '-w', 'server', '--ignore-scripts', '--json', '--pack-destination', packDir], appRoot)
+  const { code, stdout, stderr } = await capture(NPM[0], [...NPM.slice(1), 'pack', '-w', 'server', '--ignore-scripts', '--json', '--pack-destination', packDir], appRoot)
   expect(code === 0, `npm pack failed:\n${stderr}`)
   const [pack] = JSON.parse(stdout)
   return { pack, tarball: join(packDir, pack.filename) }
@@ -218,14 +240,14 @@ function verifyTarball(pack) {
   const missing = REQUIRED_PATHS.filter((path) => !paths.includes(path))
   expect(missing.length === 0, `package is missing: ${missing.join(', ')}`)
   expect(paths.some((path) => /^ui\/assets\/.+\.js$/.test(path)), 'package has no UI JavaScript assets')
-  expect((pack.files.find((file) => file.path === 'bin/videobook.js')?.mode & 0o111) !== 0, 'bin/videobook.js is not executable')
+  expect(WINDOWS || (pack.files.find((file) => file.path === 'bin/videobook.js')?.mode & 0o111) !== 0, 'bin/videobook.js is not executable')
   log(`${pack.filename}: ${(pack.size / 1048576).toFixed(2)} MiB packed, ${(pack.unpackedSize / 1048576).toFixed(2)} MiB unpacked, ${pack.entryCount} files`)
 }
 
 async function globalInstall(npmCommand, tarball, prefix, extraArgs) {
-  await mkdir(join(prefix, 'lib', 'node_modules'), { recursive: true })
+  await mkdir(globalModulesDir(prefix), { recursive: true })
   await run(npmCommand[0], [...npmCommand.slice(1), 'install', '-g', tarball, '--prefix', prefix, '--no-audit', '--no-fund', ...extraArgs], runtimeRoot)
-  const packageDir = join(prefix, 'lib', 'node_modules', 'videobook')
+  const packageDir = join(globalModulesDir(prefix), 'videobook')
   expect(existsSync(join(packageDir, 'package.json')), `global install did not create ${packageDir}`)
   return packageDir
 }
@@ -275,8 +297,8 @@ async function verifyInstalledTree(packageDir) {
 
 async function verifyVersionAndDoctor(binDir, packageDir) {
   const version = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')).version
-  const env = isolatedEnvironment({ PATH: `${dirname(process.execPath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH}` })
-  const viaShim = await capture(join(binDir, 'videobook'), ['--version'], runtimeRoot, env)
+  const env = isolatedEnvironment({ PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH}` })
+  const viaShim = await captureShim(binDir, ['--version'], env)
   expect(viaShim.code === 0 && viaShim.stdout.startsWith(`videobook ${version} (engine `), `videobook --version failed:\n${viaShim.stdout}${viaShim.stderr}`)
   log(viaShim.stdout.trim())
   const doctor = await capture(process.execPath, [join(packageDir, 'bin', 'videobook.js'), 'doctor', '--json'], runtimeRoot)
@@ -306,6 +328,21 @@ async function callJson(client, name, args) {
   return JSON.parse(result.content.find((item) => item.type === 'text')?.text ?? 'null')
 }
 
+async function verifyStopped(server, label) {
+  const code = await stop(server)
+  if (WINDOWS) return
+  expect(code === 0, `${label} did not exit cleanly:\n${server.output}`)
+  expect(!existsSync(join(runtimeRoot, 'home', 'books', '.videobook-server.json')), `${label} did not release the library lock`)
+}
+
+async function verifyStaleLockReplaced(bin) {
+  const port = await freePort()
+  const server = start(process.execPath, [bin, 'serve', '--headless', '--port', String(port)], isolatedEnvironment())
+  await waitFor(`http://127.0.0.1:${port}/healthz`, server)
+  await stop(server)
+  log('serve --headless: Windows stops the server forcefully; the next start replaced its stale lock')
+}
+
 async function verifyHeadless(packageDir, sdk) {
   const bin = join(packageDir, 'bin', 'videobook.js')
   const port = await freePort()
@@ -323,8 +360,8 @@ async function verifyHeadless(packageDir, sdk) {
   expect((await fetch(`${base}/`, { headers: { accept: 'text/html' } })).status === 404, '--headless still served the web UI')
   const second = await capture(process.execPath, [bin, 'serve', '--headless', '--port', String(await freePort())], runtimeRoot)
   expect(second.code === 1 && second.stderr.includes(`videobook is already running at ${base}`), `second serve was not refused:\n${second.stderr}`)
-  expect(await stop(server) === 0, `headless server did not exit cleanly:\n${server.output}`)
-  expect(!existsSync(join(runtimeRoot, 'home', 'books', '.videobook-server.json')), 'library lock was not released')
+  await verifyStopped(server, 'headless server')
+  if (WINDOWS) await verifyStaleLockReplaced(bin)
   log('serve --headless: health, MCP create/list, lock refusal and clean shutdown passed')
 }
 
@@ -340,7 +377,7 @@ async function verifyUi(packageDir) {
   expect(assetResponse?.ok && assetResponse.headers.get('content-type')?.includes('javascript'), `UI asset ${asset} did not load`)
   const deepLink = await (await fetch(`${base}/jobs`, { headers: { accept: 'text/html' } })).text()
   expect(deepLink.includes('<div id="root"></div>'), '/jobs did not fall back to the UI shell')
-  expect(await stop(server) === 0, `UI server did not exit cleanly:\n${server.output}`)
+  await verifyStopped(server, 'UI server')
   log('serve: web UI shell, hashed asset and deep link passed')
 }
 
@@ -435,7 +472,8 @@ async function verifyYtdlpFallback(packageDir, env, label) {
   }
   const binDir = join(temporaryRoot, `yt-dlp-${label}`)
   await mkdir(binDir, { recursive: true })
-  await symlink(real, join(binDir, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'))
+  if (WINDOWS) await copyFile(real, join(binDir, 'yt-dlp.exe'))
+  else await symlink(real, join(binDir, 'yt-dlp'))
   const onPath = await doctorYtdlpCheck(packageDir, { ...env, PATH: `${env.PATH}${delimiter}${binDir}` })
   expect(onPath?.status === 'ok' && onPath.detail.endsWith('(from PATH)'), `${label}: yt-dlp on PATH was not used: ${JSON.stringify(onPath)}`)
   const override = await doctorYtdlpCheck(packageDir, { ...env, VIDEOBOOK_YTDLP_PATH: real })
@@ -470,14 +508,14 @@ function nodeRunsNpm12(version) {
 
 async function npm12Command() {
   const prefix = join(temporaryRoot, 'npm12')
-  await run('npm', ['install', '-g', 'npm@12', '--prefix', prefix, '--no-audit', '--no-fund'], runtimeRoot)
-  return [process.execPath, join(prefix, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')]
+  await run(NPM[0], [...NPM.slice(1), 'install', '-g', 'npm@12', '--prefix', prefix, '--no-audit', '--no-fund'], runtimeRoot)
+  return [process.execPath, join(globalModulesDir(prefix), 'npm', 'bin', 'npm-cli.js')]
 }
 
 async function verifyNpm12(tarball) {
   const npm12 = await npm12Command()
   const strictPrefix = join(temporaryRoot, 'strict')
-  await mkdir(join(strictPrefix, 'lib', 'node_modules'), { recursive: true })
+  await mkdir(globalModulesDir(strictPrefix), { recursive: true })
   const strict = await capture(npm12[0], [...npm12.slice(1), 'install', '-g', tarball, '--prefix', strictPrefix, '--strict-allow-scripts', '--no-audit', '--no-fund'], runtimeRoot)
   const strictOutput = `${strict.stdout}${strict.stderr}`
   expect(strict.code !== 0, 'npm 12 --strict-allow-scripts accepted unapproved install scripts')
@@ -493,7 +531,7 @@ try {
   await writeFile(join(runtimeRoot, 'npmrc'), '', 'utf8')
   if (options.worktree) await exportWorktree(appRoot)
   else await exportCommitted(appRoot)
-  await run('npm', ['ci', '--no-audit', '--no-fund'], appRoot)
+  await run(NPM[0], [...NPM.slice(1), 'ci', '--no-audit', '--no-fund'], appRoot)
   await verifyWorkspaceLock()
   const { pack, tarball } = await packPackage()
   verifyTarball(pack)
@@ -502,16 +540,16 @@ try {
     await copyFile(tarball, join(options.artifactDir, pack.filename))
   }
   const prefix = join(temporaryRoot, 'prefix')
-  const packageDir = await globalInstall(['npm'], tarball, prefix, [`--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
+  const packageDir = await globalInstall(NPM, tarball, prefix, [`--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
   const tree = await verifyInstalledTree(packageDir)
   expect(tree.ffmpegBundled, 'ffmpeg-static did not download its binary during the global install')
   await reportFootprint(packageDir)
-  await verifyVersionAndDoctor(join(prefix, 'bin'), packageDir)
+  await verifyVersionAndDoctor(globalBinDir(prefix), packageDir)
   const sdk = await importClient(packageDir)
   await verifyHeadless(packageDir, sdk)
   await verifyUi(packageDir)
   await verifyStdio(packageDir, sdk)
-  await verifyBlockedScripts(['npm'], tarball, 'ignore-scripts', ['--ignore-scripts'])
+  await verifyBlockedScripts(NPM, tarball, 'ignore-scripts', ['--ignore-scripts'])
   if (options.npm12) await verifyNpm12(tarball)
   log('PASS')
 } finally {
