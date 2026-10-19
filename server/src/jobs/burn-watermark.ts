@@ -30,7 +30,7 @@ import { effectiveWatermarkTiming } from "../watermark-timing.js";
 const LOCK_DURATION_MS = 600_000;
 
 /** Fade applied at a watermark edge that falls inside the clip. */
-export const DEFAULT_WATERMARK_FADE_SECONDS = 0.5;
+const DEFAULT_WATERMARK_FADE_SECONDS = 0.5;
 export const MAX_WATERMARK_FADE_SECONDS = 2;
 /** Extra looped badge frames past the last fade so overlay never runs dry mid-ramp. */
 const LOOP_MARGIN_SECONDS = 0.25;

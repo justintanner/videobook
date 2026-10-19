@@ -94,30 +94,6 @@ export function apicityStringNumberField(
   return opts?.required ? described : described.optional();
 }
 
-export function apicityStringField(
-  schema: ZodLike,
-  describe: string | undefined,
-  opts: { required: true },
-): z.ZodString;
-export function apicityStringField(
-  schema: ZodLike,
-  describe?: string,
-  opts?: { required?: false },
-): z.ZodOptional<z.ZodString>;
-export function apicityStringField(
-  schema: ZodLike,
-  describe?: string,
-  opts?: { required?: boolean },
-): z.ZodOptional<z.ZodString> | z.ZodString {
-  let core = z.string();
-  const min = zodStringMinLength(schema);
-  const max = zodStringMaxLength(schema);
-  if (min !== undefined) core = core.min(min);
-  if (max !== undefined) core = core.max(max);
-  const described = describe ? core.describe(describe) : core;
-  return opts?.required ? described : described.optional();
-}
-
 export function apicityStringArrayField(
   schema: ZodLike,
   describe: string | undefined,

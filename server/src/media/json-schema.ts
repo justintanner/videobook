@@ -29,7 +29,7 @@ export function toJsonSchema(schema: ZodType): JsonSchema {
   return convert.call(schema, { unrepresentable: "any", io: "input" }) as JsonSchema;
 }
 
-export function branches(schema: JsonSchema): JsonSchema[] {
+function branches(schema: JsonSchema): JsonSchema[] {
   return schema.anyOf ?? schema.oneOf ?? [schema];
 }
 

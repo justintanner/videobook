@@ -14,7 +14,3 @@ export function parseModelId(raw: string): ParsedModelId | null {
   if (!isProvider(provider) || apiId.trim() === "") return null;
   return { id: raw, provider, apiId };
 }
-
-export function formatModelId(provider: ProviderId, apiId: string): string {
-  return `${provider}:${apiId}`;
-}

@@ -15,7 +15,7 @@ export type CaptionParts = { body: string; tags: string[] };
 
 const TAG_TOKEN = /^#[\p{L}\p{M}\p{N}_]+$/u;
 
-export function normalizePostTag(value: string): string {
+function normalizePostTag(value: string): string {
   return value.trim().replace(/^#+/u, "").replace(/[^\p{L}\p{M}\p{N}_]/gu, "");
 }
 

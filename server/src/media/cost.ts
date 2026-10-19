@@ -33,7 +33,7 @@ function combinedHints(input: Record<string, unknown>, hints: CostHints): CostHi
     : combined;
 }
 
-export function estimateWireRequest(
+function estimateWireRequest(
   model: ResolvedModel,
   request: Record<string, unknown>,
   input: Record<string, unknown>,

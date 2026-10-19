@@ -20,7 +20,7 @@ function slotTarget(refs: MediaRefs, token: string, kind: string | undefined, in
   return refsFor(refs, kind!.toLowerCase() as RefRole)[Number(index) - 1];
 }
 
-export function expandSlotTokens(prompt: string, refs: MediaRefs): string {
+function expandSlotTokens(prompt: string, refs: MediaRefs): string {
   return prompt.replace(SLOT_TOKEN, (match, token: string, kind?: string, index?: string) => {
     const target = slotTarget(refs, token, kind, index);
     return target ? `@${target}` : match;

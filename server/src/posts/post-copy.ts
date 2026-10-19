@@ -83,7 +83,7 @@ function sceneLines(value: unknown): string[] {
   }).filter(Boolean);
 }
 
-export function postCopyAnalysisFrom(raw: unknown): PostCopyAnalysis | null {
+function postCopyAnalysisFrom(raw: unknown): PostCopyAnalysis | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
   const analysis: PostCopyAnalysis = {
@@ -209,7 +209,7 @@ export function buildPostCopyPrompt(context: PostCopyContext, request: PostCopyR
   ].filter((line) => line !== "").join("\n");
 }
 
-export function parsePostCopy(raw: string, request: PostCopyRequest): Pick<PostCopyDraft, "caption" | "tags"> {
+function parsePostCopy(raw: string, request: PostCopyRequest): Pick<PostCopyDraft, "caption" | "tags"> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);

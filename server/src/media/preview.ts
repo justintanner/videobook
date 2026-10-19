@@ -26,7 +26,7 @@ const ELEVENLABS_PATHS: Record<string, string> = {
   "video-to-music": "elevenlabs.v1.music.videoToMusic(request)",
 };
 
-export function providerPath(model: ResolvedModel): string {
+function providerPath(model: ResolvedModel): string {
   switch (model.provider) {
     case "kie":
       if (isKieVeoModel(model.apiId)) return "kie.veo.post.api.v1.veo.generate(request, { otp })";
@@ -43,7 +43,7 @@ export function providerPath(model: ResolvedModel): string {
   }
 }
 
-export function placeholderRefs(refs: MediaRefs): MediaRefs {
+function placeholderRefs(refs: MediaRefs): MediaRefs {
   const placeholders: MediaRefs = {};
   for (const role of REF_ROLES) {
     const list = refs[role];

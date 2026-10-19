@@ -103,7 +103,7 @@ export function closestGoalAspectRatio(width: number, height: number): GoalAspec
     Math.abs(ratio - Math.log(candidate[1])) < Math.abs(ratio - Math.log(best[1])) ? candidate : best)[0];
 }
 
-export function goalV3Timing(brief: string, fallbackAspectRatio: GoalAspectRatio = LIGHTNING_SCENE_ASPECT_RATIO): { aspectRatio: GoalAspectRatio; durationSeconds: number } {
+function goalV3Timing(brief: string, fallbackAspectRatio: GoalAspectRatio = LIGHTNING_SCENE_ASPECT_RATIO): { aspectRatio: GoalAspectRatio; durationSeconds: number } {
   const aspectRatio = /\b(?:9:16|portrait|vertical)\b/iu.test(brief) ? "9:16"
     : /\b(?:1:1|square)\b/iu.test(brief) ? "1:1"
       : /\b(?:16:9|landscape|horizontal)\b/iu.test(brief) ? "16:9"

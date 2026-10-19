@@ -151,11 +151,3 @@ export interface ResolvedModel {
 }
 
 export type MediaRefs = Partial<Record<RefRole, string[]>>;
-
-export interface GenerationCall {
-  model: string;
-  prompt?: string;
-  refs?: MediaRefs;
-  options?: Record<string, unknown>;
-  mode?: string;
-}

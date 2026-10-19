@@ -28,7 +28,7 @@ function childContainer(current: Container, key: string, nextIsIndex: boolean): 
   return created;
 }
 
-export function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
+function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
   const segments = path.split(".");
   let current: Container = target;
   segments.slice(0, -1).forEach((segment, index) => {

@@ -6,7 +6,7 @@ import { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 import { GOAL_STYLE_IDS, goalStyleFragment, resolveGoalStyleOptions, type GoalStyleStage } from "./goal-styles.js";
 
 export type { GoalMediaRef, GoalPlanV3 } from "./goal-plan-v3.js";
-export { buildGoalPlanV3, compileGoalV3Approval, compileGoalV3Steps, goalMediaRefSchema, goalPlanV3Schema, goalV3Timing, isGoalPlanV3, refreshGoalPlanV3 } from "./goal-plan-v3.js";
+export { compileGoalV3Approval, compileGoalV3Steps, goalMediaRefSchema, goalPlanV3Schema, isGoalPlanV3, refreshGoalPlanV3 } from "./goal-plan-v3.js";
 
 export { GOAL_PROMPT_BUDGET, goalPromptWords } from "./goal-prompt-budget.js";
 

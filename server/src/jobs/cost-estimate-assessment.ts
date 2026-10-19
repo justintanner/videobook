@@ -7,7 +7,7 @@ import { estimateCostDef } from "../tools/estimate-cost.js";
 
 export type KieCostHints = { duration?: number; inputDuration?: number };
 
-export function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: number; inputDurationSeconds?: number } {
+function toUpstreamCostHints(hints: KieCostHints): { durationSeconds?: number; inputDurationSeconds?: number } {
   return {
     ...(typeof hints.duration === "number" && hints.duration > 0 ? { durationSeconds: hints.duration } : {}),
     ...(typeof hints.inputDuration === "number" && hints.inputDuration > 0 ? { inputDurationSeconds: hints.inputDuration } : {}),

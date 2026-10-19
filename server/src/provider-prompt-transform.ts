@@ -91,7 +91,7 @@ function visitProviderPayload(
   }
 }
 
-export function inspectProviderPayload(value: unknown): {
+function inspectProviderPayload(value: unknown): {
   promptLeaks: ProviderPromptLeak[];
   placeholderPaths: string[];
 } {

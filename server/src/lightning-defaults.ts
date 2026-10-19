@@ -27,11 +27,11 @@ export const LIGHTNING_SCENE_OPTIONS = {
 } as const;
 
 export const LIGHTNING_COLD_OPEN_SECONDS = 2.3;
-export const LIGHTNING_HANDLE_SECONDS = 3;
-export const LIGHTNING_QR_LEAD_SECONDS = 2.3;
+const LIGHTNING_HANDLE_SECONDS = 3;
+const LIGHTNING_QR_LEAD_SECONDS = 2.3;
 export const LIGHTNING_FADE_SECONDS = 0.3;
 
-export const LIGHTNING_POST_PLATFORM = "tiktok" as const;
+const LIGHTNING_POST_PLATFORM = "tiktok" as const;
 export const LIGHTNING_POST_LANGUAGE = "th" as const;
 export const LIGHTNING_POST_TAGS = ["fyp", "bkk"] as const;
 
@@ -178,7 +178,7 @@ export function watermarkProfileFor(
   return { ...base, ...definedProfileFields(stored), platform };
 }
 
-export function canonicalWatermarkProfile(profile: LightningWatermarkProfile): LightningWatermarkProfile {
+function canonicalWatermarkProfile(profile: LightningWatermarkProfile): LightningWatermarkProfile {
   return watermarkProfileFor(profile.platform, profile);
 }
 

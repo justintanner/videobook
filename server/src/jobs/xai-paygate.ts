@@ -7,12 +7,11 @@ import { ensurePaygateSecret } from "./kie-paygate.js";
 import { assertProviderPayload } from "../provider-prompt-transform.js";
 
 export const XAI_IMAGE_GENERATIONS_DOT_PATH = "v1.images.generations";
-export const XAI_IMAGE_EDITS_DOT_PATH = "v1.images.edits";
 export const XAI_VIDEO_GENERATIONS_DOT_PATH = "v1.videos.generations";
 
 type XaiPaidDotPath =
   | typeof XAI_IMAGE_GENERATIONS_DOT_PATH
-  | typeof XAI_IMAGE_EDITS_DOT_PATH
+  | "v1.images.edits"
   | typeof XAI_VIDEO_GENERATIONS_DOT_PATH;
 
 type XaiPaidMethod<TReq, TRes> = (request: TReq, approval?: PayGateApproval) => Promise<TRes>;

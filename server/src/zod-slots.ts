@@ -167,7 +167,7 @@ function toStringList(raw: unknown): string[] {
  * Throws if `schema` does not resolve to an enum — these feed MCP tool input
  * schemas, so a silent empty list would be a worse failure than a loud one.
  */
-export function enumOptions(schema: ZodLike | null | undefined): EnumValues {
+function enumOptions(schema: ZodLike | null | undefined): EnumValues {
   const def = defOf(unwrapToCore(schema));
   const values = toStringList(def?.entries);
   if (values.length === 0) {
