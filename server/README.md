@@ -14,12 +14,12 @@ graph, and every change is recorded as a revision. This package installs one
 - Node.js 22 or newer.
 - macOS (Apple Silicon or Intel) or Linux (x64 or arm64). Windows x64 has
   every native binary but is untested.
-- About 1.2 GB of disk. Installing downloads the ffmpeg and yt-dlp binaries
+- About 800 MB of disk. Installing downloads the ffmpeg and yt-dlp binaries
   from GitHub, and the first video render downloads Chrome Headless Shell
   (about 150 MB) into `~/.cache/videobook/remotion`.
-- `ffmpeg` and `ffprobe` on `PATH` are recommended. Apple Silicon and Linux
-  arm64 always use the system `ffprobe`, and every platform falls back to the
-  system binaries when the bundled ones are missing.
+- Native ffmpeg, ffprobe and yt-dlp builds come with the package. Every
+  platform falls back to `ffmpeg`, `ffprobe` and `yt-dlp` on `PATH` when a
+  bundled binary is missing.
 
 ## Install
 
@@ -43,6 +43,11 @@ npm config set allow-scripts=ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearc
 - `@dolthub/doltlite`, `usearch` and `onnxruntime-node` use prebuilt native
   binaries and only compile or fetch extras on unusual platforms.
 - `esbuild` checks its platform binary for the Remotion renderer.
+
+npm also reports the install script of `@ffprobe-installer/<platform>`, for
+example `@ffprobe-installer/darwin-arm64`. It only marks ffprobe executable,
+which videobook does itself when it starts, so it can stay unapproved. With
+`--strict-allow-scripts`, approve it too.
 
 `videobook doctor` reports anything missing and prints the fix.
 
@@ -168,12 +173,10 @@ come from 1Password are read-only in Settings.
 
 ## Platform notes
 
-- macOS on Apple Silicon is the primary platform. The bundled ffprobe is an
-  Intel build, so install `ffprobe` with `brew install ffmpeg`.
+- macOS on Apple Silicon is the primary platform.
 - macOS on Intel works, but ONNX Runtime has no Intel Mac build, so semantic
   search is unavailable there.
-- Linux x64 is supported. Linux arm64 needs `ffprobe` from the system package
-  manager.
+- Linux x64 and arm64 are supported.
 - Windows x64 is untested.
 
 ## Security

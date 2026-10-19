@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
@@ -18,6 +18,8 @@ const runtimeRoot = join(temporaryRoot, 'runtime')
 const children = new Set()
 
 const ALLOW_SCRIPTS = ['ffmpeg-static', 'ytdlp-nodejs', '@dolthub/doltlite', 'usearch', 'onnxruntime-node', 'esbuild']
+const FFPROBE_PLATFORM_PACKAGE = `@ffprobe-installer/${process.platform}-${process.arch}`
+const SCRIPT_NOT_REQUIRED = /^@ffprobe-installer\//
 const MAX_PACKED_BYTES = 8 * 1024 * 1024
 const MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 const ALLOWED_PATH = /^(package\.json|README\.md|LICENSE|CHANGELOG\.md|bin\/videobook\.js|dist\/.+|ui\/.+)$/
@@ -261,7 +263,7 @@ async function recordInstallScripts(packageDir, found) {
 
 async function verifyInstalledTree(packageDir) {
   const scripted = [...(await packagesWithInstallScripts(join(packageDir, 'node_modules'))).keys()].sort()
-  const undocumented = scripted.filter((name) => !ALLOW_SCRIPTS.includes(name))
+  const undocumented = scripted.filter((name) => !ALLOW_SCRIPTS.includes(name) && !SCRIPT_NOT_REQUIRED.test(name))
   expect(undocumented.length === 0, `packages with install scripts missing from the documented --allow-scripts list: ${undocumented.join(', ')}`)
   log(`install scripts in the tree: ${scripted.join(', ')}`)
   const fromPackage = createRequire(join(packageDir, 'package.json'))
@@ -363,6 +365,39 @@ async function verifyStdio(packageDir, sdk) {
   log(`mcp over stdio: ${tools.tools.length} tools, list_books passed`)
 }
 
+async function directorySize(path) {
+  const entries = await readdir(path, { withFileTypes: true })
+  const sizes = await Promise.all(entries.map(async (entry) => {
+    const child = join(path, entry.name)
+    if (entry.isDirectory()) return await directorySize(child)
+    return entry.isFile() ? (await stat(child)).size : 0
+  }))
+  return sizes.reduce((total, size) => total + size, 0)
+}
+
+async function packageDirectories(nodeModules) {
+  const entries = (await readdir(nodeModules, { withFileTypes: true })).filter((entry) => entry.isDirectory() && entry.name !== '.bin')
+  const nested = await Promise.all(entries.map(async (entry) => {
+    const path = join(nodeModules, entry.name)
+    if (!entry.name.startsWith('@')) return [{ name: entry.name, path }]
+    const scoped = (await readdir(path, { withFileTypes: true })).filter((child) => child.isDirectory())
+    return scoped.map((child) => ({ name: `${entry.name}/${child.name}`, path: join(path, child.name) }))
+  }))
+  return nested.flat()
+}
+
+function mebibytes(bytes) {
+  return `${Math.round(bytes / 1024 / 1024)} MiB`
+}
+
+async function reportFootprint(packageDir) {
+  const total = await directorySize(packageDir)
+  const packages = await packageDirectories(join(packageDir, 'node_modules'))
+  const sized = await Promise.all(packages.map(async (entry) => ({ ...entry, size: await directorySize(entry.path) })))
+  const largest = sized.sort((left, right) => right.size - left.size).slice(0, 8)
+  log(`installed footprint ${mebibytes(total)}; largest: ${largest.map((entry) => `${entry.name} ${mebibytes(entry.size)}`).join(', ')}`)
+}
+
 function workspaceYtdlp() {
   try {
     return createRequire(join(appRoot, 'package.json'))('ytdlp-nodejs').helpers.findYtdlpBinary() ?? null
@@ -371,9 +406,19 @@ function workspaceYtdlp() {
   }
 }
 
-async function doctorYtdlpCheck(packageDir, env) {
+async function doctorCheck(packageDir, env, id) {
   const doctor = await capture(process.execPath, [join(packageDir, 'bin', 'videobook.js'), 'doctor', '--json'], runtimeRoot, env)
-  return JSON.parse(doctor.stdout).checks.find((check) => check.id === 'yt-dlp')
+  return JSON.parse(doctor.stdout).checks.find((check) => check.id === id)
+}
+
+async function doctorYtdlpCheck(packageDir, env) {
+  return await doctorCheck(packageDir, env, 'yt-dlp')
+}
+
+async function verifyBundledFfprobe(packageDir, env, label) {
+  const ffprobe = await doctorCheck(packageDir, env, 'ffprobe')
+  expect(ffprobe?.status === 'ok' && ffprobe.detail.includes('(bundled: '), `${label}: the bundled ffprobe did not run with its chmod script blocked: ${JSON.stringify(ffprobe)}`)
+  log(`${label}: bundled ffprobe runs without its chmod script`)
 }
 
 async function verifyYtdlpFallback(packageDir, env, label) {
@@ -405,6 +450,7 @@ async function verifyBlockedScripts(npmCommand, tarball, label, blockArgs) {
   const version = await capture(process.execPath, [join(packageDir, 'bin', 'videobook.js'), '--version'], runtimeRoot, env)
   expect(version.code === 0, `videobook --version failed with install scripts blocked:\n${version.stderr}`)
   await verifyYtdlpFallback(packageDir, env, label)
+  await verifyBundledFfprobe(packageDir, env, label)
   const tree = await verifyInstalledTree(packageDir)
   if (tree.ffmpegBundled) {
     log(`${label}: ffmpeg-static binary present despite blocked scripts; skipping the remedy check`)
@@ -436,8 +482,8 @@ async function verifyNpm12(tarball) {
   const strictOutput = `${strict.stdout}${strict.stderr}`
   expect(strict.code !== 0, 'npm 12 --strict-allow-scripts accepted unapproved install scripts')
   expect(/allow-?scripts|install scripts?|lifecycle scripts?/i.test(strictOutput) && ALLOW_SCRIPTS.some((name) => strictOutput.includes(name)), `npm 12 strict install failed for another reason:\n${strictOutput}`)
-  await globalInstall(npm12, tarball, join(temporaryRoot, 'approved'), ['--strict-allow-scripts', `--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
-  log('npm 12: strict install fails without the list and succeeds with the documented --allow-scripts list')
+  await globalInstall(npm12, tarball, join(temporaryRoot, 'approved'), ['--strict-allow-scripts', `--allow-scripts=${[...ALLOW_SCRIPTS, FFPROBE_PLATFORM_PACKAGE].join(',')}`])
+  log(`npm 12: strict install fails without the list and succeeds with the documented --allow-scripts list plus ${FFPROBE_PLATFORM_PACKAGE}`)
   await verifyBlockedScripts(npm12, tarball, 'npm12', [])
 }
 
@@ -459,6 +505,7 @@ try {
   const packageDir = await globalInstall(['npm'], tarball, prefix, [`--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
   const tree = await verifyInstalledTree(packageDir)
   expect(tree.ffmpegBundled, 'ffmpeg-static did not download its binary during the global install')
+  await reportFootprint(packageDir)
   await verifyVersionAndDoctor(join(prefix, 'bin'), packageDir)
   const sdk = await importClient(packageDir)
   await verifyHeadless(packageDir, sdk)

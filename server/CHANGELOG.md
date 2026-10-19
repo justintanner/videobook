@@ -19,6 +19,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - `VIDEOBOOK_YTDLP_PATH` selects the yt-dlp binary.
 - `list_jobs` accepts `job_keys`, the `job_id` strings other tools return.
 
+### Changed
+
+- ffprobe now comes from `@ffprobe-installer/ffprobe`, which installs one
+  native build for the current platform instead of `ffprobe-static`'s builds
+  for every platform. Apple Silicon and Linux arm64 get a bundled ffprobe, and
+  the install is about 300 MB smaller. When npm skips the package's chmod
+  script, videobook marks the binary executable itself.
+
 ### Fixed
 
 - Downloading videos from URLs works when npm blocked the yt-dlp download:

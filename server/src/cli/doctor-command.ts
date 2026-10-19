@@ -10,7 +10,7 @@ import { dataLayout } from "../data-home.js";
 import { bookManager } from "../engine.js";
 import { MANAGED_ENV_KEYS, getDefaultSecretStore } from "../env-secrets.js";
 import { FFMPEG } from "../ffmpeg-binary.js";
-import { FFPROBE } from "../ffprobe-binary.js";
+import { FFPROBE, bundledFfprobe } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
 import { readOnePasswordSettings, type OnePasswordResolution } from "../one-password.js";
 import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
@@ -281,7 +281,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
     await dataHomeCheck(),
     await libraryCheck(),
     await binaryCheck("ffmpeg", "ffmpeg", FFMPEG, bundledPath("ffmpeg-static"), "VIDEOBOOK_FFMPEG_PATH"),
-    await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledPath("ffprobe-static"), "VIDEOBOOK_FFPROBE_PATH"),
+    await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledFfprobe(), "VIDEOBOOK_FFPROBE_PATH"),
     ytdlpCheck(),
     nativeCoreCheck(),
     searchRuntimeCheck(),

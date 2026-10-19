@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync } from "node:fs";
+import { accessSync, chmodSync, closeSync, constants, openSync, readSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 
 /** CPU a Mach-O header targets; `universal` covers fat binaries. */
@@ -41,25 +41,45 @@ export function readBinaryHeader(path: string): Uint8Array | null {
   }
 }
 
-/**
- * ffprobe-static ships an x86_64 build under darwin/arm64, which cannot spawn
- * on Apple Silicon without Rosetta. An explicit override wins; otherwise the
- * bundled binary is used only when its CPU matches, else `ffprobe` on PATH.
- */
+export function ensureExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    try {
+      chmodSync(path, statSync(path).mode | 0o111);
+      accessSync(path, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export function resolveFfprobePath(
-  bundledPath: string,
+  bundledPath: string | null,
   override: string | undefined,
   hostArch: string,
 ): string {
   if (override) return override;
+  if (!bundledPath) return "ffprobe";
   const header = readBinaryHeader(bundledPath);
   return header && binaryRunsOnHost(header, hostArch) ? bundledPath : "ffprobe";
 }
 
 const require = createRequire(import.meta.url);
 
+export function bundledFfprobe(): string | null {
+  try {
+    const { path } = require("@ffprobe-installer/ffprobe") as { path: string };
+    return ensureExecutable(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 export const FFPROBE: string = resolveFfprobePath(
-  require("ffprobe-static").path,
+  bundledFfprobe(),
   process.env.VIDEOBOOK_FFPROBE_PATH,
   process.arch,
 );
