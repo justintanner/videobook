@@ -119,6 +119,7 @@ export default defineConfig({
       'server/src/ffmpeg-binary.test.ts',
       'server/src/data-home.test.ts',
       'server/src/server-lock.test.ts',
+      'server/src/package-manifest.test.ts',
       'server/src/cli/**/*.test.ts',
       'server/src/frame-utils.test.ts',
       'server/src/fs.test.ts',
