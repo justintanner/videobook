@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { SCHEMA_VERSION } from "videobook-engine/catalog-metadata";
+import { redirectConsoleToStderr } from "./stdio-guard.js";
 import {
   CliUsageError,
   applyFlagsToEnv,
@@ -35,6 +36,10 @@ async function runCommand(parsed: RunnableCli): Promise<number> {
       const { runServeCommand } = await import("./serve-command.js");
       return runServeCommand(parsed.flags);
     }
+    case "mcp": {
+      const { runMcpCommand } = await import("./mcp-command.js");
+      return runMcpCommand();
+    }
     default:
       process.stderr.write(`videobook ${parsed.command} is not available yet.\n`);
       return 2;
@@ -53,6 +58,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   applyFlagsToEnv(parsed.flags, process.env, process.cwd());
+  if (parsed.command === "mcp") redirectConsoleToStderr();
   await import("../load-env.js");
   return runCommand(parsed);
 }

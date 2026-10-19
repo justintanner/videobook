@@ -13,15 +13,30 @@ import { allowsHttpRequest } from "./http-access.js";
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const SERVER_VERSION: string = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
-function createServer(
+interface CreateServerOptions {
+  instructions?: string;
+}
+
+export function serverInstructions(baseUrl: string): string {
+  return [
+    "Videobook is a local-first notebook for AI video creation.",
+    `Tools return media as paths such as /files/<bookId>/<artifactId>/<name>; fetch them from ${baseUrl}.`,
+    `The web UI for this library is at ${baseUrl}/.`,
+    "Generation and rendering run as queued jobs; follow them with list_jobs or wait_for_asset_ready.",
+  ].join(" ");
+}
+
+export function createServer(
   engine: Engine = defaultFs,
   books: BookManager = bookManager,
+  options: CreateServerOptions = {},
 ): McpServer {
   const server = new McpServer({
     name: "videobook",
     version: SERVER_VERSION,
   }, {
     supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
+    ...(options.instructions ? { instructions: options.instructions } : {}),
   });
 
   registerAllTools(server, engine, books);
