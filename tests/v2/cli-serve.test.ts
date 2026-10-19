@@ -65,8 +65,8 @@ describe('videobook serve', () => {
 
     expect(cli.stdout.join('')).toContain(`UI       ${base}/`)
     expect(cli.stdout.join('')).toContain(`Library  ${join(home, 'books')}`)
-    const lock = JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>
-    expect(lock).toMatchObject({ pid: cli.child.pid, port, url: base, version: SERVER_VERSION })
+    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: 15_000 })
+      .toMatchObject({ pid: cli.child.pid, port, url: base, version: SERVER_VERSION })
 
     const second = await runCli(['serve', '--port', String(await availablePort()), '--home', home], env)
     expect(second.code).toBe(1)
@@ -100,7 +100,8 @@ describe('videobook serve', () => {
     const cli = spawnCli(['serve', '--headless', '--port', String(port), '--home', home])
 
     await waitForHealth(`http://127.0.0.1:${port}`, cli)
-    expect(JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8'))).toMatchObject({ pid: cli.child.pid, port })
+    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: 15_000 })
+      .toMatchObject({ pid: cli.child.pid, port })
     expect(await stopCli(cli)).toBe(0)
   }, 60_000)
 

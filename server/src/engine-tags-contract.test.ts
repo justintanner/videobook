@@ -15,12 +15,12 @@ function value<T>(result: Result<T, { message: string }>): T {
 }
 
 /**
- * The vendored engine owns tag storage outright: there is no consumer-side
+ * The engine owns tag storage outright: there is no consumer-side
  * fallback, so an engine bump that drops or reshapes this surface has to fail
  * here rather than inside a tagging job. The migration itself is the engine's
  * to test; what this guards is the shape the application codes against.
  */
-describe("vendored engine tag contract", () => {
+describe("engine tag contract", () => {
   let tempDir: string;
   let engine: ReturnType<typeof createEngineForTest> | undefined;
 
@@ -42,29 +42,26 @@ describe("vendored engine tag contract", () => {
     return engine;
   }
 
-  it("vendors one engine version across the manifest, lockfile and install", async () => {
-    const revision = await readFile(
-      join(repoRoot, "vendor/ENGINE_REVISION.txt"),
-      "utf8",
-    );
-    const [, version, tarball] =
-      /videobook-engine (\S+)[\s\S]*tarball: (\S+)/.exec(revision) ?? [];
-    const manifest = JSON.parse(
-      await readFile(join(repoRoot, "package.json"), "utf8"),
-    ) as {
-      dependencies: Record<string, string>;
-      allowScripts: Record<string, boolean>;
-    };
-    const installed = JSON.parse(
-      await readFile(
-        join(repoRoot, "node_modules/videobook-engine/package.json"),
-        "utf8",
-      ),
-    ) as { version: string };
+  async function repoJson<T>(path: string): Promise<T> {
+    return JSON.parse(await readFile(join(repoRoot, path), "utf8")) as T;
+  }
 
+  it("pins one npm engine release across both manifests, the lockfile and the install", async () => {
+    const root = await repoJson<{ dependencies: Record<string, string>; allowScripts: Record<string, boolean> }>("package.json");
+    const server = await repoJson<{ dependencies: Record<string, string> }>("server/package.json");
+    const lock = await repoJson<{ packages: Record<string, { version?: string; resolved?: string; integrity?: string }> }>("package-lock.json");
+    const installed = await repoJson<{ version: string }>("node_modules/videobook-engine/package.json");
+    const version = server.dependencies["videobook-engine"];
+
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/u);
+    expect(root.dependencies["videobook-engine"]).toBe(version);
     expect(installed.version).toBe(version);
-    expect(manifest.dependencies["videobook-engine"]).toBe(`file:${tarball}`);
-    expect(manifest.allowScripts).toHaveProperty(`file:${tarball}`);
+    expect(lock.packages["node_modules/videobook-engine"]).toMatchObject({
+      version,
+      resolved: `https://registry.npmjs.org/videobook-engine/-/videobook-engine-${version}.tgz`,
+      integrity: expect.stringMatching(/^sha512-/u),
+    });
+    expect(Object.keys(root.allowScripts).filter((key) => key.startsWith("file:"))).toEqual([]);
   });
 
   it("exposes the tag surface the application builds on", async () => {

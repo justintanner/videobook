@@ -201,7 +201,7 @@ Requirements:
 - ffmpeg
 - 1Password CLI only when loading cloud-provider credentials from `.env.tpl`
 
-Install the application and server workspace from the repository root. The engine is included as a pinned vendored package; a sibling engine checkout is not required.
+Install the application and server workspace from the repository root. The engine is pinned to an exact `videobook-engine` release on npm; a sibling engine checkout is not required.
 
 ```bash
 cd ~/videobook

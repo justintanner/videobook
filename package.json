@@ -46,27 +46,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@apicity/alibaba": "^0.16.1",
-    "@apicity/b2": "^0.16.1",
-    "@apicity/cost": "^0.16.1",
-    "@apicity/elevenlabs": "^0.16.1",
-    "@apicity/fal": "^0.16.1",
-    "@apicity/free-media-upload": "^0.16.1",
-    "@apicity/kie": "^0.16.1",
-    "@apicity/kimicoding": "^0.16.1",
-    "@apicity/openai": "^0.16.1",
-    "@apicity/x": "^0.16.1",
-    "@apicity/xai": "^0.16.1",
     "@modelcontextprotocol/client": "^2.2.0",
-    "@remotion/bundler": "^4.0.494",
-    "@remotion/google-fonts": "^4.0.467",
-    "@remotion/player": "4.0.467",
-    "@remotion/renderer": "^4.0.467",
+    "@remotion/player": "4.0.494",
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
-    "dotenv": "^17.3.1",
     "lucide-react": "^0.577.0",
-    "playwright": "^1.58.2",
     "prosemirror-commands": "1.7.2",
     "prosemirror-history": "1.5.0",
     "prosemirror-keymap": "1.2.3",
@@ -75,16 +59,14 @@
     "prosemirror-view": "1.42.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "remotion": "^4.0.467",
+    "remotion": "4.0.494",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "file:vendor/videobook-engine-5.7.0-2caea7a.tgz",
-    "ws": "^8.21.0",
-    "@apicity/dropbox": "^0.16.1"
+    "videobook-engine": "5.7.0"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
-    "sharp": "^0.35.5",
+    "sharp": "0.35.5",
     "concurrently": {
       "shell-quote": "^1.11.0"
     },
@@ -98,6 +80,11 @@
     "esbuild": "0.28.1"
   },
   "devDependencies": {
+    "@apicity/cost": "^0.16.1",
+    "@apicity/elevenlabs": "^0.16.1",
+    "@apicity/kie": "^0.16.1",
+    "@apicity/openai": "^0.16.1",
+    "@apicity/x": "^0.16.1",
     "@dolthub/doltlite": "0.50.9",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/node": "2.0.0",
@@ -118,7 +105,8 @@
     "express": "^5.2.1",
     "globals": "^16.5.0",
     "knip": "^6.11.0",
-    "sharp": "^0.35.5",
+    "playwright": "^1.58.2",
+    "sharp": "0.35.5",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
@@ -126,6 +114,7 @@
     "vite": "^7.3.1",
     "vitest": "^4.1.11",
     "wait-on": "^9.0.4",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "allowScripts": {
@@ -134,7 +123,6 @@
     "ffmpeg-static@5.3.0": true,
     "onnxruntime-node@1.29.0": true,
     "usearch@2.26.0": true,
-    "ytdlp-nodejs@3.4.5": true,
-    "file:vendor/videobook-engine-5.7.0-2caea7a.tgz": false
+    "ytdlp-nodejs@3.4.5": true
   }
 }

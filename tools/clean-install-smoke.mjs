@@ -288,7 +288,7 @@ try {
   await writeFile(join(runtimeRoot, 'npmrc'), '', 'utf8')
   const appFiles = await copyRepository(appSource, appRoot)
   process.stdout.write(
-    `clean-install: copied ${appFiles} app files with no sibling videobook-engine\n`,
+    `clean-install: copied ${appFiles} app files; videobook-engine comes from npm\n`,
   )
   await run('npm', ['ci', '--no-audit', '--no-fund'], appRoot)
   await verifyNativeRuntime()
@@ -299,8 +299,10 @@ try {
   const expectedEngineVersion = enginePackageJson.version
   const lock = JSON.parse(await readFile(join(appRoot, 'package-lock.json'), 'utf8'))
   const lockedEngine = lock.packages['node_modules/videobook-engine']
-  if (expectedEngineVersion !== lockedEngine.version || !lockedEngine.resolved.startsWith('file:vendor/')) {
-    throw new Error('Installed engine does not match the pinned vendored lockfile')
+  if (expectedEngineVersion !== lockedEngine.version
+    || lockedEngine.resolved !== `https://registry.npmjs.org/videobook-engine/-/videobook-engine-${expectedEngineVersion}.tgz`
+    || !lockedEngine.integrity?.startsWith('sha512-')) {
+    throw new Error('Installed engine does not match the pinned npm release in the lockfile')
   }
   const builtEngine = await import(
     pathToFileURL(join(appRoot, 'node_modules/videobook-engine/dist/index.js')).href
