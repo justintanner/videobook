@@ -6,6 +6,7 @@ import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
+import { renderBrowserExecutable } from "../remotion/browser.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { chunkSegments } from "../remotion/subtitles/chunker.js";
@@ -393,11 +394,13 @@ export function registerRenderProjectJob(engine: Engine): void {
 
               const outputPath = join(asset.assetDir, outputFilename);
 
+              const browserExecutable = await renderBrowserExecutable();
               const composition = await selectComposition({
                 serveUrl: bundleDir,
                 id: "render",
                 inputProps: inputProps as unknown as Record<string, unknown>,
                 timeoutInMilliseconds: 60_000,
+                ...(browserExecutable ? { browserExecutable } : {}),
               });
               ctx.signal.throwIfAborted();
 
@@ -412,6 +415,7 @@ export function registerRenderProjectJob(engine: Engine): void {
                   concurrency: 1,
                   hardwareAcceleration: "if-possible",
                   cancelSignal,
+                  ...(browserExecutable ? { browserExecutable } : {}),
                 }),
               );
 

@@ -147,6 +147,7 @@ export default defineConfig({
       'server/src/osg-placement-cache.test.ts',
       'server/src/remotion-cancellation.test.ts',
       'server/src/remotion/constants.test.ts',
+      'server/src/remotion/browser.test.ts',
       'server/src/remotion/keyword-graphics.test.ts',
       'server/src/remotion/keyword-placement.test.ts',
       'server/src/remotion/osg-spec.test.ts',

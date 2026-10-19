@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { access, constants, readdir } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { SCHEMA_VERSION } from "videobook-engine/catalog-metadata";
 import type { DoctorFlags } from "./args.js";
@@ -12,6 +12,7 @@ import { MANAGED_ENV_KEYS, getDefaultSecretStore, isSecretEnvKey, maskEnvValue }
 import { FFMPEG } from "../ffmpeg-binary.js";
 import { FFPROBE } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
+import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
 
 export type CheckStatus = "ok" | "warn" | "fail";
 
@@ -186,6 +187,26 @@ function searchRuntimeCheck(): DoctorCheck {
   }
 }
 
+async function renderBrowserCheck(): Promise<DoctorCheck> {
+  const root = remotionCacheRoot();
+  if (!root) {
+    return check({ id: "render-browser", label: "Render browser", status: "ok", detail: "managed by Remotion in this source checkout", required: false });
+  }
+  const directory = remotionBrowserDir(root);
+  try {
+    await access(join(directory, "chrome-headless-shell"));
+    return check({ id: "render-browser", label: "Render browser", status: "ok", detail: `Chrome Headless Shell in ${directory}`, required: false });
+  } catch {
+    return check({
+      id: "render-browser",
+      label: "Render browser",
+      status: "warn",
+      detail: `not downloaded yet; the first render downloads Chrome Headless Shell into ${directory}`,
+      required: false,
+    });
+  }
+}
+
 function providerKeysCheck(): DoctorCheck {
   const store = getDefaultSecretStore();
   const configured = MANAGED_ENV_KEYS.filter((key) => key.endsWith("_API_KEY") && store.getSource(key) !== "missing");
@@ -227,6 +248,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
     ytdlpCheck(),
     nativeCoreCheck(),
     searchRuntimeCheck(),
+    await renderBrowserCheck(),
     providerKeysCheck(),
     await ownerCheck(resolvePort(process.env)),
   ];

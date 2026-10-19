@@ -18,6 +18,7 @@ import type {
   QrOutroOrientation,
 } from "../remotion/qr-outro-spec.js";
 import { DEFAULT_QR_OUTRO_SOUND_FILENAME } from "../remotion/qr-outro-audio.js";
+import { renderBrowserExecutable } from "../remotion/browser.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -135,11 +136,13 @@ export function registerRenderQrOutroJob(engine: Engine): void {
             durationSeconds: durationSeconds ?? null,
             includeAudio,
           };
+          const browserExecutable = await renderBrowserExecutable();
           const composition = await selectComposition({
             serveUrl: bundleDir,
             id: "qr-outro",
             inputProps: inputProps as unknown as Record<string, unknown>,
             timeoutInMilliseconds: 60_000,
+            ...(browserExecutable ? { browserExecutable } : {}),
           });
           ctx.signal.throwIfAborted();
           const tempOutputPath = join(tempDir, "original.mp4");
@@ -156,6 +159,7 @@ export function registerRenderQrOutroJob(engine: Engine): void {
               concurrency: 1,
               hardwareAcceleration: "if-possible",
               cancelSignal,
+              ...(browserExecutable ? { browserExecutable } : {}),
             }),
           );
 
