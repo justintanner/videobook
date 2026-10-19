@@ -27,7 +27,7 @@ export function binaryRunsOnHost(header: Uint8Array, hostArch: string): boolean 
   return arch === null || arch === "universal" || arch === hostArch;
 }
 
-function readHeader(path: string): Uint8Array | null {
+export function readBinaryHeader(path: string): Uint8Array | null {
   try {
     const fd = openSync(path, "r");
     try {
@@ -52,7 +52,7 @@ export function resolveFfprobePath(
   hostArch: string,
 ): string {
   if (override) return override;
-  const header = readHeader(bundledPath);
+  const header = readBinaryHeader(bundledPath);
   return header && binaryRunsOnHost(header, hostArch) ? bundledPath : "ffprobe";
 }
 

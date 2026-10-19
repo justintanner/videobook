@@ -291,8 +291,15 @@ B2_ENDPOINT
 
 Provider credentials continue to use the existing `@apicity` integrations.
 See `.env.tpl` for the complete set.
-`VIDEOBOOK_ENV_PATH` selects the local environment file used by Settings;
-it defaults to the repository's `.env`. This also allows isolated application fixtures.
+`VIDEOBOOK_ENV_PATH` selects the local environment file used by Settings.
+In a source checkout it defaults to the repository's `.env`, books default to
+`books/`, and application state to `runtime/app-state.json`. An installed
+package keeps all three in `~/.videobook` instead; `VIDEOBOOK_HOME` moves that
+data home. Set `VIDEOBOOK_HOME` and `VIDEOBOOK_ENV_PATH` in the shell, because
+they choose which `.env` is read. These also allow isolated application fixtures.
+`VIDEOBOOK_FFMPEG_PATH` and `VIDEOBOOK_FFPROBE_PATH` override the bundled media
+binaries; without them the server falls back to `ffmpeg` and `ffprobe` on PATH
+when a bundled binary is missing or built for another CPU.
 
 ### Voice chat
 

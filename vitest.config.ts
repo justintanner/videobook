@@ -116,6 +116,8 @@ export default defineConfig({
       'server/src/env-secrets.test.ts',
       'server/src/ffmpeg.test.ts',
       'server/src/ffprobe-binary.test.ts',
+      'server/src/ffmpeg-binary.test.ts',
+      'server/src/data-home.test.ts',
       'server/src/frame-utils.test.ts',
       'server/src/fs.test.ts',
       'server/src/image-edit-models.test.ts',

@@ -1,16 +1,14 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import * as fsp from "node:fs/promises";
 import { logger } from "./logger.js";
+import { FFMPEG } from "./ffmpeg-binary.js";
 import { FFPROBE } from "./ffprobe-binary.js";
 
-export { FFPROBE };
+export { FFMPEG, FFPROBE };
 
 const execFileAsync = promisify(execFile);
 
-const require = createRequire(import.meta.url);
-export const FFMPEG: string = require("ffmpeg-static");
 const DEFAULT_FFMPEG_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_FFPROBE_TIMEOUT_MS = 2 * 60_000;
 

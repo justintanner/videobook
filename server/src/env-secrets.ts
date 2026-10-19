@@ -13,16 +13,17 @@
  * via `.env` is "env" and editable. A shell-exported var is also classified
  * "1password"; the label is approximate but the read-only behavior is right.
  *
- * `.env` lives at the repo root and is server runtime configuration, not a
- * project artifact, so direct node:fs is correct here — the videobook-engine
- * rule covers managed artifacts and their materialized workspaces.
+ * `.env` lives in the data home (the repo root in a source checkout) and is
+ * server runtime configuration, not a project artifact, so direct node:fs is
+ * correct here — the videobook-engine rule covers managed artifacts and their
+ * materialized workspaces.
  */
 import { readFileSync } from "node:fs";
-import { readFile, writeFile, rename } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parse } from "dotenv";
+import { dataLayout } from "./data-home.js";
 
 export const MANAGED_ENV_KEYS = [
   "OPENAI_API_KEY",
@@ -118,8 +119,7 @@ function upsertEnvLine(raw: string, key: ManagedEnvKey, newLine: string): string
 }
 
 function defaultEnvPath(): string {
-  return process.env.VIDEOBOOK_ENV_PATH
-    ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../.env");
+  return process.env.VIDEOBOOK_ENV_PATH ?? dataLayout().envPath;
 }
 
 export function createSecretStore(options: SecretStoreOptions = {}): SecretStore {
@@ -186,6 +186,7 @@ export function createSecretStore(options: SecretStoreOptions = {}): SecretStore
       raw = "";
     }
     const updated = upsertEnvLine(raw, key, line);
+    await mkdir(dirname(envPath), { recursive: true });
     const tmp = `${envPath}.tmp.${randomUUID()}`;
     await writeFile(tmp, updated, "utf8");
     await rename(tmp, envPath);

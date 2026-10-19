@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { dataLayout } from "./data-home.js";
 
 export interface ApplicationStateStore {
   get<T>(key: string): Promise<T | null>;
@@ -9,15 +10,14 @@ export interface ApplicationStateStore {
 
 type StoredState = { values: Record<string, unknown> };
 
-export const DEFAULT_APPLICATION_STATE_PATH = "runtime/app-state.json";
-
 export function resolveApplicationStatePath(
   envValue: string | undefined,
   cwd: string = process.cwd(),
+  fallback: string = dataLayout(process.env, cwd).appStatePath,
 ): string {
   const normalized = envValue?.trim();
-  const raw = normalized ? normalized : DEFAULT_APPLICATION_STATE_PATH;
-  return isAbsolute(raw) ? raw : resolve(cwd, raw);
+  if (!normalized) return fallback;
+  return isAbsolute(normalized) ? normalized : resolve(cwd, normalized);
 }
 
 const statePath = resolveApplicationStatePath(process.env.VIDEOBOOK_APP_STATE_PATH);

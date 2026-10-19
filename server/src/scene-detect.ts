@@ -1,10 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
+import { FFMPEG } from "./ffmpeg-binary.js";
 
 const execFileAsync = promisify(execFile);
-const sceneDetectRequire = createRequire(import.meta.url);
-const FFMPEG: string = sceneDetectRequire("ffmpeg-static");
 
 // Camera-cut threshold on scdet's absolute mean frame diff. ffmpeg's default
 // scdet threshold is 10; we match that for the "shot" classification. Anything

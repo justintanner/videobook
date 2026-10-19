@@ -45,8 +45,9 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const dataHome = process.env.VIDEOBOOK_HOME?.trim();
 const statePath = process.env.VIDEOBOOK_APP_STATE_PATH?.trim()
-  || join(root, "runtime", "app-state.json");
+  || (dataHome ? join(resolve(dataHome), "app-state.json") : join(root, "runtime", "app-state.json"));
 
 async function writeTokens(next) {
   let state = { values: {} };

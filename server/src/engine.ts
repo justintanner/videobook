@@ -1,12 +1,9 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { createEngine } from "videobook-engine";
 import { BookManager } from "./book-manager.js";
 import { scopedBookEngine } from "./book-context.js";
 import { contentStoreFromEnvironment } from "./content-store.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_LIBRARY_DIR = resolve(__dirname, "../../books");
+import { dataLayout } from "./data-home.js";
 
 export function environmentValue(
   value: string | undefined,
@@ -34,7 +31,7 @@ function catalogBackupTemplate(): string | undefined {
 
 const BOOK_LIBRARY_DIR = environmentValue(
   process.env.VIDEOBOOK_LIBRARY_DIR,
-  DEFAULT_LIBRARY_DIR,
+  dataLayout().libraryDir,
 );
 
 const objectStore = contentStoreFromEnvironment();

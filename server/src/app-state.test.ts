@@ -4,30 +4,26 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  DEFAULT_APPLICATION_STATE_PATH,
   createFileApplicationState,
   resolveApplicationStatePath,
 } from "./app-state.js";
+import { dataLayout } from "./data-home.js";
 
 describe("resolveApplicationStatePath", () => {
   const cwd = "/Users/jwt/videobook";
+  const fallback = "/home/user/.videobook/app-state.json";
 
-  it("uses the documented default file when the env var is unset", () => {
-    expect(resolveApplicationStatePath(undefined, cwd)).toBe(
-      join(cwd, DEFAULT_APPLICATION_STATE_PATH),
-    );
+  it("uses the data-home default file when the env var is unset", () => {
+    expect(resolveApplicationStatePath(undefined, cwd, fallback)).toBe(fallback);
+    expect(resolveApplicationStatePath(undefined, cwd)).toBe(dataLayout(process.env, cwd).appStatePath);
   });
 
-  it("uses the documented default file when the env var is empty", () => {
-    expect(resolveApplicationStatePath("", cwd)).toBe(
-      join(cwd, DEFAULT_APPLICATION_STATE_PATH),
-    );
+  it("uses the data-home default file when the env var is empty", () => {
+    expect(resolveApplicationStatePath("", cwd, fallback)).toBe(fallback);
   });
 
-  it("uses the documented default file when the env var is whitespace-only", () => {
-    expect(resolveApplicationStatePath("   \n\t  ", cwd)).toBe(
-      join(cwd, DEFAULT_APPLICATION_STATE_PATH),
-    );
+  it("uses the data-home default file when the env var is whitespace-only", () => {
+    expect(resolveApplicationStatePath("   \n\t  ", cwd, fallback)).toBe(fallback);
   });
 
   it("resolves a relative path against the given cwd", () => {
