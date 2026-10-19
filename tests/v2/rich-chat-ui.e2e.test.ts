@@ -462,13 +462,13 @@ describe('rich chat references with real notebook media', () => {
     expect(await dock.getByRole('textbox', { name: 'Prompt', exact: true }).inputValue()).toBe('a slow dolly through a pine forest')
   })
 
-  it('keeps global actions available from an empty Library', async () => {
+  it('keeps global actions available when no books exist', async () => {
     await call('delete_book', { book_id: secondBookId, confirm_name: 'rich-chat-secondary' })
     await call('delete_book', { confirm_name: 'rich-chat-primary' })
     await page.reload()
-    await page.getByLabel('Open Library', { exact: true }).click()
-    await page.getByRole('button', { name: 'Open library actions', exact: true }).click()
-    expect(await page.getByRole('button', { name: 'Open library actions', exact: true, includeHidden: true }).isVisible()).toBe(false)
+    await expect.poll(() => page.getByLabel('Open Library', { exact: true }).isDisabled()).toBe(true)
+    expect(await input().getAttribute('aria-disabled')).toBe('true')
+    await page.getByRole('button', { name: 'Open actions', exact: true }).click()
     await input().fill('create book')
     await page.locator('.workspace-actions-list [data-command="/create-book"]').click()
     await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
