@@ -160,7 +160,6 @@ export default defineConfig({
       'server/src/tools/**/*.test.ts',
       'server/src/media/**/*.test.ts',
       'server/src/scheduled-posts.test.ts',
-      'server/src/screenshot.test.ts',
       'server/src/notebook-published-post.test.ts',
       'server/src/notebook-reference-resolver.test.ts',
       'server/src/generation-input-mentions.test.ts',
