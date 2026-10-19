@@ -1,5 +1,6 @@
-/* Startup benchmark: replicates server/src/index.ts start() phase by phase,
- * skipping queue.start(), with per-import and per-book attribution. Run under
+/* Startup benchmark: runs the server's startup phases (the shared
+ * hydrateLibrary steps from server/src/hydration.ts), skipping queue.start(),
+ * with per-import and per-book attribution. Run under
  * `node --cpu-prof --import tsx scripts/benchmark-startup.ts out.json` for
  * function-level attribution. doltlite prototypes are frozen; SQL attribution
  * is impossible — use CPU profiling instead of sqlStats scaffolding.
@@ -171,57 +172,16 @@ for (const bookId of roots) {
   engine.close();
 }
 
-await timed("open", "bookManager.ready()", () => bookManager.ready());
-
-const imageSubjects = await timed("import", "jobs/image-subjects (hydrate)", () =>
-  import("../server/src/jobs/image-subjects.ts"),
+const hydration = await timed("import", "hydration", () =>
+  import("../server/src/hydration.ts"),
 );
-const runNotebook = await timed("import", "jobs/run-notebook (hydrate)", () =>
-  import("../server/src/jobs/run-notebook.ts"),
-);
-if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
-  const dancing = await timed("import", "dancing-workflow (fixtures)", () =>
-    import("../server/src/dancing-workflow.ts"),
-  );
-  await timed("reconcile", "ensureDancingWorkflow()", () =>
-    dancing.ensureDancingWorkflow(bookManager),
-  );
-}
-
-for (const book of bookManager.list()) {
-  const selected = bookManager.get(book.bookId);
-  if (!selected.ok) continue;
-  const e = selected.value.engine;
-  const tag = `${book.name} [${book.bookId.slice(0, 8)}]`;
-  await timed("reconcile", `${tag} jobs.queue.reap()`, () => e.jobs.queue.reap());
-  await timed("reconcile", `${tag} reconcileImageSubjectJobFailures`, () =>
-    imageSubjects.reconcileImageSubjectJobFailures(e, book.bookId),
-  );
-  await timed("reconcile", `${tag} abortLeasedNotebookRunsOnStartup`, () =>
-    runNotebook.abortLeasedNotebookRunsOnStartup(e),
-  );
-  await timed("reconcile", `${tag} reconcileGenerationMediaOutputs`, () =>
-    runNotebook.reconcileGenerationMediaOutputs(e),
-  );
-  await timed("reconcile", `${tag} reconcileQueuedNotebookCells`, () =>
-    runNotebook.reconcileQueuedNotebookCells(e),
-  );
-}
+await hydration.hydrateLibrary(bookManager, {
+  devFixtures: process.env.VIDEOBOOK_DEV_FIXTURES === "1",
+  startQueue: false,
+  startPostMetrics: false,
+  runStep: (step) => timed(step.phase, step.label, step.run),
+});
 record("reconcile", "SKIPPED queue.start()", 0);
-for (const book of bookManager.list()) {
-  const selected = bookManager.get(book.bookId);
-  if (!selected.ok) continue;
-  await timed(
-    "reconcile",
-    `${book.name} [${book.bookId.slice(0, 8)}] reconcileAwaitingNotebookOutputs`,
-    () =>
-      runNotebook.reconcileAwaitingNotebookOutputs(
-        selected.value.engine,
-        book.bookId,
-      ),
-  );
-}
-await timed("reconcile", "loadAndArmAll()", () => sched.loadAndArmAll());
 sched.stopScheduler();
 record("total", "TIME-TO-HYDRATED (list_books unblocks)", performance.now() - T_START);
 
