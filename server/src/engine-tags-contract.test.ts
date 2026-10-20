@@ -49,8 +49,8 @@ describe("engine tag contract", () => {
   it("pins one npm engine release across both manifests, the lockfile and the install", async () => {
     const root = await repoJson<{ dependencies: Record<string, string>; allowScripts: Record<string, boolean> }>("package.json");
     const server = await repoJson<{ dependencies: Record<string, string> }>("server/package.json");
-    const lock = await repoJson<{ packages: Record<string, { version?: string; resolved?: string; integrity?: string }> }>("package-lock.json");
-    const installed = await repoJson<{ version: string }>("node_modules/videobook-engine/package.json");
+    const lock = await repoJson<{ packages: Record<string, { version?: string; resolved?: string; integrity?: string; dependencies?: Record<string, string>; bundleDependencies?: string[] }> }>("package-lock.json");
+    const installed = await repoJson<{ version: string; dependencies: Record<string, string>; bundleDependencies?: string[] }>("node_modules/videobook-engine/package.json");
     const version = server.dependencies["videobook-engine"];
 
     expect(version).toMatch(/^\d+\.\d+\.\d+$/u);
@@ -60,7 +60,9 @@ describe("engine tag contract", () => {
       version,
       resolved: `https://registry.npmjs.org/videobook-engine/-/videobook-engine-${version}.tgz`,
       integrity: expect.stringMatching(/^sha512-/u),
+      dependencies: installed.dependencies,
     });
+    expect(lock.packages["node_modules/videobook-engine"]?.bundleDependencies ?? []).toEqual(installed.bundleDependencies ?? []);
     expect(Object.keys(root.allowScripts).filter((key) => key.startsWith("file:"))).toEqual([]);
   });
 

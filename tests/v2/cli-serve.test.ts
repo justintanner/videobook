@@ -87,7 +87,7 @@ describe('videobook serve', () => {
 
     await waitForHealth(base, cli)
     expect((await html(`${base}/`)).status).toBe(404)
-    expect(cli.stdout.join('')).toContain('UI       off (--headless)')
+    await expect.poll(() => cli.stdout.join(''), { timeout: 15_000 }).toContain('UI       off (--headless)')
     expect(await stopCli(cli)).toBe(0)
   }, 60_000)
 
