@@ -181,7 +181,7 @@ unknown when they cannot be established.
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.7.0 schema-v28 root under
+Each book owns an isolated `videobook-engine` v5.7.1 schema-v28 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable

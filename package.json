@@ -66,7 +66,7 @@
     "remotion": "4.0.494",
     "tailwind-merge": "^3.5.0",
     "uuid": "^14.0.0",
-    "videobook-engine": "5.7.0"
+    "videobook-engine": "5.7.1"
   },
   "overrides": {
     "adm-zip": "^0.6.0",
@@ -89,7 +89,7 @@
     "@apicity/kie": "^0.16.1",
     "@apicity/openai": "^0.16.1",
     "@apicity/x": "^0.16.1",
-    "@dolthub/doltlite": "0.50.9",
+    "@dolthub/doltlite": "0.51.1",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/node": "2.0.0",
     "@tailwindcss/vite": "^4.2.1",
@@ -122,7 +122,7 @@
     "zod": "^4.4.3"
   },
   "allowScripts": {
-    "@dolthub/doltlite@0.50.9": true,
+    "@dolthub/doltlite@0.51.1": true,
     "@ffprobe-installer/darwin-arm64@5.0.1": true,
     "@ffprobe-installer/darwin-x64@5.1.0": true,
     "@ffprobe-installer/linux-arm64@5.2.0": true,

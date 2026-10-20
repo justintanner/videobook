@@ -6,6 +6,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-20
+
+### Changed
+
+- Upgrade to videobook-engine 5.7.1 with official DoltLite 0.51.1 for
+  concurrency, reopened-catalog allocation, schema-conflict recovery, and
+  ignored AUTOINCREMENT sequence fixes. Existing 0.50.9 books retain their
+  format and engine schema.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

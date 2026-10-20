@@ -1,6 +1,6 @@
 {
   "name": "videobook",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first MCP server and web UI for AI video creation: notebooks, generation, editing, rendering and publishing.",
   "keywords": [
     "mcp",
@@ -69,7 +69,7 @@
     "remotion": "4.0.494",
     "sharp": "0.35.5",
     "uuid": "^14.0.0",
-    "videobook-engine": "5.7.0",
+    "videobook-engine": "5.7.1",
     "ws": "^8.21.0",
     "ytdlp-nodejs": "^3.4.4",
     "zod": "^4.4.3"
