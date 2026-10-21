@@ -3,9 +3,9 @@ import { useHarSettings } from '@/videobook/useHarSettings'
 
 export function HarCaptureSettings({ call }: { call?: PostToolCall }) {
   const { settings, busy, error, update } = useHarSettings(call)
-  return <section className="settings-panel" aria-labelledby="settings-diagnostics-heading">
-    <div className="settings-panel-heading"><h2 id="settings-diagnostics-heading">Diagnostics</h2><span>Application</span></div>
-    <p>Provider request capture is off by default. Enabling it keeps prompts, media URLs, model parameters, provider responses and error text locally. Secrets, cookies and media bytes above the capture cap are not kept. Realtime WebSocket traffic is not captured.</p>
+  return <section className="settings-section" aria-labelledby="settings-diagnostics-heading">
+    <div className="settings-section-heading"><h2 id="settings-diagnostics-heading">Diagnostics</h2></div>
+    <p className="settings-note">Provider request capture is off by default. Enabling it keeps prompts, media URLs, model parameters, provider responses and error text locally. Secrets, cookies and media bytes above the capture cap are not kept. Realtime WebSocket traffic is not captured.</p>
     <button type="button" disabled={busy || !call} onClick={() => void update()}>Check capture settings</button>
     {settings && <>
       <label htmlFor="har-capture-mode">Provider capture</label>

@@ -12096,7 +12096,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onCommandRowHeightChange={setCommandRowHeight}
         onHeightChange={setComposerHeight}
         hidden={!showCommandComposer}
-        dockOpen={composerDockOpen}
+        dockOpen={composerDockOpen && screen !== 'settings'}
         onDockOpenChange={setComposerDockOpen}
         contextualContent={composerContextualContent}
         contextualHasHeader={composerPanelHasHeader}

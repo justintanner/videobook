@@ -95,12 +95,15 @@ describe('Settings through the real application', () => {
       }))
       measurements.push({ viewport, ...measurement })
       const composer = await page.locator('.command-line-shell').boundingBox()
-      for (const heading of ['Providers', 'X account', 'Storage']) {
-        const bounds = await page.getByRole('heading', { name: heading, exact: true }).boundingBox()
+      for (const heading of ['AI providers', 'Accounts', 'Storage']) {
+        const headingLocator = page.getByRole('heading', { name: heading, exact: true })
+        await headingLocator.scrollIntoViewIfNeeded()
+        const bounds = await headingLocator.boundingBox()
         expect(bounds?.y).toBeGreaterThan(0)
         expect(bounds!.y + bounds!.height).toBeLessThan(composer!.y)
       }
       for (const button of await page.locator('.settings-providers button').all()) {
+        await button.scrollIntoViewIfNeeded()
         const bounds = await button.boundingBox()
         expect(bounds!.y + bounds!.height).toBeLessThan(composer!.y)
       }
@@ -151,7 +154,7 @@ describe('Settings through the real application', () => {
     const managed = page.getByRole('article', { name: 'Kimi Coding setting', exact: true })
     expect(await managed.textContent()).toContain('Managed in 1Password')
     expect(await managed.getByRole('button').count()).toBe(0)
-    const xDetails = page.locator('.settings-details').filter({ has: page.locator('summary', { hasText: /^X credentials/ }) })
+    const xDetails = page.locator('.settings-details').filter({ has: page.locator('summary', { hasText: 'App credentials' }) })
     await xDetails.locator('summary').click()
     await page.getByRole('button', { name: 'Edit X client ID', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Edit X client secret', exact: true }).waitFor()
@@ -262,7 +265,7 @@ describe('Settings through the real application', () => {
       else await route.continue()
     })
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-    await page.locator('.settings-screen > .settings-error').waitFor()
+    await page.locator('.settings-page > .settings-error').waitFor()
     expect(await value.inputValue()).toBe('test-retained-draft')
     const storage = page.getByRole('region', { name: 'Storage', exact: true })
     failedTool = ''

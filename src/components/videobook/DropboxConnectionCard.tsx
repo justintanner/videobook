@@ -20,5 +20,17 @@ export function DropboxConnectionCard({ call }: { call?: PostToolCall }) {
     } catch (cause) { popup?.close(); setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setBusy(false) }
   }
-  return <article className="settings-dropbox-connection"><div className="settings-credential-copy"><strong>Dropbox delivery</strong><p>{status?.connected ? 'Connected · offline access enabled' : status?.pending ? 'Approve access in Dropbox, then check connection.' : 'Deliver private clip files and captions for manual posting.'}</p><small>App key: DROPBOX_CLIENT_ID · Redirect: http://127.0.0.1:8766/callback</small></div><button type="button" disabled={busy || !call} onClick={() => void invoke(true)}>{status?.connected ? 'Reconnect Dropbox' : 'Connect Dropbox'}</button><button type="button" disabled={busy || !call} onClick={() => void invoke(false)}>Check connection</button>{(error || status?.error) && <p role="alert" className="settings-error">{error ?? status?.error}</p>}</article>
+  const detail = status?.connected ? 'Connected · offline access enabled'
+    : status?.pending ? 'Approve access in Dropbox, then check the connection.' : 'Not connected'
+  return <article className="settings-row settings-dropbox-connection" aria-label="Dropbox">
+    <div className="settings-row-main">
+      <div className="settings-row-copy">
+        <strong>Dropbox</strong>
+        <span className="settings-row-detail">{detail}</span>
+      </div>
+      <button type="button" className="settings-quiet" aria-label="Check Dropbox connection" disabled={busy || !call} onClick={() => void invoke(false)}>Check</button>
+      <button type="button" aria-label={status?.connected ? 'Reconnect Dropbox' : 'Connect Dropbox'} disabled={busy || !call} onClick={() => void invoke(true)}>{status?.connected ? 'Reconnect' : 'Connect'}</button>
+    </div>
+    {(error || status?.error) && <p role="alert" className="settings-error">{error ?? status?.error}</p>}
+  </article>
 }
