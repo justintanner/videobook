@@ -225,7 +225,10 @@ async function packPackage() {
   await mkdir(packDir, { recursive: true })
   const { code, stdout, stderr } = await capture(NPM[0], [...NPM.slice(1), 'pack', '-w', 'server', '--ignore-scripts', '--json', '--pack-destination', packDir], appRoot)
   expect(code === 0, `npm pack failed:\n${stderr}`)
-  const [pack] = JSON.parse(stdout)
+  const result = JSON.parse(stdout)
+  const packages = Array.isArray(result) ? result : Object.values(result)
+  expect(packages.length === 1, `expected one packed workspace, got ${packages.length}`)
+  const [pack] = packages
   return { pack, tarball: join(packDir, pack.filename) }
 }
 
