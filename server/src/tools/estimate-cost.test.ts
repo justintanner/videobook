@@ -64,6 +64,27 @@ describe("estimate_cost tool", () => {
     expect(payload.per_call[1]!.estimate.warnings.join(" ")).toContain("unknown model");
   });
 
+  it("validates edit source duration and bills source-length output", async () => {
+    const engine = createEngineForTest(tempDir);
+    for (const duration of [3.99, 4, 8, 30, 30.01]) {
+      const source = await videoWithDuration(engine, duration);
+      const payload = await estimate([{ tool_name: "generate_video", input: {
+        model: "kie:bytedance/seedance-2-5", prompt: "edit", mode: "v2v", refs: { video: [source] },
+        options: { duration: 13, aspect_ratio: "9:16" },
+      } }]);
+      if (duration >= 4 && duration <= 30) {
+        expect(payload.estimate.warnings).toEqual([]);
+        expect(payload.estimate.breakdown.units).toBe(duration * 2);
+      } else {
+        expect(payload.estimate.warnings.join(" ")).toContain("between 4 and 30 seconds");
+      }
+    }
+    const unknown = await estimate([{ tool_name: "generate_video", input: {
+      model: "kie:bytedance/seedance-2-5", prompt: "edit", mode: "v2v", refs: { video: ["https://example.test/source.mp4"] },
+    } }]);
+    expect(unknown.estimate.warnings.join(" ")).toContain("known duration");
+  });
+
   it("prices a per-second video model from its duration option", async () => {
     const five = await estimate([{ tool_name: "generate_video", input: { model: "kie:bytedance/seedance-2-5", prompt: "x", options: { duration: 5, resolution: "720p" } } }]);
     const ten = await estimate([{ tool_name: "generate_video", input: { model: "kie:bytedance/seedance-2-5", prompt: "x", options: { duration: 10, resolution: "720p" } } }]);

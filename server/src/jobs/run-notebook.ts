@@ -46,7 +46,7 @@ import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
 import { spliceVideoDef } from "../tools/splice-video.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { previewGeneration } from "../media/preview.js";
-import { checkInsertVideoTiming, normalizeRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkInsertVideoTiming, normalizeRefs } from "../media/refs.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 import {
   captureFrame,
@@ -1177,6 +1177,8 @@ async function prepareMediaGeneration(
     const timingError = await checkInsertVideoTiming(engine, model, normalizeRefs(prepared.input.refs),
       preview.preview.payload.input as Record<string, unknown> ?? {});
     if (timingError) throw new Error(timingError);
+    const sourceError = await checkSeedanceEditSource(engine, model, normalizeRefs(prepared.input.refs), prepared.input.mode);
+    if (sourceError) throw new Error(sourceError);
   }
   return {
     tool: `generate_${model.media}`,

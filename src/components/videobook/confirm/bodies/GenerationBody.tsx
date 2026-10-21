@@ -1,3 +1,4 @@
+import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../../../server/src/media/seedance-edit'
 import { useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
@@ -208,7 +209,10 @@ export function GenerationBody({
     ? settings.voice_id
     : ''
   const insertVideo = isInsertVideoModel(draft.action.model)
-  const visibleControls = insertVideo
+  const seedanceEdit = isSeedanceEdit(draft.action.model, draft.cell.inputs?.generationMode ?? draft.cell.inputs?.mode)
+  const visibleControls = seedanceEdit
+    ? draft.action.controls.filter((control) => !['duration', 'aspect_ratio'].includes(control.name))
+    : insertVideo
     ? draft.action.controls.filter((control) => !['start_time', 'resume_time', 'duration'].includes(control.name))
     : draft.action.controls
   const generalControls = showVoicePicker
@@ -344,6 +348,7 @@ export function GenerationBody({
         {insertVideo && <InsertVideoEditor sources={sources} settings={settings} controls={draft.action.controls} busy={busy} onChange={onSettingChange} />}
 
         <section className="generation-review-settings-section" aria-label="Settings">
+          {seedanceEdit && <p className="muted">{SEEDANCE_EDIT_DESCRIPTION}</p>}
           {frameAspectRatio && <p className="muted">{FRAME_ASPECT_DESCRIPTION}</p>}
           <div className="generation-review-settings">
             {fieldControls.map((control) => (

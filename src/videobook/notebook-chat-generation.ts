@@ -1,3 +1,4 @@
+import { isSeedanceEdit } from '../../server/src/media/seedance-edit'
 import type {
   NotebookCell,
   NotebookDocument,
@@ -411,6 +412,7 @@ export function notebookChatGenerationSettings(
       || typeof value === 'boolean'
       ? [[name, value]]
       : []))
+  if (isSeedanceEdit(draft.action.model, inputs?.generationMode)) return { ...values, aspect_ratio: 'adaptive', duration: -1 }
   const aspectRatio = frameAspectRatio(draft.action.model, inputs ?? {})
   return aspectRatio ? { ...values, aspect_ratio: aspectRatio } : values
 }

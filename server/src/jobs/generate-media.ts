@@ -1,3 +1,4 @@
+import { isSeedanceEdit } from "../media/seedance-edit.js";
 import type { Engine } from "videobook-engine";
 import type { CostHints } from "@apicity/cost";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
@@ -7,7 +8,7 @@ import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
-import { checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { adapterFor } from "../media/adapters/index.js";
 import { completeMediaGeneration } from "../media/complete.js";
 import type { MediaRefs, ResolvedModel } from "../media/types.js";
@@ -35,10 +36,10 @@ async function replaceAudioMeta(engine: Engine, ref: string | undefined): Promis
   return { replaceAudioWith: { assetId: input.assetId, filename: input.filename } };
 }
 
-async function costHints(engine: Engine, refs: ResolvedRefs): Promise<CostHints> {
+async function costHints(engine: Engine, refs: ResolvedRefs, job: GenerateMediaJob): Promise<CostHints> {
   if (refs.sourceVideoIds.length === 0) return {};
   const seconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
-  return seconds === undefined ? {} : { inputDurationSeconds: seconds };
+  return seconds === undefined ? {} : { inputDurationSeconds: seconds, ...(isSeedanceEdit(job.model, job.mode) ? { durationSeconds: seconds } : {}) };
 }
 
 function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: ResolvedRefs): Record<string, unknown> {
@@ -59,6 +60,7 @@ export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ct
   await engine.metadata.artifacts.write(job.assetId, "generation-request", job);
   const prompt = job.prompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, job.prompt, job.refs);
   const durationError = (await checkInsertVideoTiming(engine, model, job.refs, job.options))
+    ?? (await checkSeedanceEditSource(engine, model, job.refs, job.mode))
     ?? await checkRefDurations(engine, model, job.refs);
   if (durationError) throw new Error(durationError);
   const refs = await uploadRefs(engine, adapter, job.refs);
@@ -75,7 +77,7 @@ export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ct
     assetId: job.assetId,
     assetDir: job.assetDir,
     meta,
-    costHints: await costHints(engine, refs),
+    costHints: await costHints(engine, refs, job),
   });
   if (result.kind === "done") {
     await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs });

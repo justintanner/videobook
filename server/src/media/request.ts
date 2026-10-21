@@ -1,3 +1,4 @@
+import { isSeedanceEdit } from "./seedance-edit.js";
 import type { ZodError } from "zod";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
@@ -174,6 +175,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   const refs = call.refUrls ?? {};
   const refError = checkRefs(model, refs, call.mode);
   if (refError) return { ok: false, error: refError };
+  if (isSeedanceEdit(model.id, call.mode) && refs.video?.length !== 1) return { ok: false, error: "Seedance Edit video requires exactly one source video (4–30 seconds)." };
   const promptError = checkPrompt(model, call.prompt);
   if (promptError) return { ok: false, error: promptError };
   const value: Record<string, unknown> = clone(model.entry.defaults) ?? {};
@@ -182,6 +184,10 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   const optionError = applyOptions(model, value, call.options ?? {});
   if (optionError) return { ok: false, error: optionError };
   applyFrameOptions(model, value, refs, call.mode);
+  if (isSeedanceEdit(model.id, call.mode)) {
+    value.aspect_ratio = "adaptive";
+    value.duration = -1;
+  }
   const prompt = call.prompt?.trim();
   if (model.promptField && prompt) setPath(value, model.promptField, prompt);
   const input = model.wire.input.safeParse(value);

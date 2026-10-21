@@ -1,3 +1,4 @@
+import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../server/src/media/seedance-edit'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, Play, X } from 'lucide-react'
@@ -76,7 +77,10 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
   const frameAspectRatio = action.generation && typeof draftValues.model === 'string'
     ? modelFrameAspectRatio(draftValues.model, draftValues)
     : undefined
-  const values: Record<string, unknown> = frameAspectRatio
+  const seedanceEdit = isSeedanceEdit(String(draftValues.model ?? ''), draftValues.mode)
+  const values: Record<string, unknown> = seedanceEdit
+    ? { ...draftValues, options: { ...(draftValues.options && typeof draftValues.options === 'object' ? draftValues.options : {}), aspect_ratio: 'adaptive', duration: -1 } }
+    : frameAspectRatio
     ? { ...draftValues, options: { ...(draftValues.options && typeof draftValues.options === 'object' ? draftValues.options : {}), aspect_ratio: frameAspectRatio } }
     : draftValues
   const [busy, setBusy] = useState(false)
@@ -145,6 +149,7 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
           setResult(null)
         }} />)}
     </div>
+    {seedanceEdit && <p role="status">{SEEDANCE_EDIT_DESCRIPTION}</p>}
     {frameAspectRatio && <p role="status">{FRAME_ASPECT_DESCRIPTION}</p>}
     {hasDependentChoices && <button type="button" disabled={busy} onClick={() => onOpenAction(action.id, values)}>Refresh available choices</button>}
     {unavailable && <p role="status">{unavailable}</p>}

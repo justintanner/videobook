@@ -85,7 +85,7 @@ Use Seedance 2.0 reference-to-video when replacing people in a clip. Pass the so
 Replace the on-screen person matching @Image1 with @Image1 as character reference. Replace the on-screen person matching @Image2 with @Image2 as character reference. Replace the on-screen person matching @Image3 with @Image3 as character reference. Keep camera movement, pacing, and framing of @Video1.
 ```
 
-Notebook wiring: connect the source video plus the identity stills to a Seedance generation cell (model `kie:bytedance/seedance-2-5`, mode `r2v`). The runner fills `refs.video` from connected video cells and `refs.image` from connected image cells. The result is a normal generated video artifact (`original.mp4` / `proxy.mp4`), not an orientation render.
+Notebook wiring: connect the source video plus the identity stills to a Seedance generation cell (model `kie:bytedance/seedance-2-5`, mode `v2v` / Edit video). Use one source video with a known duration of 4–30 seconds; import URL sources into the book first. Edit mode sets `aspect_ratio=adaptive` and `duration=-1` to preserve the source shape and length. Ordinary reference generation remains `r2v` with its chosen output settings. The runner fills `refs.video` from connected video cells and `refs.image` from connected image cells. The result is a normal generated video artifact (`original.mp4` / `proxy.mp4`), not an orientation render.
 
 ## Camera Movement Vocabulary
 

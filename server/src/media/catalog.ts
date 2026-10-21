@@ -127,10 +127,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   {
     id: "kie:bytedance/seedance-2-5",
     media: "video",
-    operations: ["text_to_video", "image_to_video", "reference_to_video"],
+    operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"],
     guide: "seedance25",
     dialect: "seedance",
-    modes: SEEDANCE_MODES,
+    modes: [...SEEDANCE_MODES, { id: "v2v", label: "Edit video", roles: ["video", "image", "audio"], requireAny: ["video"] }],
     defaults: { ...LIGHTNING_VIDEO_OPTIONS },
     frameOptions: { aspect_ratio: "adaptive" },
   },

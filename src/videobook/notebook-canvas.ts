@@ -1,3 +1,4 @@
+import { isSeedanceEdit } from '../../server/src/media/seedance-edit'
 import type { PostView } from '../../server/src/posts/post-contract'
 import type { NotebookSnapshot } from './workspace-responses'
 import {
@@ -118,7 +119,8 @@ function videoCanvasMetadata(
   const generationSettings = producer?.type === 'generate_video'
     ? recordValue(producer.inputs?.generationSettings)
     : null
-  const configuredAspectRatio = frameAspectRatio(producer?.model ?? '', producer?.inputs ?? {}) ?? asString(
+  const seedanceEdit = isSeedanceEdit(producer?.model ?? '', producer?.inputs?.generationMode)
+  const configuredAspectRatio = seedanceEdit ? 'adaptive' : frameAspectRatio(producer?.model ?? '', producer?.inputs ?? {}) ?? asString(
     cell?.inputs?.aspectRatio ?? cell?.inputs?.aspect_ratio,
   ) ?? asString(generationSettings?.aspect_ratio)
   const aspectRatio = configuredAspectRatio
@@ -135,7 +137,7 @@ function videoCanvasMetadata(
   )
   return {
     aspectRatio,
-    durationSeconds: actualDuration ?? configuredDuration,
+    durationSeconds: actualDuration ?? (seedanceEdit ? null : configuredDuration),
   }
 }
 

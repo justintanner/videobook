@@ -374,7 +374,7 @@ describe("notebook action catalog", () => {
       defaultPriority: 0,
     });
     expect(seedance25Action?.inputContract?.modes.map((mode) => mode.id))
-      .toEqual(["t2v", "i2v", "r2v"]);
+      .toEqual(["t2v", "i2v", "r2v", "v2v"]);
     expect(seedance25Action?.inputContract?.modes.find((mode) =>
       mode.id === "r2v")?.slots.map((slot) => ({
       field: slot.field,

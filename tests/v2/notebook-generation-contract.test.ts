@@ -84,6 +84,7 @@ describe("notebook generation input contracts", () => {
       "t2v",
       "i2v",
       "r2v",
+      "v2v",
     ]);
     expect(contract.modes.find((mode) => mode.id === "i2v")?.slots
       .map((slot) => slot.field)).toEqual([

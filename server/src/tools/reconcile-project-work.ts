@@ -1,3 +1,4 @@
+import { seedanceEditFailure } from "../media/seedance-edit.js";
 import { createKie, createXai, createAlibaba, createFal } from "../usage-providers.js";
 import { describeFalError } from "../jobs/_fal-shared.js";
 import { currentBookContext, withBookContext } from "../book-context.js";
@@ -1603,7 +1604,7 @@ async function processKieTaskResult(
 
     result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
   } else if (data?.state === "fail") {
-    const failMsg = data.failMsg ?? "unknown error";
+    const failMsg = seedanceEditFailure(task.meta?.model, data.failMsg ?? "unknown error");
     // A kie 500 is only retryable while the task is still in flight; once it
     // has terminally completed, surface the failure instead of stranding the
     // asset as "working" until the 30m reconciliation timeout. See isTransientKieFailure.

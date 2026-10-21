@@ -185,7 +185,7 @@ describe("generic media generation", () => {
     for (const model of speech.models) expect(model).toMatchObject({ media: "audio", operations: expect.arrayContaining(["speech"]) });
     const seedance = all.models.find((model) => model.id === "kie:bytedance/seedance-2-5") as unknown as { options: Array<{ name: string; defaultValue?: unknown }>; modes: Array<{ id: string }> };
     expect(seedance.options).toEqual(expect.arrayContaining([expect.objectContaining({ name: "resolution", defaultValue: "1080p" })]));
-    expect(seedance.modes.map((mode) => mode.id)).toEqual(["t2v", "i2v", "r2v"]);
+    expect(seedance.modes.map((mode) => mode.id)).toEqual(["t2v", "i2v", "r2v", "v2v"]);
   });
 
   it("rejects bad generation calls before creating an artifact", async () => {
@@ -200,6 +200,22 @@ describe("generic media generation", () => {
     const image = await imageArtifact();
     expect(toolError(await client.callTool({ name: "generate_video", arguments: { book_id, model: "kie:bytedance/seedance-2-5", prompt: "x", refs: { video: [image] } } }))).toMatch(/video ref must be a video artifact/);
     expect(engine.artifacts.list()).toHaveLength(before + 1);
+  });
+
+  it("validates Seedance edit sources before enqueueing and rechecks queued work", async () => {
+    const book_id = engine.book.get().bookId;
+    const model = "kie:bytedance/seedance-2-5";
+    const source = await probedVideoArtifact(shortClip);
+    const args = { book_id, model, prompt: "Edit @video1", mode: "v2v", options: { duration: 13, aspect_ratio: "9:16" } };
+    const before = engine.artifacts.list().length;
+    expect(toolError(await client.callTool({ name: "generate_video", arguments: { ...args, refs: { video: ["https://example.test/source.mp4"] } } })))
+      .toContain("known duration");
+    expect(engine.artifacts.list()).toHaveLength(before);
+    const accepted = toolJson(await client.callTool({ name: "generate_video", arguments: { ...args, refs: { video: [source] } } }));
+    const job = queuedJob(String(accepted.asset_id));
+    await engine.metadata.artifacts.write(source.replace(/^@/, ""), "original", { duration: 31 });
+    await expect(runGenerateMedia(engine, job, await ownerContext(job.assetId))).rejects.toThrow("between 4 and 30 seconds");
+    expect(requests).toHaveLength(0);
   });
 
   it("generates a kie image from a reference through submit, poll and completion", async () => {

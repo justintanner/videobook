@@ -1,3 +1,4 @@
+import { isSeedanceEdit } from "./seedance-edit.js";
 import type { Engine } from "videobook-engine";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
@@ -141,4 +142,14 @@ export async function checkInsertVideoTiming(engine: Engine, model: ResolvedMode
   const source = refs.video?.[0];
   const duration = source ? await referenceVideoDuration(engine, [source]) : undefined;
   return insertVideoTimingError(options, duration);
+}
+
+export async function checkSeedanceEditSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, mode: unknown): Promise<string | null> {
+  if (!isSeedanceEdit(model.id, mode)) return null;
+  if (refs.video?.length !== 1) return "Seedance Edit video requires exactly one source video (4–30 seconds).";
+  const duration = await referenceVideoDuration(engine, refs.video);
+  if (duration === undefined) return "Seedance Edit video requires a source with known duration. Import the video into the book and use its artifact reference (4–30 seconds).";
+  return duration < 4 || duration > 30
+    ? `Seedance Edit video source is ${duration} seconds; use a source between 4 and 30 seconds.`
+    : null;
 }

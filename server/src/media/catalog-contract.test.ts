@@ -1,3 +1,5 @@
+import { previewGeneration } from "./preview.js";
+import { seedanceEditFailure } from "./seedance-edit.js";
 import { describe, expect, it } from "vitest";
 import { createKie } from "@apicity/kie";
 import { MODEL_ENTRIES } from "./catalog.js";
@@ -219,5 +221,40 @@ describe("prompt dialects", () => {
     expect(applyPromptDialect("seedance", "@firstframe walks to @image1", refs)).toBe("walks to @Image1");
     expect(applyPromptDialect("natural", `put @${image} here`, { image: [image] })).toBe("put reference image 1 here");
     expect(applyPromptDialect("brackets", "@image1 dances", { image: [image] })).toBe("[Image 1] dances");
+  });
+});
+
+describe("Seedance 2.5 edit mode", () => {
+  const model = resolveModel("kie:bytedance/seedance-2-5");
+  const refs = { video: ["https://example.test/source.mp4"], image: ["https://example.test/owner.png"] };
+
+  it("overrides stale settings consistently in previews and wire requests", () => {
+    const options = { duration: 13, aspect_ratio: "9:16", resolution: "720p" };
+    const built = buildWireRequest(model, { prompt: "Animate the owner", mode: "v2v", refUrls: refs, options });
+    expect(built).toMatchObject({ ok: true, input: { duration: -1, aspect_ratio: "adaptive", resolution: "720p" } });
+    const preview = previewGeneration({ model: model.id, prompt: "Animate the owner", mode: "v2v", refs, options });
+    expect(preview.ok && preview.preview.payload).toEqual(built.ok && built.request);
+    expect(buildWireRequest(model, { prompt: "x", mode: "r2v", refUrls: refs, options }))
+      .toMatchObject({ ok: true, input: options });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: refs, options }))
+      .toMatchObject({ ok: true, input: options });
+  });
+
+  it("requires one source and leaves Wan modes unchanged", () => {
+    expect(buildWireRequest(model, { prompt: "x", mode: "v2v" }).ok).toBe(false);
+    expect(buildWireRequest(model, { prompt: "x", mode: "v2v", refUrls: { video: [...refs.video, ...refs.video] } }).ok).toBe(false);
+    expect(resolveModel("kie:wan/3-0-video").modes.map((mode) => mode.id)).toEqual(["t2v", "i2v", "r2v"]);
+  });
+
+  it("prices source-length output and input instead of the lightning default", () => {
+    const estimate = estimateGeneration(model, { prompt: "x", mode: "v2v", refUrls: refs }, { inputDurationSeconds: 8 });
+    expect(estimate).toMatchObject({ ok: true, estimate: { breakdown: { units: 16 }, warnings: [] } });
+  });
+
+  it("makes provider-classified editing failures actionable without rewriting unrelated failures", () => {
+    const message = "Seedance identified your task as video editing; ratio must be adaptive; duration must be -1";
+    expect(seedanceEditFailure(model.id, message)).toContain("Select Edit video (mode v2v)");
+    expect(seedanceEditFailure(model.id, "Unavailable")).toBe("Unavailable");
+    expect(seedanceEditFailure("kie:wan/3-0-video", message)).toBe(message);
   });
 });
