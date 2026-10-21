@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
@@ -46,6 +46,42 @@ function engineError(
   message: string,
 ): EngineError {
   return { code, message };
+}
+
+const MOVE_ATTEMPTS = 8;
+const RETRYABLE_MOVE_CODES = new Set(["EPERM", "EBUSY", "EACCES", "ENOTEMPTY"]);
+
+function systemCode(cause: unknown): string | undefined {
+  if (!cause || typeof cause !== "object" || !("code" in cause)) return undefined;
+  const code = (cause as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Windows denies renaming a directory while Defender, or a Dolt file that just
+// closed, still holds a handle. Retry, then copy and drop the staging tree.
+async function moveDirectory(source: string, destination: string): Promise<void> {
+  let last: unknown;
+  for (let attempt = 0; attempt < MOVE_ATTEMPTS; attempt += 1) {
+    try {
+      await rename(source, destination);
+      return;
+    } catch (cause) {
+      last = cause;
+      if (!RETRYABLE_MOVE_CODES.has(systemCode(cause) ?? "")) throw cause;
+      if (attempt < MOVE_ATTEMPTS - 1) await delay(50 * 2 ** attempt);
+    }
+  }
+  try {
+    await cp(source, destination, { recursive: true });
+  } catch {
+    await rm(destination, { recursive: true, force: true }).catch(() => undefined);
+    throw last;
+  }
+  await rm(source, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => undefined);
 }
 
 function isInside(parent: string, candidate: string): boolean {
@@ -170,8 +206,9 @@ export class BookManager {
       const created = temporaryEngine.book.get();
       temporaryEngine.close();
       temporaryEngine = null;
+      await delay(0);
       const destination = this.bookRoot(created.bookId);
-      await rename(temporaryRoot, destination);
+      await moveDirectory(temporaryRoot, destination);
       finalRoot = destination;
       const engine = this.createEngine(finalRoot);
       finalEngine = engine;
