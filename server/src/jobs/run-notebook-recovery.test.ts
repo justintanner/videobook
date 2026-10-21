@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Engine, JobState } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
-import { claimNotebookRunPlan } from "../notebook-run-plan.js";
+import { claimNotebookRunPlan, notebookRunPlanRecords } from "../notebook-run-plan.js";
 import { placeChainGeneration } from "../chain-generation.js";
 import { queue as appQueue, setEngineRoot } from "../queue.js";
 import { preserveProviderTask } from "../provider-task-record.js";
@@ -275,6 +275,73 @@ describe("awaiting notebook output startup recovery", () => {
     }
     throw new Error("await_notebook_output did not reach a terminal state");
   }
+
+  it("records distinct terminal attempts when a failed resume is retried after provider recovery", async () => {
+    const fixture = await createAwaitingNotebook();
+    const read = engine.notebooks.read(fixture.notebookId);
+    if (!read.ok) throw new Error(read.error.message);
+    const output = engine.notebooks.createCell({
+      type: "image", label: "Recovered output", slot: { row: 1, column: 0 },
+      inputs: { generationRunId: fixture.runId },
+    });
+    const now = new Date().toISOString();
+    const runPlanId = "retry-terminal-run-plan";
+    expect((await engine.notebooks.write({
+      ...read.value,
+      cells: [...read.value.cells, output],
+      edges: [engine.notebooks.createEdge({ source: fixture.cellId, target: output.id, targetInput: "media" })],
+      execution: { [output.id]: read.value.execution![fixture.cellId]! },
+      notebookRunPlans: [{
+        planId: runPlanId, status: "awaiting-output", plan: { planId: runPlanId },
+        paidCellIds: [fixture.cellId], cellDefinitionFingerprints: {},
+        knownCostUsd: 0, unknownCostCount: 0, createdAt: now, updatedAt: now,
+        runId: fixture.runId,
+      }],
+    })).ok).toBe(true);
+    expect((await engine.jobs.failures.write(fixture.providerArtifactId, {
+      message: "Provider output failed",
+    })).ok).toBe(true);
+    registerRunNotebookJob(engine);
+    await setEngineRoot(rootDir, engine);
+    const payload = { ...awaitPayload(fixture), runPlanId, outputCellId: output.id, cellIds: [fixture.cellId] };
+    await appQueue.enqueueAndWait("failed-provider-await", payload, 5_000);
+    await expect.poll(() => engine.jobs.queue.list({ type: "run_notebook" })[0]?.state)
+      .toBe("failed");
+    const failed = engine.notebooks.read(fixture.notebookId);
+    if (!failed.ok) throw new Error(failed.error.message);
+    const first = notebookRunPlanRecords(failed.value)[0]!;
+    expect(first).toMatchObject({ runId: fixture.runId, status: "failed" });
+    expect(first.plan.recordedRuns).toHaveLength(1);
+    expect(first.plan.recordedRuns?.[0]).toMatchObject({ status: "failed" });
+    expect(first.plan.recordedRunId).not.toBe(fixture.runId);
+
+    expect((await engine.jobs.failures.clear(fixture.providerArtifactId)).ok).toBe(true);
+    const bytes = await sharp({ create: { width: 32, height: 32, channels: 3, background: "red" } }).png().toBuffer();
+    expect((await engine.files.write(fixture.providerArtifactId, "original.png", bytes)).ok).toBe(true);
+    await appQueue.enqueueAndWait("retried-provider-await", payload, 5_000);
+    await expect.poll(() => engine.jobs.queue.list({ type: "run_notebook" })
+      .some(job => job.state === "done")).toBe(true);
+    const completed = engine.notebooks.read(fixture.notebookId);
+    if (!completed.ok) throw new Error(completed.error.message);
+    const latest = notebookRunPlanRecords(completed.value)[0]!;
+    expect(latest).toMatchObject({ runId: fixture.runId, status: "completed" });
+    expect(latest.error).toBeUndefined();
+    expect(latest.plan.recordedRuns).toHaveLength(2);
+    expect(latest.plan.recordedRuns?.[0]).toEqual(first.plan.recordedRuns?.[0]);
+    expect(latest.plan.recordedRuns?.[1]).toMatchObject({
+      recordedRunId: latest.plan.recordedRunId, status: "completed",
+    });
+    expect(latest.plan.recordedRunId).not.toBe(first.plan.recordedRunId);
+    const recordedIds = engine.history.revisions(100)
+      .filter(revision => revision.operation === "record_notebook_run")
+      .map(revision => revision.details?.runId);
+    expect(recordedIds).toHaveLength(2);
+    expect(recordedIds).toEqual(expect.arrayContaining(latest.plan.recordedRuns!.map(run => run.recordedRunId)));
+    const job = engine.jobs.queue.list({ type: "run_notebook" }).find(job => job.state === "done");
+    expect(job?.result).toMatchObject({
+      id: fixture.runId, runId: fixture.runId, recordedRunId: latest.plan.recordedRunId,
+    });
+  });
 
   it("does not duplicate an active await job", async () => {
     const fixture = await createAwaitingNotebook();

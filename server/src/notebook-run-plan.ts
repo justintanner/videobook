@@ -31,8 +31,19 @@ type NotebookRunPlanStatus =
   | "completed"
   | "failed";
 
-interface NotebookRunPlanRecord extends NotebookRunPlan {
+export interface RecordedNotebookRun {
+  recordedRunId: string;
+  status: "completed" | "failed" | "aborted";
+  completedAt: string;
+  error?: string;
+}
+
+export interface NotebookRunPlanRecord extends NotebookRunPlan {
   status: NotebookRunPlanStatus;
+  plan: NotebookRunPlan["plan"] & {
+    recordedRunId?: string;
+    recordedRuns?: RecordedNotebookRun[];
+  };
 }
 
 interface CostEstimate {

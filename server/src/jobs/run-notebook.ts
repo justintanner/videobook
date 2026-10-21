@@ -26,6 +26,7 @@ import {
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { logger } from "../logger.js";
 import { mutateNotebook } from "../notebook-mutations.js";
+import type { NotebookRunPlanRecord, RecordedNotebookRun } from "../notebook-run-plan.js";
 import { removeCreditFailedOutput } from "../notebook-credit-retry.js";
 import {
   allocateGenerateAudioResult,
@@ -3203,6 +3204,7 @@ async function updateNotebookRunPlanState(
   planId: string,
   status: string,
   details: Partial<NotebookRunPlan> = {},
+  recordedRun?: RecordedNotebookRun,
 ): Promise<void> {
   const result = await mutateNotebook(
     engine,
@@ -3218,6 +3220,17 @@ async function updateNotebookRunPlanState(
               ...record,
               status,
               ...details,
+              ...(recordedRun ? {
+                plan: {
+                  ...record.plan,
+                  recordedRunId: recordedRun.recordedRunId,
+                  recordedRuns: [
+                    ...((record as NotebookRunPlanRecord).plan.recordedRuns ?? []),
+                    recordedRun,
+                  ],
+                },
+                error: recordedRun.error,
+              } : {}),
               updatedAt: new Date().toISOString(),
             }
           : record),
@@ -3941,7 +3954,7 @@ export function registerRunNotebookJob(engine: Engine): void {
     }
     const now = new Date().toISOString();
     const run: NotebookRun = {
-      id: runId,
+      id: uuidv7(),
       notebookId: input.notebookId,
       status: errors.length === 0 ? "completed" : "failed",
       startedAt: now,
@@ -3963,10 +3976,16 @@ export function registerRunNotebookJob(engine: Engine): void {
           outputs,
           ...(errors.length > 0 ? { error: errors.join("\n") } : {}),
         },
+        {
+          recordedRunId: run.id,
+          status: run.status,
+          completedAt: now,
+          ...(run.error ? { error: run.error } : {}),
+        },
       );
     }
     if (errors.length > 0) throw new Error(errors.join("\n"));
-    return run;
+    return { ...run, id: runId, runId, recordedRunId: run.id };
   };
   registerJobHandler("run_notebook", async (payload) => {
     const input = payload as unknown as RunNotebookPayload;
