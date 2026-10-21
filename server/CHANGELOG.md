@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Windows x64 is supported. The release check runs the pack-and-install
+  smoke on Windows and blocks the release when it fails. Stopping
+  `videobook serve` from another process still ends it without a clean
+  shutdown, because Windows has no SIGTERM, and the next start replaces
+  the lock file.
+
 ## [0.2.2] - 2026-10-21
 
 ### Added

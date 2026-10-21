@@ -12,8 +12,8 @@ graph, and every change is recorded as a revision. This package installs one
 ## Requirements
 
 - Node.js 22 or newer.
-- macOS (Apple Silicon or Intel) or Linux (x64 or arm64). Windows is not
-  supported yet; see the platform notes.
+- macOS (Apple Silicon or Intel), Linux (x64 or arm64), or Windows x64.
+  See the platform notes.
 - About 800 MB of disk. Installing downloads the ffmpeg and yt-dlp binaries
   from GitHub, and the first video render downloads Chrome Headless Shell
   (about 150 MB) into `~/.cache/videobook/remotion`.
@@ -177,12 +177,10 @@ come from 1Password are read-only in Settings.
 - macOS on Intel works, but ONNX Runtime has no Intel Mac build, so semantic
   search is unavailable there.
 - Linux x64 and arm64 are supported.
-- Windows is not supported yet. Every native dependency has a Windows x64
-  build, but the release smoke test has not passed on Windows. Windows has no
-  SIGTERM, so stopping `videobook serve` from another process ends it without
-  a clean shutdown, and the next start replaces the lock file it leaves. The
-  Release check workflow runs the smoke test on Windows for every release tag
-  without blocking the release.
+- Windows x64 is supported. Windows has no SIGTERM, so stopping
+  `videobook serve` from another process ends it without a clean shutdown,
+  and the next start replaces the lock file it leaves. The Release check
+  workflow runs the pack-and-install smoke on Windows for every release tag.
 
 ## Security
 

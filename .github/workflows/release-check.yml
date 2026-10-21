@@ -53,9 +53,8 @@ jobs:
           path: ${{ runner.temp }}/pack/*.tgz
 
   windows-smoke:
-    name: Smoke-test the videobook package on Windows (not yet supported)
+    name: Smoke-test the videobook package on Windows
     runs-on: windows-latest
-    continue-on-error: true
     timeout-minutes: 90
     steps:
       - name: Check out repository
