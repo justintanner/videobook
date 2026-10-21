@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile)
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const appSource = resolve(scriptDir, '..')
 const options = parseOptions(process.argv.slice(2))
-const temporaryRoot = await mkdtemp(join(tmpdir(), 'videobook-pack-install-'))
+const temporaryRoot = canonicalDirectory(await mkdtemp(join(tmpdir(), 'videobook-pack-install-')))
 const appRoot = join(temporaryRoot, 'videobook')
 const runtimeRoot = join(temporaryRoot, 'runtime')
 const children = new Set()
@@ -73,6 +73,13 @@ function log(message) {
   process.stdout.write(`pack-install: ${message}\n`)
 }
 
+function canonicalDirectory(path) {
+  const resolved = realpathSync.native(path)
+  if (resolved.startsWith('\\\\?\\UNC\\')) return `\\\\${resolved.slice(8)}`
+  if (resolved.startsWith('\\\\?\\')) return resolved.slice(4)
+  return resolved
+}
+
 function isSafeSourcePath(relativePath) {
   const parts = relativePath.split('/')
   if (parts.some((part) => part === '.git' || part === '.beads' || part === '.env' || part.startsWith('.env.'))) return false
@@ -117,7 +124,7 @@ function isolatedEnvironment(extra = {}) {
   }
   delete env.NODE_OPTIONS
   delete env.NODE_PATH
-  return {
+  const merged = {
     ...env,
     CI: '1',
     VIDEOBOOK_HOME: join(runtimeRoot, 'home'),
@@ -129,6 +136,15 @@ function isolatedEnvironment(extra = {}) {
     npm_config_userconfig: join(runtimeRoot, 'npmrc'),
     ...extra,
   }
+  return Object.hasOwn(extra, 'PATH') ? withPath(merged, extra.PATH) : merged
+}
+
+function withPath(env, pathValue) {
+  const next = { ...env, PATH: pathValue }
+  for (const key of Object.keys(next)) {
+    if (key !== 'PATH' && key.toLowerCase() === 'path') delete next[key]
+  }
+  return next
 }
 
 function run(command, args, cwd, env = isolatedEnvironment()) {
@@ -477,7 +493,7 @@ async function verifyYtdlpFallback(packageDir, env, label) {
   await mkdir(binDir, { recursive: true })
   if (WINDOWS) await copyFile(real, join(binDir, 'yt-dlp.exe'))
   else await symlink(real, join(binDir, 'yt-dlp'))
-  const onPath = await doctorYtdlpCheck(packageDir, { ...env, PATH: `${env.PATH}${delimiter}${binDir}` })
+  const onPath = await doctorYtdlpCheck(packageDir, withPath(env, `${env.PATH}${delimiter}${binDir}`))
   expect(onPath?.status === 'ok' && onPath.detail.endsWith('(from PATH)'), `${label}: yt-dlp on PATH was not used: ${JSON.stringify(onPath)}`)
   const override = await doctorYtdlpCheck(packageDir, { ...env, VIDEOBOOK_YTDLP_PATH: real })
   expect(override?.status === 'ok' && override.detail === `${real} (VIDEOBOOK_YTDLP_PATH)`, `${label}: VIDEOBOOK_YTDLP_PATH was not used: ${JSON.stringify(override)}`)
