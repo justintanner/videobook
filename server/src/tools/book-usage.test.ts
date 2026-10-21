@@ -103,6 +103,14 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.recent()[0]?.model).toBe("alibaba/qwen-image-3/edit");
   });
 
+  it("excludes fal uploads and request control calls from spend", async () => {
+    const transport = providerUsageFetch("fal");
+    for (const path of ["/storage/upload/initiate", "/minimax/h3-max/requests/fal-one/cancel"]) {
+      await scoped(() => transport(`${url}${path}`, { method: "POST", body: "{}" }));
+    }
+    expect(engine.usage.recent()).toEqual([]);
+  });
+
   it("settles xAI video and Alibaba media through their own task polling shapes", async () => {
     const xai = providerUsageFetch("xai");
     reply = { request_id: "xai-video" };

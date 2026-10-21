@@ -36,10 +36,20 @@ async function replaceAudioMeta(engine: Engine, ref: string | undefined): Promis
   return { replaceAudioWith: { assetId: input.assetId, filename: input.filename } };
 }
 
-async function costHints(engine: Engine, refs: ResolvedRefs, job: GenerateMediaJob): Promise<CostHints> {
-  if (refs.sourceVideoIds.length === 0) return {};
-  const seconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
-  return seconds === undefined ? {} : { inputDurationSeconds: seconds, ...(isSeedanceEdit(job.model, job.mode) ? { durationSeconds: seconds } : {}) };
+export async function generationSourceCostHints(engine: Engine, refs: ResolvedRefs, job: Pick<GenerateMediaJob, "model" | "mode">): Promise<CostHints> {
+  const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
+  if (videoSeconds !== undefined) {
+    return { inputDurationSeconds: videoSeconds, ...(isSeedanceEdit(job.model, job.mode) ? { durationSeconds: videoSeconds } : {}) };
+  }
+  if (resolveModel(job.model).provider !== "fal") return {};
+  for (const assetId of refs.sourceAudioIds) {
+    const metadata = await engine.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
+    const seconds = metadata.ok ? metadata.value.duration : undefined;
+    if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+      return { inputDurationSeconds: seconds };
+    }
+  }
+  return {};
 }
 
 function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: ResolvedRefs): Record<string, unknown> {
@@ -77,7 +87,7 @@ export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ct
     assetId: job.assetId,
     assetDir: job.assetDir,
     meta,
-    costHints: await costHints(engine, refs, job),
+    costHints: await generationSourceCostHints(engine, refs, job),
   });
   if (result.kind === "done") {
     await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs });

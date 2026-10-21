@@ -3,6 +3,7 @@ import { requireApiKey } from "../../api-key.js";
 import { uploadAssetToFal } from "../../jobs/_fal-upload.js";
 import { describeFalError } from "../../jobs/_fal-shared.js";
 import { withProviderHandoff } from "../../jobs/_lease.js";
+import { generationCostHints } from "../cost.js";
 import { providerEndpoints } from "../endpoints.js";
 import { writePendingTask } from "./pending.js";
 import { MEDIA_TASK_TYPES, type ProviderAdapter, type SubmitContext, type SubmitResult } from "./types.js";
@@ -31,6 +32,11 @@ async function submitQueued(request: Record<string, unknown>, context: SubmitCon
 }
 
 async function submit(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult> {
+  const hints = generationCostHints(request, context.costHints);
+  if (Object.keys(hints).length > 0) {
+    const written = await context.engine.metadata.artifacts.write(context.assetId, "generation-cost-hints", hints);
+    if (!written.ok) throw new Error(written.error.message);
+  }
   const taskId = await withProviderHandoff(context.engine, context.assetId, context.ctx, "generate", async (ownerId) => {
     const id = await submitQueued(request, context, ownerId);
     return { taskId: id, result: id };

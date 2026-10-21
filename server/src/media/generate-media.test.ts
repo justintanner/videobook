@@ -11,7 +11,11 @@ import { createEngineForTest } from "../engine.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, waitForJob, type JobHandlerContext, type LeaseToken } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { pollPendingProviderTasks } from "../tools/reconcile-project-work.js";
-import { runGenerateMedia, type GenerateMediaJob } from "../jobs/generate-media.js";
+import { generationSourceCostHints, runGenerateMedia, type GenerateMediaJob } from "../jobs/generate-media.js";
+import { withBookContext } from "../book-context.js";
+import { falAdapter } from "./adapters/fal.js";
+import { resolveModel } from "./descriptor.js";
+import { buildWireRequest } from "./request.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 
 type RecordedRequest = { method: string; path: string; body: Buffer };
@@ -73,6 +77,7 @@ describe("generic media generation", () => {
         data: { taskId: "kie-task-1", state: "success", resultJson: JSON.stringify({ resultUrls: [`${baseURL}/files/out.png`] }) },
       });
     }
+    if (path === "/minimax/h3-max/relight" || path === "/pixverse/music-video/vibemv") return sendJson(response, { request_id: "fal-duration", status: "IN_QUEUE" });
     if (path === "/bytedance/seedream/v5/flash/text-to-image") return sendJson(response, { request_id: "fal-1", status: "IN_QUEUE" });
     if (path === "/bytedance/seedream/requests/fal-1/status") return sendJson(response, { status: "COMPLETED" });
     if (path === "/bytedance/seedream/requests/fal-1") return sendJson(response, { images: [{ url: `${baseURL}/files/out.png` }] });
@@ -255,6 +260,54 @@ describe("generic media generation", () => {
     await completePending();
     const manifest = await engine.files.manifest(assetId);
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");
+  });
+
+  it.each([
+    { id: "fal:minimax/h3-max/relight", kind: "video" as const, duration: 6 },
+    { id: "fal:pixverse/music-video/vibemv", kind: "audio" as const, duration: 12 },
+  ])("prices $id usage from persisted source duration hints", async ({ id, kind, duration }) => {
+    const source = await engine.artifacts.create(kind, "priced source");
+    const output = await engine.artifacts.create("video", "priced output");
+    if (!source.ok || !output.ok) throw new Error("Could not create usage fixtures");
+    expect((await engine.metadata.artifacts.write(source.value.artifactId, "original", { duration })).ok).toBe(true);
+    const refs = {
+      urls: { [kind]: [`${baseURL}/source.${kind === "video" ? "mp4" : "mp3"}`], image: [`${baseURL}/files/out.png`] },
+      sourceImageIds: [],
+      sourceVideoIds: kind === "video" ? [source.value.artifactId] : [],
+      sourceAudioIds: kind === "audio" ? [source.value.artifactId] : [],
+    };
+    const model = resolveModel(id);
+    const built = buildWireRequest(model, { refUrls: refs.urls, options: {} });
+    if (!built.ok) throw new Error(built.error);
+    const hints = await generationSourceCostHints(engine, refs, { model: id });
+    expect(hints).toEqual({ inputDurationSeconds: duration });
+    const assetId = output.value.artifactId;
+    const bookId = engine.book.get().bookId;
+    const ctx = await ownerContext(assetId);
+    await withBookContext({ engine, bookId, artifactId: assetId, operation: "generate_media" }, () =>
+      falAdapter.submit(built.request, {
+        engine, bookId, assetId, assetDir: "", ctx, model, meta: {}, costHints: hints,
+      }));
+    const persisted = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(persisted.ok && persisted.value).toEqual({ inputDurationSeconds: duration, durationSeconds: duration });
+    const usage = engine.usage.recent(10).find(entry => entry.artifactId === assetId);
+    expect(usage).toMatchObject({ provider: "fal", model: model.apiId, basis: "estimated", status: "pending", warnings: [] });
+    expect(usage?.costUsd).toBeGreaterThan(0);
+    expect(usage?.units).toBe(duration);
+  });
+
+  it("keeps audio duration fallback out of Kie paygate hints", async () => {
+    const source = await engine.artifacts.create("audio", "source song");
+    if (!source.ok) throw new Error(source.error.message);
+    expect((await engine.metadata.artifacts.write(source.value.artifactId, "original", { duration: 12 })).ok).toBe(true);
+    const refs = { urls: {}, sourceImageIds: [], sourceVideoIds: [] as string[], sourceAudioIds: [source.value.artifactId] };
+    expect(await generationSourceCostHints(engine, refs, { model: "kie:bytedance/seedance-2-5" })).toEqual({});
+    const video = await probedVideoArtifact(shortClip);
+    refs.sourceVideoIds.push(video);
+    expect(await generationSourceCostHints(engine, refs, { model: "kie:bytedance/seedance-2-5" }))
+      .toEqual({ inputDurationSeconds: 6 });
+    expect(await generationSourceCostHints(engine, refs, { model: "kie:bytedance/seedance-2-5", mode: "v2v" }))
+      .toEqual({ inputDurationSeconds: 6, durationSeconds: 6 });
   });
 
   it("writes synchronous ElevenLabs audio straight into the artifact", async () => {

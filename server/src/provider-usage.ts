@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
+import { modelEntry } from "./media/catalog.js";
 import { currentBookContext } from "./book-context.js";
 
 function installedPackageVersion(name: string): string {
@@ -118,7 +119,8 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
   if (method !== "POST") return false;
   if (provider === "openai" || provider === "xai") return /\/(responses|chat\/completions|images\/(generations|edits)|videos\/(generations|edits|extensions)|audio\/(speech|transcriptions|translations)|embeddings|tts|stt)$/u.test(path);
   if (provider === "kie") return /\/(createTask|veo\/(generate|extend))$/u.test(path);
-  if (provider === "fal") return /^\/(fal-ai|alibaba)\//u.test(path) && !/\/requests\//u.test(path);
+  if (provider === "fal") return !/\/requests\//u.test(path)
+    && (/^\/(fal-ai|alibaba)\//u.test(path) || modelEntry(`fal:${path.slice(1)}`) !== undefined);
   if (provider === "alibaba") return path.includes("/services/aigc/");
   if (provider === "elevenlabs") return /\/(text-to-speech|speech-to-text|speech-to-speech|sound-generation|audio-isolation|music)(\/|$)/u.test(path);
   return /\/(videos|images)(\/|$)/u.test(path);
