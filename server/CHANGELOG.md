@@ -6,13 +6,30 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-21
+
+### Added
+
+- Fal FLUX 3 Max text-to-video, image-to-video, and keyframes-to-video,
+  with generated audio and resolution-tiered per-second cost estimates.
+- Bria Fibo 2 text-to-image with structured VGL prompts, and Fibo 2 Edit
+  for one to four reference images, including the image editor.
+- H3 Max Reframe Video, which outpaints a source video to a target aspect
+  ratio at 480p, 768p, or 1080p while keeping its audio and timing.
+  Priced from fal's historical average because the request does not fix
+  the billed duration.
+
 ### Changed
 
+- Upgrade all application `@apicity/*` dependencies to 0.16.3.
 - Windows x64 is supported. The release check runs the pack-and-install
   smoke on Windows and blocks the release when it fails. Stopping
   `videobook serve` from another process still ends it without a clean
   shutdown, because Windows has no SIGTERM, and the next start replaces
   the lock file.
+- Dynamic fal requests are priced from fal's historical average when
+  `FAL_ADMIN_API_KEY` is set. Without the key, and for the two Seedance
+  formula gaps, the estimate stays at the local $0.
 
 ## [0.2.2] - 2026-10-21
 

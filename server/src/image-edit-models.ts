@@ -36,6 +36,7 @@ const EDIT_MODELS: ReadonlyArray<{ catalogModel: string; label: string }> = [
   { catalogModel: "fal:fal-ai/nano-banana-2/edit", label: "Nano Banana 2" },
   { catalogModel: "fal:alibaba/qwen-image-3/edit", label: "Qwen 3.0 Edit" },
   { catalogModel: "fal:fal-ai/wan/v2.7/edit", label: "Wan 2.7 Edit" },
+  { catalogModel: "fal:bria/fibo-2/edit", label: "Fibo 2 Edit" },
 ];
 
 function imageSlotMax(model: ResolvedModel): number | null {

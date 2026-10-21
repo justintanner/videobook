@@ -19,6 +19,7 @@ const DYNAMIC_MODELS = [
   "fal:fal-ai/kandinsky6-vsr/lite",
   "fal:mirelo-ai/sfx2.0/video-to-video",
   "fal:bytedance/seedance-2.5/us/image-to-video",
+  "fal:minimax/h3-max/reframe-video",
 ] as const;
 
 const FORMULA_GAPS = [

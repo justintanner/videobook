@@ -1,4 +1,4 @@
-import { arrayBounds, arrayItems, isArraySchema, isUrlObject, propertyAt, type JsonSchema } from "./json-schema.js";
+import { arrayBounds, arrayItems, isArraySchema, isKeyframeItem, isUrlObject, propertyAt, type JsonSchema } from "./json-schema.js";
 import type { ModelEntry, RefRole, SlotField, SlotSpec } from "./types.js";
 
 const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
@@ -64,12 +64,14 @@ function expandField(input: JsonSchema, field: string): ExpandedField[] {
   const required = isRequired(input, field);
   if (isArraySchema(schema)) {
     const bounds = arrayBounds(schema);
+    const items = arrayItems(schema);
     return [{
       path: field,
       multi: true,
       max: bounds.max,
       min: required ? Math.max(1, bounds.min) : 0,
-      urlObject: isUrlObject(arrayItems(schema)),
+      urlObject: isUrlObject(items),
+      ...(isKeyframeItem(items) ? { keyframe: true } : {}),
     }];
   }
   return [{ path: field, multi: false, max: 1, min: required ? 1 : 0, urlObject: isUrlObject(schema) }];
@@ -90,7 +92,13 @@ export function resolveSlot(role: RefRole, input: JsonSchema, entry: ModelEntry)
     if (!fieldPresent(input, name)) throw new Error(`${entry.id}: ref field ${name} for ${role} is not in the apicity schema`);
   }
   const expanded = names.flatMap((name) => expandField(input, name));
-  const fields: SlotField[] = expanded.map(({ path, multi, max, urlObject }) => ({ path, multi, max, urlObject }));
+  const fields: SlotField[] = expanded.map(({ path, multi, max, urlObject, keyframe }) => ({
+    path,
+    multi,
+    max,
+    urlObject,
+    ...(keyframe ? { keyframe: true } : {}),
+  }));
   const max = expanded.some((field) => field.max === null)
     ? null
     : expanded.reduce((sum, field) => sum + (field.max ?? 0), 0);

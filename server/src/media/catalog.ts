@@ -12,6 +12,14 @@ const FRAME_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
 ];
 
+const FLUX_3_MAX_DEFAULTS: Record<string, unknown> = {
+  aspect_ratio: "auto",
+  duration: 5,
+  generate_audio: true,
+  resolution: "720p",
+  reasoning_level: "high",
+};
+
 const SEEDANCE_US_REFERENCE_MODES: readonly ModeSpec[] = [
   { id: "r2v", label: "References", roles: ["image", "video", "audio"], requireAny: ["image", "video", "audio"] },
   { id: "v2v", label: "Edit video", roles: ["video", "image", "audio"], requireAny: ["video"], defaults: { task: "editing" } },
@@ -121,6 +129,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:ideogram/v4.5/edit", media: "image", operations: ["edit_image"], refs: { image: ["image_url", "reference_image_urls"] } },
   { id: "fal:blackforestlabs/flux-3/text-to-image", media: "image", operations: ["text_to_image"] },
   { id: "fal:blackforestlabs/flux-3/edit-image", media: "image", operations: ["edit_image"] },
+  { id: "fal:bria/fibo-2/generate", media: "image", operations: ["text_to_image"] },
+  { id: "fal:bria/fibo-2/edit", media: "image", operations: ["edit_image"], prompt: "instruction" },
   { id: "fal:fal-ai/flux-2-flex", media: "image", operations: ["text_to_image"] },
   { id: "fal:bria/guided-remove-background", media: "image", operations: ["edit_image"] },
   { id: "fal:bria/fibo-edit-1.5/expand", media: "image", operations: ["edit_image"] },
@@ -184,6 +194,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:alibaba/wan-3.0-prime/text-to-video", media: "video", operations: ["text_to_video"], hidden: true },
   { id: "fal:alibaba/wan-3.0-prime/image-to-video", media: "video", operations: ["image_to_video"], hidden: true },
   { id: "fal:alibaba/wan-3.0-prime/reference-to-video", media: "video", operations: ["reference_to_video"], hidden: true },
+  { id: "fal:blackforestlabs/flux-3-max/text-to-video", media: "video", operations: ["text_to_video"], title: "FLUX 3 Max", defaults: FLUX_3_MAX_DEFAULTS },
+  { id: "fal:blackforestlabs/flux-3-max/image-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Image", refs: { first_frame: "image_url" }, modes: FRAME_MODES, defaults: FLUX_3_MAX_DEFAULTS },
+  { id: "fal:blackforestlabs/flux-3-max/keyframes-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Keyframes", refs: { image: "keyframes" }, keyframeFps: 24, defaults: FLUX_3_MAX_DEFAULTS },
+  { id: "fal:minimax/h3-max/reframe-video", media: "video", operations: ["edit_video"] },
   { id: "fal:minimax/h3-max/insert-video", media: "video", operations: ["edit_video"], refs: { video: ["video_url", "reference_video_urls"] } },
   { id: "fal:minimax/h3-max/recast", media: "video", operations: ["edit_video"] },
   { id: "fal:minimax/h3-max-turbo/extend-video", media: "video", operations: ["extend_video"] },

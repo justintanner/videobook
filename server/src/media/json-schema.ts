@@ -60,6 +60,13 @@ export function isUrlObject(schema: JsonSchema | undefined): boolean {
   return branches(schema).some((branch) => branch.type === "object" && branch.properties?.url !== undefined);
 }
 
+export function isKeyframeItem(schema: JsonSchema | undefined): boolean {
+  if (!schema) return false;
+  return branches(schema).some((branch) => branch.type === "object"
+    && branch.properties?.image_url !== undefined
+    && branch.properties?.frame_index !== undefined);
+}
+
 export function isArraySchema(schema: JsonSchema): boolean {
   return branches(schema).some((branch) => branch.type === "array");
 }

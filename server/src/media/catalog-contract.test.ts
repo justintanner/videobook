@@ -206,6 +206,111 @@ describe("media request building", () => {
     expect(built).toMatchObject({ ok: true, request: { input: { duration: 13 } } });
   });
 
+  it("wires the fal 0.16.3 models and prices them from the cost rows", async () => {
+    const text = resolveModel("fal:blackforestlabs/flux-3-max/text-to-video");
+    const image = resolveModel("fal:blackforestlabs/flux-3-max/image-to-video");
+    const keyframes = resolveModel("fal:blackforestlabs/flux-3-max/keyframes-to-video");
+    const fibo = resolveModel("fal:bria/fibo-2/generate");
+    const fiboEdit = resolveModel("fal:bria/fibo-2/edit");
+    const reframe = resolveModel("fal:minimax/h3-max/reframe-video");
+
+    expect(text.options.map((option) => option.name)).toEqual(expect.arrayContaining(["generate_audio", "duration", "resolution"]));
+    expect(text.slots.map((slot) => slot.role)).toEqual([]);
+    expect(image.slots.map((slot) => slot.role)).toEqual(["first_frame", "last_frame"]);
+    expect(keyframes.slots.find((slot) => slot.role === "image")).toMatchObject({ min: 1, max: 10 });
+    expect(fiboEdit.slots.find((slot) => slot.role === "image")).toMatchObject({ min: 1, max: 4 });
+    expect(fibo.promptField).toBe("prompt");
+    expect(fiboEdit.promptField).toBe("instruction");
+    expect(reframe.entry.operations).toEqual(["edit_video"]);
+    expect(reframe.slots.find((slot) => slot.role === "video")).toMatchObject({ min: 1, max: 1 });
+
+    expect(buildWireRequest(text, { prompt: "a red fox" })).toMatchObject({
+      ok: true,
+      request: { prompt: "a red fox", duration: 5, resolution: "720p", generate_audio: true, aspect_ratio: "auto", reasoning_level: "high" },
+    });
+    expect(buildWireRequest(image, {
+      prompt: "a red fox",
+      refUrls: { first_frame: ["https://example.com/start.png"], last_frame: ["https://example.com/end.png"] },
+    })).toMatchObject({
+      ok: true,
+      request: { image_url: "https://example.com/start.png", end_image_url: "https://example.com/end.png", generate_audio: true },
+    });
+    expect(buildWireRequest(keyframes, {
+      prompt: "a red fox",
+      refUrls: { image: ["https://example.com/a.png", "https://example.com/b.png"] },
+    })).toMatchObject({
+      ok: true,
+      request: {
+        keyframes: [
+          { image_url: "https://example.com/a.png", frame_index: 0 },
+          { image_url: "https://example.com/b.png", frame_index: 120 },
+        ],
+      },
+    });
+    expect(buildWireRequest(keyframes, {
+      prompt: "a red fox",
+      refUrls: { image: ["https://example.com/a.png", "https://example.com/b.png", "https://example.com/c.png"] },
+      options: { duration: 10 },
+    })).toMatchObject({
+      ok: true,
+      request: {
+        duration: 10,
+        keyframes: [
+          { image_url: "https://example.com/a.png", frame_index: 0 },
+          { image_url: "https://example.com/b.png", frame_index: 120 },
+          { image_url: "https://example.com/c.png", frame_index: 240 },
+        ],
+      },
+    });
+    const structured = buildWireRequest(fibo, {
+      prompt: "a red fox",
+      options: { vgl: { short_description: "a red fox in snow", objects: [] } },
+    });
+    expect(structured).toMatchObject({
+      ok: true,
+      request: { prompt: "a red fox", vgl: { short_description: "a red fox in snow" } },
+    });
+    expect(buildWireRequest(fiboEdit, {
+      prompt: "make the sky orange",
+      refUrls: { image: ["https://example.com/a.png", "https://example.com/b.png", "https://example.com/c.png", "https://example.com/d.png"] },
+    })).toMatchObject({
+      ok: true,
+      request: { instruction: "make the sky orange", image_urls: [
+        "https://example.com/a.png",
+        "https://example.com/b.png",
+        "https://example.com/c.png",
+        "https://example.com/d.png",
+      ] },
+    });
+    expect(buildWireRequest(fiboEdit, {
+      prompt: "too many",
+      refUrls: { image: Array.from({ length: 5 }, (_, index) => `https://example.com/${index}.png`) },
+    })).toMatchObject({ ok: false, error: expect.stringContaining("at most 4") });
+    expect(buildWireRequest(reframe, {
+      prompt: "extend the room",
+      refUrls: { video: ["https://example.com/clip.mp4"] },
+      options: { aspect_ratio: "9:16", resolution: "480p" },
+    })).toMatchObject({
+      ok: true,
+      request: { prompt: "extend the room", video_url: "https://example.com/clip.mp4", aspect_ratio: "9:16", resolution: "480p" },
+    });
+
+    const textCost = await estimateGeneration(text, { prompt: "a red fox" });
+    const hdCost = await estimateGeneration(text, { prompt: "a red fox", options: { duration: 10, resolution: "1080p" } });
+    const silent = await estimateGeneration(text, { prompt: "a red fox", options: { generate_audio: false } });
+    const fiboCost = await estimateGeneration(fibo, { prompt: "a red fox" });
+    const editCost = await estimateGeneration(fiboEdit, {
+      prompt: "make the sky orange",
+      refUrls: { image: ["https://example.com/a.png"] },
+    });
+    expect(textCost.ok && hdCost.ok && silent.ok && fiboCost.ok && editCost.ok).toBe(true);
+    if (textCost.ok) expect(textCost.estimate.usd).toBeCloseTo(0.2125);
+    if (hdCost.ok) expect(hdCost.estimate.usd).toBeCloseTo(0.725);
+    if (silent.ok) expect(silent.estimate.usd).toBeCloseTo(0.2125);
+    if (fiboCost.ok) expect(fiboCost.estimate.usd).toBeCloseTo(0.04);
+    if (editCost.ok) expect(editCost.estimate.usd).toBeCloseTo(0.04);
+  });
+
   it("names unknown models", () => {
     expect(() => resolveModel("kie:not-a-model")).toThrow(UnknownModelError);
     expect(() => resolveModel("generate_kie_seedance_2_5_video")).toThrow(/list_generation_models/);

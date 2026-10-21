@@ -1628,11 +1628,17 @@ describe("image subject tools", () => {
           book_id: bookId, notebook_id: source.notebookId, cell_id: parsed.producer_cell_id,
         } });
         expect(preview.isError, JSON.stringify(preview.content)).not.toBe(true);
-        expect(resultJson(preview)).toMatchObject({
+        const previewBody = resultJson(preview) as {
+          provider: string;
+          model: string;
+          payload: { input: Record<string, unknown> };
+        };
+        expect(previewBody).toMatchObject({
           provider: entry.provider,
           model: entry.id,
-          payload: { input: { prompt: expect.stringContaining("Modify only these selected subjects") } },
         });
+        const submittedText = previewBody.payload.input.prompt ?? previewBody.payload.input.instruction;
+        expect(submittedText).toEqual(expect.stringContaining("Modify only these selected subjects"));
       } finally {
         if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
         else delete process.env.KIE_API_KEY;
@@ -1855,9 +1861,12 @@ describe("image subject tools", () => {
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(10);
+      expect(catalog.models).toHaveLength(11);
       expect(catalog.models.find((model) => model.id === "flux-3/klein-edit-image")).toMatchObject({
         label: "FLUX 3 Klein Edit", provider: "kie", available: true, max_input_images: 10,
+      });
+      expect(catalog.models.find((model) => model.id === "bria/fibo-2/edit")).toMatchObject({
+        label: "Fibo 2 Edit", provider: "fal", available: false, max_input_images: 4,
       });
       expect(catalog.models[0]).toMatchObject({
         id: "nano-banana-2-1",

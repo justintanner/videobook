@@ -9,6 +9,7 @@ import {
 } from "@apicity/kie/zod";
 import {
   FalAlibabaQwenImage3EditRequestSchema,
+  FalBriaFibo2EditRequestSchema,
   FalNanoBanana2EditRequestSchema,
   FalNanoBananaProEditRequestSchema,
   FalWanV2p7EditRequestSchema,
@@ -42,6 +43,8 @@ function imageFieldFor(entryId: string): { safeParse(value: unknown): { success:
       return FalAlibabaQwenImage3EditRequestSchema.shape.image_urls;
     case "fal-ai/wan/v2.7/edit":
       return FalWanV2p7EditRequestSchema.shape.image_urls;
+    case "bria/fibo-2/edit":
+      return FalBriaFibo2EditRequestSchema.shape.image_urls;
     default:
       return null;
   }

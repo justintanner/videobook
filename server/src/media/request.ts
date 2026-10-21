@@ -29,6 +29,15 @@ function childContainer(current: Container, key: string, nextIsIndex: boolean): 
   return created;
 }
 
+function getPath(target: Record<string, unknown>, path: string): unknown {
+  let current: unknown = target;
+  for (const segment of path.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
 function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
   const segments = path.split(".");
   let current: Container = target;
@@ -81,11 +90,48 @@ function refValue(field: SlotField, url: string, item: Record<string, unknown> |
   return field.urlObject ? { ...item, url } : url;
 }
 
+function keyframeIndexes(count: number, lastFrame: number): number[] {
+  if (count <= 1) return [0];
+  return Array.from({ length: count }, (_, index) => Math.round((index * lastFrame) / (count - 1)));
+}
+
+function retimeKeyframeField(model: ResolvedModel, value: Record<string, unknown>, field: SlotField): void {
+  const fps = model.entry.keyframeFps;
+  if (!fps) return;
+  const current = getPath(value, field.path);
+  if (!Array.isArray(current) || current.length === 0) return;
+  const duration = typeof value.duration === "number" && Number.isFinite(value.duration) && value.duration > 0
+    ? value.duration
+    : 5;
+  const indexes = keyframeIndexes(current.length, Math.round(duration * fps));
+  setPath(value, field.path, current.map((frame, index) => {
+    const imageUrl = typeof frame === "object" && frame !== null && "image_url" in frame
+      ? (frame as { image_url: unknown }).image_url
+      : frame;
+    return { image_url: imageUrl, frame_index: indexes[index] };
+  }));
+}
+
+function retimeKeyframes(model: ResolvedModel, value: Record<string, unknown>): void {
+  if (!model.entry.keyframeFps) return;
+  for (const slot of model.slots) {
+    for (const field of slot.fields) {
+      if (field.keyframe) retimeKeyframeField(model, value, field);
+    }
+  }
+}
+
 function placeSlot(model: ResolvedModel, slot: SlotSpec, value: Record<string, unknown>, urls: readonly string[]): void {
   const item = model.entry.refItem?.[slot.role];
   let cursor = 0;
   for (const field of slot.fields) {
     if (cursor >= urls.length) return;
+    if (field.keyframe) {
+      const taken = field.max === null ? urls.slice(cursor) : urls.slice(cursor, cursor + field.max);
+      setPath(value, field.path, taken.map((url) => ({ image_url: url, frame_index: 0 })));
+      cursor += taken.length;
+      continue;
+    }
     if (!field.multi) {
       setPath(value, field.path, refValue(field, urls[cursor]!, item));
       cursor += 1;
@@ -184,6 +230,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   const optionError = applyOptions(model, value, call.options ?? {});
   if (optionError) return { ok: false, error: optionError };
   applyFrameOptions(model, value, refs, call.mode);
+  retimeKeyframes(model, value);
   if (isSeedanceEdit(model.id, call.mode)) {
     value.aspect_ratio = "adaptive";
     value.duration = -1;

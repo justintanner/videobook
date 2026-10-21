@@ -82,6 +82,7 @@ export interface ModelEntry {
   refs?: Partial<Record<RefRole, string | readonly string[] | null>>;
   aliases?: Record<string, string>;
   defaults?: Record<string, unknown>;
+  keyframeFps?: number;
   refItem?: Partial<Record<RefRole, Record<string, unknown>>>;
   dialect?: PromptDialect;
   guide?: PromptGuide;
@@ -109,6 +110,7 @@ export interface SlotField {
   multi: boolean;
   max: number | null;
   urlObject: boolean;
+  keyframe?: boolean;
 }
 
 export interface SlotSpec {

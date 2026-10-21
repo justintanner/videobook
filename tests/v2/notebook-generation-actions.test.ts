@@ -288,6 +288,38 @@ describe('notebook generation actions', () => {
     })
   })
 
+  it('offers the fal 0.16.3 models for the inputs they accept', () => {
+    const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
+    const models = (
+      type: 'generate_image' | 'generate_video',
+      inputs: Array<{ kind: 'image' | 'video'; target: string }>,
+    ) => compatibleGenerationActions(catalog, type, inputs).map((action) => action.model)
+
+    expect(models('generate_video', [])).toContain('fal:blackforestlabs/flux-3-max/text-to-video')
+    expect(models('generate_video', [])).not.toContain('fal:blackforestlabs/flux-3-max/image-to-video')
+    expect(models('generate_video', [{ kind: 'image', target: 'image' }])).toContain(
+      'fal:blackforestlabs/flux-3-max/keyframes-to-video',
+    )
+    expect(models('generate_video', [{ kind: 'image', target: 'first_frame' }])).toContain(
+      'fal:blackforestlabs/flux-3-max/image-to-video',
+    )
+    expect(models('generate_video', [
+      { kind: 'image', target: 'first_frame' },
+      { kind: 'image', target: 'last_frame' },
+    ])).toContain('fal:blackforestlabs/flux-3-max/image-to-video')
+    expect(models('generate_video', [{ kind: 'video', target: 'video' }])).toContain(
+      'fal:minimax/h3-max/reframe-video',
+    )
+    expect(models('generate_image', [])).toContain('fal:bria/fibo-2/generate')
+    expect(models('generate_image', [{ kind: 'image', target: 'image' }])).toEqual(
+      expect.arrayContaining(['fal:bria/fibo-2/generate', 'fal:bria/fibo-2/edit']),
+    )
+    expect(catalog.find((action) => action.id === 'image-edit.bria/fibo-2/edit')).toMatchObject({
+      title: 'Fibo 2 Edit',
+      provider: 'fal',
+    })
+  })
+
   it('resolves saved edit models without offering workflow edits on new generation cells', () => {
     const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
     const selection = {
