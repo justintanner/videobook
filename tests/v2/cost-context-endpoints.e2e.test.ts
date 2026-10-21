@@ -30,11 +30,11 @@ function sourceRefs(item: SourceCase, ref: string): MediaRefs {
   return { ...item.refs, [item.source]: [ref] }
 }
 
-function expectedUsd(item: SourceCase, hints: CostHints): number {
+async function expectedUsd(item: SourceCase, hints: CostHints): Promise<number> {
   const model = tryResolveModel(item.model)
   if (!model) throw new Error(`Unknown model ${item.model}`)
   const placeholder = item.source === 'video' ? VIDEO_URL : AUDIO_URL
-  const result = estimateGeneration(model, { prompt: item.prompt, refUrls: sourceRefs(item, placeholder), options: item.options }, hints)
+  const result = await estimateGeneration(model, { prompt: item.prompt, refUrls: sourceRefs(item, placeholder), options: item.options }, hints)
   if (!result.ok) throw new Error(result.error)
   return result.estimate.usd
 }
@@ -90,7 +90,7 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
   it('resolves each source in its own book within a mixed batch', async () => {
     const calls = fixtures.map((fixture) => ({ tool_name: 'generate_video', input: sourceInput(MOTION, fixture) }))
     const actual = await callTool<EstimateResult>(client, 'estimate_cost', { calls })
-    const expected = fixtures.map((fixture) => expectedUsd(MOTION, { inputDurationSeconds: fixture.duration }))
+    const expected = await Promise.all(fixtures.map((fixture) => expectedUsd(MOTION, { inputDurationSeconds: fixture.duration })))
     expect(actual.per_call.map((call) => call.estimate.usd)).toEqual(expected)
     expect(new Set(expected).size).toBe(fixtures.length)
     expect(actual.estimate.usd).toBeCloseTo(expected.reduce((sum, usd) => sum + usd, 0), 8)
@@ -101,7 +101,7 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
       const actual = await estimate(sourceInput(item, fixture))
       expect(actual.estimate.warnings).toEqual([])
       expect(actual.estimate.usd).toBeGreaterThan(0)
-      expect(actual.estimate.usd).toBeCloseTo(expectedUsd(item, { inputDurationSeconds: fixture.duration }), 8)
+      expect(actual.estimate.usd).toBeCloseTo(await expectedUsd(item, { inputDurationSeconds: fixture.duration }), 8)
     }
   })
 
@@ -109,8 +109,8 @@ describe('source-dependent cost endpoints over HTTP MCP', () => {
     const first = fixtures[0]!
     const second = fixtures[1]!
     const foreign = await estimate(sourceInput(MOTION, second, first.bookId))
-    expect(foreign.estimate.usd).toBe(expectedUsd(MOTION, {}))
-    expect(foreign.estimate.usd).not.toBe(expectedUsd(MOTION, { inputDurationSeconds: second.duration }))
+    expect(foreign.estimate.usd).toBe(await expectedUsd(MOTION, {}))
+    expect(foreign.estimate.usd).not.toBe(await expectedUsd(MOTION, { inputDurationSeconds: second.duration }))
     const unknown = await client.callTool({ name: 'estimate_cost', arguments: { calls: [{ tool_name: 'generate_video', input: sourceInput(MOTION, second, '00000000-0000-7000-8000-000000000001') }] } })
     expect(unknown.isError).toBe(true)
   })

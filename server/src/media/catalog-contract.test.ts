@@ -83,10 +83,10 @@ describe("media catalog contract", () => {
     }
   });
 
-  it.each(MODEL_ENTRIES.map((entry) => [entry.id]))("%s has a cost estimate path", (id) => {
+  it.each(MODEL_ENTRIES.map((entry) => [entry.id]))("%s has a cost estimate path", async (id) => {
     const model = resolveModel(id);
     const mode = model.modes[0]!;
-    const result = estimateGeneration(model, {
+    const result = await estimateGeneration(model, {
       prompt: model.promptField ? "a red fox in snow" : undefined,
       refUrls: sampleRefs(model, mode),
       options: requiredOptions(model),
@@ -246,8 +246,8 @@ describe("Seedance 2.5 edit mode", () => {
     expect(resolveModel("kie:wan/3-0-video").modes.map((mode) => mode.id)).toEqual(["t2v", "i2v", "r2v"]);
   });
 
-  it("prices source-length output and input instead of the lightning default", () => {
-    const estimate = estimateGeneration(model, { prompt: "x", mode: "v2v", refUrls: refs }, { inputDurationSeconds: 8 });
+  it("prices source-length output and input instead of the lightning default", async () => {
+    const estimate = await estimateGeneration(model, { prompt: "x", mode: "v2v", refUrls: refs }, { inputDurationSeconds: 8 });
     expect(estimate).toMatchObject({ ok: true, estimate: { breakdown: { units: 16 }, warnings: [] } });
   });
 
@@ -282,8 +282,8 @@ describe("FLUX 3 Klein", () => {
       }
     });
 
-    it.each([["1K", 0.008], ["2K", 0.0125], ["4K", 0.0325]] as const)(`${id} prices %s per output image`, (resolution, usd) => {
-      const result = estimateGeneration(resolveModel(id), { prompt: "a fox", refUrls, options: { resolution, num_images: 4 } });
+    it.each([["1K", 0.008], ["2K", 0.0125], ["4K", 0.0325]] as const)(`${id} prices %s per output image`, async (resolution, usd) => {
+      const result = await estimateGeneration(resolveModel(id), { prompt: "a fox", refUrls, options: { resolution, num_images: 4 } });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.estimate.usd).toBeCloseTo(usd * 4);

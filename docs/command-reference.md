@@ -76,7 +76,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
 - `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
-- `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.
+- `estimate_cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.
 - `export_asset_file` — Hand an asset's original media file to macOS: copy it to Downloads, put it on the pasteboard as a file, or reveal its folder in Finder.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_transcript_srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.
@@ -324,7 +324,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/enqueue-sequence-export` — Queue a confirmed canonical sequence export after revalidating its exact revision; MCP: `enqueue_sequence_export`
 - `/ensure-notebook-workflow-scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists; MCP: `ensure_notebook_workflow_scaffold`
 - `/entities` — Open the reusable entity library; UI: `open_entities`
-- `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.; MCP: `estimate_cost`
+- `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_asset_file`
 - `/export-sequence` — Review and export the current sequence; preview or workspace operation

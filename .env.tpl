@@ -5,6 +5,7 @@ X_CLIENT_ID=op://Apicity/X_CLIENT_ID/password
 X_CLIENT_SECRET=op://Apicity/X_CLIENT_SECRET/password
 KIMI_CODING_API_KEY=op://Apicity/KIMI_CODING_API_KEY/password
 FAL_API_KEY=op://Apicity/FAL_API_KEY/password
+FAL_ADMIN_API_KEY=op://Apicity/FAL_ADMIN_API_KEY/password
 DASHSCOPE_API_KEY=op://Apicity/DASHSCOPE_API_KEY/password
 ELEVENLABS_API_KEY=op://Apicity/ELEVENLABS_API_KEY/password
 B2_ACCESS_KEY_ID=op://Apicity/B2_ACCESS_KEY_ID/password

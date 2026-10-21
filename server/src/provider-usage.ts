@@ -6,6 +6,7 @@ import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
+import { estimateFalRequest } from "./media/cost.js";
 import { currentBookContext } from "./book-context.js";
 
 function installedPackageVersion(name: string): string {
@@ -93,15 +94,28 @@ function tokenPrice(provider: Provider, model: string, tokens: ReturnType<typeof
   return { ...unknownPrice([]), costUsd: usd, basis: "estimated", rateSource: rate.source.url, unit: "tokens", units: tokens.inputTokens + tokens.outputTokens };
 }
 
-function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string, hints?: CostHints): Price {
+function historicalAverage(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
+}
+
+async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string, hints?: CostHints): Promise<Price> {
   try {
     const request: EstimateRequest = { provider, payload, ...(provider === "fal" ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
-    const estimate = cost.estimate(request);
-    if (estimate.warnings.length || estimate.source === "tokens-heuristic+table") return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
+    const estimate = provider === "fal"
+      ? await estimateFalRequest(endpoint, payload, hints)
+      : cost.estimate(request);
+    const historical = estimate.usd > 0 && historicalAverage(estimate.warnings);
+    if (!historical && (estimate.warnings.length || estimate.source === "tokens-heuristic+table")) {
+      return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
+    }
     return {
-      ...unknownPrice([]), costUsd: estimate.usd, basis: estimate.source === "free" ? "free" : "estimated",
-      rateSource: rateFor(provider, model)?.source.url ?? null, pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf}`,
-      units: estimate.breakdown.units ?? null, unit: estimate.breakdown.unit ?? null,
+      ...unknownPrice(historical ? estimate.warnings : []),
+      costUsd: estimate.usd,
+      basis: estimate.source === "free" ? "free" : "estimated",
+      rateSource: rateFor(provider, model)?.source.url ?? null,
+      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (historical ? "fal-historical" : PRICING_AS_OF)}`,
+      units: estimate.breakdown.units ?? null,
+      unit: estimate.breakdown.unit ?? null,
     };
   } catch { return unknownPrice(); }
 }
@@ -211,7 +225,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...priceRequest(provider, model, payload, endpoint, hints),
+        ...await priceRequest(provider, model, payload, endpoint, hints),
       };
       safeRecord(engine, entry);
     }

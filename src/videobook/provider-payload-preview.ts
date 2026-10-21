@@ -55,8 +55,13 @@ export function providerPayloadPreviewReferenceError(
 interface GenerationEstimate {
   usd: number | null
   currency: string
-  // The provider reported no usable price (dynamic pricing, missing adapter).
+  warnings: string[]
   unknown: boolean
+}
+
+export function historicalAverageEstimate(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) =>
+    warning.includes('historical average per call'))
 }
 
 export function generationEstimate(preview: unknown): GenerationEstimate {
@@ -65,10 +70,12 @@ export function generationEstimate(preview: unknown): GenerationEstimate {
     ? estimate.warnings.filter((warning): warning is string =>
         typeof warning === 'string')
     : []
+  const historical = historicalAverageEstimate(warnings)
   return {
     usd: typeof estimate?.usd === 'number' ? estimate.usd : null,
     currency: typeof estimate?.currency === 'string' ? estimate.currency : 'USD',
-    unknown: warnings.some((warning) =>
+    warnings,
+    unknown: !historical && warnings.some((warning) =>
       /not found|unavailable|no cost adapter|unknown/iu.test(warning)),
   }
 }

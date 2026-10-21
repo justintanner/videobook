@@ -252,6 +252,7 @@ import {
 } from '@/videobook/confirm-validation'
 import {
   generationEstimate,
+  historicalAverageEstimate,
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
 import {
@@ -1748,8 +1749,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? estimate.warnings.filter((value): value is string => typeof value === 'string')
           : []
         const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
-        if (usd === null || usd <= 0 || warnings.length > 0) return null
-        return `$${usd.toFixed(usd < 0.01 ? 4 : 2)}`
+        const historical = historicalAverageEstimate(warnings)
+        if (usd === null || usd <= 0 || (warnings.length > 0 && !historical)) return null
+        const amount = `$${usd.toFixed(usd < 0.01 ? 4 : 2)}`
+        return historical ? `${amount} · historical average` : amount
       } catch {
         return null
       }
@@ -9338,8 +9341,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const estimate = recordValue(result?.estimate)
       const warnings = Array.isArray(estimate?.warnings) ? estimate.warnings.filter((value): value is string => typeof value === 'string') : []
       const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
+      const historical = historicalAverageEstimate(warnings)
+      const priced = usd !== null && usd > 0 && (warnings.length === 0 || historical)
       return {
-        cost: warnings.length || usd === null ? 'Cost estimate unavailable' : `Estimated cost: $${usd.toFixed(4)}`,
+        cost: priced ? `Estimated cost: $${usd.toFixed(4)}` : 'Cost estimate unavailable',
         message: `This action may send your prompt and selected media to a generation provider and incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''} Confirm to start.`,
       }
     }

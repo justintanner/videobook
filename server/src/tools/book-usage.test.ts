@@ -8,6 +8,7 @@ import { createEngine } from "videobook-engine";
 import type { Engine } from "videobook-engine";
 import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js";
 import { withBookContext, scopedBookEngine } from "../book-context.js";
+import { installFalDynamicEstimator } from "../media/cost.js";
 import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage } from "../provider-usage.js";
 import { bookUsageDef } from "./book-usage.js";
 
@@ -101,6 +102,47 @@ describe("provider usage through real HTTP and engine storage", () => {
     await scoped(() => transport(`${url}/alibaba/qwen-image-3/requests/fal-alibaba`));
     expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 0, reportedUsd: 0.3, unpriced: 0 });
     expect(engine.usage.recent()[0]?.model).toBe("alibaba/qwen-image-3/edit");
+  });
+
+  it("records a historical fal average and keeps it when the queue result has no billable units", async () => {
+    const restore = installFalDynamicEstimator(async (request) => {
+      expect(request).toEqual({
+        estimate_type: "historical_api_price",
+        endpoints: { "fal-ai/flux-2-flex": { call_quantity: 1 } },
+      });
+      return { total_cost: 0.42, currency: "USD" };
+    });
+    try {
+      const transport = providerUsageFetch("fal");
+      reply = { request_id: "fal-flex", status: "IN_QUEUE" };
+      await scoped(() => transport(`${url}/fal-ai/flux-2-flex`, { method: "POST", body: JSON.stringify({ prompt: "a fox" }) }));
+      expect(engine.usage.recent()[0]).toMatchObject({
+        model: "fal-ai/flux-2-flex",
+        costUsd: 0.42,
+        basis: "estimated",
+        status: "pending",
+        pricingVersion: expect.stringContaining("fal-historical"),
+      });
+      expect(engine.usage.recent()[0]?.warnings.join(" ")).toContain("historical average per call");
+      expect(engine.usage.summary().totals.unpriced).toBe(0);
+      reply = { status: "COMPLETED", request_id: "fal-flex" };
+      await scoped(() => transport(`${url}/fal-ai/flux-2-flex/requests/fal-flex/status`));
+      expect(engine.usage.find("fal", "fal-flex")).toMatchObject({
+        costUsd: 0.42,
+        basis: "estimated",
+        status: "completed",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("leaves a dynamic fal request unpriced when the admin estimator is absent", async () => {
+    const transport = providerUsageFetch("fal");
+    reply = { request_id: "fal-flex", status: "IN_QUEUE" };
+    await scoped(() => transport(`${url}/fal-ai/flux-2-flex`, { method: "POST", body: JSON.stringify({ prompt: "a fox" }) }));
+    expect(engine.usage.recent()[0]).toMatchObject({ model: "fal-ai/flux-2-flex", costUsd: null, basis: "unknown", status: "pending" });
+    expect(engine.usage.summary().totals).toMatchObject({ pendingCount: 1, estimatedUsd: 0 });
   });
 
   it("excludes fal uploads and request control calls from spend", async () => {

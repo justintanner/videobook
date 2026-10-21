@@ -79,7 +79,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
     : {};
   const sourceError = await checkSeedanceEditSource(engine, model, refs, input.mode);
   if (sourceError) return unavailable(sourceError);
-  const result = estimateGeneration(model, {
+  const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(refs),
     options,
@@ -88,13 +88,13 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   return result.ok ? result.estimate : unavailable(result.error);
 }
 
-function estimateImageEdit(input: Record<string, unknown>): CostEstimate {
+async function estimateImageEdit(input: Record<string, unknown>): Promise<CostEstimate> {
   if (input.model === "sharp/layer-composite" && input.operation === "remove") return { ...FREE_ESTIMATE };
   const editModel = findImageEditModel(text(input.model) ?? DEFAULT_IMAGE_EDIT_MODEL_ID);
   const model = editModel ? tryResolveModel(editModel.catalogModel) : null;
   if (!model) return unavailable(`unknown image edit model '${String(input.model)}'`);
   const imageCount = Array.isArray(input.image_refs) && input.image_refs.length > 0 ? input.image_refs.length : 1;
-  const result = estimateGeneration(model, {
+  const result = await estimateGeneration(model, {
     prompt: text(input.prompt) ?? "edit",
     refUrls: { image: Array.from({ length: imageCount }, (_, index) => `https://example.test/edit-${index + 1}.png`) },
   });
@@ -153,7 +153,7 @@ export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "estimate_cost",
     description:
-      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Models without published rates return $0 with a warning.",
+      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;

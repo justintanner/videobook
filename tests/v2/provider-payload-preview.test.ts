@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  generationEstimate,
+  historicalAverageEstimate,
   providerPayloadPreviewMentions,
   providerPayloadPreviewReferenceError,
 } from '../../src/videobook/provider-payload-preview'
@@ -59,5 +61,28 @@ describe('provider payload preview mentions', () => {
       'Fix prompt references before generating: @e2 does not have media output yet',
     )
     expect(providerPayloadPreviewReferenceError({ mentions: {} })).toBeNull()
+  })
+})
+
+describe('generation cost preview', () => {
+  const historical = "fal pricing estimate for 'fal-ai/flux-2-flex' is fal's historical average per call x 1; it ignores this request's payload"
+
+  it('keeps a historical fal average as a known price', () => {
+    expect(historicalAverageEstimate([historical])).toBe(true)
+    expect(historicalAverageEstimate([historical, 'model not found'])).toBe(false)
+    expect(generationEstimate({
+      estimate: { usd: 0.17, currency: 'USD', warnings: [historical] },
+    })).toEqual({
+      usd: 0.17,
+      currency: 'USD',
+      warnings: [historical],
+      unknown: false,
+    })
+  })
+
+  it('treats an unknown model warning as an unavailable price', () => {
+    expect(generationEstimate({
+      estimate: { usd: 0, warnings: ['model not found in pricing table'] },
+    })).toMatchObject({ usd: 0, currency: 'USD', unknown: true })
   })
 })

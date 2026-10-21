@@ -37,6 +37,7 @@ import { recordValue } from '@/videobook/value-decoders'
 const emptyDoltArtifactAssets: DoltArtifactAssets = new Map()
 import {
   generationEstimate,
+  historicalAverageEstimate,
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
 
@@ -515,7 +516,9 @@ export function GenerationBody({
             ? 'Updating estimate…'
             : previewError || estimate.unknown || estimate.usd === null
               ? 'Cost estimate unavailable'
-              : 'Estimated provider cost'}
+              : historicalAverageEstimate(estimate.warnings)
+                ? 'Historical average per call; this request can differ'
+                : 'Estimated provider cost'}
         </small>
         {previewError && <button
           type="button"

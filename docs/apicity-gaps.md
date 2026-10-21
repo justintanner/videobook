@@ -526,15 +526,20 @@ aspect ratio). The other ten stay dynamic, and `FAL_DYNAMIC_BILLED_UNITS`
 and its edit (token-summed $1 units), FLUX.2 Flex (processed megapixels), the
 four Kandinsky 6 text and image models (compute units), both Kandinsky 6 VSR
 models (output megapixels × frames) and Mirelo SFX 2.0 (output seconds ×
-samples). None is a constant a request determines, so this gap stays open by
-design and the usage rows for these runs stay unpriced.
+samples). None is a constant a request determines, so a local table cannot price them.
 
-`resolveFalDynamicEstimate` can price them through fal's pricing API, but only
-with `FAL_ADMIN_API_KEY` (Videobook's operator env carries `FAL_API_KEY` only)
-and only from a billed-unit count or fal's historical per-call average. fal
-returns `x-fal-billable-units` on synchronous `fal.run` calls, not on the queue
-results Videobook polls, so an exact post-run price is not available either.
-Videobook carries no local workaround: these rows are honestly unpriced.
+Update 2026-10-21 (vb-x1xh): when `FAL_ADMIN_API_KEY` is set, estimates,
+previews and usage rows for dynamically billed fal endpoints call
+`resolveFalDynamicEstimate` with `callQuantity: 1`. That is fal's historical
+average per call, and the estimate warns that the average ignores this request.
+Queue results still omit `x-fal-billable-units`, so a finished run keeps that
+same average rather than an exact unit price. Without the admin key, or when
+the pricing call fails, the row stays at the local $0 with its warning.
+Statically priced endpoints never call fal. Two Seedance requests stay on the
+local formula and remain $0 until the request supplies the missing field:
+2.0 US reference-to-video without `video_urls`, and 2.5 draft completion
+without the draft's aspect ratio and duration. Those two are not historical
+averages.
 
 ---
 
@@ -591,7 +596,8 @@ the versioned Qwen models, so neither change reaches the catalog.
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
 | **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
-| **BY DESIGN**| §41 fal dynamic endpoints (Seedance priced in 0.16.0)               | none; 13 dynamic requests stay unpriced                |
+| **RESOLVED** | §41 dynamically billed fal endpoints                                | historical average per call when `FAL_ADMIN_API_KEY` is set (vb-x1xh) |
+| **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
@@ -635,5 +641,8 @@ deleted. Adopted upstream contracts: the OpenAI `./realtime` and xAI
 fal entries (§42), and the schema's required Bria `image_url` (§8, §42).
 The §36 clip window is enforced from the apicity constant (vb-6rct). Usage
 rows stamp the installed `@apicity/cost` version in `pricingVersion` instead of
-a hard-coded `apicity-0.15.0`. No local Apicity workaround remains. Upstream
-items without a local workaround: the 13 dynamically billed fal requests in §41.
+a hard-coded `apicity-0.15.0`. No vendored Apicity patch remains. Dynamically
+billed fal endpoints use fal's historical average per call when
+`FAL_ADMIN_API_KEY` is set (§41, vb-x1xh). Seedance 2.0 US reference-to-video
+without `video_urls`, and Seedance 2.5 draft completion without the draft's
+ratio and duration, stay on the local formula.

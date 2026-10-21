@@ -141,9 +141,10 @@ Seedance 2.5 US stay out of the picker because KIE already serves those models
 there; they, and Seedance 2.5 draft completion, remain available to
 `generate_image`, `generate_video` and `list_generation_models` with
 `include_hidden`. Since 0.16.0 fal Seedance estimates come from the output size,
-resolution and duration. Several other fal models are priced dynamically, so
-their estimates read $0 with a warning naming the billed unit; see
-[docs/apicity-gaps.md](docs/apicity-gaps.md).
+resolution and duration. Dynamically billed fal models use fal's historical
+average per call when `FAL_ADMIN_API_KEY` is set, and that estimate warns that
+it ignores the request. Without that key they stay at $0 with a warning naming
+the billed unit. See [docs/apicity-gaps.md](docs/apicity-gaps.md).
 
 ## Posts and results
 

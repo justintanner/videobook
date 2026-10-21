@@ -121,6 +121,7 @@ Caches live in `~/.cache/videobook`. Other settings: `PORT`,
 ## Provider keys
 
 The keys are `OPENAI_API_KEY`, `KIE_API_KEY`, `XAI_API_KEY`, `FAL_API_KEY`,
+`FAL_ADMIN_API_KEY`,
 `DASHSCOPE_API_KEY`, `ELEVENLABS_API_KEY`, `KIMI_CODING_API_KEY`,
 `X_CLIENT_ID` and `X_CLIENT_SECRET`, `DROPBOX_CLIENT_ID` and
 `DROPBOX_CLIENT_SECRET`, and the `B2_*` storage settings. The server starts
