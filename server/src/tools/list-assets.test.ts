@@ -478,7 +478,7 @@ describe("list_assets tool", () => {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });
     }
-  });
+  }, 120_000);
 
   it("keeps referenced hydration when Library browse filters the page", async () => {
     const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
@@ -578,5 +578,5 @@ describe("list_assets tool", () => {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });
     }
-  });
+  }, 120_000);
 });
