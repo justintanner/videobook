@@ -71,6 +71,8 @@ function h3MaxStyle(style: string): ModelEntry {
 
 export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:nano-banana-2-1", media: "image", operations: ["text_to_image", "edit_image"], dialect: "natural_numbered", defaults: { ...LIGHTNING_SCENE_OPTIONS } },
+  { id: "kie:flux-3/klein-text-to-image", media: "image", operations: ["text_to_image"], dialect: "natural", defaults: { resolution: "1K" } },
+  { id: "kie:flux-3/klein-edit-image", media: "image", operations: ["edit_image"], dialect: "natural", defaults: { resolution: "1K" } },
   { id: "kie:nano-banana-pro", media: "image", operations: ["text_to_image", "edit_image"], guide: "nano_banana", dialect: "natural" },
   { id: "kie:gpt-image-2-5-flare-text-to-image", media: "image", operations: ["text_to_image"], guide: "gpt_image", dialect: "natural", defaults: { resolution: "2K" } },
   { id: "kie:gpt-image-2-5-flare-image-to-image", media: "image", operations: ["edit_image"], guide: "gpt_image", dialect: "natural", defaults: { resolution: "2K" } },

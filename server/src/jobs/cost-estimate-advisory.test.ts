@@ -18,8 +18,21 @@ import {
 } from "./cost-estimate-assessment.js";
 import { authorizeKiePaygate, mintKieOtp } from "./kie-paygate.js";
 import { canonicalHash, parseOtp } from "@apicity/cost";
+import { MediaGenerationRequestSchema } from "@apicity/kie/zod";
 
 describe("advisory cost estimation", () => {
+  it("estimates both Klein requests through the shared KIE cost path", () => {
+    for (const model of ["flux-3/klein-text-to-image", "flux-3/klein-edit-image"] as const) {
+      const assessment = assessKieRequestEstimate(MediaGenerationRequestSchema.parse({
+        model,
+        input: { prompt: "a fox", image_urls: ["https://example.test/source.png"], resolution: "2K", num_images: 3 },
+      }));
+      expect(assessment.available).toBe(true);
+      expect(assessment.usd).toBeCloseTo(0.0375);
+      expect(assessment.warnings).toEqual([]);
+    }
+  });
+
   it("carries input-video duration into the provider request estimate", () => {
     const assessment = assessKieRequestEstimate({
       model: "bytedance/seedance-2-5",

@@ -210,11 +210,11 @@ describe("provider usage through real HTTP and engine storage", () => {
 
   it("persists each realtime response once and labels missing model rates", () => {
     const response = { status: "cancelled", usage: { input_tokens: 30, output_tokens: 10, input_token_details: { cached_tokens: 5, audio_tokens: 20 } } };
-    recordVoiceUsage(engine, "openai", "gpt-realtime-2.1", "session", "response", response);
-    recordVoiceUsage(engine, "openai", "gpt-realtime-2.1", "session", "response", response);
+    recordVoiceUsage(engine, "openai", "unknown-realtime-model", "session", "response", response);
+    recordVoiceUsage(engine, "openai", "unknown-realtime-model", "session", "response", response);
     expect(engine.usage.summary().totals).toMatchObject({ count: 1, inputTokens: 30, outputTokens: 10, cachedTokens: 5, unpriced: 1 });
     expect(engine.usage.recent()[0]?.status).toBe("cancelled");
-    recordTranscriptionUsage(engine, "gpt-4o-mini-transcribe", "session", "input", { usage: { input_tokens: 20, output_tokens: 5 } });
+    recordTranscriptionUsage(engine, "unknown-transcription-model", "session", "input", { usage: { input_tokens: 20, output_tokens: 5 } });
     expect(engine.usage.summary().totals).toMatchObject({ count: 2, inputTokens: 50, outputTokens: 15, unpriced: 2 });
     expect(engine.usage.summary().groups.map((group) => group.activity)).toEqual(["analysis", "voice"]);
   });

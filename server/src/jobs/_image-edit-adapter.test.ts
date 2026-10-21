@@ -66,7 +66,7 @@ function imageUrlsOf(request: ImageEditProviderRequest): unknown {
 
 describe("image edit adapters", () => {
   it("exposes one adapter per catalog model with matching ids", () => {
-    expect(IMAGE_EDIT_ADAPTERS.length).toBe(9);
+    expect(IMAGE_EDIT_ADAPTERS.length).toBe(10);
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
       expect(findImageEditModel(adapter.id), adapter.id).toBeDefined();
     }
@@ -82,6 +82,10 @@ describe("image edit adapters", () => {
 
       const region = adapter.buildRegionRequest(regionInput());
       expect(imageUrlsOf(region)).toEqual([SOURCE, ...REPLACEMENTS]);
+      if (adapter.id === "flux-3/klein-edit-image") {
+        expect(semantic.input.resolution).toBe("1K");
+        expect(region.input.resolution).toBe("1K");
+      }
       if (adapter.id.startsWith("gpt-image-2-5-")) {
         expect(semantic.input.resolution).toBe("2K");
         expect(region.input.resolution).toBe("2K");

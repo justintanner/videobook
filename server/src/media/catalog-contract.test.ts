@@ -258,3 +258,37 @@ describe("Seedance 2.5 edit mode", () => {
     expect(seedanceEditFailure("kie:wan/3-0-video", message)).toBe(message);
   });
 });
+
+describe("FLUX 3 Klein", () => {
+  for (const suffix of ["text-to-image", "edit-image"]) {
+    const id = `kie:flux-3/klein-${suffix}`;
+    const refUrls = suffix === "edit-image" ? { image: ["https://example.com/source.png"] } : {};
+
+    it(`${id} exposes defaults and validates dimensions and image counts`, () => {
+      const model = resolveModel(id);
+      expect(model.entry.hidden).not.toBe(true);
+      expect(model.title).toContain("FLUX 3 Klein");
+      expect(buildWireRequest(model, { prompt: "a fox", refUrls })).toMatchObject({
+        ok: true,
+        input: { resolution: "1K", aspect_ratio: suffix === "edit-image" ? "auto" : "1:1", num_images: 1, output_format: "png" },
+      });
+      for (const options of [{ width: 512 }, { width: 128, height: 512 }, { num_images: 5 }]) {
+        expect(buildWireRequest(model, { prompt: "a fox", refUrls, options }).ok).toBe(false);
+      }
+      expect(buildWireRequest(model, { prompt: "a fox", refUrls, options: { width: 1024, height: 768 } }).ok).toBe(true);
+      if (suffix === "edit-image") {
+        expect(buildWireRequest(model, { prompt: "a fox" }).ok).toBe(false);
+        expect(buildWireRequest(model, { prompt: "a fox", refUrls: { image: Array<string>(11).fill("https://example.com/source.png") } }).ok).toBe(false);
+      }
+    });
+
+    it.each([["1K", 0.008], ["2K", 0.0125], ["4K", 0.0325]] as const)(`${id} prices %s per output image`, (resolution, usd) => {
+      const result = estimateGeneration(resolveModel(id), { prompt: "a fox", refUrls, options: { resolution, num_images: 4 } });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.estimate.usd).toBeCloseTo(usd * 4);
+        expect(result.estimate.warnings).toEqual([]);
+      }
+    });
+  }
+});

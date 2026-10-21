@@ -1855,7 +1855,10 @@ describe("image subject tools", () => {
         default_model: string;
         last_used_model: string | null;
       };
-      expect(catalog.models).toHaveLength(9);
+      expect(catalog.models).toHaveLength(10);
+      expect(catalog.models.find((model) => model.id === "flux-3/klein-edit-image")).toMatchObject({
+        label: "FLUX 3 Klein Edit", provider: "kie", available: true, max_input_images: 10,
+      });
       expect(catalog.models[0]).toMatchObject({
         id: "nano-banana-2-1",
         label: "Nano Banana 2.1 Edit",

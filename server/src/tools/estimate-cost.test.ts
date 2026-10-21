@@ -163,14 +163,16 @@ describe("estimate_cost tool", () => {
     expect(long.estimate.usd).toBeCloseTo(short.estimate.usd * 2, 6);
   });
 
-  it("estimates the openai prompt rewrite by token heuristic and prices image subject edits", async () => {
+  it("reports missing rewrite token counts and prices image subject edits", async () => {
     const payload = await estimate([
       { tool_name: "rewrite_prompt", input: { prompt: "x".repeat(400) } },
       { tool_name: "edit_image_subjects", input: { model: "nano-banana-2-1", image_refs: ["a", "b"] } },
       { tool_name: "edit_image_subjects", input: { model: "sharp/layer-composite", operation: "remove" } },
     ]);
-    expect(payload.per_call[0]!.estimate.source).toBe("tokens-heuristic+table");
-    expect(payload.per_call[0]!.estimate.breakdown.inputTokens).toBe(100);
+    expect(payload.per_call[0]!.estimate.source).toBe("declared-tokens+table");
+    expect(payload.per_call[0]!.estimate.breakdown.inputTokens).toBeUndefined();
+    expect(payload.per_call[0]!.estimate.usd).toBe(0);
+    expect(payload.per_call[0]!.estimate.warnings.join(" ")).toContain("costHints.inputTokens");
     expect(payload.per_call[1]!.estimate.usd).toBeGreaterThan(0);
     expect(payload.per_call[2]!.estimate.usd).toBe(0);
   });

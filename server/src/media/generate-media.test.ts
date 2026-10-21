@@ -185,6 +185,10 @@ describe("generic media generation", () => {
   it("lists catalog models by media and operation", async () => {
     const all = toolJson(await client.callTool({ name: "list_generation_models", arguments: {} })) as { models: Array<{ id: string; media: string; operations: string[] }> };
     expect(all.models.some((model) => model.id === "kie:bytedance/seedance-2-5")).toBe(true);
+    expect(all.models).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "kie:flux-3/klein-text-to-image", media: "image", operations: ["text_to_image"] }),
+      expect.objectContaining({ id: "kie:flux-3/klein-edit-image", media: "image", operations: ["edit_image"] }),
+    ]));
     const speech = toolJson(await client.callTool({ name: "list_generation_models", arguments: { media: "audio", operation: "speech" } })) as { models: Array<{ media: string; operations: string[] }> };
     expect(speech.models.length).toBeGreaterThan(5);
     for (const model of speech.models) expect(model).toMatchObject({ media: "audio", operations: expect.arrayContaining(["speech"]) });
@@ -241,6 +245,26 @@ describe("generic media generation", () => {
     expect(submitted.input.image_input).toEqual([source]);
     const pending = engine.jobs.pending.read(assetId);
     expect(pending.ok && pending.value).toMatchObject({ taskId: "kie-task-1", taskType: "media_kie", meta: { model: "kie:nano-banana-2-1", media: "image" } });
+    await completePending();
+    const manifest = await engine.files.manifest(assetId);
+    expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");
+  });
+
+  it.each(["text-to-image", "edit-image"])("generates a Klein %s image through KIE submit and completion", async (suffix) => {
+    const model = `kie:flux-3/klein-${suffix}`;
+    const source = `${baseURL}/files/out.png`;
+    const refs = suffix === "edit-image" ? { image: [source] } : {};
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_image",
+      arguments: { book_id: engine.book.get().bookId, model, prompt: "a fox in snow", refs },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { input: Record<string, unknown> };
+    expect(submitted).toMatchObject({ model: `flux-3/klein-${suffix}`, input: { prompt: "a fox in snow", resolution: "1K", output_format: "png" } });
+    expect(submitted.input.image_urls).toEqual(refs.image);
+    const pending = engine.jobs.pending.read(assetId);
+    expect(pending.ok && pending.value).toMatchObject({ taskType: "media_kie", meta: { model, media: "image" } });
     await completePending();
     const manifest = await engine.files.manifest(assetId);
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");

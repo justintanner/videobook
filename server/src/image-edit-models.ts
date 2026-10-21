@@ -27,6 +27,7 @@ const STANDARD_IMAGE_EDIT_CAPABILITIES = {
 
 const EDIT_MODELS: ReadonlyArray<{ catalogModel: string; label: string }> = [
   { catalogModel: `kie:${DEFAULT_IMAGE_EDIT_MODEL_ID}`, label: "Nano Banana 2.1 Edit" },
+  { catalogModel: "kie:flux-3/klein-edit-image", label: "FLUX 3 Klein Edit" },
   { catalogModel: "kie:seedream/5-pro-image-to-image", label: "Seedream 5 Pro" },
   { catalogModel: "kie:gpt-image-2-5-flare-image-to-image", label: "GPT Image 2.5 Flare" },
   { catalogModel: "kie:gpt-image-2-5-sunburst-image-to-image", label: "GPT Image 2.5 Sunburst" },

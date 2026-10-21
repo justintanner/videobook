@@ -7,6 +7,14 @@ import type { ImageSubjectMap } from '../../src/videobook/image-subject-map'
 
 const models: ImageEditModelOption[] = [
   {
+    id: 'flux-3/klein-edit-image',
+    label: 'FLUX 3 Klein Edit',
+    provider: 'kie',
+    capabilities: { semantic: true, regionReplace: true, wholeImage: true, exactMask: false },
+    maxInputImages: 10,
+    available: true,
+  },
+  {
     id: 'nano-banana-2-1',
     label: 'Nano Banana 2.1 Edit',
     provider: 'kie',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   NanoBanana21RequestSchema,
+  Flux3KleinEditImageRequestSchema,
   GptImage25FlareImageToImageRequestSchema,
   GptImage25SunburstImageToImageRequestSchema,
   GptImage2ImageToImageRequestSchema,
@@ -21,6 +22,8 @@ import {
 
 function imageFieldFor(entryId: string): { safeParse(value: unknown): { success: boolean } } | null {
   switch (entryId) {
+    case "flux-3/klein-edit-image":
+      return Flux3KleinEditImageRequestSchema.shape.input.shape.image_urls;
     case "nano-banana-2-1":
       return NanoBanana21RequestSchema.shape.input.shape.image_input;
     case "seedream/5-pro-image-to-image":

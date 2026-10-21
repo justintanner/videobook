@@ -6,6 +6,22 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+### Added
+
+- KIE FLUX 3 Klein text-to-image and image editing, with 1K defaults,
+  up to ten edit references, and resolution-aware per-image cost estimates.
+- FLUX 3 Klein Edit in the image editor for whole-image and region edits.
+
+### Changed
+
+- Upgrade all application `@apicity/*` dependencies to 0.16.2.
+
+### Fixed
+
+- Accept npm 12 workspace pack results in the installed-package smoke gate.
+
 ## [0.2.1] - 2026-10-20
 
 ### Changed
