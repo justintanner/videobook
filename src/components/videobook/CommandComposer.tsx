@@ -160,6 +160,7 @@ interface CommandComposerProps {
   placeholder?: string
   portalTarget?: Element | null
   pendingInput?: string
+  replacePendingInput?: boolean
   notice?: ComposerNotice | null
   // Where execute outcomes and the notice render: the composer's own result
   // strip, or the footer of the confirm sheet passed as children.
@@ -238,6 +239,7 @@ export function CommandComposer({
   placeholder,
   portalTarget = null,
   pendingInput,
+  replacePendingInput = false,
   notice,
   outcomeSlot = 'composer',
   onEnsureCatalog,
@@ -395,7 +397,7 @@ export function CommandComposer({
     setPreparedAction(null)
     setDismissed(pendingInput !== undefined && !isSpeakCommandPreview(pendingInput))
   } else if (pendingInput !== renderedPendingInput) {
-    const replaceDraft = !input.trim() || input === renderedPendingInput
+    const replaceDraft = replacePendingInput || !input.trim() || input === renderedPendingInput
     setRenderedPendingInput(pendingInput)
     if (voice?.pendingReview || voiceReviewDraft) {
       setVoiceReviewDraft(pendingInput !== undefined)

@@ -159,6 +159,7 @@ import {
   GenerationBody,
   type GenerationReviewSource,
 } from '@/components/videobook/confirm/bodies/GenerationBody'
+import { TranscribeBody } from '@/components/videobook/confirm/bodies/TranscribeBody'
 import { usePromptHistory } from '@/videobook/use-prompt-history'
 import { generationPromptSurface } from '../server/src/prompt-surfaces'
 import {
@@ -557,12 +558,21 @@ import {
 import { pollImageSubjectMap } from '@/videobook/image-subject-map-poll'
 import {
   idleMediaInsightWork,
+  mediaCellHasSpokenAudio,
   mediaInsightIsRunning,
   mediaInsightRunningPatch,
   type MediaInsightKind,
   type MediaInsightWork,
   type TranscriptSidecarSource,
 } from '@/videobook/media-insights'
+import {
+  resolveTranscribeTarget,
+  transcribeClipChoices,
+  transcribeEstimateView,
+  transcribeLanguageOverride,
+  transcribeToolArgs,
+  transcribeValidation,
+} from '@/videobook/transcribe-review'
 import {
   mediaInsightWatchStep,
   type MediaInsightWatchStep,
@@ -774,6 +784,16 @@ type PendingChatAction =
       chainId: string
       review: ChainStepReviewValue
       remaining: number
+    }
+  | {
+      kind: 'transcribe'
+      assetId: string | null
+      languageCode: string
+      diarize: boolean
+      tagAudioEvents: boolean
+      estimateUsd: number | null
+      estimateLoading: boolean
+      estimateUnavailable: boolean
     }
 
 type WorkspaceNoticeTone = 'info' | 'error'
@@ -1290,6 +1310,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     result?: WorkspaceActionResult
   } | null>(null)
   const actionCatalogRequestRef = useRef(0)
+  const transcribeEstimateRequestRef = useRef(0)
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
   const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
   const [previewComposerTarget, setPreviewComposerTarget] = useState<HTMLDivElement | null>(null)
@@ -1618,8 +1639,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         .map((item) => item.address)
       return { target: target ?? null, sources: rest }
     }
+    if (pendingChatAction.kind === 'transcribe' && pendingChatAction.assetId) {
+      const assetId = pendingChatAction.assetId
+      const address = commandMentionAssets.find((asset) => asset.artifactId === assetId)?.cellAddress
+      return address
+        ? { target: null, sources: [address] }
+        : NO_NOTEBOOK_REVIEW
+    }
     return NO_NOTEBOOK_REVIEW
-  }, [pendingChatAction, pendingGenerationDraft, pendingGenerationSources])
+  }, [commandMentionAssets, pendingChatAction, pendingGenerationDraft, pendingGenerationSources])
   const pendingReviewRoles = useMemo(
     () => notebookReviewRoles(pendingReviewAddresses),
     [pendingReviewAddresses],
@@ -3493,63 +3521,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [applyJobsSnapshot, applyNotebook])
 
-  const runAssetInsight = useCallback(async (
-    artifactId: string,
-    insight: MediaInsightKind,
-  ) => {
-    const notebookId = notebook?.id
-    if (!bookId || !notebookId) return
-    const work = mediaInsightWork[artifactId] ?? idleMediaInsightWork
-    if (mediaInsightIsRunning(work, insight)) return
-    const hadInsight = assetHasInsight(
-      watchScopeRef.current.assets.find((candidate) =>
-        candidate.artifactId === artifactId),
-      insight,
-    )
-    const since = Date.now()
-    updateMediaInsightWork(artifactId, {
-      ...mediaInsightRunningPatch(insight, true),
-      error: null,
-    })
-    try {
-      await call(
-        insight === 'transcript' ? 'transcribe' : 'analyze_video',
-        insight === 'transcript'
-          ? { book_id: bookId, asset_id: artifactId }
-          : { book_id: bookId, asset_id: artifactId, force: hadInsight },
-        { background: true },
-      )
-      const step = await watchAssetInsight({
-        bookId,
-        notebookId,
-        artifactId,
-        insight,
-        since,
-        hadInsight,
-      })
-      updateMediaInsightWork(artifactId, {
-        ...mediaInsightRunningPatch(insight, false),
-        error: step.kind === 'failed' ? step.message : null,
-      })
-    } catch (error) {
-      updateMediaInsightWork(artifactId, {
-        ...mediaInsightRunningPatch(insight, false),
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }, [
-    bookId,
-    call,
-    mediaInsightWork,
-    notebook,
-    updateMediaInsightWork,
-    watchAssetInsight,
-  ])
-
-  const transcribeAsset = useCallback((artifactId: string) => {
-    void runAssetInsight(artifactId, 'transcript')
-  }, [runAssetInsight])
-
   const loadTranscriptJson = useCallback(async (
     artifactId: string,
     source: TranscriptSidecarSource,
@@ -4069,7 +4040,123 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCommands(workspaceActionCommands(catalog.actions, asCommands(value)))
   }, [call])
 
+  const queueTranscribeEstimate = (
+    assetId: string,
+    languageCode: string,
+    diarize: boolean,
+    tagAudioEvents: boolean,
+  ) => {
+    if (!bookId) return
+    const request = ++transcribeEstimateRequestRef.current
+    const args = transcribeToolArgs({
+      bookId,
+      assetId,
+      languageCode,
+      diarize,
+      tagAudioEvents,
+    })
+    void call('estimate_cost', {
+      calls: [{ tool_name: 'transcribe', input: args }],
+    }, { background: true }).then((value) => {
+      if (request !== transcribeEstimateRequestRef.current) return
+      const next = transcribeEstimateView(recordValue(recordValue(value)?.estimate))
+      setPendingChatAction((current) => current?.kind === 'transcribe' && current.assetId === assetId
+        ? {
+            ...current,
+            estimateUsd: next.usd,
+            estimateLoading: false,
+            estimateUnavailable: next.unavailable,
+          }
+        : current)
+    }).catch(() => {
+      if (request !== transcribeEstimateRequestRef.current) return
+      setPendingChatAction((current) => current?.kind === 'transcribe' && current.assetId === assetId
+        ? { ...current, estimateUsd: null, estimateLoading: false, estimateUnavailable: true }
+        : current)
+    })
+  }
+
+  const openTranscribeReview = (input: {
+    assetRef?: string
+    languageCode?: string
+    diarize?: boolean
+    tagAudioEvents?: boolean
+    chat?: ChatExecution
+  }): ComposerOutcome => {
+    if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+    const addressByArtifactId = new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress]))
+    const fullscreen = mediaFullscreen?.asset
+    const previewMedia = workspacePreview?.media
+    const preview = fullscreen && mediaCellHasSpokenAudio(fullscreen.type)
+      ? { assetId: fullscreen.artifactId, type: fullscreen.type }
+      : previewMedia && mediaCellHasSpokenAudio(previewMedia.type)
+        ? { assetId: previewMedia.assetId, type: previewMedia.type }
+        : null
+    const resolved = resolveTranscribeTarget({
+      assetRef: input.assetRef,
+      selectedCell: selectedNotebookCell
+        ? {
+            outputArtifactId: selectedNotebookCell.outputArtifactId,
+            type: selectedNotebookCell.type,
+          }
+        : null,
+      preview,
+      assets,
+      addressByArtifactId,
+    })
+    if (!resolved.ok) return resolved
+    const languageCode = input.languageCode?.trim() ?? ''
+    const diarize = input.diarize ?? true
+    const tagAudioEvents = input.tagAudioEvents ?? true
+    actionCatalogRequestRef.current += 1
+    reviewChat(input.chat, false, () => setPendingCommandPlan(null))
+    reviewChat(input.chat, false, () => setPendingWatermarkReview(null))
+    reviewChat(input.chat, false, () => setActionDialog(null))
+    reviewChat(input.chat, false, () => setActionDiscovery(null))
+    reviewChat(input.chat, true, () => setPendingChatAction({
+      kind: 'transcribe',
+      assetId: resolved.assetId,
+      languageCode,
+      diarize,
+      tagAudioEvents,
+      estimateUsd: null,
+      estimateLoading: resolved.assetId !== null,
+      estimateUnavailable: false,
+    }))
+    setComposerDockOpen(true)
+    if (resolved.assetId) {
+      queueTranscribeEstimate(resolved.assetId, languageCode, diarize, tagAudioEvents)
+    } else {
+      transcribeEstimateRequestRef.current += 1
+    }
+    const address = resolved.assetId ? addressByArtifactId.get(resolved.assetId) : null
+    const label = address
+      ? `@${address}`
+      : resolved.assetId
+        ? assets.find((asset) => asset.artifactId === resolved.assetId)?.label ?? resolved.assetId
+        : null
+    return generationApplyReadyOutcome(label
+      ? `Transcribe review ready for ${label}`
+      : 'Transcribe review ready. Choose a clip.')
+  }
+
+  const transcribeAsset = (artifactId: string) => {
+    const outcome = openTranscribeReview({ assetRef: artifactId })
+    if (!outcome.ok) setNotice(outcome.message, 'error')
+  }
+
   const openWorkspaceActions = async (actionId?: string, values?: Record<string, unknown>, query?: string, returnFocus?: HTMLElement | null, chat?: ChatExecution) => {
+    if (actionId === 'tool.transcribe') {
+      const outcome = openTranscribeReview({
+        assetRef: asString(values?.asset_id) ?? undefined,
+        languageCode: asString(values?.language_code) ?? '',
+        diarize: typeof values?.diarize === 'boolean' ? values.diarize : true,
+        tagAudioEvents: typeof values?.tag_audio_events === 'boolean' ? values.tag_audio_events : true,
+        chat,
+      })
+      if (!outcome.ok) presentChat(chat, () => setNotice(outcome.message, 'error'))
+      return
+    }
     if (mcp.state !== 'ready') return
     setComposerDockOpen(true)
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -8055,6 +8142,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }, chat)
       return applyReadyOutcome(`Watermark review ready for ${target.label}`)
     }
+    if (plan.tool === 'transcribe' || plan.routedTool === 'transcribe') {
+      return openTranscribeReview({
+        assetRef: asString(plan.params.asset_id) ?? undefined,
+        languageCode: asString(plan.params.language_code) ?? '',
+        diarize: typeof plan.params.diarize === 'boolean' ? plan.params.diarize : true,
+        tagAudioEvents: typeof plan.params.tag_audio_events === 'boolean' ? plan.params.tag_audio_events : true,
+        chat,
+      })
+    }
     if (plan.tool === 'extract_audio') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
@@ -8454,6 +8550,98 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const applyPendingTranscribe = async (
+    action: Extract<PendingChatAction, { kind: 'transcribe' }>,
+    languageOverride: string | null,
+    chat?: ChatExecution,
+  ): Promise<ComposerOutcome> => {
+    const languageCode = languageOverride ?? action.languageCode
+    const validation = transcribeValidation({ assetId: action.assetId, languageCode })
+    const retryInput = languageOverride ? `/apply ${languageOverride}` : '/apply '
+    if (validation.blocking || !action.assetId || !bookId) {
+      return {
+        ok: false,
+        message: validation.blocking ?? 'Choose a video or audio clip.',
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    const assetId = action.assetId
+    const work = mediaInsightWork[assetId] ?? idleMediaInsightWork
+    if (mediaInsightIsRunning(work, 'transcript')) {
+      return {
+        ok: false,
+        message: 'Transcription is already running for this clip.',
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    if (languageOverride !== null && languageOverride !== action.languageCode) {
+      presentChat(chat, () => setPendingChatAction((current) => current?.kind === 'transcribe'
+        ? { ...current, languageCode }
+        : current))
+    }
+    const notebookId = notebook?.id
+    const hadInsight = assetHasInsight(assetById.get(assetId), 'transcript')
+    const since = Date.now()
+    updateMediaInsightWork(assetId, {
+      ...mediaInsightRunningPatch('transcript', true),
+      error: null,
+    })
+    try {
+      await call('transcribe', transcribeToolArgs({
+        bookId,
+        assetId,
+        languageCode,
+        diarize: action.diarize,
+        tagAudioEvents: action.tagAudioEvents,
+      }), { chat })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      updateMediaInsightWork(assetId, {
+        ...mediaInsightRunningPatch('transcript', false),
+        error: message,
+      })
+      return {
+        ok: false,
+        message,
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    reviewChat(chat, false, () => setPendingChatAction(null))
+    const address = commandMentionAssets.find((asset) => asset.artifactId === assetId)?.cellAddress
+    const label = address ? `@${address}` : assetById.get(assetId)?.label ?? assetId
+    const message = `Transcription queued for ${label}`
+    presentChat(chat, () => setNotice(message))
+    if (notebookId) {
+      void watchAssetInsight({
+        bookId,
+        notebookId,
+        artifactId: assetId,
+        insight: 'transcript',
+        since,
+        hadInsight,
+      }).then((step) => {
+        updateMediaInsightWork(assetId, {
+          ...mediaInsightRunningPatch('transcript', false),
+          error: step.kind === 'failed' ? step.message : null,
+        })
+      }).catch((error: unknown) => {
+        updateMediaInsightWork(assetId, {
+          ...mediaInsightRunningPatch('transcript', false),
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    } else {
+      updateMediaInsightWork(assetId, {
+        ...mediaInsightRunningPatch('transcript', false),
+        error: null,
+      })
+    }
+    return { ok: true, message, nextInput: '' }
+  }
+
   const applyPendingChatAction = async (
     promptOverride: string | null = null,
     chat?: ChatExecution,
@@ -8504,6 +8692,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }))
       }
       return { ok: true, message }
+    }
+    if (pendingChatAction.kind === 'transcribe') {
+      if (promptOverride) {
+        const override = transcribeLanguageOverride(promptOverride)
+        if (!override.ok) {
+          return {
+            ok: false,
+            message: override.message,
+            nextInput: `/apply ${promptOverride}`,
+            selectInput: false,
+          }
+        }
+        return await applyPendingTranscribe(pendingChatAction, override.languageCode, chat)
+      }
+      return await applyPendingTranscribe(pendingChatAction, null, chat)
     }
     if (pendingChatAction.kind === 'generation') {
       return await applyPendingGenerationAction(pendingChatAction, promptOverride, chat)
@@ -8906,7 +9109,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (applyCommand) {
         if (
           applyCommand.promptOverride
-          && (pendingWatermarkReview || pendingChatAction?.kind !== 'generation')
+          && (pendingWatermarkReview || (
+            pendingChatAction?.kind !== 'generation'
+            && pendingChatAction?.kind !== 'transcribe'
+          ))
         ) {
           return {
             ok: false,
@@ -8978,6 +9184,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             rest,
             gridMentionAssets,
           )
+      if (commandToken === '/transcribe') {
+        const assetRef = resolvedRest.split(/\s+/).find((token) => token.length > 0)
+        return openTranscribeReview({ assetRef, chat })
+      }
       const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', { detail: 'full' }, { chat })).actions
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
@@ -9364,6 +9574,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (action.handler.kind === 'ui' && (action.handler.action === 'open_post_dropbox' || action.handler.action === 'open_post_icloud')) {
         const reference = input.trim().slice(action.command.length).trim()
         return openSourceDeliveryReview(reference || undefined, action.handler.action === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
+      }
+      if (action.handler.kind === 'tool' && action.handler.tool === 'transcribe') {
+        const command = workspaceActionCommands([action], []).find((entry) => entry.command === action.command)
+        const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
+        const parsed = command ? parseCommandArgs(rest, command.params) : {}
+        const parsedAsset = asString(parsed.asset_id)?.trim()
+        const seededAsset = asString(context.action.values?.asset_id)?.trim()
+        return openTranscribeReview({
+          assetRef: parsedAsset || seededAsset || undefined,
+          languageCode: asString(context.action.values?.language_code) ?? '',
+          diarize: typeof context.action.values?.diarize === 'boolean' ? context.action.values.diarize : true,
+          tagAudioEvents: typeof context.action.values?.tag_audio_events === 'boolean' ? context.action.values.tag_audio_events : true,
+          chat,
+        })
       }
       const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
       const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
@@ -10437,9 +10661,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       : pendingChatAction?.kind === 'chain-step'
         ? { kind: 'chain-step' }
-        : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
-          ? { kind: 'other' }
-          : { kind: 'none' }
+        : pendingChatAction?.kind === 'transcribe'
+          ? { kind: 'transcribe' }
+          : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
+            ? { kind: 'other' }
+            : { kind: 'none' }
     const plan = planVoiceReviewCommand(command, pending)
     if (plan.kind === 'refused') return plan.outcome
     if (plan.kind === 'revise') {
@@ -10604,6 +10830,73 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
     }
     if (!pendingChatAction) return null
+    if (pendingChatAction.kind === 'transcribe') {
+      const action = pendingChatAction
+      const addressByArtifactId = new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress]))
+      const choices = transcribeClipChoices(assets, addressByArtifactId)
+      const clip = choices.find((choice) => choice.artifactId === action.assetId) ?? null
+      const patchTranscribe = (patch: Partial<typeof action>) => {
+        setPendingChatAction((current) => current?.kind === 'transcribe' ? { ...current, ...patch } : current)
+      }
+      return (
+        <ConfirmSheet
+          kind="transcribe"
+          ariaLabel="Transcribe review"
+          tag="TRANSCRIBE · CHAT"
+          title={clip ? `Transcribe ${clip.label}` : 'Transcribe a clip'}
+          address={clip?.label ?? null}
+          effect={{ label: 'Queues 1 transcription', tone: 'default' }}
+          validation={transcribeValidation({
+            assetId: action.assetId,
+            languageCode: action.languageCode,
+          })}
+          busy={busy}
+          applyFormId={COMMAND_COMPOSER_FORM_ID}
+          onCancel={dismissPendingCommandPlan}
+        >
+          <TranscribeBody
+            busy={busy}
+            clip={clip}
+            choices={choices}
+            languageCode={action.languageCode}
+            diarize={action.diarize}
+            tagAudioEvents={action.tagAudioEvents}
+            estimateUsd={action.estimateUsd}
+            estimateLoading={action.estimateLoading}
+            estimateUnavailable={action.estimateUnavailable}
+            onClipChange={(assetId) => {
+              patchTranscribe({
+                assetId,
+                estimateUsd: null,
+                estimateLoading: assetId !== null,
+                estimateUnavailable: false,
+              })
+              if (assetId) queueTranscribeEstimate(assetId, action.languageCode, action.diarize, action.tagAudioEvents)
+              else transcribeEstimateRequestRef.current += 1
+            }}
+            onLanguageChange={(languageCode) => patchTranscribe({ languageCode })}
+            onDiarizeChange={(diarize) => {
+              patchTranscribe({
+                diarize,
+                estimateUsd: null,
+                estimateLoading: action.assetId !== null,
+                estimateUnavailable: false,
+              })
+              if (action.assetId) queueTranscribeEstimate(action.assetId, action.languageCode, diarize, action.tagAudioEvents)
+            }}
+            onTagAudioEventsChange={(tagAudioEvents) => {
+              patchTranscribe({
+                tagAudioEvents,
+                estimateUsd: null,
+                estimateLoading: action.assetId !== null,
+                estimateUnavailable: false,
+              })
+              if (action.assetId) queueTranscribeEstimate(action.assetId, action.languageCode, action.diarize, tagAudioEvents)
+            }}
+          />
+        </ConfirmSheet>
+      )
+    }
     if (pendingChatAction.kind === 'generation') {
       const action = pendingChatAction
       const firstSource = pendingGenerationSources[0]
@@ -11843,11 +12136,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : mediaFullscreen && currentActionComposer ? mediaFullscreenComposerTarget : null}
         pendingInput={pendingWatermarkReview
             ? '/apply'
-            : pendingChatAction?.kind === 'generation'
+            : pendingChatAction?.kind === 'generation' || pendingChatAction?.kind === 'transcribe'
             ? '/apply '
             : pendingCommandPlan || pendingChatAction
               ? '/apply'
               : undefined}
+        replacePendingInput={pendingChatAction?.kind === 'transcribe'}
         notice={notice
           ? { message: notice.text, tone: notice.tone }
           : null}

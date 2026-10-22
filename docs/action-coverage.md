@@ -304,7 +304,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.suggest_sfx` | `/suggest-sfx` |  | book | asset: asset_id | `suggest_sfx` | slash, launcher, cell-menu | dialog | generation |
 | `tool.sync_video_to_audio` | `/sync-audio` |  | book | asset: asset_id | `sync_video_to_audio` | slash, launcher, cell-menu | dialog | none |
 | `tool.timewarp_video` | `/timewarp` |  | book | asset: asset_id | `timewarp_video` | slash, launcher, cell-menu | dialog | none |
-| `tool.transcribe` | `/transcribe` |  | book | asset: asset_id | `transcribe` | slash, launcher, cell-menu | dialog | generation |
+| `tool.transcribe` | `/transcribe` |  | book | asset: asset_id | `transcribe` | slash, launcher, cell-menu | composer | generation |
 | `tool.translate_subtitles` | `/translate-subs` |  | book | asset: asset_id | `translate_subtitles` | slash, launcher, cell-menu | dialog | generation |
 | `tool.trim_audio` | `/trim-audio` |  | book | asset: asset_id | `trim_audio` | slash, launcher, cell-menu | dialog | none |
 | `tool.trim_video` | `/trim-video` | /trim | book | asset: asset_id | `trim_video` | slash, launcher, cell-menu | dialog | destructive |

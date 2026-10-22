@@ -517,7 +517,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/tool-rename-all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.; MCP: `rename_all`
 - `/track-add` — Add a video, audio or caption track; preview or workspace operation
 - `/track-remove` — Remove an empty sequence track; preview or workspace operation
-- `/transcribe` — Transcribe audio using ElevenLabs; MCP: `transcribe`
+- `/transcribe` — Open a chat review to transcribe a video or audio clip; MCP: `transcribe`
 - `/transcript` — Read transcript of a video or audio asset; MCP: `read_transcript`
 - `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
 - `/trim-audio` — Trim audio clip; MCP: `trim_audio`

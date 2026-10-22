@@ -1096,7 +1096,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/transcribe",
-    description: "Transcribe audio using ElevenLabs",
+    description: "Open a chat review to transcribe a video or audio clip",
     example: "/transcribe @a1",
     category: "action",
     icon: "Mic",

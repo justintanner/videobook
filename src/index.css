@@ -7693,6 +7693,24 @@ textarea:focus-visible {
   align-items: stretch;
 }
 
+.confirm-transcribe {
+  --generation-review-source-preview-size: 56px;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 152px minmax(0, 1fr) 144px;
+  grid-template-areas: 'inputs editor estimate';
+  gap: 10px;
+  align-items: stretch;
+}
+
+.confirm-transcribe .generation-review-source {
+  cursor: default;
+}
+
+.confirm-transcribe .generation-review-editor {
+  grid-area: editor;
+}
+
 .generation-review-prompt-section {
   flex: 1 1 auto;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -7858,6 +7876,13 @@ textarea:focus-visible {
       'estimate dolt mcp';
     grid-template-rows: minmax(0, 1fr) auto;
   }
+
+  .confirm-transcribe {
+    grid-template-columns: minmax(0, 1fr) 144px;
+    grid-template-areas:
+      'inputs estimate'
+      'editor estimate';
+  }
 }
 
 @media (max-width: 900px) {
@@ -7891,6 +7916,14 @@ textarea:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'inputs' 'dolt' 'mcp' 'estimate';
     grid-template-rows: auto;
+  }
+
+  .confirm-transcribe {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'inputs'
+      'editor'
+      'estimate';
   }
 
   .confirm-watermark-timing-row {

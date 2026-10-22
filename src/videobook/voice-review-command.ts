@@ -1,4 +1,5 @@
 import type { VoiceOutcome, VoiceReviewCommand } from '../../server/src/voice-contract'
+import { isTranscribeLanguageCode } from './transcribe-review'
 import type {
   GenerationControl,
   GenerationControlValue,
@@ -16,6 +17,7 @@ export type PendingReview =
   | { kind: 'none' }
   | { kind: 'other' }
   | { kind: 'chain-step' }
+  | { kind: 'transcribe' }
   | { kind: 'generation'; action: ReviewAction; models: readonly ReviewAction[] }
 
 export type VoiceReviewEdit =
@@ -190,6 +192,12 @@ export function planVoiceReviewCommand(
     }
     if (prompt && pending.kind === 'chain-step') {
       return refuse('review', "A chain step can't be rewritten. Apply it as it stands, or cancel the chain.")
+    }
+    if (prompt && pending.kind === 'transcribe') {
+      if (!isTranscribeLanguageCode(prompt)) {
+        return refuse('review', 'A transcription review only takes a language code, for example en. Apply it as it stands, or cancel it.')
+      }
+      return { kind: 'command', input: `/apply ${prompt.trim()}` }
     }
     if (prompt && pending.kind !== 'generation') {
       return refuse('review', 'Only a generation review takes a new prompt. Apply this one as it stands, or cancel it.')

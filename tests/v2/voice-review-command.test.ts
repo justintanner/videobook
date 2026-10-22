@@ -172,6 +172,15 @@ describe('spoken decisions about the review on screen', () => {
     }
   })
 
+  it('lets a transcription review take a language code', () => {
+    expect(planVoiceReviewCommand({ decision: 'apply' }, { kind: 'transcribe' }))
+      .toEqual({ kind: 'command', input: '/apply' })
+    expect(planVoiceReviewCommand({ decision: 'apply', prompt: 'en' }, { kind: 'transcribe' }))
+      .toEqual({ kind: 'command', input: '/apply en' })
+    expect(planVoiceReviewCommand({ decision: 'apply', prompt: 'make it louder' }, { kind: 'transcribe' }))
+      .toMatchObject({ kind: 'refused', outcome: { status: 'review' } })
+  })
+
   it('lets a chain step be applied or cancelled, but never revised', () => {
     expect(planVoiceReviewCommand({ decision: 'apply' }, { kind: 'chain-step' }))
       .toEqual({ kind: 'command', input: '/apply' })
