@@ -164,6 +164,48 @@ describe('notebook download placement', () => {
     })
   })
 
+  it('reports a failed subtitle render when the clip is already in error', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Job lease expired' },
+      result: null,
+      state: 'failed',
+      type: 'render_project',
+    }])).toEqual({
+      kind: 'failed',
+      message: 'Job lease expired',
+    })
+  })
+
+  it('does not fail an in-progress clip because an older subtitle render failed', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'render-queued-portrait',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Asset is locked: workspace' },
+      result: null,
+      state: 'failed',
+      type: 'render_project',
+    }])).toEqual({ kind: 'continue' })
+  })
+
+  it('keeps a ready clip completed after a failed subtitle render', () => {
+    expect(mediaAssetWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'ready',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Job lease expired' },
+      result: null,
+      state: 'failed',
+      type: 'render_project',
+    }])).toEqual({ kind: 'completed' })
+  })
+
   it('ignores unrelated failed jobs while media is still processing', () => {
     expect(mediaAssetWatchStep('artifact-01', {
       artifactId: 'artifact-01',

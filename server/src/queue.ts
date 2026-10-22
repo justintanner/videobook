@@ -546,6 +546,9 @@ async function createBookRunner(bookId: string): Promise<RunnerInfo> {
   const runner = engine.jobs.queue.createRunner({
     concurrency: 5,
     pollIntervalMs: 250,
+    // The engine default lease is 30s. Remotion can stall the event loop
+    // longer than that, and the reaper then fails the subtitle render.
+    leaseMs: 10 * 60_000,
     preferredJobTypes: SEARCH_REFERENCE_JOB_TYPES,
     resolveHandler: makeWrappedResolver(bookId, engine),
   });

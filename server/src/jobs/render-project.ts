@@ -60,7 +60,10 @@ import { resolveKeywordPlacements } from "../remotion/keyword-placement.js";
 import { aliveRenderTrack, type AliveRenderTrack } from "../alive-captions/track.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
-const CLAIM_WAIT_MS = 30_000;
+// All three orientations lock the same source workspace. A subtitle render
+// of one orientation outlives the old 30s wait, so the others failed and the
+// queue then marked the playable source as media-failed.
+const CLAIM_WAIT_MS = 15 * 60_000;
 
 type AssetDescriptor = {
   assetId: string;
@@ -149,6 +152,78 @@ async function resolveSubtitleSegments(
   }
 }
 
+function preserveArtifactState(error: unknown): Error {
+  const preserved = error instanceof Error ? error : new Error(String(error));
+  Object.assign(preserved, { preserveArtifactState: true });
+  return preserved;
+}
+
+export async function sourceVideoIsPlayable(engine: Engine, assetId: string): Promise<boolean> {
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) return false;
+  return findVideoFile(manifest.value.files) !== null;
+}
+
+async function clearRenderError(engine: Engine, assetId: string): Promise<void> {
+  const cleared = await engine.jobs.failures.clear(assetId);
+  if (cleared.ok && cleared.value) return;
+  // A reaped render lease marks the view failed without writing a
+  // generation-error row, and clear() then no-ops. Write a row so the same
+  // clear can restore the playable source.
+  const view = engine.jobs.artifactWork.read(assetId);
+  if (!view.ok || view.value?.status !== "error") return;
+  const written = await engine.jobs.failures.write(assetId, {
+    message: "Retrying subtitle render",
+  });
+  if (!written.ok) return;
+  await engine.jobs.failures.clear(assetId);
+}
+
+/** A failed subtitle render must not leave a playable source stuck in error. */
+export async function clearRenderErrorIfPlayable(engine: Engine, assetId: string): Promise<boolean> {
+  if (!(await sourceVideoIsPlayable(engine, assetId))) return false;
+  const view = engine.jobs.artifactWork.read(assetId);
+  if (view.ok && view.value?.status === "error") {
+    await clearRenderError(engine, assetId);
+  }
+  return true;
+}
+
+/** Drop a queued render view when this attempt never took the lease. */
+export async function releaseQueuedRenderIfPlayable(engine: Engine, assetId: string): Promise<void> {
+  if (!(await sourceVideoIsPlayable(engine, assetId))) return;
+  const view = engine.jobs.artifactWork.read(assetId);
+  if (!view.ok || view.value?.status !== "pending") return;
+  const owner = engine.jobs.artifactWork.begin(assetId, {
+    kind: "render",
+    ownerKind: "job",
+    durationMs: 5_000,
+  });
+  if (!owner) return;
+  engine.jobs.artifactWork.complete(assetId, owner.ownerId);
+  // complete() does not remove a generation-error row, and that row alone
+  // still reports the playable source as failed.
+  await clearRenderError(engine, assetId);
+}
+
+export async function preservePlayableRenderSources(
+  engine: Engine,
+  assetIds: readonly string[],
+  markAssetFailureHandled: () => void,
+  error: unknown,
+): Promise<never> {
+  const playable = await Promise.all(assetIds.map(async (assetId) => {
+    const kept = await clearRenderErrorIfPlayable(engine, assetId);
+    if (kept) await releaseQueuedRenderIfPlayable(engine, assetId);
+    return kept;
+  }));
+  if (playable.some(Boolean)) {
+    markAssetFailureHandled();
+    throw preserveArtifactState(error);
+  }
+  throw error instanceof Error ? error : new Error(String(error));
+}
+
 function abortRace(signal: AbortSignal): Promise<never> {
   return new Promise((_, reject) => {
     const fail = () => {
@@ -164,7 +239,6 @@ function abortRace(signal: AbortSignal): Promise<never> {
 
 export function registerRenderProjectJob(engine: Engine): void {
   registerJobHandler("render_project", async (payload, ctx) => {
-    ctx.signal.throwIfAborted();
     const {
       orientation,
       assets,
@@ -198,11 +272,41 @@ export function registerRenderProjectJob(engine: Engine): void {
       shadowOpacity,
     } = payload as RenderProjectPayload;
 
-    const bundleDir = await Promise.race([
-      getSharedBundleLocation(),
-      abortRace(ctx.signal),
-    ]);
-    ctx.signal.throwIfAborted();
+    let bundleDir: string;
+    let osgImagePath = payloadOsgImagePath;
+    let osgCopyName: string | null = null;
+    let osgCopyPath: string | null = null;
+    try {
+      ctx.signal.throwIfAborted();
+      bundleDir = await Promise.race([
+        getSharedBundleLocation(),
+        abortRace(ctx.signal),
+      ]);
+      ctx.signal.throwIfAborted();
+      if (!osgImagePath && osgAssetId) {
+        const resolved = await resolveOsgImagePath(engine, osgAssetId);
+        if (resolved.ok) {
+          osgImagePath = resolved.path;
+        } else {
+          logger.warn("overlay-skipped", { assetId: osgAssetId, error: resolved.error });
+        }
+      }
+      if (osgImagePath) {
+        osgCopyName = `osg-project-${Date.now()}${basename(osgImagePath).replace(/^[^.]*/, "")}`;
+        osgCopyPath = join(bundleDir, osgCopyName);
+        await copyFile(resolve(osgImagePath), osgCopyPath);
+      }
+    } catch (error) {
+      const assetIds = Array.isArray(assets)
+        ? assets.flatMap((asset) => (asset && typeof asset.assetId === "string" ? [asset.assetId] : []))
+        : [];
+      return preservePlayableRenderSources(
+        engine,
+        assetIds,
+        () => ctx.markAssetFailureHandled(),
+        error,
+      );
+    }
 
     const targetWidth = orientation === "portrait" ? PORTRAIT_WIDTH : orientation === "square" ? SQUARE_WIDTH : LANDSCAPE_WIDTH;
     const targetHeight = orientation === "portrait" ? PORTRAIT_HEIGHT : orientation === "square" ? SQUARE_HEIGHT : LANDSCAPE_HEIGHT;
@@ -212,33 +316,12 @@ export function registerRenderProjectJob(engine: Engine): void {
         ? "square.mp4"
         : "landscape.mp4";
 
-    // The stored-settings path (set_video_overlay → lazy render) carries only
-    // osgAssetId; resolve it to a file at run time so the overlay actually
-    // renders — and so the path survives file moves between enqueue and run.
-    let osgImagePath = payloadOsgImagePath;
-    if (!osgImagePath && osgAssetId) {
-      const resolved = await resolveOsgImagePath(engine, osgAssetId);
-      if (resolved.ok) {
-        osgImagePath = resolved.path;
-      } else {
-        logger.warn("overlay-skipped", { assetId: osgAssetId, error: resolved.error });
-      }
-    }
-
-    // Copy OSG image into bundle dir once if provided
-    let osgCopyName: string | null = null;
-    let osgCopyPath: string | null = null;
-    if (osgImagePath) {
-      osgCopyName = `osg-project-${Date.now()}${basename(osgImagePath).replace(/^[^.]*/, "")}`;
-      osgCopyPath = join(bundleDir, osgCopyName);
-      await copyFile(resolve(osgImagePath), osgCopyPath);
-    }
-
     const rendered: string[] = [];
     const failed: Array<{ assetId: string; error: string }> = [];
 
     try {
       for (const asset of assets) {
+        const playable = await clearRenderErrorIfPlayable(engine, asset.assetId);
         try {
           ctx.signal.throwIfAborted();
           const claim = await claimLockedLease(
@@ -251,6 +334,7 @@ export function registerRenderProjectJob(engine: Engine): void {
           );
           if (!claim.ok) {
             failed.push({ assetId: asset.assetId, error: claim.reason });
+            if (playable) await releaseQueuedRenderIfPlayable(engine, asset.assetId);
             continue;
           }
           const lease = { ownerId: claim.ownerId };
@@ -514,8 +598,9 @@ export function registerRenderProjectJob(engine: Engine): void {
             }
           } finally {
             clearInterval(heartbeat);
-            if (renderSucceeded) {
+            if (renderSucceeded || playable) {
               await engine.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
+              await clearRenderError(engine, asset.assetId);
             } else {
               await engine.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
                 message: "render failed",
@@ -524,7 +609,13 @@ export function registerRenderProjectJob(engine: Engine): void {
             await engine.jobs.locks.release(asset.assetDir);
           }
         } catch (err) {
-          if (ctx.signal.aborted) throw err;
+          if (ctx.signal.aborted) {
+            if (playable) {
+              ctx.markAssetFailureHandled();
+              throw preserveArtifactState(err);
+            }
+            throw err;
+          }
           failed.push({ assetId: asset.assetId, error: err instanceof Error ? err.message : String(err) });
         }
       }
@@ -533,7 +624,13 @@ export function registerRenderProjectJob(engine: Engine): void {
     }
 
     if (rendered.length === 0 && failed.length > 0) {
-      throw new Error(`Render failed: ${failed.map((f) => `${f.assetId}: ${f.error}`).join("; ")}`);
+      const error = new Error(`Render failed: ${failed.map((f) => `${f.assetId}: ${f.error}`).join("; ")}`);
+      const playable = await Promise.all(failed.map((entry) => clearRenderErrorIfPlayable(engine, entry.assetId)));
+      if (playable.some(Boolean)) {
+        ctx.markAssetFailureHandled();
+        throw preserveArtifactState(error);
+      }
+      throw error;
     }
 
     return { success: failed.length === 0, rendered, failed };

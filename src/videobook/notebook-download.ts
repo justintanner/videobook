@@ -92,9 +92,16 @@ export function mediaAssetWatchStep(
     && (job.state === 'failed' || job.state === 'aborted')
     && MEDIA_FAILURE_JOB_TYPES.has(job.type))
   if (asset?.status === 'error' || failed) {
+    const renderFailure = asset?.status === 'error'
+      ? jobs.find((job) =>
+        job.artifactId === artifactId
+        && job.type === 'render_project'
+        && (job.state === 'failed' || job.state === 'aborted'))
+      : undefined
     return {
       kind: 'failed',
       message: failed?.error?.message
+        ?? renderFailure?.error?.message
         ?? nonBlankStringValue(recordedError)
         ?? 'Media processing failed',
     }
