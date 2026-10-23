@@ -1,6 +1,6 @@
 {
   "name": "videobook",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Local-first MCP server and web UI for AI video creation: notebooks, generation, editing, rendering and publishing.",
   "keywords": [
     "mcp",

@@ -1,6 +1,8 @@
+import { modelFrontierRankings, type ModelFrontierRanking } from "./frontier.js";
+import { PROVIDER_ENV_KEYS } from "./adapters/index.js";
 import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveModel } from "./descriptor.js";
-import type { Media, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotSpec } from "./types.js";
+import type { Media, ModelEntry, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotSpec } from "./types.js";
 
 export interface ModelListing {
   id: string;
@@ -14,12 +16,18 @@ export interface ModelListing {
   modes: ModeSpec[];
   options: OptionSpec[];
   hidden: boolean;
+  available: boolean;
+  frontier: readonly ModelFrontierRanking[];
 }
 
 export interface ListingFilter {
   media?: Media;
   operation?: Operation;
   includeHidden?: boolean;
+}
+
+export function modelIsHidden(entry: ModelEntry): boolean {
+  return entry.hidden === true && modelFrontierRankings(entry.id).length === 0;
 }
 
 export function modelListing(model: ResolvedModel): ModelListing {
@@ -34,13 +42,15 @@ export function modelListing(model: ResolvedModel): ModelListing {
     refs: model.slots.map(({ role, min, max }) => ({ role, min, max })),
     modes: model.modes,
     options: model.options,
-    hidden: model.entry.hidden === true,
+    hidden: modelIsHidden(model.entry),
+    available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
+    frontier: modelFrontierRankings(model.id),
   };
 }
 
 export function listModels(filter: ListingFilter = {}): ResolvedModel[] {
   return MODEL_ENTRIES
-    .filter((entry) => filter.includeHidden || !entry.hidden)
+    .filter((entry) => filter.includeHidden || !modelIsHidden(entry))
     .filter((entry) => !filter.media || entry.media === filter.media)
     .filter((entry) => !filter.operation || entry.operations.includes(filter.operation))
     .map((entry) => resolveModel(entry.id));

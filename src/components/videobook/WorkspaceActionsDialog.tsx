@@ -1,3 +1,4 @@
+import { generationModelChoices } from '@/videobook/generation-frontier'
 import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../server/src/media/seedance-edit'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -96,9 +97,12 @@ function ActionForm({ action, context, initialValues, initialResult, variants, o
   const unavailable = actionUnavailableReason(action, context)
   const hasDependentChoices = ['commit_hash', 'filename', 'subject_id', 'subject_ids'].some((name) => name in (action.inputSchema.properties ?? {}))
   const cropMedia = action.handler.kind === 'tool' && action.handler.tool === 'crop_asset' && typeof values.asset_id === 'string' ? context.media?.[values.asset_id] : undefined
-  const choices = action.target.argument && action.target.mediaKinds
+  const baseChoices = action.target.argument && action.target.mediaKinds
     ? { ...context.choices, [action.target.argument]: (context.choices[action.target.argument] ?? context.choices.asset_id ?? []).filter((choice) => action.target.mediaKinds?.some((kind) => kind === choice.detail)) }
     : context.choices
+  const choices = action.generation && baseChoices.model
+    ? { ...baseChoices, model: generationModelChoices(baseChoices.model, action.generation.mediaType, values) }
+    : baseChoices
 
   const execute = async () => {
     if (busy || unavailable) return

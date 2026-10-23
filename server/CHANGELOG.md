@@ -6,7 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-23
+
 ### Added
+
+- Image and video model pickers show frontier rankings from the offline
+  `@apicity/cost` snapshot, with rank, Elo and price for the selected operation.
+  Other models follow in their existing order; unconfigured providers are
+  marked unavailable. Saved selections and default models stay unchanged.
 
 - MachGen as a video provider, with six models: MiniMax H3, Seedance
   2.5, Seedance 2.0, Wan 3.0 and HappyHorse 1.1 for text, frame and

@@ -7,6 +7,8 @@ import type {
 } from "videobook-engine";
 import { notebookCellTableRows } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
+import { modelFrontierRankings, type ModelFrontierRanking } from "./media/frontier.js";
+import { PROVIDER_ENV_KEYS } from "./media/adapters/index.js";
 import { listModels } from "./media/listing.js";
 import type { ResolvedModel } from "./media/types.js";
 import { notebookGenerationInputContract } from "./notebook-generation-contract.js";
@@ -62,6 +64,8 @@ interface NotebookAction {
   inputContract?: NotebookGenerationInputContract;
   controls?: NotebookGenerationControl[];
   existingCellOnly?: boolean;
+  available?: boolean;
+  frontier?: readonly ModelFrontierRanking[];
 }
 
 const LOCAL_ACTIONS: NotebookAction[] = [
@@ -361,6 +365,8 @@ function generationAction(model: ResolvedModel): NotebookAction {
     ...(DEFAULT_MODELS.has(model.id) ? { defaultPriority: 0, isDefault: true } : {}),
     inputContract: notebookGenerationInputContract(model),
     controls: controlsForModel(model),
+    available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
+    frontier: modelFrontierRankings(model.id),
   };
 }
 

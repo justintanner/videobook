@@ -1,3 +1,4 @@
+import { parseFrontierRankings } from './generation-frontier'
 import type { WorkspaceAction } from '../../server/src/workspace-action-contract'
 import type { ActionChoice } from './workspace-actions'
 
@@ -82,7 +83,11 @@ export async function loadWorkspaceActionResources(
   })())
   if (fields.model && action.generation) requests.push((async () => {
     const models = rows(await call('list_generation_models', { media: action.generation?.mediaType }), 'models')
-    result.choices.model = choices(models, ['id'], ['title'])
+    result.choices.model = models.flatMap(model => choices([model], ['id'], ['title']).map(choice => ({
+      ...choice,
+      ...(typeof model.available === 'boolean' ? { available: model.available } : {}),
+      frontier: parseFrontierRankings(model.frontier),
+    })))
   })())
   if (fields.voice_id) requests.push((async () => {
     result.choices.voice_id = choices(rows(await call('list_elevenlabs_voices', {}), 'voices'), ['voice_id', 'id'], ['name'])

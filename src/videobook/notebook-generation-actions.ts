@@ -1,3 +1,5 @@
+import type { ModelFrontierRanking } from '../../server/src/media/frontier'
+import { parseFrontierRankings } from './generation-frontier'
 import type {
   NotebookCell,
   NotebookEdge,
@@ -84,6 +86,8 @@ export type NotebookGenerationAction = {
   defaultPriority: number | null
   inputContract: GenerationInputContract
   controls: GenerationControl[]
+  available?: boolean
+  frontier?: readonly ModelFrontierRanking[]
   existingCellOnly?: boolean
 }
 
@@ -315,6 +319,8 @@ export function asNotebookGenerationActions(
       defaultPriority: priority,
       inputContract: contract,
       controls,
+      ...(typeof action.available === 'boolean' ? { available: action.available } : {}),
+      ...(Array.isArray(action.frontier) ? { frontier: parseFrontierRankings(action.frontier) } : {}),
       ...(action.existingCellOnly === true ? { existingCellOnly: true } : {}),
     }]
   })

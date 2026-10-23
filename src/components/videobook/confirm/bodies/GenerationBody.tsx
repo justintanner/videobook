@@ -1,3 +1,4 @@
+import { frontierPickerGroups, generationFrontierType } from '@/videobook/generation-frontier'
 import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../../../server/src/media/seedance-edit'
 import { useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
@@ -190,6 +191,8 @@ export function GenerationBody({
   onSettingChange,
 }: GenerationBodyProps) {
   const [showSourcePicker, setShowSourcePicker] = useState(false)
+  const frontierType = generationFrontierType(draft.cell.type, generationMode(draft), draft.action.operation, sources)
+  const modelGroups = frontierPickerGroups(actions, frontierType)
   const settings = notebookChatGenerationSettings(draft)
   const frameAspectRatio = modelFrameAspectRatio(draft.action.model, draft.cell.inputs ?? {})
   const previewPlayer = useVoicePreviewPlayer()
@@ -319,10 +322,16 @@ export function GenerationBody({
               disabled={busy || actions.length === 0}
               onChange={(event) => onActionChange(event.target.value)}
             >
-              {actions.map((action) => (
-                <option key={action.id} value={action.id}>
-                  {action.title} · {action.providerLabel}
-                </option>
+              {modelGroups.map(group => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.rows.map(({ action, ranking }) => (
+                    <option key={action.id} value={action.id} disabled={action.available === false}>
+                      {ranking ? `#${ranking.rank} · ` : ''}{action.title} · {action.providerLabel}
+                      {ranking ? ` · Elo ${ranking.elo} · ${ranking.priceLabel}` : ''}
+                      {action.available === false ? ' · unavailable' : ''}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>

@@ -76,6 +76,7 @@ export function WorkspaceActionField({
     : { ...schema, ...variants[inputFormat] }
   const label = schema.title ?? actionFieldLabel(name)
   const options = choices[choiceName ?? name]
+  const optionGroups = options ? [...new Set(options.map(option => option.group ?? ''))] : []
   const structured = resolved.type === 'object' || resolved.type === 'array'
   const selectedVariant = variants.findIndex((variant) => variantLabel(variant) === variantLabel(resolved))
   const enumValues = resolved.enum ?? (resolved.type === 'boolean' ? [true, false] : undefined)
@@ -102,7 +103,12 @@ export function WorkspaceActionField({
         <select id={id} required={required} disabled={disabled} value={typeof value === 'string' ? value : ''}
           onChange={(event) => onChange(event.target.value || undefined)}>
           <option value="">{options.length ? `Choose ${label.toLowerCase()}` : `No ${label.toLowerCase()} available`}</option>
-          {options.map((option) => <option key={option.value} value={option.value}>{option.label}{option.detail ? ` · ${option.detail}` : ''}</option>)}
+          {optionGroups.map(group => {
+            const entries = options.filter(option => (option.group ?? '') === group).map(option => (
+              <option key={option.value} value={option.value} disabled={option.available === false}>{option.label}{option.detail ? ` · ${option.detail}` : ''}</option>
+            ))
+            return group ? <optgroup key={group} label={group}>{entries}</optgroup> : entries
+          })}
         </select>
       )
     }
