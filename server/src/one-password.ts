@@ -151,8 +151,9 @@ export function listVaultItemTitles(vault: string, env: NodeJS.ProcessEnv, token
   const parsed = JSON.parse(runOp(["item", "list", "--vault", vault, "--format", "json"], env, token)) as unknown;
   if (!Array.isArray(parsed)) throw new Error("op item list did not return a list");
   return new Set(parsed.flatMap((item: unknown) => {
-    const title = item && typeof item === "object" ? (item as { title?: unknown }).title : undefined;
-    return typeof title === "string" ? [title] : [];
+    const { title, category } = item && typeof item === "object" ? (item as { title?: unknown; category?: unknown }) : {};
+    // SSH keys carry no password field, so op://<vault>/<title>/password cannot resolve them.
+    return typeof title === "string" && category !== "SSH_KEY" ? [title] : [];
   }));
 }
 
