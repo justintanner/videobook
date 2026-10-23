@@ -158,7 +158,7 @@ function preserveArtifactState(error: unknown): Error {
   return preserved;
 }
 
-export async function sourceVideoIsPlayable(engine: Engine, assetId: string): Promise<boolean> {
+async function sourceVideoIsPlayable(engine: Engine, assetId: string): Promise<boolean> {
   const manifest = await engine.files.manifest(assetId);
   if (!manifest.ok) return false;
   return findVideoFile(manifest.value.files) !== null;
