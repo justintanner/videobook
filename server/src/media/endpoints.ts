@@ -2,6 +2,7 @@ export interface ProviderEndpoints {
   kieBaseURL?: string;
   falQueueBaseURL?: string;
   elevenlabsBaseURL?: string;
+  machgenBaseURL?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
 }

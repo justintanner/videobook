@@ -9,6 +9,7 @@ import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
+import { seedanceDraftCostHints } from "../media/seedance-draft.js";
 import { adapterFor } from "../media/adapters/index.js";
 import { completeMediaGeneration } from "../media/complete.js";
 import type { MediaRefs, ResolvedModel } from "../media/types.js";
@@ -36,7 +37,9 @@ async function replaceAudioMeta(engine: Engine, ref: string | undefined): Promis
   return { replaceAudioWith: { assetId: input.assetId, filename: input.filename } };
 }
 
-export async function generationSourceCostHints(engine: Engine, refs: ResolvedRefs, job: Pick<GenerateMediaJob, "model" | "mode">): Promise<CostHints> {
+export async function generationSourceCostHints(engine: Engine, refs: ResolvedRefs, job: Pick<GenerateMediaJob, "model" | "mode"> & Partial<Pick<GenerateMediaJob, "options">>): Promise<CostHints> {
+  const draftHints = await seedanceDraftCostHints(engine, job.model, job.options ?? {});
+  if (Object.keys(draftHints).length > 0) return draftHints;
   const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
   if (videoSeconds !== undefined) {
     return { inputDurationSeconds: videoSeconds, ...(isSeedanceEdit(job.model, job.mode) ? { durationSeconds: videoSeconds } : {}) };

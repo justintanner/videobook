@@ -1,6 +1,6 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
-import type { ModeSpec, ModelEntry } from "./types.js";
+import type { InputRules, ModeSpec, ModelEntry, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
   { id: "t2v", label: "Text to video", roles: [] },
@@ -31,6 +31,24 @@ const XAI_MODES: readonly ModeSpec[] = [
   { id: "r2v", label: "References", roles: ["image"] },
   { id: "v2v", label: "Edit video", roles: ["video"], requireAny: ["video"] },
 ];
+
+const MACHGEN_FRAMES: ModeSpec = { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"] };
+const MACHGEN_MEDIA: readonly RefRole[] = ["image", "video", "audio"];
+
+function machgenModes(frames: ModeSpec, references: readonly RefRole[], requireAny: readonly RefRole[] = references): readonly ModeSpec[] {
+  return [
+    { id: "t2v", label: "Text to video", roles: [] },
+    frames,
+    { id: "r2v", label: "References", roles: references, requireAny },
+  ];
+}
+
+function machgenClips(maximumSeconds: number): InputRules {
+  const window = { minimum: 2000, maximum: maximumSeconds * 1000, maximumTotal: maximumSeconds * 1000 };
+  return { refDurationMs: { video: window, audio: window } };
+}
+
+const MACHGEN_VIDEO = ["text_to_video", "image_to_video", "reference_to_video"] as const;
 
 const SPEAKER = "Speaker 1";
 
@@ -146,6 +164,14 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     defaults: { ...LIGHTNING_VIDEO_OPTIONS },
     frameOptions: { aspect_ratio: "adaptive" },
   },
+  {
+    id: "kie:bytedance/seedance-2-5-draft",
+    media: "video",
+    operations: ["upscale_video"],
+    title: "Seedance 2.5 Draft Complete",
+    description: "Render the 1080p final of a Seedance 2.5 draft: a 480p kie:bytedance/seedance-2-5 run with draft on. Pass that run's Kie task id as draft_task_id.",
+    defaults: { resolution: "1080p" },
+  },
   { id: "kie:grok-imagine/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine" },
   { id: "kie:grok-imagine/text-to-video", media: "video", operations: ["text_to_video"], guide: "grok_imagine", defaults: { duration: 6, resolution: "480p" } },
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
@@ -227,6 +253,54 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:pixelcut/looping-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
   { id: "fal:creatify/boreal", media: "video", operations: ["text_to_video", "image_to_video", "lip_sync"] },
   { id: "fal:mirelo-ai/sfx2.0/video-to-video", media: "video", operations: ["edit_video"], prompt: "text_prompt", defaults: { num_samples: 1 } },
+  {
+    id: "machgen:MiniMax-H3",
+    media: "video",
+    operations: MACHGEN_VIDEO,
+    title: "MiniMax H3 (MachGen)",
+    dialect: "natural_strip_frames",
+    modes: machgenModes({ ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] }, MACHGEN_MEDIA),
+    rules: machgenClips(15),
+  },
+  {
+    id: "machgen:Seedance-2.5",
+    media: "video",
+    operations: MACHGEN_VIDEO,
+    title: "Seedance 2.5 (MachGen)",
+    guide: "seedance25",
+    dialect: "natural_strip_frames",
+    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA),
+    frameOptions: { aspect_ratio: "adaptive" },
+    rules: machgenClips(30),
+  },
+  {
+    id: "machgen:Seedance-2.0",
+    media: "video",
+    operations: MACHGEN_VIDEO,
+    title: "Seedance 2.0 (MachGen)",
+    guide: "seedance2",
+    dialect: "natural_strip_frames",
+    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA, ["image", "video"]),
+    rules: machgenClips(15),
+  },
+  {
+    id: "machgen:Alibaba-Wan-3.0",
+    media: "video",
+    operations: MACHGEN_VIDEO,
+    title: "Wan 3.0 (MachGen)",
+    dialect: "natural_strip_frames",
+    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA),
+    rules: machgenClips(15),
+  },
+  {
+    id: "machgen:HappyHorse-1.1",
+    media: "video",
+    operations: MACHGEN_VIDEO,
+    title: "HappyHorse 1.1 (MachGen)",
+    dialect: "natural_strip_frames",
+    modes: machgenModes({ ...MACHGEN_FRAMES, roles: ["first_frame"] }, ["image"]),
+  },
+  { id: "machgen:Grok-Imagine-Video-1.5", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 (MachGen)", guide: "grok_imagine", dialect: "natural_strip_frames" },
 
   { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
   { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },

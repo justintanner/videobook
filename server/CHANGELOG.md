@@ -6,6 +6,33 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- MachGen as a video provider, with six models: MiniMax H3, Seedance
+  2.5, Seedance 2.0, Wan 3.0 and HappyHorse 1.1 for text, frame and
+  reference video, and Grok Imagine Video 1.5 for image-to-video. Each
+  model offers its own resolutions, durations and aspect ratios, and
+  cost estimates come from the `@apicity/cost` MachGen per-second rates.
+  Wan 3.0 always sends MachGen's documented adaptive, 30 fps, with-audio
+  config. Generations run as provider tasks: Videobook polls MachGen and
+  downloads the finished video with the API key.
+- `MACHGEN_API_KEY` is a managed key. `videobook config`, 1Password
+  resolution and the provider keys panel include it. Without it, MachGen
+  generations stop with "MACHGEN_API_KEY environment variable is not set"
+  before an asset is created, and pending MachGen tasks wait unpolled.
+- Seedance 2.5 Draft Complete (`kie:bytedance/seedance-2-5-draft`)
+  renders the 1080p final of a 480p Seedance 2.5 draft from the draft's
+  Kie task id. A draft rendered in the same book supplies the billed
+  seconds and reference video seconds for the estimate. The Kie Seedance
+  2.5 model gains the matching `draft` option.
+
+### Changed
+
+- Upgrade all application `@apicity/*` dependencies to 0.17.0 and add
+  `@apicity/machgen`.
+- Kie Seedance 2.5 estimates use the 2026-10-22 rates, for example
+  $0.79 per second at 1080p without a reference video, up from $0.57.
+
 ## [0.2.3] - 2026-10-21
 
 ### Added

@@ -1,6 +1,6 @@
 import type { ZodObject, ZodRawShape, ZodType } from "zod";
 
-export type ProviderId = "kie" | "fal" | "xai" | "alibaba" | "elevenlabs";
+export type ProviderId = "kie" | "fal" | "xai" | "alibaba" | "elevenlabs" | "machgen";
 
 export type Media = "image" | "video" | "audio";
 
@@ -38,6 +38,7 @@ export type PromptDialect =
   | "natural_numbered"
   | "natural_kinds"
   | "natural_source_video"
+  | "natural_strip_frames"
   | "seedance"
   | "strip_frames"
   | "brackets"

@@ -3,6 +3,7 @@ import { alibabaAdapterFor } from "./alibaba.js";
 import { elevenLabsAdapter } from "./elevenlabs.js";
 import { falAdapter } from "./fal.js";
 import { kieAdapter } from "./kie.js";
+import { machgenAdapter } from "./machgen.js";
 import type { ProviderAdapter } from "./types.js";
 import { xaiAdapter } from "./xai.js";
 
@@ -18,6 +19,8 @@ export function adapterFor(model: ResolvedModel): ProviderAdapter {
       return alibabaAdapterFor(model.apiId);
     case "elevenlabs":
       return elevenLabsAdapter;
+    case "machgen":
+      return machgenAdapter;
   }
 }
 
@@ -27,4 +30,5 @@ export const PROVIDER_ENV_KEYS: Readonly<Record<ResolvedModel["provider"], strin
   xai: "XAI_API_KEY",
   alibaba: "DASHSCOPE_API_KEY",
   elevenlabs: "ELEVENLABS_API_KEY",
+  machgen: "MACHGEN_API_KEY",
 };

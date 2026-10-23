@@ -13,6 +13,7 @@ import {
   ElevenLabsTextToSpeechRequestSchema,
   ElevenLabsVideoToMusicRequestSchema,
 } from "@apicity/elevenlabs/zod";
+import { machgenWire } from "./machgen.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 
 type AnyObject = ZodObject<ZodRawShape>;
@@ -184,5 +185,7 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
       return alibabaWire(parsed.apiId);
     case "elevenlabs":
       return elevenLabsWire(parsed.apiId);
+    case "machgen":
+      return machgenWire(parsed.apiId);
   }
 }

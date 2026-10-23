@@ -6,13 +6,17 @@ import './ProviderTaskLink.css'
 export function ProviderTaskLink({ task }: { task: ProviderTaskStatus }) {
   const [copied, setCopied] = useState<string | null>(null)
   const url = providerStatusUrl(task.provider, task.model)
-  if (!url) return null
-  const label = task.provider === 'fal' ? 'fal requests' : 'Kie logs'
+  if (!url && (task.provider !== 'machgen' || !task.taskId)) return null
+  const label = task.provider === 'fal' ? 'fal requests' : task.provider === 'machgen' ? 'MachGen task' : 'Kie logs'
   return (
     <div className="provider-task-link">
-      <a href={url} target="_blank" rel="noopener noreferrer">
-        {label}<ExternalLink size={12} aria-hidden="true" />
-      </a>
+      {url
+        ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            {label}<ExternalLink size={12} aria-hidden="true" />
+          </a>
+        )
+        : <span>{label}</span>}
       {task.taskId && <>
         <code title={task.taskId}>{task.taskId}</code>
         <button type="button" aria-label="Copy provider request ID" title="Copy provider request ID"

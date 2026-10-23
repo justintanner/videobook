@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.16.1 (2026-10-17). Image, video and audio
+Videobook now uses Apicity 0.17.0 (2026-10-23). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -590,6 +590,32 @@ the versioned Qwen models, so neither change reaches the catalog.
 
 ---
 
+## 44. (quirk) MachGen 0.17.0 request shapes Videobook adapts — CONSUMER REQUIREMENT
+
+`@apicity/machgen` publishes one generic `MachGenGenerateRequestSchema` for every
+model and task type, so `server/src/media/machgen.ts` keeps a per-model table
+taken from MachGen's model capability contract as captured on 2026-10-22: task
+types, heights, durations, aspect ratios, audio, seed, and end-frame support.
+Each catalog entry exposes flat fields (`first_frame_url`, `last_frame_url`,
+`reference_*_urls`, `duration`, `resolution`, `aspect_ratio`, `generate_audio`,
+`seed`). The wrap derives `task_type` from the connected media and nests the
+settings in `video_config`.
+
+- MiniMax H3 offers 480p, 768p and 1440p. MachGen marks 1080p private, and
+  `@apicity/cost` publishes no 1080p rate. 1440p and first-plus-last-frame
+  runs stop at 15 seconds. A lone last frame is sent with `keyframe_indices: [-1]`.
+- Reference lists use the apicity schema caps (9 images, 3 videos, 3 audio
+  clips), although MachGen's contract allows more for Seedance 2.5 and Wan 3.0.
+- Wan 3.0 always sends the documented `aspect_ratio: "adaptive"`, `fps: 30`,
+  `audio: true`, because MachGen rejected requests without them at zero charge.
+- Prompts name references in plain words (`natural_strip_frames`). Videobook
+  sends no subject maps, so MachGen's `@handle` validation does not apply.
+- MachGen has no per-task web page, so provider status shows the task id
+  without a link. The client raises timeouts and aborts as `MachGenError` 408
+  and 499, so polls keep a task on 408, 429 and 499 and fail it on other 4xx.
+
+---
+
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | catalog rule reads the apicity constant (vb-6rct)      |
@@ -600,6 +626,7 @@ the versioned Qwen models, so neither change reaches the catalog.
 | **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
+| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`       |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -646,3 +673,12 @@ billed fal endpoints use fal's historical average per call when
 `FAL_ADMIN_API_KEY` is set (§41, vb-x1xh). Seedance 2.0 US reference-to-video
 without `video_urls`, and Seedance 2.5 draft completion without the draft's
 ratio and duration, stay on the local formula.
+
+**0.17.0 update (2026-10-23, vb-9sht):** all 13 Apicity packages resolve 0.17.0,
+and `@apicity/machgen` adds six MachGen video models as provider tasks (§44).
+KIE adds `bytedance/seedance-2-5-draft`, catalogued and visible because the KIE
+Seedance 2.5 model now has the `draft` option that creates its drafts. A draft
+rendered in the same book supplies the completion's billed seconds; otherwise
+the estimate stays at $0 with the upstream warning. KIE's new chat models
+(`gpt-6-1-sol`, `claude-haiku-5-5`) do not apply: Videobook chat routes through
+OpenAI (vb-ga0z). KIE Seedance 2.5 rates moved to the 2026-10-22 price page.

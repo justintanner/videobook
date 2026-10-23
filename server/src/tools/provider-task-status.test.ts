@@ -73,6 +73,27 @@ describe("provider status details", () => {
       ? "https://fal.ai/models/fal-ai/nano-banana-pro/edit/requests" : "https://kie.ai/logs");
   });
 
+  it("keeps MachGen task IDs after failure without inventing a status page", async () => {
+    const asset = await engine.artifacts.create("video", "machgen output");
+    if (!asset.ok) throw new Error(asset.error.message);
+    const artifactId = asset.value.artifactId;
+    await engine.metadata.artifacts.write(artifactId, "generation-payload", {
+      model: "Seedance-2.5", task_type: "T2V", prompt: "a boat", video_config: { height: 720, duration_secs: 5 },
+    });
+    const owner = engine.jobs.artifactWork.begin(artifactId, { kind: "generate", ownerKind: "job", durationMs: 60_000 });
+    if (!owner) throw new Error("Missing task owner");
+    const written = await engine.jobs.pending.write({ artifactId, taskId: "machgen-task-id", taskType: "machgen_media",
+      meta: { model: "machgen:Seedance-2.5", media: "video", machgenModel: "Seedance-2.5" } }, owner.ownerId);
+    if (!written.ok || !written.value) throw new Error("Task was not written");
+    const expected = { provider: "machgen", model: "Seedance-2.5", taskId: "machgen-task-id" };
+    expect(await readProviderTaskStatus(engine, artifactId)).toEqual(expected);
+    await preserveProviderTask(engine, written.value.task);
+    const failed = await engine.jobs.pending.fail(artifactId, "machgen-task-id", { message: "Request Rejected" });
+    expect(failed.ok && failed.value).toBeTruthy();
+    expect(await readProviderTaskStatus(engine, artifactId)).toEqual(expected);
+    expect(providerStatusUrl("machgen", "Seedance-2.5")).toBeNull();
+  });
+
   it("does not identify another provider or an unsafe model as a fal or Kie page", async () => {
     expect(await readProviderTaskStatus(engine, null, { provider: "xai", taskId: "xai-task" })).toBeNull();
     expect(providerStatusUrl("fal", "https://example.test/api-key")).toBeNull();

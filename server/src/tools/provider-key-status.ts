@@ -26,6 +26,7 @@ type ProviderGroup =
   | "kimicoding"
   | "fal"
   | "dashscope"
+  | "machgen"
   | "b2";
 type LiveLookup = "kie-credits" | "elevenlabs-credits" | "openai-tokens" | "xai-tokens";
 
@@ -88,6 +89,7 @@ const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
   FAL_API_KEY: { provider: "fal", label: "FAL" },
   FAL_ADMIN_API_KEY: { provider: "fal", label: "FAL admin" },
   DASHSCOPE_API_KEY: { provider: "dashscope", label: "DashScope" },
+  MACHGEN_API_KEY: { provider: "machgen", label: "MachGen" },
   B2_ACCESS_KEY_ID: { provider: "b2", label: "Backblaze B2" },
   B2_SECRET_ACCESS_KEY: { provider: "b2", label: "Backblaze B2" },
   B2_REGION: { provider: "b2", label: "Backblaze B2" },
@@ -109,6 +111,7 @@ const ROW_ORDER: readonly ManagedEnvKey[] = [
   "FAL_API_KEY",
   "FAL_ADMIN_API_KEY",
   "DASHSCOPE_API_KEY",
+  "MACHGEN_API_KEY",
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",

@@ -40,6 +40,8 @@ function providerPath(model: ResolvedModel): string {
       return "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation(request)";
     case "elevenlabs":
       return ELEVENLABS_PATHS[model.apiId] ?? "elevenlabs";
+    case "machgen":
+      return "machgen.api.v0.generate(request)";
   }
 }
 

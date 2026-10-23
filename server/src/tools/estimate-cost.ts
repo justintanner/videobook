@@ -10,6 +10,7 @@ import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-m
 import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
 import { checkSeedanceEditSource, normalizeRefs } from "../media/refs.js";
+import { seedanceDraftCostHints } from "../media/seedance-draft.js";
 import { REF_ROLES, type MediaRefs } from "../media/types.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
@@ -79,12 +80,13 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
     : {};
   const sourceError = await checkSeedanceEditSource(engine, model, refs, input.mode);
   if (sourceError) return unavailable(sourceError);
+  const hints = { ...await mediaHints(engine, refs), ...await seedanceDraftCostHints(engine, model.id, options) };
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(refs),
     options,
     mode: text(input.mode),
-  }, await mediaHints(engine, refs));
+  }, hints);
   return result.ok ? result.estimate : unavailable(result.error);
 }
 

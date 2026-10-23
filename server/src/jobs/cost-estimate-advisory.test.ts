@@ -42,7 +42,7 @@ describe("advisory cost estimation", () => {
       },
     }, { inputDuration: 10 });
     expect(assessment.available).toBe(true);
-    expect(assessment.usd).toBeCloseTo(15 * 0.3425);
+    expect(assessment.usd).toBeCloseTo(15 * 0.475);
     expect(assessment.warnings).toEqual([]);
   });
 

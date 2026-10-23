@@ -23,7 +23,7 @@ function installedPackageVersion(name: string): string {
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
-type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs";
+type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen";
 type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
@@ -137,6 +137,7 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
     && (/^\/(fal-ai|alibaba)\//u.test(path) || modelEntry(`fal:${path.slice(1)}`) !== undefined);
   if (provider === "alibaba") return path.includes("/services/aigc/");
   if (provider === "elevenlabs") return /\/(text-to-speech|speech-to-text|speech-to-speech|sound-generation|audio-isolation|music)(\/|$)/u.test(path);
+  if (provider === "machgen") return path === "/api/v0/generate";
   return /\/(videos|images)(\/|$)/u.test(path);
 }
 
@@ -158,7 +159,7 @@ function remoteId(body: RecordValue, url: URL, method: string): string | null {
   const pathId = url.searchParams.get("taskId") ?? url.searchParams.get("task_id")
     ?? (/\/(requests|tasks|jobs|videos)\/([^/]+)(?:\/status)?$/u.exec(url.pathname)?.[2] ?? null);
   if (method === "GET" && pathId) return decodeURIComponent(pathId);
-  return text(data.taskId) ?? text(data.task_id) ?? text(body.request_id) ?? text(body.job_id)
+  return text(data.taskId) ?? text(data.task_id) ?? text(body.task_id) ?? text(body.request_id) ?? text(body.job_id)
     ?? text(output.task_id) ?? text(body.id);
 }
 
@@ -220,7 +221,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const model = text(payload.model) ?? text(payload.model_id) ?? (provider === "fal" ? endpoint : endpoint.split("/").slice(-2).join("/"));
       let hints: CostHints | undefined;
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
-      const activity = activityFor(model, url.pathname, context.operation);
+      const activity = provider === "machgen" ? "video" : activityFor(model, url.pathname, context.operation);
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
@@ -240,7 +241,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const body = json ? object(await response.clone().json()) : {};
       const externalId = remoteId(body, url, method);
       if (entry) {
-        const accepted = !!externalId && (provider === "kie" || provider === "fal" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
+        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...observedPatch(provider, entry, body, status) });
       } else if (method === "GET" && externalId && response.ok && json) {

@@ -3,7 +3,7 @@ import type { CostHints } from "@apicity/cost";
 import type { JobHandlerContext } from "../../queue.js";
 import type { ProviderId, ResolvedModel } from "../types.js";
 
-export type ProviderOutput = { url: string } | { bytes: Buffer; extension: string };
+export type ProviderOutput = { url: string } | { bytes: Buffer; extension: string; url?: string };
 
 export interface SubmitContext {
   engine: Engine;
@@ -32,4 +32,5 @@ export const MEDIA_TASK_TYPES = {
   kie: "media_kie",
   fal: "fal_media",
   xai: "xai_media",
+  machgen: "machgen_media",
 } as const;

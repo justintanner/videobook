@@ -245,7 +245,7 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("prices Seedance 2.5 1080p from the Apicity 0.13.0 rate table", () => {
+  it("prices Seedance 2.5 1080p from the Apicity 0.17.0 rate table", () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
     const request = {
       model: "bytedance/seedance-2-5" as const,
@@ -258,7 +258,7 @@ describe("kie paygate", () => {
     };
     const estimate = computeEstimate({ provider: "kie", payload: request });
 
-    expect(estimate.usd).toBeCloseTo(2.85);
+    expect(estimate.usd).toBeCloseTo(5 * 0.79);
     expect(estimate.warnings).toEqual([]);
     const otp = mintKieOtp(request, 60);
     const parsed = parseOtp(otp);

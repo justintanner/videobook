@@ -29,6 +29,13 @@ describe('notebook generation policy', () => {
       type: 'generate_image', tool: 'edit_image_subjects', provider: 'fal',
     })).toBe(true)
   })
+  it('requires cloud consent for MachGen video cells', () => {
+    const cell = { type: 'generate_video' as const, operation: 'image_to_video', provider: 'machgen', tool: 'generate_video' }
+
+    expect(notebookCellRequiresCloudGenerationConsent(cell)).toBe(true)
+    expect(notebookCellSupportsGenerateCellCommand(cell)).toBe(true)
+  })
+
   it('requires cloud consent for prompt rewrites without accepting them as generate-cell targets', () => {
     const cell = { type: 'prompt' as const, operation: 'rewrite_prompt' }
 

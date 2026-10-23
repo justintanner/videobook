@@ -270,6 +270,28 @@ describe("generic media generation", () => {
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");
   });
 
+  it("completes a Seedance 2.5 draft on Kie with the draft's billed seconds", async () => {
+    const draft = await engine.artifacts.create("video", "seedance draft");
+    if (!draft.ok) throw new Error(draft.error.message);
+    for (const [key, value] of Object.entries({
+      "kie-task-id": { taskId: "kie-draft-1" },
+      "generation-payload": { model: "bytedance/seedance-2-5", input: { prompt: "a boat", draft: true, resolution: "480p", duration: 6 } },
+    })) expect((await engine.metadata.artifacts.write(draft.value.artifactId, key, value)).ok).toBe(true);
+    const model = "kie:bytedance/seedance-2-5-draft";
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: engine.book.get().bookId, model, options: { draft_task_id: "kie-draft-1" } },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as Record<string, unknown>;
+    expect(submitted).toMatchObject({ model: "bytedance/seedance-2-5-draft", input: { draft_task_id: "kie-draft-1", resolution: "1080p" } });
+    const hints = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(hints.ok && hints.value).toEqual({ durationSeconds: 6, inputDurationSeconds: 0 });
+    const pending = engine.jobs.pending.read(assetId);
+    expect(pending.ok && pending.value).toMatchObject({ taskId: "kie-task-1", taskType: "media_kie", meta: { model, media: "video" } });
+  });
+
   it("generates a fal image through the queue endpoints", async () => {
     const enqueued = toolJson(await client.callTool({
       name: "generate_image",

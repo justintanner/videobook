@@ -4,6 +4,7 @@ import { createKie as kie } from "@apicity/kie";
 import { createFal as fal } from "@apicity/fal";
 import { createAlibaba as alibaba } from "@apicity/alibaba";
 import { createElevenLabs as elevenlabs } from "@apicity/elevenlabs";
+import { createMachGen as machgen } from "@apicity/machgen";
 import { providerUsageFetch } from "./provider-usage.js";
 
 export function createOpenAi(options: Parameters<typeof openai>[0]): ReturnType<typeof openai> {
@@ -28,4 +29,8 @@ export function createAlibaba(options: Parameters<typeof alibaba>[0]): ReturnTyp
 
 export function createElevenLabs(options: Parameters<typeof elevenlabs>[0]): ReturnType<typeof elevenlabs> {
   return elevenlabs({ ...options, fetch: providerUsageFetch("elevenlabs", options.fetch) });
+}
+
+export function createMachGen(options: NonNullable<Parameters<typeof machgen>[0]>): ReturnType<typeof machgen> {
+  return machgen({ ...options, fetch: providerUsageFetch("machgen", options.fetch) });
 }

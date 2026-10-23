@@ -320,6 +320,65 @@ describe('notebook generation actions', () => {
     })
   })
 
+  it('offers the MachGen video models for the inputs each one accepts', () => {
+    const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
+    const machgen = (inputs: Array<{ kind: 'image' | 'video' | 'audio'; target: string }>) =>
+      compatibleGenerationActions(catalog, 'generate_video', inputs)
+        .filter((action) => action.provider === 'machgen')
+        .map((action) => action.model)
+        .sort()
+    const all = [
+      'machgen:Alibaba-Wan-3.0',
+      'machgen:Grok-Imagine-Video-1.5',
+      'machgen:HappyHorse-1.1',
+      'machgen:MiniMax-H3',
+      'machgen:Seedance-2.0',
+      'machgen:Seedance-2.5',
+    ]
+    const withoutGrok = all.filter((model) => model !== 'machgen:Grok-Imagine-Video-1.5')
+
+    expect(machgen([])).toEqual(withoutGrok)
+    expect(machgen([{ kind: 'image', target: 'first_frame' }])).toEqual(all)
+    const frames = [
+      { kind: 'image' as const, target: 'first_frame' },
+      { kind: 'image' as const, target: 'last_frame' },
+    ]
+    const modes = (model: string, inputs: Array<{ kind: 'image'; target: string }>) =>
+      compatibleGenerationModes(catalog.find((action) => action.model === model)!, inputs).map((mode) => mode.id)
+    expect(modes('machgen:MiniMax-H3', [frames[1]!])).toEqual(['i2v', 'r2v'])
+    expect(modes('machgen:Seedance-2.5', [frames[1]!])).toEqual(['r2v'])
+    expect(modes('machgen:Seedance-2.0', frames)).toEqual(['i2v', 'r2v'])
+    expect(modes('machgen:HappyHorse-1.1', frames)).toEqual(['r2v'])
+    expect(modes('machgen:Grok-Imagine-Video-1.5', frames)).toEqual([])
+    expect(machgen([{ kind: 'image', target: 'image' }])).toEqual(withoutGrok)
+    expect(machgen([{ kind: 'video', target: 'video' }]))
+      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:Seedance-2.0', 'machgen:Seedance-2.5'])
+    expect(machgen([{ kind: 'audio', target: 'audio' }]))
+      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:Seedance-2.5'])
+
+    const h3 = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
+    expect(generationActionLabel(h3)).toBe('MiniMax H3 (MachGen) · MachGen')
+    expect(h3.controls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'resolution', kind: 'select', options: ['480p', '768p', '1440p'], defaultValue: '768p' }),
+      expect.objectContaining({ name: 'duration', kind: 'number', minimum: 1, maximum: 30, defaultValue: 5 }),
+      expect.objectContaining({ name: 'generate_audio', kind: 'boolean', defaultValue: true }),
+    ]))
+    expect(catalog.find((action) => action.model === 'machgen:Alibaba-Wan-3.0')?.controls.map((control) => control.name))
+      .toEqual(['duration', 'resolution', 'seed'])
+  })
+
+  it('offers the Seedance 2.5 draft completion as a Kie video model', () => {
+    const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
+    const draft = catalog.find((action) => action.model === 'kie:bytedance/seedance-2-5-draft')
+    expect(draft).toMatchObject({ provider: 'kie', providerLabel: 'Kie', operation: 'upscale_video', title: 'Seedance 2.5 Draft Complete' })
+    expect(draft?.controls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'draft_task_id', kind: 'text', required: true }),
+      expect.objectContaining({ name: 'resolution', kind: 'select', options: ['1080p'], defaultValue: '1080p' }),
+    ]))
+    expect(compatibleGenerationActions(catalog, 'generate_video', []).map((action) => action.model))
+      .toContain('kie:bytedance/seedance-2-5-draft')
+  })
+
   it('resolves saved edit models without offering workflow edits on new generation cells', () => {
     const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
     const selection = {

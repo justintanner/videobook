@@ -393,6 +393,7 @@ describe("notebook action catalog", () => {
       "duration",
       "output_format",
       "web_search",
+      "draft",
       "nsfw_checker",
     ]);
     const seedanceDuration = seedance25Action?.controls?.find((control) =>

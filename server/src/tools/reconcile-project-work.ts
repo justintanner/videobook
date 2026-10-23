@@ -15,6 +15,8 @@ import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
 import { XaiError } from "@apicity/xai";
 import { AlibabaError } from "@apicity/alibaba";
 import { FalError } from "@apicity/fal";
+import { MachGenError } from "@apicity/machgen";
+import type { MachGenTaskStatusResponse } from "@apicity/machgen";
 import {
   EMPTY_TAG_SUMMARY,
   readAssetTagSummaries,
@@ -49,6 +51,8 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { probeVideo } from "../ffmpeg.js";
 import { providerEndpoints } from "../media/endpoints.js";
+import { machgenProvider } from "../media/adapters/machgen.js";
+import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
 import {
@@ -1021,11 +1025,88 @@ type PollPendingProviderTasksOptions = {
   kieBaseURL?: string;
   /** Point FAL queue status/result at a local server. Production polls use the provider default. */
   falQueueBaseURL?: string;
+  machgenBaseURL?: string;
 };
+
+const MACHGEN_RETRYABLE_STATUSES = new Set([408, 429, 499]);
+
+function machgenPollFailureIsFinal(error: unknown): boolean {
+  if (!(error instanceof MachGenError)) return false;
+  const status = (error as MachGenError).status;
+  return status >= 400 && status < 500 && !MACHGEN_RETRYABLE_STATUSES.has(status);
+}
+
+async function processMachGenTaskStatus(
+  engine: Engine,
+  task: PendingTask,
+  status: MachGenTaskStatusResponse,
+  result: ProviderPollResult,
+  bookId: string,
+): Promise<void> {
+  const prompt = metaPrompt(task.meta);
+  if (status.status === "FAILED") {
+    const failMsg = status.error_msg || "MachGen task failed";
+    result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    return;
+  }
+  if (status.status !== "COMPLETED") {
+    result.pending.push({
+      assetId: task.artifactId,
+      taskType: task.taskType,
+      progress: 0,
+      state: status.status.toLowerCase(),
+      prompt,
+      startedAt: task.createdAt,
+    });
+    return;
+  }
+  const assetDirResult = await engine.workspaces.resolveArtifact(task.artifactId);
+  if (!assetDirResult.ok) {
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+    return;
+  }
+  await engine.jobs.pending.markCompleting(task.artifactId);
+  const jobId = `complete-machgen-${task.artifactId}-${Date.now()}`;
+  const video = status.task_output?.video;
+  await queue.enqueue(jobId, {
+    type: "complete_kie_task",
+    taskId: task.taskId,
+    taskType: task.taskType,
+    assetId: task.artifactId,
+    assetDir: assetDirResult.value,
+    bookId,
+    meta: task.meta,
+    resultUrls: typeof video === "string" && video ? [video] : [],
+  } as unknown as Record<string, unknown>);
+  result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
+}
+
+async function pollMachGenTasks(
+  engine: Engine,
+  tasks: readonly PendingTask[],
+  result: ProviderPollResult,
+  bookId: string,
+  baseURL: string | undefined,
+): Promise<void> {
+  const machgenTasks = tasks.filter((task) => task.taskType === MEDIA_TASK_TYPES.machgen);
+  if (!getApiKey("MACHGEN_API_KEY") || machgenTasks.length === 0) return;
+  const provider = machgenProvider(30_000, baseURL);
+  await Promise.all(machgenTasks.map(async (task) => {
+    try {
+      await processMachGenTaskStatus(engine, task, await provider.api.v0.tasks(task.taskId), result, bookId);
+    } catch (error) {
+      const failMsg = error instanceof Error ? error.message : "Poll failed";
+      const prompt = metaPrompt(task.meta);
+      result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      if (machgenPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    }
+  }));
+}
 
 /**
  * Poll provider-pending tasks: submit queued KIE rows, age out stale tasks,
- * and poll kie/veo/xai/alibaba/fal recordInfo lanes that mark
+ * and poll kie/veo/xai/alibaba/fal/machgen recordInfo lanes that mark
  * completing + enqueue complete_kie_task. Does NOT process external uploads,
  * auto-render, or auto-transcribe.
  */
@@ -1413,6 +1494,7 @@ export async function pollPendingProviderTasks(
     }));
   }
 
+  await pollMachGenTasks(engine, pollableTasks, result, book_id, options.machgenBaseURL ?? providerEndpoints().machgenBaseURL);
 
   for (const task of expiredTasks) {
     if (options.signal?.aborted) break;

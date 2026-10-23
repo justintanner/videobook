@@ -84,11 +84,11 @@
     "esbuild": "0.28.1"
   },
   "devDependencies": {
-    "@apicity/cost": "^0.16.3",
-    "@apicity/elevenlabs": "^0.16.3",
-    "@apicity/kie": "^0.16.3",
-    "@apicity/openai": "^0.16.3",
-    "@apicity/x": "^0.16.3",
+    "@apicity/cost": "^0.17.0",
+    "@apicity/elevenlabs": "^0.17.0",
+    "@apicity/kie": "^0.17.0",
+    "@apicity/openai": "^0.17.0",
+    "@apicity/x": "^0.17.0",
     "@dolthub/doltlite": "0.51.1",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/node": "2.0.0",

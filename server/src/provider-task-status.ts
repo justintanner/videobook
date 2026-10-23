@@ -1,4 +1,5 @@
 import type { Engine, Job } from "videobook-engine";
+import { MEDIA_TASK_TYPES } from "./media/adapters/types.js";
 import { parseModelId } from "./media/model-id.js";
 import { legacyMediaForTaskType } from "./media/legacy-task-types.js";
 import { readProviderTaskRecord } from "./provider-task-record.js";
@@ -30,12 +31,14 @@ export async function readProviderTaskStatus(
   if (catalogModelId.includes(":") && !catalogModel) return null;
   const model = firstString(endpoint, payload.model, catalogModel?.apiId, saved?.meta.apiModel, saved?.meta.model, hints.model);
   const taskId = firstString(saved?.taskId, storedId.taskId, hints.taskId);
+  const machgenTask = saved?.taskType === MEDIA_TASK_TYPES.machgen;
   if (saved && /^(?:xai|alibaba)_/u.test(saved.taskType)) return null;
-  if (saved && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
+  if (saved && !machgenTask && saved.taskType !== "media_kie" && saved.taskType !== "isolate_vocals"
     && !saved.taskType.startsWith("fal_") && legacyMediaForTaskType(saved.taskType) === null) return null;
   const provider = endpoint || saved?.taskType.startsWith("fal_") ? "fal"
-    : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
-  if (provider !== "kie" && provider !== "fal") return null;
+    : machgenTask ? "machgen"
+      : catalogModel?.provider ?? hints.provider ?? (storedId.taskId || saved ? "kie" : null);
+  if (provider !== "kie" && provider !== "fal" && provider !== "machgen") return null;
   return { provider, model, taskId: taskId === "queued" ? null : taskId };
 }
 

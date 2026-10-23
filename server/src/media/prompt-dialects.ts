@@ -58,6 +58,8 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
     case "natural_kinds":
       return natural(prompt, refs).replace(/@(image|audio)([1-9]\d*)(?![\w-])/giu,
         (_match, kind: string, index: string) => `reference ${kind.toLowerCase()} ${index}`);
+    case "natural_strip_frames":
+      return stripRefMentions(natural(prompt, refs), frames(refs));
     case "natural_source_video":
       return replaceNaturalAssetMentions(prompt, {
         imageRefs: refsFor(refs, "image"),

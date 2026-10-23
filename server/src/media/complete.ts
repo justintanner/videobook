@@ -56,7 +56,7 @@ function extensionFromContentType(contentType: string | null, media: Media): str
 }
 
 async function download(output: ProviderOutput, media: Media): Promise<Downloaded> {
-  if ("bytes" in output) return { bytes: output.bytes, extension: output.extension };
+  if ("bytes" in output) return { bytes: output.bytes, extension: output.extension, ...(output.url ? { url: output.url } : {}) };
   const response = await fetch(output.url);
   if (!response.ok) throw new Error(`Failed to download generated ${media}: ${response.status} ${response.statusText}`);
   const bytes = Buffer.from(await response.arrayBuffer());
