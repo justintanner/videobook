@@ -76,9 +76,13 @@ export function redactToken(text: string, token: string | null): string {
   return token ? text.split(token).join("***") : text;
 }
 
+/** Every vault item titled like an environment variable fills that variable, except the vault settings themselves. */
+function isVaultEnvTitle(title: string): boolean {
+  return ENV_NAME.test(title) && title !== OP_VAULT_SETTING && title !== OP_TOKEN_SETTING;
+}
+
 export function planReferences(
   env: NodeJS.ProcessEnv,
-  managedKeys: readonly string[],
   vault: string | null,
   vaultTitles: ReadonlySet<string>,
 ): ReferencePlan {
@@ -87,8 +91,9 @@ export function planReferences(
     .map(([key, reference]): [string, string] => [key, reference.trim()]);
   const covered = new Set(explicit.map(([key]) => key));
   const convention = vault
-    ? managedKeys
-      .filter((key) => !covered.has(key) && !env[key]?.trim() && vaultTitles.has(key))
+    ? [...vaultTitles]
+      .filter((key) => isVaultEnvTitle(key) && !covered.has(key) && !env[key]?.trim())
+      .sort()
       .map((key): [string, string] => [key, vaultReference(vault, key)])
     : [];
   return { explicit, convention };
@@ -218,12 +223,12 @@ function emptyResolution(settings: OnePasswordSettings): OnePasswordResolution {
   };
 }
 
-export function resolveOnePasswordEnv(env: NodeJS.ProcessEnv, managedKeys: readonly string[]): OnePasswordResolution {
+export function resolveOnePasswordEnv(env: NodeJS.ProcessEnv): OnePasswordResolution {
   const settings = readOnePasswordSettings(env);
   const hasReferences = Object.values(env).some((value) => isOpReference(value));
   if (!hasReferences && !settings.vault) return emptyResolution(settings);
   const listing = vaultTitles(settings, env);
-  const plan = planReferences(env, managedKeys, settings.vault, listing.titles);
+  const plan = planReferences(env, settings.vault, listing.titles);
   const result = resolveEntries([...plan.explicit, ...plan.convention], env, settings.token.value);
   for (const [key] of plan.explicit) {
     const value = result.values.get(key);

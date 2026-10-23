@@ -6,9 +6,10 @@
  *      them into the environment BEFORE Node starts (npm run dev:server).
  *   2. A plain `.env` file, loaded here with dotenv semantics: never override
  *      a var that is already set, so op-injected values always win.
- *   3. op:// references left in the environment or `.env`, plus the vault
- *      named by VIDEOBOOK_OP_VAULT, resolved through the 1Password CLI by
- *      resolveOnePassword() before a server starts.
+ *   3. op:// references left in the environment or `.env`, plus every
+ *      env-named item in the vault named by VIDEOBOOK_OP_VAULT, resolved
+ *      through the 1Password CLI by resolveOnePassword() before a server
+ *      starts.
  *
  * A managed key that was already set before `.env` loaded, or that 1Password
  * resolved, is therefore "1password" — externally managed and read-only,
@@ -156,7 +157,7 @@ export function createSecretStore(options: SecretStoreOptions = {}): SecretStore
   function resolveOnePassword(): OnePasswordResolution {
     if (resolution) return resolution;
     loadDotenv();
-    const resolved = resolveOnePasswordEnv(processEnv, MANAGED_ENV_KEYS);
+    const resolved = resolveOnePasswordEnv(processEnv);
     for (const key of [...resolved.fromReferences, ...resolved.fromVault]) fromOnePassword.add(key);
     resolution = resolved;
     return resolved;

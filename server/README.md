@@ -134,7 +134,8 @@ A key can come from four places. The first one that has it wins:
    Settings in the web UI.
 3. A 1Password secret reference in `.env`, such as
    `op://Private/FAL_API_KEY/password`.
-4. A 1Password vault whose items are named after the keys.
+4. A 1Password vault: every item named like an environment variable fills
+   that variable, whether or not videobook lists it as a key.
 
 `videobook config` lists every key with its source and masks secret values.
 `config get`, `config set` and `config unset` work on one key and edit

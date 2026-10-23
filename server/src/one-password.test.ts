@@ -45,24 +45,31 @@ describe("1Password references", () => {
 });
 
 describe("planReferences", () => {
-  const keys = ["OPENAI_API_KEY", "FAL_API_KEY", "KIE_API_KEY", "B2_REGION"];
-
-  it("resolves explicit references first and fills only missing keys whose vault item exists", () => {
+  it("resolves explicit references first and fills every missing key the vault names", () => {
     const env: NodeJS.ProcessEnv = {
       OPENAI_API_KEY: "op://Other/OPENAI/credential",
       FAL_API_KEY: "literal-key",
       CUSTOM_SETTING: "op://Apicity/CUSTOM/password",
     };
-    const plan = planReferences(env, keys, "Apicity", new Set(["OPENAI_API_KEY", "FAL_API_KEY", "KIE_API_KEY"]));
+    const titles = new Set(["OPENAI_API_KEY", "FAL_API_KEY", "KIE_API_KEY", "MACHGEN_API_KEY"]);
+    const plan = planReferences(env, "Apicity", titles);
     expect(plan.explicit).toEqual([
       ["OPENAI_API_KEY", "op://Other/OPENAI/credential"],
       ["CUSTOM_SETTING", "op://Apicity/CUSTOM/password"],
     ]);
-    expect(plan.convention).toEqual([["KIE_API_KEY", "op://Apicity/KIE_API_KEY/password"]]);
+    expect(plan.convention).toEqual([
+      ["KIE_API_KEY", "op://Apicity/KIE_API_KEY/password"],
+      ["MACHGEN_API_KEY", "op://Apicity/MACHGEN_API_KEY/password"],
+    ]);
+  });
+
+  it("skips vault items that are not environment names or are the vault settings", () => {
+    const titles = new Set(["Google login", "npm-token", "VIDEOBOOK_OP_VAULT", "VIDEOBOOK_OP_SERVICE_TOKEN", "B2_REGION"]);
+    expect(planReferences({}, "Apicity", titles).convention).toEqual([["B2_REGION", "op://Apicity/B2_REGION/password"]]);
   });
 
   it("uses no vault convention without a vault", () => {
-    expect(planReferences({ KIE_API_KEY: "" }, keys, null, new Set(keys)).convention).toEqual([]);
+    expect(planReferences({ KIE_API_KEY: "" }, null, new Set(["KIE_API_KEY"])).convention).toEqual([]);
   });
 });
 
@@ -82,7 +89,7 @@ describe("op inject template", () => {
 describe("resolveOnePasswordEnv", () => {
   it("does nothing without references or a vault, so op never runs", () => {
     const env: NodeJS.ProcessEnv = { OPENAI_API_KEY: "sk-literal" };
-    expect(resolveOnePasswordEnv(env, ["OPENAI_API_KEY"])).toEqual({
+    expect(resolveOnePasswordEnv(env)).toEqual({
       attempted: false,
       vault: null,
       tokenSource: null,
@@ -96,7 +103,7 @@ describe("resolveOnePasswordEnv", () => {
 
   it("unsets references it cannot resolve instead of passing them on as keys", () => {
     const env: NodeJS.ProcessEnv = { FAL_API_KEY: "op://v/item/pass{{word}}", PATH: process.env.PATH };
-    const resolution = resolveOnePasswordEnv(env, ["FAL_API_KEY"]);
+    const resolution = resolveOnePasswordEnv(env);
     expect(resolution.attempted).toBe(true);
     expect(resolution.unresolved).toEqual([{ key: "FAL_API_KEY", reference: "op://v/item/pass{{word}}", reason: "malformed op:// reference" }]);
     expect(env.FAL_API_KEY).toBeUndefined();
