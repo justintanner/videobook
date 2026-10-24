@@ -35,7 +35,17 @@ export interface ConfigFlags extends GlobalFlags {
   json: boolean;
 }
 
+export interface HarFlags extends GlobalFlags {
+  out?: string;
+  since?: string;
+  failures: boolean;
+  providers: string[];
+  json: boolean;
+}
+
 export type ConfigAction = "list" | "get" | "set" | "unset";
+
+export type HarAction = "list" | "export";
 
 export type ParsedCli =
   | { command: "serve"; flags: ServeFlags }
@@ -46,6 +56,7 @@ export type ParsedCli =
   | { command: "doctor"; flags: DoctorFlags }
   | { command: "setup"; target: "1password"; flags: SetupFlags }
   | { command: "config"; action: ConfigAction; key: string | null; value: string | null; flags: ConfigFlags }
+  | { command: "har"; action: HarAction; flags: HarFlags }
   | { command: "version" }
   | { command: "help" };
 
@@ -61,9 +72,10 @@ export class CliUsageError extends Error {
 type OptionSpec = { type: "string" | "boolean"; short?: string };
 
 const LOG_LEVELS: ReadonlySet<string> = new Set(["silent", "error", "warn", "info", "debug"]);
-const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "setup", "config", "version", "help"]);
+const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "setup", "config", "har", "version", "help"]);
 const CONFIG_ACTIONS: ReadonlySet<string> = new Set(["list", "get", "set", "unset"]);
-const POSITIONAL_COMMANDS: ReadonlySet<string> = new Set(["run", "setup", "config"]);
+const HAR_ACTIONS: ReadonlySet<string> = new Set(["list", "export"]);
+const POSITIONAL_COMMANDS: ReadonlySet<string> = new Set(["run", "setup", "config", "har"]);
 const DEFAULT_RUN_TIMEOUT_SECONDS = 600;
 
 const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
@@ -84,6 +96,7 @@ const COMMAND_OPTIONS: Record<CommandName, Record<string, OptionSpec>> = {
   doctor: { json: { type: "boolean" } },
   setup: { "op-vault": { type: "string" }, "op-token": { type: "string" }, "no-verify": { type: "boolean" }, remove: { type: "boolean" } },
   config: { json: { type: "boolean" } },
+  har: { out: { type: "string" }, since: { type: "string" }, failures: { type: "boolean" }, provider: { type: "string" }, json: { type: "boolean" } },
 };
 
 type ParsedValues = Record<string, string | boolean | undefined>;
@@ -200,6 +213,33 @@ function buildConfig(values: ParsedValues, positionals: string[], flags: GlobalF
   };
 }
 
+function buildHar(values: ParsedValues, positionals: string[], flags: GlobalFlags): ParsedCli {
+  const [action, ...extra] = positionals;
+  if (!action || !HAR_ACTIONS.has(action) || extra.length > 0) {
+    throw new CliUsageError("Usage: videobook har list [--since <date>] [--failures] [--provider <p>] [--json] | har export --out <dir|file.tar.gz> [--since <date>] [--failures] [--provider <p>]");
+  }
+  const out = stringValue(values.out);
+  if (action === "export" && out === undefined) throw new CliUsageError("har export needs --out <dir|file.tar.gz>");
+  if (action === "list" && out !== undefined) throw new CliUsageError("--out applies to har export only");
+  const since = stringValue(values.since);
+  if (since !== undefined && !Number.isFinite(Date.parse(since))) throw new CliUsageError(`--since needs an ISO date or time, got "${since}".`);
+  const providers = typeof values.provider === "string"
+    ? values.provider.split(",").map((provider) => provider.trim()).filter(Boolean)
+    : [];
+  return {
+    command: "har",
+    action: action as HarAction,
+    flags: {
+      ...flags,
+      ...(out === undefined ? {} : { out }),
+      ...(since === undefined ? {} : { since }),
+      failures: values.failures === true,
+      providers,
+      json: values.json === true,
+    },
+  };
+}
+
 function buildCommand(command: CommandName, values: ParsedValues, positionals: string[]): ParsedCli {
   const flags = globalFlags(values);
   switch (command) {
@@ -216,6 +256,8 @@ function buildCommand(command: CommandName, values: ParsedValues, positionals: s
       return buildSetup(values, positionals, flags);
     case "config":
       return buildConfig(values, positionals, flags);
+    case "har":
+      return buildHar(values, positionals, flags);
     default:
       return { command, flags };
   }
@@ -264,6 +306,8 @@ export function helpText(): string {
     "  gc-books           Reclaim catalog storage in every book",
     "  doctor             Check Node, media binaries, native modules and keys",
     "  config [action]    list | get <KEY> | set <KEY> <VALUE> | unset <KEY> in the data-home .env",
+    "  har list           List provider HAR captures, newest first",
+    "  har export         Copy scrub-checked captures and a manifest to share with apicity (--out)",
     "  setup 1password    Read keys from a 1Password vault (--op-vault, --op-token)",
     "  version            Print versions",
     "  help               Print this help",
@@ -277,7 +321,11 @@ export function helpText(): string {
     "  --open             serve: open the web UI in a browser",
     "  --no-wait          run: do not wait for queued jobs",
     "  --timeout <s>      run: seconds to wait for jobs (default 600)",
-    "  --json             doctor, config: print machine-readable results",
+    "  --json             doctor, config, har: print machine-readable results",
+    "  --out <path>       har export: a new directory, or a .tar.gz/.tgz file",
+    "  --since <date>     har: only calls at or after this ISO date or time",
+    "  --failures         har: only failed calls",
+    "  --provider <p>     har: only these providers, comma separated",
     "  --op-vault <name>  setup 1password: vault whose items are named after the keys",
     "  --op-token <tok>   setup 1password: service-account token, best as env:VAR",
     "  --no-verify        setup 1password: skip the op item list check",

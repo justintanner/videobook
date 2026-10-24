@@ -6,9 +6,24 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-24
+
 ### Added
 
 - Opt-in local provider HAR diagnostics with Settings, MCP and CLI controls, concurrent book attribution and retention limits.
+  Captured SDK calls are named by their apicity catalog dot path, such as
+  `api.v1.jobs.createTask`, so `apicity har report` attributes them to their
+  endpoints.
+- The Request payload panel of a queued, generating or failed cell downloads
+  the attempt's scrubbed captures as one HAR file, or shows "Capture off" with
+  a link to Settings. `inspect_generation_request` reports whether an asset has
+  a capture, with its path and outcome; the new `get_generation_har` tool
+  returns the HAR for an asset or attempt id.
+- `videobook har list` and `videobook har export --out <dir|file.tar.gz>`,
+  both with `--since`, `--failures` and `--provider`. Export re-runs the
+  `@apicity/har` scrubber on every capture and refuses, naming the file, when
+  scrubbing would change it. Otherwise it writes the captures with an index
+  and a manifest and prints the `apicity har report` hand-off.
 
 ### Changed
 

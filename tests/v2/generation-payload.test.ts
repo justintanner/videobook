@@ -72,6 +72,7 @@ describe("generation payload inspection", () => {
       },
       taskType: null,
       task: null,
+      har: { mode: "off", hasCapture: false, captures: 0, path: null, outcome: null },
     });
   });
 });

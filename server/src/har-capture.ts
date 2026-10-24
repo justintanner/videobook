@@ -96,6 +96,12 @@ async function runCapture<T>(meta: HarCallMeta, operation: (fetch: typeof global
   }
 }
 
+const HTTP_METHODS: ReadonlySet<string> = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+
+function endpointDotPath(path: readonly string[]): string {
+  return (path.length > 1 && HTTP_METHODS.has(path[0] ?? "") ? path.slice(1) : path).join(".");
+}
+
 const providerCalls = new WeakMap<object, {
   original: object;
   base: typeof globalThis.fetch;
@@ -122,7 +128,7 @@ export function capturedProvider<T extends object>(
   function wrap(target: object, path: string[]): object {
     return new Proxy(target, {
       apply(fn, receiver, args: unknown[]) {
-        return withHarCapture({ provider, endpoint: path.join("."), input: args.length === 1 ? args[0] : args },
+        return withHarCapture({ provider, endpoint: endpointDotPath(path), input: args.length === 1 ? args[0] : args },
           (fetch) => transports.run(fetch, () => Reflect.apply(fn as (...values: unknown[]) => unknown, receiver, args)), base);
       },
       get(object, property, receiver): unknown {

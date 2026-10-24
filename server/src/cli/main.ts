@@ -64,6 +64,10 @@ async function runCommand(parsed: RunnableCli): Promise<number> {
       const { runConfigCommand } = await import("./config-command.js");
       return runConfigCommand(parsed);
     }
+    case "har": {
+      const { runHarCommand } = await import("./har-command.js");
+      return runHarCommand(parsed);
+    }
   }
 }
 

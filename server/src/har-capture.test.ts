@@ -88,7 +88,7 @@ describe("opt-in provider HAR diagnostics", () => {
     await expect(provider.get.xai.v1.models()).rejects.toThrow();
     const files = await captures();
     expect(files).toHaveLength(1);
-    expect(files[0]?.log._apicity).toMatchObject({ provider: "kie", outcome: "provider_error" });
+    expect(files[0]?.log._apicity).toMatchObject({ provider: "kie", endpoint: "xai.v1.models", outcome: "provider_error" });
     expect(files[0]?.log.entries[0]?.response.status).toBe(200);
     await writeHarSettings({ mode: "off" });
     await expect(provider.get.xai.v1.models()).rejects.toThrow();

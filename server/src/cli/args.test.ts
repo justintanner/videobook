@@ -51,6 +51,22 @@ describe("parseCli", () => {
     expect(parseCli(["config", "unset", "FAL_API_KEY"])).toMatchObject({ action: "unset", key: "FAL_API_KEY", value: null });
   });
 
+  it("parses har list and export filters", () => {
+    expect(parseCli(["har", "list"])).toEqual({ command: "har", action: "list", flags: { failures: false, providers: [], json: false } });
+    expect(parseCli(["har", "export", "--out", "captures.tar.gz", "--since", "2026-10-01", "--failures", "--provider", "kie, fal", "--home", "/tmp/vb"]))
+      .toEqual({
+        command: "har",
+        action: "export",
+        flags: { home: "/tmp/vb", out: "captures.tar.gz", since: "2026-10-01", failures: true, providers: ["kie", "fal"], json: false },
+      });
+    expect(() => parseCli(["har"])).toThrow("Usage: videobook har");
+    expect(() => parseCli(["har", "prune"])).toThrow("Usage: videobook har");
+    expect(() => parseCli(["har", "list", "extra"])).toThrow("Usage: videobook har");
+    expect(() => parseCli(["har", "export"])).toThrow("har export needs --out");
+    expect(() => parseCli(["har", "list", "--out", "x"])).toThrow("--out applies to har export only");
+    expect(() => parseCli(["har", "list", "--since", "yesterday"])).toThrow("--since needs an ISO date or time");
+  });
+
   it("answers help and version from any position", () => {
     expect(parseCli(["help"])).toEqual({ command: "help" });
     expect(parseCli(["--help"])).toEqual({ command: "help" });
@@ -136,7 +152,7 @@ describe("resolvePort", () => {
 describe("helpText", () => {
   it("documents every command and the agent setup line", () => {
     const text = helpText();
-    for (const command of ["serve", "mcp", "run", "tools", "gc-books", "doctor", "config", "setup 1password", "version", "help"]) {
+    for (const command of ["serve", "mcp", "run", "tools", "gc-books", "doctor", "config", "har list", "har export", "setup 1password", "version", "help"]) {
       expect(text).toContain(`  ${command}`);
     }
     expect(text).toContain("claude mcp add videobook -- videobook mcp");

@@ -84,6 +84,7 @@ import { listAssetsDef } from "./list-assets.js";
 import { listCellGenerationsDef } from "./list-cell-generations.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 import { generationPayloadDef } from "./generation-payload.js";
+import { getGenerationHarDef } from "./get-generation-har.js";
 import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { chainDef } from "./chain.js";
@@ -326,6 +327,7 @@ export function getAllToolDefs(
     listCellGenerationsDef(engine),
     waitForAssetReadyDef(engine),
     generationPayloadDef(engine),
+    getGenerationHarDef(engine),
     concatImagesDef(engine),
     chatDef(engine),
     chainDef(engine),

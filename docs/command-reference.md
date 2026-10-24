@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (226)
+## MCP endpoints (227)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -94,6 +94,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
 - `get_editing_moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source
 - `get_entity` — Read a reusable prompt, scene or character
+- `get_generation_har` — Return the scrubbed provider HAR capture of one generation attempt, by attempt id or asset id. Several captured calls are combined into one HAR with a page per call. Needs provider capture (set_har_capture).
 - `get_history_action` — Read one authored semantic revision
 - `get_image_subject_map` — Read cached automatic image subjects without starting provider work
 - `get_music_analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio
@@ -108,7 +109,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read the effective watermark profile for TikTok or X, including alias preferences and appearance. A fresh book returns the TikTok profile. The authenticated handle is available only for X.
 - `inject_first_frame` — Replace the first frame of a video, or of the final render, with an image asset in place, keeping runtime and audio; for final, orientation defaults to the timeline's.
-- `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
+- `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
 - `link_post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.
@@ -237,7 +238,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (300; 145 dedicated command routes)
+## Slash actions (301; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -352,6 +353,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-edit-action` — Read the immutable audit record for a committed CommandPlan edit stage; MCP: `get_edit_action`
 - `/get-editing-moments` — Read cached editing moments (shot boundaries, motion, ranked source moments) for the current video source; MCP: `get_editing_moments`
 - `/get-entity` — Read a reusable prompt, scene or character; MCP: `get_entity`
+- `/get-generation-har` — Return the scrubbed provider HAR capture of one generation attempt, by attempt id or asset id. Several captured calls are combined into one HAR with a page per call. Needs provider capture (set_har_capture).; MCP: `get_generation_har`
 - `/get-history-action` — Read one authored semantic revision; MCP: `get_history_action`
 - `/get-image-subject-map` — Read cached automatic image subjects without starting provider work; MCP: `get_image_subject_map`
 - `/get-music-analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio; MCP: `get_music_analysis`
@@ -372,7 +374,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/insert` — Preview inserting media into the sequence; preview or workspace operation
-- `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, and failure info for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
+- `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`

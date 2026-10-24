@@ -1,6 +1,7 @@
 import { Check, Copy, RotateCcw } from 'lucide-react'
 import { Suspense, startTransition, use, useState, type ReactNode } from 'react'
 import type { ArtifactThumbAsset } from './ArtifactThumb'
+import { GenerationHarActions, type DownloadGenerationHar } from './GenerationHarActions'
 import { RichJson } from './RichJson'
 import { ProviderTaskLink } from './ProviderTaskLink'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
@@ -288,12 +289,16 @@ function GeneratingPayloadPanel({
   loading,
   artifactAssets,
   onRefresh,
+  onDownloadHar,
+  onOpenSettings,
 }: {
   facts: GeneratingRunFacts
   outcome: InspectionOutcome | null
   loading: boolean
   artifactAssets?: ReadonlyMap<string, ArtifactThumbAsset>
   onRefresh?: () => void
+  onDownloadHar?: DownloadGenerationHar
+  onOpenSettings?: () => void
 }) {
   const inspection = outcome?.ok ? outcome.inspection : null
   const payload = inspection?.payload ?? null
@@ -305,6 +310,12 @@ function GeneratingPayloadPanel({
         {inspection?.taskType && <code>{inspection.taskType}</code>}
         {submitted && <span className="inspector-generating-muted">sent {submitted}</span>}
         <span className="inspector-generating-spacer" />
+        <GenerationHarActions
+          generationId={facts.providerArtifactId}
+          status={inspection?.har}
+          onDownload={onDownloadHar}
+          onOpenSettings={onOpenSettings}
+        />
         {onRefresh && (
           <button
             type="button"
@@ -348,6 +359,8 @@ type ColumnsProps = {
   footer?: ReactNode
   artifactAssets?: ReadonlyMap<string, ArtifactThumbAsset>
   onRefresh?: () => void
+  onDownloadHar?: DownloadGenerationHar
+  onOpenSettings?: () => void
 }
 
 function GeneratingRunColumnsView({
@@ -358,6 +371,8 @@ function GeneratingRunColumnsView({
   outcome,
   loading,
   onRefresh,
+  onDownloadHar,
+  onOpenSettings,
 }: ColumnsProps & { outcome: InspectionOutcome | null; loading: boolean }) {
   const inspection = outcome?.ok ? outcome.inspection : null
   return (
@@ -378,6 +393,8 @@ function GeneratingRunColumnsView({
         loading={loading}
         artifactAssets={artifactAssets}
         onRefresh={onRefresh}
+        onDownloadHar={onDownloadHar}
+        onOpenSettings={onOpenSettings}
       />
     </>
   )

@@ -10,12 +10,23 @@ export type GenerationRequestTask = {
   completing: boolean
 }
 
+export type HarCaptureMode = 'off' | 'failures' | 'all'
+
+export type GenerationHarStatus = {
+  mode: HarCaptureMode
+  hasCapture: boolean
+  captures: number
+  path: string | null
+  outcome: string | null
+}
+
 export type GenerationRequestInspection = {
   payload: unknown
   taskType: string | null
   task: GenerationRequestTask | null
   errorMessage: string | null
   providerTask?: ProviderTaskStatus | null
+  har?: GenerationHarStatus | null
 }
 
 export type GenerationPayloadSetting = {
@@ -43,17 +54,36 @@ function parseTask(value: unknown): GenerationRequestTask | null {
   return { taskId, submittedAt, completing: record.completing === true }
 }
 
+function parseHarCaptureMode(value: unknown): HarCaptureMode | null {
+  return value === 'off' || value === 'failures' || value === 'all' ? value : null
+}
+
+function parseGenerationHarStatus(value: unknown): GenerationHarStatus | null {
+  const record = asRecord(value)
+  const mode = parseHarCaptureMode(record?.mode)
+  if (!record || !mode) return null
+  return {
+    mode,
+    hasCapture: record.hasCapture === true,
+    captures: typeof record.captures === 'number' ? record.captures : 0,
+    path: asText(record.path),
+    outcome: asText(record.outcome),
+  }
+}
+
 export function parseGenerationRequestInspection(
   value: unknown,
 ): GenerationRequestInspection {
   const record = asRecord(value) ?? {}
   const providerTask = parseProviderTaskStatus(record.providerTask)
+  const har = parseGenerationHarStatus(record.har)
   return {
     payload: record.payload ?? null,
     taskType: asText(record.taskType),
     task: parseTask(record.task),
     errorMessage: asText(asRecord(record.error)?.message),
     ...(providerTask ? { providerTask } : {}),
+    ...(har ? { har } : {}),
   }
 }
 

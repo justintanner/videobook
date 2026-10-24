@@ -86,6 +86,7 @@
   "devDependencies": {
     "@apicity/cost": "^0.18.0",
     "@apicity/elevenlabs": "^0.18.0",
+    "@apicity/har": "^0.18.0",
     "@apicity/kie": "^0.18.0",
     "@apicity/openai": "^0.18.0",
     "@apicity/x": "^0.18.0",

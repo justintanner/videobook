@@ -444,6 +444,50 @@ not run while capture is off.
 item. Never create a vault item named `VIDEOBOOK_HAR_CAPTURE` unless capture is
 intended; a vault value can enable it on startup.
 
+Each capture is one apicity call. SDK calls are named by their apicity catalog
+dot path (`api.v1.jobs.createTask`), so `apicity har report` attributes them to
+the right endpoint. Generation submissions, completions and uploads are also
+recorded under Videobook's own names (`generation.submit`), which apicity reports
+as unresolved calls.
+
+### Sharing captures with apicity
+
+Captures let apicity correct its schemas and defaults from real working and
+failing payloads. To debug one generation attempt, open its queued, generating
+or failed cell: the Request payload panel offers **HAR** when the attempt has a
+capture and downloads all of the attempt's captured calls as one scrubbed HAR
+file, one page per call. When capture is off it shows **Capture off**, which
+opens Settings. Over MCP, `inspect_generation_request` reports `har.mode`,
+`har.hasCapture`, `har.path` and `har.outcome` for an asset, and
+`get_generation_har` returns the HAR for an asset id or attempt id. Captures
+match an attempt by its asset or attempt id, then by its provider task id.
+
+To share a corpus, export it:
+
+```bash
+videobook har list --failures      # newest first; also --since, --provider, --json
+videobook har export --out ~/videobook-har.tar.gz --since 2026-10-01 --failures
+videobook har export --out ./captures --provider kie,fal
+```
+
+`har export` reads the capture index, re-runs `scrubHar` from `@apicity/har` on
+every selected file and refuses, naming each file, if scrubbing would change
+anything. That means apicity lacks a scrub rule: report it to apicity instead of
+editing the capture. Otherwise it writes the captures in their original layout
+with an `index.jsonl` and a `manifest.json` (calls per provider, endpoint and
+outcome, the date range, and the Videobook and apicity versions) to a new
+directory or `.tar.gz`, and prints the hand-off for a maintainer:
+`apicity har report <dir>` for the learning report, and `apicity har scrub
+--check` followed by `pnpm run har:promote` in the apicity repository to turn a
+successful call into a replay test.
+
+The export contains what capture kept: prompts, media URLs, model parameters,
+provider responses and error text. Prompts and media URLs are included because
+turning capture on is the consent to keep them; API keys, cookies and media
+bytes above the cap are not. Read the files, then send the directory or archive
+privately to an apicity maintainer, for example by email or a private file
+share, never in a public issue. Videobook uploads nothing on its own.
+
 ## Quality gates
 
 ```bash

@@ -65,6 +65,9 @@ videobook gc-books             # reclaim catalog storage in every book
 videobook doctor               # check Node, binaries, native modules and keys
 videobook config               # show where each provider key comes from
 videobook config set FAL_API_KEY op://Private/FAL_API_KEY/password
+videobook config set har_capture failures   # opt in to provider HAR capture
+videobook har list --failures  # captured provider calls, newest first
+videobook har export --out captures.tar.gz  # scrub-checked captures for apicity
 videobook setup 1password --op-vault Private
 videobook --version
 ```
@@ -104,10 +107,11 @@ run while a server owns the library.
 Installed data lives in `~/.videobook`:
 
 - `books/`, the library of books
-- `app-state.json`, connected X and Dropbox accounts
+- `app-state.json`, connected X and Dropbox accounts and the HAR capture setting
 - `.env`, provider keys, also editable from Settings in the web UI
+- `har/`, opt-in provider HAR captures (off by default) with an `index.jsonl`
 
-`VIDEOBOOK_HOME` or `--home` moves all three. `VIDEOBOOK_LIBRARY_DIR`,
+`VIDEOBOOK_HOME` or `--home` moves all four. `VIDEOBOOK_LIBRARY_DIR`,
 `VIDEOBOOK_APP_STATE_PATH` and `VIDEOBOOK_ENV_PATH` move one each; `--home`
 overrides any of them inherited from your shell. Set `VIDEOBOOK_HOME` and
 `VIDEOBOOK_ENV_PATH` in the environment, not in `.env`, because they decide

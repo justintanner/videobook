@@ -54,6 +54,22 @@ describe('parseGenerationRequestInspection', () => {
       errorMessage: 'Provider rejected the request',
     })
   })
+
+  it('reads the HAR capture status and ignores an unknown mode', () => {
+    const har = {
+      mode: 'failures',
+      hasCapture: true,
+      captures: 2,
+      path: '/home/me/.videobook/har/kie/api.v1.jobs.createTask/call.har',
+      outcome: 'provider_error',
+    }
+    expect(parseGenerationRequestInspection({ payload: null, har }).har).toEqual(har)
+    expect(parseGenerationRequestInspection({ payload: null, har: { mode: 'off' } }).har)
+      .toEqual({ mode: 'off', hasCapture: false, captures: 0, path: null, outcome: null })
+    expect(parseGenerationRequestInspection({ payload: null, har: { mode: 'sometimes', hasCapture: true } }))
+      .not.toHaveProperty('har')
+    expect(parseGenerationRequestInspection({ payload: null, har: null })).not.toHaveProperty('har')
+  })
 })
 
 describe('generationPayloadSentPrompt', () => {

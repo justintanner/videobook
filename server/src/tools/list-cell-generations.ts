@@ -19,6 +19,10 @@ import {
 import { buildAssetList } from "./reconcile-project-work.js";
 import { readProviderTaskStatus } from "../provider-task-status.js";
 import type { ProviderTaskStatus } from "../provider-status-link.js";
+import { captureKeys, generationHarStatus, type GenerationHarStatus } from "../generation-har.js";
+import { readHarIndex } from "../har-index.js";
+import { readHarSettings, type HarSettings } from "../har-settings.js";
+import { logger } from "../logger.js";
 
 type CellGenerationTransition = {
   status: GenerationStatus;
@@ -45,6 +49,7 @@ type CellGenerationAttempt = {
   payload?: unknown;
   commandPlan: unknown;
   transitions: CellGenerationTransition[];
+  har: GenerationHarStatus | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -65,7 +70,23 @@ export type ListCellGenerationsResponse = {
   currentExecution: NotebookCellExecution | null;
   generationPlans: NotebookGenerationPlan[];
   generations: CellGenerationsSummary;
+  harMode: HarSettings["mode"] | null;
 };
+
+type AttemptHarLookup = {
+  mode: HarSettings["mode"];
+  status: (ids: Array<string | undefined>) => Promise<GenerationHarStatus>;
+};
+
+async function attemptHarLookup(engine: Engine): Promise<AttemptHarLookup | null> {
+  try {
+    const [{ mode }, rows] = await Promise.all([readHarSettings(), readHarIndex()]);
+    return { mode, status: async (ids) => generationHarStatus(await captureKeys(engine, ids), mode, rows) };
+  } catch (error) {
+    logger.warn("har-capture-failed", { error });
+    return null;
+  }
+}
 
 function generationArtifactIds(
   generations: readonly Generation[],
@@ -229,6 +250,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             !row.outputCellId || row.outputCellId === requestedResult.id)
           : generationsResult.value;
         const transitions = generationTransitions(engine, rows);
+        const harLookup = await attemptHarLookup(engine);
         const assets = await buildAssetList(engine, book_id);
         const assetById = new Map(
           assets.map((asset) => [asset.artifact_id, asset]),
@@ -284,6 +306,9 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             ...(include_payloads ? { payload } : {}),
             commandPlan,
             transitions: transitions.get(row.generationId) ?? [],
+            har: harLookup
+              ? await harLookup.status([row.generationId, row.providerArtifactId, row.outputArtifactId])
+              : null,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           });
@@ -313,6 +338,7 @@ export function listCellGenerationsDef(engine: Engine): ToolDef {
             latestStatus: rows[0]?.status ?? null,
             artifactIds: generationArtifactIds(rows),
           },
+          harMode: harLookup?.mode ?? null,
         };
         return {
           content: [{

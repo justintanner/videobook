@@ -50,6 +50,8 @@ import {
   type GeneratingRunFacts,
   type InspectGenerationRequest,
 } from './GeneratingRunDetails'
+import { GenerationHarActions, type DownloadGenerationHar } from './GenerationHarActions'
+import type { GenerationHarStatus } from '@/videobook/generation-request-inspection'
 import { useElapsedSeconds } from '@/videobook/use-elapsed-seconds'
 import {
   formatMediaTime,
@@ -422,6 +424,7 @@ export type CellGenerationAttempt = {
   payload?: unknown
   commandPlan: unknown
   transitions: readonly CellGenerationTransition[]
+  har?: GenerationHarStatus | null
   createdAt: number
   updatedAt: number
 }
@@ -489,6 +492,8 @@ type NotebookCellInspectorProps = {
   onLoadGenerationPayload?: (assetId: string) => Promise<unknown>
   /** Reads the provider request and pending task behind an in-flight run. */
   onInspectGenerationRequest?: InspectGenerationRequest
+  onDownloadGenerationHar?: DownloadGenerationHar
+  onOpenSettings?: () => void
   generations?: {
     attempts: readonly CellGenerationAttempt[]
     currentExecution: NotebookCellExecution | null
@@ -1659,6 +1664,8 @@ function GeneratingMediaLayout({
   onCancelJob,
   onDelete,
   onInspectGenerationRequest,
+  onDownloadHar,
+  onOpenSettings,
 }: {
   kind: MediaDockKind
   address: string
@@ -1676,6 +1683,8 @@ function GeneratingMediaLayout({
   onCancelJob?: (jobId: number) => void
   onDelete: () => Promise<void>
   onInspectGenerationRequest?: InspectGenerationRequest
+  onDownloadHar?: DownloadGenerationHar
+  onOpenSettings?: () => void
 }) {
   const failed = state.kind === 'failed'
   const running = state.kind === 'failed' ? null : state
@@ -1721,6 +1730,8 @@ function GeneratingMediaLayout({
       <GeneratingRunColumns
         facts={facts}
         inspect={onInspectGenerationRequest}
+        onDownloadHar={onDownloadHar}
+        onOpenSettings={onOpenSettings}
         artifactAssets={artifactAssets}
         header={(
           <GeneratingStatusRow
@@ -1768,6 +1779,8 @@ function MediaCellInspector({
   assetTools,
   artifactAssets,
   onInspectGenerationRequest,
+  onDownloadGenerationHar,
+  onOpenSettings,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1791,6 +1804,8 @@ function MediaCellInspector({
   | 'bookId'
   | 'assetTools'
   | 'onInspectGenerationRequest'
+  | 'onDownloadGenerationHar'
+  | 'onOpenSettings'
 > & {
   /** Which dock this is; the caller has already ruled out every other type. */
   kind: MediaDockKind
@@ -1843,6 +1858,8 @@ function MediaCellInspector({
           onCancelJob={onCancelJob}
           onDelete={onDelete}
           onInspectGenerationRequest={onInspectGenerationRequest}
+          onDownloadHar={onDownloadGenerationHar}
+          onOpenSettings={onOpenSettings}
         />
       </div>
     )
@@ -3544,6 +3561,8 @@ function CellGenerationsPanel({
   error,
   artifactAssets,
   onLoadPayload,
+  onDownloadHar,
+  onOpenSettings,
 }: {
   attempts: readonly CellGenerationAttempt[]
   currentExecution: NotebookCellExecution | null
@@ -3551,8 +3570,11 @@ function CellGenerationsPanel({
   error: string | null
   artifactAssets: ReadonlyMap<string, NotebookCellInspectorAsset>
   onLoadPayload?: (assetId: string) => Promise<unknown>
+  onDownloadHar?: DownloadGenerationHar
+  onOpenSettings?: () => void
 }) {
   const liveAttemptId = liveGenerationAttemptId(attempts, currentExecution)
+  const harMode = attempts.find((attempt) => attempt.har)?.har?.mode
   return (
     <section className="inspector-generations" aria-label="Generation attempts">
       <header className="inspector-source-meta">
@@ -3561,6 +3583,11 @@ function CellGenerationsPanel({
           Generations
         </span>
         <code>{attempts.length} attempt{attempts.length === 1 ? '' : 's'}</code>
+        <GenerationHarActions
+          generationId={null}
+          status={harMode ? { mode: harMode, hasCapture: false } : null}
+          onOpenSettings={onOpenSettings}
+        />
       </header>
       {loading && (
         <p className="inspector-analysis-json-status" role="status">
@@ -3681,6 +3708,12 @@ function CellGenerationsPanel({
                     </p>
                   )}
                   {attempt.providerTask && <ProviderTaskLink task={attempt.providerTask} />}
+                  <GenerationHarActions
+                    generationId={attempt.attemptId}
+                    status={attempt.har}
+                    captureOffHint={false}
+                    onDownload={onDownloadHar}
+                  />
                 </div>
               </div>
               {(attempt.payload !== undefined
@@ -3771,6 +3804,8 @@ export function NotebookCellInspector({
   onSelectSource,
   onLoadGenerationPayload,
   onInspectGenerationRequest,
+  onDownloadGenerationHar,
+  onOpenSettings,
   onTranscribeAsset,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
@@ -3835,6 +3870,8 @@ export function NotebookCellInspector({
           error={generations?.error ?? null}
           artifactAssets={artifactAssets}
           onLoadPayload={onLoadGenerationPayload}
+          onDownloadHar={onDownloadGenerationHar}
+          onOpenSettings={onOpenSettings}
         />
       </div>
     )
@@ -3893,6 +3930,8 @@ export function NotebookCellInspector({
         assetTools={assetTools}
         artifactAssets={artifactAssets}
         onInspectGenerationRequest={onInspectGenerationRequest}
+        onDownloadGenerationHar={onDownloadGenerationHar}
+        onOpenSettings={onOpenSettings}
       />
     )
   }

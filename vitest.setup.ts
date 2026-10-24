@@ -60,7 +60,7 @@ const ACESTEP_ENV_VARS = [
   "VIDEOBOOK_ACESTEP_KEEP_LOADED",
 ];
 
-for (const name of [...SECRET_ENV_VARS, ...ACESTEP_ENV_VARS]) {
+for (const name of [...SECRET_ENV_VARS, ...ACESTEP_ENV_VARS, "VIDEOBOOK_HAR_CAPTURE"]) {
   delete process.env[name];
 }
 

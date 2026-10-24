@@ -54,6 +54,7 @@ import {
   notebookCellRepairPrompt,
 } from '@/videobook/notebook-cell-repair'
 import { parseGenerationRequestInspection } from '@/videobook/generation-request-inspection'
+import { fetchGenerationHar, saveGenerationHar } from '@/videobook/generation-har-download'
 import { useChatTurns } from '@/videobook/use-chat-turns'
 import {
   lazy,
@@ -3441,6 +3442,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       asset_id: assetId,
     }, { background: true })
     return parseGenerationRequestInspection(value)
+  }, [bookId, call])
+
+  const downloadGenerationHar = useCallback(async (generationId: string) => {
+    if (!bookId) throw new Error('Book is not ready')
+    saveGenerationHar(await fetchGenerationHar(call, bookId, generationId))
   }, [bookId, call])
 
   const updateMediaInsightWork = useCallback((
@@ -11516,6 +11522,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onSelectSource={selectCanvasCell}
           onLoadGenerationPayload={loadGenerationPayload}
           onInspectGenerationRequest={inspectGenerationRequest}
+          onDownloadGenerationHar={downloadGenerationHar}
+          onOpenSettings={() => navigate('settings')}
           mediaInsightWork={mediaInsightWork}
           onTranscribeAsset={transcribeAsset}
           onLoadTranscriptJson={loadTranscriptJson}
