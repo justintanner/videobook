@@ -6,6 +6,21 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-24
+
+### Added
+
+- Thirteen fal video endpoints: Kling 4 text, frame, reference and editing;
+  HeyGen Video text, image and reference generation; HeyGen Avatar 3/4/5
+  stock digital twins, Avatar 4 image animation, and Video Agent v2/v3.
+- HeyGen Video text and reference models appear in the ranked pickers.
+  Kling 4 appears in the unranked group. Digital twins accept spoken scripts
+  with stock avatar and voice defaults; Avatar 4 image animation defaults to Ivy.
+
+### Changed
+
+- Upgrade all Apicity packages to 0.17.1 and refresh generated model documentation.
+
 ## [0.2.4] - 2026-10-23
 
 ### Added

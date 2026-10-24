@@ -25,6 +25,17 @@ describe('frontier model picker', () => {
     expect(initialGenerationSelection({ type: 'generate_image', model: flare.model }, actions)?.model).toBe(flare.model)
   })
 
+  it('ranks HeyGen video endpoints and keeps Kling 4 in the other group', () => {
+    const videoActions = asNotebookGenerationActions({ actions: listNotebookActions() })
+      .filter(action => action.cellTypes.includes('generate_video'))
+      .map(action => ({ ...action, available: true }))
+    for (const [type, suffix] of [['t2v', 'text-to-video'], ['r2v', 'reference-to-video']] as const) {
+      const groups = frontierPickerGroups(videoActions, type)
+      expect(groups[0]!.rows.some(row => row.action.model === `fal:heygen/heygen-video/${suffix}` && row.ranking?.type === type)).toBe(true)
+      expect(groups[1]!.rows.some(row => row.action.model === `fal:kling/v4/${suffix}`)).toBe(true)
+    }
+  })
+
   it('selects the matching operation board, including explicit video reference/edit modes', () => {
     expect(generationFrontierType('generate_image', 'default', 'text_to_image', [])).toBe('t2i')
     expect(generationFrontierType('generate_image', 'default', 'text_to_image', [{ type: 'prompt' }])).toBe('t2i')
