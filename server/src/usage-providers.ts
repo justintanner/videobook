@@ -67,17 +67,17 @@ export function createFreeMediaUpload(options: Parameters<typeof freemediaupload
 }
 
 export function uploadFalFile(options: Parameters<typeof fal>[0], input: Parameters<typeof falUpload>[1]): Promise<string> {
-  return withHarCapture({ provider: "fal", endpoint: "uploadFile", input },
+  return withHarCapture({ provider: "fal", endpoint: "storage.upload.initiate", input },
     (fetch) => falUpload(fal({ ...options, fetch }), input), providerUsageFetch("fal", options.fetch));
 }
 
 export function uploadAlibabaFile(options: Parameters<typeof alibaba>[0], input: Parameters<typeof alibabaUpload>[1]): Promise<string> {
-  return withHarCapture({ provider: "alibaba", endpoint: "uploadFile", input },
+  return withHarCapture({ provider: "alibaba", endpoint: "api.v1.uploads", input },
     (fetch) => alibabaUpload(alibaba({ ...options, fetch }), input), providerUsageFetch("alibaba", options.fetch));
 }
 
 export function uploadKieFile(options: Parameters<typeof kie>[0], file: Blob, filename: string): Promise<string> {
-  return withHarCapture({ provider: "kie", endpoint: "uploadFile", input: { file, filename } },
+  return withHarCapture({ provider: "kie", endpoint: "api.fileStreamUpload", input: { file, filename } },
     (fetch) => kieUpload(kie({ ...options, fetch }), file, filename), providerUsageFetch("kie", options.fetch));
 }
 

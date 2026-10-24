@@ -1,4 +1,4 @@
-import { withHarCapture } from "../har-capture.js";
+import { withHarLocalFailure } from "../har-capture.js";
 import { createKie } from "../usage-providers.js";
 import type { MediaGenerationRequest } from "@apicity/kie";
 import { submitMediaJob } from "../usage-providers.js";
@@ -233,9 +233,9 @@ async function submitQueuedKieTaskInner(
 }
 
 export async function submitKieTask(engine: Engine, ctx: JobHandlerContext, args: SubmitKieTaskArgs): Promise<string> {
-  return withHarCapture({ provider: "kie", endpoint: "generation.paygate", input: args.request }, () => submitKieTaskInner(engine, ctx, args));
+  return withHarLocalFailure({ provider: "kie", endpoint: "api.v1.jobs.createTask", input: args.request }, () => submitKieTaskInner(engine, ctx, args));
 }
 
 export async function submitQueuedKieTask(engine: Engine, task: PendingTask): Promise<PendingTask> {
-  return withHarCapture({ provider: "kie", endpoint: "generation.queued", input: task }, () => submitQueuedKieTaskInner(engine, task));
+  return withHarLocalFailure({ provider: "kie", endpoint: "api.v1.jobs.createTask", input: task }, () => submitQueuedKieTaskInner(engine, task));
 }

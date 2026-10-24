@@ -11,7 +11,7 @@ import type { Har } from "@apicity/har";
 import { appState, createFileApplicationState } from "./app-state.js";
 import { withBookContext } from "./book-context.js";
 import { createKie, createX, submitMediaJob, uploadFalFile, uploadAlibabaFile } from "./usage-providers.js";
-import { flushHarCaptures, withHarCapture } from "./har-capture.js";
+import { flushHarCaptures, withHarCapture, withHarLocalFailure } from "./har-capture.js";
 import { readHarSettings, writeHarSettings, harDirectory } from "./har-settings.js";
 import { pruneHarCaptures } from "./har-retention.js";
 import { setHarCaptureDef } from "./tools/set-har-capture.js";
@@ -132,7 +132,7 @@ describe("opt-in provider HAR diagnostics", () => {
 
   it("records local validation failures with input and isolates write failures from results", async () => {
     await writeHarSettings({ mode: "failures" });
-    await expect(withHarCapture({ provider: "kie", endpoint: "generation.submit", input: { prompt: "keep", api_key: "secret", otp: "secret" } }, () => z.number().parse("invalid"))).rejects.toThrow();
+    await expect(withHarCapture({ provider: "kie", endpoint: "api.v1.jobs.createTask", input: { prompt: "keep", api_key: "secret", otp: "secret" } }, () => z.number().parse("invalid"))).rejects.toThrow();
     const files = await captures();
     expect(files[0]?.log._apicity).toMatchObject({ outcome: "local_error", input: { prompt: "keep", api_key: "***", otp: "***" } });
     expect(files[0]?.log.entries[0]?._apicity?.kind).toBe("local");
@@ -154,12 +154,33 @@ describe("opt-in provider HAR diagnostics", () => {
     expect(await withHarCapture({ provider: "kie", endpoint: "local", input: invalid }, () => 7)).toBe(7);
   });
 
+  it("omits successful local wrappers and records nested failures only once", async () => {
+    await writeHarSettings({ mode: "all" });
+    const meta = { provider: "kie", endpoint: "api.v1.jobs.createTask", input: {} };
+    expect(await withHarLocalFailure(meta, async () => 42)).toBe(42);
+    expect(await captures()).toEqual([]);
+    await expect(withHarLocalFailure(meta, () => withHarLocalFailure(meta, async () => {
+      throw new Error("local refusal");
+    }))).rejects.toThrow("local refusal");
+    expect(await captures()).toHaveLength(1);
+    reject = true;
+    const provider = createKie({ apiKey: "test", baseURL: url });
+    await expect(withHarLocalFailure(meta, async () => {
+      try { await provider.get.xai.v1.models(); }
+      catch (cause) { throw new Error("wrapped provider refusal", { cause }); }
+    })).rejects.toThrow("wrapped provider refusal");
+    const files = await captures();
+    expect(files).toHaveLength(2);
+    expect(files.filter(file => file.log._apicity?.outcome === "provider_error")).toHaveLength(1);
+  });
+
   it("captures auxiliary fal and Alibaba storage requests using the SDK injected fetch", async () => {
     await writeHarSettings({ mode: "all" });
     await uploadFalFile({ apiKey: "test", baseURL: url, restBaseURL: url }, { data: new Uint8Array([1, 2]), filename: "image.png", contentType: "image/png" });
     await uploadAlibabaFile({ apiKey: "test", baseURL: url }, { data: new Uint8Array([1, 2]), filename: "image.png", contentType: "image/png", model: "wan" });
     const files = await captures();
     expect(files).toHaveLength(2);
+    expect(files.map(file => file.log._apicity?.endpoint).sort()).toEqual(["api.v1.uploads", "storage.upload.initiate"]);
     for (const file of files) {
       expect(file.log.entries).toHaveLength(2);
       expect(file.log._apicity?.input).toMatchObject({ data: { _apicity_placeholder: { bytes: 2 } } });

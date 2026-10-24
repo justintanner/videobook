@@ -5,6 +5,8 @@ import { currentBookContext } from "./book-context.js";
 import { harDirectory, readHarSettings } from "./har-settings.js";
 import { logger } from "./logger.js";
 
+const localFailures = new AsyncLocalStorage<Set<unknown>>();
+
 const pending = new Set<Promise<void>>();
 let maintenance: Promise<void> = Promise.resolve();
 
@@ -51,10 +53,32 @@ export async function withHarCapture<T>(
   pending.add(finished);
   try {
     return await runCapture(meta, operation, base, context);
+  } catch (error) {
+    localFailures.getStore()?.add(error);
+    throw error;
   } finally {
     finish();
     pending.delete(finished);
   }
+}
+
+export async function withHarLocalFailure<T>(meta: HarCallMeta, operation: () => Promise<T>): Promise<T> {
+  const failures = localFailures.getStore() ?? new Set<unknown>();
+  return localFailures.run(failures, async () => {
+    try {
+      return await operation();
+    } catch (error) {
+      const seen = new Set<unknown>();
+      let cause: unknown = error;
+      while (!seen.has(cause)) {
+        if (failures.has(cause)) throw error;
+        seen.add(cause);
+        if (!(cause instanceof Error) || cause.cause === undefined) break;
+        cause = cause.cause;
+      }
+      return withHarCapture(meta, () => { throw error; });
+    }
+  });
 }
 
 async function runCapture<T>(meta: HarCallMeta, operation: (fetch: typeof globalThis.fetch) => T | Promise<T>, base: typeof globalThis.fetch, context: Record<string, unknown>): Promise<T> {

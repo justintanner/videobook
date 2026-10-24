@@ -1,3 +1,6 @@
+import type { Har } from "@apicity/har";
+import { flushHarCaptures } from "../har-capture.js";
+import { harDirectory } from "../har-settings.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -225,6 +228,47 @@ describe("generic media generation", () => {
     await engine.metadata.artifacts.write(source.replace(/^@/, ""), "original", { duration: 31 });
     await expect(runGenerateMedia(engine, job, await ownerContext(job.assetId))).rejects.toThrow("between 4 and 30 seconds");
     expect(requests).toHaveLength(0);
+  });
+
+  it.each([
+    ["kie:nano-banana-2-1", "api.v1.jobs.createTask"],
+    ["fal:bytedance/seedream/v5/flash/text-to-image", "v1.queue.submit"],
+  ])("records submit-time schema refusals for %s under its catalog endpoint", async (model, endpoint) => {
+    const previousHome = process.env.VIDEOBOOK_HOME;
+    const previousMode = process.env.VIDEOBOOK_HAR_CAPTURE;
+    process.env.VIDEOBOOK_HOME = root;
+    process.env.VIDEOBOOK_HAR_CAPTURE = "all";
+    try {
+      const enqueued = toolJson(await client.callTool({ name: "generate_image", arguments: {
+        book_id: engine.book.get().bookId, model, prompt: "a lighthouse",
+      } }));
+      const assetId = String(enqueued.asset_id);
+      const job = queuedJob(assetId);
+      const option = model.startsWith("kie:") ? "aspect_ratio" : "num_images";
+      const invalid = { ...job, options: { ...job.options, [option]: { invalid: true } } };
+      const context = await ownerContext(assetId);
+      await expect(runGenerateMedia(engine, invalid, context)).rejects.toThrow(/Aspect ratio|Num images/);
+      await flushHarCaptures();
+      const index = await readFile(join(harDirectory(), "index.jsonl"), "utf8");
+      const rows = index.trim().split("\n").map(line => JSON.parse(line) as { file: string });
+      expect(rows).toHaveLength(1);
+      const capture = JSON.parse(await readFile(join(harDirectory(), rows[0]!.file), "utf8")) as Har;
+      expect(capture.log._apicity).toMatchObject({ endpoint, outcome: "local_error" });
+      expect(capture.log.entries[0]?._apicity?.kind).toBe("local");
+      expect(requests).toHaveLength(0);
+      await runGenerateMedia(engine, job, context);
+      await flushHarCaptures();
+      const after = (await readFile(join(harDirectory(), "index.jsonl"), "utf8")).trim().split("\n");
+      expect(after).toHaveLength(2);
+      const successRow = JSON.parse(after[1]!) as { file: string };
+      const success = JSON.parse(await readFile(join(harDirectory(), successRow.file), "utf8")) as Har;
+      expect(success.log.entries).toHaveLength(1);
+      expect(success.log.entries[0]?.request.method).toBe("POST");
+    } finally {
+      await flushHarCaptures();
+      if (previousHome === undefined) delete process.env.VIDEOBOOK_HOME; else process.env.VIDEOBOOK_HOME = previousHome;
+      if (previousMode === undefined) delete process.env.VIDEOBOOK_HAR_CAPTURE; else process.env.VIDEOBOOK_HAR_CAPTURE = previousMode;
+    }
   });
 
   it("generates a kie image from a reference through submit, poll and completion", async () => {
