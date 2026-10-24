@@ -8,7 +8,7 @@
  * Callers refresh it after a new authorization or on explicit request.
  */
 
-import { createX } from "@apicity/x";
+import { createX } from "../usage-providers.js";
 import { appState, type ApplicationStateStore } from "../app-state.js";
 import { getValidAccessToken } from "./x-tokens.js";
 

@@ -6,7 +6,7 @@
  * "unknown" and fall back to a cached value or prompt the user.
  */
 
-import { createX } from "@apicity/x";
+import { createX } from "../usage-providers.js";
 import { getValidAccessToken } from "./x-tokens.js";
 import { normalizeHandle } from "../watermark-config.js";
 

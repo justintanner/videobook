@@ -1,3 +1,4 @@
+import { sweepHarCaptures } from "./har-retention.js";
 import { appendDiagnostic, registerDiagnosticName } from "./diagnostics.js";
 import {
   type ArtifactWorkKind,
@@ -130,10 +131,13 @@ export function isProviderPollDriverActive(bookId: string): boolean {
   return info?.providerPollTimer != null;
 }
 
+let harRetentionTimer: ReturnType<typeof setInterval> | null = null;
+
 async function tickProviderPoll(info: RunnerInfo): Promise<void> {
   if (info.providerPollInFlight || info.pollAbort.signal.aborted) return;
   info.providerPollInFlight = true;
   try {
+    await sweepHarCaptures();
     if (providerPollWorkHook) {
       await providerPollWorkHook(info.pollAbort.signal);
     }
@@ -357,7 +361,10 @@ function makeWrappedResolver(
     const handler = handlers.get(type);
     if (!handler) return null;
     return async (job: Job, queueSignal?: AbortSignal) => withBookContext(
-      { bookId, engine, operation: type, ...(job.artifactId ? { artifactId: job.artifactId } : {}) },
+      { bookId, engine, operation: type, ...(job.artifactId ? { artifactId: job.artifactId } : {}),
+        ...(typeof job.payload.runId === "string" ? { runId: job.payload.runId } : {}),
+        ...(typeof job.payload.generationId === "string" ? { attemptId: job.payload.generationId } : {}),
+        ...(typeof job.payload.model === "string" ? { model: job.payload.model } : {}) },
       () => runWithJobDeadline(type, async (signal) => {
         const jobSignal = queueSignal
           ? AbortSignal.any([signal, queueSignal])
@@ -692,6 +699,8 @@ export const queue: Queue = {
     };
   },
   async start() {
+    await sweepHarCaptures(true);
+    harRetentionTimer ??= setInterval(() => { void sweepHarCaptures(); }, 60_000).unref();
     await ensureJobHandlersLoaded();
     await reconcileQueueOnStartup();
   },
@@ -699,6 +708,8 @@ export const queue: Queue = {
     await ensureRunner(bookId);
   },
   async stop() {
+    if (harRetentionTimer) clearInterval(harRetentionTimer);
+    harRetentionTimer = null;
     if (stoppingQueue) return stoppingQueue;
     const pending = stopQueueRunners();
     stoppingQueue = pending;

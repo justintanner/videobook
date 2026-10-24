@@ -1,4 +1,4 @@
-import { createFal } from "@apicity/fal";
+import { createFal } from "../usage-providers.js";
 import {
   computeEstimate,
   createFalEstimateCache,

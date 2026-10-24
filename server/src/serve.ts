@@ -1,3 +1,4 @@
+import { flushHarCaptures } from "./har-capture.js";
 import { once } from "node:events";
 import type { Server } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
@@ -47,6 +48,7 @@ async function shutdownServices(services: VideobookApp): Promise<void> {
   await services.voiceSessions.close();
   await services.mcpHandler.close();
   await queue.stop();
+  await flushHarCaptures();
   await stopAceServer();
   await bookManager.close();
 }

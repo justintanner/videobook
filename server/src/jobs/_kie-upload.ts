@@ -1,5 +1,4 @@
-import { createKie } from "../usage-providers.js";
-import { uploadFile } from "@apicity/kie";
+import { uploadKieFile } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
@@ -21,9 +20,8 @@ async function uploadPreparedToKie(
   const apiKey = getApiKey("KIE_API_KEY");
   if (apiKey) {
     try {
-      const provider = createKie({ apiKey, timeout: 120_000 });
       const blob = new Blob([new Uint8Array(data)], { type: contentType });
-      return await uploadFile(provider, blob, hashedFilename);
+      return await uploadKieFile({ apiKey, timeout: 120_000 }, blob, hashedFilename);
     } catch (err) {
       logger.warn("kie-upload-fallback", { error: err });
     }

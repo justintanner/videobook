@@ -1,4 +1,4 @@
-import { createKimiCoding } from "@apicity/kimicoding";
+import { createKimiCoding } from "../usage-providers.js";
 import { isPlaceholderApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 

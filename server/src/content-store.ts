@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-import { B2Error, createB2 } from "@apicity/b2";
+import { createB2 } from "./usage-providers.js";
+import { B2Error } from "@apicity/b2";
 import type { ContentStore } from "videobook-engine";
 
 interface B2ContentStoreConfig {

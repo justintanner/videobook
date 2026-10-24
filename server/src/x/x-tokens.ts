@@ -1,4 +1,5 @@
-import { createXOAuth, XError, type XOAuthTokenResponse } from "@apicity/x";
+import { createXOAuth } from "../usage-providers.js";
+import { XError, type XOAuthTokenResponse } from "@apicity/x";
 import { appState, type ApplicationStateStore } from "../app-state.js";
 
 const REFRESH_BUFFER_MS = 60_000;

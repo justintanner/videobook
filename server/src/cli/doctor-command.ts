@@ -1,3 +1,4 @@
+import { harDirectory, readHarSettings } from "../har-settings.js";
 import { execFile } from "node:child_process";
 import { access, constants, readdir } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -86,6 +87,16 @@ async function dataHomeCheck(): Promise<DoctorCheck> {
       required: true,
     });
   }
+}
+
+async function harCaptureCheck(): Promise<DoctorCheck> {
+  const settings = await readHarSettings();
+  const dir = harDirectory();
+  let writable = true;
+  try { await access(await nearestExisting(dir), constants.W_OK); }
+  catch { writable = false; }
+  return check({ id: "har-capture", label: "HAR capture", status: writable || settings.mode === "off" ? "ok" : "warn",
+    detail: `${settings.mode}; ${dir}; writable: ${writable ? "yes" : "no"}`, required: false });
 }
 
 async function libraryCheck(): Promise<DoctorCheck> {
@@ -279,6 +290,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
   return [
     nodeCheck(),
     await dataHomeCheck(),
+    await harCaptureCheck(),
     await libraryCheck(),
     await binaryCheck("ffmpeg", "ffmpeg", FFMPEG, bundledPath("ffmpeg-static"), "VIDEOBOOK_FFMPEG_PATH"),
     await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledFfprobe(), "VIDEOBOOK_FFPROBE_PATH"),

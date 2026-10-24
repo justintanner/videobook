@@ -1,5 +1,4 @@
-import { createFal } from "../usage-providers.js";
-import { uploadFile } from "@apicity/fal";
+import { uploadFalFile } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
@@ -19,8 +18,7 @@ async function uploadPreparedToFal(
   const apiKey = getApiKey("FAL_API_KEY");
   if (apiKey) {
     try {
-      const provider = createFal({ apiKey, timeout: 60_000 });
-      return await uploadFile(provider, {
+      return await uploadFalFile({ apiKey, timeout: 60_000 }, {
         data,
         filename: hashedFilename,
         contentType,

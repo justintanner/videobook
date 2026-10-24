@@ -53,7 +53,8 @@ export type ManagedEnvKey = (typeof MANAGED_ENV_KEYS)[number];
 
 export type SecretSource = "1password" | "env" | "missing";
 
-const NON_SECRET_ENV_KEYS: ReadonlySet<ManagedEnvKey> = new Set<ManagedEnvKey>([
+const NON_SECRET_ENV_KEYS: ReadonlySet<string> = new Set<string>([
+  "VIDEOBOOK_HAR_CAPTURE",
   "B2_REGION",
   "B2_BUCKET",
   "B2_ENDPOINT",

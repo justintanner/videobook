@@ -1,3 +1,4 @@
+import { HarCaptureSettings } from './HarCaptureSettings'
 import { DropboxConnectionCard } from './DropboxConnectionCard'
 import type { PostToolCall } from '@/videobook/use-post-actions'
 import { RefreshCw } from 'lucide-react'
@@ -113,6 +114,7 @@ export function SettingsScreen({ call, providers, loading, error, refreshed, sto
         <CredentialRows providers={mainProviders} editor={editor} busy={busy} />
       </section>
       <div className="settings-secondary">
+        <HarCaptureSettings call={call} />
         <section className="settings-panel" aria-labelledby="settings-x-heading">
           <div className="settings-panel-heading"><h2 id="settings-x-heading">X account</h2><span>Application</span></div>
           <XConnectionCard busy={busy} connection={connection} onConnect={onConnect} />

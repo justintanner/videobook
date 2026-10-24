@@ -1,9 +1,5 @@
-import {
-  submitMediaJob,
-  type GrokImagineImage2ImageEditRequest,
-  type KieProvider,
-  type SeedreamProLayerDecompositionRequest,
-} from "@apicity/kie";
+import { submitMediaJob } from "../usage-providers.js";
+import { type GrokImagineImage2ImageEditRequest, type KieProvider, type SeedreamProLayerDecompositionRequest } from "@apicity/kie";
 import {
   GrokImagineImage2ImageEditRequestSchema,
   GrokImagineImage2SegmentMapRequestSchema,

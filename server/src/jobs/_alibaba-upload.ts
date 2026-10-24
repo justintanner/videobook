@@ -1,5 +1,4 @@
-import { createAlibaba } from "../usage-providers.js";
-import { uploadFile } from "@apicity/alibaba";
+import { uploadAlibabaFile } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
 import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
 import { getApiKey } from "../api-key.js";
@@ -23,8 +22,7 @@ export async function uploadAssetToAlibaba(
   const apiKey = getApiKey("DASHSCOPE_API_KEY");
   if (apiKey) {
     try {
-      const provider = createAlibaba({ apiKey, timeout: 60_000 });
-      return await uploadFile(provider, {
+      return await uploadAlibabaFile({ apiKey, timeout: 60_000 }, {
         model,
         data,
         filename: hashedFilename,

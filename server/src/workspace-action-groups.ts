@@ -94,7 +94,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   ],
   Publishing: ["create_post", "update_post", "get_post", "list_posts", "link_post", "upload_post_to_dropbox", "save_post_to_icloud", "refresh_post_metrics", "record_post_metrics", "connect_service", "service_status", "post_icloud_sync_status", "draft_post_copy", "post", "verify_x_mentions"],
   Providers: [
-    "check_kimi_coding_api", "list_chat_models", "provider_key_status", "set_env_secret",
+    "check_kimi_coding_api", "list_chat_models", "provider_key_status", "set_env_secret", "set_har_capture",
     "list_elevenlabs_voices",
   ],
 };

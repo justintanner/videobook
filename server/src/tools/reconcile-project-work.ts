@@ -1082,6 +1082,13 @@ async function processMachGenTaskStatus(
   result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
 }
 
+function withProviderTaskContext<T>(engine: Engine, bookId: string, task: PendingTask, operation: () => Promise<T>): Promise<T> {
+  return withBookContext({ bookId, engine, operation: "poll_pending_provider_tasks", artifactId: task.artifactId,
+    providerTaskId: task.taskId, attemptId: typeof task.meta.attemptId === "string" ? task.meta.attemptId : task.artifactId,
+    runId: typeof task.meta.runId === "string" ? task.meta.runId : undefined,
+    model: typeof task.meta.model === "string" ? task.meta.model : undefined }, operation);
+}
+
 async function pollMachGenTasks(
   engine: Engine,
   tasks: readonly PendingTask[],
@@ -1092,7 +1099,7 @@ async function pollMachGenTasks(
   const machgenTasks = tasks.filter((task) => task.taskType === MEDIA_TASK_TYPES.machgen);
   if (!getApiKey("MACHGEN_API_KEY") || machgenTasks.length === 0) return;
   const provider = machgenProvider(30_000, baseURL);
-  await Promise.all(machgenTasks.map(async (task) => {
+  await Promise.all(machgenTasks.map(async (task) => withProviderTaskContext(engine, bookId, task, async () => {
     try {
       await processMachGenTaskStatus(engine, task, await provider.api.v0.tasks(task.taskId), result, bookId);
     } catch (error) {
@@ -1101,7 +1108,7 @@ async function pollMachGenTasks(
       result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
       if (machgenPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
     }
-  }));
+  })));
 }
 
 /**
@@ -1198,7 +1205,7 @@ export async function pollPendingProviderTasks(
       ...(kieBaseURL ? { baseURL: kieBaseURL } : {}),
     });
 
-    await Promise.all(kieTasks.map(async (task) => {
+    await Promise.all(kieTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       try {
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
         await processKieTaskResult(engine, task, taskInfo, result, book_id);
@@ -1214,7 +1221,7 @@ export async function pollPendingProviderTasks(
           }
         }
       }
-    }));
+    })));
   }
 
   // Poll KIE Veo tasks (separate namespace: kie.veo.get.api.v1.veo.recordInfo)
@@ -1226,7 +1233,7 @@ export async function pollPendingProviderTasks(
       ...(kieBaseURL ? { baseURL: kieBaseURL } : {}),
     });
 
-    await Promise.all(veoTasks.map(async (task) => {
+    await Promise.all(veoTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       const prompt = metaPrompt(task.meta);
       try {
         const recordInfo = await provider.veo.get.api.v1.veo.recordInfo(task.taskId);
@@ -1282,7 +1289,7 @@ export async function pollPendingProviderTasks(
           }
         }
       }
-    }));
+    })));
   }
 
   // Poll xAI tasks (only if API key is set)
@@ -1290,7 +1297,7 @@ export async function pollPendingProviderTasks(
   if (process.env.XAI_API_KEY && xaiTasks.length > 0) {
     const provider = createXai({ apiKey: process.env.XAI_API_KEY, timeout: 30_000 });
 
-    await Promise.all(xaiTasks.map(async (task) => {
+    await Promise.all(xaiTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       const prompt = metaPrompt(task.meta);
       try {
         const videoResult = await provider.get.v1.videos(task.taskId);
@@ -1337,7 +1344,7 @@ export async function pollPendingProviderTasks(
           }
         }
       }
-    }));
+    })));
   }
 
   // Poll Alibaba tasks (only if API key is set)
@@ -1345,7 +1352,7 @@ export async function pollPendingProviderTasks(
   if (process.env.DASHSCOPE_API_KEY && alibabaTasks.length > 0) {
     const provider = createAlibaba({ apiKey: process.env.DASHSCOPE_API_KEY, timeout: 30_000 });
 
-    await Promise.all(alibabaTasks.map(async (task) => {
+    await Promise.all(alibabaTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       const prompt = metaPrompt(task.meta);
       try {
         const taskStatus = await provider.get.api.v1.tasks(task.taskId);
@@ -1415,7 +1422,7 @@ export async function pollPendingProviderTasks(
           }
         }
       }
-    }));
+    })));
   }
 
   // Poll FAL tasks (only if API key is set)
@@ -1430,7 +1437,7 @@ export async function pollPendingProviderTasks(
     const falNamespace = (endpointId: string): string =>
       endpointId.split("/").slice(0, 2).join("/");
 
-    await Promise.all(falTasks.map(async (task) => {
+    await Promise.all(falTasks.map(async (task) => withProviderTaskContext(engine, book_id, task, async () => {
       const prompt = metaPrompt(task.meta);
       const endpointId = typeof task.meta?.falEndpointId === "string" ? task.meta.falEndpointId : null;
       if (!endpointId) {
@@ -1491,7 +1498,7 @@ export async function pollPendingProviderTasks(
           }
         }
       }
-    }));
+    })));
   }
 
   await pollMachGenTasks(engine, pollableTasks, result, book_id, options.machgenBaseURL ?? providerEndpoints().machgenBaseURL);

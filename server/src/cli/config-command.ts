@@ -1,3 +1,4 @@
+import { readHarSettings, writeHarSettings, harDirectory } from "../har-settings.js";
 import type { ConfigAction, ConfigFlags } from "./args.js";
 import { hasControlCharacters, readEnvValues, updateEnvFile } from "../env-file.js";
 import {
@@ -9,7 +10,7 @@ import {
 } from "../env-secrets.js";
 import { OP_TOKEN_SETTING, OP_VAULT_SETTING, isOpReference, vaultReference } from "../one-password.js";
 
-type ConfigSource = "environment" | ".env" | "1password reference" | "1password vault" | "missing";
+type ConfigSource = "app state" | "environment" | ".env" | "1password reference" | "1password vault" | "missing";
 
 type EnvValues = Readonly<Record<string, string>>;
 
@@ -105,10 +106,24 @@ async function unsetKey(key: string, envPath: string): Promise<number> {
 }
 
 export async function runConfigCommand(command: ConfigCommand): Promise<number> {
+  if (command.key === "har_capture") {
+    try {
+      const current = await readHarSettings();
+      const settings = command.action === "set" || command.action === "unset"
+        ? await writeHarSettings({ ...await readHarSettings(undefined, {}), mode: command.action === "unset" ? "off" : command.value })
+        : current;
+      process.stdout.write(`${JSON.stringify({ harCapture: settings, dir: harDirectory(), overridden: Boolean(process.env.VIDEOBOOK_HAR_CAPTURE?.trim()) })}\n`);
+      return 0;
+    } catch (error) {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+  }
   const envPath = getDefaultSecretStore().envPath();
   if (command.action === "list") {
     const file = readEnvValues(envPath);
-    printRows(CONFIG_KEYS.map((key) => configRow(key, file)), file, command.flags.json, envPath);
+    const har = await readHarSettings();
+    printRows([...CONFIG_KEYS.map((key) => configRow(key, file)), { key: "har_capture", source: process.env.VIDEOBOOK_HAR_CAPTURE?.trim() ? "environment" : "app state", value: har.mode }], file, command.flags.json, envPath);
     return 0;
   }
   const key = command.key ?? "";

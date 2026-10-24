@@ -1,4 +1,5 @@
-import { createFreeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
+import { createFreeMediaUpload } from "./usage-providers.js";
+import { uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";

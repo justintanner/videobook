@@ -21,11 +21,12 @@ describe('videobook doctor', () => {
     const report = JSON.parse(result.stdout) as { ok: boolean; checks: DoctorCheck[] }
     expect(report.ok).toBe(true)
     expect(report.checks.map((check) => check.id)).toEqual([
-      'node', 'data-home', 'library', 'ffmpeg', 'ffprobe', 'yt-dlp', 'native-runtime', 'search-runtime', 'render-browser', 'one-password', 'provider-keys', 'owner',
+      'node', 'data-home', 'har-capture', 'library', 'ffmpeg', 'ffprobe', 'yt-dlp', 'native-runtime', 'search-runtime', 'render-browser', 'one-password', 'provider-keys', 'owner',
     ])
     const byId = new Map(report.checks.map((check) => [check.id, check]))
     expect(byId.get('data-home')?.detail).toContain(`${home} (VIDEOBOOK_HOME)`)
     expect(byId.get('library')?.detail).toContain(join(home, 'books'))
+    expect(byId.get('har-capture')?.detail).toContain(`off; ${join(home, 'har')}; writable: yes`)
     expect(byId.get('native-runtime')?.status).toBe('ok')
     expect(byId.get('one-password')?.detail).toContain('not used')
     expect(byId.get('provider-keys')?.status).toBe('warn')

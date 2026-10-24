@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in local provider HAR diagnostics with Settings, MCP and CLI controls, concurrent book attribution and retention limits.
+
+### Changed
+
+- Upgrade all Apicity dependencies to 0.18.0.
+
 ## [0.2.5] - 2026-10-24
 
 ### Added

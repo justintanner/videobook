@@ -1,6 +1,7 @@
+import { withHarCapture } from "../har-capture.js";
 import { createKie } from "../usage-providers.js";
 import type { MediaGenerationRequest } from "@apicity/kie";
-import { submitMediaJob } from "@apicity/kie";
+import { submitMediaJob } from "../usage-providers.js";
 import { mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -130,7 +131,7 @@ function createKieProvider(apiKey: string) {
   });
 }
 
-export async function submitKieTask(
+async function submitKieTaskInner(
   engine: Engine,
   ctx: JobHandlerContext,
   args: SubmitKieTaskArgs,
@@ -182,7 +183,7 @@ export async function submitKieTask(
   return taskId;
 }
 
-export async function submitQueuedKieTask(
+async function submitQueuedKieTaskInner(
   engine: Engine,
   task: PendingTask,
 ): Promise<PendingTask> {
@@ -229,4 +230,12 @@ export async function submitQueuedKieTask(
 
   await engine.metadata.artifacts.write(task.artifactId, "kie-task-id", { taskId });
   return writeResult.value.task;
+}
+
+export async function submitKieTask(engine: Engine, ctx: JobHandlerContext, args: SubmitKieTaskArgs): Promise<string> {
+  return withHarCapture({ provider: "kie", endpoint: "generation.paygate", input: args.request }, () => submitKieTaskInner(engine, ctx, args));
+}
+
+export async function submitQueuedKieTask(engine: Engine, task: PendingTask): Promise<PendingTask> {
+  return withHarCapture({ provider: "kie", endpoint: "generation.queued", input: task }, () => submitQueuedKieTaskInner(engine, task));
 }

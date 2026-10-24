@@ -6,6 +6,10 @@ interface BookContext {
   engine: Engine;
   operation?: string;
   artifactId?: string;
+  attemptId?: string;
+  providerTaskId?: string;
+  runId?: string;
+  model?: string;
 }
 
 const contexts = new AsyncLocalStorage<BookContext>();

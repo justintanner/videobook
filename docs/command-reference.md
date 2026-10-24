@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (225)
+## MCP endpoints (226)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -202,6 +202,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `set_alive_captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
+- `set_har_capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.
 - `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
 - `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
@@ -236,7 +237,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (299; 145 dedicated command routes)
+## Slash actions (300; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -484,6 +485,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/set-alive-captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
+- `/set-har-capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.; MCP: `set_har_capture`
 - `/set-notebook-cell-input` — Atomically replace or clear one named notebook cell input; MCP: `set_notebook_cell_input`
 - `/set-notebook-media-slot` — Attach or clear a passive notebook media slot; MCP: `set_notebook_media_slot`
 - `/set-timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs; MCP: `set_timeline`

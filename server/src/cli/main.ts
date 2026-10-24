@@ -86,7 +86,14 @@ async function main(argv: string[]): Promise<number> {
   applyFlagsToEnv(parsed.flags, process.env, process.cwd());
   if (parsed.command !== "serve") redirectConsoleToStderr();
   if (parsed.command !== "setup" && parsed.command !== "config") await loadDotenv();
-  return runCommand(parsed);
+  try {
+    return await runCommand(parsed);
+  } finally {
+    if (parsed.command === "run" || parsed.command === "mcp") {
+      const { flushHarCaptures } = await import("../har-capture.js");
+      await flushHarCaptures();
+    }
+  }
 }
 
 function flushed(stream: NodeJS.WriteStream): Promise<void> {

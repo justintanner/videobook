@@ -1,3 +1,4 @@
+import { withBookContext } from "../book-context.js";
 import { createHash } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -1407,13 +1408,15 @@ async function generationTool(
       await queue.enqueue(jobId, {
         ...prepared.imageEdit.jobInput,
         type: "generate_image_subject_edit", imageAssetId, bookId,
+        runId: options.runId, model: prepared.model,
         notebookId: document.id, producerCellId: cell.id, outputCellId, jobId,
         managedByNotebook: true,
         ...(generationId ? { generationId } : {}),
       });
       response = { content: [{ type: "text", text: JSON.stringify({ image_asset_id: imageAssetId }) }] };
     } else {
-      response = await definition.handler(prepared.input);
+      response = await withBookContext({ bookId, engine, operation: prepared.tool, runId: options.runId,
+        attemptId: generationId ?? undefined, model: prepared.model }, () => definition.handler(prepared.input));
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);

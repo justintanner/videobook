@@ -1,3 +1,5 @@
+import { withHarCapture } from "../har-capture.js";
+import { withBookContext } from "../book-context.js";
 import { isSeedanceEdit } from "../media/seedance-edit.js";
 import type { Engine } from "videobook-engine";
 import type { CostHints } from "@apicity/cost";
@@ -17,6 +19,8 @@ import type { MediaRefs, ResolvedModel } from "../media/types.js";
 export type GenerateMediaJob = {
   type: "generate_media";
   model: string;
+  runId?: string;
+  generationId?: string;
   bookId: string;
   assetId: string;
   assetDir: string;
@@ -58,6 +62,8 @@ export async function generationSourceCostHints(engine: Engine, refs: ResolvedRe
 function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: ResolvedRefs): Record<string, unknown> {
   return {
     model: model.id,
+    runId: job.runId,
+    attemptId: job.generationId ?? job.assetId,
     media: model.media,
     prompt: job.prompt ?? "",
     sourceImageIds: refs.sourceImageIds,
@@ -66,7 +72,7 @@ function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: Resol
   };
 }
 
-export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
+async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
   const model = resolveModel(job.model);
   const adapter = adapterFor(model);
   requireApiKey(adapter.envKey);
@@ -96,6 +102,12 @@ export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ct
     await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs });
   }
   return { success: true, model: model.id, taskId: result.taskId, status: result.kind };
+}
+
+export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
+  return withBookContext({ bookId: job.bookId, engine, operation: "generate_media", artifactId: job.assetId,
+    attemptId: job.generationId ?? job.assetId, runId: job.runId, model: job.model }, () =>
+    withHarCapture({ provider: resolveModel(job.model).provider, endpoint: "generation.submit", input: job }, () => generateMedia(engine, job, ctx)));
 }
 
 export function registerGenerateMediaJob(engine: Engine): void {

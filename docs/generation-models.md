@@ -77,7 +77,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:gpt-image-2-image-to-image` | GPT Image 2 Edit | image | edit_image | image 1-16 |  | visible |
 | `kie:seedream/5-pro-image-to-image` | Seedream 5 Pro Edit | image | edit_image | image 1-10 |  | visible |
 | `kie:grok-imagine/text-to-image` | Grok Imagine | image | text_to_image | none |  | visible |
-| `kie:grok-imagine/image-to-image` | Grok Imagine | image | edit_image | image 1-n |  | visible |
+| `kie:grok-imagine/image-to-image` | Grok Imagine | image | edit_image | image 1-1 |  | visible |
 | `kie:qwen2/image-edit` | Qwen 2 Edit | image | edit_image | image 1-1 |  | visible |
 | `kie:qwen3/image-to-image` | Qwen 3 Image Edit | image | edit_image | image 1-3 |  | visible |
 | `kie:qwen2-1/text-to-image` | Qwen 2.1 Image | image | text_to_image | none |  | visible |

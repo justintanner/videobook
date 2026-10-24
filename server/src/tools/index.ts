@@ -1,3 +1,4 @@
+import { setHarCaptureDef } from "./set-har-capture.js";
 import { coldOpenDefs } from "./cold-open.js";
 import type { McpServer, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
 import type { Engine } from "videobook-engine";
@@ -288,6 +289,7 @@ export function getAllToolDefs(
     listChatModelsDef(),
     providerKeyStatusDef(),
     setEnvSecretDef(),
+    setHarCaptureDef(),
     listElevenLabsVoicesDef(),
     estimateCostDef(engine, books),
     bookUsageDef(engine),

@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
-import { createX, XError } from "@apicity/x";
+import { createX } from "../usage-providers.js";
+import { XError } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";

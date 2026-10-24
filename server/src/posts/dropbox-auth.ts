@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { createDropbox } from "@apicity/dropbox";
+import { createDropbox } from "../usage-providers.js";
 import type { DropboxProvider } from "@apicity/dropbox";
 import { appState } from "../app-state.js";
 

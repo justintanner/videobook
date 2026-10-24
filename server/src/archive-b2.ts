@@ -1,4 +1,4 @@
-import { createB2 } from "@apicity/b2";
+import { createB2 } from "./usage-providers.js";
 import type { B2Provider } from "@apicity/b2";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";

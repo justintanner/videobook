@@ -1,3 +1,4 @@
+import { currentBookContext } from "../book-context.js";
 import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import { queue } from "../queue.js";
@@ -100,6 +101,8 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
   const jobId = `generate-${model.media}-${artifactId}-${Date.now()}`;
   const job: GenerateMediaJob = {
     type: "generate_media",
+    runId: currentBookContext()?.runId,
+    generationId: currentBookContext()?.attemptId,
     model: model.id,
     bookId: String(args.book_id),
     assetId: artifactId,

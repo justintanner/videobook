@@ -1,6 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { MediaGenerationRequest, SunoGenerateRequest, SunoSoundsRequest, VeoGenerateRequest } from "@apicity/kie";
-import { KieError, submitMediaJob } from "@apicity/kie";
+import { submitMediaJob } from "../../usage-providers.js";
+import { KieError } from "@apicity/kie";
 import { createKie } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
 import { authorizeKiePaygate, ensurePaygateSecret, mintKieOtp } from "../../jobs/kie-paygate.js";

@@ -97,6 +97,7 @@ export default defineConfig({
       'src/videobook/post-delivery-review.test.ts', 'src/videobook/post-copy-review.test.ts',
       'src/videobook/x-post-thread.test.ts',
       'server/src/app-state.test.ts',
+      'server/src/har-capture.test.ts',
       'server/src/engine-rename.test.ts',
       'server/src/engine-tags-contract.test.ts',
       'server/src/archive-store.test.ts',

@@ -1,3 +1,4 @@
+import { withHarCapture } from "../har-capture.js";
 import { createXai } from "../usage-providers.js";
 
 import type { XaiProvider } from "@apicity/xai";
@@ -39,6 +40,8 @@ export async function callXaiPaid<TReq extends object, TRes>(
   dotPath: XaiPaidDotPath,
   request: TReq,
 ): Promise<TRes> {
-  assertProviderPayload(request, { toolName: dotPath, wire: true });
-  return method(request, { otp: mintXaiOtp(dotPath, request) });
+  return withHarCapture({ provider: "xai", endpoint: dotPath, input: request }, () => {
+    assertProviderPayload(request, { toolName: dotPath, wire: true });
+    return method(request, { otp: mintXaiOtp(dotPath, request) });
+  });
 }

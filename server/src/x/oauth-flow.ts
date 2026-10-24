@@ -1,6 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import { createXOAuth, type XOAuthTokenResponse } from "@apicity/x";
+import { createXOAuth } from "../usage-providers.js";
+import { type XOAuthTokenResponse } from "@apicity/x";
 import { appState } from "../app-state.js";
 import { readTokens, writeTokens, type XTokenStore } from "./x-tokens.js";
 import {

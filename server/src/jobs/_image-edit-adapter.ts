@@ -1,5 +1,5 @@
 import { createFal } from "../usage-providers.js";
-import { submitMediaJob } from "@apicity/kie";
+import { submitMediaJob } from "../usage-providers.js";
 import type { MediaGenerationRequest } from "@apicity/kie";
 import { FalError } from "@apicity/fal";
 import { SeedreamProImageToImageRequestSchema } from "@apicity/kie/zod";

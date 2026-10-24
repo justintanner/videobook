@@ -1,3 +1,4 @@
+import { withHarCapture } from "../har-capture.js";
 import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -74,7 +75,9 @@ async function reclaimFailedCompletion(
 }
 
 export function registerCompleteProviderTaskJob(engine: Engine): void {
-  registerJobHandler("complete_kie_task", async (payload, ctx) => {
+  registerJobHandler("complete_kie_task", async (payload, ctx) => withHarCapture({
+    provider: String(payload.taskType).split("_")[0] ?? "unknown", endpoint: "generation.complete", input: payload,
+  }, async () => {
     const {
       taskId, taskType, assetId, bookId, meta,
       resultUrls, resultObject,
@@ -161,7 +164,7 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
       clearInterval(heartbeat);
       await engine.jobs.locks.release(assetDir);
     }
-  });
+  }, globalThis.fetch, { providerTaskId: payload.taskId, model: (payload.meta as Record<string, unknown>).model, runId: (payload.meta as Record<string, unknown>).runId, attemptId: (payload.meta as Record<string, unknown>).attemptId }));
 }
 
 async function mediaOutputs(taskType: string, taskId: string, urls: string[]): Promise<ProviderOutput[]> {

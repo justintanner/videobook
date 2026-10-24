@@ -417,6 +417,33 @@ Detailed errors remain in MCP/CLI responses and job/artifact failure state.
 Explicit chat history retains the messages the user asked to save. This policy
 applies to newly written diagnostics; existing log files are not rewritten.
 
+### Opt-in provider captures
+
+Provider HAR capture is off by default. Enable it in Settings → Diagnostics, with
+`videobook config set har_capture failures` (or `all`), or through
+`set_har_capture`. Use `off` to disable it. Changes apply to the next call without
+restarting. `VIDEOBOOK_HAR_CAPTURE=off|failures|all` overrides the saved mode;
+an invalid override disables capture. `videobook doctor` reports mode, directory
+and writability.
+
+When enabled, captures retain prompts, media URLs, model parameters, provider
+responses and error text locally. Known secrets and cookies are scrubbed; binary
+media and bodies above the 256 KiB cap become placeholders. Review captures
+before sharing: arbitrary private text is not anonymized. Realtime WebSockets
+and output media downloads are not captured. The default logging policy remains
+unchanged when capture is off.
+
+Captures live in `runtime/har` in a source checkout, or `<VIDEOBOOK_HOME>/har`
+(default `~/.videobook/har`) when installed, with an `index.jsonl`. The application
+state `harCapture` block stores `mode`, `maxAgeDays` (default 30), and
+`maxTotalMB` (default 512 MiB). The settings tool can change the limits. Startup
+and daily queue sweeps remove the oldest captures over these limits. Sweeps do
+not run while capture is off.
+
+`VIDEOBOOK_OP_VAULT` fills any empty environment variable named after a vault
+item. Never create a vault item named `VIDEOBOOK_HAR_CAPTURE` unless capture is
+intended; a vault value can enable it on startup.
+
 ## Quality gates
 
 ```bash
