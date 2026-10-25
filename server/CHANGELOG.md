@@ -36,6 +36,9 @@ and the package uses [Semantic Versioning](https://semver.org/).
   generating, was counted as settled spend at its first status poll, and a
   Veo generation that failed while generating (`successFlag` 3) was counted
   as completed spend.
+- A Veo generation that fails while generating now fails with KIE's error
+  message at the next status poll. It was treated as still processing and
+  polled until the pending-task timeout.
 
 ## [0.3.1] - 2026-10-25
 

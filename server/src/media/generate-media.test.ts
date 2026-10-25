@@ -66,6 +66,7 @@ describe("generic media generation", () => {
   let server: Server;
   let baseURL: string;
   let requests: RecordedRequest[];
+  let veoRecord: Record<string, unknown> = {};
   let root: string;
   let engine: Engine;
   let client: Client;
@@ -82,6 +83,8 @@ describe("generic media generation", () => {
         data: { taskId: "kie-task-1", state: "success", resultJson: JSON.stringify({ resultUrls: [`${baseURL}/files/out.png`] }) },
       });
     }
+    if (path === "/api/v1/veo/generate") return sendJson(response, { code: 200, msg: "success", data: { taskId: "veo-task-1" } });
+    if (path.startsWith("/api/v1/veo/record-info")) return sendJson(response, { code: 200, msg: "success", data: { taskId: "veo-task-1", ...veoRecord } });
     if (path === "/api/v1/generate" || path === "/api/v1/generate/sounds") return sendJson(response, { code: 200, msg: "success", data: { taskId: "suno-task-1" } });
     if (path.startsWith("/api/v1/generate/record-info")) {
       return sendJson(response, {
@@ -506,6 +509,27 @@ describe("generic media generation", () => {
       provider: "kie", model: submitted.model, activity: "audio", basis: "estimated", status: "completed", externalId: "suno-task-1", warnings: [],
     })]);
     expect(usage[0]?.costUsd).toBeCloseTo(usd);
+  });
+
+  it("keeps a queued Veo generation pending while it generates and fails it when generation fails", async () => {
+    const bookId = engine.book.get().bookId;
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: bookId, model: "kie:veo3_fast", prompt: "a lighthouse at dusk" },
+    }));
+    const assetId = String(enqueued.asset_id);
+    expect(await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId))).toMatchObject({ status: "pending", taskId: "veo-task-1" });
+    veoRecord = { successFlag: 0 };
+    const generating = await pollPendingProviderTasks(engine, bookId);
+    expect(generating.failed).toEqual([]);
+    expect(generating.pending).toEqual([expect.objectContaining({ assetId, state: "waiting" })]);
+    veoRecord = { successFlag: 3, errorMessage: "The video could not be generated" };
+    const failed = await pollPendingProviderTasks(engine, bookId);
+    expect(failed.failed).toEqual([expect.objectContaining({ assetId, failMsg: "The video could not be generated" })]);
+    expect(failed.pending).toEqual([]);
+    const settled = await pollPendingProviderTasks(engine, bookId);
+    expect([...settled.pending, ...settled.failed]).toEqual([]);
+    expect(engine.usage.recent(20).find((entry) => entry.artifactId === assetId)).toMatchObject({ provider: "kie", model: "veo3_fast", status: "failed" });
   });
 
   it("writes synchronous ElevenLabs audio straight into the artifact", async () => {

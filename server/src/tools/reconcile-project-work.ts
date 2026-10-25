@@ -1074,7 +1074,7 @@ export async function pollPendingProviderTasks(
       try {
         const recordInfo = await provider.veo.get.api.v1.veo.recordInfo(task.taskId);
         const data = recordInfo.data;
-        // Veo successFlag: 0=submitted/pending, 1=success, 2=fail, 3=processing
+        // Veo successFlag: 0=generating, 1=success, 2=task creation failed, 3=generation failed
         if (data?.successFlag === 1) {
           const urls = data.response?.resultUrls ?? [];
           if (urls.length === 0) {
@@ -1101,7 +1101,7 @@ export async function pollPendingProviderTasks(
             resultUrls: urls,
           } as unknown as Record<string, unknown>);
           result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
-        } else if (data?.successFlag === 2) {
+        } else if (data?.successFlag === 2 || data?.successFlag === 3) {
           const failMsg = data.errorMessage ?? "Veo task failed";
           result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
           await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
@@ -1110,7 +1110,7 @@ export async function pollPendingProviderTasks(
             assetId: task.artifactId,
             taskType: task.taskType,
             progress: 0,
-            state: data?.successFlag === 3 ? "processing" : "waiting",
+            state: "waiting",
             prompt,
             startedAt: task.createdAt,
           });
