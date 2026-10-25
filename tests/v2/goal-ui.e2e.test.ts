@@ -289,7 +289,7 @@ describe('staged goal mode in the browser', () => {
 
   scenario('shows portrait defaults for a goal created without a supplied plan or format words', async () => {
     const fresh = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand' })
-    expect(fresh).toMatchObject({ planVersion: 3, status: 'review', plan: { version: 3, aspectRatio: '16:9', video: { durationSeconds: 13 } } })
+    expect(fresh).toMatchObject({ planVersion: 3, status: 'review', plan: { version: 3, aspectRatio: '9:16', video: { durationSeconds: 12 } } })
     expect(fresh.plan && 'shots' in fresh.plan).toBe(false)
     const created = await call<GoalSnapshot>('video_goal', { action: 'create', brief: '@a1 @a2 as Mr Bean in Thailand, portrait', plan: { ...goalTestSimplePlan(), aspectRatio: '9:16' } })
     await open(created)

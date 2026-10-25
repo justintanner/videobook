@@ -14,7 +14,7 @@ import { createTestClient } from "../test-client.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, stopBookQueue } from "../queue.js";
 import { cancelChainRun, getChainRun, resumeOpenChains, waitForChainRun } from "../chain-executor.js";
 import { copyVideoFixture } from "../test-media-fixtures.js";
-import { compileFrameSteps, compileGoalV3Steps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, goalStillPrompt, GOAL_PROMPT_BUDGET, GOAL_VIDEO_MODEL, GOAL_VIDEO_TOOL } from "../goal-plan.js";
+import { compileFrameSteps, compileGoalV3Steps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalBriefConstraints, goalPlanSchema, goalPlannerResponseSchema, goalPromptBudgetIssues, goalPromptWords, goalStillPrompt, GOAL_PROMPT_BUDGET, GOAL_VIDEO_MODEL, GOAL_VIDEO_TOOL, type GoalPlanV3 } from "../goal-plan.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
 import { readGoal, saveGoal } from "../goal-store.js";
@@ -1326,6 +1326,61 @@ describe("staged video goals through MCP", () => {
     expect(pins).toHaveLength(2);
     await invoke({ action: "cancel", goal_id: videoOnly.goalId });
     await waitForChainRun(engine, video.chainId!);
+  }, 60_000);
+
+  it("loads, edits, approves and retries a v3 goal saved with the earlier 2K scene default", async () => {
+    const created = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
+    if (!created.plan || !("version" in created.plan) || created.plan.version !== 3) throw new Error("expected a v3 plan");
+    expect(created.plan.scene.resolution).toBe("4K");
+    const savedBefore4K: GoalPlanV3 = {
+      ...created.plan,
+      aspectRatio: "16:9",
+      scene: { ...created.plan.scene, aspectRatio: "16:9", resolution: "2K" },
+      video: { ...created.plan.video, aspectRatio: "16:9", durationSeconds: 13 },
+    };
+    const store = async (stored: unknown) => {
+      const document = notebook();
+      const written = await engine.notebooks.write({ ...document, cells: document.cells.map(cell => cell.id === created.cellId ? { ...cell, inputs: { ...cell.inputs, plan: stored } } : cell) });
+      if (!written.ok) throw new Error(written.error.message);
+    };
+    const { resolution: _resolution, ...sceneWithoutResolution } = savedBefore4K.scene;
+    await store({ ...savedBefore4K, scene: sceneWithoutResolution });
+    expect((await status(created.goalId)).plan).toEqual(savedBefore4K);
+    await store(savedBefore4K);
+    const loaded = await status(created.goalId);
+    expect(loaded).toMatchObject({ planVersion: 3, status: "review", stage: "frame" });
+    expect(loaded.plan).toEqual(savedBefore4K);
+
+    const edited = await invoke({
+      action: "update", goal_id: created.goalId, revision: loaded.revision,
+      plan: { ...savedBefore4K, scene: { ...savedBefore4K.scene, prompt: `${savedBefore4K.scene.prompt} at dawn` } },
+    });
+    expect(edited.revision).toBe(loaded.revision + 1);
+    expect(edited.plan).toMatchObject({ aspectRatio: "16:9", scene: { resolution: "2K" }, video: { durationSeconds: 13 } });
+    if (!edited.plan || !("scene" in edited.plan)) throw new Error("expected the edited scene");
+    const upgraded = await raw({
+      action: "update", goal_id: created.goalId, revision: edited.revision,
+      plan: { ...edited.plan, scene: { ...edited.plan.scene, resolution: "4K" } },
+    });
+    expect(textOf(upgraded)).toContain("settings stay with this goal");
+
+    await pauseBookQueueForTests(bookId);
+    const started = await approve(edited);
+    expect(getChainRun(engine, started.chainId!)!.steps[0]!.params.options).toMatchObject({ aspect_ratio: "16:9", resolution: "2K" });
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    const providerArtifactId = String(getChainRun(engine, started.chainId!)!.steps[0]!.outputs?.asset_id);
+    expect(providerJob(providerArtifactId).payload).toMatchObject({ options: { aspect_ratio: "16:9", resolution: "2K" } });
+    expect(await engine.jobs.queue.abort(providerJob(providerArtifactId).id, "Fixture generation stopped")).toBe(true);
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    expect((await status(created.goalId)).status).toBe("failed");
+
+    const retried = await invoke({ action: "retry", goal_id: created.goalId });
+    expect(retried).toMatchObject({ status: "running", chainId: started.chainId, plan: { scene: { resolution: "2K" } } });
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    const retriedArtifactId = String(getChainRun(engine, retried.chainId!)!.steps[0]!.outputs?.asset_id);
+    expect(providerJob(retriedArtifactId).payload).toMatchObject({ options: { aspect_ratio: "16:9", resolution: "2K" } });
+    await invoke({ action: "cancel", goal_id: created.goalId });
+    await waitForChainRun(engine, retried.chainId!);
   }, 60_000);
 
   it("refuses to finish a v2 goal with a cold open", async () => {

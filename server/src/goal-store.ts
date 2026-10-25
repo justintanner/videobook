@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
-import { goalMediaRefSchema, goalPlanSchema, goalPlanV3Schema, goalStyleSchema, legacyGoalPlanSchema, type GoalCharacter, type GoalDisplayPlan, type GoalMediaRef, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
+import { goalMediaRefSchema, goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, savedGoalPlanV3Schema, type GoalCharacter, type GoalDisplayPlan, type GoalMediaRef, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
 import type { GoalStyleSelection } from "./goal-styles.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
@@ -160,7 +160,7 @@ function mediaFrom(value: unknown): GoalMediaRef[] {
 
 export function goalContent(cell: NotebookCell): GoalContent {
   const inputs = cell.inputs ?? {};
-  const plan = z.union([goalPlanV3Schema, goalPlanSchema, legacyGoalPlanSchema]).safeParse(inputs.plan);
+  const plan = z.union([savedGoalPlanV3Schema, goalPlanSchema, legacyGoalPlanSchema]).safeParse(inputs.plan);
   const requestedStyle = goalStyleSchema.safeParse(inputs.requestedStyle);
   const media = mediaFrom(inputs.media);
   return {

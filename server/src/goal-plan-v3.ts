@@ -22,6 +22,8 @@ import {
 
 const IMAGE_LIMIT = 30;
 const VIDEO_LIMIT = 10;
+const LEGACY_SCENE_RESOLUTION = "2K";
+const SCENE_RESOLUTIONS = [LEGACY_SCENE_RESOLUTION, "4K"] as const;
 
 export const goalMediaRefSchema = z.object({
   kind: z.enum(["image", "video"]),
@@ -44,7 +46,7 @@ export const goalPlanV3Schema = z.object({
     tool: z.literal("generate_image"),
     model: z.literal(LIGHTNING_SCENE_MODEL),
     aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
-    resolution: z.literal(LIGHTNING_SCENE_RESOLUTION),
+    resolution: z.enum(SCENE_RESOLUTIONS),
     outputFormat: z.literal(LIGHTNING_SCENE_OUTPUT_FORMAT),
     imageRefs: z.array(goalMediaRefSchema).max(IMAGE_LIMIT),
   }).strict(),
@@ -81,6 +83,14 @@ export const goalPlanV3Schema = z.object({
     }).strict(),
   }).strict(),
 }).strict();
+
+function withLegacySceneResolution(plan: unknown): unknown {
+  if (typeof plan !== "object" || plan === null || !("version" in plan) || plan.version !== 3) return plan;
+  if (!("scene" in plan) || typeof plan.scene !== "object" || plan.scene === null || "resolution" in plan.scene) return plan;
+  return { ...plan, scene: { ...plan.scene, resolution: LEGACY_SCENE_RESOLUTION } };
+}
+
+export const savedGoalPlanV3Schema = z.preprocess(withLegacySceneResolution, goalPlanV3Schema);
 
 export type GoalPlanV3 = z.infer<typeof goalPlanV3Schema>;
 
