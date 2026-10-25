@@ -10,6 +10,8 @@ import { queue, setEngineRoot } from "../queue.js";
 import { buildAssetList } from "../tools/reconcile-project-work.js";
 import { registerAllJobHandlers } from "./index.js";
 
+const POSTER_JOB_TIMEOUT_MS = 15_000;
+
 function valueOf<T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }): T {
   if (!result.ok) throw new Error(result.error.message);
   return result.value;
@@ -61,7 +63,7 @@ describe("missing video poster recovery", () => {
     await expect.poll(async () => {
       const jobs = engine.jobs.queue.list({ type: "extract_video_poster" });
       return jobs.find((job) => job.payload.posterArtifactId === artifact.artifactId)?.state;
-    }).toBe("done");
+    }, { timeout: POSTER_JOB_TIMEOUT_MS }).toBe("done");
     const poster = valueOf(await engine.files.read(artifact.artifactId, "original.jpg"));
     const { data } = await sharp(poster).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
     expect(data[0]).toBeGreaterThan(200);
@@ -100,7 +102,8 @@ describe("missing video poster recovery", () => {
     valueOf(await engine.files.write(artifact.artifactId, "original.mp4", Buffer.from("invalid video")));
     await buildAssetList(engine, bookId);
     await expect.poll(() => engine.jobs.queue.list({ type: "extract_video_poster" })
-      .find((job) => job.payload.posterArtifactId === artifact.artifactId)?.state).toBe("failed");
+      .find((job) => job.payload.posterArtifactId === artifact.artifactId)?.state,
+      { timeout: POSTER_JOB_TIMEOUT_MS }).toBe("failed");
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const asset = (await buildAssetList(engine, bookId)).find((entry) => entry.id === artifact.artifactId)!;
       expect(asset.status).toBe("ready");
@@ -109,6 +112,7 @@ describe("missing video poster recovery", () => {
       .filter((job) => job.payload.posterArtifactId === artifact.artifactId)).toHaveLength(1);
     valueOf(await engine.files.writeFromPath(artifact.artifactId, "original.mp4", videoPath));
     await buildAssetList(engine, bookId);
-    await expect.poll(async () => (await engine.files.read(artifact.artifactId, "original.jpg")).ok).toBe(true);
+    await expect.poll(async () => (await engine.files.read(artifact.artifactId, "original.jpg")).ok,
+      { timeout: POSTER_JOB_TIMEOUT_MS }).toBe(true);
   });
 });
