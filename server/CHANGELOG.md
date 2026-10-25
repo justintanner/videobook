@@ -6,6 +6,17 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Queued KIE OmniHuman 1.5 and 2.0 generations pass their driving audio's
+  length to the cost estimate, so the KIE paygate estimate is bounded and the
+  usage row is priced.
+- Queued KIE HappyHorse video edit and Kling 3.0 motion control generations
+  pass their source video's length, and Volcengine lip sync passes its audio's
+  length, so their paygate estimates and usage rows are priced too.
+  `estimate_cost` now prices Volcengine lip sync from the audio, whose length
+  the output follows, instead of the source video.
+
 ## [0.3.1] - 2026-10-25
 
 ### Added

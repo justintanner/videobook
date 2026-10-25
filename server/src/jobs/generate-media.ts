@@ -42,8 +42,6 @@ async function replaceAudioMeta(engine: Engine, ref: string | undefined): Promis
   return { replaceAudioWith: { assetId: input.assetId, filename: input.filename } };
 }
 
-const AUDIO_LENGTH_MODELS = new Set(["kie:omnihuman-1-5", "kie:omnihuman-2-0"]);
-
 async function sourceAudioSeconds(engine: Engine, assetIds: readonly string[]): Promise<number | undefined> {
   for (const assetId of assetIds) {
     const metadata = await engine.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
@@ -56,15 +54,17 @@ async function sourceAudioSeconds(engine: Engine, assetIds: readonly string[]): 
 export async function generationSourceCostHints(engine: Engine, refs: ResolvedRefs, job: Pick<GenerateMediaJob, "model" | "mode"> & Partial<Pick<GenerateMediaJob, "options">>): Promise<CostHints> {
   const draftHints = await seedanceDraftCostHints(engine, job.model, job.options ?? {});
   if (Object.keys(draftHints).length > 0) return draftHints;
-  if (AUDIO_LENGTH_MODELS.has(job.model)) {
+  const model = resolveModel(job.model);
+  if (model.entry.outputLength === "audio") {
     const seconds = await sourceAudioSeconds(engine, refs.sourceAudioIds);
     return seconds === undefined ? {} : { durationSeconds: seconds };
   }
   const videoSeconds = await referenceVideoDuration(engine, refs.sourceVideoIds);
   if (videoSeconds !== undefined) {
-    return { inputDurationSeconds: videoSeconds, ...(isSeedanceEdit(job.model, job.mode) ? { durationSeconds: videoSeconds } : {}) };
+    const followsVideo = model.entry.outputLength === "video" || isSeedanceEdit(job.model, job.mode);
+    return { inputDurationSeconds: videoSeconds, ...(followsVideo ? { durationSeconds: videoSeconds } : {}) };
   }
-  if (resolveModel(job.model).provider !== "fal") return {};
+  if (model.provider !== "fal") return {};
   const seconds = await sourceAudioSeconds(engine, refs.sourceAudioIds);
   return seconds === undefined ? {} : { inputDurationSeconds: seconds };
 }

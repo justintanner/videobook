@@ -23,7 +23,7 @@ const SOURCE_CASES: SourceCase[] = [
   MOTION,
   { model: 'kie:happyhorse/video-edit', prompt: 'make it rain', source: 'video', refs: {}, options: { resolution: '1080p' } },
   { model: 'kie:omnihuman-1-5', prompt: 'a calm presenter', source: 'audio', refs: { image: [IMAGE_URL] }, options: {} },
-  { model: 'kie:volcengine/video-to-video-lip-sync', source: 'video', refs: { audio: [AUDIO_URL] }, options: { mode: 'lite' } },
+  { model: 'kie:volcengine/video-to-video-lip-sync', source: 'audio', refs: { video: [VIDEO_URL] }, options: { mode: 'lite' } },
 ]
 
 function sourceRefs(item: SourceCase, ref: string): MediaRefs {

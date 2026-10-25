@@ -93,6 +93,7 @@ export interface ModelEntry {
   modes?: readonly ModeSpec[];
   frameOptions?: Record<string, unknown>;
   rules?: InputRules;
+  outputLength?: "audio" | "video";
   hidden?: boolean;
 }
 

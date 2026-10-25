@@ -315,7 +315,7 @@ have no duration field (output follows source/driving media):
 | `kling-3.0/motion-control`           | motion video    |
 | `omnihuman-1-5`                      | driving audio   |
 | `omnihuman-2-0`                      | driving audio   |
-| `volcengine/video-to-video-lip-sync` | source video    |
+| `volcengine/video-to-video-lip-sync` | driving audio   |
 
 Videocity maps its measured `KieCostHints.duration` to the formal
 `EstimateRequest.costHints.durationSeconds` side channel
@@ -325,6 +325,20 @@ Everything else is unchanged: job handlers measure source media, hints persist
 in `.generation-cost-hints.json` for queued re-submit, the OTP hashes the
 verbatim wire request, `estimate_cost` enriches from asset `original` duration
 metadata, and minting fails closed when no duration is readable.
+
+Since the generic media catalog, each of these entries names the media its
+output length follows with `outputLength` in `server/src/media/catalog.ts`.
+`estimate_cost` and queued `generate_media` jobs both pass that media's length
+as `costHints.durationSeconds` (vb-khz1, vb-77ty), so the KIE paygate estimate
+is bounded and the usage row is priced. HappyHorse video edit also passes the
+source as `inputDurationSeconds`: its page bills "Unit Price × (Input Video
+Duration + Output Video Duration)" and returns a video as long as its 3-60 s
+input. Kling 3.0 motion control output "will normally match the length of the
+uploaded reference video" (3-30 s, at most 10 s with `character_orientation:
+image`); a shorter output from complex motion is not refunded. Volcengine lip
+sync follows its audio, not its source video: KIE's docs state the "output
+duration follows the audio duration", trimming a longer source video and
+looping a shorter one (read 2026-10-25).
 
 ## 31. (bug) ~~Fal area pricing guesses omitted image sizes~~ — RESOLVED in 0.8.6
 

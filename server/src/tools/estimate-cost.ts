@@ -11,7 +11,7 @@ import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
 import { checkSeedanceEditSource, normalizeRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
-import { REF_ROLES, type MediaRefs } from "../media/types.js";
+import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
 const REWRITE_MODEL = "gpt-5.6-sol";
@@ -62,12 +62,17 @@ async function sourceDuration(engine: Engine, refs: readonly string[]): Promise<
   return undefined;
 }
 
-async function mediaHints(engine: Engine, refs: MediaRefs): Promise<CostHints> {
+async function mediaHints(engine: Engine, refs: MediaRefs, model: ResolvedModel): Promise<CostHints> {
+  const audioSeconds = () => sourceDuration(engine, (refs.audio ?? []).filter((ref) => !ref.startsWith("http")));
+  if (model.entry.outputLength === "audio") {
+    const seconds = await audioSeconds();
+    return seconds === undefined ? {} : { durationSeconds: seconds };
+  }
   const videos = (refs.video ?? []).filter((ref) => !ref.startsWith("http"));
   const videoSeconds = videos.length > 0 ? await referenceVideoDuration(engine, videos) : undefined;
   if (videoSeconds !== undefined) return { inputDurationSeconds: videoSeconds };
-  const audioSeconds = await sourceDuration(engine, (refs.audio ?? []).filter((ref) => !ref.startsWith("http")));
-  return audioSeconds === undefined ? {} : { inputDurationSeconds: audioSeconds };
+  const seconds = await audioSeconds();
+  return seconds === undefined ? {} : { inputDurationSeconds: seconds };
 }
 
 async function estimateMedia(engine: Engine, input: Record<string, unknown>): Promise<CostEstimate> {
@@ -80,7 +85,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
     : {};
   const sourceError = await checkSeedanceEditSource(engine, model, refs, input.mode);
   if (sourceError) return unavailable(sourceError);
-  const hints = { ...await mediaHints(engine, refs), ...await seedanceDraftCostHints(engine, model.id, options) };
+  const hints = { ...await mediaHints(engine, refs, model), ...await seedanceDraftCostHints(engine, model.id, options) };
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(refs),

@@ -448,6 +448,36 @@ describe("generic media generation", () => {
     expect(usage?.costUsd).toBeCloseTo(usd);
   });
 
+  it.each([
+    { model: "kie:happyhorse/video-edit", prompt: "make it rain", options: { resolution: "720p" }, audio: false, hints: { inputDurationSeconds: 6, durationSeconds: 6 }, units: 12, usd: 12 * 0.14 },
+    { model: "kie:kling-3.0/motion-control", prompt: "dance", options: { mode: "720p" }, audio: false, hints: { inputDurationSeconds: 6, durationSeconds: 6 }, units: 6, usd: 6 * 0.1 },
+    { model: "kie:volcengine/video-to-video-lip-sync", prompt: undefined, options: { mode: "lite" }, audio: true, hints: { durationSeconds: 4.5 }, units: 4.5, usd: 4.5 * 0.04 },
+  ])("prices $model from the media its output length follows through the queued job", async ({ model, prompt, options, audio, hints, units, usd }) => {
+    const refs: Record<string, string[]> = { video: [await probedVideoArtifact(shortClip)] };
+    if (model === "kie:kling-3.0/motion-control") refs.image = [`${baseURL}/files/out.png`];
+    if (audio) {
+      const voice = await engine.artifacts.create("audio", "lip-sync voice");
+      if (!voice.ok) throw new Error(voice.error.message);
+      expect((await engine.files.write(voice.value.artifactId, "original.mp3", mp3)).ok).toBe(true);
+      expect((await engine.metadata.artifacts.write(voice.value.artifactId, "original", { duration: 4.5 })).ok).toBe(true);
+      refs.audio = [voice.value.artifactId];
+    }
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: engine.book.get().bookId, model, ...(prompt ? { prompt } : {}), refs, options },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
+    expect(submitted).toMatchObject({ model: model.slice("kie:".length), input: options });
+    const persisted = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(persisted.ok && persisted.value).toEqual(hints);
+    expect(engine.logs.read("generation-cost-estimate")).toEqual([]);
+    const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
+    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), basis: "estimated", status: "pending", warnings: [], units });
+    expect(usage?.costUsd).toBeCloseTo(usd);
+  });
+
   it("writes synchronous ElevenLabs audio straight into the artifact", async () => {
     const enqueued = toolJson(await client.callTool({
       name: "generate_audio",

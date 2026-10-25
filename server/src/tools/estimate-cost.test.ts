@@ -144,6 +144,26 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeGreaterThan(0);
   });
 
+  it("bills lip sync from its audio, which the output follows, rather than its source video", async () => {
+    const engine = createEngineForTest(tempDir);
+    const video = await videoWithDuration(engine, 30);
+    const audio = await engine.artifacts.create("audio", "voice");
+    if (!audio.ok) throw new Error(audio.error.message);
+    await engine.metadata.artifacts.write(audio.value.artifactId, "original", { duration: 12 });
+    const payload = await estimate([{
+      tool_name: "generate_video",
+      input: {
+        book_id: engine.book.get().bookId,
+        model: "kie:volcengine/video-to-video-lip-sync",
+        refs: { video: [video], audio: [`@${audio.value.artifactId}`] },
+        options: { mode: "lite" },
+      },
+    }]);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.breakdown.units).toBe(12);
+    expect(payload.estimate.usd).toBeCloseTo(12 * 0.04);
+  });
+
   it("prices image models on kie and fal", async () => {
     const payload = await estimate([
       { tool_name: "generate_image", input: { model: "kie:nano-banana-2-1", prompt: "a cat" } },
