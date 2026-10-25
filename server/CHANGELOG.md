@@ -27,6 +27,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
   34 KIE and fal models, among them OmniHuman, the HeyGen digital twins, the
   Gemini and ElevenLabs speech models and the Bria image models, were counted
   as analysis, and fal Wan 2.7 image edit as video.
+- KIE Suno music and sound generations now reach the usage counter as audio,
+  priced at KIE's flat rate per generation: $0.06 for music and $0.0125 for
+  sounds. Their status polls settle the row: a lyrics-only result stays
+  pending, and a failed generation is not counted as spend.
 
 ## [0.3.1] - 2026-10-25
 

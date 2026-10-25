@@ -12,8 +12,10 @@ import { installFalDynamicEstimator } from "../media/cost.js";
 import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage } from "../provider-usage.js";
 import { MODEL_ENTRIES } from "../media/catalog.js";
 import { parseModelId } from "../media/model-id.js";
-import { isKieSunoModel, isKieVeoModel } from "../media/wire.js";
+import { isKieVeoModel } from "../media/wire.js";
 import { bookUsageDef } from "./book-usage.js";
+
+const SUNO_PATHS: Record<string, string> = { "suno/generate": "/api/v1/generate", "suno/sounds-generate": "/api/v1/generate/sounds" };
 
 describe("provider usage through real HTTP and engine storage", () => {
   let root: string;
@@ -78,16 +80,21 @@ describe("provider usage through real HTTP and engine storage", () => {
     const recorded: Record<string, string | undefined> = {};
     for (const entry of MODEL_ENTRIES) {
       const { provider, apiId } = parseModelId(entry.id)!;
-      if (provider === "kie" && !isKieSunoModel(apiId)) {
-        const path = isKieVeoModel(apiId) ? "/api/v1/veo/generate" : "/api/v1/jobs/createTask";
-        await scoped(() => kie(`${url}${path}`, { method: "POST", body: JSON.stringify({ model: apiId, input: {} }) }), engine, "generate_media");
+      const sunoPath = provider === "kie" ? SUNO_PATHS[apiId] : undefined;
+      const model = sunoPath ? String(entry.defaults?.model) : apiId;
+      if (provider === "kie") {
+        const path = sunoPath ?? (isKieVeoModel(apiId) ? "/api/v1/veo/generate" : "/api/v1/jobs/createTask");
+        reply = sunoPath ? { code: 200, msg: "success", data: { taskId: apiId } } : undefined;
+        await scoped(() => kie(`${url}${path}`, { method: "POST", body: JSON.stringify({ model, input: {} }) }), engine, "generate_media");
+        reply = undefined;
       } else if (provider === "fal") {
         await scoped(() => fal(`${url}/${apiId}`, { method: "POST", body: JSON.stringify({ prompt: "test" }) }), engine, "generate_media");
       } else continue;
       const [row] = engine.usage.recent(1);
       expected[apiId] = activity[entry.media];
-      recorded[apiId] = row?.model === apiId ? row.activity : undefined;
+      recorded[apiId] = row?.model === model ? row.activity : undefined;
     }
+    expect(Object.keys(recorded)).toEqual(expect.arrayContaining(Object.keys(SUNO_PATHS)));
     expect(recorded).toEqual(expected);
     const openai = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });
     responseId = "chat-turn";
@@ -121,6 +128,39 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.find("kie", "kie-one")?.costUsd).toBe(0.028);
     await scoped(() => transport(`${url}/api/v1/jobs/recordInfo?taskId=old-task`));
     expect(engine.usage.summary().totals.count).toBe(2);
+  });
+
+  it("prices Suno music and sounds by endpoint and settles them from record-info polls without adding spend", async () => {
+    const kie = providerUsageFetch("kie");
+    async function submit(path: string, taskId: string, body: Record<string, unknown>) {
+      reply = { code: 200, msg: "success", data: { taskId } };
+      await scoped(() => kie(`${url}${path}`, { method: "POST", body: JSON.stringify(body) }), engine, "generate_media");
+    }
+    async function poll(taskId: string, data: Record<string, unknown>) {
+      reply = { code: 200, msg: "success", data: { taskId, ...data } };
+      await scoped(() => kie(`${url}/api/v1/generate/record-info?taskId=${taskId}`), engine, "generate_media");
+    }
+    await submit("/api/v1/generate", "suno-music", { prompt: "a calm piano loop", model: "V5_5", instrumental: true, customMode: false, callBackUrl: "https://callback.test" });
+    await submit("/api/v1/generate/sounds", "suno-sounds", { prompt: "rain on a tin roof", model: "V5" });
+    expect(engine.usage.find("kie", "suno-music")).toMatchObject({
+      model: "V5_5", activity: "audio", status: "pending", basis: "estimated", costUsd: 0.06, units: 1,
+      rateSource: "https://kie.ai/suno-api?model=ai-music-api%2Fgenerate",
+    });
+    expect(engine.usage.find("kie", "suno-sounds")).toMatchObject({
+      model: "V5", activity: "audio", status: "pending", basis: "estimated", costUsd: 0.0125, units: 1,
+      rateSource: "https://kie.ai/suno-api?model=ai-music-api%2Fsounds",
+    });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 2, estimatedUsd: 0 });
+    expect(engine.usage.summary().totals.pendingUsd).toBeCloseTo(0.0725);
+    for (const status of ["PENDING", "TEXT_SUCCESS"]) {
+      await poll("suno-music", { status });
+      expect(engine.usage.find("kie", "suno-music")?.status).toBe("pending");
+    }
+    await poll("suno-music", { status: "FIRST_SUCCESS", response: { sunoData: [{ audioUrl: "https://example.test/track.mp3" }] } });
+    await poll("suno-sounds", { status: "GENERATE_AUDIO_FAILED", errorMessage: "Audio generation failed" });
+    expect(engine.usage.find("kie", "suno-music")).toMatchObject({ status: "completed", costUsd: 0.06 });
+    expect(engine.usage.find("kie", "suno-sounds")).toMatchObject({ status: "failed", costUsd: 0.0125 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, pendingUsd: 0, estimatedUsd: 0.06 });
   });
 
 

@@ -85,10 +85,10 @@ function historicalAverage(warnings: readonly string[]): boolean {
   return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
 }
 
-async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string, hints?: CostHints): Promise<Price> {
+async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string | undefined, hints?: CostHints): Promise<Price> {
   try {
-    const request: EstimateRequest = { provider, payload, ...(provider === "fal" ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
-    const estimate = provider === "fal"
+    const request: EstimateRequest = { provider, payload, ...(endpoint ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
+    const estimate = provider === "fal" && endpoint
       ? await estimateFalRequest(endpoint, payload, hints)
       : cost.estimate(request);
     const historical = estimate.usd > 0 && historicalAverage(estimate.warnings);
@@ -99,7 +99,7 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
       ...unknownPrice(historical ? estimate.warnings : []),
       costUsd: estimate.usd,
       basis: estimate.source === "free" ? "free" : "estimated",
-      rateSource: rateFor(provider, model)?.source.url ?? null,
+      rateSource: (rateFor(provider, model) ?? (endpoint ? rateFor(provider, endpoint) : undefined))?.source.url ?? null,
       pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (historical ? "fal-historical" : PRICING_AS_OF)}`,
       units: estimate.breakdown.units ?? null,
       unit: estimate.breakdown.unit ?? null,
@@ -109,8 +109,14 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
 
 const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
 
+function kieSunoApiId(provider: Provider, path: string): string | undefined {
+  const match = provider === "kie" ? /\/api\/v1\/generate(\/sounds)?$/u.exec(path) : null;
+  if (!match) return undefined;
+  return match[1] ? "suno/sounds-generate" : "suno/generate";
+}
+
 function catalogMedia(provider: Provider, model: string, path: string): Media | undefined {
-  return modelEntry(provider === "fal" ? `fal:${path.slice(1)}` : `${provider}:${model}`)?.media;
+  return modelEntry(provider === "fal" ? `fal:${path.slice(1)}` : `${provider}:${kieSunoApiId(provider, path) ?? model}`)?.media;
 }
 
 function activityFor(provider: Provider, model: string, path: string, operation = ""): UsageEntry["activity"] {
@@ -127,7 +133,7 @@ function activityFor(provider: Provider, model: string, path: string, operation 
 function isBillable(provider: Provider, path: string, method: string): boolean {
   if (method !== "POST") return false;
   if (provider === "openai" || provider === "xai") return /\/(responses|chat\/completions|images\/(generations|edits)|videos\/(generations|edits|extensions)|audio\/(speech|transcriptions|translations)|embeddings|tts|stt)$/u.test(path);
-  if (provider === "kie") return /\/(createTask|veo\/(generate|extend))$/u.test(path);
+  if (provider === "kie") return /\/(createTask|veo\/(generate|extend))$/u.test(path) || kieSunoApiId(provider, path) !== undefined;
   if (provider === "fal") return !/\/requests\//u.test(path)
     && (/^\/(fal-ai|alibaba)\//u.test(path) || modelEntry(`fal:${path.slice(1)}`) !== undefined);
   if (provider === "alibaba") return path.includes("/services/aigc/");
@@ -162,11 +168,12 @@ function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["statu
   const data = object(body.data);
   const output = object(body.output);
   const state = String(body.status ?? data.state ?? data.status ?? output.task_status ?? "").toLowerCase();
-  if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2 || ["failed", "fail", "error"].includes(state)) return "failed";
+  if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2
+    || ["failed", "fail", "error", "create_task_failed", "generate_audio_failed", "sensitive_word_error"].includes(state)) return "failed";
   if (["cancelled", "canceled"].includes(state)) return "cancelled";
   if (state === "uncertain" || state === "expired") return "uncertain";
   if (data.successFlag === 1 || ["success", "succeeded", "completed", "done"].includes(state)) return "completed";
-  if (["created", "pending", "queued", "in_queue", "running", "in_progress", "processing", "started", "waiting"].includes(state)) return "pending";
+  if (["created", "pending", "queued", "in_queue", "running", "in_progress", "processing", "started", "waiting", "text_success"].includes(state)) return "pending";
   return accepted ? "pending" : "completed";
 }
 
@@ -221,7 +228,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...await priceRequest(provider, model, payload, endpoint, hints),
+        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : kieSunoApiId(provider, url.pathname), hints),
       };
       safeRecord(engine, entry);
     }

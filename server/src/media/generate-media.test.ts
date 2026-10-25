@@ -81,6 +81,15 @@ describe("generic media generation", () => {
         data: { taskId: "kie-task-1", state: "success", resultJson: JSON.stringify({ resultUrls: [`${baseURL}/files/out.png`] }) },
       });
     }
+    if (path === "/api/v1/generate" || path === "/api/v1/generate/sounds") return sendJson(response, { code: 200, msg: "success", data: { taskId: "suno-task-1" } });
+    if (path.startsWith("/api/v1/generate/record-info")) {
+      return sendJson(response, {
+        code: 200,
+        msg: "success",
+        data: { taskId: "suno-task-1", status: "SUCCESS", response: { sunoData: [{ audioUrl: `${baseURL}/files/out.mp3` }] } },
+      });
+    }
+    if (path === "/files/out.mp3") return sendBytes(response, mp3, "audio/mpeg");
     if (path === "/minimax/h3-max/relight" || path === "/pixverse/music-video/vibemv") return sendJson(response, { request_id: "fal-duration", status: "IN_QUEUE" });
     if (path === "/bytedance/seedream/v5/flash/text-to-image") return sendJson(response, { request_id: "fal-1", status: "IN_QUEUE" });
     if (path === "/bytedance/seedream/requests/fal-1/status") return sendJson(response, { status: "COMPLETED" });
@@ -476,6 +485,26 @@ describe("generic media generation", () => {
     const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
     expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), activity: "video", basis: "estimated", status: "pending", warnings: [], units });
     expect(usage?.costUsd).toBeCloseTo(usd);
+  });
+
+  it.each([
+    ["kie:suno/generate", "/api/v1/generate", 0.06],
+    ["kie:suno/sounds-generate", "/api/v1/generate/sounds", 0.0125],
+  ] as const)("records one priced audio usage row for a queued %s generation", async (model, path, usd) => {
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_audio",
+      arguments: { book_id: engine.book.get().bookId, model, prompt: "rain on a tin roof" },
+    }));
+    const assetId = String(enqueued.asset_id);
+    expect(await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId))).toMatchObject({ status: "done" });
+    const submitted = JSON.parse(requests.find((entry) => entry.path === path)!.body.toString()) as { model: string };
+    expect(submitted.model).toBe("V5_5");
+    expect(requests.some((entry) => entry.path === "/api/v1/generate/record-info?taskId=suno-task-1")).toBe(true);
+    const usage = engine.usage.recent(20).filter((entry) => entry.artifactId === assetId);
+    expect(usage).toEqual([expect.objectContaining({
+      provider: "kie", model: submitted.model, activity: "audio", basis: "estimated", status: "completed", externalId: "suno-task-1", warnings: [],
+    })]);
+    expect(usage[0]?.costUsd).toBeCloseTo(usd);
   });
 
   it("writes synchronous ElevenLabs audio straight into the artifact", async () => {
