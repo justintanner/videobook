@@ -617,7 +617,7 @@ settings in `video_config`.
 
 ---
 
-## 45. (gap) Fal queue status and result have no endpoint catalog rows — OPEN in 0.18.0
+## 45. (gap) Fal queue status and result have no endpoint catalog rows — RESOLVED in 0.18.1
 
 Videobook polls fal queue jobs with `v1.queue.status` and `v1.queue.result`
 (`server/src/jobs/_image-edit-adapter.ts` and
@@ -643,12 +643,19 @@ catalog does not contain. Apicity `ac-8zeblu` asks for `v1.queue.status` and
 polling captures resolve in `apicity har report` and marks this section
 resolved.
 
-Apicity 0.18.1 (2026-10-25), installed since Videobook 0.3.1, ships both rows:
-the `@apicity/cli` 0.18.1 catalog lists `v1.queue.status` and
-`v1.queue.result` (`ac-8zeblu`) along with the other fal SDK methods written
-as method shorthand (`ac-3ba9xb`). The fal requests Videobook sends are
-unchanged. This section stays open until vb-7871 confirms the captures
-resolve.
+**Resolved in 0.18.1 (2026-10-25, vb-7871).** Apicity 0.18.1, installed
+since Videobook 0.3.1, ships both rows: the `@apicity/cli` 0.18.1 catalog lists
+`v1.queue.status` and `v1.queue.result` (`ac-8zeblu`) along with the other fal
+SDK methods written as method shorthand (`ac-3ba9xb`). The fal requests
+Videobook sends are unchanged. The same offline reproduction under the 0.18.1
+CLI (`apicity har report <dir> --no-baseline --json`) gives 4 calls (3 ok,
+1 provider error), 0 unmatched exchanges and 0 unresolved calls, and the 422
+poll is listed under `v1.queue.status` provider errors with the field
+`request_id`. `server/src/har-capture.test.ts` checks the capture names and
+outcomes against the released rows. The submit row's path is a single
+`{endpoint_id}` placeholder, which `findMatchingRow` cannot match against a
+multi-segment endpoint id, so the report, like the test, attributes a submit
+capture as the capture's only entry.
 
 ---
 
@@ -663,7 +670,7 @@ resolve.
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
 | **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`       |
-| **OPEN**     | §45 fal queue status/result catalog rows (`ac-8zeblu`)              | none; captures keep the SDK dot paths (vb-7871)        |
+| **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871)        |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |

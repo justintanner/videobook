@@ -10,7 +10,7 @@ import { createEngine, type Engine } from "videobook-engine";
 import { findMatchingRow, type Har } from "@apicity/har";
 import { appState, createFileApplicationState } from "./app-state.js";
 import { withBookContext } from "./book-context.js";
-import { createKie, createX, submitMediaJob, uploadFalFile, uploadAlibabaFile } from "./usage-providers.js";
+import { createFal, createKie, createX, submitMediaJob, uploadFalFile, uploadAlibabaFile } from "./usage-providers.js";
 import { flushHarCaptures, withHarCapture, withHarLocalFailure } from "./har-capture.js";
 import { readHarSettings, writeHarSettings, harDirectory } from "./har-settings.js";
 import { pruneHarCaptures } from "./har-retention.js";
@@ -48,6 +48,10 @@ describe("opt-in provider HAR diagnostics", () => {
         else if (req.url?.includes("users/me")) res.end(JSON.stringify({ data: { id: "42", username: "test", name: "Test" } }));
         else if (req.url?.includes("/models") && !reject) res.end(JSON.stringify({ code: 200, data: [] }));
         else if (req.url?.startsWith("/claude/")) res.end(JSON.stringify({ type: "message", content: [] }));
+        else if (req.url?.endsWith("/requests/expired/status")) {
+          res.statusCode = 422;
+          res.end(JSON.stringify({ detail: [{ loc: ["path", "request_id"], msg: "Invalid request id", type: "value_error" }] }));
+        }
         else setTimeout(() => res.end(JSON.stringify(reject ? { code: 400, msg: "SDK rejects this 200 response" } : { code: 200, data: { taskId: "one", state: "success" } })), 5);
       });
     });
@@ -136,6 +140,34 @@ describe("opt-in provider HAR diagnostics", () => {
       const candidates = catalog.filter((row) => row.provider === file.log._apicity?.provider && row.dotPath === file.log._apicity?.endpoint);
       expect(candidates).toHaveLength(1);
       expect(findMatchingRow(file.log.entries[0], candidates, { provider: "kie" })).toBe(candidates[0]);
+    }
+  });
+
+  it("names fal queue submit, status and result captures by the catalog rows apicity har report resolves", async () => {
+    await writeHarSettings({ mode: "all" });
+    const fal = createFal({ apiKey: "test", queueBaseURL: url });
+    const endpoint_id = "fal-ai/flux/dev";
+    await fal.v1.queue.submit({ endpoint_id, input: { prompt: "test" } });
+    await fal.v1.queue.status({ endpoint_id, request_id: "one" });
+    await fal.v1.queue.result({ endpoint_id, request_id: "one" });
+    await expect(fal.v1.queue.status({ endpoint_id, request_id: "expired" })).rejects.toThrow();
+    const catalog = [
+      ["POST", "v1.queue.submit", "https://queue.fal.run/{endpoint_id}{query}"],
+      ["GET", "v1.queue.status", "https://queue.fal.run/{endpoint_id}/requests/{request_id}/status"],
+      ["GET", "v1.queue.result", "https://queue.fal.run/{endpoint_id}/requests/{request_id}"],
+    ].map(([method, dotPath, fullUrl]) => ({ provider: "fal", method, dotPath, fullUrl }));
+    const files = await captures();
+    expect(files.map((file) => [file.log._apicity?.endpoint, file.log._apicity?.outcome]).sort()).toEqual([
+      ["v1.queue.result", "ok"],
+      ["v1.queue.status", "ok"],
+      ["v1.queue.status", "provider_error"],
+      ["v1.queue.submit", "ok"],
+    ]);
+    for (const file of files) {
+      const candidates = catalog.filter((row) => row.provider === file.log._apicity?.provider && row.dotPath === file.log._apicity?.endpoint);
+      expect(candidates).toHaveLength(1);
+      const resolved = findMatchingRow(file.log.entries[0], candidates, { provider: "fal" }) ?? (file.log.entries.length === 1 ? candidates[0] : null);
+      expect(resolved).toBe(candidates[0]);
     }
   });
 
