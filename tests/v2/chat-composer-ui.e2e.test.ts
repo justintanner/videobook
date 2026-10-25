@@ -4268,7 +4268,8 @@ describe('chat composer browser flow', () => {
     expect(await imageModel.inputValue()).toBe('generation.kie:nano-banana-2-1')
     expect(await editor.getByLabel('Resolution', { exact: true }).inputValue()).toBe('string:2K')
     expect(await source.textContent()).toContain('"resolution": "2K"')
-    const gptModels = await imageModel.locator('option').allTextContents()
+    const gptModels = (await imageModel.locator('option').allTextContents())
+      .map((label) => label.replace(/^#\d+ · /u, '').replace(/ · Elo .*$/u, ''))
     expect(gptModels.filter((label) => label.includes('GPT Image')).sort()).toEqual([
       'GPT Image 2.5 Flare · Kie',
       'GPT Image 2.5 Sunburst · Kie',
@@ -5037,6 +5038,7 @@ describe('chat composer browser flow', () => {
       'Download video',
       'Extract frame',
       'Generate video',
+      'Generate image',
       'Duplicate',
       'Split video',
       'Delete cell',
