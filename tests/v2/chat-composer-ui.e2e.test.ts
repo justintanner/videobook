@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { execFile } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +13,7 @@ import sharp from 'sharp'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { MVP_CONTRACT_VERSION, type EditIntent, type NotebookDocument, type Sequence } from 'videobook-engine'
 import { v7 as uuidv7 } from 'uuid'
+import { MANAGED_ENV_KEYS } from '../../server/src/env-secrets.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
 const execFileAsync = promisify(execFile)
@@ -267,11 +268,17 @@ describe('chat composer browser flow', () => {
     const vitePort = await availablePort()
     mcpOrigin = `http://127.0.0.1:${mcpPort}`
     appUrl = `http://127.0.0.1:${vitePort}`
+    const envPath = join(rootDir, '.env')
+    await writeFile(envPath, '')
     mcpProcess = startProcess(
       ['--import', 'tsx', 'server/src/index.ts'],
       {
         ...process.env,
+        ...Object.fromEntries(MANAGED_ENV_KEYS.map((key) => [key, ''])),
+        KIE_API_KEY: 'test-chat-ui-e2e',
+        FAL_API_KEY: 'test-chat-ui-e2e',
         PORT: String(mcpPort),
+        VIDEOBOOK_ENV_PATH: envPath,
         VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime', 'app-state.json'),
         VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'),
         VIDEOBOOK_DOWNLOADS_DIR: join(rootDir, 'downloads'),
