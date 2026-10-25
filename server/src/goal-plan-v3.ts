@@ -23,7 +23,12 @@ import {
 const IMAGE_LIMIT = 30;
 const VIDEO_LIMIT = 10;
 const LEGACY_SCENE_RESOLUTION = "2K";
+const SCENE_MODELS = ["kie:nano-banana-2-1"] as const;
 const SCENE_RESOLUTIONS = [LEGACY_SCENE_RESOLUTION, "4K"] as const;
+const SCENE_OUTPUT_FORMATS = ["jpg"] as const;
+const VIDEO_MODELS = ["kie:bytedance/seedance-2-5"] as const;
+const VIDEO_RESOLUTIONS = ["1080p"] as const;
+const VIDEO_OUTPUT_FORMATS = ["mp4"] as const;
 
 export const goalMediaRefSchema = z.object({
   kind: z.enum(["image", "video"]),
@@ -44,21 +49,21 @@ export const goalPlanV3Schema = z.object({
   scene: z.object({
     prompt: z.string().trim().min(1).max(4000),
     tool: z.literal("generate_image"),
-    model: z.literal(LIGHTNING_SCENE_MODEL),
+    model: z.enum(SCENE_MODELS),
     aspectRatio: z.enum(["16:9", "9:16", "1:1"]),
     resolution: z.enum(SCENE_RESOLUTIONS),
-    outputFormat: z.literal(LIGHTNING_SCENE_OUTPUT_FORMAT),
+    outputFormat: z.enum(SCENE_OUTPUT_FORMATS),
     imageRefs: z.array(goalMediaRefSchema).max(IMAGE_LIMIT),
   }).strict(),
   video: z.object({
     prompt: z.string().trim().min(1).max(4000),
     tool: z.literal("generate_video"),
-    model: z.literal(LIGHTNING_VIDEO_MODEL),
+    model: z.enum(VIDEO_MODELS),
     aspectRatio: z.enum(["16:9", "9:16", "1:1", "adaptive"]),
-    resolution: z.literal(LIGHTNING_VIDEO_RESOLUTION),
+    resolution: z.enum(VIDEO_RESOLUTIONS),
     durationSeconds: z.number().int().min(4).max(30),
     generateAudio: z.literal(true),
-    outputFormat: z.literal(LIGHTNING_VIDEO_OUTPUT_FORMAT),
+    outputFormat: z.enum(VIDEO_OUTPUT_FORMATS),
     imageRefs: z.array(goalMediaRefSchema).max(IMAGE_LIMIT),
     videoRefs: z.array(goalMediaRefSchema).max(VIDEO_LIMIT),
   }).strict(),
