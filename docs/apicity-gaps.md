@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.17.0 (2026-10-23). Image, video and audio
+Videobook now uses Apicity 0.18.0 (2026-10-24). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -616,6 +616,34 @@ settings in `video_config`.
 
 ---
 
+## 45. (gap) Fal queue status and result have no endpoint catalog rows — OPEN in 0.18.0
+
+Videobook polls fal queue jobs with `v1.queue.status` and `v1.queue.result`
+(`server/src/jobs/_image-edit-adapter.ts` and
+`server/src/tools/reconcile-project-work.ts`), and HAR capture names each call
+by that SDK dot path. The SDK sends
+`GET https://queue.fal.run/{endpoint_id}/requests/{request_id}/status` and
+`GET https://queue.fal.run/{endpoint_id}/requests/{request_id}`, but the 0.18.0
+endpoint catalog (`scripts/endpoint-docs.tsv`, bundled with `@apicity/cli`) has
+no fal row for either. Its only queue row is `v1.queue.submit`.
+`apicity har report` resolves a capture only when its endpoint equals a
+catalog dot path, so it lists every fal poll as an unresolved `not-in-catalog`
+call, and a poll that fails with a provider error never reaches the report's
+outcome counts or provider errors.
+
+An offline reproduction with four stubbed captures (submit, status, result and
+a 422 status poll) gives one resolved call and three unresolved calls under the
+0.18.0 CLI. With the two rows added to a scratch copy of its catalog, all four
+calls resolve and the 422 counts as a provider error.
+
+Videobook keeps the SDK names rather than renaming the captures to a path the
+catalog does not contain. Apicity `ac-8zeblu` asks for `v1.queue.status` and
+`v1.queue.result` rows. Once a release ships them, vb-7871 checks that fal
+polling captures resolve in `apicity har report` and marks this section
+resolved.
+
+---
+
 | Status       | Sections                                                            | What Videocity still carries                           |
 | ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
 | **RESOLVED** | §36 MiniMax H3 reference clip bounds (upstream constant)            | catalog rule reads the apicity constant (vb-6rct)      |
@@ -627,6 +655,7 @@ settings in `video_config`.
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
 | **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`       |
+| **OPEN**     | §45 fal queue status/result catalog rows (`ac-8zeblu`)              | none; captures keep the SDK dot paths (vb-7871)        |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
