@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execute = promisify(execFile)
 
@@ -27,7 +28,7 @@ describe('explicit search model preparation command', () => {
       try {
         const result = await execute(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
           cwd: process.cwd(), env: { ...process.env, VIDEOBOOK_MODEL_CACHE_DIR: root, VIDEOBOOK_MODEL_DOWNLOAD: 'enabled' },
-          timeout: 20_000,
+          timeout: testBudget(20_000),
         })
         stdout = result.stdout
         stderr = result.stderr

@@ -15,6 +15,7 @@ import {
   hasAudibleContinuationTail,
   type ExtendAudioPayload,
 } from "./extend-audio.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -223,7 +224,7 @@ describe("extend audio ElevenLabs job", () => {
         crossfade_duration: 0.5,
       });
     }
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("leads the sound generation prompt with a continuation direction like add outro music", async () => {
     const source = await fs.artifacts.create("aud", "source");
@@ -264,7 +265,7 @@ describe("extend audio ElevenLabs job", () => {
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({ continuation_prompt: "add outro music" });
     }
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects a generated continuation with a silent tail", async () => {
     const silentTailPath = join(tempDir, "silent-tail.mp3");
@@ -294,5 +295,5 @@ describe("extend audio ElevenLabs job", () => {
     expect(await hasAudibleContinuationTail(filledPath)).toBe(true);
     const filledProbe = await probeVideo(filledPath);
     expect(filledProbe.audioDuration).toBeCloseTo(9.452, 1);
-  }, 30_000);
+  }, testBudget(30_000));
 });

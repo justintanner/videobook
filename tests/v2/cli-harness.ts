@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const CLI_ENTRY = 'server/src/cli/entry.ts'
 
@@ -73,7 +74,7 @@ async function exitCode(cli: CliProcess, timeoutMs: number): Promise<number | nu
   return await exited
 }
 
-export async function runCli(args: string[], env: NodeJS.ProcessEnv = cliEnv(), timeoutMs = 60_000): Promise<CliResult> {
+export async function runCli(args: string[], env: NodeJS.ProcessEnv = cliEnv(), timeoutMs = testBudget(60_000)): Promise<CliResult> {
   const cli = spawnCli(args, env)
   const code = await exitCode(cli, timeoutMs)
   return { code, stdout: cli.stdout.join(''), stderr: cli.stderr.join('') }
@@ -81,11 +82,11 @@ export async function runCli(args: string[], env: NodeJS.ProcessEnv = cliEnv(), 
 
 export async function stopCli(cli: CliProcess, signal: NodeJS.Signals = 'SIGTERM'): Promise<number | null> {
   if (cli.child.exitCode === null && cli.child.signalCode === null) cli.child.kill(signal)
-  return await exitCode(cli, 20_000)
+  return await exitCode(cli, testBudget(20_000))
 }
 
 export async function waitForHealth(baseUrl: string, cli: CliProcess): Promise<Record<string, unknown>> {
-  for (let attempt = 0; attempt < 300; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(300); attempt += 1) {
     if (cli.child.exitCode !== null) throw new Error(`videobook exited during startup:\n${cli.output()}`)
     try {
       const response = await fetch(`${baseUrl}/healthz`)

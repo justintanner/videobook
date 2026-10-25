@@ -11,6 +11,7 @@ import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import { resolveHasAudioForCuts } from "./apply-cuts.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -71,12 +72,12 @@ describe("apply_cuts tool", () => {
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-apply-cuts-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-apply-cuts-test-"));
@@ -112,7 +113,7 @@ describe("apply_cuts tool", () => {
     const probe = await probeVideo(join(uploaded.path, "original.mp4"));
     expect(probe.duration).toBeGreaterThan(1.7);
     expect(probe.duration).toBeLessThan(2.3);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("splices two non-overlapping cuts", async () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
@@ -134,7 +135,7 @@ describe("apply_cuts tool", () => {
     const probe = await probeVideo(join(uploaded.path, "original.mp4"));
     expect(probe.duration).toBeGreaterThan(1.7);
     expect(probe.duration).toBeLessThan(2.3);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("returns error for overlapping cuts", async () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
@@ -250,7 +251,7 @@ describe("apply_cuts tool", () => {
     expect(probe.duration).toBeGreaterThan(1.7);
     expect(probe.duration).toBeLessThan(2.3);
     expect(probe.hasAudio).toBe(false);
-  }, 60_000);
+  }, testBudget(60_000));
 });
 
 describe("resolveHasAudioForCuts", () => {
@@ -258,7 +259,7 @@ describe("resolveHasAudioForCuts", () => {
 
   beforeAll(async () => {
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-hasaudio-"));
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
@@ -277,5 +278,5 @@ describe("resolveHasAudioForCuts", () => {
     const withAudio = join(fixtureDir, "probe-audio.mp4");
     await generateTestVideo(withAudio);
     await expect(resolveHasAudioForCuts(undefined, withAudio)).resolves.toBe(true);
-  }, 60_000);
+  }, testBudget(60_000));
 });

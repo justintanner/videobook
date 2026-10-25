@@ -14,6 +14,7 @@ import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerExportSequenceJob } from '../../server/src/jobs/export-sequence.js'
 import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { validateSequenceExport } from '../../server/src/tools/export-sequence.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 describe('canonical sequence export renderer', () => {
@@ -318,5 +319,5 @@ describe('canonical sequence export renderer', () => {
     const currentSource = await engine.files.read(artifact.value.artifactId, 'original.mp4')
     expect(currentSource.ok && currentSource.value.equals(replacement)).toBe(true)
     engine.close()
-  }, 90_000)
+  }, testBudget(90_000))
 })

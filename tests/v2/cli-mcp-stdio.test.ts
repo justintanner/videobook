@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { availablePort } from './e2e-harness.js'
 import { callTool } from './mcp-http-test-server.js'
 import { cleanupCli, cliEnv, connectMcp, spawnCli, stopCli, tempDir, waitForHealth } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 interface StdioSession {
   client: Client
@@ -49,7 +50,7 @@ async function openStdio(args: string[], negotiation: 'pinned' | 'default'): Pro
 async function closeStdio(session: StdioSession): Promise<void> {
   const pid = session.transport.pid
   await session.client.close()
-  if (pid !== null) await expect.poll(() => processGone(pid), { timeout: 10_000 }).toBe(true)
+  if (pid !== null) await expect.poll(() => processGone(pid), { timeout: testBudget(10_000) }).toBe(true)
 }
 
 async function toolNames(client: Client): Promise<string[]> {
@@ -87,7 +88,7 @@ describe('videobook mcp', () => {
 
     await closeStdio(stdio)
     await expect(access(join(home, 'books', '.videobook-server.json'))).rejects.toMatchObject({ code: 'ENOENT' })
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('relays stdio to a running owner for clients that negotiate the legacy way', async () => {
     const root = await tempDir()
@@ -116,5 +117,5 @@ describe('videobook mcp', () => {
     await closeStdio(stdio)
     expect((await fetch(`${base}/healthz`)).ok).toBe(true)
     expect(await stopCli(owner)).toBe(0)
-  }, 120_000)
+  }, testBudget(120_000))
 })

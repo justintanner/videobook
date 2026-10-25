@@ -8,6 +8,7 @@ import { createTestClient } from "../test-client.js";
 import { stopBookQueue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { testBudget } from "../test-budget.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -125,7 +126,7 @@ describe("doctor tool", () => {
 
   it(
     "gc reports per-book bytes and shrinks a churned catalog",
-    { timeout: 180_000 },
+    { timeout: testBudget(180_000) },
     async () => {
       // This fixture owns its leases. A background reaper must not turn the
       // oldest churn rows into runnable jobs while doctor compacts the catalog.

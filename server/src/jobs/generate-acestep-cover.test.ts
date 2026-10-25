@@ -16,6 +16,7 @@ import {
   registerAcestepCoverJob,
   type AcestepCoverPayload,
 } from "./generate-acestep-cover.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const TARGET_DURATION_MS = 22_010;
@@ -218,7 +219,7 @@ describe("generate acestep cover job", () => {
       readFile(generatedPath),
       readFile(shortGeneratedPath),
     ]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
@@ -396,7 +397,7 @@ describe("generate acestep cover job", () => {
     }
     const sourceManifest = await fs.files.manifest(sourceAssetId);
     expect(sourceManifest.ok && sourceManifest.value.files.map((file) => file.name)).toEqual(["original.mp4"]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("rejects generated audio more than 250ms short without persisting output or leaking scratch", async () => {
     const captured: CapturedRequest[] = [];
@@ -411,7 +412,7 @@ describe("generate acestep cover job", () => {
     expect(after).toEqual([]);
     const manifest = await fs.files.manifest(outputAssetId);
     expect(manifest.ok && manifest.value.files).toEqual([]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("fails when ace-server reports the synth job as failed, without persisting output", async () => {
     const captured: CapturedRequest[] = [];
@@ -427,7 +428,7 @@ describe("generate acestep cover job", () => {
     expect(after).toEqual([]);
     const manifest = await fs.files.manifest(outputAssetId);
     expect(manifest.ok && manifest.value.files).toEqual([]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("fails fast when no ace-server is reachable at the configured base URL", async () => {
     process.env.VIDEOBOOK_ACESTEP_BASE_URL = "http://127.0.0.1:1";
@@ -439,7 +440,7 @@ describe("generate acestep cover job", () => {
     expect(after).toEqual([]);
     const manifest = await fs.files.manifest(outputAssetId);
     expect(manifest.ok && manifest.value.files).toEqual([]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it.each([9_999, 240_001])("rejects out-of-contract duration %sms before contacting ace-server", async (targetDurationMs) => {
     const captured: CapturedRequest[] = [];

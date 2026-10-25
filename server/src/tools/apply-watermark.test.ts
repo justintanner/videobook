@@ -13,6 +13,7 @@ import { watermarkOsgScale } from "../remotion/osg-spec.js";
 import { videoProxyMetadataMatches } from "../video-proxy.js";
 import type { Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -368,7 +369,7 @@ describe("apply_watermark tool", () => {
       left: 40, top: 0, width: 240, height: 48,
     })).toBeGreaterThan(0.4);
     await expectOverlayCleared(fs, assetId);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("records handles and defaults to the saved handle", async () => {
     const assetId = await createRealVideoAsset();
@@ -473,7 +474,7 @@ describe("apply_watermark tool", () => {
     // The burned badge replaces the render-time overlay, so a later render
     // can't stamp the watermark twice.
     await expectOverlayCleared(fs, assetId);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("burns a QR-only watermark without validating or rendering a handle", async () => {
     const assetId = await createRealVideoAsset();
@@ -511,7 +512,7 @@ describe("apply_watermark tool", () => {
     const videoFile = findVideoFile(after.value.files)!;
     expect(videoFile.objectHash).not.toBe(beforeHash);
     expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("fades a mid-clip QR in instead of cutting it in", async () => {
     const assetId = await createRealVideoAsset();
@@ -546,7 +547,7 @@ describe("apply_watermark tool", () => {
     expect(beforeStart).toBeLessThan(8);
     expect(midFadeIn).toBeGreaterThan(beforeStart + 3);
     expect(fullyVisible).toBeGreaterThan(midFadeIn * 2);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("queues the burn without waiting when wait is false", async () => {
     const assetId = await createRealVideoAsset();
@@ -594,7 +595,7 @@ describe("apply_watermark tool", () => {
     expect(findVideoFile(after.value.files)!.objectHash).not.toBe(beforeHash);
     expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
     await expectOverlayCleared(fs, assetId);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("records handle placement and vertical padding on overlay cards", async () => {
     const assetId = await createRealVideoAsset();
@@ -701,7 +702,7 @@ describe("apply_watermark tool", () => {
       savedHandle: "alice",
       profile: { handle: "alice", handleEndSeconds: null, qrLeadSeconds: null, qrStartSeconds: null, qrEndSeconds: null },
     });
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("rejects a watermark with neither QR nor handle", async () => {
     const assetId = await createRealVideoAsset();

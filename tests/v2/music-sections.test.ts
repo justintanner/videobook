@@ -21,6 +21,7 @@ import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { synthesizeClicks } from '../../server/src/rhythm/synthesize.js'
 import type { MusicAnalysis, MusicAnalysisState } from '../../server/src/rhythm/model.js'
 import type { ToolResult } from '../../server/src/tools/tool-def.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const exec = promisify(execFile)
 
@@ -180,7 +181,7 @@ describe('optional music sections, energy planning and provenance', () => {
     expect(read.analysis!.energy).toEqual(first.energy)
     expect(read.analysis!.sections).toEqual(first.sections)
     expect(read.sections!.status).toBe('missing')
-  }, 30000)
+  }, testBudget(30000))
 
   it('keeps quiet passages low and loud passages high with deterministic tiers', async () => {
     const { id } = await createAudio()
@@ -193,7 +194,7 @@ describe('optional music sections, energy planning and provenance', () => {
     expect(segments[0]!.meanEnergy).toBeLessThan(segments[1]!.meanEnergy)
     const repeat = energySegments(analysis.energy!, analysis.sections, analysis.durationSeconds)
     expect(repeat).toEqual(segments)
-  }, 30000)
+  }, testBudget(30000))
 
   it('records optional label absence without touching the local analysis', async () => {
     const { id } = await createAudio()
@@ -202,8 +203,8 @@ describe('optional music sections, energy planning and provenance', () => {
     const args = { book_id: engine.book.get().bookId, asset_id: id, sections: true }
     const queued = decode<MusicAnalysisState>(await analyze.handler(args))
     expect(queued.analysis).toBeNull()
-    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 20000 }).toBe('ready')
-    await expect.poll(async () => (await readMusicAnalysis(engine, id)).sections?.status, { timeout: 10000 }).toBe('unavailable')
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: testBudget(20000) }).toBe('ready')
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).sections?.status, { timeout: testBudget(10000) }).toBe('unavailable')
     const state = await readMusicAnalysis(engine, id)
     expect(state.sections!.labels).toBeNull()
     expect(state.sections!.error).toContain('OPENAI_API_KEY')
@@ -216,7 +217,7 @@ describe('optional music sections, energy planning and provenance', () => {
     const settled = decode<MusicAnalysisState>(await analyze.handler({ book_id: engine.book.get().bookId, asset_id: id }))
     expect(settled.status).toBe('ready')
     expect(settled.sections!.status).toBe('unavailable')
-  }, 40000)
+  }, testBudget(40000))
 
   it('plans denser cuts in loud sections while every cut stays on the verified beat map', async () => {
     const { id } = await createAudio()
@@ -274,7 +275,7 @@ describe('optional music sections, energy planning and provenance', () => {
     expect(second.energyPlan).toEqual(first.energyPlan)
     expect(first.shots.length).toBeGreaterThan(plain.shots.filter((shot) => shot.startFrame >= 240).length)
     expect(analysis.analysisId).toBe(source.analysisId)
-  }, 60000)
+  }, testBudget(60000))
 
   it('rejects stale analysis and moments references instead of planning from them', async () => {
     const { id } = await createAudio()
@@ -309,5 +310,5 @@ describe('optional music sections, energy planning and provenance', () => {
       ...options, analysis: { music_analysis_id: source.analysisId, moments: [{ artifact_id: footage, moments_id: 'missing-moments' }] },
     }, engine.head, rhythm.revision, 'stale-test', 'ui')).rejects.toThrow(/stale or missing/)
     await expect(planMusicVideo(engine, options, engine.head, rhythm.revision, 'stale-test', 'ui')).rejects.toThrow(/energy curve/)
-  }, 60000)
+  }, testBudget(60000))
 })

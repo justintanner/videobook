@@ -19,6 +19,7 @@ import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import { applyGenerationRoutingDefaults, CHAT_DEFAULT_MODELS } from "../chat-generation-routing.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -434,7 +435,7 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
     expect(payload.job_id).toBeTruthy();
     if (payload.job_id) await waitForJob(payload.job_id);
     expect(payload.image_asset_id).toBeTruthy();
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("lets an untitled post plan through validation so the sheet can add the title", async () => {
     // The router validates its plan with the tool schema before the confirm

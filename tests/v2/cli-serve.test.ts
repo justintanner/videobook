@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { availablePort } from './e2e-harness.js'
 import { callTool } from './mcp-http-test-server.js'
 import { cleanupCli, cliEnv, connectMcp, runCli, spawnCli, stopCli, tempDir, waitForHealth } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const SERVER_VERSION = (createRequire(import.meta.url)('../../server/package.json') as { version: string }).version
 const LOCK_FILE = '.videobook-server.json'
@@ -65,7 +66,7 @@ describe('videobook serve', () => {
 
     expect(cli.stdout.join('')).toContain(`UI       ${base}/`)
     expect(cli.stdout.join('')).toContain(`Library  ${join(home, 'books')}`)
-    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: 15_000 })
+    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: testBudget(15_000) })
       .toMatchObject({ pid: cli.child.pid, port, url: base, version: SERVER_VERSION })
 
     const second = await runCli(['serve', '--port', String(await availablePort()), '--home', home], env)
@@ -76,7 +77,7 @@ describe('videobook serve', () => {
     expect(await stopCli(cli)).toBe(0)
     expect(cli.output()).toContain('[shutdown-complete]')
     await expect(access(join(home, 'books', LOCK_FILE))).rejects.toMatchObject({ code: 'ENOENT' })
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('runs headless with MCP and no web UI', async () => {
     const root = await tempDir()
@@ -87,9 +88,9 @@ describe('videobook serve', () => {
 
     await waitForHealth(base, cli)
     expect((await html(`${base}/`)).status).toBe(404)
-    await expect.poll(() => cli.stdout.join(''), { timeout: 15_000 }).toContain('UI       off (--headless)')
+    await expect.poll(() => cli.stdout.join(''), { timeout: testBudget(15_000) }).toContain('UI       off (--headless)')
     expect(await stopCli(cli)).toBe(0)
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('takes over a lock left behind by a process that died', async () => {
     const root = await tempDir()
@@ -100,10 +101,10 @@ describe('videobook serve', () => {
     const cli = spawnCli(['serve', '--headless', '--port', String(port), '--home', home])
 
     await waitForHealth(`http://127.0.0.1:${port}`, cli)
-    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: 15_000 })
+    await expect.poll(async () => JSON.parse(await readFile(join(home, 'books', LOCK_FILE), 'utf8')) as Record<string, unknown>, { timeout: testBudget(15_000) })
       .toMatchObject({ pid: cli.child.pid, port })
     expect(await stopCli(cli)).toBe(0)
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('explains a busy port without creating the library', async () => {
     const root = await tempDir()
@@ -122,5 +123,5 @@ describe('videobook serve', () => {
     } finally {
       await new Promise<void>((resolveClose) => blocker.close(() => resolveClose()))
     }
-  }, 60_000)
+  }, testBudget(60_000))
 })

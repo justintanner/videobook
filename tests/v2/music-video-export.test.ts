@@ -11,6 +11,7 @@ import { updateSequenceRhythm } from '../../server/src/rhythm/sequence-rhythm.js
 import { planMusicVideo, commitMusicVideo } from '../../server/src/rhythm/music-draft.js'
 import { registerExportSequenceJob } from '../../server/src/jobs/export-sequence.js'
 import { queue, setEngineRoot } from '../../server/src/queue.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const exec = promisify(execFile)
 let root = ''
@@ -114,4 +115,4 @@ it('renders fitted beat cuts at the reviewed frames with trimmed and offset soun
   expect(rms(0.76, 0.80)).toBeGreaterThan(0.1)
   expect(rms(0.76, 0.80)).toBeLessThan(0.25)
   expect(rms(0.9, 1.1)).toBeLessThan(0.002)
-}, 90000)
+}, testBudget(90000))

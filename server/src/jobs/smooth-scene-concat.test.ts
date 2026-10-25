@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { smoothSceneConcatFiles } from "./smooth-scene-concat.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,7 +67,7 @@ describe("smooth scene concat files", () => {
       "-pix_fmt", "yuv420p",
       silentPath,
     ]);
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
@@ -91,7 +92,7 @@ describe("smooth scene concat files", () => {
     expect(Math.abs(output.videoDuration - result.outputDuration)).toBeLessThanOrEqual(
       1 / output.fps + 0.001,
     );
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("uses a fixed dissolve and retains one available audio track", async () => {
     const first = await probeVideo(firstPath);
@@ -116,7 +117,7 @@ describe("smooth scene concat files", () => {
     expect(Math.abs(output.videoDuration - result.outputDuration)).toBeLessThanOrEqual(
       1 / output.fps + 0.001,
     );
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects a transition as long as either input", async () => {
     await expect(smoothSceneConcatFiles({

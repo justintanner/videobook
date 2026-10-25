@@ -1,12 +1,14 @@
 import { defineConfig, configDefaults } from 'vitest/config';
-import { availableParallelism } from 'node:os';
 import path from 'node:path';
+import { testBudget, testTimeScale, testWorkers } from './server/src/test-budget';
 
 // Benign prefixes stripped even from failing-test console output.
 // Keep this list tiny so real diagnostics stay visible.
 const BENIGN_TEST_CONSOLE_PREFIXES = [
   '[mcp] ',
 ] as const;
+
+const TEST_TIME_SCALE = testTimeScale();
 
 export default defineConfig({
   // Mirror vite.config.ts's `@` → src alias so tests can import src modules
@@ -37,11 +39,12 @@ export default defineConfig({
     // Media tests launch multithreaded FFmpeg encoders, so four Vitest workers
     // can exhaust the smaller GitHub runner even though each test is isolated.
     // Two workers retain file parallelism without oversubscribing encoders.
-    // GitHub Actions keeps that cap; local runs scale with cores (ffmpeg
-    // time-slices). A local CI=true env var does not imply the runner cap.
-    // E2E uses its own worker policy.
+    // GitHub Actions keeps that cap; local runs scale with cores and the
+    // 1-minute load average (server/src/test-budget.ts). A local CI=true env
+    // var does not imply the runner cap. E2E uses its own worker policy.
     fileParallelism: true,
-    maxWorkers: process.env.GITHUB_ACTIONS ? 2 : Math.min(8, Math.max(2, availableParallelism() - 2)),
+    maxWorkers: testWorkers(),
+    env: { VIDEOBOOK_TEST_TIME_SCALE: String(TEST_TIME_SCALE) },
     include: [
       'tests/v2/**/*.test.ts',
       'tests/dolt-native-cutover.test.ts',
@@ -103,6 +106,7 @@ export default defineConfig({
       'server/src/engine-tags-contract.test.ts',
       'server/src/archive-store.test.ts',
       'server/src/test-media-fixtures.test.ts',
+      'server/src/test-budget.test.ts',
       'server/src/test-clock-inventory.test.ts',
       'server/src/jobs/asset-file-helpers.test.ts',
       'server/src/jobs/_image-edit-adapter.test.ts',
@@ -201,9 +205,10 @@ export default defineConfig({
     onConsoleLog(log) {
       return !BENIGN_TEST_CONSOLE_PREFIXES.some((prefix) => log.startsWith(prefix));
     },
-    testTimeout: 30_000,
+    testTimeout: testBudget(30_000, TEST_TIME_SCALE),
     // Per-test afterEach now waits for leaked jobs (vb-2ky4.4) instead of
     // letting the next beforeEach absorb a 30–60s runner drain.
-    hookTimeout: 15_000,
+    hookTimeout: testBudget(15_000, TEST_TIME_SCALE),
+    expect: { poll: { timeout: testBudget(1_000, TEST_TIME_SCALE) } },
   },
 });

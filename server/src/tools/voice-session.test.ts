@@ -25,6 +25,7 @@ import { appendVoiceHistory } from "./chat-history.js";
 import { voiceWorkspaceContext } from "../voice-actions.js";
 import { VoiceReplyProgress } from "../voice-reply-progress.js";
 import type { VoiceOutcome, VoiceSessionEvent } from "../voice-contract.js";
+import { testBudget } from "../test-budget.js";
 
 describe("voice turn continuation", () => {
   it("joins later clauses onto the original request", () => {
@@ -386,7 +387,7 @@ describe("voice session boundaries", () => {
     const events: VoiceSessionEvent[] = [];
     const session = new VoiceSession(books, bookId, notebookId, engine, "unused-without-start", 30, () => undefined);
     session.subscribe(event => events.push(event));
-    await expect.poll(() => events.some(event => event.type === "closed" && event.reason.includes("idle")), { timeout: 1000 }).toBe(true);
+    await expect.poll(() => events.some(event => event.type === "closed" && event.reason.includes("idle")), { timeout: testBudget(1000) }).toBe(true);
     await session.close();
     expect(events.filter(event => event.type === "closed")).toHaveLength(1);
     await expect(session.start("v=0", new AbortController().signal)).rejects.toThrow("cancelled");
@@ -594,7 +595,7 @@ describe("voice session boundaries", () => {
       const inserted = await engine.notebooks.insertCell(notebookId, cell);
       expect(inserted.ok).toBe(true);
 
-      await expect.poll(() => instructionsOf().length, { timeout: 10_000 }).toBe(2);
+      await expect.poll(() => instructionsOf().length, { timeout: testBudget(10_000) }).toBe(2);
       expect(instructionsOf()[1]).toMatch(/@b5/u);
       expect(instructionsOf()[1]).toMatch(/Storyboard/u);
 

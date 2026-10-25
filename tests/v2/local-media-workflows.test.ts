@@ -14,6 +14,7 @@ import { queue, setEngineRoot } from '../../server/src/queue.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 import { installLocalSearchProviderFixtures } from '../../server/src/local-search-models.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error.message)
@@ -24,11 +25,11 @@ interface TransformersRuntime { env: { remoteHost: string } }
 const runtime: TransformersRuntime = await import(new URL('./transformers-runtime.js', import.meta.resolve('videobook-engine')).href)
 
 it.each(['direct-index', 'migration-index', 'semantic_index', 'prepare_search_reference', 'browse', 'ingest-status', 'retry-ingest', 'edit-history', 'library-moments'])(
-  '%s does not hydrate missing media from the application object store', runWorkflow, 20_000,
+  '%s does not hydrate missing media from the application object store', runWorkflow, testBudget(20_000),
 )
 it(
   'runs cached-model search, indexing, edits and history without model or object requests, then backs up explicitly',
-  () => runWorkflow('cached'), 60_000,
+  () => runWorkflow('cached'), testBudget(60_000),
 )
 
 async function runWorkflow(operation: string) {

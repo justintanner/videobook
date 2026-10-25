@@ -20,6 +20,7 @@ import { applyPromptDialect } from "./prompt-dialects.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { MACHGEN_MODELS } from "./machgen.js";
 import type { Operation } from "./types.js";
+import { testBudget } from "../test-budget.js";
 
 const FRAME = "https://example.test/first.png";
 const LAST = "https://example.test/last.png";
@@ -258,7 +259,7 @@ describe("MachGen provider tasks", () => {
     expect(result.isError, toolText(result)).toBeFalsy();
     const enqueued = JSON.parse(toolText(result)) as { asset_id: string; job_id: string };
     await resumeBookQueueForTests(bookId);
-    await waitForJob(enqueued.job_id, 30_000);
+    await waitForJob(enqueued.job_id, testBudget(30_000));
     return enqueued.asset_id;
   }
 
@@ -296,7 +297,7 @@ describe("MachGen provider tasks", () => {
     const done = await pollPendingProviderTasks(engine, bookId);
     expect(done.failed).toEqual([]);
     expect(done.completed).toEqual([expect.objectContaining({ assetId, taskType: "machgen_media" })]);
-    await waitForJob(done.completed[0]!.jobId, 30_000);
+    await waitForJob(done.completed[0]!.jobId, testBudget(30_000));
 
     const download = recorded.find((entry) => entry.path === `/api/v0/assets/${TASK_ID}`);
     expect(download?.authorization).toBe("Bearer local-machgen-key");

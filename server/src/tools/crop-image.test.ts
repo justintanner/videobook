@@ -7,6 +7,7 @@ import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { probeImage } from "../image.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -37,7 +38,7 @@ async function uploadImage(
   return JSON.parse((result.content as TextContent)[0].text);
 }
 
-async function waitForProcessImage(assetPath: string, timeoutMs = 15_000): Promise<void> {
+async function waitForProcessImage(assetPath: string, timeoutMs = testBudget(15_000)): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -61,11 +62,11 @@ describe("crop_image tool", () => {
     await queue.start();
     // 1920x1080 source so centred 9:16 / 1:1 crops fit with correct aspect.
     sourcePng = await createTestPng(1920, 1080);
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await queue.stop();
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-crop-image-test-"));
@@ -114,7 +115,7 @@ describe("crop_image tool", () => {
     await readFile(join(uploaded.path, "landscape.jpg"));
     await readFile(join(uploaded.path, "portrait.jpg"));
     await readFile(join(uploaded.path, "square.jpg"));
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("crops to 1:1 and produces 1080x1080 original.jpg", async () => {
     const uploaded = await uploadImage(client, "crop-img-proj", sourcePng);
@@ -140,7 +141,7 @@ describe("crop_image tool", () => {
     const dims = await probeImage(jpg);
     expect(dims.width).toBe(1080);
     expect(dims.height).toBe(1080);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("crops to 16:9 and produces 1920x1080 original.jpg", async () => {
     const uploaded = await uploadImage(client, "crop-img-proj", sourcePng);
@@ -164,7 +165,7 @@ describe("crop_image tool", () => {
     const dims = await probeImage(jpg);
     expect(dims.width).toBe(1920);
     expect(dims.height).toBe(1080);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("returns error for out-of-bounds rect", async () => {
     const uploaded = await uploadImage(client, "crop-img-proj", sourcePng);
@@ -208,7 +209,7 @@ describe("crop_image tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toMatch(/aspect/i);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
@@ -261,5 +262,5 @@ describe("crop_image tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toMatch(/No original image|not found|Failed|Crop failed/i);
-  }, 60_000);
+  }, testBudget(60_000));
 });

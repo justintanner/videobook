@@ -10,6 +10,7 @@ import { FFMPEG } from "../ffmpeg.js";
 import { createEngineForTest } from "../engine.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const PROJECT = "audio-sync-tool";
@@ -229,8 +230,8 @@ describe("sync_video_to_audio tool", () => {
     expect(response.asset_id).toBe(audioAssetId);
     expect(response.job_id).toMatch(/^sync-audio-/);
     expect(response.status).toBe("enqueued");
-    await expect(waitForJob(String(response.job_id), 120_000)).resolves.toBeUndefined();
-  }, 120_000);
+    await expect(waitForJob(String(response.job_id), testBudget(120_000))).resolves.toBeUndefined();
+  }, testBudget(120_000));
 
   it("enforces exactly one audio target per anchor", async () => {
     const result = await client.callTool({

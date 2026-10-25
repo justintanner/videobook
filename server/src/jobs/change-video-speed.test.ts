@@ -10,6 +10,7 @@ import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerProcessVideoJob } from "./process-video.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -175,7 +176,7 @@ async function probeVideoFormat(
 async function waitForProcessVideo(
   fs: Engine,
   assetId: string,
-  timeoutMs = 120_000,
+  timeoutMs = testBudget(120_000),
 ): Promise<Job> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -210,7 +211,7 @@ describe("change-video-speed job handler", () => {
     await setEngineRoot(engineRoot, fs);
     registerChangeVideoSpeedJob(fs);
     registerProcessVideoJob(fs);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
@@ -287,7 +288,7 @@ describe("change-video-speed job handler", () => {
     const outputProbe = await probeVideo(join(asset.path, "original.mp4"));
     expect(Math.abs(outputProbe.duration - 1)).toBeLessThan(0.1);
     expect(outputProbe.hasAudio).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("normalizes 10-bit HEVC input to 8-bit H.264", async () => {
     expect(await probeVideoFormat(tenBitSourcePath)).toEqual({
@@ -324,7 +325,7 @@ describe("change-video-speed job handler", () => {
       codec: "h264",
       pixelFormat: "yuv420p",
     });
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("preserves every source frame and the final audio cue at 1.3x", async () => {
     const asset = valueOf(await fs.artifacts.create("vid", "speed tail markers"));
@@ -375,7 +376,7 @@ describe("change-video-speed job handler", () => {
     expect(proxyCounts.video.frames).toBe(source.video.frames);
     expect(Math.abs(proxyCounts.video.duration - counts.video.duration)).toBeLessThan(0.1);
     expectBlueTail(await lastFrameColor(join(asset.path, "proxy.mp4"), proxyCounts.video.duration));
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("keeps the complete tail in exact target-duration mode", async () => {
     const asset = valueOf(await fs.artifacts.create("vid", "speed exact-duration markers"));
@@ -414,7 +415,7 @@ describe("change-video-speed job handler", () => {
     expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
     expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeGreaterThanOrEqual(840);
     expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeLessThanOrEqual(920);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("preserves every frame for silent sources at 1.3x", async () => {
     const silentSourcePath = join(tempDir, "source-markers-silent.mp4");
@@ -450,7 +451,7 @@ describe("change-video-speed job handler", () => {
     expect(Math.abs(counts.video.duration - source.video.duration / 1.3)).toBeLessThan(0.1);
     expect(counts.audio).toBeNull();
     expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("rejects invalid retime output without replacing canonical media", async () => {    const asset = valueOf(await fs.artifacts.create("vid", "speed invalid output"));
     valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(markerSourcePath)));
@@ -483,5 +484,5 @@ describe("change-video-speed job handler", () => {
     const counts = await probeStreamCounts(join(asset.path, "original.mp4"));
     expect(counts.video.frames).toBe(72);
     expect(counts.audio).not.toBeNull();
-  }, 120_000);
+  }, testBudget(120_000));
 });

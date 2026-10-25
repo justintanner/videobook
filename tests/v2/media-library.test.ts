@@ -17,6 +17,7 @@ import {
 } from '../../server/src/media-library.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 import { seedMixedStatusCatalog } from './library-browse-fixture.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const reverseSearchManifest: IndexManifest = {
   manifestId: 'media-library-reverse-v1',
@@ -526,7 +527,7 @@ describe('media Library slots', () => {
         referenceId: reference.reference_id, kinds: ['image'], tags: { all: [{ label: 'missing' }] },
       })).assets).toEqual([])
     } finally { searchReferenceStore.release(reference.reference_id) }
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('copies a foreign asset through Engine files and attaches its canonical target UUID', async () => {
     const source = await books.create('source-book')
@@ -751,7 +752,7 @@ describe('media Library slots', () => {
     })
     expect(queryReadyOnly.assets).toEqual([])
     expect(queryReadyOnly.page.total).toBe(0)
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('walks three All-books Ready pages using the Library Load more offset', async () => {
     const created = await books.create('ready-pages')
@@ -786,5 +787,5 @@ describe('media Library slots', () => {
     expect(new Set(loaded).size).toBe(loaded.length)
     expect(loaded).toHaveLength(catalog.ready.length)
     expect([...loaded].sort()).toEqual([...catalog.ready].sort())
-  }, 120_000)
+  }, testBudget(120_000))
 })

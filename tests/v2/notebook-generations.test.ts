@@ -22,6 +22,7 @@ import {
 } from "../../server/src/queue.js";
 import { listCellGenerationsDef } from "../../server/src/tools/list-cell-generations.js";
 import type { ListCellGenerationsResponse } from "../../server/src/tools/list-cell-generations.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const VIDEO_TOOL = "generate_video";
 const VIDEO_JOB_TYPE = "generate_media";
@@ -171,8 +172,8 @@ describe("notebook generation rows", () => {
       providerArtifactId: result.outputArtifactId,
       runId,
     });
-    await waitForJob(awaitJobId, 30_000);
-    await waitForJob(`resume-notebook-${runId}`, 30_000);
+    await waitForJob(awaitJobId, testBudget(30_000));
+    await waitForJob(`resume-notebook-${runId}`, testBudget(30_000));
 
     const completed = engine.generations.listForCell(notebookId, cell.id);
     expect(completed.ok).toBe(true);
@@ -204,7 +205,7 @@ describe("notebook generation rows", () => {
     for (const candidate of finished.value.cells) {
       expect(candidate.model ?? "").not.toMatch(/RequestSchema$/);
     }
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("records one failed row with the provider error truncated to 500 chars", async () => {
     const longMessage = `provider exploded: ${"detail ".repeat(200)}`;
@@ -233,7 +234,7 @@ describe("notebook generation rows", () => {
       providerArtifactId: result.outputArtifactId,
       runId,
     });
-    await waitForJob(awaitJobId, 30_000);
+    await waitForJob(awaitJobId, testBudget(30_000));
 
     const failed = engine.generations.listForCell(notebookId, cell.id);
     expect(failed.ok).toBe(true);
@@ -260,7 +261,7 @@ describe("notebook generation rows", () => {
       notebook.value.execution?.[outputCellId ?? ""]?.status
       ?? notebook.value.execution?.[cell.id]?.status,
     ).toBe("error");
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("marks the row failed when dispatch fails before provider handoff", async () => {
     delete process.env.KIE_API_KEY;
@@ -290,7 +291,7 @@ describe("notebook generation rows", () => {
       { operation: "fail_generation", status: "failed" },
       { operation: "record_generation", status: "dispatched" },
     ]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   // Local ffmpeg cells (extract_audio) run inline and never
   // reach generationTool, so they create no generations rows by design;
@@ -342,8 +343,8 @@ describe("notebook generation rows", () => {
         providerArtifactId: result.outputArtifactId,
         runId,
       });
-      await waitForJob(awaitJobId, 30_000);
-      await waitForJob(`resume-notebook-${runId}`, 30_000);
+      await waitForJob(awaitJobId, testBudget(30_000));
+      await waitForJob(`resume-notebook-${runId}`, testBudget(30_000));
     }
 
     const listed = engine.generations.listForCell(notebookId, cell.id);
@@ -393,5 +394,5 @@ describe("notebook generation rows", () => {
       .toEqual(new Set(runIds));
     expect(data.generations.count).toBe(2);
     expect(data.generations.latestStatus).toBe("completed");
-  }, 60_000);
+  }, testBudget(60_000));
 });

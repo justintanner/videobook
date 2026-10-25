@@ -18,6 +18,7 @@ import type { MusicAnalysis, MusicAnalysisState, RhythmSettings } from '../../se
 import type { ToolResult } from '../../server/src/tools/tool-def.js'
 import { runRhythmWorker } from '../../server/src/rhythm/run-worker.js'
 import { FFMPEG, runFfmpeg } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 function decode<T>(result: ToolResult): T {
   if (result.isError) throw new Error(result.content[0]!.text)
@@ -127,7 +128,7 @@ describe('music analysis and rhythm persistence', () => {
       const analyze = tools.find((tool) => tool.name === 'analyze_music')!
       const read = tools.find((tool) => tool.name === 'get_music_analysis')!
       const first = decode<MusicAnalysisState>(await analyze.handler(args))
-      await expect.poll(async () => decode<MusicAnalysisState>(await read.handler(args)).status, { timeout: 15000 }).toBe('ready')
+      await expect.poll(async () => decode<MusicAnalysisState>(await read.handler(args)).status, { timeout: testBudget(15000) }).toBe('ready')
       const ready = decode<MusicAnalysisState>(await read.handler(args))
       expect(ready.error).toBeNull()
       expect(ready.analysis).toMatchObject({ artifactId: id, streamId: clip.source.range.streamId, objectHash: clip.source.range.objectHash })
@@ -138,7 +139,7 @@ describe('music analysis and rhythm persistence', () => {
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
-  }, 20000)
+  }, testBudget(20000))
 
   it('runs the real decoder and queued analyzer once, caches by audio content, and fences replaced sources', async () => {
     const { id } = await audio()
@@ -147,7 +148,7 @@ describe('music analysis and rhythm persistence', () => {
     const first = decode<MusicAnalysisState>(await tool.handler(args))
     const second = decode<MusicAnalysisState>(await tool.handler(args))
     expect(second.jobId).toBe(first.jobId)
-    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: testBudget(15000) }).toBe('ready')
     const ready = await readMusicAnalysis(engine, id)
     expect(ready.analysis?.beats.length).toBeGreaterThan(10)
     expect(ready.analysis?.beats[0]?.timeSeconds).toBeGreaterThan(0.4)
@@ -165,7 +166,7 @@ describe('music analysis and rhythm persistence', () => {
     expect((await readMusicAnalysis(engine, id)).status).toBe('missing')
     await expect(analyzeMusicSource(engine, id, oldSource.analysisId, oldSource.streamId, new AbortController().signal)).rejects.toThrow()
     expect(await cachedMusicAnalysis(engine, await musicSource(engine, id))).toBeNull()
-  }, 20000)
+  }, testBudget(20000))
 
   it('transfers a multi-minute beat map from the worker without truncating IPC output', async () => {
     const { id } = await audio(300)
@@ -175,7 +176,7 @@ describe('music analysis and rhythm persistence', () => {
     expect(result.beats.at(-1)!.timeSeconds).toBeGreaterThan(298)
     expect(result.resources!.pcmRetainedSamples).toBeLessThanOrEqual(1280)
     expect(result.resources!.peakRssBytes).toBeLessThan(512 * 1024 * 1024)
-  }, 15000)
+  }, testBudget(15000))
 
   it.each(['1', '2'])('invalidates version %s analysis and reruns a completed empty result into beats with automatic bars', async (version) => {
     const { id } = await audio(24, 108, true)
@@ -195,7 +196,7 @@ describe('music analysis and rhythm persistence', () => {
     const tool = musicAnalysisDefs(engine).find(item => item.name === 'analyze_music')!
     const args = { book_id: engine.book.get().bookId, asset_id: id }
     const first = decode<MusicAnalysisState>(await tool.handler(args))
-    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: testBudget(15000) }).toBe('ready')
     const result = (await readMusicAnalysis(engine, id)).analysis!
     expect(result.beats.length).toBeGreaterThan(35)
     expect(result).toMatchObject({ lowConfidence: true, barSource: 'estimated', beatsPerBar: 4 })
@@ -206,9 +207,9 @@ describe('music analysis and rhythm persistence', () => {
     expect((await readMusicAnalysis(engine, id)).status).toBe('no-beats')
     const retry = decode<MusicAnalysisState>(await tool.handler({ ...args, force: true }))
     expect(retry.jobId).not.toBe(first.jobId)
-    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: 15000 }).toBe('ready')
+    await expect.poll(async () => (await readMusicAnalysis(engine, id)).status, { timeout: testBudget(15000) }).toBe('ready')
     expect((await readMusicAnalysis(engine, id)).analysis).toEqual(result)
-  }, 30000)
+  }, testBudget(30000))
 
   it('keeps failed decode and cancelled analysis distinct from a successful empty beat map', async () => {
     const { id, stream } = await audio(60)
@@ -227,7 +228,7 @@ describe('music analysis and rhythm persistence', () => {
     const invalid = await musicSource(engine, id)
     await expect(analyzeMusicSource(engine, id, invalid.analysisId, registered.value.streamId, new AbortController().signal)).rejects.toThrow('decode')
     expect(await cachedMusicAnalysis(engine, invalid)).toBeNull()
-  }, 15000)
+  }, testBudget(15000))
 
   it('persists beat corrections with conflict protection and independent undo/redo', async () => {
     const { id } = await audio()

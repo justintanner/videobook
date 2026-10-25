@@ -18,6 +18,7 @@ import { registerPrepareSearchReferenceJob } from "./jobs/prepare-search-referen
 import { queue, setEngineRoot, stopBookQueue } from "./queue.js";
 
 import { searchReferenceStore } from "./search-reference-store.js";
+import { testBudget } from "./test-budget.js";
 
 type ModelEnvironmentName =
   | "VIDEOBOOK_MODEL_CACHE_DIR"
@@ -197,7 +198,7 @@ describe("local search provider registration", () => {
     const job = await queue.enqueue(`stalled-${type}`, {
       type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
     });
-    await expect.poll(() => requests.length, { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect.poll(() => requests.length, { timeout: testBudget(10_000) }).toBeGreaterThan(0);
     const started = Date.now();
     expect(await engine.jobs.queue.abort(job.id, "Cancel stalled preparation")).toBe(true);
     await stopBookQueue(bookId);

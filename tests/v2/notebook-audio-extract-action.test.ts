@@ -8,6 +8,7 @@ import { registerExtractNotebookAudioJob } from "../../server/src/jobs/extract-n
 import { setEngineRoot, stopBookQueue, waitForJob } from "../../server/src/queue.js";
 import { extractNotebookAudioDef } from "../../server/src/tools/extract-notebook-audio.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): Record<string, unknown> {
   if (result.isError) throw new Error(result.content[0]?.text ?? "Tool failed");
@@ -108,5 +109,5 @@ describe("extract_audio action", () => {
         sourceArtifactId: video.value.artifactId,
       }));
     }
-  }, 60_000);
+  }, testBudget(60_000));
 });

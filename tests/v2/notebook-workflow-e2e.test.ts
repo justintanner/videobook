@@ -10,6 +10,7 @@ import { topologicalOrder } from '../../server/src/jobs/run-notebook.js'
 import { listNotebookActions } from '../../server/src/notebook-action-catalog.js'
 import { captureFrame, extractSourceAudio, splitSourceRange } from '../../server/src/notebook-media-ops.js'
 import { applyAnalysisResults, buildSevenStageScaffold } from '../../server/src/notebook-workflow.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -136,5 +137,5 @@ describe('transparent runnable DAG e2e (offline)', () => {
       cell.inputs?.requiresConfirmation === true)).toBe(true)
     expect(fanned.cells.filter((cell) => cell.operation === 'image_to_video').every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true)
-  }, 90_000)
+  }, testBudget(90_000))
 })

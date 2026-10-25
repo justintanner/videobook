@@ -14,6 +14,7 @@ import {
   seedMultycultyWorkflow,
 } from "../../server/src/multyculty-workflow.js";
 import { applyAnalysisResults } from "../../server/src/notebook-workflow.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -449,5 +450,5 @@ describe("Multyculty workflow fixture", () => {
       .not.toBe(source?.id);
     expect(engine.files.listSubdir(sourceId, "original_frames"))
       .toEqual(sourceFrames);
-  }, 90_000);
+  }, testBudget(90_000));
 });

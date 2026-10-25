@@ -12,6 +12,7 @@ import {
   planTimelineVideo,
   type TimelineVideoProbe,
 } from "./render-timeline.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -121,7 +122,7 @@ describe("timeline re-encode with real ffmpeg", () => {
     clip24 = join(workDir, "clip24.mp4");
     clip30 = join(workDir, "clip30.mp4");
     await Promise.all([makeClip(clip24, 24), makeClip(clip30, 30)]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await rm(workDir, { recursive: true, force: true });
@@ -166,5 +167,5 @@ describe("timeline re-encode with real ffmpeg", () => {
     expect(result.hasAudio).toBe(true);
     expect(result.duration).toBeGreaterThan(1.8);
     expect(result.duration).toBeLessThan(2.3);
-  }, 60_000);
+  }, testBudget(60_000));
 });

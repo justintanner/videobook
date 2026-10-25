@@ -13,6 +13,7 @@ import {
 } from "../../server/src/notebook-media-ops.js";
 import { applyAnalysisResults } from "../../server/src/notebook-workflow.js";
 import { topologicalOrder } from "../../server/src/jobs/run-notebook.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -136,7 +137,7 @@ describe("notebook local media and analysis fan-out", () => {
     const waveform = await engine.metadata.waveforms.read(audio.artifactId);
     expect(waveform.ok).toBe(true);
     if (waveform.ok) expect(waveform.value.peaks.length).toBeGreaterThan(0);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("captures the last frame when container duration rounds past video duration", async () => {
     if (!engine || !rootDir) throw new Error("engine missing");
@@ -170,7 +171,7 @@ describe("notebook local media and analysis fan-out", () => {
     if (!manifest.ok) return;
     expect(manifest.value.files.some((file) =>
       file.name.endsWith(".jpg"))).toBe(true);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("rejects split ranges that start at the end of the source video", async () => {
     if (!engine || !rootDir) throw new Error("engine missing");
@@ -195,7 +196,7 @@ describe("notebook local media and analysis fan-out", () => {
       { startSeconds: 2, endSeconds: 3 },
       "out-of-range split",
     )).rejects.toThrow(/starts at or after the source video duration/);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("rejects video operations on an audio-only media artifact", async () => {
     if (!engine || !rootDir) throw new Error("engine missing");
@@ -224,7 +225,7 @@ describe("notebook local media and analysis fan-out", () => {
       role: "first",
       title: "audio-only frame",
     })).rejects.toThrow(/source has no video stream/);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("fans out owned split/frame/video branches from fixture analysis without deleting artifacts", async () => {
     if (!engine) throw new Error("engine missing");

@@ -27,6 +27,7 @@ import {
   parseNotebookSplitCommand,
   planNotebookSplitCommand,
 } from '../../src/videobook/notebook-split-command'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -36,7 +37,7 @@ function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
 }
 
 async function waitForJob(jobId: string): Promise<void> {
-  for (let attempt = 0; attempt < 400; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(400); attempt += 1) {
     const status = await queue.getStatus(jobId)
     if (status?.state === 'completed') return
     if (status?.state === 'failed') {
@@ -436,7 +437,7 @@ describe('notebook split commands', () => {
         ]),
       )
     }
-  }, 45_000)
+  }, testBudget(45_000))
 
   it('proves KEEP, REMOVE, and ALL of 0.03-0.11 with real ffmpeg', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-split-modes-'))
@@ -630,5 +631,5 @@ describe('notebook split commands', () => {
     const middleDuration = Number(allOutputs[1]?.inputs?.durationSeconds)
     expect(middleDuration).toBeGreaterThan(0.08 - frame)
     expect(middleDuration).toBeLessThan(0.08 + frame)
-  }, 45_000)
+  }, testBudget(45_000))
 })

@@ -17,6 +17,7 @@ import {
   registerJobHandler,
   setEngineRoot,
 } from '../../server/src/queue.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 describe('processing resilience', () => {
   let rootDir: string | undefined
@@ -104,7 +105,7 @@ describe('processing resilience', () => {
     expect(parent.id).toBeGreaterThan(0)
 
     const startedAt = Date.now()
-    while (Date.now() - startedAt < 5_000) {
+    while (Date.now() - startedAt < testBudget(5_000)) {
       if ((await queue.getStatus('lease-order-child'))?.state === 'completed') {
         expect(childRuns).toBe(1)
         return
@@ -143,7 +144,7 @@ describe('processing resilience', () => {
     })
 
     const startedAt = Date.now()
-    while (Date.now() - startedAt < 5_000) {
+    while (Date.now() - startedAt < testBudget(5_000)) {
       const status = await queue.getStatus('process-image-variants')
       if (status?.state === 'failed') {
         throw new Error(status.error?.message ?? 'image processing failed')

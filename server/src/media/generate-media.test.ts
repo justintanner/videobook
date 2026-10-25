@@ -20,6 +20,7 @@ import { falAdapter } from "./adapters/fal.js";
 import { resolveModel } from "./descriptor.js";
 import { buildWireRequest } from "./request.js";
 import { configureProviderEndpoints } from "./endpoints.js";
+import { testBudget } from "../test-budget.js";
 
 type RecordedRequest = { method: string; path: string; body: Buffer };
 
@@ -192,7 +193,7 @@ describe("generic media generation", () => {
     const polled = await pollPendingProviderTasks(engine, engine.book.get().bookId);
     expect(polled.failed).toEqual([]);
     await resumeBookQueueForTests(engine.book.get().bookId);
-    for (const completed of polled.completed) await waitForJob(completed.jobId, 30_000);
+    for (const completed of polled.completed) await waitForJob(completed.jobId, testBudget(30_000));
   }
 
   it("lists catalog models by media and operation", async () => {

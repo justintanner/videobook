@@ -14,6 +14,7 @@ import {
   stopBookQueue,
 } from "./queue.js";
 import { pollPendingProviderTasks } from "./tools/reconcile-project-work.js";
+import { testBudget } from "./test-budget.js";
 
 async function seedPendingTask(fs: Engine, taskId = "shutdown-poll-task"): Promise<string> {
   const asset = await fs.artifacts.create("img", "shutdown-poll");
@@ -74,7 +75,7 @@ describe("queue and server stop abort in-flight provider polls", () => {
       });
     });
 
-    const deadline = Date.now() + 2_000;
+    const deadline = Date.now() + testBudget(2_000);
     while (!started && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }

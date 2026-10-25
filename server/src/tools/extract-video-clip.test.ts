@@ -12,6 +12,7 @@ import { registerAllJobHandlers } from "../jobs/index.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { extractVideoClipDef } from "./extract-video-clip.js";
 import { splitVideoDef } from "./split-video.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -70,13 +71,13 @@ describe("source-preserving video clip tools", () => {
       outputArtifactId: sourceArtifactId,
     }));
     expect(inserted.ok).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 
   afterAll(async () => {
     await queue.stop();
     if (root && engine) closeEngineForTest(root, engine);
     if (root) await rm(root, { recursive: true, force: true, maxRetries: 3 });
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("extracts a new timestamped clip from a notebook address without an OpenAI key", async () => {
     const originalKey = process.env.OPENAI_API_KEY;
@@ -117,7 +118,7 @@ describe("source-preserving video clip tools", () => {
       if (originalKey) process.env.OPENAI_API_KEY = originalKey;
       else delete process.env.OPENAI_API_KEY;
     }
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("splits a notebook video at a human timestamp and preserves the source", async () => {
     const result = await splitVideoDef(engine).handler({
@@ -136,7 +137,7 @@ describe("source-preserving video clip tools", () => {
     expect(split.chunk_b_artifact_id).toEqual(expect.any(String));
     for (const artifactId of [split.chunk_a_artifact_id, split.chunk_b_artifact_id]) {
       await expect.poll(async () => (await engine.files.read(String(artifactId), "original.jpg")).ok,
-        { timeout: 30_000 }).toBe(true);
+        { timeout: testBudget(30_000) }).toBe(true);
       const poster = await engine.files.read(String(artifactId), "original.jpg");
       expect(poster.ok).toBe(true);
       if (!poster.ok) throw new Error(poster.error.message);
@@ -146,5 +147,5 @@ describe("source-preserving video clip tools", () => {
     }
     const sourceManifest = await engine.files.manifest(sourceAssetId);
     expect(sourceManifest.ok).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 });

@@ -9,6 +9,7 @@ import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -68,7 +69,7 @@ describe("render_timeline tool", () => {
 
   afterAll(async () => {
     await queue.stop();
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-render-timeline-test-"));

@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const PROJECT = "scene-concat-proj";
@@ -70,7 +71,7 @@ describe("smooth_scene_concat tool", () => {
     fs = createEngineForTest(projectsDir);
     firstAssetId = await createVideoAsset(fs, "first", firstPath);
     secondAssetId = await createVideoAsset(fs, "second", secondPath);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await client?.close();
@@ -80,7 +81,7 @@ describe("smooth_scene_concat tool", () => {
       rm(projectsDir, { recursive: true, force: true, maxRetries: 3 }),
       rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 }),
     ]);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("validates inputs and enqueues a new processed video asset", async () => {
     const sameAsset = await client.callTool({
@@ -128,7 +129,7 @@ describe("smooth_scene_concat tool", () => {
     expect(parsed.status).toBe("enqueued");
     expect(parsed.alignment_mode).toBe("fixed");
 
-    await waitForJob(parsed.job_id, 60_000);
+    await waitForJob(parsed.job_id, testBudget(60_000));
     const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original");
     if (!metadata.ok) throw metadata.error;
     expect(metadata.value).toMatchObject({
@@ -138,5 +139,5 @@ describe("smooth_scene_concat tool", () => {
       alignment_mode: "fixed",
       transition_seconds: 0.2,
     });
-  }, 60_000);
+  }, testBudget(60_000));
 });

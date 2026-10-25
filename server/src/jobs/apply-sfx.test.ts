@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { buildMixFilter, mixSfxIntoVideo } from "./apply-sfx.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,7 +72,7 @@ describe("apply SFX media mixing", () => {
       sum += value * value;
     }
     expect(Math.sqrt(sum / Math.max(1, pcm.length / 4))).toBeGreaterThan(0.05);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects an unbounded silent mix", () => {
     expect(() => buildMixFilter([], false, 0)).toThrow("Invalid silent video duration");

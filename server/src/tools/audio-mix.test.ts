@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import { createTestClient } from "../test-client.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const BOOK_ID = "audio-mix-tool-test";
@@ -100,7 +101,7 @@ describe("audio_mix tool", () => {
     expect(probe.audioDuration).toBeCloseTo(2, 1);
     const waveform = await fs.metadata.waveforms.read(targetAssetId);
     expect(waveform.ok).toBe(true);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects volume above 100 before enqueueing", async () => {
     const result = await client.callTool({

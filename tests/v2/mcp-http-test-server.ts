@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import type { Client } from '@modelcontextprotocol/client'
+import { testBudget } from '../../server/src/test-budget.js'
 
 export interface StartedServer {
   child: ChildProcess
@@ -59,7 +60,7 @@ export async function startServer(rootDir: string): Promise<StartedServer> {
   child.stderr.on('data', (data: Buffer) => output.push(data.toString()))
   const started = { child, output, url: `http://127.0.0.1:${port}/mcp` }
 
-  for (let attempt = 0; attempt < 150; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(150); attempt += 1) {
     if (child.exitCode !== null) {
       throw new Error(`MCP server exited during startup:\n${output.join('')}`)
     }
@@ -79,7 +80,7 @@ export async function stopServer(server: StartedServer | undefined): Promise<voi
   server.child.kill('SIGINT')
   const stopped = await Promise.race([
     exited.then(() => true),
-    wait(5_000).then(() => false),
+    wait(testBudget(5_000)).then(() => false),
   ])
   if (stopped) return
   server.child.kill('SIGKILL')

@@ -14,6 +14,7 @@ import {
   waitForBookQueuesIdleForTests,
 } from "./queue.js";
 import { withProviderHandoff } from "./jobs/_lease.js";
+import { testBudget } from "./test-budget.js";
 
 describe("server queue (Dolt-native)", () => {
   let projectsDir: string;
@@ -121,7 +122,7 @@ describe("server queue (Dolt-native)", () => {
     expect(result.ok).toBe(true);
 
     const start = Date.now();
-    while (Date.now() - start < 5_000) {
+    while (Date.now() - start < testBudget(5_000)) {
       const status = await appQueue.getStatus("sync-child-probe");
       if (status?.state === "completed") {
         expect(childSawReady).toBe(true);
@@ -150,7 +151,7 @@ describe("server queue (Dolt-native)", () => {
     // index entry, so memory can't grow unbounded across fire-and-forget jobs.
     const start = Date.now();
     let sawCompleted = false;
-    while (Date.now() - start < 5_000) {
+    while (Date.now() - start < testBudget(5_000)) {
       const status = await appQueue.getStatus("index-cleanup-probe");
       if (status?.state === "completed") {
         sawCompleted = true;
@@ -200,7 +201,7 @@ describe("server queue (Dolt-native)", () => {
         index,
       });
     }
-    const runningDeadline = Date.now() + 5_000;
+    const runningDeadline = Date.now() + testBudget(5_000);
     while (started.length < blockers.length && Date.now() < runningDeadline) {
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
     }
@@ -215,7 +216,7 @@ describe("server queue (Dolt-native)", () => {
       payload: { type: "prepare_search_reference", bookId },
     });
     try {
-      const preferredDeadline = Date.now() + 5_000;
+      const preferredDeadline = Date.now() + testBudget(5_000);
       while (
         cfs.jobs.queue.get(preferred.job.id)?.state !== "done"
         && Date.now() < preferredDeadline

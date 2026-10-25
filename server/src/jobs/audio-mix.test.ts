@@ -9,6 +9,7 @@ import { type Engine } from "videobook-engine";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { resolveAudioMixAsset } from "../tools/audio-mix.js";
 import { buildAudioMixFilter, mixAudioMedia } from "./audio-mix.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -114,7 +115,7 @@ describe("audio mix", () => {
     expect(output.hasAudio).toBe(true);
     expect(output.videoDuration).toBeCloseTo(2, 1);
     expect(output.audioDuration).toBeCloseTo(2, 1);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("mixes a video layer into an audio target at the requested volume", async () => {
     const targetPath = join(tempDir, "tone-target.wav");
@@ -158,5 +159,5 @@ describe("audio mix", () => {
     const baseAmplitude = projectedAmplitude(samples, 440, 48_000);
     const layerAmplitude = projectedAmplitude(samples, 880, 48_000);
     expect(layerAmplitude / baseAmplitude).toBeCloseTo(0.25, 1);
-  }, 30_000);
+  }, testBudget(30_000));
 });

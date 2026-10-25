@@ -7,6 +7,7 @@ import { createEngineForTest } from "../engine.js";
 import { waitForAssetReadyDef } from "./wait-for-asset-ready.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { testBudget } from "../test-budget.js";
 
 describe("wait_for_asset_ready tool", () => {
   let client: Client;
@@ -122,7 +123,7 @@ describe("waitForAssetReadyDef handler", () => {
         process.env.KIE_API_KEY = savedKey;
       }
     }
-  }, 15_000);
+  }, testBudget(15_000));
 
   it("does not report ready before an enqueued job claims its asset", async () => {
     const assetResult = await fs.artifacts.create("img", "queued-asset");

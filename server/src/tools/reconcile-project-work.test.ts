@@ -7,6 +7,7 @@ import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { testBudget } from "../test-budget.js";
 
 async function writeNativeFile(
   fs: Engine,
@@ -327,7 +328,7 @@ describe("buildAssetList", () => {
         "original",
       );
       expect(meta.ok && typeof meta.value.duration === "number").toBe(true);
-    }, { timeout: 10_000, interval: 50 });
+    }, { timeout: testBudget(10_000), interval: 50 });
 
     const assets = await buildAssetList(fs, fs.book.get().bookId);
     expect(assets[0].duration).toBeGreaterThan(1.2);

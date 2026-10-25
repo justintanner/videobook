@@ -13,6 +13,7 @@ import { deleteAssetDef } from '../../server/src/tools/delete-asset.js'
 import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 import { searchWithPreparation } from '../../src/videobook/search-preparation.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 let root: string | undefined
 let books: BookManager | undefined
@@ -155,5 +156,5 @@ it.each([
       { modalities: ['visual'] }, searchReferenceStore.get(referenceId).reference,
     ))
     expect(replacement.hits[0]?.artifactId).toBe(replacementId)
-  }, 30_000,
+  }, testBudget(30_000),
 )

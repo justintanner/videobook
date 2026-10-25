@@ -14,6 +14,7 @@ import {
   registerCompleteProviderTaskJob,
 } from "./complete-provider-task.js";
 import { registerProcessImageJob } from "./process-image.js";
+import { testBudget } from "../test-budget.js";
 
 // 1x1 PNG
 const TINY_PNG = Buffer.from(
@@ -137,7 +138,7 @@ describe("complete_kie_task media generations", () => {
     await expect.poll(async () => {
       const result = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
       return result.ok ? result.value : null;
-    }, { timeout: 10_000 }).toMatchObject({
+    }, { timeout: testBudget(10_000) }).toMatchObject({
       model: "kie:gpt-image-2-5-sunburst-text-to-image", prompt: "a cat", width: 1, height: 1, download_url: imageUrl,
     });
   });
@@ -196,7 +197,7 @@ describe("complete_kie_task media generations", () => {
     expect(result.success).toBe(true);
     const original = await readOriginal(cfs, assetId, "original.mp4");
     expect(original.ok).toBe(true);
-    await expect.poll(() => processed.length, { timeout: 10_000 }).toBe(1);
+    await expect.poll(() => processed.length, { timeout: testBudget(10_000) }).toBe(1);
     expect(processed[0]).toMatchObject({ assetId, provenance: { model: "kie:bytedance/seedance-2-5", prompt: "waves" } });
   });
 
@@ -224,7 +225,7 @@ describe("complete_kie_task media generations", () => {
     }, 10_000);
     expect(result.success).toBe(true);
     expect((await readOriginal(cfs, assetId, "original.mp4")).ok).toBe(true);
-    await expect.poll(() => processed.length, { timeout: 10_000 }).toBe(1);
+    await expect.poll(() => processed.length, { timeout: testBudget(10_000) }).toBe(1);
     expect(processed[0]).toMatchObject({
       assetId,
       provenance: {
@@ -269,7 +270,7 @@ describe("complete_kie_task media generations", () => {
     expect(work.ok ? work.value?.status : "fail").not.toBe("error");
     const pendingAfter = await cfs.jobs.pending.read(assetId);
     expect(pendingAfter.ok ? pendingAfter.value : "fail").toBeNull();
-    await expect.poll(() => processed.length, { timeout: 10_000 }).toBe(1);
+    await expect.poll(() => processed.length, { timeout: testBudget(10_000) }).toBe(1);
   });
 
   it("fails an unknown provider task instead of silently completing it", async () => {

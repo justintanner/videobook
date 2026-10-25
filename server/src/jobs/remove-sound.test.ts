@@ -18,6 +18,7 @@ import {
   type RemoveSoundPayload,
   type SoundEvent,
 } from "./remove-sound.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -210,7 +211,7 @@ describe("remove sound ElevenLabs job", () => {
     const waveform = await fs.metadata.waveforms.read(created.value.artifactId);
     expect(waveform.ok).toBe(true);
     if (waveform.ok) expect(waveform.value.peaks.length).toBeGreaterThan(0);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("silences the matched window of a vid-* asset without touching the video stream", async () => {
     const sourcePath = join(tempDir, "source.mp4");
@@ -250,7 +251,7 @@ describe("remove sound ElevenLabs job", () => {
     const bars = quietAndLoudBars(peaks, 6);
     expect(Math.max(...bars.horse)).toBeLessThan(0.01);
     expect(Math.min(...bars.dog)).toBeGreaterThan(0.1);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("reports detected events when the description matches nothing", async () => {
     const sourcePath = join(tempDir, "source.mp3");
@@ -279,5 +280,5 @@ describe("remove sound ElevenLabs job", () => {
     };
     await expect(removeSoundWithElevenLabs(fs, payload, await makeProvider()))
       .rejects.toThrow(/No audio event matching "car engine".*horse neighing.*dog barking/);
-  }, 30_000);
+  }, testBudget(30_000));
 });

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -170,5 +171,5 @@ describe("transcribe tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("Transcription failed");
-  }, 60_000);
+  }, testBudget(60_000));
 });

@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { FFPROBE } from "../ffprobe-binary.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -78,7 +79,7 @@ async function upload(
   return JSON.parse((result.content as TextContent)[0].text) as UploadedAsset;
 }
 
-async function waitForJob(jobId: string, timeoutMs = 120_000): Promise<void> {
+async function waitForJob(jobId: string, timeoutMs = testBudget(120_000)): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const status = await queue.getStatus(jobId);
@@ -200,12 +201,12 @@ describe("inject_first_frame tool", () => {
       generateVideo(videoFixture),
       generateImage(imageFixture),
     ]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-inject-first-frame-test-"));
@@ -215,13 +216,13 @@ describe("inject_first_frame tool", () => {
       name: "create_project",
       arguments: { book_id: bookId },
     });
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterEach(async () => {
     await client?.close();
     fs?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("replaces only frame zero of a vid asset and preserves encoded audio and timing", async () => {
     const video = await upload(client, bookId, "blue.mp4", videoFixture);
@@ -261,7 +262,7 @@ describe("inject_first_frame tool", () => {
     expect(first.blue).toBeLessThan(80);
     expect(second.blue).toBeGreaterThan(180);
     expect(second.red).toBeLessThan(80);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("uses the active final orientation and leaves other final outputs untouched", async () => {
     const video = await upload(client, bookId, "blue.mp4", videoFixture);
@@ -343,7 +344,7 @@ describe("inject_first_frame tool", () => {
     expect(first.blue).toBeLessThan(80);
     expect(second.blue).toBeGreaterThan(180);
     expect(second.red).toBeLessThan(80);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("rejects invalid target, image, and orientation combinations", async () => {
     const video = await upload(client, bookId, "blue.mp4", videoFixture);
@@ -379,5 +380,5 @@ describe("inject_first_frame tool", () => {
       },
     });
     expect(invalidOrientation.isError).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 });

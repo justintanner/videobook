@@ -19,6 +19,7 @@ Guidance for AI coding agents working in the Videobook repository.
 | `npm run pack:package` | Pack the publishable `videobook` package into .artifacts/ |
 | `npm run lint` | ESLint all *.ts/*.tsx files |
 | `npm run test` | Run all vitest integration tests |
+| `npm run test:ci` | The suite as CI runs it: vitest without the two smooth-scene-concat files, then those serially |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:e2e` | E2E tests with vitest.e2e.config.ts |
 | `npm run preview` | Preview the production build locally |
@@ -188,6 +189,9 @@ Treat each `useEffect` as technical debt. **No MCP tool calls in effects** — u
 ### Testing
 - Write **integration tests with real dependencies** (zero mocks)
 - Example test pattern: see existing tests in `server/src/tools/*.test.ts`
+- Test budgets scale with host load through `server/src/test-budget.ts`. `vitest.config.ts` multiplies `testTimeout` (real-media and FFmpeg tests), `hookTimeout` (fixture setup) and the `expect.poll` timeout (probe/poll) by one factor per run and hands that factor to every worker. Pass any other budget (a test or hook timeout, a poll timeout, a job or chain wait, a deadline, a subprocess timeout) through `testBudget(ms)` instead of a bare literal. Latency assertions stay fixed.
+- The factor is 1 on GitHub Actions; locally it is (1-minute load average + workers) / cores, from 1 to 6. `VIDEOBOOK_TEST_TIME_SCALE` overrides it.
+- Workers are 2 on GitHub Actions; locally cores − 2 (at most 8), minus two for each full multiple of the core count in the 1-minute load average, never below 2. `VIDEOBOOK_TEST_WORKERS` overrides them; set it instead of `--maxWorkers` so the factor counts the same workers. When sharding `test:ci` on a shared host, run `vitest run --shard=i/N` with its two `--exclude` flags and no `--maxWorkers`, then the serial smooth-scene-concat step.
 
 ## Environment Variables
 

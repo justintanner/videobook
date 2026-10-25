@@ -33,6 +33,7 @@ import {
   notebookCellActionPresentation,
   notebookCellIsActiveStatus,
 } from "../../src/videobook/notebook-cell-presentation";
+import { testBudget } from "../../server/src/test-budget.js";
 
 function resultJson(result: Awaited<ReturnType<ToolDef["handler"]>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined();
@@ -500,8 +501,8 @@ describe("unstacked generation run and await", () => {
       runId: input.runId,
       ...(input.outputCellId ? { outputCellId: input.outputCellId } : {}),
     });
-    await waitForJob(awaitJobId, 30_000);
-    await waitForJob(`resume-notebook-${input.runId}`, 30_000);
+    await waitForJob(awaitJobId, testBudget(30_000));
+    await waitForJob(`resume-notebook-${input.runId}`, testBudget(30_000));
   }
 
   it("keeps a generate_video producer idle after an accepted provider-active run", async () => {
@@ -656,5 +657,5 @@ describe("unstacked generation run and await", () => {
     }
     expect(listGenerateImageOutputs(imageDoc.value, image.cell.id)).toHaveLength(3);
     expect(listGenerateVideoOutputs(videoDoc.value, videoCell.id)).toHaveLength(3);
-  }, 60_000);
+  }, testBudget(60_000));
 });

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { spliceVideoChain, spliceVideoFiles } from "./splice-video.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -36,7 +37,7 @@ describe("splice video files", () => {
       "-pix_fmt", "yuv420p",
       secondPath,
     ]);
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await rm(tempDir, { recursive: true, force: true });
@@ -67,7 +68,7 @@ describe("splice video files", () => {
       score: null,
     });
     expect(output.videoDuration).toBeCloseTo(first.videoDuration + second.videoDuration, 1);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("only searches for a match inside the requested tail overlap", async () => {
     const first = await probeVideo(firstPath);
@@ -93,7 +94,7 @@ describe("splice video files", () => {
     expect(result.frameIndex).not.toBeNull();
     expect(result.score).not.toBeNull();
     expect(output.videoDuration).toBeCloseTo(result.timestamp + second.videoDuration, 1);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("concatenates three complete clips in order", async () => {
     const first = await probeVideo(firstPath);
@@ -129,7 +130,7 @@ describe("splice video files", () => {
       first.videoDuration + second.videoDuration + third.videoDuration,
       1,
     );
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects a completed file whose duration is shorter than both clips", async () => {
     const first = await probeVideo(firstPath);
@@ -146,7 +147,7 @@ describe("splice video files", () => {
       withAudio: false,
       overlap: 0,
     })).rejects.toThrow("does not match expected");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects negative overlap", async () => {
     const first = await probeVideo(firstPath);

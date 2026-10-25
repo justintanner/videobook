@@ -10,6 +10,7 @@ import { FFPROBE } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { planEvenSplit } from "./even-split.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -241,13 +242,13 @@ describe("even_split tool (integration)", () => {
       materialize("thirty-30s-multi.mp4", 30),
       materialize("dest-empty-3s.mp4", 3),
     ]);
-  }, 120_000);
+  }, testBudget(120_000));
 
   afterAll(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects sources too short for any split", async () => {
     // Default target is 7s; a 2s source can't be split with the [7] backup
@@ -263,7 +264,7 @@ describe("even_split tool (integration)", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("too short");
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("splits a 14s source into [7, 7] with default target", async () => {
     const result = await client.callTool({
@@ -303,7 +304,7 @@ describe("even_split tool (integration)", () => {
       arguments: { asset_id: source14s.assetId, book_id: "even-split-proj" },
     });
     expect(sourceManifest.isError).toBeFalsy();
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("splits a 21s source into [7, 7, 7] with explicit per-scene targets", async () => {
     const result = await client.callTool({
@@ -333,7 +334,7 @@ describe("even_split tool (integration)", () => {
       expect(dur).toBeLessThanOrEqual(7);
       expect(dur).toBeGreaterThan(6.5);
     }
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("accepts target_secs as strings with 's' suffix (chat-style)", async () => {
     const result = await client.callTool({
@@ -349,7 +350,7 @@ describe("even_split tool (integration)", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.used_target_secs).toEqual([10]);
     await waitForJob(parsed.job_id);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("splits a 30s source with two targets [10, 15] into 3 chunks", async () => {
     const result = await client.callTool({
@@ -387,7 +388,7 @@ describe("even_split tool (integration)", () => {
       expect(dur).toBeLessThanOrEqual(expectedDurations[i] + 0.05);
       expect(dur).toBeGreaterThan(expectedDurations[i] - 0.5);
     }
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
@@ -463,7 +464,7 @@ describe("even_split tool (integration)", () => {
         expect(dur).toBeLessThanOrEqual(7.05);
         expect(dur).toBeGreaterThan(6.5);
       }
-    }, 180_000);
+    }, testBudget(180_000));
 
     it("rejects filenames length mismatch with target_secs", async () => {
       const result = await client.callTool({
@@ -478,7 +479,7 @@ describe("even_split tool (integration)", () => {
 
       expect(result.isError).toBe(true);
       expect((result.content as TextContent)[0].text).toContain("must equal target_secs length");
-    }, 60_000);
+    }, testBudget(60_000));
 
     it("rejects when a destination filename already exists", async () => {
       // dest already has `original.mp4`; pick that as a collision filename.
@@ -494,7 +495,7 @@ describe("even_split tool (integration)", () => {
 
       expect(result.isError).toBe(true);
       expect((result.content as TextContent)[0].text).toContain("Refusing silent overwrite");
-    }, 60_000);
+    }, testBudget(60_000));
 
     it("rejects when destination asset does not exist", async () => {
       const result = await client.callTool({
@@ -509,6 +510,6 @@ describe("even_split tool (integration)", () => {
 
       expect(result.isError).toBe(true);
       expect((result.content as TextContent)[0].text).toContain("not found");
-    }, 60_000);
+    }, testBudget(60_000));
   });
 });

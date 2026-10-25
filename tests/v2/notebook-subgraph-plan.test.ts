@@ -13,6 +13,7 @@ import {
   planSelectedNotebookSubgraph,
 } from "../../server/src/notebook-run-plan.js";
 import { setEngineRoot, stopBookQueue, waitForJob } from "../../server/src/queue.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 describe("selected notebook subgraph planning", () => {
   let rootDir: string | undefined;
@@ -309,7 +310,7 @@ describe("selected notebook subgraph planning", () => {
       }),
     ]);
 
-    await waitForJob(queued.jobId!, 30_000).catch(() => undefined);
+    await waitForJob(queued.jobId!, testBudget(30_000)).catch(() => undefined);
     const after = engine.notebooks.read(document.value.id);
     expect(after.ok).toBe(true);
     if (!after.ok) throw new Error(after.error.message);

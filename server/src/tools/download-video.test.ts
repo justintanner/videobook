@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -18,7 +19,7 @@ describe("download_video tool", () => {
 
   afterAll(async () => {
     await queue.stop();
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-download-video-test-"));

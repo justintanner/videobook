@@ -28,6 +28,7 @@ import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { saveWatermarkProfile } from "../watermark-config.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import type { GoalSnapshot } from "./goal.js";
+import { testBudget } from "../test-budget.js";
 
 const SUNBURST_EDIT_MODEL = "kie:gpt-image-2-5-sunburst-image-to-image";
 const brief = "@a1@a2 make a funny video of a dog on a skateboard, three 10s clips";
@@ -313,7 +314,7 @@ describe("staged video goals through MCP", () => {
       const step = getChainRun(engine, chainId)?.steps[0];
       const artifactId = step?.outputs?.asset_id;
       return step?.status === "running" && typeof artifactId === "string" && step.childJobIds.length > 0;
-    }, { timeout: 15_000 }).toBe(true);
+    }, { timeout: testBudget(15_000) }).toBe(true);
     const step = getChainRun(engine, chainId)!.steps[0]!;
     const artifactId = String(step.outputs?.asset_id);
     if (kind === "image") {
@@ -327,9 +328,9 @@ describe("staged video goals through MCP", () => {
       await registerMediaProbe(engine, artifactId, "original.mp4", await probeVideo(path));
     }
     await completeProviderJob(artifactId);
-    await expect.poll(() => engine.jobs.queue.list().some(job => job.type === "await_notebook_output" && job.payload.providerArtifactId === artifactId), { timeout: 15_000 }).toBe(true);
+    await expect.poll(() => engine.jobs.queue.list().some(job => job.type === "await_notebook_output" && job.payload.providerArtifactId === artifactId), { timeout: testBudget(15_000) }).toBe(true);
     await resumeBookQueueForTests(bookId);
-    await expect.poll(() => getChainRun(engine, chainId)?.status, { timeout: 20_000 }).toBe("completed");
+    await expect.poll(() => getChainRun(engine, chainId)?.status, { timeout: testBudget(20_000) }).toBe("completed");
     await pauseBookQueueForTests(bookId);
     return artifactId;
   }
@@ -810,7 +811,7 @@ describe("staged video goals through MCP", () => {
     await stopBookQueue(bookId);
     const combining = await invoke({ action: "combine", goal_id: goal.goalId });
     expect((await invoke({ action: "combine", goal_id: goal.goalId })).combined?.artifactId).toBe(combining.combined!.artifactId);
-    await expect.poll(async () => (await invoke({ action: "status", goal_id: goal.goalId })).combined?.status, { timeout: 20_000 }).toBe("completed");
+    await expect.poll(async () => (await invoke({ action: "status", goal_id: goal.goalId })).combined?.status, { timeout: testBudget(20_000) }).toBe("completed");
     const combined = (await invoke({ action: "status", goal_id: goal.goalId })).combined!;
     const manifest = await engine.files.manifest(combined.artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
@@ -1137,7 +1138,7 @@ describe("staged video goals through MCP", () => {
     const classic = await create({ brief: `${classicBrief} make a funny video of a dog on a skateboard, three 10s clips` });
     expect(classic.planVersion).toBe(2);
     expect(classic.plan).toMatchObject({ version: 2 });
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("approves a v3 scene then a video and stops at finishing review", async () => {
     const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
@@ -1214,7 +1215,7 @@ describe("staged video goals through MCP", () => {
     expect(restored.stages.frame?.outputs[0]?.artifactId).toBe(sceneArtifactId);
     expect(restored.finish).toMatchObject({ status: "review", sourceArtifactId: videoArtifactId, finalArtifactId: null });
     expect(engine.sequences.getPrimary().clips).toHaveLength(0);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("saves a v3 title and prompt without rewriting settings or a title-only finish", async () => {
     const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
@@ -1269,16 +1270,16 @@ describe("staged video goals through MCP", () => {
     expect(reopened.status).toBe("review");
     expect(reopened.finalArtifactId).toBeNull();
     expect(reopened.finish).toBeNull();
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("retries an interrupted v3 scene unless the reference changed, including a video-only goal", async () => {
     const goal = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
     await pauseBookQueueForTests(bookId);
     const started = await approve(goal);
-    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: testBudget(15_000) }).toBe(1);
     const providerArtifactId = String(getChainRun(engine, started.chainId!)!.steps[0]!.outputs?.asset_id);
     expect(await engine.jobs.queue.abort(providerJob(providerArtifactId).id, "Fixture generation stopped")).toBe(true);
-    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: testBudget(15_000) }).toBe("failed");
     const chain = getChainRun(engine, started.chainId!)!;
     const store = engine.settings.get<{ runs: Record<string, typeof chain>; requestIndex: Record<string, string> }>("application.chain-runs.v1") ?? { runs: {}, requestIndex: {} };
     const restored = engine.settings.set("application.chain-runs.v1", {
@@ -1293,11 +1294,11 @@ describe("staged video goals through MCP", () => {
     const retried = await invoke({ action: "retry", goal_id: goal.goalId });
     expect(retried.status).toBe("running");
     expect(retried.chainId).toBe(started.chainId);
-    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: testBudget(15_000) }).toBe(1);
     const runningArtifactId = String(getChainRun(engine, retried.chainId!)!.steps[0]!.outputs?.asset_id);
     const aborted = await engine.jobs.queue.abort(providerJob(runningArtifactId).id, "Fixture generation stopped");
     expect(aborted).toBe(true);
-    await expect.poll(() => getChainRun(engine, retried.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.status, { timeout: testBudget(15_000) }).toBe("failed");
     const failed = await status(goal.goalId);
     expect(failed.status).toBe("failed");
     const rewritten = await engine.files.write(imageIds[0]!, "original.png", await sharp({ create: { width: 32, height: 32, channels: 3, background: "#111111" } }).png().toBuffer());
@@ -1326,7 +1327,7 @@ describe("staged video goals through MCP", () => {
     expect(pins).toHaveLength(2);
     await invoke({ action: "cancel", goal_id: videoOnly.goalId });
     await waitForChainRun(engine, video.chainId!);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("loads, edits, approves and retries a v3 goal saved with the earlier 2K scene default", async () => {
     const created = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
@@ -1367,21 +1368,21 @@ describe("staged video goals through MCP", () => {
     await pauseBookQueueForTests(bookId);
     const started = await approve(edited);
     expect(getChainRun(engine, started.chainId!)!.steps[0]!.params.options).toMatchObject({ aspect_ratio: "16:9", resolution: "2K" });
-    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.steps[0]?.childJobIds.length, { timeout: testBudget(15_000) }).toBe(1);
     const providerArtifactId = String(getChainRun(engine, started.chainId!)!.steps[0]!.outputs?.asset_id);
     expect(providerJob(providerArtifactId).payload).toMatchObject({ options: { aspect_ratio: "16:9", resolution: "2K" } });
     expect(await engine.jobs.queue.abort(providerJob(providerArtifactId).id, "Fixture generation stopped")).toBe(true);
-    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: 15_000 }).toBe("failed");
+    await expect.poll(() => getChainRun(engine, started.chainId!)?.status, { timeout: testBudget(15_000) }).toBe("failed");
     expect((await status(created.goalId)).status).toBe("failed");
 
     const retried = await invoke({ action: "retry", goal_id: created.goalId });
     expect(retried).toMatchObject({ status: "running", chainId: started.chainId, plan: { scene: { resolution: "2K" } } });
-    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: 15_000 }).toBe(1);
+    await expect.poll(() => getChainRun(engine, retried.chainId!)?.steps[0]?.childJobIds.length, { timeout: testBudget(15_000) }).toBe(1);
     const retriedArtifactId = String(getChainRun(engine, retried.chainId!)!.steps[0]!.outputs?.asset_id);
     expect(providerJob(retriedArtifactId).payload).toMatchObject({ options: { aspect_ratio: "16:9", resolution: "2K" } });
     await invoke({ action: "cancel", goal_id: created.goalId });
     await waitForChainRun(engine, retried.chainId!);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("refuses to finish a v2 goal with a cold open", async () => {
     const goal = await create();
@@ -1435,7 +1436,7 @@ describe("staged video goals through MCP", () => {
         await expect.poll(async () => {
           latest = await status(goalId);
           return `${latest.status}:${latest.finish?.status ?? "none"}:${latest.finish?.error ?? ""}`;
-        }, { timeout: 120_000, interval: 500 }).toBe("completed:completed:");
+        }, { timeout: testBudget(120_000), interval: 500 }).toBe("completed:completed:");
       } finally {
         await pauseBookQueueForTests(bookId);
       }
@@ -1645,5 +1646,5 @@ describe("staged video goals through MCP", () => {
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
     expect(await mediaHash(videoArtifactId)).toBe(sourceHash);
     expect(await mediaHash(finalBefore)).toBe(finalBeforeHash);
-  }, 300_000);
+  }, testBudget(300_000));
 });

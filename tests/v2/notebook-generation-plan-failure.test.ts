@@ -8,6 +8,7 @@ import { registerGenerateMediaJob } from "../../server/src/jobs/generate-media.j
 import { registerRunNotebookJob } from "../../server/src/jobs/run-notebook.js";
 import { setEngineRoot, stopBookQueue } from "../../server/src/queue.js";
 import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 describe("generation plan after an asynchronous provider failure", () => {
   let rootDir: string;
@@ -76,7 +77,7 @@ describe("generation plan after an asynchronous provider failure", () => {
       await expect.poll(
         () => engine.jobs.queue.list({ type: "run_notebook" })
           .find((job) => job.payload.resume === true)?.state,
-        { timeout: 30_000 },
+        { timeout: testBudget(30_000) },
       ).toBe("failed");
 
       expect(engine.jobs.queue.list({ type: "generate_media" })).toEqual([
@@ -105,5 +106,5 @@ describe("generation plan after an asynchronous provider failure", () => {
     } finally {
       await stopBookQueue(bookId);
     }
-  }, 60_000);
+  }, testBudget(60_000));
 });

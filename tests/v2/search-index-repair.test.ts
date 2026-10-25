@@ -14,6 +14,7 @@ import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import { repairSearchIndexes } from '../../src/videobook/search-index-repair.js'
 import { installLocalSearchProviderFixtures, registerLocalClipSearchProvider } from '../../server/src/local-search-models.js'
 import { runFfmpeg } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 function value<T>(result: Result<T>): T {
   if (!result.ok) throw new Error(result.error.message)
@@ -124,12 +125,12 @@ it('returns queued repair work promptly and reports missing models without faili
   ])
   expect(value(engine.jobs.artifactWork.read(id))).toMatchObject({ status: 'ready', ownerId: null })
   expect((await searchLibraryAssets(books, { kinds: ['image'], indexCoverage: true })).unindexed_visual_assets).toBe(1)
-}, 20_000)
+}, testBudget(20_000))
 
 it('completes an empty repair without loading models', async () => {
   await startQueue()
   expect(await repair()).toEqual({ indexed: 0, failed: 0, failures: [] })
-}, 20_000)
+}, testBudget(20_000))
 
 it('repairs images and frameless videos, continues past corrupt media, and skips repaired assets on retry', async () => {
   await startQueue()
@@ -179,7 +180,7 @@ it('repairs images and frameless videos, continues past corrupt media, and skips
   expect(await repair()).toMatchObject({ indexed: 0, failed: 1 })
   expect(engine.catalogIntegrity().tableRowCounts.runtime_segment_embeddings).toBe(counts.runtime_segment_embeddings)
   for (const id of [imageId, videoId, brokenId]) expect(value(engine.jobs.artifactWork.read(id))).toMatchObject({ status: 'ready', ownerId: null })
-}, 120_000)
+}, testBudget(120_000))
 
 it('honors cancellation before changing index coverage or media', async () => {
   const id = await source()

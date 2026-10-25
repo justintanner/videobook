@@ -14,6 +14,7 @@ import type { Client } from "@modelcontextprotocol/client";
 import { withBookContext } from "../book-context.js";
 import { chatActionPlanSchema, prepareVoiceChatAction } from "./chat.js";
 import { previewGeneration } from "../media/preview.js";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -220,7 +221,7 @@ describe("chain MCP tool", () => {
   }
 
   async function waitPublic(chainId: string): Promise<Record<string, unknown>> {
-    const record = await waitForChainRun(engine, chainId, 180_000);
+    const record = await waitForChainRun(engine, chainId, testBudget(180_000));
     return {
       kind: "chain-run",
       chain_id: record.chainId,
@@ -279,7 +280,7 @@ describe("chain MCP tool", () => {
     await setupBook("pause-paid");
     const accepted = await runChain(extractThenGenerate());
     const chainId = String(accepted.chain_id);
-    const settled = await waitForChainRun(engine, chainId, 180_000);
+    const settled = await waitForChainRun(engine, chainId, testBudget(180_000));
     expect(settled.status).toBe("awaiting-approval");
     expect(settled.awaitingStepId).toBe("animate");
 
@@ -301,14 +302,14 @@ describe("chain MCP tool", () => {
       { id: "manifest", tool: "asset_manifest", params: { asset_id: "@b2" } },
     ]);
     const chainId = String(accepted.chain_id);
-    await waitForChainRun(engine, chainId, 180_000);
+    await waitForChainRun(engine, chainId, testBudget(180_000));
 
     const cancelled = await chainAction("cancel", chainId);
     expect(cancelled.status).toBe("cancelled");
     const steps = publicSteps(cancelled);
     expect(steps.map((step) => step.status)).toEqual(["completed", "rejected", "skipped"]);
     // The frame the first step made is still there; cancelling rolls nothing back.
-    const finished = await waitForChainRun(engine, chainId, 180_000);
+    const finished = await waitForChainRun(engine, chainId, testBudget(180_000));
     const frameId = String(finished.steps[0]?.outputs?.image_asset_id);
     expect(engine.artifacts.get(frameId).ok).toBe(true);
   });
@@ -317,7 +318,7 @@ describe("chain MCP tool", () => {
     await setupBook("approve-once");
     const accepted = await runChain(extractThenGenerate());
     const chainId = String(accepted.chain_id);
-    await waitForChainRun(engine, chainId, 180_000);
+    await waitForChainRun(engine, chainId, testBudget(180_000));
 
     const approved = await chainAction("approve", chainId, { step_id: "animate", actor: "chat" });
     expect(approved.awaiting_step_id).toBeNull();
@@ -325,7 +326,7 @@ describe("chain MCP tool", () => {
 
     // No provider key in tests, so the dispatch this approval authorised fails at
     // the key guard rather than reaching a provider. The transition is the point.
-    const settled = await waitForChainRun(engine, chainId, 180_000);
+    const settled = await waitForChainRun(engine, chainId, testBudget(180_000));
     expect(settled.status).toBe("failed");
     expect(settled.steps[1]?.error).toContain("KIE_API_KEY");
 
@@ -342,7 +343,7 @@ describe("chain MCP tool", () => {
     await setupBook("restart-paused");
     const accepted = await runChain(extractThenGenerate());
     const chainId = String(accepted.chain_id);
-    await waitForChainRun(engine, chainId, 180_000);
+    await waitForChainRun(engine, chainId, testBudget(180_000));
 
     const { resumeOpenChains } = await import("../chain-executor.js");
     const { getAllToolDefs } = await import("./index.js");
@@ -385,7 +386,7 @@ describe("chain MCP tool", () => {
     const applied = await client.callTool({ name: "chat", arguments: { book_id: bookId, action_plan: plan } });
     expect(applied.isError, JSON.stringify(applied.content)).toBeFalsy();
     const chainId = String(parseText(applied).chain_id);
-    const paused = await waitForChainRun(engine, chainId, 15_000);
+    const paused = await waitForChainRun(engine, chainId, testBudget(15_000));
     expect(paused.status).toBe("awaiting-approval");
     expect(paused.awaitingStepId).toBe("ambience");
     expect(paused.steps[0]?.review?.params.options).toEqual({ duration_seconds: targetDuration });
@@ -394,7 +395,7 @@ describe("chain MCP tool", () => {
     });
     expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
     await chainAction("approve", chainId, { step_id: "ambience" });
-    await expect.poll(() => getChainRun(engine, chainId)?.steps[0]?.outputs?.cell_id, { timeout: 15_000 }).toBeTypeOf("string");
+    await expect.poll(() => getChainRun(engine, chainId)?.steps[0]?.outputs?.cell_id, { timeout: testBudget(15_000) }).toBeTypeOf("string");
     const pending = getChainRun(engine, chainId)!;
     const audioId = String(pending.steps[0]?.outputs?.asset_id);
     const outputCellId = String(pending.steps[0]?.outputs?.cell_id);
@@ -414,7 +415,7 @@ describe("chain MCP tool", () => {
     if (!providerJob) throw new Error("Missing queued audio generation");
     if (outcome === "failed") {
       expect(await engine.jobs.queue.fail(providerJob.id, { error: { message: "Audio provider failed" }, allowRetry: false }, providerJob.fence)).toBe(true);
-      const failed = await waitForChainRun(engine, chainId, 15_000);
+      const failed = await waitForChainRun(engine, chainId, testBudget(15_000));
       expect(failed.status).toBe("failed");
       expect(failed.steps.map(step => step.status)).toEqual(["failed", "skipped", "skipped", "skipped"]);
       const failedNotebook = engine.notebooks.read(notebookId);
@@ -430,7 +431,7 @@ describe("chain MCP tool", () => {
     expect(Math.abs((await probeVideo(audioPath)).duration - targetDuration)).toBeLessThan(0.15);
     expect(await engine.jobs.queue.complete(providerJob.id, { result: { success: true } })).toBe(true);
     await resumeBookQueueForTests(actualBookId);
-    const mixed = await waitForChainRun(engine, chainId, 60_000);
+    const mixed = await waitForChainRun(engine, chainId, testBudget(60_000));
     expect(mixed.status, mixed.error ?? "").toBe("awaiting-approval");
     expect(mixed.awaitingStepId).toBe("sfx");
     expect(mixed.steps.map(step => step.status)).toEqual(["completed", "completed", "awaiting-approval", "pending"]);
@@ -447,10 +448,10 @@ describe("chain MCP tool", () => {
       expect(amplitude).toBeGreaterThan(0.015);
     }
     await chainAction("cancel", chainId);
-    const cancelled = await waitForChainRun(engine, chainId, 15_000);
+    const cancelled = await waitForChainRun(engine, chainId, testBudget(15_000));
     expect(cancelled.steps.map(step => step.status)).toEqual(["completed", "completed", "rejected", "skipped"]);
     expect(engine.jobs.queue.list({ type: "apply_sfx" })).toHaveLength(0);
-  }, 90_000);
+  }, testBudget(90_000));
 
   it.each(["chat", "list_jobs", "analyze_video"])("continues a background audio request to review through %s", async tool => {
     await setupBook(`audio-routing-${tool}`, 28);
@@ -476,7 +477,7 @@ describe("chain MCP tool", () => {
     ]);
     const applied = await client.callTool({ name: "chat", arguments: { book_id: bookId, action_plan: plan } });
     expect(applied.isError, JSON.stringify(applied.content)).toBeFalsy();
-    const run = await waitForChainRun(engine, String(parseText(applied).chain_id), 15_000);
+    const run = await waitForChainRun(engine, String(parseText(applied).chain_id), testBudget(15_000));
     expect(run.status, run.error ?? "").toBe("awaiting-approval");
     expect(run.awaitingStepId).toBe("ambience");
     const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
@@ -492,7 +493,7 @@ describe("chain MCP tool", () => {
       { id: "sound", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "A wooden knock", options: { duration_seconds: duration } } },
       { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "sound", output: "asset_id" } }, volume: 50 } },
     ]);
-    const run = await waitForChainRun(engine, String(accepted.chain_id), 15_000);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), testBudget(15_000));
     expect(run.status).toBe("awaiting-approval");
     const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
     if (!metadata.ok) throw new Error(metadata.error.message);
@@ -507,13 +508,13 @@ describe("chain MCP tool", () => {
       { id: "music", tool: "generate_audio", params: { model: "elevenlabs:music", prompt: "Rhythmic woodworking ambience" } },
       { id: "replace", tool: "replace_video_audio", params: { asset_id: { $ref: { step_id: "trim", output: "asset_id" } }, audio_asset_id: { $ref: { step_id: "music", output: "asset_id" } } } },
     ]);
-    const run = await waitForChainRun(engine, String(accepted.chain_id), 60_000);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), testBudget(60_000));
     expect(run.status, run.error ?? "").toBe("awaiting-approval");
     const metadata = await engine.metadata.artifacts.read<{ duration: number }>(targetId, "original");
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(run.steps[1]?.review?.params.options).toEqual({ music_length_ms: Math.round(metadata.value.duration * 1_000) });
     await chainAction("cancel", run.chainId);
-  }, 90_000);
+  }, testBudget(90_000));
 
   it("rejects an unsupported target length before audio generation can spend", async () => {
     await setupBook("long-audio-duration", 31);
@@ -521,7 +522,7 @@ describe("chain MCP tool", () => {
       { id: "sound", tool: "generate_audio", params: { model: "elevenlabs:sound-generation", prompt: "Woodworking ambience" } },
       { id: "mix", tool: "audio_mix", params: { target_asset_id: "@c4", layer_asset_id: { $ref: { step_id: "sound", output: "asset_id" } }, volume: 50 } },
     ]);
-    const run = await waitForChainRun(engine, String(accepted.chain_id), 15_000);
+    const run = await waitForChainRun(engine, String(accepted.chain_id), testBudget(15_000));
     expect(run.status).toBe("failed");
     expect(run.error).toContain("duration_seconds range (0.5–30)");
     expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
@@ -533,7 +534,7 @@ describe("chain MCP tool", () => {
       { id: "extract", tool: "extract_audio", params: { asset_id: "@b2" } },
       { id: "mix", tool: "audio_mix", params: { target_asset_id: { $ref: { step_id: "extract", output: "audio_asset_id" } }, layer_asset_id: "@c4", volume: 35 } },
     ]);
-    const finished = await waitForChainRun(engine, String(accepted.chain_id), 60_000);
+    const finished = await waitForChainRun(engine, String(accepted.chain_id), testBudget(60_000));
     expect(finished.status, finished.error ?? "").toBe("completed");
     const audioId = String(finished.steps[0]?.outputs?.audio_asset_id);
     expect(finished.steps[1]?.outputs?.target_asset_id).toBe(audioId);
@@ -541,7 +542,7 @@ describe("chain MCP tool", () => {
     for (const amplitude of await toneAmplitudes(await filePathFor(engine, audioId, "original.mp3"), tempDir)) {
       expect(amplitude).toBeGreaterThan(0.015);
     }
-  }, 90_000);
+  }, testBudget(90_000));
 
   it("lists chain as a public MCP tool", async () => {
     await setupBook("list");
@@ -591,7 +592,7 @@ describe("chain MCP tool", () => {
     expect(sourceFreq).toBeGreaterThan(300);
     expect(sourceFreq).toBeLessThan(600);
     expect(Math.abs(targetFreq - sourceFreq)).toBeLessThan(80);
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("reuses a third local media tool in a valid $ref plan", async () => {
     await setupBook("trim-extract");
@@ -614,7 +615,7 @@ describe("chain MCP tool", () => {
     const extract = (finished.steps as Array<{ outputs: Record<string, unknown> | null }>)[1];
     const audioId = String(extract?.outputs?.audio_asset_id);
     expect(await filePathFor(engine, audioId, "original.mp3")).toContain("original.mp3");
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("rejects invalid plans before dispatch", async () => {
     await setupBook("invalid");
@@ -697,7 +698,7 @@ describe("chain MCP tool", () => {
     });
     expect(conflict.isError).toBe(true);
     await waitPublic(String(first.chain_id));
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("stops later steps on failure and reports skipped work", async () => {
     await setupBook("failure");
@@ -732,7 +733,7 @@ describe("chain MCP tool", () => {
     const steps = finished.steps as Array<{ status: string }>;
     expect(steps[0]?.status).toBe("failed");
     expect(steps[1]?.status).toBe("skipped");
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("cancels later steps without rolling back completed work", async () => {
     await setupBook("cancel");
@@ -761,7 +762,7 @@ describe("chain MCP tool", () => {
     if (finished.status === "cancelled") {
       expect(steps.some((step) => step.status === "skipped" || step.status === "cancelled")).toBe(true);
     }
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("does not deadlock concurrent chains on the media worker pool", async () => {
     await setupBook("concurrent");
@@ -776,7 +777,7 @@ describe("chain MCP tool", () => {
       runs.map((run) => waitPublic(String(run.chain_id))),
     );
     expect(finished.every((run) => run.status === "completed")).toBe(true);
-  }, 180_000);
+  }, testBudget(180_000));
 
   it("routes the required natural-language request through chat to chain", async () => {
     await setupBook("chat-route");

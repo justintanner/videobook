@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanupCli, cliEnv, runCli, tempDir } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 interface ConfigRow {
   key: string
@@ -57,7 +58,7 @@ describe('videobook config', () => {
     expect(await readFile(envPath, 'utf8')).toBe('FAL_API_KEY=op://Example/FAL_API_KEY/password\nB2_REGION=us-west-004\n')
     const again = await runCli(['config', 'unset', 'OPENAI_API_KEY', '--home', home])
     expect(again.stdout).toBe(`OPENAI_API_KEY was not set in ${envPath}\n`)
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('refuses keys the environment overrides, unknown keys and unusable values', async () => {
     const home = await newHome()
@@ -73,7 +74,7 @@ describe('videobook config', () => {
     const usage = await runCli(['config', 'set', 'KIE_API_KEY', '--home', home])
     expect(usage.code).toBe(2)
     expect(existsSync(join(home, '.env'))).toBe(false)
-  }, 60_000)
+  }, testBudget(60_000))
 })
 
 describe('videobook setup 1password', () => {
@@ -105,11 +106,11 @@ describe('videobook setup 1password', () => {
     const removed = await runCli(['setup', '1password', '--remove', '--home', home])
     expect(removed.code).toBe(0)
     expect(await readFile(envPath, 'utf8')).toBe('')
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('needs a vault', async () => {
     const result = await runCli(['setup', '1password', '--no-verify', '--home', await newHome()])
     expect(result.code).toBe(2)
     expect(result.stderr).toContain('setup 1password needs --op-vault <vault>')
-  }, 60_000)
+  }, testBudget(60_000))
 })

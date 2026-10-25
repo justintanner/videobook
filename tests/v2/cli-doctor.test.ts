@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanupCli, cliEnv, runCli, tempDir } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 interface DoctorCheck {
   id: string
@@ -31,7 +32,7 @@ describe('videobook doctor', () => {
     expect(byId.get('one-password')?.detail).toContain('not used')
     expect(byId.get('provider-keys')?.status).toBe('warn')
     expect(byId.get('owner')?.detail).toContain('not running')
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('reports a 1Password reference it cannot resolve and does not use it as a key', async () => {
     const home = join(await tempDir(), 'home')
@@ -44,7 +45,7 @@ describe('videobook doctor', () => {
     expect(byId.get('one-password')?.status).toBe('warn')
     expect(byId.get('one-password')?.detail).toContain('FAL_API_KEY from op://Example/FAL_API_KEY/pass{{word}} (malformed op:// reference)')
     expect(byId.get('provider-keys')?.detail).not.toContain('FAL_API_KEY (')
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('fails with the install remedy when ffmpeg cannot run', async () => {
     const home = join(await tempDir(), 'home')
@@ -52,5 +53,5 @@ describe('videobook doctor', () => {
     expect(result.code).toBe(1)
     expect(result.stdout).toMatch(/FAIL\s+ffmpeg\s+\/nonexistent\/ffmpeg did not run/u)
     expect(result.stdout).toContain('npm install -g videobook --allow-scripts=ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearch,onnxruntime-node,esbuild')
-  }, 60_000)
+  }, testBudget(60_000))
 })

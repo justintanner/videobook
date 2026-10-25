@@ -9,6 +9,7 @@ import { queue, waitForJob } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,12 +59,12 @@ describe("pad_video tool", () => {
   beforeAll(async () => {
     await queue.start();
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-pad-video-fixture-"));
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-pad-video-test-"));
@@ -72,12 +73,12 @@ describe("pad_video tool", () => {
       name: "create_project",
       arguments: { book_id: "pad-video-proj" },
     });
-  }, 120_000);
+  }, testBudget(120_000));
 
   afterEach(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("pads a 2.31s source by 2s to 5.00s", async () => {
     const videoPath = join(fixtureDir, "fractional.mp4");
@@ -111,7 +112,7 @@ describe("pad_video tool", () => {
     expect(dur).toBeCloseTo(5, 1);
     const hasAudio = await hasAudioStream(path);
     expect(hasAudio).toBe(true);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("already integral source: 3s + 2s stays 5s", async () => {
     const videoPath = join(fixtureDir, "integral.mp4");
@@ -139,7 +140,7 @@ describe("pad_video tool", () => {
     const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
     const dur = await probeDuration(path);
     expect(dur).toBeCloseTo(5, 1);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("pads silent video and retains silence", async () => {
     const videoPath = join(fixtureDir, "silent.mp4");
@@ -170,7 +171,7 @@ describe("pad_video tool", () => {
     
     const hasAudio = await hasAudioStream(path);
     expect(hasAudio).toBe(false);
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("returns error for invalid durations", async () => {
     const videoPath = join(fixtureDir, "invalid-dur.mp4");
@@ -188,5 +189,5 @@ describe("pad_video tool", () => {
       });
       expect(result.isError).toBe(true);
     }
-  }, 60_000);
+  }, testBudget(60_000));
 });

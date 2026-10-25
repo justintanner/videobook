@@ -9,6 +9,7 @@ import { queue } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,12 +65,12 @@ describe("crop_video tool", () => {
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-crop-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-crop-test-"));
@@ -109,7 +110,7 @@ describe("crop_video tool", () => {
     expect(dims.width).toBe(1080);
     expect(dims.height).toBe(1920);
     expect(dims.duration).toBeGreaterThan(1.5);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("crops to 1:1 and produces 1080x1080 output", async () => {
     const uploaded = await uploadVideo(client, "crop-proj", videoPath);
@@ -129,7 +130,7 @@ describe("crop_video tool", () => {
     const dims = await probeDims(join(uploaded.path, "original.mp4"));
     expect(dims.width).toBe(1080);
     expect(dims.height).toBe(1080);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("crops to 16:9 and produces 1920x1080 output", async () => {
     const uploaded = await uploadVideo(client, "crop-proj", videoPath);
@@ -149,7 +150,7 @@ describe("crop_video tool", () => {
     const dims = await probeDims(join(uploaded.path, "original.mp4"));
     expect(dims.width).toBe(1920);
     expect(dims.height).toBe(1080);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("returns error for out-of-bounds rect", async () => {
     const uploaded = await uploadVideo(client, "crop-proj", videoPath);
@@ -177,7 +178,7 @@ describe("crop_video tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toMatch(/aspect/i);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({

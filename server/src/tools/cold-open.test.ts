@@ -16,6 +16,7 @@ import { INTELLIGENCE_MODEL } from "../openai-intelligence.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { coldOpenDefs } from "./cold-open.js";
 import type { ToolResult } from "./tool-def.js";
+import { testBudget } from "../test-budget.js";
 
 const exec = promisify(execFile);
 const value = (result: ToolResult): Record<string, unknown> => {
@@ -35,7 +36,7 @@ describe("reviewed cold-open copies", () => {
   const call = async (name: string, args: Record<string, unknown> = {}) => coldOpenDefs(engine).find(tool => tool.name === name)!.handler({ book_id: bookId, asset_id: assetId, notebook_id: notebookId, ...args });
   const edit = (args: Record<string, unknown> = {}) => call("edit_cold_open", { source_object_hash: sourceHash, start_time: 2, end_time: 4, request_id: randomUUID(), ...args });
   const done = async (jobId: unknown) => {
-    await expect.poll(() => engine.jobs.queue.get(Number(jobId))?.state, { timeout: 45_000 }).toMatch(/done|failed|aborted/);
+    await expect.poll(() => engine.jobs.queue.get(Number(jobId))?.state, { timeout: testBudget(45_000) }).toMatch(/done|failed|aborted/);
     const job = engine.jobs.queue.get(Number(jobId))!;
     expect(job.error).toBeNull();
     expect(job.state).toBe("done");
@@ -121,7 +122,7 @@ describe("reviewed cold-open copies", () => {
     expect(notebook.ok && notebook.value.cells).toHaveLength(2);
     expect((await coldOpenSource(engine, assetId)).file.objectHash).toBe(sourceHash);
     expect(engine.artifacts.list()).toHaveLength(2);
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("keeps short portrait video silent and places its copy in a free slot", async () => {
     await engine.files.writeFromPath(assetId, "original.mp4", join(fixtureRoot, "silent.mp4"));

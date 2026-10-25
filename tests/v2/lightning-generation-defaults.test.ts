@@ -37,6 +37,7 @@ import {
   stopBookQueue,
   waitForJob,
 } from "../../server/src/queue.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const STALE = "An older long cinematic prompt that must not be submitted again";
 const SHORT = "A short submitted prompt";
@@ -122,7 +123,7 @@ describe("lightning generation defaults and submitted prompts", () => {
   async function waitForJobs(count: number): Promise<void> {
     const start = Date.now();
     while (seen.length < count) {
-      if (Date.now() - start > 10_000) {
+      if (Date.now() - start > testBudget(10_000)) {
         throw new Error(`expected ${count} Seedance jobs, saw ${seen.length}`);
       }
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -139,7 +140,7 @@ describe("lightning generation defaults and submitted prompts", () => {
       providerArtifactId: artifactId,
       runId,
     });
-    await waitForJob(awaitJobId, 30_000);
+    await waitForJob(awaitJobId, testBudget(30_000));
   }
 
   it("submits lightning video defaults and keeps the submitted prompt through completion and rerun", async () => {

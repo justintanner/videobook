@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { testBudget } from "../server/src/test-budget.js";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scriptPath = join(repoRoot, "scripts", "benchmark-startup.ts");
@@ -46,7 +47,7 @@ function runBenchmark(
 describe("benchmark:startup script", () => {
   it(
     "writes JSON with import, TIME-TO-LISTEN, and bookManager.ready rows, and fails budget flags",
-    { timeout: 120_000 },
+    { timeout: testBudget(120_000) },
     async () => {
       const scratch = await mkdtemp(join(tmpdir(), "videobook-benchmark-"));
       const libraryDir = join(scratch, "books");

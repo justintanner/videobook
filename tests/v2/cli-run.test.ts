@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { availablePort } from './e2e-harness.js'
 import { callTool } from './mcp-http-test-server.js'
 import { cleanupCli, connectMcp, runCli, spawnCli, stopCli, tempDir, waitForHealth } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 describe('videobook run, tools and gc-books', () => {
   afterEach(cleanupCli)
@@ -19,7 +20,7 @@ describe('videobook run, tools and gc-books', () => {
     const listed = await runCli(['run', 'list_books', '--home', home])
     expect(listed.code).toBe(0)
     expect(JSON.parse(listed.stdout)).toEqual([expect.objectContaining({ name: 'cli-run' })])
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('calls tools through a running owner and refuses gc-books while it runs', async () => {
     const home = join(await tempDir(), 'home')
@@ -48,7 +49,7 @@ describe('videobook run, tools and gc-books', () => {
     const collected = await runCli(['gc-books', '--home', home])
     expect(collected.code).toBe(0)
     expect(JSON.parse(collected.stdout)).toEqual({ catalogs: [expect.objectContaining({ bookId: book.bookId })] })
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('reports unknown tools and invalid arguments with exit code 1', async () => {
     const home = join(await tempDir(), 'home')
@@ -58,7 +59,7 @@ describe('videobook run, tools and gc-books', () => {
     const invalid = await runCli(['run', 'create_book', 'name=42', '--home', home])
     expect(invalid.code).toBe(1)
     expect(invalid.stdout).toBe('')
-  }, 120_000)
+  }, testBudget(120_000))
 
   it('waits for a job queued on a running owner and reports how it ended', async () => {
     const home = join(await tempDir(), 'home')
@@ -84,7 +85,7 @@ describe('videobook run, tools and gc-books', () => {
       await http.close()
     }
     expect(await stopCli(owner)).toBe(0)
-  }, 180_000)
+  }, testBudget(180_000))
 
   it('lists tools without opening the library', async () => {
     const home = join(await tempDir(), 'home')
@@ -93,5 +94,5 @@ describe('videobook run, tools and gc-books', () => {
     expect(result.stdout).toContain('create_book <name>')
     expect(result.stdout).toContain('list_books')
     await expect(access(join(home, 'books'))).rejects.toMatchObject({ code: 'ENOENT' })
-  }, 60_000)
+  }, testBudget(60_000))
 })

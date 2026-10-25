@@ -60,6 +60,7 @@ import {
   imageSubjectAnalysisResumeTaskId,
   reuseImageSubjectAnalysis,
 } from "./image-subjects.js";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -1124,7 +1125,7 @@ describe("image subject tools", () => {
       operation: "remove",
       prompt: "Remove person",
     });
-    await waitForJob(jobId, 30_000);
+    await waitForJob(jobId, testBudget(30_000));
     const completed = engine.notebooks.read(source.notebookId);
     if (!completed.ok) throw new Error(completed.error.message);
     expect(completed.value.execution?.[producer.id]).toMatchObject({
@@ -1210,7 +1211,7 @@ describe("image subject tools", () => {
       producer_cell_id: string;
       output_cell_id: string;
     };
-    await waitForJob(parsed.job_id, 30_000);
+    await waitForJob(parsed.job_id, testBudget(30_000));
 
     expect(engine.jobs.queue.list({ type: "semantic_index" })).toEqual(expect.arrayContaining([
       expect.objectContaining({ artifactId: null, payload: expect.objectContaining({ assetId: parsed.output_artifact_id, prepareVisualMedia: true }) }),
@@ -1592,10 +1593,10 @@ describe("image subject tools", () => {
         return resultJson(result) as { job_id: string; producer_cell_id: string };
       };
       const kie = await edit();
-      await expect(waitForJob(kie.job_id, 30_000))
+      await expect(waitForJob(kie.job_id, testBudget(30_000)))
         .rejects.toThrow('KIE_API_KEY is a placeholder ("test-key")');
       const fal = await edit("fal-ai/nano-banana-2/edit");
-      await expect(waitForJob(fal.job_id, 30_000))
+      await expect(waitForJob(fal.job_id, testBudget(30_000)))
         .rejects.toThrow('FAL_API_KEY is a placeholder ("test-key")');
 
       const rerun = async () => {
@@ -1604,7 +1605,7 @@ describe("image subject tools", () => {
         const producer = notebook.value.cells.find((cell) => cell.id === kie.producer_cell_id)!;
         const run = await runNotebookCell(engine, bookId, source.notebookId, notebook.value, producer,
           { confirmPaid: true, runId: uuidv7() });
-        return waitForJob(`notebook-image-edit-${run.outputArtifactId}`, 30_000);
+        return waitForJob(`notebook-image-edit-${run.outputArtifactId}`, testBudget(30_000));
       };
       await expect(rerun()).rejects.toThrow('KIE_API_KEY is a placeholder ("test-key")');
       delete process.env.KIE_API_KEY;

@@ -16,6 +16,7 @@ import { readHarSettings, writeHarSettings, harDirectory } from "./har-settings.
 import { pruneHarCaptures } from "./har-retention.js";
 import { setHarCaptureDef } from "./tools/set-har-capture.js";
 import { configureLoggerForTests, resetLoggerForTests } from "./logger.js";
+import { testBudget } from "./test-budget.js";
 
 const exec = promisify(execFile);
 
@@ -285,7 +286,7 @@ describe("opt-in provider HAR diagnostics", () => {
 
   it("round-trips CLI settings and reports the doctor row without creating captures", async () => {
     const env = { ...process.env, VIDEOBOOK_HOME: root, VIDEOBOOK_APP_STATE_PATH: join(root, "app-state.json") };
-    const cli = (...args: string[]) => exec(process.execPath, ["--import", "tsx", "server/src/cli/entry.ts", ...args], { env, timeout: 60_000 });
+    const cli = (...args: string[]) => exec(process.execPath, ["--import", "tsx", "server/src/cli/entry.ts", ...args], { env, timeout: testBudget(60_000) });
     await cli("config", "set", "har_capture", "failures");
     const config = await cli("config", "get", "har_capture", "--json");
     expect(JSON.parse(config.stdout).harCapture.mode).toBe("failures");
@@ -293,5 +294,5 @@ describe("opt-in provider HAR diagnostics", () => {
     expect(doctor.stdout).toContain('"har-capture"');
     expect(doctor.stdout).toContain("writable:");
     expect(await captures()).toEqual([]);
-  }, 90_000);
+  }, testBudget(90_000));
 });

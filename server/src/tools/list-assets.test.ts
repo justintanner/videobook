@@ -6,6 +6,7 @@ import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { isUuidV7 } from "videobook-engine";
 import { seedMixedStatusCatalog } from "../../../tests/v2/library-browse-fixture.js";
+import { testBudget } from "../test-budget.js";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -478,7 +479,7 @@ describe("list_assets tool", () => {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });
     }
-  }, 120_000);
+  }, testBudget(120_000));
 
   it("keeps referenced hydration when Library browse filters the page", async () => {
     const { createEngineForTest, closeEngineForTest } = await import("../engine.js");
@@ -578,5 +579,5 @@ describe("list_assets tool", () => {
       closeEngineForTest(root, engine);
       await rm(root, { recursive: true, force: true, maxRetries: 3 });
     }
-  }, 120_000);
+  }, testBudget(120_000));
 });

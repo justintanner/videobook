@@ -19,6 +19,7 @@ import {
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import { enqueueNotebookAudioCommand } from '../../src/videobook/notebook-audio-command'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -28,7 +29,7 @@ function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
 }
 
 async function waitForJob(jobId: string): Promise<void> {
-  for (let attempt = 0; attempt < 400; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(400); attempt += 1) {
     const status = await queue.getStatus(jobId)
     if (status?.state === 'completed') return
     if (status?.state === 'failed') {
@@ -271,5 +272,5 @@ describe('notebook audio commands', () => {
     const rerunManifest = await engine.files.manifest(rerunAction!.outputArtifactId!)
     expect(rerunManifest.ok && rerunManifest.value.files.some((file) =>
       file.name === 'original.m4a')).toBe(true)
-  }, 60_000)
+  }, testBudget(60_000))
 })

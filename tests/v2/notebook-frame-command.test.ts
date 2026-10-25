@@ -22,6 +22,7 @@ import {
   enqueueNotebookFrameCommand,
   parseNotebookFrameCommand,
 } from '../../src/videobook/notebook-frame-command'
+import { testBudget } from '../../server/src/test-budget.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -31,7 +32,7 @@ function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
 }
 
 async function waitForJob(jobId: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(200); attempt += 1) {
     const status = await queue.getStatus(jobId)
     if (status?.state === 'completed') return
     if (status?.state === 'failed') {
@@ -47,7 +48,7 @@ async function waitForManifestFile(
   artifactId: string,
   filename: string,
 ): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  for (let attempt = 0; attempt < testBudget(200); attempt += 1) {
     const manifest = await engine.files.manifest(artifactId)
     if (manifest.ok && manifest.value.files.some((file) =>
       file.name === filename)) return
@@ -286,7 +287,7 @@ describe('notebook frame commands', () => {
     if (!afterSecond.ok) return
     expect(afterSecond.value.cells.filter((cell) =>
       cell.inputs?.mediaRole === 'extract-frame-output')).toHaveLength(2)
-  }, 30_000)
+  }, testBudget(30_000))
 
   it('clamps timestamp extractions and rejects invalid requests', async () => {
     const harness = await setup('frame-time-command', 2)
@@ -392,5 +393,5 @@ describe('notebook frame commands', () => {
     )
     expect(wrongSource.isError).toBe(true)
     expect(wrongSource.content[0]?.text).toContain('not a video-producing cell')
-  }, 30_000)
+  }, testBudget(30_000))
 })

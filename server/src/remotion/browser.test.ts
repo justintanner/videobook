@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { remotionBrowserDir, remotionCacheRoot, renderBrowserExecutable } from "./browser.js";
+import { testBudget } from "../test-budget.js";
 
 const repoBrowser = resolve(import.meta.dirname, "../../../node_modules/.remotion");
 const previousOverride = process.env.VIDEOBOOK_REMOTION_CACHE_DIR;
@@ -39,5 +40,5 @@ describe("remotion render browser location", () => {
     expect(executable).toBeDefined();
     await access(executable ?? "");
     expect(JSON.parse(await readFile(join(root, "package.json"), "utf8"))).toEqual({ name: "videobook-remotion-cache", private: true });
-  }, 60_000);
+  }, testBudget(60_000));
 });

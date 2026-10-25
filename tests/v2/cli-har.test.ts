@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createHarCapture, type Har } from '@apicity/har'
 import { cleanupCli, runCli, tempDir } from './cli-harness.js'
+import { testBudget } from '../../server/src/test-budget.js'
 
 interface IndexRow {
   ts: string
@@ -77,7 +78,7 @@ describe('videobook har', () => {
     const parsed = JSON.parse(failures.stdout) as { dir: string; captures: IndexRow[] }
     expect(parsed.dir).toBe(join(home, 'har'))
     expect(parsed.captures.map((row) => row.provider)).toEqual(['fal'])
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('exports scrub-checked captures with a manifest and prints the apicity hand-off', async () => {
     const home = await seededHome()
@@ -97,7 +98,7 @@ describe('videobook har', () => {
     const result = JSON.parse(failures.stdout) as { out: string; archive: boolean; manifest: { files: number; filters: unknown } }
     expect(result).toMatchObject({ out: archive, archive: true, manifest: { files: 1, filters: { since: null, failures: true, providers: ['fal', 'kie'] } } })
     expect(existsSync(archive)).toBe(true)
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('refuses to export when a capture would change under scrubHar', async () => {
     const home = await seededHome()
@@ -115,7 +116,7 @@ describe('videobook har', () => {
     expect(refused.stderr).toContain(planted)
     expect(refused.stdout).toBe('')
     expect(existsSync(out)).toBe(false)
-  }, 60_000)
+  }, testBudget(60_000))
 
   it('reports usage errors', async () => {
     const home = await tempDir('videobook-har-cli-')
@@ -135,5 +136,5 @@ describe('videobook har', () => {
     const empty = await runCli(['har', 'export', '--out', join(home, 'export'), '--home', home])
     expect(empty.code).toBe(1)
     expect(empty.stderr).toContain('No captures in')
-  }, 60_000)
+  }, testBudget(60_000))
 })

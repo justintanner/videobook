@@ -16,6 +16,7 @@ import {
   notebookCellIsStale,
   prepareNotebookGeneration,
 } from "../../server/src/jobs/run-notebook.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -249,5 +250,5 @@ describe("Dancing workflow fixture", () => {
       cell.inputs?.fixtureOwner === DANCING_FIXTURE_OWNER).map((cell) => cell.id))
       .toEqual(firstIds);
     expect(engine.head).toBe(firstHead);
-  }, 90_000);
+  }, testBudget(90_000));
 });

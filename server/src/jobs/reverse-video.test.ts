@@ -10,6 +10,7 @@ import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { queue, setEngineRoot } from "../queue.js";
 import { registerProcessVideoJob } from "./process-video.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -56,7 +57,7 @@ async function rgbAt(filePath: string, seconds: number): Promise<[number, number
 async function waitForProcessVideo(
   fs: Engine,
   assetId: string,
-  timeoutMs = 120_000,
+  timeoutMs = testBudget(120_000),
 ): Promise<Job> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -85,7 +86,7 @@ describe("reverse-video job handler", () => {
     await setEngineRoot(engineRoot, fs);
     registerReverseVideoJob(fs);
     registerProcessVideoJob(fs);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
@@ -160,5 +161,5 @@ describe("reverse-video job handler", () => {
     const lastFrame = await rgbAt(output, 1.3);
     expect(firstFrame[2]).toBeGreaterThan(firstFrame[0]);
     expect(lastFrame[0]).toBeGreaterThan(lastFrame[2]);
-  }, 120_000);
+  }, testBudget(120_000));
 });

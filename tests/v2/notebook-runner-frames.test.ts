@@ -20,6 +20,7 @@ import { frameAspectRatio } from "../../server/src/media/frame-options.js";
 import { previewGeneration } from "../../server/src/media/preview.js";
 import { DEFAULT_ANIMATION_MODEL } from "../../server/src/notebook-action-catalog.js";
 import { buildAssetList } from "../../server/src/tools/reconcile-project-work.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -703,7 +704,7 @@ describe("notebook runner frames and concat", () => {
       completedExtractAudio.outputArtifactId,
       rerun.outputArtifactId,
     ]);
-  }, 90_000);
+  }, testBudget(90_000));
 
   it("rejects extract audio actions connected to non-video media", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-audio-input-"));
@@ -880,5 +881,5 @@ describe("notebook runner frames and concat", () => {
       stream.kind === "video" && stream.codec === "h264")).toBe(true);
     expect(streams.value.some((stream) =>
       stream.kind === "audio" && stream.codec === "aac")).toBe(true);
-  }, 90_000);
+  }, testBudget(90_000));
 });

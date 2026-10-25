@@ -22,6 +22,7 @@ import {
   type AwaitNotebookOutputPayload,
   type RunNotebookPayload,
 } from "./run-notebook.js";
+import { testBudget } from "../test-budget.js";
 
 interface AwaitingNotebookFixture {
   bookId: string;
@@ -264,7 +265,7 @@ describe("awaiting notebook output startup recovery", () => {
     }).job;
   }
 
-  async function waitForAwaitJobTerminal(timeoutMs = 5_000): Promise<void> {
+  async function waitForAwaitJobTerminal(timeoutMs = testBudget(5_000)): Promise<void> {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
       const jobs = engine.jobs.queue.list({ type: "await_notebook_output" });
@@ -532,7 +533,7 @@ describe("awaiting notebook output startup recovery", () => {
         await expect.poll(() => {
           const current = engine.notebooks.read(notebook.value.id);
           return current.ok ? current.value.execution?.[placed.outputCellId]?.status : null;
-        }, { timeout: 5_000 }).toBe("error");
+        }, { timeout: testBudget(5_000) }).toBe("error");
         const current = engine.notebooks.read(notebook.value.id);
         if (!current.ok) throw new Error(current.error.message);
         expect(current.value.execution?.[placed.outputCellId]).toMatchObject({

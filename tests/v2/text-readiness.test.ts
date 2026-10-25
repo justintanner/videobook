@@ -12,6 +12,7 @@ import { FFMPEG } from "../../server/src/ffmpeg.js";
 import { enqueueSearchIndex } from "../../server/src/jobs/enqueue-search-index.js";
 import { registerSemanticIndexJob } from "../../server/src/jobs/semantic-index.js";
 import { queue, setEngineRoot } from "../../server/src/queue.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -212,4 +213,4 @@ it("makes committed analysis metadata and an imported transcript lexically searc
   console.info(
     `text readiness: metadata ${metadataMs.toFixed(0)} ms, ocr ${ocrMs.toFixed(0)} ms, transcript ${transcriptMs.toFixed(0)} ms`,
   );
-}, 60_000);
+}, testBudget(60_000));

@@ -16,6 +16,7 @@ import {
   stopBookQueue,
 } from "../queue.js";
 import { pollPendingProviderTasks } from "./reconcile-project-work.js";
+import { testBudget } from "../test-budget.js";
 
 async function seedPendingTask(
   fs: Engine,
@@ -186,7 +187,7 @@ describe("pollPendingProviderTasks", () => {
     // Allow createdAt to exceed 1ms timeout, then wait for at least one tick
     await sleep(120);
 
-    const deadline = Date.now() + 3_000;
+    const deadline = Date.now() + testBudget(3_000);
     while (Date.now() < deadline) {
       const pending = await fs.jobs.pending.findAll();
       if (pending.ok && pending.value.length === 0 && ticks >= 1) break;

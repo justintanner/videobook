@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import { ensureAceServer, stopAceServer } from "../../server/src/acestep/process.js";
 import { configureLoggerForTests, resetLoggerForTests } from "../../server/src/logger.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 it("drains a real provider subprocess without logging its private stdout or stderr", async () => {
   const root = await mkdtemp(join(tmpdir(), "videobook-private-provider-"));
@@ -44,7 +45,7 @@ run();
     process.env.VIDEOBOOK_ACESTEP_SERVER_PATH = executable;
     process.env.VIDEOBOOK_ACESTEP_MODELS_DIR = root;
     process.env.VIDEOBOOK_ACESTEP_MODEL = "fixture.gguf";
-    expect(await ensureAceServer({ signal: AbortSignal.timeout(10_000) })).toMatchObject({ owned: true });
+    expect(await ensureAceServer({ signal: AbortSignal.timeout(testBudget(10_000)) })).toMatchObject({ owned: true });
     await stopAceServer();
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("ace-server-exited");
@@ -61,4 +62,4 @@ run();
     }
     await rm(root, { recursive: true, force: true, maxRetries: 3 });
   }
-}, 20_000);
+}, testBudget(20_000));

@@ -10,6 +10,7 @@ import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import { findApplySfxSourceFile } from "./apply-sfx.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -53,12 +54,12 @@ describe("apply_sfx tool", () => {
     fixtureDir = await mkdtemp(join(tmpdir(), "videocity-apply-sfx-fixture-"));
     videoPath = join(fixtureDir, "test-source.mp4");
     await generateTestVideo(videoPath);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     await queue.stop();
     await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     delete process.env.ELEVENLABS_API_KEY;
@@ -158,7 +159,7 @@ describe("apply_sfx tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("rejected");
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("rejects schema with more than 8 entries", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";

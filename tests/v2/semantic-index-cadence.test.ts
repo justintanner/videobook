@@ -21,6 +21,7 @@ import {
 } from "../../server/src/jobs/semantic-index.js";
 import { installLocalSearchProviderFixtures, registerLocalClipSearchProvider } from "../../server/src/local-search-models.js";
 import { prepareSearchVideo } from "../../server/src/search-index-media.js";
+import { testBudget } from "../../server/src/test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -446,6 +447,6 @@ describe("progressive deep-model batch cadence (VE-NFR-003)", () => {
         engine.close();
       }
     },
-    180_000,
+    testBudget(180_000),
   );
 });

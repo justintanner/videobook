@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import { currentTestLabel, formatBlockedFetchError } from "./test-fetch-guard.js";
+import { testBudget } from "./test-budget.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -26,7 +27,7 @@ async function runVitest(
       {
         cwd,
         encoding: "utf8",
-        timeout: 30_000,
+        timeout: testBudget(30_000),
         env: { ...process.env, VITEST: "true" },
       },
     );

@@ -11,6 +11,7 @@ import {
   renderCleanVideoAudio,
   replaceVideoAssetInPlace,
 } from "./clean-video-audio.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,7 +65,7 @@ describe("clean-video-audio job media mix", () => {
       "-c:a", "libmp3lame",
       musicPath,
     ]);
-  }, 60_000);
+  }, testBudget(60_000));
 
   afterAll(async () => {
     if (engine && engineRoot) closeEngineForTest(engineRoot, engine);
@@ -109,7 +110,7 @@ describe("clean-video-audio job media mix", () => {
     expect(outputProbe.duration).toBeCloseTo(3, 1);
     expect(await streamHash(outputPath, "v:0")).toBe(await streamHash(sourcePath, "v:0"));
     expect(await streamHash(outputPath, "a:0")).not.toBe(await streamHash(sourcePath, "a:0"));
-  }, 60_000);
+  }, testBudget(60_000));
 
   it("replaces the canonical asset video through videobook-engine", async () => {
     const outputPath = join(tempDir, "replacement.mp4");
@@ -148,5 +149,5 @@ describe("clean-video-audio job media mix", () => {
     if (!stored.ok) throw new Error(stored.error.message);
     expect(stored.value.equals(await readFile(outputPath))).toBe(true);
     expect(fs.history.artifact(asset.value.artifactId).length).toBeGreaterThan(historyBefore.length);
-  }, 60_000);
+  }, testBudget(60_000));
 });

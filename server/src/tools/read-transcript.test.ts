@@ -7,6 +7,7 @@ import { createEngineForTest } from "../engine.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -43,11 +44,11 @@ describe("read_transcript tool (integration)", () => {
 
   beforeAll(async () => {
     await queue.start();
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await queue.stop();
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-read-transcript-"));
@@ -57,12 +58,12 @@ describe("read_transcript tool (integration)", () => {
       name: "create_project",
       arguments: { book_id: "transcript-proj" },
     });
-  }, 120_000);
+  }, testBudget(120_000));
 
   afterEach(async () => {
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 120_000);
+  }, testBudget(120_000));
 
   async function uploadAndWriteTranscript(
     filename: string,
@@ -129,7 +130,7 @@ describe("read_transcript tool (integration)", () => {
     expect(response.words[0]).toEqual({ text: "Hello", start: 0.0, end: 0.5, speaker_id: "spk_0" });
     expect(response.words[1]).toEqual({ text: "world", start: 0.6, end: 1.0, speaker_id: "spk_0" });
     expect(response.words[2].text).toBe("this");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("returns silence when elevenlabs.json has only audio_event words", async () => {
     const elevenLabsJson = {
@@ -149,7 +150,7 @@ describe("read_transcript tool (integration)", () => {
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("silence");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("falls back to plain text when elevenlabs.json is absent but gpt4otrans exists", async () => {
     const plainJson = { text: "This is a plain text transcript with enough words to pass quality checks." };
@@ -160,7 +161,7 @@ describe("read_transcript tool (integration)", () => {
     expect(response.kind).toBe("plain");
     if (response.kind !== "plain") return;
     expect(response.text).toContain("plain text transcript");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("returns silence when gpt4otrans has only noise tags", async () => {
     const plainJson = { text: "[music] [applause]" };
@@ -169,7 +170,7 @@ describe("read_transcript tool (integration)", () => {
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("silence");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("returns missing when no transcript files exist", async () => {
     const uploadResult = await client.callTool({
@@ -185,7 +186,7 @@ describe("read_transcript tool (integration)", () => {
     const response = await callReadTranscript(asset.assetId);
 
     expect(response.kind).toBe("missing");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("prefers timed elevenlabs.json over gpt4otrans plain text", async () => {
     const elevenLabsJson = {
@@ -226,7 +227,7 @@ describe("read_transcript tool (integration)", () => {
     if (response.kind !== "timed") return;
     expect(response.words).toHaveLength(2);
     expect(response.words[0].text).toBe("Timed");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("selects the plain sidecar when raw=true and source=plain even if elevenlabs exists", async () => {
     const elevenLabsJson = {
@@ -308,7 +309,7 @@ describe("read_transcript tool (integration)", () => {
     expect(elevenPayload.text).toContain("keep-me-elevenlabs");
     expect(elevenPayload.text).toContain("transcription_id");
     expect(elevenPayload.text).not.toContain("plain text transcript");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("returns untouched sidecar text when raw=true", async () => {
     const elevenLabsJson = {
@@ -335,5 +336,5 @@ describe("read_transcript tool (integration)", () => {
     expect(payload.file).toBe("elevenlabs.json");
     expect(payload.text).toContain("keep-me");
     expect(payload.text).toContain("transcription_id");
-  }, 30_000);
+  }, testBudget(30_000));
 });

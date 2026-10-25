@@ -7,6 +7,7 @@ import { createEngineForTest } from "../engine.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
+import { testBudget } from "../test-budget.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -27,11 +28,11 @@ describe("analyze_video tool", () => {
 
   beforeAll(async () => {
     await queue.start();
-  }, 30_000);
+  }, testBudget(30_000));
 
   afterAll(async () => {
     await queue.stop();
-  }, 30_000);
+  }, testBudget(30_000));
 
   beforeEach(async () => {
     delete process.env.OPENAI_API_KEY;
@@ -42,14 +43,14 @@ describe("analyze_video tool", () => {
       name: "create_project",
       arguments: { book_id: "analyze-proj" },
     });
-  }, 120_000);
+  }, testBudget(120_000));
 
   afterEach(async () => {
     if (originalKey) process.env.OPENAI_API_KEY = originalKey;
     else delete process.env.OPENAI_API_KEY;
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
-  }, 120_000);
+  }, testBudget(120_000));
 
   async function createVideoAsset(label: string): Promise<string> {
     const created = await engine.artifacts.create("video", label);
@@ -81,7 +82,7 @@ describe("analyze_video tool", () => {
     const result = await callAnalyze({ asset_id: assetId });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("OPENAI_API_KEY");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("rejects non-video artifacts", async () => {
     process.env.OPENAI_API_KEY = "test-key";
@@ -90,7 +91,7 @@ describe("analyze_video tool", () => {
     const result = await callAnalyze({ asset_id: created.value.artifactId });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("only accepts video artifacts");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("refuses a video artifact that has no video file yet", async () => {
     process.env.OPENAI_API_KEY = "test-key";
@@ -99,7 +100,7 @@ describe("analyze_video tool", () => {
     const result = await callAnalyze({ asset_id: created.value.artifactId });
     expect(result.isError).toBe(true);
     expect(result.text).toContain("has no video file yet");
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("enqueues an analysis job for a video artifact", async () => {
     process.env.OPENAI_API_KEY = "test-key";
@@ -114,7 +115,7 @@ describe("analyze_video tool", () => {
     expect(parsed.status).toBe("enqueued");
     expect(parsed.asset_id).toBe(assetId);
     expect(parsed.job_id).toBe(`analyze-video-${assetId}`);
-  }, 30_000);
+  }, testBudget(30_000));
 
   it("skips assets that already carry an analysis unless forced", async () => {
     process.env.OPENAI_API_KEY = "test-key";
@@ -133,5 +134,5 @@ describe("analyze_video tool", () => {
     const forced = await callAnalyze({ asset_id: assetId, force: true });
     expect(forced.isError).toBe(false);
     expect(JSON.parse(forced.text).status).toBe("enqueued");
-  }, 30_000);
+  }, testBudget(30_000));
 });

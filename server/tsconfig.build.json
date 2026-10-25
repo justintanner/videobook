@@ -10,6 +10,7 @@
     "src/**/*.e2e.test.ts",
     "src/fixtures/**",
     "src/quiet-probes/**",
+    "src/test-budget.ts",
     "src/test-client.ts",
     "src/test-fetch-guard.ts",
     "src/test-goals.ts",

@@ -12,6 +12,7 @@ import { BookManager } from '../../server/src/book-manager'
 import { placeChainGeneration } from '../../server/src/chain-generation'
 import { callTool, startServer, stopServer } from './mcp-http-test-server'
 import type { StartedServer } from './mcp-http-test-server'
+import { testBudget } from '../../server/src/test-budget.js'
 
 function value<T>(result: Result<T, { message: string }>): T {
   if (!result.ok) throw new Error(result.error.message)
@@ -77,7 +78,7 @@ describe('server startup', () => {
       const args = { book_id: book.bookId, notebook_id: notebook.id, cell_id: placed.outputCellId }
       type Details = { execution: { status: string; error?: string }; generations: { latestStatus: string } }
       await expect.poll(async () => (await callTool<Details>(client, 'get_notebook_cell_details', args)).execution.status,
-        { timeout: 15_000 }).toBe(providerStatus === 'ready' ? 'completed' : 'error')
+        { timeout: testBudget(15_000) }).toBe(providerStatus === 'ready' ? 'completed' : 'error')
       const details = await callTool<Details>(client, 'get_notebook_cell_details', args)
       expect(details.generations.latestStatus).toBe(providerStatus === 'ready' ? 'completed' : 'failed')
       if (providerStatus === 'failed') expect(details.execution.error).toContain('Provider rejected this request')

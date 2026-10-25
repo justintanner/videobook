@@ -4,6 +4,7 @@ import { delimiter, isAbsolute, join } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { afterEach, describe, expect, it } from "vitest";
 import { YTDLP_MISSING_MESSAGE, bundledYtdlp, findOnPath, resolveYtdlp, ytdlpRunOptions } from "./ytdlp-binary.js";
+import { testBudget } from "./test-budget.js";
 
 describe("yt-dlp binary resolution", () => {
   const roots: string[] = [];
@@ -65,5 +66,5 @@ describe("yt-dlp binary resolution", () => {
     const options = ytdlpRunOptions(process.env, bundledYtdlp());
     const version = await new YtDlp(options).getVersionAsync();
     expect(version).toMatch(/^\d{4}\.\d{2}\.\d{2}/u);
-  }, 60_000);
+  }, testBudget(60_000));
 });
