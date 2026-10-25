@@ -3521,6 +3521,29 @@ async function finishAwaitingNotebookCell(
   return { outputArtifactId, document: refreshed.value };
 }
 
+function withFailedGenerationPlan(
+  document: NotebookDocument,
+  cellId: string,
+  runId: string,
+  error: string,
+  updatedAt: string,
+): NotebookDocument {
+  return {
+    ...document,
+    generationPlans: (document.generationPlans ?? []).map((record) =>
+      record.cellId === cellId
+      && (record.status === "queued" || record.status === "awaiting-output")
+      && generationPlanClaimRunId(record.plan) === runId
+        ? {
+            ...record,
+            status: "failed",
+            updatedAt,
+            error: truncateGenerationError(error),
+          }
+        : record),
+  };
+}
+
 async function failAwaitingNotebookCell(
   engine: Engine,
   input: AwaitNotebookOutputPayload,
@@ -3550,7 +3573,13 @@ async function failAwaitingNotebookCell(
         : undefined) ?? cell.id;
       const current = executionState(document)[failTargetId]
         ?? executionState(document)[cell.id];
-      const withFailure = withExecution(document, failTargetId, {
+      const withFailure = withExecution(withFailedGenerationPlan(
+        document,
+        cell.id,
+        input.runId,
+        message,
+        updatedAt,
+      ), failTargetId, {
         fingerprint: current?.fingerprint
           ?? notebookCellFingerprint(document, cell),
         status: "error",
