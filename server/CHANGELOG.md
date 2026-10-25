@@ -31,6 +31,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
   priced at KIE's flat rate per generation: $0.06 for music and $0.0125 for
   sounds. Their status polls settle the row: a lyrics-only result stays
   pending, and a failed generation is not counted as spend.
+- KIE generations stay pending in the usage counter until their task
+  settles. A queuing or generating KIE task, or a Veo task that is still
+  generating, was counted as settled spend at its first status poll, and a
+  Veo generation that failed while generating (`successFlag` 3) was counted
+  as completed spend.
 
 ## [0.3.1] - 2026-10-25
 

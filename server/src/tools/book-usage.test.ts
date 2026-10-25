@@ -163,6 +163,36 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, pendingUsd: 0, estimatedUsd: 0.06 });
   });
 
+  it("keeps KIE createTask and Veo usage pending until their record-info polls settle it", async () => {
+    const kie = providerUsageFetch("kie");
+    async function submit(path: string, taskId: string, body: Record<string, unknown>) {
+      reply = { code: 200, msg: "success", data: { taskId } };
+      await scoped(() => kie(`${url}${path}`, { method: "POST", body: JSON.stringify(body) }), engine, "generate_media");
+    }
+    async function poll(path: string, taskId: string, data: Record<string, unknown>) {
+      reply = { code: 200, msg: "success", data: { taskId, ...data } };
+      await scoped(() => kie(`${url}${path}?taskId=${taskId}`), engine, "generate_media");
+    }
+    const tasks = ["image-done", "image-failed", "veo-done", "veo-failed"];
+    for (const taskId of tasks.slice(0, 2)) await submit("/api/v1/jobs/createTask", taskId, { model: "qwen2/text-to-image", input: { prompt: "test" } });
+    for (const taskId of tasks.slice(2)) await submit("/api/v1/veo/generate", taskId, { model: "veo3_fast", prompt: "test" });
+    for (const state of ["waiting", "queuing", "generating"]) {
+      for (const taskId of tasks.slice(0, 2)) await poll("/api/v1/jobs/recordInfo", taskId, { state });
+    }
+    for (const taskId of tasks.slice(2)) await poll("/api/v1/veo/record-info", taskId, { successFlag: 0 });
+    expect(tasks.map((taskId) => engine.usage.find("kie", taskId)?.status)).toEqual(["pending", "pending", "pending", "pending"]);
+    expect(engine.usage.summary().totals).toMatchObject({ count: 4, pendingCount: 4, estimatedUsd: 0 });
+    await poll("/api/v1/jobs/recordInfo", "image-done", { state: "success" });
+    await poll("/api/v1/jobs/recordInfo", "image-failed", { state: "fail", failMsg: "Generation failed" });
+    await poll("/api/v1/veo/record-info", "veo-done", { successFlag: 1 });
+    await poll("/api/v1/veo/record-info", "veo-failed", { successFlag: 3 });
+    expect(tasks.map((taskId) => engine.usage.find("kie", taskId)?.status)).toEqual(["completed", "failed", "completed", "failed"]);
+    expect(engine.usage.find("kie", "veo-done")).toMatchObject({ model: "veo3_fast", activity: "video", costUsd: 0.3 });
+    const totals = engine.usage.summary().totals;
+    expect(totals).toMatchObject({ count: 4, pendingCount: 0, pendingUsd: 0 });
+    expect(totals.estimatedUsd).toBeCloseTo(0.328);
+  });
+
 
   it("records fal Alibaba routes and resolves polling by request id rather than output id", async () => {
     const transport = providerUsageFetch("fal");

@@ -168,12 +168,13 @@ function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["statu
   const data = object(body.data);
   const output = object(body.output);
   const state = String(body.status ?? data.state ?? data.status ?? output.task_status ?? "").toLowerCase();
-  if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2
+  if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2 || data.successFlag === 3
     || ["failed", "fail", "error", "create_task_failed", "generate_audio_failed", "sensitive_word_error"].includes(state)) return "failed";
   if (["cancelled", "canceled"].includes(state)) return "cancelled";
   if (state === "uncertain" || state === "expired") return "uncertain";
   if (data.successFlag === 1 || ["success", "succeeded", "completed", "done"].includes(state)) return "completed";
-  if (["created", "pending", "queued", "in_queue", "running", "in_progress", "processing", "started", "waiting", "text_success"].includes(state)) return "pending";
+  if (data.successFlag === 0
+    || ["created", "pending", "queued", "in_queue", "running", "in_progress", "processing", "started", "waiting", "queuing", "generating", "text_success"].includes(state)) return "pending";
   return accepted ? "pending" : "completed";
 }
 
