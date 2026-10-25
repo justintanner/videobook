@@ -62,6 +62,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -6113,6 +6114,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSettingsLoading(false)
   }
 
+  const loadSettingsOnOpen = useEffectEvent(() => {
+    if (!settingsLoading) void refreshSettings()
+  })
+  const settingsReady = screen === 'settings' && mcp.state === 'ready'
+  useEffect(() => {
+    if (settingsReady) loadSettingsOnOpen()
+  }, [settingsReady])
+
   const storeSecret = async (key: string, value: string) => {
     if (mcp.state !== 'ready') throw new Error('Connect to save settings')
     if (!value.trim()) throw new Error('Enter a value to save')
@@ -9355,7 +9364,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (command.uiAction === 'x_connect') {
         showScreen('settings')
-        void refreshSettings()
         return await connectX()
       }
       if (command.uiAction === 'open_provider_keys') {
@@ -9901,7 +9909,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     closeCellContextMenu()
     if (mediaLibraryPicker) closeMediaLibrary()
     showScreen(next)
-    if (next === 'settings') void refreshSettings()
     if (next === 'jobs' && bookId) {
       void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
         setNotice(error instanceof Error ? error.message : String(error), 'error')
