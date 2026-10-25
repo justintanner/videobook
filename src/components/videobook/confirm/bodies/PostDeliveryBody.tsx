@@ -9,7 +9,6 @@ import {
   icloudProgressLabel,
   icloudShareHint,
   POST_CAPTION_LIMIT,
-  postAwaitingLink,
   type DeliveryDestination,
   type PostDeliveryReview,
 } from '@/videobook/post-delivery-review'
@@ -322,7 +321,7 @@ export function PostDeliveryBody(props: PostDeliveryBodyProps) {
         )}
         {props.review.receipt && <p className="post-delivery-receipt">{props.review.receipt}</p>}
         {progress && <p className="post-delivery-progress">{progress}</p>}
-        {postAwaitingLink(props.post) && <PostLinkField post={props.post} disabled={props.busy} className="post-delivery-link" onLink={props.onLink} />}
+        {!props.post.runtime.url && <PostLinkField post={props.post} disabled={props.busy || Boolean(props.review.copy.drafting)} className="post-delivery-link" onLink={props.onLink} />}
       </div>
     </div>
   )

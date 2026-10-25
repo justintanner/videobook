@@ -17,6 +17,7 @@ import {
   postDeliveryTool,
   postDeliveryValidation,
   postPlatformArgs,
+  postReviewDraftArgs,
   resolveDeliveryPost,
   resolveDeliverySource,
   reviewWithIcloudStatus,
@@ -10988,6 +10989,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               onCheckConnection={() => void checkPostDropboxConnection()}
               onOpenPost={() => openCellInspector(post.id)}
               onLink={async args => {
+                const draftArgs = postReviewDraftArgs(post, review)
+                if (draftArgs) await call('update_post', draftArgs)
                 await call('link_post', { book_id: review.bookId, post_cell_id: post.id, ...args })
                 await refreshBookData(review.bookId, review.notebookId)
                 dismissPendingCommandPlan()

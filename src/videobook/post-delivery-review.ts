@@ -190,6 +190,16 @@ export function postPlatformArgs(post: PostView, review: PostDeliveryReview): Re
   return { book_id: review.bookId, post_cell_id: post.id, platform: review.copy.platform }
 }
 
+export function postReviewDraftArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> | null {
+  if (deliveryCaptionLocked(post)) return null
+  const caption = copyCaption(review.copy)
+  const patch = {
+    ...(review.copy.platform !== post.definition.platform ? { platform: review.copy.platform } : {}),
+    ...(caption !== post.definition.caption ? { caption } : {}),
+  }
+  return Object.keys(patch).length > 0 ? { book_id: review.bookId, post_cell_id: post.id, ...patch } : null
+}
+
 export function postDeliveryTool(destination: DeliveryDestination): 'save_post_to_icloud' | 'upload_post_to_dropbox' {
   return destination === 'icloud' ? 'save_post_to_icloud' : 'upload_post_to_dropbox'
 }
@@ -223,7 +233,7 @@ export function postTileStatus(post: PostView): string {
 export function postTileNextStep(post: PostView): string | null {
   if (post.runtime.postedAt || post.runtime.url) return null
   if (postAwaitingLink(post)) return post.definition.platform === 'other' ? 'Paste the published link' : `Paste ${postPlatformName(post)} link`
-  return 'Save to iPhone next'
+  return post.definition.platform === 'other' ? 'Save to iPhone or paste link' : `Save to iPhone or paste ${postPlatformName(post)} link`
 }
 
 export function postTilePostedOn(post: PostView): string | null {

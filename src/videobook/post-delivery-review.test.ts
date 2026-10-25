@@ -26,6 +26,7 @@ import {
   reviewWithIcloudStatus,
   type ICloudStatus,
   postPlatformArgs,
+  postReviewDraftArgs,
   type PostDeliveryReview,
 } from './post-delivery-review'
 import { editCopyVersion, initialCopyState } from './post-copy-review'
@@ -154,6 +155,14 @@ describe('post delivery review', () => {
     expect(postDeliveryArgs(frozen, review({ copy: edited }))).not.toHaveProperty('caption')
   })
 
+  it('saves the reviewed caption and platform before linking a Post that skipped delivery', () => {
+    expect(postReviewDraftArgs(postView(), review())).toBeNull()
+    const edited = { ...editCopyVersion(initialCopyState(postView()), { body: 'New', tags: ['rain'] }), platform: 'instagram' as const }
+    expect(postReviewDraftArgs(postView(), review({ copy: edited }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, platform: 'instagram', caption: 'New\n\n#rain' })
+    const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
+    expect(postReviewDraftArgs(frozen, review({ copy: edited }))).toBeNull()
+  })
+
   it('saves a changed platform before delivery while the Post is still a draft', () => {
     expect(postPlatformArgs(postView(), review())).toBeNull()
     const copy = { ...initialCopyState(postView()), platform: 'x' as const }
@@ -196,7 +205,7 @@ describe('post delivery review', () => {
     expect(postAwaitingLink(delivered)).toBe(true)
     expect(postAwaitingLink(postView({ ...delivered.runtime, url: 'https://www.tiktok.com/@jtbkk/video/1', postedAt: '2026-10-15T01:00:00.000Z' }))).toBe(false)
     expect(postLinkPrompt(delivered)).toBe('Posted on TikTok? Paste the link')
-    expect(postTileNextStep(postView())).toBe('Save to iPhone next')
+    expect(postTileNextStep(postView())).toBe('Save to iPhone or paste TikTok link')
     expect(postTileNextStep(delivered)).toBe('Paste TikTok link')
     expect(postTileStatus(postView())).toBe('draft')
     expect(postTileStatus(delivered)).toBe('needs_link')
