@@ -73,6 +73,7 @@ describe("generic media generation", () => {
 
   function route(path: string, response: ServerResponse): void {
     if (path === "/api/v1/jobs/createTask") return sendJson(response, { code: 200, msg: "success", data: { taskId: "kie-task-1" } });
+    if (path === "/api/file-stream-upload") return sendJson(response, { code: 200, msg: "success", data: { downloadUrl: `${baseURL}/files/voice.mp3` } });
     if (path.startsWith("/api/v1/jobs/recordInfo")) {
       return sendJson(response, {
         code: 200,
@@ -126,7 +127,7 @@ describe("generic media generation", () => {
       originalEnv.set(key, process.env[key]);
       process.env[key] = `local-media-${key.toLowerCase()}`;
     }
-    restoreEndpoints = configureProviderEndpoints({ kieBaseURL: baseURL, falQueueBaseURL: baseURL, elevenlabsBaseURL: baseURL });
+    restoreEndpoints = configureProviderEndpoints({ kieBaseURL: baseURL, kieUploadBaseURL: baseURL, falQueueBaseURL: baseURL, elevenlabsBaseURL: baseURL });
   });
 
   afterEach(async () => {
@@ -421,6 +422,30 @@ describe("generic media generation", () => {
       .toEqual({ inputDurationSeconds: 6 });
     expect(await generationSourceCostHints(engine, refs, { model: "kie:bytedance/seedance-2-5", mode: "v2v" }))
       .toEqual({ inputDurationSeconds: 6, durationSeconds: 6 });
+  });
+
+  it.each([
+    ["kie:omnihuman-1-5", 6.008, 6.008 * 0.135],
+    ["kie:omnihuman-2-0", 7, 7 * 0.07],
+  ] as const)("prices %s from its driving audio through the queued job", async (model, units, usd) => {
+    const voice = await engine.artifacts.create("audio", "driving voice");
+    if (!voice.ok) throw new Error(voice.error.message);
+    expect((await engine.files.write(voice.value.artifactId, "original.mp3", mp3)).ok).toBe(true);
+    expect((await engine.metadata.artifacts.write(voice.value.artifactId, "original", { duration: 6.008 })).ok).toBe(true);
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: engine.book.get().bookId, model, prompt: "a presenter speaks", refs: { image: [`${baseURL}/files/out.png`], audio: [voice.value.artifactId] } },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { input: Record<string, unknown> };
+    expect(submitted.input.audio_url).toBe(`${baseURL}/files/voice.mp3`);
+    const hints = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
+    expect(hints.ok && hints.value).toEqual({ durationSeconds: 6.008 });
+    expect(engine.logs.read("generation-cost-estimate")).toEqual([]);
+    const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
+    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), basis: "estimated", status: "pending", warnings: [], units });
+    expect(usage?.costUsd).toBeCloseTo(usd);
   });
 
   it("writes synchronous ElevenLabs audio straight into the artifact", async () => {

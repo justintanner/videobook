@@ -6,6 +6,7 @@ import {
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
 import { logger } from "../logger.js";
+import { providerEndpoints } from "../media/endpoints.js";
 
 // Upload prepared bytes to Kie's native storage via POST /api/file-stream-upload.
 // Kie workers run in China — using their first-party CDN avoids the
@@ -21,7 +22,8 @@ async function uploadPreparedToKie(
   if (apiKey) {
     try {
       const blob = new Blob([new Uint8Array(data)], { type: contentType });
-      return await uploadKieFile({ apiKey, timeout: 120_000 }, blob, hashedFilename);
+      const uploadBaseURL = providerEndpoints().kieUploadBaseURL;
+      return await uploadKieFile({ apiKey, timeout: 120_000, ...(uploadBaseURL ? { uploadBaseURL } : {}) }, blob, hashedFilename);
     } catch (err) {
       logger.warn("kie-upload-fallback", { error: err });
     }

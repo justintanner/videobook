@@ -1,5 +1,6 @@
 export interface ProviderEndpoints {
   kieBaseURL?: string;
+  kieUploadBaseURL?: string;
   falQueueBaseURL?: string;
   elevenlabsBaseURL?: string;
   machgenBaseURL?: string;

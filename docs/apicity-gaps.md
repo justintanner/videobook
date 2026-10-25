@@ -314,6 +314,7 @@ have no duration field (output follows source/driving media):
 | `happyhorse/video-edit`              | source video    |
 | `kling-3.0/motion-control`           | motion video    |
 | `omnihuman-1-5`                      | driving audio   |
+| `omnihuman-2-0`                      | driving audio   |
 | `volcengine/video-to-video-lip-sync` | source video    |
 
 Videocity maps its measured `KieCostHints.duration` to the formal
