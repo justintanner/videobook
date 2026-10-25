@@ -82,7 +82,10 @@ function CredentialRow({ provider, editor, busy }: { provider: SettingsProvider;
       <span className={`settings-status settings-key-${provider.keyStatus}`}>{statusLabel(provider.keyStatus)}</span>
       {provider.editable ? <button type="button" className="settings-quiet" aria-label={`Edit ${label}`}
         aria-expanded={editing} disabled={busy || editor.saving}
-        onClick={event => editor.edit(provider, event.currentTarget)}>{editLabel(provider)}</button>
+        onClick={event => editor.edit(provider, event.currentTarget)}>
+        <span className="settings-edit-text">{editLabel(provider)}</span>
+        <ChevronRight className="settings-edit-chevron" size={16} aria-hidden="true" />
+      </button>
         : <span className="settings-row-spacer" />}
     </div>
     {editing && <KeyEditor provider={provider} editor={editor} busy={busy} />}
@@ -106,6 +109,23 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
     <summary><ChevronRight size={14} aria-hidden="true" />{summary}</summary>
     <div className="settings-details-body">{children}</div>
   </details>
+}
+
+const SECTION_LINKS = [
+  { id: 'settings-providers-heading', label: 'Providers' },
+  { id: 'settings-accounts-heading', label: 'Accounts' },
+  { id: 'settings-storage-heading', label: 'Storage' },
+  { id: 'settings-diagnostics-heading', label: 'Diagnostics' },
+] as const
+
+function jumpToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+}
+
+function SectionJump() {
+  return <nav className="settings-jump" aria-label="Settings sections">
+    {SECTION_LINKS.map(link => <button key={link.id} type="button" onClick={() => jumpToSection(link.id)}>{link.label}</button>)}
+  </nav>
 }
 
 function configuredCount(providers: readonly SettingsProvider[]): string {
@@ -150,46 +170,53 @@ export function SettingsScreen({ call, providers, loading, error, refreshed, sto
         <div className="settings-refresh">
           <span role="status">{loading ? 'Refreshing…' : refreshed ? 'Up to date' : ''}</span>
           <button type="button" disabled={busy || loading} onClick={() => void onRefresh()}>
-            <RefreshCw size={15} aria-hidden="true" />Refresh
+            <RefreshCw size={15} aria-hidden="true" /><span className="settings-refresh-label">Refresh</span>
           </button>
         </div>
       </header>
       {error && <p role="alert" className="settings-error">{error}</p>}
 
-      <section className="settings-section settings-providers" aria-labelledby="settings-providers-heading">
-        <div className="settings-section-heading">
-          <h2 id="settings-providers-heading">AI providers</h2>
-          {aiProviders.length > 0 && <span>{configuredCount(aiProviders)}</span>}
-        </div>
-        {aiProviders.length ? <CredentialRows providers={aiProviders} editor={editor} busy={busy} />
-          : <p className="settings-note">{loading ? 'Loading providers…' : 'Refresh to load provider settings.'}</p>}
-      </section>
+      <SectionJump />
 
-      <section className="settings-section" aria-labelledby="settings-accounts-heading">
-        <div className="settings-section-heading"><h2 id="settings-accounts-heading">Accounts</h2></div>
-        <div className="settings-list">
-          <XConnectionCard busy={busy} connection={connection} onConnect={onConnect} />
-          <DropboxConnectionCard call={call} />
+      <div className="settings-columns">
+        <div className="settings-column">
+          <section className="settings-section settings-providers" aria-labelledby="settings-providers-heading">
+            <div className="settings-section-heading">
+              <h2 id="settings-providers-heading">AI providers</h2>
+              {aiProviders.length > 0 && <span>{configuredCount(aiProviders)}</span>}
+            </div>
+            {aiProviders.length ? <CredentialRows providers={aiProviders} editor={editor} busy={busy} />
+              : <p className="settings-note">{loading ? 'Loading providers…' : 'Refresh to load provider settings.'}</p>}
+          </section>
         </div>
-        <Disclosure summary="App credentials">
-          <CredentialRows providers={accountCredentials} editor={editor} busy={busy} />
-          <p className="settings-note">Dropbox redirect: http://127.0.0.1:8766/callback</p>
-        </Disclosure>
-      </section>
+        <div className="settings-column">
+          <section className="settings-section" aria-labelledby="settings-accounts-heading">
+            <div className="settings-section-heading"><h2 id="settings-accounts-heading">Accounts</h2></div>
+            <div className="settings-list">
+              <XConnectionCard busy={busy} connection={connection} onConnect={onConnect} />
+              <DropboxConnectionCard call={call} />
+            </div>
+            <Disclosure summary="App credentials">
+              <CredentialRows providers={accountCredentials} editor={editor} busy={busy} />
+              <p className="settings-note">Dropbox redirect: http://127.0.0.1:8766/callback</p>
+            </Disclosure>
+          </section>
 
-      <section className="settings-section" aria-labelledby="settings-storage-heading">
-        <div className="settings-section-heading">
-          <h2 id="settings-storage-heading">Storage</h2>
-          <span>{bookName ?? 'No project selected'}</span>
+          <section className="settings-section" aria-labelledby="settings-storage-heading">
+            <div className="settings-section-heading">
+              <h2 id="settings-storage-heading">Storage</h2>
+              <span>{bookName ?? 'No project selected'}</span>
+            </div>
+            <StorageStatus storage={storage} bookId={bookId} loading={loading} />
+            <Disclosure summary="Backblaze configuration">
+              <p className="settings-note">Shared by all projects.</p>
+              <CredentialRows providers={storageCredentials} editor={editor} busy={busy} />
+            </Disclosure>
+          </section>
+
+          <HarCaptureSettings call={call} />
         </div>
-        <StorageStatus storage={storage} bookId={bookId} loading={loading} />
-        <Disclosure summary="Backblaze configuration">
-          <p className="settings-note">Shared by all projects.</p>
-          <CredentialRows providers={storageCredentials} editor={editor} busy={busy} />
-        </Disclosure>
-      </section>
-
-      <HarCaptureSettings call={call} />
+      </div>
 
       <p className="settings-version">videobook-engine {enginePackage.version} · schema {SCHEMA_VERSION}</p>
     </div>
