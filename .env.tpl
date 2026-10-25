@@ -8,6 +8,7 @@ FAL_API_KEY=op://Apicity/FAL_API_KEY/password
 FAL_ADMIN_API_KEY=op://Apicity/FAL_ADMIN_API_KEY/password
 DASHSCOPE_API_KEY=op://Apicity/DASHSCOPE_API_KEY/password
 ELEVENLABS_API_KEY=op://Apicity/ELEVENLABS_API_KEY/password
+MACHGEN_API_KEY=op://Apicity/MACHGEN_API_KEY/password
 B2_ACCESS_KEY_ID=op://Apicity/B2_ACCESS_KEY_ID/password
 B2_SECRET_ACCESS_KEY=op://Apicity/B2_SECRET_ACCESS_KEY/password
 B2_REGION=op://Apicity/B2_REGION/password
