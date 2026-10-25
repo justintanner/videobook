@@ -87,14 +87,15 @@ async function repair() {
 it('counts missing current visual coverage, including zero-vector completed indexes', async () => {
   const id = await source()
   const hash = value(await engine.files.manifest(id)).files[0]!.objectHash
-  expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(1)
+  expect((await searchLibraryAssets(books, { kinds: ['image'], indexCoverage: true })).unindexed_visual_assets).toBe(1)
+  expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(0)
   value(engine.temporalSearch.manifests.register(LOCAL_CLIP_MANIFEST))
   value(engine.temporalSearch.commitBatch({
     artifactId: id, objectHash: hash, manifestId: LOCAL_CLIP_MANIFEST.manifestId, generation: LOCAL_CLIP_MANIFEST.manifestId,
     phase: 'visual', maxUnits: 1, observations: [], coveredRanges: [], totalUnits: 0, complete: true,
   }))
-  expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(1)
-  expect((await searchLibraryAssets(books, { kinds: ['video'] })).unindexed_visual_assets).toBe(0)
+  expect((await searchLibraryAssets(books, { kinds: ['image'], indexCoverage: true })).unindexed_visual_assets).toBe(1)
+  expect((await searchLibraryAssets(books, { kinds: ['video'], indexCoverage: true })).unindexed_visual_assets).toBe(0)
 })
 
 it('deduplicates pending index jobs by source bytes and keeps indexing detached from media health', async () => {
@@ -122,7 +123,7 @@ it('returns queued repair work promptly and reports missing models without faili
     expect.objectContaining({ artifactId: null, state: 'failed' }),
   ])
   expect(value(engine.jobs.artifactWork.read(id))).toMatchObject({ status: 'ready', ownerId: null })
-  expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(1)
+  expect((await searchLibraryAssets(books, { kinds: ['image'], indexCoverage: true })).unindexed_visual_assets).toBe(1)
 }, 20_000)
 
 it('completes an empty repair without loading models', async () => {
@@ -151,11 +152,11 @@ it('repairs images and frameless videos, continues past corrupt media, and skips
     video: { width: 64, height: 64, rotationDegrees: 0, pixelAspect: { numerator: 1, denominator: 1 } },
   }))
   value(await engine.files.write(videoId, 'original.mp4', await readFile(videoPath)))
-  expect((await searchLibraryAssets(books, { kinds: ['image', 'video'] })).unindexed_visual_assets).toBe(3)
+  expect((await searchLibraryAssets(books, { kinds: ['image', 'video'], indexCoverage: true })).unindexed_visual_assets).toBe(3)
   const summary = await repair()
   expect(summary).toMatchObject({ indexed: 2, failed: 1 })
   expect(engine.jobs.queue.list({ type: 'repair_search_indexes' })[0]?.result).toMatchObject({ failures: [{ artifactId: brokenId }] })
-  const after = await searchLibraryAssets(books, { kinds: ['image', 'video'] })
+  const after = await searchLibraryAssets(books, { kinds: ['image', 'video'], indexCoverage: true })
   expect(after.unindexed_visual_assets).toBe(1)
   expect(after.assets).toHaveLength(3)
   const provider = registerLocalClipSearchProvider(engine)
@@ -188,6 +189,6 @@ it('honors cancellation before changing index coverage or media', async () => {
     jobId: 1,
     signal: abort.signal, setLease: () => undefined, getOwnerId: () => '', markAssetFailureHandled: () => undefined,
   })).rejects.toThrow('Cancelled indexing')
-  expect((await searchLibraryAssets(books, { kinds: ['image'] })).unindexed_visual_assets).toBe(1)
+  expect((await searchLibraryAssets(books, { kinds: ['image'], indexCoverage: true })).unindexed_visual_assets).toBe(1)
   expect(value(engine.jobs.artifactWork.read(id))).toMatchObject({ status: 'ready', ownerId: null })
 })

@@ -40,6 +40,7 @@ import { registerLabelMusicSectionsJob } from "./label-music-sections.js";
 import { registerEditingMomentsJob } from "./analyze-editing-moments.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
 import { registerExtractVideoPosterJob } from "./extract-video-poster.js";
+import { registerAssessMediaProbeJobs } from "./assess-media-probes.js";
 import { registerReplaceVideoAudioJob } from "./replace-video-audio.js";
 import { registerSpliceVideoJob } from "./splice-video.js";
 import { registerSmoothSceneConcatJob } from "./smooth-scene-concat.js";
@@ -116,6 +117,7 @@ export function registerAllJobHandlers(
   registerExtractAudioJob(engine);
   registerExtractWaveformJob(engine);
   registerExtractVideoPosterJob(engine);
+  registerAssessMediaProbeJobs(engine);
   registerAnalyzeMusicJob(engine);
   registerPlanGoalJob(engine);
   registerAssembleGoalJob(engine);

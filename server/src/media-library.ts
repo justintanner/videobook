@@ -6,6 +6,9 @@ import type {
   NotebookCell,
   NotebookDocument,
   PreparedSearchOptions,
+  PreparedSearchReference,
+  EngineError,
+  Result,
   SearchHit,
 } from "videobook-engine";
 import type { BookManager, ManagedBook } from "./book-manager.js";
@@ -17,10 +20,14 @@ import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { comparableHitScore } from "./search-scoring.js";
-import { buildAssetList, type ProjectAsset } from "./tools/reconcile-project-work.js";
+import {
+  projectLibraryAsset,
+  readLibraryCandidates,
+  type LibraryAssetRow,
+  type LibraryCandidate,
+} from "./library-asset-projection.js";
 import { assetRecency, readAssetUsage, recordAssetUse } from "./asset-usage.js";
 import {
-  matchesTagFilter,
   tagFacetCounts,
   transferAssetTags,
   type AssetTagFilter,
@@ -38,7 +45,7 @@ import {
 
 type MediaCellType = "audio" | "image" | "video";
 
-interface LibraryAsset extends ProjectAsset {
+interface LibraryAsset extends LibraryAssetRow {
   owning_book_id: string;
   owning_book_name: string;
   last_used_at: string | null;
@@ -65,6 +72,20 @@ interface LibraryAssetSearchResult {
     book_id: string;
     message: string;
   }>;
+}
+
+type LibraryBook = Pick<ManagedBook, "bookId" | "name">;
+
+interface LibrarySearchInput {
+  query?: string;
+  referenceId?: string;
+  referenceRange?: PreparedSearchOptions["range"];
+  kinds: MediaCellType[];
+  tags?: AssetTagFilter;
+  limit?: number;
+  offset?: number;
+  browseStatus?: LibraryBrowseStatus;
+  indexCoverage?: boolean;
 }
 
 interface CopiedLibraryAsset {
@@ -226,16 +247,43 @@ export async function setNotebookMediaSlot(
   };
 }
 
-function kindMatches(
-  requested: ReadonlySet<MediaCellType>,
-  kind: string,
-): boolean {
-  return requested.has(kind as MediaCellType)
-    || (kind === "final" && requested.has("video"));
+type LibraryEntry = LibraryCandidate & {
+  owning_book_id: string;
+  owning_book_name: string;
+  last_used_at: string | null;
+};
+
+type BookSearchResult = {
+  entries: LibraryEntry[];
+  statusCounts: LibraryStatusCounts;
+  hits: SearchHit[];
+  searchError?: string;
+  preparationJob?: { bookId: string; jobId: number };
+  unindexed: number;
+};
+
+type LibrarySearchPlan = {
+  query: string;
+  prepared: PreparedSearchReference | undefined;
+  referenceRange: PreparedSearchOptions["range"] | undefined;
+  searching: boolean;
+  browseStatus: LibraryBrowseStatus;
+  candidateKinds: ReadonlySet<ArtifactKind>;
+  searchKinds: ArtifactKind[];
+  tags: AssetTagFilter | undefined;
+  indexCoverage: boolean;
+};
+
+function libraryArtifactKinds(requested: ReadonlySet<MediaCellType>): ArtifactKind[] {
+  return [
+    ...(requested.has("audio") ? ["audio" as const] : []),
+    ...(requested.has("image") ? ["image" as const] : []),
+    ...(requested.has("video") ? ["video" as const, "final" as const] : []),
+  ];
 }
 
 function searchRank(
-  asset: LibraryAsset,
+  asset: LibraryEntry,
   query: string,
 ): number {
   if (!query) return 3;
@@ -247,7 +295,7 @@ function searchRank(
   return prompt.startsWith(query) ? 2 : 3;
 }
 
-function matchesQuery(asset: LibraryAsset, query: string): boolean {
+function matchesQuery(asset: LibraryEntry, query: string): boolean {
   if (!query) return true;
   return [
     asset.id,
@@ -261,12 +309,12 @@ function lastUsedAt(usedAt: number | undefined): string | null {
   return usedAt === undefined ? null : new Date(usedAt).toISOString();
 }
 
-function libraryAssetRecency(asset: LibraryAsset): number {
+function libraryAssetRecency(asset: LibraryEntry): number {
   const used = asset.last_used_at ? Date.parse(asset.last_used_at) : undefined;
   return assetRecency(asset.created_at, used);
 }
 
-function compareRecentlyUsed(left: LibraryAsset, right: LibraryAsset): number {
+function compareRecentlyUsed(left: LibraryEntry, right: LibraryEntry): number {
   const recency = libraryAssetRecency(right) - libraryAssetRecency(left);
   if (recency !== 0) return recency;
   const created = Date.parse(right.created_at) - Date.parse(left.created_at);
@@ -275,201 +323,211 @@ function compareRecentlyUsed(left: LibraryAsset, right: LibraryAsset): number {
     : left.artifact_id.localeCompare(right.artifact_id);
 }
 
-export async function searchLibraryAssets(
+function compareNewest(left: LibraryEntry, right: LibraryEntry): number {
+  const created = Date.parse(right.created_at) - Date.parse(left.created_at);
+  return created !== 0
+    ? created
+    : left.artifact_id.localeCompare(right.artifact_id);
+}
+
+function entryKey(entry: { owning_book_id: string; artifact_id: string }): string {
+  return `${entry.owning_book_id}:${entry.artifact_id}`;
+}
+
+async function querySemanticHits(
+  engine: Engine,
+  plan: LibrarySearchPlan,
+  readyEntries: readonly LibraryEntry[],
+): Promise<Result<SearchHit[], EngineError>> {
+  registerLocalClipSearchProvider(engine);
+  const searchQuery = {
+    ...(plan.query ? { text: plan.query } : {}),
+    modalities: plan.query
+      ? ["visual" as const, "metadata" as const]
+      : ["visual" as const],
+    artifactKinds: plan.searchKinds,
+    sourceArtifactIds: readyEntries.map((entry) => entry.artifact_id),
+    limit: 100,
+  };
+  const result = plan.prepared
+    ? await engine.temporalSearch.queryPrepared(
+        searchQuery,
+        plan.prepared,
+        plan.referenceRange ? { range: plan.referenceRange } : {},
+      )
+    : await engine.temporalSearch.query(searchQuery);
+  return result.ok ? { ok: true, value: result.value.hits } : result;
+}
+
+async function searchBook(
   books: BookManager,
-  input: {
-    query?: string;
-    referenceId?: string;
-    referenceRange?: PreparedSearchOptions["range"];
-    kinds: MediaCellType[];
-    tags?: AssetTagFilter;
-    limit?: number;
-    offset?: number;
-    browseStatus?: LibraryBrowseStatus;
-  },
-): Promise<LibraryAssetSearchResult> {
-  await books.ready();
-  const query = input.query?.trim().toLowerCase() ?? "";
-  const requested = new Set(input.kinds);
-  const prepared = input.referenceId
-    ? searchReferenceStore.get(input.referenceId).reference
-    : undefined;
-  const searching = Boolean(query || prepared);
-  const browseStatus: LibraryBrowseStatus = searching
-    ? "ready"
-    : (input.browseStatus ?? "ready");
-  const artifactKinds = [
-    ...(requested.has("audio") ? ["audio" as const] : []),
-    ...(requested.has("image") ? ["image" as const] : []),
-    ...(requested.has("video") ? ["video" as const, "final" as const] : []),
-  ];
-  const summaries = books.list({ sort: "newest" });
-  const results = await Promise.allSettled(
-    summaries.map(async (summary) => {
-      const book = books.get(summary.bookId);
-      if (!book.ok) throw new Error(book.error.message);
-      const engine = book.value.engine;
-      const builtAssets = await engine.withLocalMedia(() => buildAssetList(
-        engine,
-        summary.bookId,
-        "newest",
-      ));
-      const usage = readAssetUsage(engine);
-      const eligible = builtAssets
-        .filter((asset) =>
-          kindMatches(requested, asset.type)
-          && matchesTagFilter(asset.tags ?? undefined, input.tags))
-        .map((asset): LibraryAsset => ({
-          ...asset,
-          owning_book_id: summary.bookId,
-          owning_book_name: summary.name,
-          last_used_at: lastUsedAt(usage.get(asset.artifact_id)),
-        }));
-      const statusCounts = countBrowseStatuses(eligible);
-      const readyAssets = eligible.filter((asset) => asset.status === "ready");
-      const assets = searching
-        ? readyAssets
-        : eligible.filter((asset) => matchesBrowseStatus(asset.status, browseStatus));
-      let hits: SearchHit[] = [];
-      let searchError: string | undefined;
-      let preparationJob: { bookId: string; jobId: number } | undefined;
-      if (searching) {
-        registerLocalClipSearchProvider(engine);
-        const searchQuery = {
-          ...(query ? { text: query } : {}),
-          modalities: query
-            ? ["visual" as const, "metadata" as const]
-            : ["visual" as const],
-          artifactKinds,
-          sourceArtifactIds: readyAssets.map((asset) => asset.artifact_id),
-          limit: 100,
-        };
-        const result = prepared
-          ? await engine.temporalSearch.queryPrepared(
-              searchQuery,
-              prepared,
-              input.referenceRange ? { range: input.referenceRange } : {},
-            )
-          : await engine.temporalSearch.query(searchQuery);
-        if (result.ok) {
-          hits = result.value.hits;
-        } else if (result.error.code === "NOT_READY" && result.error.details?.requiresIndexPreparation) {
-          preparationJob = await enqueueTemporalSearchPreparation(summary.bookId);
-        } else {
-          searchError = result.error.message;
-        }
-      }
-      return {
-        assets,
-        statusCounts,
-        hits,
-        searchError,
-        preparationJob,
-        unindexed: missingVisualIndexes(engine, readyAssets).length,
-      };
-    }),
-  );
-  const errors: LibraryAssetSearchResult["books_with_errors"] = [];
-  const assets: LibraryAsset[] = [];
-  let statusCounts = emptyStatusCounts();
-  const semanticHits: Array<{
-    key: string;
-    hit: SearchHit;
-  }> = [];
-  results.forEach((result, index) => {
-    if (result.status === "fulfilled") {
-      assets.push(...result.value.assets);
-      statusCounts = addStatusCounts(statusCounts, result.value.statusCounts);
-      semanticHits.push(
-        ...result.value.hits.map((hit) => ({
-          key: `${summaries[index]?.bookId ?? "unknown"}:${hit.artifactId}`,
-          hit,
-        })),
-      );
-      if (result.value.searchError) {
-        errors.push({
-          book_id: summaries[index]?.bookId ?? "unknown",
-          message: result.value.searchError,
-        });
-      }
-      return;
-    }
-    const book = summaries[index];
-    errors.push({
-      book_id: book?.bookId ?? "unknown",
-      message: result.reason instanceof Error
-        ? result.reason.message
-        : String(result.reason),
-    });
-  });
+  summary: LibraryBook,
+  plan: LibrarySearchPlan,
+): Promise<BookSearchResult> {
+  const book = books.get(summary.bookId);
+  if (!book.ok) throw new Error(book.error.message);
+  const engine = book.value.engine;
+  const candidates = await engine.withLocalMedia(() => readLibraryCandidates(engine, {
+    kinds: plan.candidateKinds,
+    ...(plan.tags ? { tags: plan.tags } : {}),
+  }));
+  const usage = readAssetUsage(engine);
+  const eligible = candidates.map((candidate): LibraryEntry => ({
+    ...candidate,
+    owning_book_id: summary.bookId,
+    owning_book_name: summary.name,
+    last_used_at: lastUsedAt(usage.get(candidate.artifact_id)),
+  }));
+  const readyEntries = eligible.filter((entry) => entry.status === "ready");
+  const result: BookSearchResult = {
+    entries: plan.searching
+      ? readyEntries
+      : eligible.filter((entry) => matchesBrowseStatus(entry.status, plan.browseStatus)),
+    statusCounts: countBrowseStatuses(eligible),
+    hits: [],
+    unindexed: plan.indexCoverage ? missingVisualIndexes(engine, readyEntries).length : 0,
+  };
+  if (!plan.searching) return result;
+  const hits = await querySemanticHits(engine, plan, readyEntries);
+  if (hits.ok) return { ...result, hits: hits.value };
+  if (hits.error.code === "NOT_READY" && hits.error.details?.requiresIndexPreparation) {
+    return { ...result, preparationJob: await enqueueTemporalSearchPreparation(summary.bookId) };
+  }
+  return { ...result, searchError: hits.error.message };
+}
+
+function rankEntries(
+  entries: readonly LibraryEntry[],
+  semanticHits: ReadonlyArray<{ key: string; hit: SearchHit }>,
+  plan: LibrarySearchPlan,
+): Array<{ entry: LibraryEntry; hit: SearchHit | undefined }> {
+  if (!plan.searching) {
+    return [...entries].sort(compareRecentlyUsed).map((entry) => ({ entry, hit: undefined }));
+  }
   const metadataRank = new Map(
-    assets
-      .filter((asset) => !prepared && matchesQuery(asset, query))
-      .sort((left, right) => {
-        const rank = searchRank(left, query) - searchRank(right, query);
-        if (rank !== 0) return rank;
-        const created = Date.parse(right.created_at) - Date.parse(left.created_at);
-        return created !== 0
-          ? created
-          : left.artifact_id.localeCompare(right.artifact_id);
-      })
-      .map((asset, index) => [
-        `${asset.owning_book_id}:${asset.artifact_id}`,
-        index + 1,
-      ]),
+    entries
+      .filter((entry) => !plan.prepared && matchesQuery(entry, plan.query))
+      .sort((left, right) =>
+        searchRank(left, plan.query) - searchRank(right, plan.query)
+        || compareNewest(left, right))
+      .map((entry, index) => [entryKey(entry), index + 1]),
   );
-  semanticHits.sort((left, right) =>
+  const sortedHits = [...semanticHits].sort((left, right) =>
     comparableHitScore(right.hit) - comparableHitScore(left.hit)
     || left.key.localeCompare(right.key));
   const semanticRank = new Map<string, number>();
   const semanticMatch = new Map<string, SearchHit>();
-  for (const item of semanticHits) {
+  for (const item of sortedHits) {
     if (semanticRank.has(item.key)) continue;
     semanticRank.set(item.key, semanticRank.size + 1);
     semanticMatch.set(item.key, item.hit);
   }
-  const ranked = assets
-    .flatMap((asset) => {
-      const key = `${asset.owning_book_id}:${asset.artifact_id}`;
+  return entries
+    .flatMap((entry) => {
+      const key = entryKey(entry);
       const metadata = metadataRank.get(key);
       const semantic = semanticRank.get(key);
-      if ((query || prepared) && metadata === undefined && semantic === undefined) {
-        return [];
-      }
-      const hit = semanticMatch.get(key);
+      if (metadata === undefined && semantic === undefined) return [];
       return [{
-        asset: hit
-          ? {
-              ...asset,
-              search_match: {
-                score: comparableHitScore(hit),
-                location: hit.location,
-              },
-            }
-          : asset,
+        entry,
+        hit: semanticMatch.get(key),
         score:
           (metadata === undefined ? 0 : 1 / (60 + metadata))
           + (semantic === undefined ? 0 : 1 / (60 + semantic)),
       }];
     })
-    .sort((left, right) => {
-      const rank = right.score - left.score;
-      if (rank !== 0) return rank;
-      const created =
-        Date.parse(right.asset.created_at) - Date.parse(left.asset.created_at);
-      return created !== 0
-        ? created
-        : left.asset.artifact_id.localeCompare(right.asset.artifact_id);
-    })
-    .map((item) => item.asset);
-  if (!query && !prepared) ranked.sort(compareRecentlyUsed);
-  const paged = pageLibraryAssets(ranked, {
+    .sort((left, right) =>
+      right.score - left.score || compareNewest(left.entry, right.entry))
+    .map(({ entry, hit }) => ({ entry, hit }));
+}
+
+async function projectLibraryEntry(
+  books: BookManager,
+  entry: LibraryEntry,
+  hit: SearchHit | undefined,
+): Promise<LibraryAsset> {
+  const book = books.get(entry.owning_book_id);
+  if (!book.ok) throw new Error(book.error.message);
+  const engine = book.value.engine;
+  const row = await engine.withLocalMedia(() =>
+    projectLibraryAsset(engine, entry.owning_book_id, entry));
+  return {
+    ...row,
+    owning_book_id: entry.owning_book_id,
+    owning_book_name: entry.owning_book_name,
+    last_used_at: entry.last_used_at,
+    ...(hit
+      ? { search_match: { score: comparableHitScore(hit), location: hit.location } }
+      : {}),
+  };
+}
+
+function librarySearchPlan(input: LibrarySearchInput): LibrarySearchPlan {
+  const query = input.query?.trim().toLowerCase() ?? "";
+  const prepared = input.referenceId
+    ? searchReferenceStore.get(input.referenceId).reference
+    : undefined;
+  const searching = Boolean(query || prepared);
+  const searchKinds = libraryArtifactKinds(new Set(input.kinds));
+  return {
+    query,
+    prepared,
+    referenceRange: input.referenceRange,
+    searching,
+    browseStatus: searching ? "ready" : (input.browseStatus ?? "ready"),
+    candidateKinds: new Set<ArtifactKind>(searchKinds),
+    searchKinds,
+    tags: input.tags,
+    indexCoverage: input.indexCoverage ?? searching,
+  };
+}
+
+export async function searchLibraryAssets(
+  books: BookManager,
+  input: LibrarySearchInput,
+): Promise<LibraryAssetSearchResult> {
+  await books.ready();
+  const plan = librarySearchPlan(input);
+  const summaries = books.list({ sort: "newest" });
+  const results = await Promise.allSettled(
+    summaries.map((summary) => searchBook(books, summary, plan)),
+  );
+  const errors: LibraryAssetSearchResult["books_with_errors"] = [];
+  const entries: LibraryEntry[] = [];
+  let statusCounts = emptyStatusCounts();
+  const semanticHits: Array<{ key: string; hit: SearchHit }> = [];
+  results.forEach((result, index) => {
+    const bookId = summaries[index]?.bookId ?? "unknown";
+    if (result.status === "rejected") {
+      errors.push({
+        book_id: bookId,
+        message: result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason),
+      });
+      return;
+    }
+    entries.push(...result.value.entries);
+    statusCounts = addStatusCounts(statusCounts, result.value.statusCounts);
+    semanticHits.push(...result.value.hits.map((hit) => ({
+      key: `${bookId}:${hit.artifactId}`,
+      hit,
+    })));
+    if (result.value.searchError) {
+      errors.push({ book_id: bookId, message: result.value.searchError });
+    }
+  });
+  const ranked = rankEntries(entries, semanticHits, plan);
+  const paged = pageLibraryAssets(ranked.map(({ entry }) => entry), {
     offset: input.offset ?? 0,
     limit: input.limit ?? 50,
   });
+  const offset = input.offset ?? 0;
+  const pageHits = ranked.slice(offset, offset + paged.pageAssets.length);
   return {
-    assets: paged.pageAssets,
-    tag_facets: tagFacetCounts(ranked),
+    assets: await Promise.all(pageHits.map(({ entry, hit }) =>
+      projectLibraryEntry(books, entry, hit))),
+    tag_facets: tagFacetCounts(paged.matching),
     unindexed_visual_assets: results.reduce((count, result) =>
       count + (result.status === "fulfilled" ? result.value.unindexed : 0), 0),
     preparationJobs: results.flatMap((result) =>

@@ -101,6 +101,8 @@ const JOB_TITLES: Record<string, string> = {
   semantic_index: 'Semantic index',
   extract_waveform: 'Extract waveform',
   extract_video_poster: 'Create video poster',
+  assess_video_proxy: 'Check video proxy',
+  backfill_media_duration: 'Measure media duration',
   extract_audio: 'Extract audio',
   transcribe: 'Transcribe',
 }

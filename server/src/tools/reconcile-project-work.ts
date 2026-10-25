@@ -8,7 +8,6 @@ import { parseModelId } from "../media/model-id.js";
 import type { Engine, Artifact, ArtifactKind, ArtifactManifestFile } from "videobook-engine";
 import { computeArtifactStatus, QUEUED_TASK_ID } from "videobook-engine";
 import { z } from "zod";
-import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { KieError } from "@apicity/kie";
 import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
@@ -28,7 +27,6 @@ import { getApiKey } from "../api-key.js";
 import {
   findVideoFile,
   findAudioFile,
-  findPrimaryMediaFile,
   RENDER_ORIENTATIONS as MEDIA_RENDER_ORIENTATIONS,
 } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
@@ -49,7 +47,6 @@ import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import type { PendingTask } from "videobook-engine";
 import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-upload.js";
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
-import { probeVideo } from "../ffmpeg.js";
 import { providerEndpoints } from "../media/endpoints.js";
 import { machgenProvider } from "../media/adapters/machgen.js";
 import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
@@ -59,16 +56,18 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
+import type { VideoProxyAssessment } from "../video-proxy.js";
 import {
-  invalidVideoProxyMetadata,
-  probeStoredVideoFile,
-  videoProxyAssessmentMatches,
-  videoProxyMetadata,
-  videoProxyMetadataMatches,
-  videoProxyValidationError,
-  type VideoProxyAssessment,
-  type VideoProxySourceProfile,
-} from "../video-proxy.js";
+  assetDuration,
+  assetMediaUrls,
+  assetStreamProfile,
+  findAssetMediaFile,
+  groupByArtifactId,
+  indexByArtifactId,
+  PARTIAL_DOWNLOAD_RE,
+  scheduleMissingVideoPoster,
+  servedVideoProxyFile,
+} from "../asset-media-projection.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
  *  before reconciliation ages it out. Guards against providers leaving jobs in an
@@ -312,39 +311,6 @@ async function analysisOutputProjection(
   }
 }
 
-function findAssetMediaFile(
-  files: ArtifactManifestFile[],
-  asset: Pick<Artifact, "kind">,
-): ArtifactManifestFile | null {
-  return asset.kind === "audio"
-    ? findAudioFile(files, asset.kind)
-    : asset.kind === "video"
-      ? findVideoFile(files.filter((file) => file.name !== "proxy.mp4"))
-    : findPrimaryMediaFile(files, asset.kind);
-}
-
-async function assessStoredVideoProxy(
-  engine: Engine,
-  assetId: string,
-  sourceFile: ArtifactManifestFile,
-  proxyFile: ArtifactManifestFile,
-  sourceProfile: VideoProxySourceProfile,
-): Promise<boolean> {
-  let assessment: VideoProxyAssessment;
-  try {
-    const proxy = await probeStoredVideoFile(engine, assetId, proxyFile.name);
-    const error = videoProxyValidationError(sourceProfile, proxy);
-    assessment = error
-      ? invalidVideoProxyMetadata(sourceFile, proxyFile, error)
-      : videoProxyMetadata(sourceFile, proxyFile, proxy);
-  } catch (cause) {
-    const error = cause instanceof Error ? cause.message : String(cause);
-    assessment = invalidVideoProxyMetadata(sourceFile, proxyFile, error);
-  }
-  await engine.metadata.artifacts.write(assetId, "proxy", assessment);
-  return assessment.valid;
-}
-
 /** Read the OSG overlay summary from the asset's render metadata. OSG is stored
  *  identically across orientations, so the first orientation that carries an
  *  osgAssetId wins. Returns null when no overlay is configured. */
@@ -478,10 +444,8 @@ function scheduleWaveformExtraction(
     });
 }
 
-const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
 
 /** Media extensions whose duration can be recovered via ffprobe when metadata lacks it. */
-const DURATION_PROBE_EXT_RE = /\.(mp4|mov|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/i;
 
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
@@ -599,30 +563,6 @@ async function readAnalysisRecommendations(
   }
 }
 
-// Content fingerprint covering every file in the asset directory. Changes
-// whenever any file is added, removed, resized, or rewritten, so every URL
-// derived from an asset's filePath (including alternate-orientation renders
-// like portrait.mp4 / landscape.mp4) invalidates together. Cheap: no file
-// reads — just hashes the immutable manifest tuples. Partial downloads are
-// excluded: their size grows on every poll while no served URL points at
-// them, and including them made every media URL churn (and the browser
-// refetch) once per poll tick for the whole duration of a download.
-function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
-  const settled = files.filter((f) => !PARTIAL_DOWNLOAD_RE.test(f.name));
-  if (settled.length === 0) return "";
-  const sorted = [...settled].sort((a, b) => a.name.localeCompare(b.name));
-  const hash = createHash("sha1");
-  for (const f of sorted) {
-    hash.update(f.name);
-    hash.update("\0");
-    hash.update(String(f.sizeBytes ?? 0));
-    hash.update("\0");
-    hash.update(f.objectHash);
-    hash.update("\0");
-  }
-  return hash.digest("hex").slice(0, 12);
-}
-
 function renderedOrientationsFor(
   files: ArtifactManifestFile[],
   kind: ArtifactKind,
@@ -632,26 +572,6 @@ function renderedOrientationsFor(
     return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`timeline_${o}.mp4`));
   }
   return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
-}
-
-function indexByArtifactId<T extends { artifactId: string }>(
-  rows: readonly T[],
-): Map<string, T> {
-  const map = new Map<string, T>();
-  for (const row of rows) map.set(row.artifactId, row);
-  return map;
-}
-
-function groupByArtifactId<T extends { artifactId: string }>(
-  rows: readonly T[],
-): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const row of rows) {
-    const list = map.get(row.artifactId);
-    if (list) list.push(row);
-    else map.set(row.artifactId, [row]);
-  }
-  return map;
 }
 
 export async function buildAssetList(engine: Engine, book_id: string, sort?: "newest" | "oldest"): Promise<ProjectAsset[]> {
@@ -703,30 +623,9 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
       const mediaFile = findAssetMediaFile(files, a);
       const meta = metadata.ok ? metadata.value : null;
       const streams = streamsByArtifact.get(a.artifactId) ?? [];
-      const videoStream = streams.find((stream) => stream.kind === "video" && stream.video);
-      const audioStream = streams.find((stream) => stream.kind === "audio" && stream.audio);
-      const frameRate = videoStream?.video?.averageFrameRate
-        ?? videoStream?.video?.nominalFrameRate;
-      const streamDuration = videoStream
-        ? videoStream.durationTicks
-          * videoStream.timeBase.numerator
-          / videoStream.timeBase.denominator
-        : 0;
-      const metadataDuration = Number(meta?.duration);
-      const sourceDuration = streamDuration > 0
-        ? streamDuration
-        : Number.isFinite(metadataDuration) ? metadataDuration : 0;
-      const sourceProfile: VideoProxySourceProfile | null = sourceDuration > 0
-        ? {
-            videoDuration: sourceDuration,
-            avgFps: frameRate
-              ? frameRate.numerator / frameRate.denominator
-              : null,
-            hasAudio: audioStream !== undefined || meta?.hasAudio === true,
-          }
-        : null;
+      const profile = assetStreamProfile(streams, meta);
+      const { audioStream, frameRate } = profile;
       const fileNames = new Set(files.map((f) => f.name));
-      const hasThumbnail = fileNames.has("original.jpg");
       const renders = renderedOrientationsFor(files, a.kind);
       const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
       const frameDirs = buildFrameDirs(directories, book_id, a.artifactId);
@@ -751,68 +650,22 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         mediaFile?.name ?? null,
       );
 
-      // Cache-bust media URLs so browsers refetch after trim / re-encode / re-render.
-      // For video and image assets, use a content fingerprint covering the whole
-      // asset directory: orientation re-renders (portrait/landscape/square.mp4)
-      // touch alternate files but not original.mp4, so a primary-mtime cache
-      // key would leave alternate-orientation URLs cached and stale.
-      const useFingerprint = a.kind === "video" || a.kind === "image";
-      let cacheBust = '';
-      if (useFingerprint) {
-        const fp = computeAssetFingerprint(files);
-        if (fp) cacheBust = `?v=${fp}`;
-      } else {
-        const mediaHash = mediaFile?.objectHash;
-        if (mediaHash) cacheBust = `?v=${mediaHash.slice(0, 12)}`;
-      }
-      // Character assets: free-form folders have no original.* media. Project
-      // the first image in the folder so sidebar thumbs and drag-drop keep working.
-      let charImage = null;
-      if (a.kind === "character") {
-        charImage = files.find((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name)) ?? null;
-      }
-
-      const proxyCandidate = a.kind === "video"
-        ? files.find((file) => file.name === "proxy.mp4")
-        : null;
-      let proxyFile: ArtifactManifestFile | null = null;
-      if (proxyCandidate && mediaFile) {
-        if (
-          proxyMetadata.ok
-          && videoProxyMetadataMatches(proxyMetadata.value, mediaFile, proxyCandidate)
-        ) {
-          proxyFile = proxyCandidate;
-        } else {
-          const assessmentMatches = proxyMetadata.ok
-            && videoProxyAssessmentMatches(proxyMetadata.value, mediaFile, proxyCandidate);
-          const active = assetWorkRow.ok
-            && assetWorkRow.value !== null
-            && (assetWorkRow.value.status === "pending" || assetWorkRow.value.status === "working");
-          if (!assessmentMatches && !active && sourceProfile) {
-            const valid = await assessStoredVideoProxy(
-              engine,
-              a.artifactId,
-              mediaFile,
-              proxyCandidate,
-              sourceProfile,
-            );
-            if (valid) proxyFile = proxyCandidate;
-          }
-        }
-      }
-      const media_url = charImage
-        ? `/files/${book_id}/${a.artifactId}/${charImage.name}${cacheBust}`
-        : proxyFile
-        ? `/files/${book_id}/${a.artifactId}/${proxyFile.name}${cacheBust}`
-        : mediaFile
-        ? `/files/${book_id}/${a.artifactId}/${mediaFile.name}${cacheBust}`
-        : null;
-      const isImage = a.kind === "image";
-      const thumbnail_url = charImage
-        ? `/files/${book_id}/${a.artifactId}/${charImage.name}${cacheBust}`
-        : hasThumbnail
-        ? `/files/${book_id}/${a.artifactId}/original.jpg${cacheBust}`
-        : isImage ? media_url : null;
+      const proxyFile = servedVideoProxyFile({
+        bookId: book_id,
+        artifact: a,
+        files,
+        mediaFile,
+        proxyMetadata,
+        work: assetWorkRow.value,
+        sourceProfile: profile.sourceProfile,
+      });
+      const { media_url, thumbnail_url } = assetMediaUrls({
+        bookId: book_id,
+        artifact: a,
+        files,
+        mediaFile,
+        proxyFile,
+      });
 
       // Status derivation lives in videobook-engine (`computeArtifactStatus`). We pass
       // the asset-type-aware primary media name we already computed so the
@@ -836,22 +689,13 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
             : null,
       });
 
-      if (a.kind === "video" && status === "ready" && !hasThumbnail && mediaFile) {
-        const recovery = await engine.metadata.artifacts.read<{ sourceHash: string; failed: boolean }>(
-          a.artifactId, "poster-recovery",
-        );
-        if (!recovery.ok || !recovery.value.failed || recovery.value.sourceHash !== mediaFile.objectHash) {
-          void queue.enqueue(`extract-video-poster-${book_id}-${a.artifactId}-${mediaFile.objectHash}`, {
-            type: "extract_video_poster",
-            bookId: book_id,
-            posterArtifactId: a.artifactId,
-            sourceFilename: mediaFile.name,
-            sourceHash: mediaFile.objectHash,
-          }).catch((error) => {
-            logger.error("poster-enqueue-failed", { assetId: a.artifactId, error });
-          });
-        }
-      }
+      await scheduleMissingVideoPoster(engine, {
+        bookId: book_id,
+        artifact: a,
+        files,
+        mediaFile,
+        status,
+      });
 
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
       const analysisInfo = analysisInfoFromMetadata(meta);
@@ -865,21 +709,13 @@ export async function buildAssetList(engine: Engine, book_id: string, sort?: "ne
         }
       }
 
-      // Backfill duration if missing from metadata (video + audio; probeVideo
-      // reads format.duration via ffprobe and works for both).
-      let duration = (meta?.duration as number) ?? null;
-      if (duration === null && mediaFile && DURATION_PROBE_EXT_RE.test(mediaFile.name)) {
-        try {
-          const probe = await probeVideo(join(a.path, mediaFile.name));
-          if (Number.isFinite(probe.duration) && probe.duration > 0) {
-            duration = probe.duration;
-            // Persist so we don't re-probe next time
-            if (metadata.ok) {
-              await engine.metadata.artifacts.write(a.artifactId, "original", { ...metadata.value, duration });
-            }
-          }
-        } catch { /* non-fatal */ }
-      }
+      const duration = assetDuration({
+        bookId: book_id,
+        artifactId: a.artifactId,
+        meta,
+        mediaFile,
+        profile,
+      });
       const audio_info = audioStream?.audio
         ? {
             codec: audioStream.codec,

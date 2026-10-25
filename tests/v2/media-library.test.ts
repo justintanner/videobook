@@ -279,6 +279,34 @@ describe('media Library slots', () => {
       .toEqual([newer.artifactId, older.artifactId])
   })
 
+  it('projects lean rows for only the requested browse page', async () => {
+    const created = await books.create('lean-book')
+    if (!created.ok) throw new Error(created.error.message)
+    const managed = books.get(created.value.bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine = managed.value.engine
+    const first = await readyArtifact(engine, 'image', 'first still', 'original.png', 'first bytes')
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    const second = await readyArtifact(engine, 'image', 'second still', 'original.png', 'second bytes')
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    const third = await readyArtifact(engine, 'image', 'third still', 'original.png', 'third bytes')
+
+    const page = await searchLibraryAssets(books, { kinds: ['image'], limit: 2, offset: 1 })
+    expect(page.assets.map((asset) => asset.artifact_id))
+      .toEqual([second.artifactId, first.artifactId])
+    expect(page.page).toEqual({ offset: 1, limit: 2, total: 3, hasMore: false })
+    expect(page.status_counts.ready).toBe(3)
+    expect(page.assets[0]).toMatchObject({
+      owning_book_name: 'lean-book',
+      status: 'ready',
+      media_url: expect.stringContaining(`/files/${created.value.bookId}/${second.artifactId}/original.png`),
+    })
+    for (const key of ['transcript', 'vision_analysis', 'waveform', 'analysis_info', 'osg', 'frame_dirs']) {
+      expect(page.assets[0]).not.toHaveProperty(key)
+    }
+    expect(page.assets.map((asset) => asset.artifact_id)).not.toContain(third.artifactId)
+  })
+
   it('filters Library search by exact tags without an embedding index', async () => {
     const alpha = await books.create('tag-alpha')
     const beta = await books.create('tag-beta')

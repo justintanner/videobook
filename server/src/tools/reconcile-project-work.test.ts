@@ -291,9 +291,11 @@ describe("buildAssetList", () => {
     expect(assets[0].status).toBe("ready");
   });
 
-  it("backfills duration for audio assets missing metadata duration", async () => {
+  it("measures a missing audio duration in a background job instead of probing inline", async () => {
     const { buildAssetList } = await import("./reconcile-project-work.js");
+    const { registerAssessMediaProbeJobs } = await import("../jobs/assess-media-probes.js");
     const { runFfmpeg } = await import("../ffmpeg.js");
+    registerAssessMediaProbeJobs(fs);
     const createResult = await fs.artifacts.create("aud", "audio-duration");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
@@ -315,12 +317,21 @@ describe("buildAssetList", () => {
     );
     expect(initialMetadata.ok).toBe(true);
 
+    const first = await buildAssetList(fs, fs.book.get().bookId);
+    expect(first.length).toBe(1);
+    expect(first[0].duration).toBeNull();
+
+    await vi.waitFor(async () => {
+      const meta = await fs.metadata.artifacts.read<{ duration?: number }>(
+        createResult.value.artifactId,
+        "original",
+      );
+      expect(meta.ok && typeof meta.value.duration === "number").toBe(true);
+    }, { timeout: 10_000, interval: 50 });
+
     const assets = await buildAssetList(fs, fs.book.get().bookId);
-    expect(assets.length).toBe(1);
     expect(assets[0].duration).toBeGreaterThan(1.2);
     expect(assets[0].duration).toBeLessThan(2.0);
-
-    // Persisted so the next list does not re-probe.
     const meta = await fs.metadata.artifacts.read<{
       duration: number;
       origin: string;

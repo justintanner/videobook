@@ -8,6 +8,8 @@ import { createEngine } from 'videobook-engine'
 import { processVideoFiles } from '../../server/src/jobs/process-video.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { buildAssetList } from '../../server/src/tools/reconcile-project-work.js'
+import { assessStoredVideoProxy } from '../../server/src/jobs/assess-media-probes.js'
+import { findAssetMediaFile } from '../../server/src/asset-media-projection.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -89,6 +91,18 @@ describe('video ingest stream identity', () => {
       }
     }
     await engine.metadata.artifacts.delete(artifact.value.artifactId, 'proxy')
+    const unassessed = await buildAssetList(engine, engine.book.get().bookId)
+    expect(unassessed[0]?.media_url).not.toContain('/proxy.mp4')
+    if (manifest.ok) {
+      const source = findAssetMediaFile(manifest.value.files, { kind: 'video' })
+      const proxy = manifest.value.files.find((file) => file.name === 'proxy.mp4')
+      if (!source || !proxy) throw new Error('missing source or proxy file')
+      expect(await assessStoredVideoProxy(engine, artifact.value.artifactId, source, proxy, {
+        videoDuration: 1,
+        avgFps: 24,
+        hasAudio: true,
+      })).toBe(true)
+    }
     const projected = await buildAssetList(engine, engine.book.get().bookId)
     expect(projected[0]?.media_url).toContain('/proxy.mp4')
     const proxyMetadata = await engine.metadata.artifacts.read<Record<string, unknown>>(
