@@ -157,7 +157,7 @@ describe("private runtime diagnostics", () => {
             if (/^console\./.test(callee) && file !== "logger.ts" && !processOutputBoundary) violations.push(`${file}: console`);
             if (/\.logs\.append$/.test(callee) && !["diagnostics.ts", "tools/chat-history.ts"].includes(file)) violations.push(`${file}: persistent log`);
             if (/^process\.(stdout|stderr)\.write$/.test(callee) && !processOutputBoundary) violations.push(`${file}: process output`);
-            if (callee === "registerDiagnosticName" && !["queue.ts", "tools/log-wrapper.ts"].includes(file)) violations.push(`${file}: name registration`);
+            if (callee === "registerDiagnosticName" && !["queue.ts", "tools/log-wrapper.ts", "media/listing.ts"].includes(file)) violations.push(`${file}: name registration`);
             if (/^logger\./.test(callee) && !ts.isStringLiteral(node.arguments[0])) violations.push(`${file}: dynamic event`);
           }
           ts.forEachChild(node, visit);

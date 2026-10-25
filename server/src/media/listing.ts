@@ -1,7 +1,9 @@
 import { modelFrontierRankings, type ModelFrontierRanking } from "./frontier.js";
 import { PROVIDER_ENV_KEYS } from "./adapters/index.js";
 import { MODEL_ENTRIES } from "./catalog.js";
-import { resolveModel } from "./descriptor.js";
+import { resolveEntry } from "./descriptor.js";
+import { registerDiagnosticName } from "../diagnostics.js";
+import { logger } from "../logger.js";
 import type { Media, ModelEntry, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotSpec } from "./types.js";
 
 export interface ModelListing {
@@ -48,10 +50,32 @@ export function modelListing(model: ResolvedModel): ModelListing {
   };
 }
 
+for (const entry of MODEL_ENTRIES) registerDiagnosticName("model", entry.id);
+
+const unresolvableReported = new Set<string>();
+
+function reportUnresolvable(entry: ModelEntry, error: unknown): void {
+  if (unresolvableReported.has(entry.id)) return;
+  unresolvableReported.add(entry.id);
+  logger.warn("model-unresolvable", { model: entry.id, error });
+}
+
+function resolveOrSkip(entry: ModelEntry): ResolvedModel[] {
+  try {
+    return [resolveEntry(entry)];
+  } catch (error) {
+    reportUnresolvable(entry, error);
+    return [];
+  }
+}
+
+export function resolvableModels(entries: readonly ModelEntry[]): ResolvedModel[] {
+  return entries.flatMap(resolveOrSkip);
+}
+
 export function listModels(filter: ListingFilter = {}): ResolvedModel[] {
-  return MODEL_ENTRIES
+  return resolvableModels(MODEL_ENTRIES
     .filter((entry) => filter.includeHidden || !modelIsHidden(entry))
     .filter((entry) => !filter.media || entry.media === filter.media)
-    .filter((entry) => !filter.operation || entry.operations.includes(filter.operation))
-    .map((entry) => resolveModel(entry.id));
+    .filter((entry) => !filter.operation || entry.operations.includes(filter.operation)));
 }

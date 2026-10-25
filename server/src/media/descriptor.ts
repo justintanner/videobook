@@ -163,14 +163,20 @@ function build(entry: ModelEntry): ResolvedModel {
   };
 }
 
+export function resolveEntry(entry: ModelEntry): ResolvedModel {
+  const cached = cache.get(entry.id);
+  if (cached) return cached;
+  const resolved = build(entry);
+  cache.set(entry.id, resolved);
+  return resolved;
+}
+
 export function resolveModel(model: string): ResolvedModel {
   const cached = cache.get(model);
   if (cached) return cached;
   const entry = modelEntry(model);
   if (!entry) throw new UnknownModelError(model);
-  const resolved = build(entry);
-  cache.set(model, resolved);
-  return resolved;
+  return resolveEntry(entry);
 }
 
 export function tryResolveModel(model: string): ResolvedModel | null {

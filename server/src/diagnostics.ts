@@ -19,6 +19,7 @@ const EVENTS = [
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
   "tag-asset-failed", "voice-session-closed", "alive-captions-regions-failed",
+  "model-unresolvable",
 ] as const;
 export type DiagnosticEvent = typeof EVENTS[number];
 const events = new Set<string>(EVENTS);
@@ -27,10 +28,15 @@ const errorCodes = new Set<string>([
   "EIO", "EMFILE", "ENFILE", "ENOMEM", "ECONNREFUSED", "ECONNRESET",
   "ETIMEDOUT", "EPIPE", "ENOTFOUND", "EADDRINUSE", "EADDRNOTAVAIL", "ABORT_ERR",
 ]);
-const names = { tool: new Set<string>(), jobType: new Set<string>() };
+const names = { tool: new Set<string>(), jobType: new Set<string>(), model: new Set<string>() };
+const NAME_PATTERNS: Record<keyof typeof names, RegExp> = {
+  tool: /^[a-z][a-z0-9_]{0,95}$/,
+  jobType: /^[a-z][a-z0-9_]{0,95}$/,
+  model: /^[a-z][a-z0-9-]{0,31}:[a-z0-9][a-z0-9._/-]{0,159}$/,
+};
 
 export function registerDiagnosticName(kind: keyof typeof names, name: string): void {
-  if (typeof name === "string" && name.trim() === name && /^[a-z][a-z0-9_]{0,95}$/.test(name)) names[kind].add(name);
+  if (typeof name === "string" && NAME_PATTERNS[kind].test(name)) names[kind].add(name);
 }
 
 export interface DiagnosticFields {
@@ -49,6 +55,7 @@ export interface DiagnosticFields {
   jobId?: string | number;
   tool?: string;
   jobType?: string;
+  model?: string;
   durationMs?: number;
   bytesBefore?: number;
   bytesAfter?: number;
@@ -117,7 +124,7 @@ export function diagnosticRecord(event: DiagnosticEvent, fields: DiagnosticField
     const value = ownValue(fields, key);
     if (typeof value === "string" && (ENUM_FIELDS[key] as readonly string[]).includes(value)) result[key] = value;
   }
-  for (const key of ["tool", "jobType"] as const) {
+  for (const key of ["tool", "jobType", "model"] as const) {
     const value = ownValue(fields, key);
     if (typeof value === "string" && names[key].has(value)) result[key] = value;
   }
