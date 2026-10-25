@@ -221,7 +221,7 @@ describe('workspace action launcher with real endpoints', () => {
 
   it('opens from Library at phone widths and keeps shared action search inside the viewport', async () => {
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByLabel('Open Assets', { exact: true }).click()
     await openActions()
     const dialog = page.locator('.composer-actions-panel')
     expect(await dialog.evaluate(element => {
@@ -288,7 +288,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(labels.at(-1)).toContain('Delete')
     expect(labels).not.toContain('More actions')
     await page.keyboard.press('Escape')
-    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByLabel('Open Assets', { exact: true }).click()
     await page.getByRole('region', { name: 'Choose library media' }).waitFor({ state: 'visible' })
     await openActions('/rename')
     expect(await page.getByRole('dialog', { name: 'Workspace actions' }).getByRole('combobox', { name: /^Media/u }).count()).toBe(1)
@@ -660,7 +660,7 @@ describe('workspace action launcher with real endpoints', () => {
       expect(await dialog.locator('.media-library-asset').filter({ hasText: 'action-image' }).count(), `cycle ${cycle}`).toBe(1)
       await page.keyboard.press('Escape')
       await expect.poll(() => dialog.count()).toBe(0)
-      await page.getByLabel('Open Library', { exact: true }).click()
+      await page.getByLabel('Open Assets', { exact: true }).click()
     }
     expect(browserErrors).toEqual([])
   }, 120_000)

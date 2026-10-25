@@ -1798,7 +1798,7 @@ describe('chat composer browser flow', () => {
     expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
     await input.fill('')
     await page.getByLabel('Clear selection', { exact: true }).click()
-    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByLabel('Open Assets', { exact: true }).click()
     await page.getByRole('button', { name: '/videobook', exact: true }).click()
     await expect.poll(async () => {
       const layout = await readLayout()
@@ -5600,10 +5600,10 @@ describe('chat composer browser flow', () => {
       new DOMMatrix(getComputedStyle(element.querySelector('.react-flow__viewport')!).transform).a)
     const scaleBefore = await scale()
 
-    const autoArrange = page.getByLabel('Auto-arrange notebook')
+    const autoArrange = page.getByLabel('Clean up notebook')
     await autoArrange.waitFor({ state: 'visible' })
     expect(await autoArrange.getAttribute('title')).toBe(
-      'Arrange cells by workflow and media type',
+      'Clean up cells by workflow and media type',
     )
     observedCalls.length = 0
     await autoArrange.click()

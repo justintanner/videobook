@@ -215,7 +215,7 @@ describe('staged goal mode in the browser', () => {
     const renamed = await engine.notebooks.write({ ...displaced, name: 'Goal layout review' })
     if (!renamed.ok) throw new Error(renamed.error.message)
     const moveResponse = page.waitForResponse(response => response.request().postData()?.includes('"move_notebook_cells"') ?? false)
-    await page.getByRole('button', { name: 'Auto-arrange notebook', exact: true }).click()
+    await page.getByRole('button', { name: 'Clean up notebook', exact: true }).click()
     const movePayload = await (await moveResponse).text()
     expect(movePayload).not.toContain('isError":true')
     await expect.poll(() => {

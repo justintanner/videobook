@@ -46,7 +46,7 @@ describe('Library in the chat composer', () => {
   const input = () => page.getByLabel('Videobook command input', { exact: true })
 
   async function openLibrary(): Promise<void> {
-    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByLabel('Open Assets', { exact: true }).click()
     await picker().waitFor({ state: 'visible', timeout: MCP_ROUNDTRIP_MS })
     await expect.poll(() => picker().locator('.media-library-results').getAttribute('aria-busy'), { timeout: MCP_ROUNDTRIP_MS }).toBe('false')
   }
@@ -112,7 +112,7 @@ describe('Library in the chat composer', () => {
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl)
     await input().waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(() => page.getByLabel('Open Library', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+    await expect.poll(() => page.getByLabel('Open Assets', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
   })
 
   afterEach(async ({ task }) => {
@@ -205,7 +205,7 @@ describe('Library in the chat composer', () => {
   it('keeps search and close controls usable on narrow screens and retires the old page', async () => {
     await page.goto(`${appUrl}/library`)
     await input().waitFor({ state: 'visible', timeout: 30_000 })
-    await expect.poll(() => page.getByLabel('Open Library', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+    await expect.poll(() => page.getByLabel('Open Assets', { exact: true }).isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await openLibrary()
     for (const [width, height] of [[1440, 1000], [390, 844], [320, 740], [844, 390]]) {
       await page.setViewportSize({ width, height })
@@ -225,6 +225,8 @@ describe('Library in the chat composer', () => {
     await openLibrary()
     expect(await cells()).toEqual([])
     await page.getByLabel('Open Jobs', { exact: true }).click()
+    expect(await page.getByLabel('Open Assets', { exact: true }).count()).toBe(0)
+    await page.getByTitle('Open notebook', { exact: true }).click()
     await openLibrary()
     expect(new URL(page.url()).pathname).toBe('/')
   })

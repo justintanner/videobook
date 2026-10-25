@@ -1,4 +1,4 @@
-import { Ellipsis, LayoutGrid, Plus, Trash2, X } from 'lucide-react'
+import { BrushCleaning, Ellipsis, Library, Plus, Trash2, X } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 
@@ -10,6 +10,9 @@ type NotebookToolbarProps = {
   onAdd: (type: NotebookCellAddType) => void | Promise<void>
   onAddDragEnd: () => void
   onArrange: () => void | Promise<void>
+  assetsOpen: boolean
+  assetsDisabled: boolean
+  onAssets: () => void
   onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
   onSelectionActions?: () => void
@@ -23,6 +26,9 @@ export function NotebookToolbar({
   onAdd,
   onAddDragEnd,
   onArrange,
+  assetsOpen,
+  assetsDisabled,
+  onAssets,
   onDeleteSelection,
   onClearSelection,
   onSelectionActions,
@@ -58,13 +64,25 @@ export function NotebookToolbar({
         <button
           type="button"
           className="canvas-auto-arrange"
-          title="Arrange cells by workflow and media type"
-          aria-label="Auto-arrange notebook"
+          title="Clean up cells by workflow and media type"
+          aria-label="Clean up notebook"
           disabled={arrangeDisabled}
           onClick={() => void onArrange()}
         >
-          <LayoutGrid size={15} />
-          <span>Arrange</span>
+          <BrushCleaning size={15} />
+          <span>Clean</span>
+        </button>
+        <button
+          type="button"
+          className={assetsOpen ? 'canvas-auto-arrange active' : 'canvas-auto-arrange'}
+          title="Assets"
+          aria-label="Open Assets"
+          aria-expanded={assetsOpen}
+          disabled={assetsDisabled}
+          onClick={onAssets}
+        >
+          <Library size={15} />
+          <span>Assets</span>
         </button>
       </div>
       {selectedCount > 0 && (

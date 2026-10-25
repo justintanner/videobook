@@ -8992,7 +8992,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (route.kind === 'existing') return null
     if (route.kind === 'library') {
       openNotebookLibrary()
-      return { ok: true, message: 'Library opened' }
+      return { ok: true, message: 'Assets opened' }
     }
     if (route.kind === 'screen') {
       navigate(route.screen)
@@ -11328,7 +11328,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const libraryDockContent = selectedMediaLibraryState?.cellId === null && mediaLibraryContent ? (
     <div className="composer-notebook-dock inspector">
       <header>
-        <span className="inspector-cell-title"><Library size={15} /><strong>Library</strong></span>
+        <span className="inspector-cell-title"><Library size={15} /><strong>Assets</strong></span>
         <div className="inspector-header-actions"><ComposerDockClose /></div>
       </header>
       {mediaLibraryContent}
@@ -11604,6 +11604,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
+            assetsOpen={mediaLibraryPicker?.cellId === null && composerDockOpen}
+            assetsDisabled={busy || mcp.state !== 'ready'}
+            onAssets={() => openNotebookLibrary()}
             onDeleteSelection={deleteSelectedCells}
             onSelectionActions={() => void openWorkspaceActions(undefined, {
               cell_id: selectedNotebookCell?.id,
@@ -11619,17 +11622,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )}
         <div className="topbar-tools">
           <nav className="header-navigation" aria-label="Workspace navigation">
-            <button
-              type="button"
-              className={mediaLibraryPicker?.cellId === null && composerDockOpen ? 'active' : ''}
-              title="Library"
-              aria-label="Open Library"
-              aria-expanded={mediaLibraryPicker?.cellId === null && composerDockOpen}
-              disabled={busy || mcp.state !== 'ready' || !notebook}
-              onClick={() => openNotebookLibrary()}
-            >
-              <Library size={17} />
-            </button>
             {screenNavigation.map((item) => {
               const Icon = item.icon
               return (

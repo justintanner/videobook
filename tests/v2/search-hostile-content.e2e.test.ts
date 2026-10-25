@@ -232,7 +232,7 @@ describe("hostile search content across browser surfaces", () => {
   it("normalizes hostile project names and safely renders search matches in the chat picker", async () => {
     if (!page) throw new Error("Browser page was not initialized");
     await page.goto(appUrl, { waitUntil: "commit" });
-    await page.getByLabel("Open Library", { exact: true }).click();
+    await page.getByLabel("Open Assets", { exact: true }).click();
     await search(page, "hostile-excerpt-marker");
     const card = page.locator(".media-library-asset");
     await card.first().waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });

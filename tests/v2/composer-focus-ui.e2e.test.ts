@@ -208,7 +208,7 @@ describe('composer focus through real workspace interactions', () => {
     expect(composerBox!.height - inputRowBox!.height).toBeLessThanOrEqual(2)
     await page.keyboard.type('primary draft')
     expect(await input().textContent()).toBe('primary draft')
-    await page.getByLabel('Open Library', { exact: true }).click()
+    await page.getByLabel('Open Assets', { exact: true }).click()
     const picker = page.getByRole('region', { name: 'Choose library media', exact: true })
     await picker.waitFor({ state: 'visible' })
     expect(await input().textContent()).toBe('primary draft')
