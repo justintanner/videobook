@@ -72,7 +72,7 @@ describe("Multyculty workflow fixture", () => {
       "-y",
       "-f", "lavfi", "-i", "color=c=0x10261b:s=160x90:r=6:d=15",
       "-f", "lavfi", "-i", "color=c=0x274b3a:s=160x90:r=6:d=15",
-      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=30",
+      "-f", "lavfi", "-i", "anoisesrc=color=pink:amplitude=0.1:seed=1:sample_rate=48000:duration=30",
       "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[video]",
       "-map", "[video]",
       "-map", "2:a",
