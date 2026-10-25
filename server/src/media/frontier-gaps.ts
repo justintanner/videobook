@@ -31,7 +31,6 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "fal:bytedance.seedance2p0.imageToVideo": "This exact endpoint is not in the Videobook catalog.",
   "fal:blackforestlabs.flux3.imageToVideo": "This exact endpoint is not in the Videobook catalog.",
   "fal:xai.grokImagineVideo.v1p5.imageToVideo": "This exact endpoint is not in the Videobook catalog.",
-  "kie:grok-imagine-video-1-5-preview": "This exact endpoint is not in the Videobook catalog.",
   "xai:v1.videos.generations.imageToVideo": "The catalog uses grok-imagine-video, not the ranked 1.5 model id.",
   "fal:alibaba.happyHorse.v1p1.imageToVideo": "This exact endpoint is not in the Videobook catalog.",
   "fal:bytedance.seedance2p5.referenceToVideo": "This exact endpoint is not in the Videobook catalog.",

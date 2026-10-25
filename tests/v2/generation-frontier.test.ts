@@ -36,6 +36,17 @@ describe('frontier model picker', () => {
     }
   })
 
+  it('ranks the Kie Grok 1.5 preview and keeps the apicity 0.18.1 Kie video models in the other group', () => {
+    const videoActions = asNotebookGenerationActions({ actions: listNotebookActions() })
+      .filter(action => action.cellTypes.includes('generate_video'))
+      .map(action => ({ ...action, available: true }))
+    const [ranked, other] = frontierPickerGroups(videoActions, 'i2v')
+    expect(ranked!.rows.find(row => row.action.model === 'kie:grok-imagine-video-1-5-preview')?.ranking).toMatchObject({ type: 'i2v', rank: 9 })
+    for (const model of ['kling-4.0/reference-to-video', 'kling-4.0/keyframe-to-video', 'pixverse-v6-max/text-to-video', 'pixverse-v6-max/image-to-video', 'omnihuman-2-0']) {
+      expect(other!.rows.some(row => row.action.model === `kie:${model}`), model).toBe(true)
+    }
+  })
+
   it('selects the matching operation board, including explicit video reference/edit modes', () => {
     expect(generationFrontierType('generate_image', 'default', 'text_to_image', [])).toBe('t2i')
     expect(generationFrontierType('generate_image', 'default', 'text_to_image', [{ type: 'prompt' }])).toBe('t2i')

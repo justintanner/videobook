@@ -2,6 +2,8 @@ import {
   replaceHappyHorseAssetMentions,
   replaceNaturalAssetMentions,
   rewriteImageRefMentionsToBrackets,
+  rewriteKling4FrameMentions,
+  rewriteKling4ReferenceMentions,
   rewriteSeedanceAssetMentions,
   rewriteViduReferenceMentions,
   stripRefMentions,
@@ -73,6 +75,14 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
       return rewriteImageRefMentionsToBrackets(prompt, refsFor(refs, "image"));
     case "vidu":
       return rewriteViduReferenceMentions(prompt, refsFor(refs, "image"), refsFor(refs, "audio"));
+    case "kling4":
+      return rewriteKling4ReferenceMentions(prompt, refsFor(refs, "image"), refsFor(refs, "video"));
+    case "kling4_keyframes":
+      return rewriteKling4FrameMentions(prompt, {
+        first: refsFor(refs, "first_frame"),
+        keyframes: refsFor(refs, "image"),
+        last: refsFor(refs, "last_frame"),
+      });
     case "happyhorse_edit":
       return replaceHappyHorseAssetMentions(prompt, refsFor(refs, "video")[0] ?? null, refsFor(refs, "image"));
   }

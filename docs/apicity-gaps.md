@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.18.0 (2026-10-24). Image, video and audio
+Videobook now uses Apicity 0.18.1 (2026-10-25). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -641,6 +641,13 @@ catalog does not contain. Apicity `ac-8zeblu` asks for `v1.queue.status` and
 `v1.queue.result` rows. Once a release ships them, vb-7871 checks that fal
 polling captures resolve in `apicity har report` and marks this section
 resolved.
+
+Apicity 0.18.1 (2026-10-25), installed since Videobook 0.3.1, ships both rows:
+the `@apicity/cli` 0.18.1 catalog lists `v1.queue.status` and
+`v1.queue.result` (`ac-8zeblu`) along with the other fal SDK methods written
+as method shorthand (`ac-3ba9xb`). The fal requests Videobook sends are
+unchanged. This section stays open until vb-7871 confirms the captures
+resolve.
 
 ---
 

@@ -43,6 +43,8 @@ export type PromptDialect =
   | "strip_frames"
   | "brackets"
   | "vidu"
+  | "kling4"
+  | "kling4_keyframes"
   | "happyhorse_edit";
 
 export type PromptGuide =

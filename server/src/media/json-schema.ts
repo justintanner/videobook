@@ -9,6 +9,7 @@ export interface JsonSchema {
   const?: unknown;
   anyOf?: JsonSchema[];
   oneOf?: JsonSchema[];
+  not?: JsonSchema;
   default?: unknown;
   description?: string;
   minimum?: number;
@@ -65,6 +66,10 @@ export function isKeyframeItem(schema: JsonSchema | undefined): boolean {
   return branches(schema).some((branch) => branch.type === "object"
     && branch.properties?.image_url !== undefined
     && branch.properties?.frame_index !== undefined);
+}
+
+export function acceptsNoValue(schema: JsonSchema): boolean {
+  return schema.not !== undefined && Object.keys(schema.not).length === 0;
 }
 
 export function isArraySchema(schema: JsonSchema): boolean {

@@ -98,6 +98,35 @@ export function rewriteSeedanceAssetMentions(
   return replaceNotebookMentions(prompt, replacements);
 }
 
+function numberedMentions(refs: readonly string[], marker: string): Array<{ reference: string; replacement: string }> {
+  return refMentionEntries(refs).map(({ ref, index }) => ({
+    reference: ref,
+    replacement: `@${marker}_${index + 1}`,
+  }));
+}
+
+export function rewriteKling4ReferenceMentions(
+  prompt: string,
+  imageRefs: readonly string[],
+  videoRefs: readonly string[],
+): string {
+  return replaceNotebookMentions(prompt, [
+    ...numberedMentions(imageRefs, "image"),
+    ...numberedMentions(videoRefs, "video"),
+  ]);
+}
+
+export function rewriteKling4FrameMentions(
+  prompt: string,
+  frames: { first: readonly string[]; keyframes: readonly string[]; last: readonly string[] },
+): string {
+  return replaceNotebookMentions(prompt, [
+    ...frames.first.slice(0, 1).map((reference) => ({ reference, replacement: "@first_frame" })),
+    ...numberedMentions(frames.keyframes, "keyframe"),
+    ...frames.last.slice(0, 1).map((reference) => ({ reference, replacement: "@last_frame" })),
+  ]);
+}
+
 export function rewriteViduReferenceMentions(
   prompt: string,
   imageRefs: readonly string[],

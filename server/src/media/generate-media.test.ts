@@ -314,6 +314,29 @@ describe("generic media generation", () => {
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.png");
   });
 
+  it.each([
+    ["kie:kling-4.0/reference-to-video", { image: ["a.png"], video: ["b.mp4"] }, { image_urls: ["a.png"], video_urls: ["b.mp4"] }, { duration: 12, resolution: "1080p", aspect_ratio: "9:16" }],
+    ["kie:kling-4.0/keyframe-to-video", { first_frame: ["a.png"], image: ["b.png"], last_frame: ["c.png"] }, { first_frame_url: "a.png", keyframe_urls: ["b.png"], last_frame_url: "c.png" }, { duration: 12, resolution: "1080p" }],
+    ["kie:pixverse-v6-max/text-to-video", {}, {}, { quality: "1080p", duration: 12, aspect_ratio: "9:16" }],
+    ["kie:pixverse-v6-max/image-to-video", { image: ["a.png"] }, { image_urls: ["a.png"] }, { quality: "1080p", duration: 12 }],
+    ["kie:omnihuman-2-0", { image: ["a.png"], audio: ["b.mp3"] }, { image_urls: ["a.png"], audio_url: "b.mp3" }, { enable_watermark: true }],
+    ["kie:grok-imagine-video-1-5-preview", { image: ["a.png"], first_frame: ["b.png"] }, { image_urls: ["a.png"], first_frame_url: "b.png" }, { duration: 12, resolution: "720p" }],
+  ] as const)("submits %s to KIE createTask with its catalog defaults", async (model, names, urlFields, fields) => {
+    const url = (name: string) => `${baseURL}/files/${name}`;
+    const refs = Object.fromEntries(Object.entries(names).map(([role, list]) => [role, list.map(url)]));
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: { book_id: engine.book.get().bookId, model, prompt: "a presenter waves", refs },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as Record<string, unknown>;
+    const placed = Object.fromEntries(Object.entries(urlFields).map(([field, value]) => [field, typeof value === "string" ? url(value) : value.map(url)]));
+    expect(submitted).toMatchObject({ model: model.slice("kie:".length), input: { prompt: "a presenter waves", ...placed, ...fields } });
+    const pending = engine.jobs.pending.read(assetId);
+    expect(pending.ok && pending.value).toMatchObject({ taskId: "kie-task-1", taskType: "media_kie", meta: { model, media: "video" } });
+  });
+
   it("completes a Seedance 2.5 draft on Kie with the draft's billed seconds", async () => {
     const draft = await engine.artifacts.create("video", "seedance draft");
     if (!draft.ok) throw new Error(draft.error.message);

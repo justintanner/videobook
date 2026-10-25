@@ -6,6 +6,53 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-25
+
+### Added
+
+- KIE Kling 4.0 reference-to-video and keyframe-to-video, 3 to 30 seconds at
+  720p or 1080p. Reference-to-video takes up to ten images and five videos,
+  and generates from the prompt alone when none are connected. Keyframe-to-video
+  takes a first frame, up to eight middle keyframes and a last frame, as many
+  as the duration allows. Prompts name connected media the way Kling 4.0 does:
+  `@image_1`, `@video_1`, `@first_frame`, `@keyframe_1` and `@last_frame`.
+- KIE PixVerse V6 Max text-to-video and image-to-video, 1 to 15 seconds at
+  360p to 1080p, with optional generated audio and a seed. Image-to-video
+  follows the image's aspect ratio.
+- KIE OmniHuman 2.0, which animates one image to a driving audio track at 720p
+  for as long as the audio runs, with an optional prompt of up to 300
+  characters. KIE's watermark stays on by default (`enable_watermark`).
+- The KIE Grok Imagine Video 1.5 preview, the KIE Grok Imagine endpoint that
+  takes first and last frames, a loop image (`loop_url`) and up to four timed
+  `keyframes`. It shares the Grok Imagine Video 1.5 image-to-video frontier
+  ranking. Kling 4.0, PixVerse V6 Max and OmniHuman 2.0 are on no top-10 board
+  and appear in the unranked group.
+
+### Changed
+
+- Upgrade all `@apicity/*` dependencies to 0.18.1, which prices the new KIE
+  models. Its endpoint catalog now lists fal `v1.queue.status` and
+  `v1.queue.result`, with the other fal SDK methods written as method
+  shorthand, so `apicity har report` from `@apicity/cli` 0.18.1 can resolve the
+  fal polling captures Videobook writes. The requests sent to fal are
+  unchanged.
+- Image and video models default to a 12-second duration (or the nearest
+  allowed length), a 9:16 aspect ratio and their highest resolution, quality
+  and bitrate. Each notebook remembers the last duration, aspect ratio,
+  resolution and quality a cell used, and applies them to new cells and model
+  switches. Goals saved before this change keep their 2K scene; new goals use
+  4K.
+- On desktop, Settings shows AI providers in one column and accounts, storage
+  and diagnostics in another; on phones the columns stack behind section jump
+  buttons. The chat input stays a plain bar on Settings.
+- The Library opens from an Assets button in the notebook toolbar instead of
+  the header, and Arrange is renamed Clean.
+- Library browsing pages assets before building their rows and no longer runs
+  ffprobe while listing; proxy checks and duration backfills run as background
+  jobs.
+- A Post can take its published link without being saved to iPhone or Dropbox
+  first.
+
 ### Fixed
 
 - HAR captures of KIE's nested Veo and Suno SDK calls are named by their
@@ -13,9 +60,24 @@ and the package uses [Semantic Versioning](https://semver.org/).
   `api.v1.generate.sounds`, instead of their SDK paths, so `apicity har report`
   resolves them. Sub-provider prefixes that are URL segments stay:
   `kie.claude.post.v1.messages` is named `claude.v1.messages`.
+- A generation that fails before reaching its provider, such as a request the
+  schema refuses, is captured under the provider's catalog endpoint, and fal,
+  Alibaba and KIE file uploads are captured as `storage.upload.initiate`,
+  `api.v1.uploads` and `api.fileStreamUpload`, so `apicity har report` resolves
+  them.
 - A notebook generation whose provider fails after accepting the request now
   marks its plan failed with the provider error. `list_notebook_generation_plans`
   and the Jobs screen kept reporting such plans as awaiting output.
+- v3 goals saved with a 2K scene load again and keep that resolution when they
+  are edited, approved or retried.
+- Image subject edits check the provider key before uploading the source image,
+  so a missing or placeholder key no longer sends the image to a public file
+  host for a request that cannot run.
+- Settings loads when the page opens on it, or when it opens before the MCP
+  connection is ready.
+- The multyculty workflow and video poster recovery tests no longer time out on
+  loaded hosts, and the chat-composer browser test no longer reads the runner's
+  `.env` or provider keys and matches the ranked model picker.
 
 ## [0.3.0] - 2026-10-24
 

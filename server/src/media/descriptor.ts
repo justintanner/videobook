@@ -5,6 +5,7 @@ import { preferredDefaults } from "./preferred-defaults.js";
 import { claimedFields, resolveSlot } from "./ref-fields.js";
 import { wireSpec } from "./wire.js";
 import {
+  acceptsNoValue,
   enumValues,
   numberBounds,
   propertyAt,
@@ -103,7 +104,7 @@ function resolveOptions(
   const defaults = entry.defaults ?? {};
   const options: OptionSpec[] = [];
   for (const [name, schema] of Object.entries(input.properties ?? {})) {
-    if (excluded.has(name) || name in fixed) continue;
+    if (excluded.has(name) || name in fixed || acceptsNoValue(schema)) continue;
     options.push(optionSpec(name, name, schema, required.has(name), defaults));
   }
   for (const [name, path] of Object.entries(entry.aliases ?? {})) {
