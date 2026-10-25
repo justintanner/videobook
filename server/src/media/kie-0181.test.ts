@@ -94,11 +94,13 @@ describe("kie 0.18.1 video catalog", () => {
     expect(applyPromptDialect(model.entry.dialect, "@image1 starts running", { image: [A] })).toBe("starts running");
   });
 
-  it("drives OmniHuman 2.0 with one image, the driving audio and an optional short prompt", () => {
+  it("drives OmniHuman 2.0 with one image, the driving audio and an optional short prompt, without KIE's watermark by default", () => {
     const model = resolveModel("kie:omnihuman-2-0");
     expect(model.entry.operations).toEqual(resolveModel("kie:omnihuman-1-5").entry.operations);
     expect(buildWireRequest(model, { refUrls: { image: [image], audio: [audio] } }))
-      .toMatchObject({ ok: true, request: { input: { image_urls: [image], audio_url: audio, enable_watermark: true } } });
+      .toMatchObject({ ok: true, request: { input: { image_urls: [image], audio_url: audio, enable_watermark: false } } });
+    expect(buildWireRequest(model, { refUrls: { image: [image], audio: [audio] }, options: { enable_watermark: true } }))
+      .toMatchObject({ ok: true, request: { input: { enable_watermark: true } } });
     expect(buildWireRequest(model, { prompt: "x".repeat(301), refUrls: { image: [image], audio: [audio] } }))
       .toMatchObject({ ok: false, error: expect.stringContaining("<=300 characters") });
     expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image] } }))

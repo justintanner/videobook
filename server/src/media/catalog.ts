@@ -206,7 +206,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:minimax-h3/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", rules: { refDurationMs: MiniMaxH3ReferenceClipDurationMs } },
   { id: "kie:volcengine/video-to-video-lip-sync", media: "video", operations: ["lip_sync"], outputLength: "audio" },
   { id: "kie:omnihuman-1-5", media: "video", operations: ["image_to_video", "lip_sync"], dialect: "natural", outputLength: "audio" },
-  { id: "kie:omnihuman-2-0", media: "video", operations: ["image_to_video", "lip_sync"], dialect: "natural", outputLength: "audio" },
+  { id: "kie:omnihuman-2-0", media: "video", operations: ["image_to_video", "lip_sync"], dialect: "natural", defaults: { enable_watermark: false }, outputLength: "audio" },
   { id: "kie:vidu-q4/image-to-video", media: "video", operations: ["image_to_video"], dialect: "natural_kinds" },
   { id: "kie:vidu-q4/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural_kinds" },
   { id: "kie:pixverse-v6-max/text-to-video", media: "video", operations: ["text_to_video"], defaults: { quality: "1080p" } },

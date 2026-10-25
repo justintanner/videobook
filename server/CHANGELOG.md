@@ -6,6 +6,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- KIE OmniHuman 2.0 generations turn KIE's watermark off by default
+  (`enable_watermark: false`); pass `enable_watermark: true` to keep it.
+  OmniHuman 2.0 videos generated with 0.3.1 carry the watermark. OmniHuman
+  1.5 has no watermark option.
+
 ### Fixed
 
 - Queued KIE OmniHuman 1.5 and 2.0 generations pass their driving audio's
