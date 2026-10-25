@@ -83,6 +83,7 @@ export interface ModelEntry {
   refs?: Partial<Record<RefRole, string | readonly string[] | null>>;
   aliases?: Record<string, string>;
   defaults?: Record<string, unknown>;
+  pinnedDefaults?: readonly string[];
   keyframeFps?: number;
   refItem?: Partial<Record<RefRole, Record<string, unknown>>>;
   dialect?: PromptDialect;

@@ -31,6 +31,7 @@ import type { ChainStepReviewValue, ChainRunValue } from '@/videobook/chat-actio
 import { NOTEBOOK_GRID_ROW_COUNT, NOTEBOOK_GRID_COLUMN_COUNT } from 'videobook-engine/notebook-grid'
 import type { ForgetAssetOutcome, ForgetAssetReference } from '@/videobook/forget-asset'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
+import { parseStickySettings, type StickySettings } from '../../server/src/media/preferred-defaults'
 
 type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
@@ -386,7 +387,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   }
 }
 
-export type NotebookSnapshot = NotebookDocument & { revision?: string; posts?: PostView[] }
+export type NotebookSnapshot = NotebookDocument & { revision?: string; posts?: PostView[]; generationSettingsMemory?: StickySettings }
 
 export function asNotebook(value: unknown): NotebookSnapshot | null {
   const item = recordValue(value)
@@ -448,6 +449,9 @@ export function asNotebook(value: unknown): NotebookSnapshot | null {
         }
       : {}),
     ...(Array.isArray(item.posts) ? { posts: item.posts as PostView[] } : {}),
+    ...(recordValue(item.generation_settings_memory)
+      ? { generationSettingsMemory: parseStickySettings(recordValue(item.generation_settings_memory)!) }
+      : {}),
     cells,
     edges,
   }

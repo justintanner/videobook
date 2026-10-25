@@ -95,7 +95,7 @@ describe("estimate_cost tool", () => {
 
   it("uses catalog defaults when options are omitted", async () => {
     const payload = await estimate([{ tool_name: "generate_video", input: { model: "kie:bytedance/seedance-2-5", prompt: "x" } }]);
-    expect(payload.estimate.breakdown.units).toBe(13);
+    expect(payload.estimate.breakdown.units).toBe(12);
     expect(payload.estimate.usd).toBeGreaterThan(0);
   });
 

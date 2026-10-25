@@ -23,8 +23,8 @@ describe("lightning defaults", () => {
   it("defaults the Seedance 2.5 catalog model to the lightning video profile", () => {
     expect(defaults(LIGHTNING_VIDEO_MODEL)).toMatchObject({
       resolution: "1080p",
-      aspect_ratio: "16:9",
-      duration: 13,
+      aspect_ratio: "9:16",
+      duration: 12,
       output_format: "mp4",
       generate_audio: true,
     });
@@ -32,8 +32,8 @@ describe("lightning defaults", () => {
 
   it("defaults the Nano Banana 2.1 catalog model to the lightning scene profile", () => {
     expect(defaults(LIGHTNING_SCENE_MODEL)).toMatchObject({
-      aspect_ratio: "16:9",
-      resolution: "2K",
+      aspect_ratio: "9:16",
+      resolution: "4K",
       output_format: "jpg",
     });
   });

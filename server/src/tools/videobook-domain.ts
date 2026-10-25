@@ -63,6 +63,11 @@ import {
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { previewGeneration } from "../media/preview.js";
+import {
+  readNotebookStickySettings,
+  rememberNotebookStickySettings,
+  seedNotebookStickySettings,
+} from "../notebook-sticky-settings.js";
 import { generationInputMentions, remapGenerationInputPrompt } from "../generation-input-mentions.js";
 import { applyPreviewPlaceholderUrls } from "../preview-payload.js";
 import { jobProviderTaskStatus } from "../provider-task-status.js";
@@ -733,6 +738,7 @@ function notebookPayload(
     cells: normalized.cells.map(cellPayload),
     posts: notebookPosts(engine, normalized),
     edges: normalized.edges,
+    generation_settings_memory: readNotebookStickySettings(engine, normalized.id),
   };
 }
 
@@ -1401,6 +1407,7 @@ export function videobookDomainDefs(
         if ((args.cell as CellInput).type === "post") return failure("Use create_post to freeze source media and create a Post cell");
         if ((args.cell as CellInput).type === "goal") return failure(GOAL_TILE_CREATE_ERROR);
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
+        let requestedCell: NotebookCell = cell;
         let outputCell: NotebookCell | null = null;
         let outputEdge: NotebookDocument["edges"][number] | null = null;
         try {
@@ -1418,6 +1425,8 @@ export function videobookDomainDefs(
                 );
               }
             cell = normalizeCellActionFields(cell, notebook);
+            requestedCell = cell;
+            cell = seedNotebookStickySettings(cell, readNotebookStickySettings(engine, String(args.notebook_id)));
             const withCell = seedInitialGenerationPrompt({
               ...notebook,
               cells: [...notebook.cells, cell],
@@ -1470,6 +1479,7 @@ export function videobookDomainDefs(
             },
             { cellId: cell.id },
           );
+          if (result.ok) rememberNotebookStickySettings(engine, String(args.notebook_id), requestedCell);
           return result.ok
             ? json({
                 ...cellPayload(cell),
@@ -1501,6 +1511,7 @@ export function videobookDomainDefs(
           return failure(`Stale notebook revision: expected ${args.expected_revision}`);
         }
         const patch = args.cell as Partial<CellInput>;
+        const edited: { previous?: NotebookCell; next?: NotebookCell } = {};
         try {
           const result = await mutateNotebook(
             engine,
@@ -1563,9 +1574,14 @@ export function videobookDomainDefs(
                     ? {}
                     : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
                 }, document);
-                const next = reconcileInitialGenerationPrompt(cell, normalized);
+                const reconciled = reconcileInitialGenerationPrompt(cell, normalized);
+                const next = reconciled.model !== cell.model
+                  ? seedNotebookStickySettings(reconciled, readNotebookStickySettings(engine, String(args.notebook_id)))
+                  : reconciled;
                 const validation = validateCellConfiguration(next, document);
                 if (!validation.ok) throw new Error(validation.message);
+                edited.previous = cell;
+                edited.next = reconciled;
                 return next;
               });
               if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
@@ -1577,6 +1593,7 @@ export function videobookDomainDefs(
             },
             { cellId: args.cell_id },
           );
+          if (result.ok && edited.next) rememberNotebookStickySettings(engine, String(args.notebook_id), edited.next, edited.previous);
           return result.ok
             ? json({ cell_id: args.cell_id, revision: result.value.hash })
             : failure(result.error.message);

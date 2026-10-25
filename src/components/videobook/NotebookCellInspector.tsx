@@ -89,6 +89,7 @@ import {
 } from '@/videobook/mention-suggestions'
 import { generationInputMentions, remapGenerationInputPrompt } from '../../../server/src/generation-input-mentions'
 import { generationModeInputError, generationModeInputTarget } from '../../../server/src/generation-input-policy'
+import { stickySettingsFor, stickySettingsFrom, type StickySettings } from '../../../server/src/media/preferred-defaults'
 import {
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
@@ -468,6 +469,7 @@ type NotebookCellInspectorProps = {
   historyVisible?: boolean
   generationsVisible?: boolean
   generationActions?: readonly NotebookGenerationAction[]
+  generationSettingsMemory?: StickySettings
   mentionAssets?: readonly AssetMentionCandidate[]
   voiceCatalog?: ElevenLabsVoicesState
   /** Transcribe / analyze progress, keyed by artifact id. */
@@ -2487,6 +2489,7 @@ function ExecutableCellInspector({
   initialGenerationPreview,
   onSelectSource,
   generationActions = [],
+  generationSettingsMemory,
   mentionAssets = [],
   voiceCatalog,
 }: Pick<
@@ -2514,6 +2517,7 @@ function ExecutableCellInspector({
   | 'initialGenerationPreview'
   | 'onSelectSource'
   | 'generationActions'
+  | 'generationSettingsMemory'
   | 'mentionAssets'
   | 'voiceCatalog'
 > & {
@@ -2901,7 +2905,7 @@ function ExecutableCellInspector({
       prompt: remapGenerationInputPrompt(draft.prompt,
         generationInputMentions(cell.id, cells, edges, effectiveGenerationMode),
         generationInputMentions(cell.id, cells, edges, generationMode)),
-      generationSettings: {},
+      generationSettings: stickySettingsFor(selected.controls, { ...generationSettingsMemory, ...stickySettingsFrom(draft.generationSettings) }),
     }
     setDraft(next)
     refreshGenerationPreview(next)
@@ -3793,6 +3797,7 @@ export function NotebookCellInspector({
   historyVisible = false,
   generationsVisible = false,
   generationActions,
+  generationSettingsMemory,
   mediaInsightWork,
   onUpdate,
   onSetInput,
@@ -3962,6 +3967,7 @@ export function NotebookCellInspector({
       initialGenerationPreview={initialGenerationPreview}
       onSelectSource={onSelectSource}
       generationActions={generationActions}
+      generationSettingsMemory={generationSettingsMemory}
       mentionAssets={mentionAssets}
       voiceCatalog={voiceCatalog}
     />

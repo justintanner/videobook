@@ -1,13 +1,13 @@
 export const LIGHTNING_SCENE_MODEL = "kie:nano-banana-2-1";
-export const LIGHTNING_SCENE_ASPECT_RATIO = "16:9";
-export const LIGHTNING_SCENE_RESOLUTION = "2K";
+export const LIGHTNING_SCENE_ASPECT_RATIO = "9:16";
+export const LIGHTNING_SCENE_RESOLUTION = "4K";
 export const LIGHTNING_SCENE_OUTPUT_FORMAT = "jpg";
 export const LIGHTNING_SCENE_PROMPT_WORDS = 25;
 
 export const LIGHTNING_VIDEO_MODEL = "kie:bytedance/seedance-2-5";
-export const LIGHTNING_VIDEO_ASPECT_RATIO = "16:9";
+export const LIGHTNING_VIDEO_ASPECT_RATIO = "9:16";
 export const LIGHTNING_VIDEO_RESOLUTION = "1080p";
-export const LIGHTNING_VIDEO_DURATION_SECONDS = 13;
+export const LIGHTNING_VIDEO_DURATION_SECONDS = 12;
 export const LIGHTNING_VIDEO_OUTPUT_FORMAT = "mp4";
 export const LIGHTNING_VIDEO_GENERATE_AUDIO = true;
 export const LIGHTNING_VIDEO_PROMPT_WORDS = 60;

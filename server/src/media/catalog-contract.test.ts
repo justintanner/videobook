@@ -104,7 +104,7 @@ describe("media request building", () => {
       ok: true,
       request: {
         model: "bytedance/seedance-2-5",
-        input: { prompt: "a cat", resolution: "1080p", aspect_ratio: "16:9", duration: 13, generate_audio: true, return_last_frame: false },
+        input: { prompt: "a cat", resolution: "1080p", aspect_ratio: "9:16", duration: 12, generate_audio: true, return_last_frame: false },
       },
     });
   });
@@ -226,7 +226,7 @@ describe("media request building", () => {
 
     expect(buildWireRequest(text, { prompt: "a red fox" })).toMatchObject({
       ok: true,
-      request: { prompt: "a red fox", duration: 5, resolution: "720p", generate_audio: true, aspect_ratio: "auto", reasoning_level: "high" },
+      request: { prompt: "a red fox", duration: 12, resolution: "1080p", generate_audio: true, aspect_ratio: "9:16", reasoning_level: "high" },
     });
     expect(buildWireRequest(image, {
       prompt: "a red fox",
@@ -243,7 +243,7 @@ describe("media request building", () => {
       request: {
         keyframes: [
           { image_url: "https://example.com/a.png", frame_index: 0 },
-          { image_url: "https://example.com/b.png", frame_index: 120 },
+          { image_url: "https://example.com/b.png", frame_index: 288 },
         ],
       },
     });
@@ -295,9 +295,9 @@ describe("media request building", () => {
       request: { prompt: "extend the room", video_url: "https://example.com/clip.mp4", aspect_ratio: "9:16", resolution: "480p" },
     });
 
-    const textCost = await estimateGeneration(text, { prompt: "a red fox" });
+    const textCost = await estimateGeneration(text, { prompt: "a red fox", options: { duration: 5, resolution: "720p" } });
     const hdCost = await estimateGeneration(text, { prompt: "a red fox", options: { duration: 10, resolution: "1080p" } });
-    const silent = await estimateGeneration(text, { prompt: "a red fox", options: { generate_audio: false } });
+    const silent = await estimateGeneration(text, { prompt: "a red fox", options: { duration: 5, resolution: "720p", generate_audio: false } });
     const fiboCost = await estimateGeneration(fibo, { prompt: "a red fox" });
     const editCost = await estimateGeneration(fiboEdit, {
       prompt: "make the sky orange",
@@ -375,7 +375,7 @@ describe("FLUX 3 Klein", () => {
       expect(model.title).toContain("FLUX 3 Klein");
       expect(buildWireRequest(model, { prompt: "a fox", refUrls })).toMatchObject({
         ok: true,
-        input: { resolution: "1K", aspect_ratio: suffix === "edit-image" ? "auto" : "1:1", num_images: 1, output_format: "png" },
+        input: { resolution: "4K", aspect_ratio: "9:16", num_images: 1, output_format: "png" },
       });
       for (const options of [{ width: 512 }, { width: 128, height: 512 }, { num_images: 5 }]) {
         expect(buildWireRequest(model, { prompt: "a fox", refUrls, options }).ok).toBe(false);

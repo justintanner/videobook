@@ -11491,6 +11491,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           jobs={inspectorJobViews}
           onCancelJob={cancelJob}
           generationActions={generationActions}
+          generationSettingsMemory={(notebook as NotebookSnapshot | null)?.generationSettingsMemory}
           mentionAssets={commandMentionAssets}
           voiceCatalog={elevenLabsVoices}
           busy={busy || Boolean(selectedMediaSlotState?.operation)}

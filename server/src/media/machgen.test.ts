@@ -54,13 +54,13 @@ describe("MachGen catalog", () => {
   it("offers each model's resolutions, durations and defaults as options", () => {
     const options = (id: string) => Object.fromEntries(resolveModel(id).options.map((option) => [option.name, option]));
     expect(options("machgen:MiniMax-H3")).toMatchObject({
-      resolution: { enumValues: ["480p", "768p", "1440p"], defaultValue: "768p" },
-      duration: { minimum: 1, maximum: 30, defaultValue: 5 },
-      aspect_ratio: { enumValues: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], defaultValue: "16:9" },
+      resolution: { enumValues: ["480p", "768p", "1440p"], defaultValue: "1440p" },
+      duration: { minimum: 1, maximum: 30, defaultValue: 12 },
+      aspect_ratio: { enumValues: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], defaultValue: "9:16" },
       generate_audio: { valueType: "boolean", defaultValue: true },
       seed: { valueType: "integer" },
     });
-    expect(options("machgen:Seedance-2.5").aspect_ratio).toMatchObject({ defaultValue: "adaptive" });
+    expect(options("machgen:Seedance-2.5").aspect_ratio).toMatchObject({ defaultValue: "9:16" });
     expect(options("machgen:Seedance-2.5").seed).toBeUndefined();
     expect(options("machgen:Seedance-2.0").resolution).toMatchObject({ enumValues: ["480p", "720p", "1080p", "2160p"] });
     expect(Object.keys(options("machgen:Alibaba-Wan-3.0")).sort()).toEqual(["duration", "resolution", "seed"]);
@@ -72,19 +72,19 @@ describe("MachGen catalog", () => {
   it.each([
     ["machgen:MiniMax-H3", { prompt: "a red boat" }, {
       model: "MiniMax-H3", task_type: "T2V", prompt: "a red boat",
-      video_config: { height: 768, duration_secs: 5, aspect_ratio: "16:9", audio: true },
+      video_config: { height: 1440, duration_secs: 12, aspect_ratio: "9:16", audio: true },
     }],
     ["machgen:MiniMax-H3", { prompt: "end on the cat", refUrls: { last_frame: [LAST] }, options: { resolution: "480p", seed: 7 } }, {
       task_type: "I2V", seed: 7, src_image_urls: [LAST], keyframe_indices: [-1],
-      video_config: { height: 480, duration_secs: 5, aspect_ratio: "16:9", audio: true },
+      video_config: { height: 480, duration_secs: 12, aspect_ratio: "9:16", audio: true },
     }],
     ["machgen:Seedance-2.5", { prompt: "the cat turns", refUrls: { first_frame: [FRAME], last_frame: [LAST] }, options: { aspect_ratio: "16:9", generate_audio: false } }, {
       model: "Seedance-2.5", task_type: "I2V", src_image_urls: [FRAME, LAST],
-      video_config: { height: 720, duration_secs: 5, aspect_ratio: "adaptive", audio: false },
+      video_config: { height: 1080, duration_secs: 12, aspect_ratio: "adaptive", audio: false },
     }],
     ["machgen:Seedance-2.0", { prompt: "dance", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] }, options: { duration: -1, resolution: "2160p" } }, {
       task_type: "R2V", src_image_urls: [FRAME], src_video_urls: [CLIP], src_audio_urls: [SONG],
-      video_config: { height: 2160, duration_secs: -1, aspect_ratio: "adaptive", audio: true },
+      video_config: { height: 2160, duration_secs: -1, aspect_ratio: "9:16", audio: true },
     }],
     ["machgen:Alibaba-Wan-3.0", { prompt: "a slow pan", options: { duration: 2, resolution: "480p" } }, {
       model: "Alibaba-Wan-3.0", task_type: "T2V",
@@ -124,15 +124,15 @@ describe("MachGen catalog", () => {
   });
 
   it.each([
-    ["machgen:MiniMax-H3", { prompt: "x" }, {}, 0.2],
+    ["machgen:MiniMax-H3", { prompt: "x", options: { resolution: "768p", duration: 5 } }, {}, 0.2],
     ["machgen:MiniMax-H3", { prompt: "x", options: { resolution: "480p", duration: 20 } }, {}, 0.6125],
-    ["machgen:MiniMax-H3", { prompt: "x", refUrls: { video: [CLIP] } }, { inputDurationSeconds: 4 }, 0.54],
-    ["machgen:Seedance-2.5", { prompt: "x" }, {}, 1.15],
-    ["machgen:Seedance-2.5", { prompt: "x", refUrls: { video: [CLIP] } }, { inputDurationSeconds: 4 }, 1.26],
-    ["machgen:Seedance-2.0", { prompt: "x", options: { resolution: "2160p" } }, {}, 3.9],
+    ["machgen:MiniMax-H3", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "768p", duration: 5 } }, { inputDurationSeconds: 4 }, 0.54],
+    ["machgen:Seedance-2.5", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 1.15],
+    ["machgen:Seedance-2.5", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "720p", duration: 5 } }, { inputDurationSeconds: 4 }, 1.26],
+    ["machgen:Seedance-2.0", { prompt: "x", options: { resolution: "2160p", duration: 5 } }, {}, 3.9],
     ["machgen:Alibaba-Wan-3.0", { prompt: "x", options: { resolution: "1080p", duration: 10 } }, {}, 1.91],
-    ["machgen:HappyHorse-1.1", { prompt: "x", options: { resolution: "1080p" } }, {}, 0.85],
-    ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p" } }, {}, 0.475],
+    ["machgen:HappyHorse-1.1", { prompt: "x", options: { resolution: "1080p", duration: 5 } }, {}, 0.85],
+    ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p", duration: 5 } }, {}, 0.475],
   ] as const)("%s is priced from the @apicity/cost machgen rows", async (id, call, hints, usd) => {
     const result = await estimateGeneration(resolveModel(id), call as WireRequestInput, hints);
     expect(result.ok).toBe(true);
@@ -270,7 +270,7 @@ describe("MachGen provider tasks", () => {
       model: "Seedance-2.5",
       task_type: "I2V",
       prompt: "the cat blinks",
-      video_config: { height: 720, duration_secs: 5, aspect_ratio: "adaptive", audio: true },
+      video_config: { height: 1080, duration_secs: 12, aspect_ratio: "adaptive", audio: true },
       src_image_urls: [FRAME],
     });
     const pending = engine.jobs.pending.read(assetId);
@@ -280,10 +280,10 @@ describe("MachGen provider tasks", () => {
       meta: { model: "machgen:Seedance-2.5", media: "video", machgenModel: "Seedance-2.5" },
     });
     const hints = await engine.metadata.artifacts.read(assetId, "generation-cost-hints");
-    expect(hints.ok && hints.value).toEqual({ durationSeconds: 5 });
+    expect(hints.ok && hints.value).toEqual({ durationSeconds: 12 });
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
       provider: "machgen", model: "Seedance-2.5", activity: "video", status: "pending",
-      externalId: TASK_ID, basis: "estimated", costUsd: expect.closeTo(1.15, 6), warnings: [],
+      externalId: TASK_ID, basis: "estimated", costUsd: expect.closeTo(7.08, 6), warnings: [],
     });
     expect(await readProviderTaskStatus(engine, assetId)).toEqual({ provider: "machgen", model: "Seedance-2.5", taskId: TASK_ID });
 

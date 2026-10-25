@@ -159,9 +159,9 @@ describe("lightning generation defaults and submitted prompts", () => {
       model: "bytedance/seedance-2-5",
       input: {
         prompt: SHORT,
-        duration: 13,
+        duration: 12,
         resolution: "1080p",
-        aspect_ratio: "16:9",
+        aspect_ratio: "9:16",
         generate_audio: true,
         output_format: "mp4",
       },
@@ -208,7 +208,7 @@ describe("lightning generation defaults and submitted prompts", () => {
     expect(output?.inputs?.resolvedPrompt).toBe(SHORT);
     expect(output?.inputs?.dispatchedPayload).toMatchObject({
       model: "bytedance/seedance-2-5",
-      input: { prompt: SHORT, duration: 13, resolution: "1080p", aspect_ratio: "16:9" },
+      input: { prompt: SHORT, duration: 12, resolution: "1080p", aspect_ratio: "9:16" },
     });
     const firstOutputId = output?.id;
     const firstArtifactId = output?.outputArtifactId;
@@ -293,7 +293,7 @@ describe("lightning generation defaults and submitted prompts", () => {
     });
   });
 
-  it("previews a fresh Nano Banana 2.1 scene at 16:9 2K JPG", async () => {
+  it("previews a fresh Nano Banana 2.1 scene at 9:16 4K JPG", async () => {
     const cell = engine.notebooks.createCell({
       type: "generate_image",
       label: "Lightning scene",

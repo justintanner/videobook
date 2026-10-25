@@ -398,8 +398,8 @@ describe("notebook action catalog", () => {
     ]);
     const seedanceDuration = seedance25Action?.controls?.find((control) =>
       control.name === "duration");
-    expect(seedanceDuration).toMatchObject({ defaultValue: 13 });
-    expect(seedanceDuration?.options ?? [13]).toContain(13);
+    expect(seedanceDuration).toMatchObject({ defaultValue: 12 });
+    expect(seedanceDuration?.options ?? [12]).toContain(12);
     expect(seedance25Action?.controls?.find((control) =>
       control.name === "output_format")).toMatchObject({
       defaultValue: "mp4",
@@ -562,8 +562,8 @@ describe("notebook action catalog", () => {
         model: "nano-banana-2-1",
         input: {
           prompt: "persisted prompt",
-          resolution: "2K",
-          aspect_ratio: "16:9",
+          resolution: "4K",
+          aspect_ratio: "9:16",
           output_format: "jpg",
         },
       },
@@ -589,7 +589,7 @@ describe("notebook action catalog", () => {
       model: "kie:gpt-image-2-5-flare-text-to-image",
       payload: {
         model: "gpt-image-2-5-flare-text-to-image",
-        input: { prompt: "draft prompt", resolution: "2K" },
+        input: { prompt: "draft prompt", resolution: "4K" },
       },
       estimate: { currency: "USD", usd: expect.any(Number) },
     });

@@ -28,7 +28,7 @@ const SEEDANCE_US_REFERENCE_MODES: readonly ModeSpec[] = [
 
 const XAI_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Image to video", roles: ["first_frame"] },
-  { id: "r2v", label: "References", roles: ["image"] },
+  { id: "r2v", label: "References", roles: ["image"], defaults: { duration: 10 } },
   { id: "v2v", label: "Edit video", roles: ["video"], requireAny: ["video"] },
 ];
 
@@ -177,7 +177,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
   { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
   { id: "kie:kling-3.0-omni/text-to-video", media: "video", operations: ["text_to_video"], guide: "kling30", dialect: "natural", defaults: { customize_multi_shots: false } },
-  { id: "kie:kling-3.0-omni/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "natural" },
+  { id: "kie:kling-3.0-omni/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "natural", defaults: { aspect_ratio: "auto" }, pinnedDefaults: ["aspect_ratio"] },
   { id: "kie:kling-3.0-omni/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "kling30", dialect: "natural", defaults: { audio: false } },
   {
     id: "kie:kling-3.0-omni/transformation",

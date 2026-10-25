@@ -410,7 +410,7 @@ describe("staged video goals through MCP", () => {
     const styledBrief = "@a1 as an IG influencer, GRWM morning routine";
     const created = await invoke({ action: "create", brief: styledBrief });
     expect(created).toMatchObject({ status: "review", planVersion: 3 });
-    expect(created.plan).toMatchObject({ version: 3, aspectRatio: "16:9", video: { durationSeconds: 13 } });
+    expect(created.plan).toMatchObject({ version: 3, aspectRatio: "9:16", video: { durationSeconds: 12 } });
     expect(created).not.toHaveProperty("requestedStyle");
     expect(notebook().cells.find(cell => cell.id === created.cellId)!.inputs).not.toHaveProperty("requestedStyle");
     const explicit = await create({ brief: styledBrief });
@@ -1017,8 +1017,8 @@ describe("staged video goals through MCP", () => {
       planVersion: 3, status: "review", stage: "frame",
       plan: {
         version: 3, aspectRatio: "16:9",
-        scene: { tool: "generate_image", model: "kie:nano-banana-2-1", aspectRatio: "16:9", resolution: "2K", outputFormat: "jpg" },
-        video: { tool: "generate_video", model: GOAL_VIDEO_MODEL, aspectRatio: "16:9", resolution: "1080p", durationSeconds: 13, generateAudio: true, outputFormat: "mp4" },
+        scene: { tool: "generate_image", model: "kie:nano-banana-2-1", aspectRatio: "16:9", resolution: "4K", outputFormat: "jpg" },
+        video: { tool: "generate_video", model: GOAL_VIDEO_MODEL, aspectRatio: "16:9", resolution: "1080p", durationSeconds: 12, generateAudio: true, outputFormat: "mp4" },
         finish: { suggestedColdOpenSeconds: 2.3, watermark: { platform: "tiktok", handle: "jtbkk", mode: "burn" } },
       },
     });
@@ -1075,7 +1075,7 @@ describe("staged video goals through MCP", () => {
     expect(truncated.plan.scene.prompt).not.toContain("word39");
 
     const portrait = await invoke({ action: "create", brief: `${mention()} a portrait clip of the market` });
-    expect(portrait.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16", durationSeconds: 13 } });
+    expect(portrait.plan).toMatchObject({ aspectRatio: "9:16", scene: { aspectRatio: "9:16" }, video: { aspectRatio: "9:16", durationSeconds: 12 } });
     const tallId = await goalTestVideo(engine, root, "blue", { width: 90, height: 160 });
     const tallCell = engine.notebooks.createCell({ type: "video", label: "Tall clip", slot: { row: 7, column: 0 }, outputArtifactId: tallId });
     const tallInserted = await engine.notebooks.insertCell(notebookId, tallCell);
@@ -1095,7 +1095,7 @@ describe("staged video goals through MCP", () => {
       refUrls: { image: ["https://example.test/scene.png"] },
       options: sceneParams.options as Record<string, unknown>,
     });
-    expect(sceneRequest).toMatchObject({ ok: true, request: { model: "nano-banana-2-1", input: { aspect_ratio: "16:9", resolution: "2K", output_format: "jpg" } } });
+    expect(sceneRequest).toMatchObject({ ok: true, request: { model: "nano-banana-2-1", input: { aspect_ratio: "16:9", resolution: "4K", output_format: "jpg" } } });
     const videoParams = steps[1]!.params;
     const videoRequest = buildWireRequest(resolveModel(String(videoParams.model)), {
       prompt: String(videoParams.prompt),
@@ -1110,7 +1110,7 @@ describe("staged video goals through MCP", () => {
         input: {
           reference_image_urls: ["https://example.test/ref.png"],
           reference_video_urls: ["https://example.test/motion.mp4"],
-          aspect_ratio: "16:9", resolution: "1080p", duration: 13, generate_audio: true, output_format: "mp4",
+          aspect_ratio: "16:9", resolution: "1080p", duration: 12, generate_audio: true, output_format: "mp4",
         },
       },
     });
@@ -1239,7 +1239,7 @@ describe("staged video goals through MCP", () => {
     expect(prompted.plan.scene.prompt).toBe(authored);
     const rejected = await raw({
       action: "update", goal_id: goal.goalId, revision: prompted.revision,
-      plan: { ...prompted.plan, scene: { ...prompted.plan.scene, aspectRatio: "9:16" } },
+      plan: { ...prompted.plan, scene: { ...prompted.plan.scene, aspectRatio: "16:9" } },
     });
     expect(textOf(rejected)).toContain("settings stay with this goal");
     expect((await status(goal.goalId)).revision).toBe(prompted.revision);

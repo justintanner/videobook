@@ -303,7 +303,7 @@ describe('notebook initial generation prompts', () => {
     expect(preview.ok).toBe(true)
     if (!preview.ok) return
     expect(preview.preview.payload).toMatchObject({
-      input: { duration: 13 },
+      input: { duration: 12 },
     })
   })
 })

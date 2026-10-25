@@ -61,7 +61,7 @@ describe("fal 0.17.1 video catalog", () => {
   it("wires Kling frames, video edits and numbered reference mentions", () => {
     expect(buildWireRequest(resolveModel("fal:kling/v4/image-to-video"), {
       prompt: "Move", refUrls: { first_frame: [image], last_frame: [image] },
-    })).toMatchObject({ ok: true, request: { start_image_url: image, end_image_url: image, duration: 5, resolution: "1080p" } });
+    })).toMatchObject({ ok: true, request: { start_image_url: image, end_image_url: image, duration: 12, resolution: "1080p" } });
     const model = resolveModel("fal:kling/v4/video-to-video/edit");
     expect(buildWireRequest(model, { prompt: "Edit" }).ok).toBe(false);
     expect(buildWireRequest(model, { prompt: "Edit", refUrls: { video: [video], image: [image] } }))

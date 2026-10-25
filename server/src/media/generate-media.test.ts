@@ -284,7 +284,7 @@ describe("generic media generation", () => {
     const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
     expect(submitted).toMatchObject({
       model: "nano-banana-2-1",
-      input: { prompt: "reference image 1 in the snow", aspect_ratio: "16:9", resolution: "2K", output_format: "jpg" },
+      input: { prompt: "reference image 1 in the snow", aspect_ratio: "16:9", resolution: "4K", output_format: "jpg" },
     });
     expect(submitted.input.image_input).toEqual([source]);
     const pending = engine.jobs.pending.read(assetId);
@@ -305,7 +305,7 @@ describe("generic media generation", () => {
     const assetId = String(enqueued.asset_id);
     await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
     const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { input: Record<string, unknown> };
-    expect(submitted).toMatchObject({ model: `flux-3/klein-${suffix}`, input: { prompt: "a fox in snow", resolution: "1K", output_format: "png" } });
+    expect(submitted).toMatchObject({ model: `flux-3/klein-${suffix}`, input: { prompt: "a fox in snow", resolution: "4K", output_format: "png" } });
     expect(submitted.input.image_urls).toEqual(refs.image);
     const pending = engine.jobs.pending.read(assetId);
     expect(pending.ok && pending.value).toMatchObject({ taskType: "media_kie", meta: { model, media: "image" } });

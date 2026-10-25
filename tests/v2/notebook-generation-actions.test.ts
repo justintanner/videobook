@@ -359,8 +359,8 @@ describe('notebook generation actions', () => {
     const h3 = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
     expect(generationActionLabel(h3)).toBe('MiniMax H3 (MachGen) · MachGen')
     expect(h3.controls).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'resolution', kind: 'select', options: ['480p', '768p', '1440p'], defaultValue: '768p' }),
-      expect.objectContaining({ name: 'duration', kind: 'number', minimum: 1, maximum: 30, defaultValue: 5 }),
+      expect.objectContaining({ name: 'resolution', kind: 'select', options: ['480p', '768p', '1440p'], defaultValue: '1440p' }),
+      expect.objectContaining({ name: 'duration', kind: 'number', minimum: 1, maximum: 30, defaultValue: 12 }),
       expect.objectContaining({ name: 'generate_audio', kind: 'boolean', defaultValue: true }),
     ]))
     expect(catalog.find((action) => action.model === 'machgen:Alibaba-Wan-3.0')?.controls.map((control) => control.name))
