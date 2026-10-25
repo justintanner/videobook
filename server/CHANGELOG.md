@@ -16,6 +16,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
   length, so their paygate estimates and usage rows are priced too.
   `estimate_cost` now prices Volcengine lip sync from the audio, whose length
   the output follows, instead of the source video.
+- The usage counter groups each catalog generation under its catalog media.
+  34 KIE and fal models, among them OmniHuman, the HeyGen digital twins, the
+  Gemini and ElevenLabs speech models and the Bria image models, were counted
+  as analysis, and fal Wan 2.7 image edit as video.
 
 ## [0.3.1] - 2026-10-25
 

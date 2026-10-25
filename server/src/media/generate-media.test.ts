@@ -444,7 +444,7 @@ describe("generic media generation", () => {
     expect(hints.ok && hints.value).toEqual({ durationSeconds: 6.008 });
     expect(engine.logs.read("generation-cost-estimate")).toEqual([]);
     const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
-    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), basis: "estimated", status: "pending", warnings: [], units });
+    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), activity: "video", basis: "estimated", status: "pending", warnings: [], units });
     expect(usage?.costUsd).toBeCloseTo(usd);
   });
 
@@ -474,7 +474,7 @@ describe("generic media generation", () => {
     expect(persisted.ok && persisted.value).toEqual(hints);
     expect(engine.logs.read("generation-cost-estimate")).toEqual([]);
     const usage = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
-    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), basis: "estimated", status: "pending", warnings: [], units });
+    expect(usage).toMatchObject({ provider: "kie", model: model.slice("kie:".length), activity: "video", basis: "estimated", status: "pending", warnings: [], units });
     expect(usage?.costUsd).toBeCloseTo(usd);
   });
 

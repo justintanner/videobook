@@ -10,6 +10,9 @@ import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js
 import { withBookContext, scopedBookEngine } from "../book-context.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
 import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage } from "../provider-usage.js";
+import { MODEL_ENTRIES } from "../media/catalog.js";
+import { parseModelId } from "../media/model-id.js";
+import { isKieSunoModel, isKieVeoModel } from "../media/wire.js";
 import { bookUsageDef } from "./book-usage.js";
 
 describe("provider usage through real HTTP and engine storage", () => {
@@ -63,9 +66,36 @@ describe("provider usage through real HTTP and engine storage", () => {
     await rm(root, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  function scoped<T>(operation: () => Promise<T>, target = engine) {
-    return withBookContext({ bookId: target.book.get().bookId, engine: target, operation: "chat" }, operation);
+  function scoped<T>(operation: () => Promise<T>, target = engine, name = "chat") {
+    return withBookContext({ bookId: target.book.get().bookId, engine: target, operation: name }, operation);
   }
+
+  it("groups every billable KIE and fal catalog generation under its catalog media", async () => {
+    const activity = { image: "images", video: "video", audio: "audio" } as const;
+    const kie = providerUsageFetch("kie");
+    const fal = providerUsageFetch("fal");
+    const expected: Record<string, string> = {};
+    const recorded: Record<string, string | undefined> = {};
+    for (const entry of MODEL_ENTRIES) {
+      const { provider, apiId } = parseModelId(entry.id)!;
+      if (provider === "kie" && !isKieSunoModel(apiId)) {
+        const path = isKieVeoModel(apiId) ? "/api/v1/veo/generate" : "/api/v1/jobs/createTask";
+        await scoped(() => kie(`${url}${path}`, { method: "POST", body: JSON.stringify({ model: apiId, input: {} }) }), engine, "generate_media");
+      } else if (provider === "fal") {
+        await scoped(() => fal(`${url}/${apiId}`, { method: "POST", body: JSON.stringify({ prompt: "test" }) }), engine, "generate_media");
+      } else continue;
+      const [row] = engine.usage.recent(1);
+      expected[apiId] = activity[entry.media];
+      recorded[apiId] = row?.model === apiId ? row.activity : undefined;
+    }
+    expect(recorded).toEqual(expected);
+    const openai = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });
+    responseId = "chat-turn";
+    await scoped(() => openai.post.v1.responses({ model: "gpt-4o", input: "test" }));
+    responseId = "cut-analysis";
+    await scoped(() => openai.post.v1.responses({ model: "gpt-4o", input: "test" }), engine, "suggest_cuts");
+    expect(engine.usage.recent(2).map((row) => row.activity).sort()).toEqual(["analysis", "chat"]);
+  });
 
   it("records measured tokens and estimates once per provider response, without saving prompts", async () => {
     const provider = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });

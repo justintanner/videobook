@@ -3,6 +3,7 @@ import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
+import type { Media } from "./media/types.js";
 import { estimateFalRequest } from "./media/cost.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
@@ -106,9 +107,17 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
   } catch { return unknownPrice(); }
 }
 
-function activityFor(model: string, path: string, operation = ""): UsageEntry["activity"] {
+const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
+
+function catalogMedia(provider: Provider, model: string, path: string): Media | undefined {
+  return modelEntry(provider === "fal" ? `fal:${path.slice(1)}` : `${provider}:${model}`)?.media;
+}
+
+function activityFor(provider: Provider, model: string, path: string, operation = ""): UsageEntry["activity"] {
   if (/\/(responses|completions)$/u.test(path) && /chat|rewrite_prompt/u.test(operation)) return "chat";
   if (/transcrib|speech.to.text|analy|describe|tag_|rename|suggest|translate|vision|image.subjects|regions|verify/iu.test(`${operation} ${path}`)) return "analysis";
+  const media = catalogMedia(provider, model, path);
+  if (media) return MEDIA_ACTIVITY[media];
   if (/video|veo|wan\/|kling|seedance|happyhorse|lipsync/iu.test(`${model} ${path}`)) return "video";
   if (/audio|speech|music|sound|sfx|suno|vocal/iu.test(`${model} ${path}`)) return "audio";
   if (/image|banana|seedream|qwen|flux|ideogram/iu.test(`${model} ${path}`)) return "images";
@@ -207,7 +216,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const model = text(payload.model) ?? text(payload.model_id) ?? (provider === "fal" ? endpoint : endpoint.split("/").slice(-2).join("/"));
       let hints: CostHints | undefined;
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
-      const activity = provider === "machgen" ? "video" : activityFor(model, url.pathname, context.operation);
+      const activity = provider === "machgen" ? "video" : activityFor(provider, model, url.pathname, context.operation);
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
