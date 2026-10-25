@@ -1560,6 +1560,66 @@ describe("image subject tools", () => {
     }
   });
 
+  it("fails edit jobs on a placeholder or missing provider key before uploading the source", async () => {
+    const originalKieKey = process.env.KIE_API_KEY;
+    const originalFalKey = process.env.FAL_API_KEY;
+    process.env.KIE_API_KEY = "test-key";
+    process.env.FAL_API_KEY = "test-key";
+    const guardedFetch = globalThis.fetch;
+    const requestedUrls: string[] = [];
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrls.push(input instanceof Request ? input.url : String(input));
+      return guardedFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const source = await createSource();
+      const edit = async (model?: string) => {
+        const result = await client.callTool({
+          name: "edit_image_subjects",
+          arguments: {
+            book_id: bookId,
+            notebook_id: source.notebookId,
+            source_cell_id: source.sourceCellId,
+            artifact_id: source.artifactId,
+            object_hash: source.objectHash,
+            operation: "edit",
+            subject_ids: ["person"],
+            prompt: "Make the person smile",
+            ...(model ? { model } : {}),
+          },
+        });
+        expect(result.isError).not.toBe(true);
+        return resultJson(result) as { job_id: string; producer_cell_id: string };
+      };
+      const kie = await edit();
+      await expect(waitForJob(kie.job_id, 30_000))
+        .rejects.toThrow('KIE_API_KEY is a placeholder ("test-key")');
+      const fal = await edit("fal-ai/nano-banana-2/edit");
+      await expect(waitForJob(fal.job_id, 30_000))
+        .rejects.toThrow('FAL_API_KEY is a placeholder ("test-key")');
+
+      const rerun = async () => {
+        const notebook = engine.notebooks.read(source.notebookId);
+        if (!notebook.ok) throw new Error(notebook.error.message);
+        const producer = notebook.value.cells.find((cell) => cell.id === kie.producer_cell_id)!;
+        const run = await runNotebookCell(engine, bookId, source.notebookId, notebook.value, producer,
+          { confirmPaid: true, runId: uuidv7() });
+        return waitForJob(`notebook-image-edit-${run.outputArtifactId}`, 30_000);
+      };
+      await expect(rerun()).rejects.toThrow('KIE_API_KEY is a placeholder ("test-key")');
+      delete process.env.KIE_API_KEY;
+      await expect(rerun()).rejects.toThrow("KIE_API_KEY environment variable is not set");
+
+      expect(requestedUrls).toEqual([]);
+    } finally {
+      globalThis.fetch = guardedFetch;
+      if (originalKieKey) process.env.KIE_API_KEY = originalKieKey;
+      else delete process.env.KIE_API_KEY;
+      if (originalFalKey) process.env.FAL_API_KEY = originalFalKey;
+      else delete process.env.FAL_API_KEY;
+    }
+  });
+
   it("rejects region replacements beyond a capped model's image inputs", async () => {
     const originalFalKey = process.env.FAL_API_KEY;
     process.env.FAL_API_KEY = "test-key";

@@ -20,6 +20,7 @@ import {
   type ImageEditProviderRequest,
 } from "./_image-edit-adapter.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID } from "../image-edit-models.js";
+import { requireApiKey } from "../api-key.js";
 import { compositeImageRegionEdit, imageRegionEditPrompt } from "../image-region-edit.js";
 import type { Engine, Job } from "videobook-engine";
 import {
@@ -747,6 +748,7 @@ async function runAdapterImageSubjectEdit(
   sourceFilename: string,
   signal: AbortSignal,
 ): Promise<ImageSubjectEditGeneration> {
+  requireApiKey(adapter.envKey);
   const stored = await readStoredImageSubjectEditTask(engine, payload.imageAssetId);
   const storedMatch = stored?.adapterId === adapter.id ? stored : null;
   let request = storedMatch?.request as ImageEditProviderRequest | null ?? null;

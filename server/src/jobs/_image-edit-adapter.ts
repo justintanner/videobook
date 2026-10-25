@@ -44,6 +44,7 @@ export interface ImageEditRequestInput {
  */
 export interface ImageEditAdapter {
   readonly id: string;
+  readonly envKey: ImageEditModelInfo["envKey"];
   /** Upload one artifact's current bytes to the provider and return a fetchable URL. */
   uploadAsset(engine: Engine, artifactId: string, filename: string): Promise<string>;
   buildSemanticRequest(input: ImageEditRequestInput): ImageEditProviderRequest;
@@ -168,6 +169,7 @@ function kieImageEditAdapter(model: ResolvedModel, build?: (input: ImageEditRequ
   });
   return {
     id: model.apiId,
+    envKey: "KIE_API_KEY",
     uploadAsset: (engine, artifactId, filename) =>
       uploadAssetToKie(engine, artifactId, filename),
     buildSemanticRequest: (input) =>
@@ -247,6 +249,7 @@ function falImageEditAdapter(model: ResolvedModel): ImageEditAdapter {
     toProviderRequest(model.apiId, catalogEditRequest(model, input));
   return {
     id: model.apiId,
+    envKey: "FAL_API_KEY",
     uploadAsset: (engine, artifactId, filename) =>
       uploadAssetToFal(engine, artifactId, filename),
     buildSemanticRequest: (input) => buildRequest({ ...input, imageUrls: [input.imageUrls[0]!] }),

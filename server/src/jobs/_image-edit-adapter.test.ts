@@ -68,7 +68,7 @@ describe("image edit adapters", () => {
   it("exposes one adapter per catalog model with matching ids", () => {
     expect(IMAGE_EDIT_ADAPTERS.length).toBe(11);
     for (const adapter of IMAGE_EDIT_ADAPTERS) {
-      expect(findImageEditModel(adapter.id), adapter.id).toBeDefined();
+      expect(findImageEditModel(adapter.id)?.envKey, adapter.id).toBe(adapter.envKey);
     }
     expect(imageEditAdapter("seedream/5-pro-image-to-image")?.id).toBe("seedream/5-pro-image-to-image");
     expect(imageEditAdapter("does-not-exist")).toBeUndefined();
