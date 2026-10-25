@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createEngine, type Engine } from "videobook-engine";
-import type { Har } from "@apicity/har";
+import { findMatchingRow, type Har } from "@apicity/har";
 import { appState, createFileApplicationState } from "./app-state.js";
 import { withBookContext } from "./book-context.js";
 import { createKie, createX, submitMediaJob, uploadFalFile, uploadAlibabaFile } from "./usage-providers.js";
@@ -47,6 +47,7 @@ describe("opt-in provider HAR diagnostics", () => {
         else if (req.url === "/bytes") res.end("{}");
         else if (req.url?.includes("users/me")) res.end(JSON.stringify({ data: { id: "42", username: "test", name: "Test" } }));
         else if (req.url?.includes("/models") && !reject) res.end(JSON.stringify({ code: 200, data: [] }));
+        else if (req.url?.startsWith("/claude/")) res.end(JSON.stringify({ type: "message", content: [] }));
         else setTimeout(() => res.end(JSON.stringify(reject ? { code: 400, msg: "SDK rejects this 200 response" } : { code: 200, data: { taskId: "one", state: "success" } })), 5);
       });
     });
@@ -104,6 +105,38 @@ describe("opt-in provider HAR diagnostics", () => {
     expect(files).toHaveLength(1);
     expect(files[0]?.log._apicity).toMatchObject({ outcome: "provider_error" });
     expect(files[0]?.log.entries[0]?.response.status).toBe(200);
+  });
+
+  it("names nested KIE Veo and Suno SDK calls by the catalog dot paths apicity har report resolves", async () => {
+    await writeHarSettings({ mode: "all" });
+    const kie = createKie({ apiKey: "test", baseURL: url });
+    await kie.veo.post.api.v1.veo.generate({ prompt: "test" });
+    await kie.veo.get.api.v1.veo.recordInfo("one");
+    await kie.suno.post.api.v1.generate({ prompt: "test", model: "V5", instrumental: false, customMode: false, callBackUrl: "https://callback.test" });
+    await kie.suno.post.api.v1.generate.sounds({ prompt: "test", model: "V5" });
+    await kie.suno.get.api.v1.generate.recordInfo("one");
+    await kie.claude.post.v1.messages({ model: "claude-haiku-4-5", messages: [] });
+    await kie.post.api.v1.jobs.createTask({ model: "qwen2/text-to-image", input: { prompt: "test" } });
+    await kie.get.api.v1.jobs.recordInfo("one");
+    await kie.get.xai.v1.models();
+    const catalog = [
+      ["POST", "api.v1.veo.generate", "/api/v1/veo/generate"],
+      ["GET", "api.v1.veo.recordInfo", "/api/v1/veo/record-info?taskId={taskId}"],
+      ["POST", "api.v1.generate", "/api/v1/generate"],
+      ["POST", "api.v1.generate.sounds", "/api/v1/generate/sounds"],
+      ["GET", "api.v1.generate.recordInfo", "/api/v1/generate/record-info?taskId={taskId}"],
+      ["POST", "claude.v1.messages", "/claude/v1/messages"],
+      ["POST", "api.v1.jobs.createTask", "/api/v1/jobs/createTask"],
+      ["GET", "api.v1.jobs.recordInfo", "/api/v1/jobs/recordInfo?taskId={taskId}"],
+      ["GET", "xai.v1.models", "/xai/v1/models"],
+    ].map(([method, dotPath, path]) => ({ provider: "kie", method, dotPath, fullUrl: `https://api.kie.ai${path}` }));
+    const files = await captures();
+    expect(files.map((file) => file.log._apicity?.endpoint).sort()).toEqual(catalog.map((row) => row.dotPath).sort());
+    for (const file of files) {
+      const candidates = catalog.filter((row) => row.provider === file.log._apicity?.provider && row.dotPath === file.log._apicity?.endpoint);
+      expect(candidates).toHaveLength(1);
+      expect(findMatchingRow(file.log.entries[0], candidates, { provider: "kie" })).toBe(candidates[0]);
+    }
   });
 
   it("isolates two concurrent books through shared KIE and previously bypassing X clients", async () => {

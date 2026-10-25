@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- HAR captures of KIE's nested Veo and Suno SDK calls are named by their
+  apicity catalog dot paths, such as `api.v1.veo.generate` and
+  `api.v1.generate.sounds`, instead of their SDK paths, so `apicity har report`
+  resolves them. Sub-provider prefixes that are URL segments stay:
+  `kie.claude.post.v1.messages` is named `claude.v1.messages`.
+
 ## [0.3.0] - 2026-10-24
 
 ### Added
