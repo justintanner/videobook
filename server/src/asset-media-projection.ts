@@ -53,7 +53,7 @@ export function findAssetMediaFile(
 // Content fingerprint for cache-busting media URLs. Pure function of the
 // manifest tuples; partial downloads are excluded because their size grows on
 // every poll while no served URL points at them.
-export function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
+function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
   const settled = files.filter((f) => !PARTIAL_DOWNLOAD_RE.test(f.name));
   if (settled.length === 0) return "";
   const sorted = [...settled].sort((a, b) => a.name.localeCompare(b.name));

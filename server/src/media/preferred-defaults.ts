@@ -1,7 +1,7 @@
 import type { ModelEntry, OptionSpec } from "./types.js";
 
-export const PREFERRED_DURATION_SECONDS = 12;
-export const PREFERRED_ASPECT_RATIO = "9:16";
+const PREFERRED_DURATION_SECONDS = 12;
+const PREFERRED_ASPECT_RATIO = "9:16";
 const PREFERRED_IMAGE_SIZE_PRESET = "portrait_16_9";
 const IMAGE_SIZE_PRESETS = new Set(["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"]);
 
@@ -139,7 +139,7 @@ export type StickyControl = {
   maximum?: number;
 };
 
-export function acceptedStickyValue(control: StickyControl, value: SettingValue): SettingValue | undefined {
+function acceptedStickyValue(control: StickyControl, value: SettingValue): SettingValue | undefined {
   if (control.options.length > 0) return matchingChoice(control.options, value);
   if (control.valueType !== "number") return undefined;
   const numeric = Number(value);
