@@ -81,7 +81,7 @@ describe('Settings through the real application', () => {
 
   it('records the full-registry desktop layout', async () => {
     const status = record(await call('provider_key_status'))
-    expect(Array.isArray(status?.providers) ? status.providers.length : 0).toBe(18)
+    expect(Array.isArray(status?.providers) ? status.providers.length : 0).toBe(19)
     const evidenceDir = process.env.VIDEOBOOK_UI_EVIDENCE_DIR ?? join(rootDir, 'evidence')
     await mkdir(evidenceDir, { recursive: true })
     const measurements = []
@@ -160,7 +160,7 @@ describe('Settings through the real application', () => {
     await page.getByRole('button', { name: 'Edit X client secret', exact: true }).waitFor()
     const b2 = page.locator('.settings-details').filter({ has: page.locator('summary', { hasText: 'Backblaze configuration' }) })
     await b2.locator('summary').click()
-    expect(await page.locator('.settings-credential').count()).toBe(18)
+    expect(await page.locator('.settings-credential').count()).toBe(19)
     await b2.getByRole('button', { name: 'Edit Region', exact: true }).click()
     expect(await b2.getByLabel('Region', { exact: true }).getAttribute('type')).toBe('text')
     await b2.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -327,7 +327,7 @@ describe('Settings through the real application', () => {
     await page.getByText('Select a project to inspect its storage.', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await page.getByText('Up to date', { exact: true }).waitFor()
-    expect(await page.locator('.settings-credential').count()).toBe(18)
+    expect(await page.locator('.settings-credential').count()).toBe(19)
     await page.getByRole('button', { name: 'Edit FAL', exact: true }).click()
     await page.getByRole('form', { name: 'Edit FAL', exact: true }).getByLabel('FAL', { exact: true }).fill('test-no-project')
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
