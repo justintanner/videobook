@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/client";
+import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
+import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { LEGACY_ALIVE_SETTINGS_KEY } from "../captions/legacy.js";
 import type { CaptionDocument } from "../captions/model.js";
@@ -13,7 +15,7 @@ import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { toolSpendsMoney } from "../paid-tools.js";
-import { queue, waitForBookQueuesIdleForTests } from "../queue.js";
+import { pauseBookQueueForTests, queue, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 import { testBudget } from "../test-budget.js";
 import { getAllToolDefs } from "./index.js";
@@ -224,6 +226,68 @@ describe("caption_video", () => {
     if (!written.ok) throw new Error(written.error.message);
     const full = await ready(assetId);
     expect(full.document.style).toMatchObject({ preset: "punch", motion: "slam", highlightColor: "#72E7AA" });
+  });
+
+  async function notebookWith(assetId: string, fill = false): Promise<string> {
+    const notebook = await engine.notebooks.create(`Captions ${randomUUID()}`);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const cells = [engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 0 }, outputArtifactId: assetId })];
+    for (let row = 0; fill && row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
+      for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
+        if (row === 0 && column === 0) continue;
+        cells.push(engine.notebooks.createCell({ type: "prompt", slot: { row, column }, prompt: "filler" }));
+      }
+    }
+    const written = await engine.notebooks.write({ ...notebook.value, cells });
+    if (!written.ok) throw new Error(written.error.message);
+    return notebook.value.id;
+  }
+
+  it("validates render requests before queueing and reuses a request on retry", async () => {
+    const assetId = await video();
+    const full = await ready(assetId);
+    const notebookId = await notebookWith(assetId);
+    const realBookId = engine.book.get().bookId;
+    const requestId = randomUUID();
+    const base = { asset_id: assetId, op: "render", notebook_id: notebookId, source_hash: full.source.media_hash };
+    await pauseBookQueueForTests(realBookId);
+    try {
+      const first = await ok<{ render: { status: string; job_id: number; output_asset_id: string } }>({ ...base, expected_revision: full.draft.revision, request_id: requestId });
+      expect(first.render).toMatchObject({ status: "queued" });
+      const persisted = await ok({ asset_id: assetId });
+      expect(persisted.draft).toMatchObject({ saved: true });
+      expect(persisted).toMatchObject({ render: { status: "queued", job_id: first.render.job_id } });
+      const retried = await ok<{ render: { job_id: number; output_asset_id: string } }>({ ...base, expected_revision: full.draft.revision, request_id: requestId });
+      expect(retried.render).toMatchObject({ job_id: first.render.job_id, output_asset_id: first.render.output_asset_id });
+      const reused = await call({ ...base, expected_revision: persisted.draft.revision, request_id: requestId });
+      expect(reused).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/different render/) } });
+      const hidden = await save({
+        asset_id: assetId, expected_revision: persisted.draft.revision,
+        edits: ["w1", "w2", "w3", "w4"].map((id) => ({ op: "hide_word", word_id: id, hidden: true })),
+      });
+      const empty = await call({ ...base, expected_revision: hidden.revision, request_id: randomUUID() });
+      expect(empty).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/no words/) } });
+      for (const job of engine.jobs.queue.list({ type: "render_captions", limit: 50 }).filter((candidate) => candidate.state === "queued")) {
+        await engine.jobs.queue.abort(job.id, "render validation test");
+      }
+    } finally {
+      await resumeBookQueueForTests(realBookId);
+    }
+    const full2 = await ready(await video());
+    const crowded = await notebookWith(full2.asset_id, true);
+    const noRoom = await call({ asset_id: full2.asset_id, op: "render", notebook_id: crowded, source_hash: full2.source.media_hash, expected_revision: full2.draft.revision, request_id: randomUUID() });
+    expect(noRoom).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/empty cell/) } });
+  });
+
+  it("forgetting a video clears its drafts, cached analysis and render records", async () => {
+    const assetId = await video();
+    const full = await ready(assetId);
+    await save({ asset_id: assetId, expected_revision: full.draft.revision, edits: [{ op: "set_word_text", word_id: "w1", text: "Us" }] });
+    const keys = () => [`captions.draft.${assetId}.original`, `captions.drafts.${assetId}`, `analysis.index.${assetId}`].filter((key) => engine.settings.get(key) !== null);
+    expect(keys()).toHaveLength(3);
+    const forgotten = await client.callTool({ name: "delete_asset", arguments: { book_id: bookId, asset_id: assetId, forget: true } });
+    expect(forgotten.isError).not.toBe(true);
+    expect(keys()).toEqual([]);
   });
 
   it("is billable only when preparing and stays out of chat routing", () => {

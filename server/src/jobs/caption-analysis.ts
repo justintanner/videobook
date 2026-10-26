@@ -19,21 +19,12 @@ import {
   vocalComponentKey,
   vocalValueSchema,
 } from "../captions/analysis.js";
-import type { CaptionRegions, CaptionTranscript, CaptionTranslation, CaptionVocal } from "../captions/analysis.js";
+import type { CaptionRegions, CaptionTranscript, CaptionTranslation } from "../captions/analysis.js";
 import { detectFrameRegions, extractFrames } from "../captions/frames.js";
 import type { FrameRegion } from "../captions/frames.js";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
-import {
-  decodeVocalPcm,
-  detectOnsets,
-  envelopeSeries,
-  HOP_SECONDS,
-  rmsFrames,
-  snapWordStarts,
-  VOCAL_SAMPLE_RATE,
-  wordEnergies,
-} from "../captions/vocal-dsp.js";
+import { analyzeVocalTiming } from "../captions/vocal.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
 import { buildIntelligenceResponses, INTELLIGENCE_MODEL } from "../openai-intelligence.js";
@@ -42,7 +33,6 @@ import { parseSegments } from "../remotion/subtitles/segments.js";
 import { requestElevenLabsTranscript, writeElevenLabsTranscript } from "./_transcribe.js";
 import { sidecarMatchesSource, translatedTranscriptFilename, translateTranscript } from "./_translate-transcript.js";
 
-const ENVELOPE_HZ = 20;
 const TRANSCRIBE_OPTIONS = { tagAudioEvents: true, diarize: true } as const;
 
 interface TranscriptPayload {
@@ -123,24 +113,6 @@ async function currentKey(engine: Engine, payload: ComponentPayload, keyFor: (me
   const source = await captionMediaSource(engine, payload.sourceArtifactId);
   const transcript = await readCaptionTranscript(engine, source);
   return transcript ? keyFor(source.mediaHash, transcript.hash) : null;
-}
-
-async function analyzeVocalTiming(source: CaptionMediaSource, transcript: CaptionTranscript, signal: AbortSignal): Promise<CaptionVocal> {
-  const pcm = source.hasAudio ? await decodeVocalPcm(source.path, signal) : null;
-  if (!pcm) {
-    return { hopSeconds: HOP_SECONDS, envelopeHz: ENVELOPE_HZ, envelope: [], onsets: [], words: transcript.words.map((word) => ({ onset: word.start, energy: 0.5 })) };
-  }
-  const rms = rmsFrames(pcm, VOCAL_SAMPLE_RATE, HOP_SECONDS);
-  const onsets = detectOnsets(rms, HOP_SECONDS);
-  const starts = snapWordStarts(transcript.words, onsets);
-  const energies = wordEnergies(transcript.words, rms, HOP_SECONDS);
-  return {
-    hopSeconds: HOP_SECONDS,
-    envelopeHz: ENVELOPE_HZ,
-    envelope: envelopeSeries(rms, ENVELOPE_HZ, HOP_SECONDS),
-    onsets,
-    words: transcript.words.map((_, index) => ({ onset: Math.max(0, starts[index]), energy: energies[index] })),
-  };
 }
 
 function clampRegion(region: FrameRegion): FrameRegion {

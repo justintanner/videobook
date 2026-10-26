@@ -60,8 +60,12 @@ function usableWords(words: readonly CaptionSeedWord[]): CaptionSeedWord[] {
     .sort((left, right) => left.start - right.start);
 }
 
+function phraseInputs(words: readonly CaptionWord[]) {
+  return words.map((word) => ({ id: word.id, text: word.analysed?.text ?? word.text, start: word.start, end: word.end }));
+}
+
 function phrasesFor(words: readonly CaptionWord[], firstNumber: number): CaptionPhrase[] {
-  return groupPhrases(words).map((wordIds, index) => ({ id: `p${firstNumber + index}`, wordIds, positions: {} }));
+  return groupPhrases(phraseInputs(words)).map((wordIds, index) => ({ id: `p${firstNumber + index}`, wordIds, positions: {} }));
 }
 
 export function seedCaptionDocument(input: CaptionSeedInput): CaptionDocument {
@@ -218,7 +222,7 @@ function mergedPhrases(previous: CaptionDocument, words: readonly CaptionWord[],
   let nextId = firstId;
   let orphanRun: CaptionWord[] = [];
   const flushOrphans = () => {
-    for (const wordIds of groupPhrases(orphanRun)) {
+    for (const wordIds of groupPhrases(phraseInputs(orphanRun))) {
       phrases.push({ id: `p${nextId}`, wordIds, positions: {} });
       nextId += 1;
     }

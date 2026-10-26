@@ -41,9 +41,9 @@ export function renderVideoDef(engine: Engine): ToolDef {
         .optional()
         .describe("Subtitle language: 'original' or a two-letter ISO 639-1 code (e.g. 'en'). Lazily translates and caches elevenlabs.<lang>.json (default: original)"),
       highlight_style: z
-        .enum(["impact", "highlight", "alive"])
+        .enum(["impact", "highlight"])
         .optional()
-        .describe("Subtitle animation style (default: impact). alive renders stacked, frame-aware, audio-timed captions configured by set_alive_captions"),
+        .describe("Subtitle animation style (default: impact). TikTok-style subtitles with word timing live in caption_video"),
       position: z
         .enum(["top", "middle", "bottom"])
         .optional()

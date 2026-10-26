@@ -3,7 +3,8 @@ import { z } from "zod";
 import { CAPTION_COMPONENTS } from "../captions/analysis.js";
 import type { CaptionEdit } from "../captions/edits.js";
 import { CAPTION_ASPECTS, CAPTION_BACKGROUNDS, CAPTION_MOTIONS, CAPTION_PRESETS, ORIGINAL_CAPTION_LANGUAGE } from "../captions/model.js";
-import type { CaptionResolution } from "../captions/service.js";
+import { latestCaptionRender, requestCaptionRender } from "../captions/render.js";
+import type { CaptionReadModel, CaptionResolution } from "../captions/service.js";
 import { CaptionServiceError, prepareCaptions, readCaptions, updateCaptions } from "../captions/service.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { advertisedAs } from "./tool-json-schema.js";
@@ -48,14 +49,16 @@ const schema = {
   book_id: z.string().describe("Book id"),
   asset_id: z.string().min(1).describe("Video artifact UUID or notebook address such as @a1"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address"),
-  op: z.enum(["get", "prepare", "update"]).optional()
-    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement or translation (transcription, placement and translation are paid); update saves edits against expected_revision"),
+  op: z.enum(["get", "prepare", "update", "render"]).optional()
+    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement or translation (transcription, placement and translation are paid); update saves edits against expected_revision; render queues a subtitled copy of exactly that revision as a new video (a version of the earlier copy when one exists)"),
   language: z.string().regex(/^(original|[a-z]{2})$/u).optional()
     .describe("original (default) for the spoken language with real word timings, or an ISO 639-1 code for translated subtitles with estimated timing"),
   detail: z.enum(["summary", "full"]).optional().describe("summary (default) omits the document, regions and loudness envelope"),
   regions: z.boolean().optional().describe("prepare: also detect faces and on-screen text so subtitles avoid them (default true)"),
   force: z.array(z.enum(CAPTION_COMPONENTS)).optional().describe("prepare: re-run these components even when cached results exist"),
-  expected_revision: z.string().optional().describe("update: the draft revision these edits apply to, from get"),
+  expected_revision: z.string().optional().describe("update and render: the draft revision from get that these edits apply to or that was reviewed"),
+  source_hash: z.string().optional().describe("render: source.media_hash from the get that was reviewed"),
+  request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
   edits: z.array(editSchema).max(500).optional()
     .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect)"),
   document: advertisedAs(z.unknown(), {
@@ -70,7 +73,9 @@ type CaptionVideoArgs = {
   book_id: string;
   asset_id: string;
   notebook_id?: string;
-  op?: "get" | "prepare" | "update";
+  op?: "get" | "prepare" | "update" | "render";
+  source_hash?: string;
+  request_id?: string;
   language?: string;
   detail?: "summary" | "full";
   regions?: boolean;
@@ -114,11 +119,28 @@ async function update(engine: Engine, args: CaptionVideoArgs, artifactId: string
   };
 }
 
+async function render(engine: Engine, args: CaptionVideoArgs, artifactId: string, language: string) {
+  if (!args.expected_revision || !args.source_hash || !args.request_id) {
+    throw new CaptionServiceError("invalid", "render needs expected_revision, source_hash and request_id from the reviewed get.");
+  }
+  const status = await requestCaptionRender(engine, args.book_id, artifactId, language, {
+    requestId: args.request_id,
+    expectedRevision: args.expected_revision,
+    sourceHash: args.source_hash,
+    notebookId: args.notebook_id ?? null,
+  });
+  return { asset_id: artifactId, language, render: status };
+}
+
+function withRender(engine: Engine, model: CaptionReadModel) {
+  return { ...model, render: latestCaptionRender(engine, model.asset_id, model.language) };
+}
+
 export function captionVideoDef(engine: Engine): ToolDef {
   return {
     name: "caption_video",
     description:
-      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, or save word, timing, phrase, position and style edits against the draft revision.",
+      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision into a new subtitled video cell (the source is kept).",
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     schema,
     handler: async (input) => {
@@ -128,10 +150,11 @@ export function captionVideoDef(engine: Engine): ToolDef {
         const language = args.language ?? ORIGINAL_CAPTION_LANGUAGE;
         const detail = args.detail ?? "summary";
         const op = args.op ?? "get";
-        if (op === "get") return json(await readCaptions(engine, artifactId, language, detail));
+        if (op === "get") return json(withRender(engine, await readCaptions(engine, artifactId, language, detail)));
         if (op === "prepare") {
-          return json(await prepareCaptions(engine, args.book_id, artifactId, language, { regions: args.regions ?? true, force: args.force ?? [], detail }));
+          return json(withRender(engine, await prepareCaptions(engine, args.book_id, artifactId, language, { regions: args.regions ?? true, force: args.force ?? [], detail })));
         }
+        if (op === "render") return json(await render(engine, args, artifactId, language));
         return json(await update(engine, args, artifactId, language));
       } catch (error) {
         return failure(error);

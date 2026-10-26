@@ -1,10 +1,25 @@
-import type { NotebookCell, NotebookGridSlot } from "videobook-engine";
+import type { NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
 import {
   nextHorizontalSlotFrom,
   nextVerticalSlotFrom,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
 } from "videobook-engine";
+import { notebookGridTag, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
+
+export function slotBelowArtifactOrFirstFree(notebook: NotebookDocument, sourceArtifactId: string, fullMessage: string): NotebookGridSlot {
+  const occupied = new Set(notebookOccupiedSlots(notebook.cells).map(notebookGridTag));
+  const source = notebook.cells.find((cell) => cell.outputArtifactId === sourceArtifactId);
+  const below = source ? { row: source.slot.row + 1, column: source.slot.column } : null;
+  if (below && below.row < NOTEBOOK_GRID_ROW_COUNT && !occupied.has(notebookGridTag(below))) return below;
+  for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
+    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
+      const slot = { row, column };
+      if (!occupied.has(notebookGridTag(slot))) return slot;
+    }
+  }
+  throw new Error(fullMessage);
+}
 
 export function slotBelow(slot: NotebookGridSlot): NotebookGridSlot {
   if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {

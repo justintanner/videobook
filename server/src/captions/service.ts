@@ -17,12 +17,13 @@ import { deleteCaptionDraft, readCaptionDraft, writeCaptionDraft } from "./draft
 import type { CaptionEdit } from "./edits.js";
 import { applyCaptionEdits, captionDocumentProblems, CaptionEditError } from "./edits.js";
 import { LEGACY_ALIVE_SETTINGS_KEY, styleFromLegacyAliveSettings } from "./legacy.js";
-import type { CaptionDocument, CaptionStyle } from "./model.js";
+import type { CaptionAspect, CaptionDocument, CaptionStyle } from "./model.js";
 import { captionDocumentSchema, DEFAULT_CAPTION_STYLE, ORIGINAL_CAPTION_LANGUAGE } from "./model.js";
 import type { CaptionSeedWord } from "./seed.js";
 import { reseedCaptionDocument, seedCaptionDocument } from "./seed.js";
 import type { CaptionMediaSource } from "./source.js";
 import { captionMediaSource } from "./source.js";
+import { ensureCaptionVocalTiming } from "./vocal.js";
 
 export type CaptionReadStatus = "ready" | "preparing" | "needs_prepare" | "unavailable" | "failed" | "silent";
 export type CaptionResolution = "reseed" | "realign" | "keep_timings" | "discard";
@@ -430,4 +431,19 @@ export async function savedCaptionDraft(engine: Engine, bookId: string, artifact
     }
     return context.saved ?? writeCaptionDraft(engine, artifactId, language, current.document);
   });
+}
+
+export async function captionDocumentForRender(
+  engine: Engine,
+  artifactId: string,
+  aspect: CaptionAspect,
+  signal: AbortSignal,
+): Promise<{ document: CaptionDocument; regions: CaptionRegions["frames"] } | null> {
+  const source = await captionMediaSource(engine, artifactId);
+  await ensureCaptionVocalTiming(engine, source, signal);
+  const context = await draftContext(engine, artifactId, ORIGINAL_CAPTION_LANGUAGE);
+  const saved = context.saved && context.saved.document.source.mediaHash === source.mediaHash ? context.saved.document : null;
+  const document = saved ?? context.seed?.document ?? null;
+  if (!document) return null;
+  return { document: { ...document, aspect }, regions: context.analysis.regions?.value?.frames ?? [] };
 }

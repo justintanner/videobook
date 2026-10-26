@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { findPrimaryMediaFile } from "videobook-engine";
 import type { Engine, NotebookDocument, NotebookGridSlot } from "videobook-engine";
-import { notebookGridTag, notebookOccupiedSlots, NOTEBOOK_GRID_ROW_COUNT, NOTEBOOK_GRID_COLUMN_COUNT } from "videobook-engine/notebook-grid";
 import { z } from "zod";
 import { INTELLIGENCE_MODEL } from "./openai-intelligence.js";
 import { coldOpenRangeError } from "./cold-open-model.js";
+import { slotBelowArtifactOrFirstFree } from "./notebook-placement.js";
 
 const coldOpenSuggestionSchema = z.object({
   sourceArtifactId: z.string().uuid(),
@@ -52,17 +52,7 @@ export function readColdOpenSuggestion(engine: Engine, key: string) {
 }
 
 export function coldOpenDestination(notebook: NotebookDocument, sourceArtifactId: string): NotebookGridSlot {
-  const occupied = new Set(notebookOccupiedSlots(notebook.cells).map(notebookGridTag));
-  const source = notebook.cells.find(cell => cell.outputArtifactId === sourceArtifactId);
-  const below = source ? { row: source.slot.row + 1, column: source.slot.column } : null;
-  if (below && below.row < NOTEBOOK_GRID_ROW_COUNT && !occupied.has(notebookGridTag(below))) return below;
-  for (let row = 0; row < NOTEBOOK_GRID_ROW_COUNT; row += 1) {
-    for (let column = 0; column < NOTEBOOK_GRID_COLUMN_COUNT; column += 1) {
-      const slot = { row, column };
-      if (!occupied.has(notebookGridTag(slot))) return slot;
-    }
-  }
-  throw new Error("The notebook needs one empty cell for the cold-open copy.");
+  return slotBelowArtifactOrFirstFree(notebook, sourceArtifactId, "The notebook needs one empty cell for the cold-open copy.");
 }
 
 export function checkColdOpenNotebook(engine: Engine, notebookId: string | undefined, sourceArtifactId: string): void {

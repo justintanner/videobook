@@ -5,6 +5,10 @@ import { QrOutroComposition } from "./QrOutroComposition.js";
 import { buildOutroSpec } from "./qr-outro-spec.js";
 import type { QrOutroInputProps } from "./QrOutroComposition.js";
 import type { RenderInputProps } from "./subtitles/types.js";
+import { CaptionComposition } from "./captions/CaptionComposition.js";
+import { captionCompositionSize } from "./captions/composition-meta.js";
+import type { CaptionCompositionProps } from "./captions/CaptionComposition.js";
+import { CAPTION_DOCUMENT_VERSION, DEFAULT_CAPTION_STYLE } from "../captions/model.js";
 
 const defaultProps: RenderInputProps = {
   videoSrc: "",
@@ -38,8 +42,32 @@ const defaultProps: RenderInputProps = {
   strokeColor: "#000000",
   shadowBlur: 6,
   shadowOpacity: 60,
-  aliveCues: [],
-  aliveSettings: null,
+  captionDocument: null,
+  captionRegions: [],
+};
+
+const defaultCaptionProps: CaptionCompositionProps = {
+  videoSrc: "",
+  sourceWidth: 1080,
+  sourceHeight: 1920,
+  durationInFrames: 30,
+  fps: 30,
+  regions: [],
+  fontUrls: null,
+  document: {
+    version: CAPTION_DOCUMENT_VERSION,
+    language: "original",
+    sourceLanguage: null,
+    wordTiming: "measured",
+    source: { artifactId: "preview", mediaHash: "preview", durationSeconds: 1, width: 1080, height: 1920, fps: 30 },
+    bindings: { transcriptKey: "preview", vocalKey: null, translationKey: null },
+    aspect: "9:16",
+    positions: {},
+    style: DEFAULT_CAPTION_STYLE,
+    words: [],
+    phrases: [],
+    nextId: 1,
+  },
 };
 
 const defaultQrOutroProps: QrOutroInputProps = {
@@ -68,6 +96,20 @@ const RemotionRoot: React.FC = () => {
           width: (props as RenderInputProps).targetWidth,
           height: (props as RenderInputProps).targetHeight,
         })}
+      />
+      <Composition
+        id="captions"
+        component={CaptionComposition as React.FC<Record<string, unknown>>}
+        durationInFrames={defaultCaptionProps.durationInFrames}
+        fps={defaultCaptionProps.fps}
+        width={1080}
+        height={1920}
+        defaultProps={defaultCaptionProps}
+        calculateMetadata={({ props }) => {
+          const input = props as CaptionCompositionProps;
+          const size = captionCompositionSize(input.document);
+          return { durationInFrames: input.durationInFrames, fps: input.fps, width: size.width, height: size.height };
+        }}
       />
       <Composition
         id="qr-outro"

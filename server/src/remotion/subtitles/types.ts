@@ -46,7 +46,8 @@ export interface KeywordGraphic {
 
 
 
-import type { AliveCue, AliveSettings } from "./alive-types.js";
+import type { CaptionRegionFrame } from "../../captions/layout.js";
+import type { CaptionDocument } from "../../captions/model.js";
 
 export interface RenderInputProps extends Record<string, unknown> {
   videoSrc: string;
@@ -80,6 +81,6 @@ export interface RenderInputProps extends Record<string, unknown> {
   strokeColor: string;
   shadowBlur: number;
   shadowOpacity: number;
-  aliveCues: AliveCue[];
-  aliveSettings: AliveSettings | null;
+  captionDocument: CaptionDocument | null;
+  captionRegions: CaptionRegionFrame[];
 }

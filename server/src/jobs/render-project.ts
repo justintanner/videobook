@@ -57,7 +57,8 @@ import {
   readKeywordPlacementAnalysis,
 } from "../keyword-placement-cache.js";
 import { resolveKeywordPlacements } from "../remotion/keyword-placement.js";
-import { aliveRenderTrack, type AliveRenderTrack } from "../alive-captions/track.js";
+import { captionDocumentForRender } from "../captions/service.js";
+import type { CaptionAspect } from "../captions/model.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
 // All three orientations lock the same source workspace. A subtitle render
@@ -111,6 +112,12 @@ type RenderProjectPayload = {
 // it matches the current transcript, translate-and-cache when it doesn't, and
 // fall back to the original-language transcript on any translation failure —
 // a render must never fail because translation did.
+const ORIENTATION_CAPTION_ASPECTS: Record<"portrait" | "landscape" | "square", CaptionAspect> = {
+  portrait: "9:16",
+  landscape: "16:9",
+  square: "1:1",
+};
+
 async function resolveSubtitleSegments(
   engine: Engine,
   assetId: string,
@@ -373,13 +380,8 @@ export function registerRenderProjectJob(engine: Engine): void {
             if (subtitlesEnabled && allSegments && highlightStyle !== "alive") {
               chunks = chunkSegments(allSegments, orientation, highlightStyle);
             }
-            const alive: AliveRenderTrack | null = subtitlesEnabled && highlightStyle === "alive" && rawTranscript
-              ? await aliveRenderTrack(engine, asset.assetId, {
-                  sourceWidth: probe.width,
-                  sourceHeight: probe.height,
-                  targetWidth,
-                  targetHeight,
-                }, ctx.signal)
+            const captions = subtitlesEnabled && highlightStyle === "alive" && rawTranscript
+              ? await captionDocumentForRender(engine, asset.assetId, ORIENTATION_CAPTION_ASPECTS[orientation], ctx.signal)
               : null;
             const keywordSegments = rawTranscript ? parseKeywordTranscript(rawTranscript) : [];
             const selectedKeywordGraphics = keywordGraphicsEnabled && rawTranscript
@@ -472,8 +474,8 @@ export function registerRenderProjectJob(engine: Engine): void {
                 strokeColor,
                 shadowBlur,
                 shadowOpacity,
-                aliveCues: alive?.cues ?? [],
-                aliveSettings: alive?.settings ?? null,
+                captionDocument: captions?.document ?? null,
+                captionRegions: captions?.regions ?? [],
               };
 
               const outputPath = join(asset.assetDir, outputFilename);
@@ -570,7 +572,6 @@ export function registerRenderProjectJob(engine: Engine): void {
                 strokeColor,
                 shadowBlur,
                 shadowOpacity,
-                aliveSettings: alive?.settings ?? null,
                 osgImagePath: osgImagePath ?? undefined,
                 osgAssetId: osgAssetId ?? undefined,
                 osgPosition,
