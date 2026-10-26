@@ -15,7 +15,7 @@ import {
   snapToOnset,
   snapWordStarts,
   wordEnergies,
-} from "./audio.js";
+} from "./vocal-dsp.js";
 
 const execFileAsync = promisify(execFile);
 

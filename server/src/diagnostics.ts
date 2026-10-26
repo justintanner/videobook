@@ -19,6 +19,7 @@ const EVENTS = [
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
   "tag-asset-failed", "voice-session-closed", "alive-captions-regions-failed",
+  "caption-preparation-continue-failed",
   "model-unresolvable",
 ] as const;
 export type DiagnosticEvent = typeof EVENTS[number];

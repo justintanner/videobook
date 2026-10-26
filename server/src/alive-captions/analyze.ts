@@ -17,8 +17,8 @@ import {
   rmsFrames,
   snapWordStarts,
   wordEnergies,
-} from "./audio.js";
-import { detectPhraseRegions, extractPhraseFrames } from "./frames.js";
+} from "../captions/vocal-dsp.js";
+import { detectFrameRegions, extractFrames } from "../captions/frames.js";
 import { aliveFingerprint, readAliveAnalysis, writeAliveAnalysis } from "./model.js";
 import { ALIVE_ANALYSIS_VERSION } from "./schema.js";
 
@@ -117,8 +117,9 @@ async function withRegions(analysis: AliveAnalysis, videoPath: string, signal: A
   const apiKey = getApiKey("OPENAI_API_KEY");
   if (!apiKey || analysis.phrases.length === 0) return analysis;
   try {
-    const frames = await extractPhraseFrames(videoPath, analysis.phrases, analysis.durationSeconds, signal);
-    return attachRegions(analysis, await detectPhraseRegions(frames, apiKey, signal));
+    const requests = analysis.phrases.map((phrase) => ({ id: phrase.id, time: phrase.frameTime }));
+    const frames = await extractFrames(videoPath, requests, analysis.durationSeconds, signal);
+    return attachRegions(analysis, await detectFrameRegions(frames, apiKey, signal));
   } catch (error) {
     signal.throwIfAborted();
     // Placement degrades to the default columns; captions must not fail on vision.
