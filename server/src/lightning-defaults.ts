@@ -1,6 +1,6 @@
 export const LIGHTNING_SCENE_MODEL = "kie:nano-banana-2-1";
 export const LIGHTNING_SCENE_ASPECT_RATIO = "9:16";
-export const LIGHTNING_SCENE_RESOLUTION = "4K";
+export const LIGHTNING_SCENE_RESOLUTION = "2K";
 export const LIGHTNING_SCENE_OUTPUT_FORMAT = "jpg";
 export const LIGHTNING_SCENE_PROMPT_WORDS = 25;
 

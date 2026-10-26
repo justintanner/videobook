@@ -33,7 +33,7 @@ describe("lightning defaults", () => {
   it("defaults the Nano Banana 2.1 catalog model to the lightning scene profile", () => {
     expect(defaults(LIGHTNING_SCENE_MODEL)).toMatchObject({
       aspect_ratio: "9:16",
-      resolution: "4K",
+      resolution: "2K",
       output_format: "jpg",
     });
   });

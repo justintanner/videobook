@@ -2,6 +2,7 @@ import type { ModelEntry, OptionSpec } from "./types.js";
 
 const PREFERRED_DURATION_SECONDS = 12;
 const PREFERRED_ASPECT_RATIO = "9:16";
+const PREFERRED_IMAGE_RESOLUTION_CEILING = 2048;
 const PREFERRED_IMAGE_SIZE_PRESET = "portrait_16_9";
 const IMAGE_SIZE_PRESETS = new Set(["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"]);
 
@@ -88,9 +89,14 @@ function preferredAspect(entry: ModelEntry, option: OptionSpec): string | undefi
   return takesImageSizePreset(entry, option) ? PREFERRED_IMAGE_SIZE_PRESET : undefined;
 }
 
-function preferredResolution(option: OptionSpec): string | number | undefined {
+function imageResolutionRank(value: string | number): number | null {
+  const rank = resolutionRank(value);
+  return rank !== null && rank <= PREFERRED_IMAGE_RESOLUTION_CEILING ? rank : null;
+}
+
+function preferredResolution(entry: ModelEntry, option: OptionSpec): string | number | undefined {
   if (!isResolutionEnum(option.enumValues.filter((value) => value !== "auto"))) return undefined;
-  return highestBy(option.enumValues, resolutionRank);
+  return highestBy(option.enumValues, entry.media === "image" ? imageResolutionRank : resolutionRank);
 }
 
 function preferredQuality(option: OptionSpec): string | number | undefined {
@@ -106,7 +112,7 @@ function preferredValue(entry: ModelEntry, option: OptionSpec): string | number 
   const group = stickySettingGroup(option.name);
   if (group === "duration") return takesDuration(entry) ? preferredDuration(option) : undefined;
   if (group === "aspect") return preferredAspect(entry, option);
-  if (group === "resolution") return preferredResolution(option);
+  if (group === "resolution") return preferredResolution(entry, option);
   if (group === "quality" || group === "bitrate") return preferredQuality(option);
   return undefined;
 }

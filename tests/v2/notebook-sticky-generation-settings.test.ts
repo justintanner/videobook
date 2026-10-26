@@ -45,8 +45,10 @@ describe("preferred generation defaults", () => {
     expect(defaultsOf("kie:gemini-omni-video")).toMatchObject({ duration: "10", aspect_ratio: "9:16", resolution: "4k" });
   });
 
-  it("defaults image models to 9:16 and their highest quality without touching edit-only durations", () => {
-    expect(defaultsOf("kie:nano-banana-pro")).toMatchObject({ aspect_ratio: "9:16", resolution: "4K" });
+  it("defaults image models to 9:16, 2K and their highest quality without touching edit-only durations", () => {
+    expect(defaultsOf("kie:nano-banana-pro")).toMatchObject({ aspect_ratio: "9:16", resolution: "2K" });
+    expect(defaultsOf("fal:blackforestlabs/flux-3/text-to-image")).toMatchObject({ resolution: "2k" });
+    expect(defaultsOf("kie:seedream/5-flash-text-to-image")).toMatchObject({ size: "2K" });
     expect(defaultsOf("kie:seedream/5-lite-text-to-image")).toMatchObject({ aspect_ratio: "9:16", quality: "high" });
     expect(defaultsOf("fal:ideogram/v4.5")).toMatchObject({ image_size: "portrait_16_9", quality: "high" });
     expect(defaultsOf("fal:minimax/h3-max/insert-video")).toMatchObject({ duration: 5 });

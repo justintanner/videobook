@@ -46,6 +46,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
   confirmation shows its review and estimated cost on the first Apply and runs
   on the second; read results and their links stay on the review. In the
   fullscreen timeline editor the add-clip review docks at the editor's foot.
+- Image models default to 2K again (or the highest resolution they offer
+  below 2K) instead of their highest resolution; 4K stays available to
+  choose. New goals plan their scene at 2K. Video models keep their highest
+  resolution, and a resolution a notebook remembers from a cell still applies.
 - Every analysis tool is keyed by the content it reads: speech-to-text by the
   transcribed audio and settings, translations by the timed transcript and
   language, video analysis by the video and the transcript it used, image

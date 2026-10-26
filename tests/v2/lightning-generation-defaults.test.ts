@@ -294,7 +294,7 @@ describe("lightning generation defaults and submitted prompts", () => {
     });
   });
 
-  it("previews a fresh Nano Banana 2.1 scene at 9:16 4K JPG", async () => {
+  it("previews a fresh Nano Banana 2.1 scene at 9:16 2K JPG", async () => {
     const cell = engine.notebooks.createCell({
       type: "generate_image",
       label: "Lightning scene",

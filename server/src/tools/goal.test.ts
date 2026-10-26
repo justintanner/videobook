@@ -1018,7 +1018,7 @@ describe("staged video goals through MCP", () => {
       planVersion: 3, status: "review", stage: "frame",
       plan: {
         version: 3, aspectRatio: "16:9",
-        scene: { tool: "generate_image", model: "kie:nano-banana-2-1", aspectRatio: "16:9", resolution: "4K", outputFormat: "jpg" },
+        scene: { tool: "generate_image", model: "kie:nano-banana-2-1", aspectRatio: "16:9", resolution: "2K", outputFormat: "jpg" },
         video: { tool: "generate_video", model: GOAL_VIDEO_MODEL, aspectRatio: "16:9", resolution: "1080p", durationSeconds: 12, generateAudio: true, outputFormat: "mp4" },
         finish: { suggestedColdOpenSeconds: 2.3, watermark: { platform: "tiktok", handle: "jtbkk", mode: "burn" } },
       },
@@ -1096,7 +1096,7 @@ describe("staged video goals through MCP", () => {
       refUrls: { image: ["https://example.test/scene.png"] },
       options: sceneParams.options as Record<string, unknown>,
     });
-    expect(sceneRequest).toMatchObject({ ok: true, request: { model: "nano-banana-2-1", input: { aspect_ratio: "16:9", resolution: "4K", output_format: "jpg" } } });
+    expect(sceneRequest).toMatchObject({ ok: true, request: { model: "nano-banana-2-1", input: { aspect_ratio: "16:9", resolution: "2K", output_format: "jpg" } } });
     const videoParams = steps[1]!.params;
     const videoRequest = buildWireRequest(resolveModel(String(videoParams.model)), {
       prompt: String(videoParams.prompt),
@@ -1332,7 +1332,7 @@ describe("staged video goals through MCP", () => {
   it("loads, edits, approves and retries a v3 goal saved with the earlier 2K scene default", async () => {
     const created = await invoke({ action: "create", brief: "@a1 @a2 skate through the morning market" });
     if (!created.plan || !("version" in created.plan) || created.plan.version !== 3) throw new Error("expected a v3 plan");
-    expect(created.plan.scene.resolution).toBe("4K");
+    expect(created.plan.scene.resolution).toBe("2K");
     const savedBefore4K: GoalPlanV3 = {
       ...created.plan,
       aspectRatio: "16:9",

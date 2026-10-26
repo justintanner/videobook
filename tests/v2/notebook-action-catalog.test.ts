@@ -562,7 +562,7 @@ describe("notebook action catalog", () => {
         model: "nano-banana-2-1",
         input: {
           prompt: "persisted prompt",
-          resolution: "4K",
+          resolution: "2K",
           aspect_ratio: "9:16",
           output_format: "jpg",
         },
@@ -589,7 +589,7 @@ describe("notebook action catalog", () => {
       model: "kie:gpt-image-2-5-flare-text-to-image",
       payload: {
         model: "gpt-image-2-5-flare-text-to-image",
-        input: { prompt: "draft prompt", resolution: "4K" },
+        input: { prompt: "draft prompt", resolution: "2K" },
       },
       estimate: { currency: "USD", usd: expect.any(Number) },
     });

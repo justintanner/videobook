@@ -375,7 +375,7 @@ describe("FLUX 3 Klein", () => {
       expect(model.title).toContain("FLUX 3 Klein");
       expect(buildWireRequest(model, { prompt: "a fox", refUrls })).toMatchObject({
         ok: true,
-        input: { resolution: "4K", aspect_ratio: "9:16", num_images: 1, output_format: "png" },
+        input: { resolution: "2K", aspect_ratio: "9:16", num_images: 1, output_format: "png" },
       });
       for (const options of [{ width: 512 }, { width: 128, height: 512 }, { num_images: 5 }]) {
         expect(buildWireRequest(model, { prompt: "a fox", refUrls, options }).ok).toBe(false);
