@@ -10,16 +10,9 @@ import {
 } from "../timewarp.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { PICTURE_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 900_000;
-
-const STALE_VISUAL_DERIVATIVES = [
-  ".original.analysis.json",
-  ".detect-scenes.json",
-  ".suggest-cuts.json",
-  ".suggest-sfx.json",
-  ".analyze-jokes.json",
-];
 
 type TimewarpAudioMode = "copy" | "aac" | "none";
 
@@ -185,7 +178,7 @@ export function registerTimewarpVideoJob(engine: Engine): void {
             inputFilename,
             outputPath,
           );
-          for (const filename of STALE_VISUAL_DERIVATIVES) {
+          for (const filename of PICTURE_SIDECARS) {
             await deleteIfPresent(engine, assetId, filename);
           }
         } catch (error) {

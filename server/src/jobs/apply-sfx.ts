@@ -7,17 +7,11 @@ import { requireApiKey } from "../api-key.js";
 import { probeVideo, runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 1_800_000;
 // Tail fade as a click-suppressor in case a cue ends on a transient.
 const SFX_FADE_OUT_S = 0.2;
-
-const STALE_DERIVATIVES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-  ".suggest-sfx.json",
-];
 
 type SfxEntry = {
   timestamp: number;
@@ -162,7 +156,7 @@ export function registerApplySfxJob(engine: Engine): void {
       for (const fn of generatedFilenames) {
         await engine.files.delete(assetId, fn).catch(() => {});
       }
-      for (const stale of STALE_DERIVATIVES) {
+      for (const stale of SOUND_SIDECARS) {
         await engine.files.delete(assetId, stale);
       }
 

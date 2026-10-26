@@ -9,6 +9,7 @@ import { ELEVENLABS_SCRIBE_MODEL } from "../elevenlabs-audio-extension.js";
 import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 30 * 60_000;
 const ELEVENLABS_TIMEOUT_MS = 10 * 60_000;
@@ -20,13 +21,6 @@ const QUERY_STOPWORDS = new Set([
   "a", "an", "the", "of", "some", "any", "all", "that", "this",
   "sound", "sounds", "noise", "noises", "audio", "sfx", "effect", "effects",
 ]);
-
-const STALE_DERIVATIVES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-  ".suggest-sfx.json",
-];
 
 export type RemoveSoundAssetKind = "video" | "audio";
 
@@ -330,7 +324,7 @@ export async function removeSoundWithElevenLabs(
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   }
 
-  for (const filename of STALE_DERIVATIVES) {
+  for (const filename of SOUND_SIDECARS) {
     const result = await engine.files.delete(payload.assetId, filename);
     if (!result.ok && result.error.code !== "NOT_FOUND") {
       throw new Error(`Failed to delete stale ${filename}: ${result.error.message}`);

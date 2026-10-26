@@ -6,6 +6,7 @@ import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { cropGeometry, type CropRect, type CropRatio } from "../crop-geometry.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 300_000;
 type CropVideoPayload = {
@@ -84,11 +85,7 @@ export function registerCropVideoJob(engine: Engine): void {
           outputPath,
         );
 
-        for (const stale of [
-          ".original.analysis.json",
-          ".analysis.gpt4otrans.json",
-          "elevenlabs.json",
-        ]) {
+        for (const stale of SOUND_SIDECARS) {
           await engine.files.delete(assetId, stale);
         }
 

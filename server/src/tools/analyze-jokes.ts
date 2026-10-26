@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { requestSidecarAnalysis } from "../analysis-sidecars.js";
-import { cachedSuggestionSummary, JOKES, jokesRecord } from "../suggestion-components.js";
+import { cachedSuggestions, JOKES, jokesRecord } from "../suggestion-components.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import type { ElevenLabs } from "./_suggest-shared.js";
 
@@ -17,7 +17,7 @@ export function analyzeJokesDef(engine: Engine): ToolDef {
   return {
     name: "analyze_jokes",
     description:
-      "Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript. Returns status cached when the current transcript was already analysed; pass force to analyse again.",
+      "Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript. Returns status cached with the earlier jokes when the current transcript was already analysed; pass force to analyse again.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
       book_id: z.string().describe("Book id"),
@@ -55,7 +55,7 @@ export function analyzeJokesDef(engine: Engine): ToolDef {
         force,
         payload: { assetId, assetDir: manifestResult.value.path, bookId: book_id },
       });
-      const cached = requested.status === "cached" ? await cachedSuggestionSummary(engine, JOKES, assetId, "jokes") : {};
+      const cached = requested.status === "cached" ? await cachedSuggestions(engine, JOKES, assetId, "jokes") : {};
 
       return {
         content: [{

@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { requestSidecarAnalysis } from "../analysis-sidecars.js";
-import { cachedSuggestionSummary, SUGGESTED_SFX, suggestionRecord } from "../suggestion-components.js";
+import { cachedSuggestions, SUGGESTED_SFX, suggestionRecord } from "../suggestion-components.js";
 import type { ToolDef } from "./tool-def.js";
 import { loadAssetForAnalysis } from "./_suggest-shared.js";
 
@@ -9,7 +9,7 @@ export function suggestSfxDef(engine: Engine): ToolDef {
   return {
     name: "suggest_sfx",
     description:
-      "Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx. Returns status cached when the same video and transcript were already reviewed; pass force for fresh suggestions.",
+      "Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx. Returns status cached with the earlier sound effects when the same video and transcript were already reviewed; pass force for fresh suggestions.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
       book_id: z.string().describe("Book id"),
@@ -39,7 +39,7 @@ export function suggestSfxDef(engine: Engine): ToolDef {
         force,
         payload: { assetId, assetDir: loaded.value.manifest.path, bookId: book_id },
       });
-      const cached = requested.status === "cached" ? await cachedSuggestionSummary(engine, SUGGESTED_SFX, assetId, "sfx") : {};
+      const cached = requested.status === "cached" ? await cachedSuggestions(engine, SUGGESTED_SFX, assetId, "sfx") : {};
 
       return {
         content: [{

@@ -18,9 +18,9 @@ interface ToolStatus {
   status: string;
   job_id: number | null;
   summary?: string;
-  trims?: number;
-  sfx?: number;
-  jokes?: number;
+  trims?: unknown[];
+  sfx?: unknown[];
+  jokes?: unknown[];
 }
 
 const TRANSCRIPT = {
@@ -108,7 +108,7 @@ describe("suggestion and joke components", () => {
     });
 
     expect(await call("suggest_cuts", { asset_id: assetId, instructions: " tighter pacing " }))
-      .toMatchObject({ status: "cached", job_id: null, trims: 1, summary: "One pause trimmed." });
+      .toMatchObject({ status: "cached", job_id: null, trims: [{ cut_start: 1, cut_end: 1.4 }], summary: "One pause trimmed." });
     expect(jobs("suggest_cuts", assetId)).toEqual([]);
 
     expect(await paused(() => call("suggest_cuts", { asset_id: assetId, instructions: "smoother transitions" })))
@@ -123,7 +123,7 @@ describe("suggestion and joke components", () => {
     const record = await suggestionRecord(engine, SUGGESTED_SFX, assetId, {});
     await stored(SUGGESTED_SFX, record, { sfx: [{ timestamp: 0.5, description: "whoosh" }], summary: "One whoosh." });
 
-    expect(await call("suggest_sfx", { asset_id: assetId })).toMatchObject({ status: "cached", sfx: 1 });
+    expect(await call("suggest_sfx", { asset_id: assetId })).toMatchObject({ status: "cached", sfx: [{ description: "whoosh" }] });
     const [first, second] = await paused(() => Promise.all([
       call("suggest_sfx", { asset_id: assetId, force: true }),
       call("suggest_sfx", { asset_id: assetId, force: true }),
@@ -131,14 +131,14 @@ describe("suggestion and joke components", () => {
     expect(second.job_id).toBe(first.job_id);
     await waitForBookJob(bookId, first.job_id as number, testBudget(20_000)).catch(() => undefined);
     expect(engine.jobs.queue.get(first.job_id as number)?.state).toBe("failed");
-    expect(await call("suggest_sfx", { asset_id: assetId })).toMatchObject({ status: "cached", sfx: 1 });
+    expect(await call("suggest_sfx", { asset_id: assetId })).toMatchObject({ status: "cached", summary: "One whoosh." });
   });
 
   it("keys jokes by the timed transcript and finishes automatic repeats without the provider", async () => {
     const assetId = await video("jokes source");
     await stored(JOKES, await jokesRecord(engine, assetId), { jokes: [{ text: "Why did the chicken" }], summary: "One joke." });
 
-    expect(await call("analyze_jokes", { asset_id: assetId })).toMatchObject({ status: "cached", jokes: 1 });
+    expect(await call("analyze_jokes", { asset_id: assetId })).toMatchObject({ status: "cached", jokes: [{ text: "Why did the chicken" }] });
     const job = await queue.enqueue(`analyze-jokes-${assetId}-repeat`, { type: "analyze_jokes", assetId, assetDir: "", bookId });
     await waitForBookJob(bookId, job.id, testBudget(20_000)).catch(() => undefined);
     expect(engine.jobs.queue.get(job.id)).toMatchObject({ state: "done", result: { success: true, cached: true } });

@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { createEngineForTest } from "../engine.js";
+import { cachedSidecarAnalysis, fileObjectHash, recordSidecarAnalysis } from "../analysis-sidecars.js";
+import { SCENE_DETECTION, sceneDetectionRecord } from "../vision-components.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 
@@ -168,6 +170,10 @@ describe("sync_video_to_audio end to end", () => {
     valueOf(await fs.files.write(assetId, "elevenlabs.json", transcript));
     valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}"));
     valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}"));
+    await recordSidecarAnalysis(fs, SCENE_DETECTION, {
+      ...sceneDetectionRecord(assetId, (await fileObjectHash(fs, assetId, "original.mp4"))!),
+      provenance: { analyzer: "test", provider: null, model: null },
+    });
     valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale")));
   }, 120_000);
 
@@ -226,7 +232,7 @@ describe("sync_video_to_audio end to end", () => {
     expect(valueOf(await fs.files.read(assetId, "original.mp3"))).toEqual(sourceMp3);
     expect(valueOf(await fs.files.read(assetId, "elevenlabs.json"))).toEqual(transcript);
     expect((await fs.files.read(assetId, ".original.analysis.json")).ok).toBe(false);
-    expect((await fs.files.read(assetId, ".detect-scenes.json")).ok).toBe(false);
+    expect(await cachedSidecarAnalysis(fs, SCENE_DETECTION, sceneDetectionRecord(assetId, findVideoFile(manifest.files)!.objectHash))).toBe(false);
     expect((await fs.files.read(assetId, "landscape.mp4")).ok).toBe(false);
     expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
     expect(fs.artifacts.list().length).toBe(initialCount);

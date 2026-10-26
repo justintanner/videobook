@@ -4,15 +4,9 @@ import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 600_000;
-
-const STALE_DERIVATIVES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-  ".suggest-cuts.json",
-];
 
 type Cut = { cut_start: number; cut_end: number };
 
@@ -98,7 +92,7 @@ export function registerApplyCutsJob(engine: Engine): void {
         outputPath,
       );
 
-      for (const stale of STALE_DERIVATIVES) {
+      for (const stale of SOUND_SIDECARS) {
         await engine.files.delete(assetId, stale);
       }
 

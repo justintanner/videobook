@@ -9,15 +9,9 @@ import { withLockedLocalLease } from "./_lease.js";
 import { audioOnlyOutputOptions, videoAudioOutputOptions } from "../audio-encoding.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { registerMediaStreams } from "./process-video.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 30 * 60_000;
-
-const STALE_DERIVATIVES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-  ".suggest-sfx.json",
-];
 
 type AudioMixPayload = {
   type: "audio_mix";
@@ -200,7 +194,7 @@ export function registerAudioMixJob(engine: Engine): void {
           await rm(tempDir, { recursive: true, force: true });
         }
 
-        for (const filename of STALE_DERIVATIVES) {
+        for (const filename of SOUND_SIDECARS) {
           await deleteIfPresent(engine, assetId, filename);
         }
 

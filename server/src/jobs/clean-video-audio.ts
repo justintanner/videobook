@@ -8,6 +8,7 @@ import { requireApiKey } from "../api-key.js";
 import { AUDIO_OPTS, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 2 * 60 * 60_000;
 const PROVIDER_TIMEOUT_MS = 65 * 60_000;
@@ -16,13 +17,6 @@ const MAX_ISOLATION_DURATION_SECONDS = 60 * 60;
 const MIN_MUSIC_DURATION_MS = 3_000;
 const MAX_MUSIC_DURATION_MS = 600_000;
 const DEFAULT_MUSIC_PROMPT = "A light, unobtrusive, warm instrumental underscore with a sparse arrangement, gentle dynamics, no vocals, and plenty of space for dialogue and natural sound effects.";
-
-const STALE_DERIVATIVES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-  ".suggest-sfx.json",
-];
 
 type CleanAudioMixOptions = {
   durationSeconds: number;
@@ -283,7 +277,7 @@ export function registerCleanVideoAudioJob(engine: Engine): void {
           await rm(tempDir, { recursive: true, force: true });
         }
 
-        for (const filename of STALE_DERIVATIVES) {
+        for (const filename of SOUND_SIDECARS) {
           await deleteIfPresent(engine, assetId, filename);
         }
 

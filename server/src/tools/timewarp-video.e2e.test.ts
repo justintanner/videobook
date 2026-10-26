@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { createEngineForTest } from "../engine.js";
+import { cachedSidecarAnalysis, fileObjectHash, recordSidecarAnalysis } from "../analysis-sidecars.js";
+import { SCENE_DETECTION, sceneDetectionRecord } from "../vision-components.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 
@@ -170,6 +172,10 @@ describe("timewarp_video end to end", () => {
     valueOf(await fs.files.write(assetId, "elevenlabs.json", timedTranscript));
     valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}"));
     valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}"));
+    await recordSidecarAnalysis(fs, SCENE_DETECTION, {
+      ...sceneDetectionRecord(assetId, (await fileObjectHash(fs, assetId, "original.mp4"))!),
+      provenance: { analyzer: "test", provider: null, model: null },
+    });
     valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale")));
     valueOf(await fs.metadata.waveforms.write(assetId, [0.1, 0.5, 0.1]));
     initialAssetCount = fs.artifacts.list().length;
@@ -221,7 +227,7 @@ describe("timewarp_video end to end", () => {
     expect(valueOf(await fs.files.read(assetId, ".analysis.gpt4otrans.json"))).toEqual(transcript);
     expect(valueOf(await fs.files.read(assetId, "elevenlabs.json"))).toEqual(timedTranscript);
     expect((await fs.files.read(assetId, ".original.analysis.json")).ok).toBe(false);
-    expect((await fs.files.read(assetId, ".detect-scenes.json")).ok).toBe(false);
+    expect(await cachedSidecarAnalysis(fs, SCENE_DETECTION, sceneDetectionRecord(assetId, findVideoFile(manifest.files)!.objectHash))).toBe(false);
     expect((await fs.files.read(assetId, "landscape.mp4")).ok).toBe(false);
     expect(manifest.files.some((file) => file.name.startsWith(".timewarp-"))).toBe(false);
     expect(fs.artifacts.list().length).toBe(initialAssetCount);

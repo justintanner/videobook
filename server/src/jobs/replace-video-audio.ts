@@ -6,14 +6,9 @@ import { registerJobHandler, queue } from "../queue.js";
 import { AUDIO_OPTS, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 300_000;
-
-const STALE_ANALYSIS_FILES = [
-  ".original.analysis.json",
-  ".analysis.gpt4otrans.json",
-  "elevenlabs.json",
-];
 
 type ReplaceVideoAudioPayload = {
   type: "replace_video_audio";
@@ -69,7 +64,7 @@ export function registerReplaceVideoAudioJob(engine: Engine): void {
         await rm(workspace, { recursive: true, force: true });
       }
 
-      for (const stale of STALE_ANALYSIS_FILES) {
+      for (const stale of SOUND_SIDECARS) {
         await engine.files.delete(assetId, stale);
       }
 

@@ -7,16 +7,9 @@ import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { registerMediaStreams } from "./process-video.js";
+import { PICTURE_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 900_000;
-
-const STALE_VISUAL_DERIVATIVES = [
-  ".original.analysis.json",
-  ".detect-scenes.json",
-  ".suggest-cuts.json",
-  ".suggest-sfx.json",
-  ".analyze-jokes.json",
-];
 
 type InjectFirstFramePayload = {
   type: "inject_first_frame";
@@ -217,7 +210,7 @@ export function registerInjectFirstFrameJob(engine: Engine): void {
               ctx.signal,
             );
           } else {
-            for (const filename of STALE_VISUAL_DERIVATIVES) {
+            for (const filename of PICTURE_SIDECARS) {
               await deleteIfPresent(engine, assetId, filename);
             }
           }

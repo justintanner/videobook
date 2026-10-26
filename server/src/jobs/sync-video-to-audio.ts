@@ -19,6 +19,7 @@ import {
 } from "./_transcribe.js";
 import { claimLockedLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { PICTURE_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 900_000;
 
@@ -26,14 +27,6 @@ const AUTO_TRANSCRIBE_OPTIONS = {
   tagAudioEvents: true,
   diarize: true,
 };
-
-const STALE_VISUAL_DERIVATIVES = [
-  ".original.analysis.json",
-  ".detect-scenes.json",
-  ".suggest-cuts.json",
-  ".suggest-sfx.json",
-  ".analyze-jokes.json",
-];
 
 type SyncVideoToAudioAudioMode = "copy" | "aac";
 
@@ -407,7 +400,7 @@ export function registerSyncVideoToAudioJob(engine: Engine): void {
               preparedTranscript.replacement.audioHash,
             );
           }
-          for (const filename of STALE_VISUAL_DERIVATIVES) {
+          for (const filename of PICTURE_SIDECARS) {
             await deleteIfPresent(engine, assetId, filename);
           }
 

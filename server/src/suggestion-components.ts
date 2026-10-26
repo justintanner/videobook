@@ -47,10 +47,9 @@ export async function jokesRecord(engine: Engine, artifactId: string): Promise<S
   };
 }
 
-export async function cachedSuggestionSummary(engine: Engine, spec: SidecarAnalysisSpec, artifactId: string, list: string): Promise<Record<string, unknown>> {
+export async function cachedSuggestions(engine: Engine, spec: SidecarAnalysisSpec, artifactId: string, list: string): Promise<Record<string, unknown>> {
   const document = await readArtifactJson(engine, artifactId, spec.sidecar);
   if (typeof document !== "object" || document === null) return {};
   const record = document as Record<string, unknown>;
-  const entries = record[list];
-  return { summary: record.summary ?? null, [list]: Array.isArray(entries) ? entries.length : 0 };
+  return { summary: record.summary ?? null, [list]: Array.isArray(record[list]) ? record[list] : [] };
 }

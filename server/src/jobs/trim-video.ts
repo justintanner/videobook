@@ -7,6 +7,7 @@ import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS, FFPROBE } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { SOUND_SIDECARS } from "../stale-sidecars.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -375,11 +376,7 @@ export function registerTrimVideoJob(engine: Engine): void {
         outputPath,
       );
 
-      for (const stale of [
-        ".original.analysis.json",
-        ".analysis.gpt4otrans.json",
-        "elevenlabs.json",
-      ]) {
+      for (const stale of SOUND_SIDECARS) {
         await engine.files.delete(assetId, stale);
       }
 
