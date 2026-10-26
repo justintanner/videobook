@@ -99,7 +99,6 @@ export type CaptionSource = z.infer<typeof captionSourceSchema>;
 export const captionBindingsSchema = z.object({
   transcriptKey: z.string().min(1),
   vocalKey: z.string().min(1).nullable(),
-  regionsKey: z.string().min(1).nullable(),
   translationKey: z.string().min(1).nullable(),
 }).strict();
 

@@ -16,7 +16,7 @@ function word(text: string, start: number, end: number, onset = start, energy = 
 function seed(words: CaptionSeedWord[], durationSeconds = 20): CaptionDocument {
   return seedCaptionDocument({
     source: { artifactId: "video-1", mediaHash: "hash-1", durationSeconds, width: 1920, height: 1080, fps: 30 },
-    bindings: { transcriptKey: "t1", vocalKey: "v1", regionsKey: null, translationKey: null },
+    bindings: { transcriptKey: "t1", vocalKey: "v1", translationKey: null },
     language: "original",
     sourceLanguage: "en",
     wordTiming: "measured",

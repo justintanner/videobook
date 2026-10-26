@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
 import {
+  EDITOR_ONLY_TOOL_NAMES,
   AUTO_APPLY_TOOL_NAMES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
@@ -38,14 +39,15 @@ describe("chat routing catalog", () => {
     await rm(root, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("exposes every registered tool except chat itself", () => {
+  it("exposes every registered tool except chat itself and editor-only tools", () => {
     const tools = buildRoutableTools(definitions);
     const directNames = tools
       .filter((tool) => tool.name === tool.actualTool && tool.effect !== "view")
       .map((tool) => tool.name);
     const expectedNames = definitions
       .map((definition) => definition.name)
-      .filter((name) => name !== "chat");
+      .filter((name) => name !== "chat" && !EDITOR_ONLY_TOOL_NAMES.has(name));
+    expect(getRoutableTool(tools, "caption_video")).toBeUndefined();
     expect(new Set(directNames)).toEqual(new Set(expectedNames));
     expect(tools).toHaveLength(
       expectedNames.length + CHAT_VIEW_ACTIONS.length,

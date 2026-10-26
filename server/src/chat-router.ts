@@ -132,9 +132,11 @@ function constraintsForTool(definition: RoutableDefinition): string[] {
   });
 }
 
+const EDITOR_ONLY_TOOL_NAMES = new Set(["caption_video"]);
+
 function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
   const tools = definitions
-    .filter((definition) => definition.name !== "chat")
+    .filter((definition) => definition.name !== "chat" && !EDITOR_ONLY_TOOL_NAMES.has(definition.name))
     .map((definition) => {
       const category = categoryForTool(definition.name);
       return {
@@ -761,6 +763,7 @@ function getRoutableTool(
 
 export {
   AUTO_APPLY_TOOL_NAMES,
+  EDITOR_ONLY_TOOL_NAMES,
   READ_ONLY_TOOL_NAMES,
   TIMESTAMP_PARAMS,
   NESTED_TIMESTAMP_PARAMS,

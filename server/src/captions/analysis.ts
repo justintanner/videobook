@@ -24,7 +24,8 @@ import { captionMediaSource, TIMED_TRANSCRIPT_FILENAME } from "./source.js";
 export const CAPTION_TRANSCRIPT_JOB = "caption_transcript";
 export const CAPTION_VOCAL: AnalysisComponentSpec = { component: "caption-vocal", version: 1, jobType: "caption_vocal" };
 export const CAPTION_REGIONS: AnalysisComponentSpec = { component: "caption-regions", version: 1, jobType: "caption_regions" };
-export const CAPTION_COMPONENTS = ["transcript", "vocal", "regions"] as const;
+export const CAPTION_TRANSLATION: AnalysisComponentSpec = { component: "caption-translation", version: 1, jobType: "caption_translation" };
+export const CAPTION_COMPONENTS = ["transcript", "vocal", "regions", "translation"] as const;
 export type CaptionComponentName = typeof CAPTION_COMPONENTS[number];
 
 const MAX_REGION_FRAMES = 90;
@@ -52,6 +53,14 @@ export const regionsValueSchema = z.object({
   frames: z.array(z.object({ time: z.number().finite().nonnegative(), regions: z.array(regionSchema) })),
 });
 
+export const translationValueSchema = z.object({
+  file: z.string().min(1),
+  fileHash: z.string().min(1),
+  language: z.string().regex(/^[a-z]{2}$/u),
+  wordCount: z.number().int().nonnegative(),
+});
+
+export type CaptionTranslation = z.infer<typeof translationValueSchema>;
 export type CaptionVocal = z.infer<typeof vocalValueSchema>;
 export type CaptionRegions = z.infer<typeof regionsValueSchema>;
 export type CaptionRegion = z.infer<typeof regionSchema>;
@@ -81,6 +90,34 @@ export interface CaptionAnalysisState {
   transcript: CaptionTranscriptState;
   vocal: AnalysisComponentState<CaptionVocal> | null;
   regions: AnalysisComponentState<CaptionRegions> | null;
+}
+
+export function translationComponentKey(mediaHash: string, transcriptHash: string, language: string): string {
+  return analysisComponentKey(CAPTION_TRANSLATION, {
+    sourceHash: mediaHash,
+    dependencies: [transcriptHash],
+    options: { language, model: INTELLIGENCE_MODEL },
+  });
+}
+
+function translationUnavailable(): string | null {
+  return getApiKey("OPENAI_API_KEY") ? null : "Translated subtitles need OPENAI_API_KEY.";
+}
+
+export function captionTranslationState(
+  engine: Engine,
+  source: CaptionMediaSource,
+  transcript: CaptionTranscriptState,
+  language: string,
+): AnalysisComponentState<CaptionTranslation> | null {
+  if (transcript.status !== "ready" || !transcript.hash || transcript.silent) return null;
+  return analysisComponentState(
+    engine,
+    CAPTION_TRANSLATION,
+    translationComponentKey(source.mediaHash, transcript.hash, language),
+    translationValueSchema,
+    translationUnavailable(),
+  );
 }
 
 export function silentTranscriptHash(mediaHash: string): string {
@@ -175,7 +212,14 @@ export function regionFrameRequests(words: readonly CaptionTranscriptWord[], dur
 interface PreparationMarker {
   mediaHash: string;
   regions: boolean;
+  languages: string[];
   requestedAt: number;
+}
+
+export interface CaptionPrepareOptions {
+  regions: boolean;
+  languages: readonly string[];
+  force: readonly CaptionComponentName[];
 }
 
 function preparationKey(artifactId: string): string {
@@ -184,7 +228,8 @@ function preparationKey(artifactId: string): string {
 
 function readMarker(engine: Engine, artifactId: string): PreparationMarker | null {
   const value = engine.settings.get<PreparationMarker>(preparationKey(artifactId));
-  return value && typeof value.mediaHash === "string" ? value : null;
+  if (!value || typeof value.mediaHash !== "string") return null;
+  return { ...value, languages: Array.isArray(value.languages) ? value.languages : [] };
 }
 
 export function clearCaptionPreparation(engine: Engine, artifactId: string): void {
@@ -210,11 +255,24 @@ function needsWork(state: AnalysisComponentState<unknown>, force: boolean): bool
   return force || state.status === "missing" || state.status === "failed";
 }
 
+async function advanceTranslations(engine: Engine, bookId: string, source: CaptionMediaSource, state: CaptionAnalysisState, options: CaptionPrepareOptions): Promise<void> {
+  if (!state.transcript.hash) return;
+  const payload = componentPayload(bookId, source, state.transcript.hash);
+  for (const language of options.languages) {
+    const translation = captionTranslationState(engine, source, state.transcript, language);
+    if (!translation || !needsWork(translation, options.force.includes("translation"))) continue;
+    await enqueueAnalysisComponent(engine, CAPTION_TRANSLATION, translation.key, { ...payload, language }, {
+      force: options.force.includes("translation"),
+      hasResult: translation.value !== null,
+    });
+  }
+}
+
 async function advancePreparation(
   engine: Engine,
   bookId: string,
   source: CaptionMediaSource,
-  options: { regions: boolean; force: readonly CaptionComponentName[] },
+  options: CaptionPrepareOptions,
 ): Promise<void> {
   const state = captionAnalysisStateFor(engine, source);
   const forceTranscript = options.force.includes("transcript") && state.transcript.status === "ready" && !state.transcript.silent;
@@ -236,29 +294,44 @@ async function advancePreparation(
       hasResult: state.regions.value !== null,
     });
   }
+  await advanceTranslations(engine, bookId, source, state, options);
 }
 
-function preparationSettled(state: CaptionAnalysisState, regions: boolean): boolean {
-  const busy = (status: AnalysisComponentStatus | undefined) => status === "queued" || status === "running" || status === "missing";
+function busy(status: AnalysisComponentStatus | undefined): boolean {
+  return status === "queued" || status === "running" || status === "missing";
+}
+
+function preparationSettled(engine: Engine, source: CaptionMediaSource, state: CaptionAnalysisState, marker: Pick<PreparationMarker, "regions" | "languages">): boolean {
   if (busy(state.transcript.status)) return false;
   if (busy(state.vocal?.status)) return false;
-  return !(regions && busy(state.regions?.status));
+  if (marker.regions && busy(state.regions?.status)) return false;
+  return marker.languages.every((language) => !busy(captionTranslationState(engine, source, state.transcript, language)?.status));
+}
+
+function mergedMarker(previous: PreparationMarker | null, source: CaptionMediaSource, options: CaptionPrepareOptions): PreparationMarker {
+  const carried = previous && previous.mediaHash === source.mediaHash ? previous : null;
+  return {
+    mediaHash: source.mediaHash,
+    regions: options.regions || (carried?.regions ?? false),
+    languages: [...new Set([...(carried?.languages ?? []), ...options.languages])],
+    requestedAt: Date.now(),
+  };
 }
 
 export async function prepareCaptionAnalysis(
   engine: Engine,
   bookId: string,
   artifactId: string,
-  options: { regions: boolean; force: readonly CaptionComponentName[] },
+  options: CaptionPrepareOptions,
 ): Promise<{ source: CaptionMediaSource; state: CaptionAnalysisState }> {
   const source = await captionMediaSource(engine, artifactId);
-  const marker: PreparationMarker = { mediaHash: source.mediaHash, regions: options.regions, requestedAt: Date.now() };
+  const marker = mergedMarker(readMarker(engine, artifactId), source, options);
   const stored = engine.settings.set(preparationKey(artifactId), marker);
   if (!stored.ok) throw new Error(stored.error.message);
   await importLegacyAliveAnalysis(engine, source);
   await advancePreparation(engine, bookId, source, options);
   const state = captionAnalysisStateFor(engine, source);
-  if (preparationSettled(state, options.regions)) clearCaptionPreparation(engine, artifactId);
+  if (preparationSettled(engine, source, state, marker)) clearCaptionPreparation(engine, artifactId);
   return { source, state };
 }
 
@@ -271,8 +344,8 @@ export async function continueCaptionPreparation(engine: Engine, bookId: string,
     return;
   }
   await importLegacyAliveAnalysis(engine, source);
-  await advancePreparation(engine, bookId, source, { regions: marker.regions, force: [] });
-  if (preparationSettled(captionAnalysisStateFor(engine, source), marker.regions)) clearCaptionPreparation(engine, artifactId);
+  await advancePreparation(engine, bookId, source, { regions: marker.regions, languages: marker.languages, force: [] });
+  if (preparationSettled(engine, source, captionAnalysisStateFor(engine, source), marker)) clearCaptionPreparation(engine, artifactId);
 }
 
 function legacyFingerprint(source: CaptionMediaSource, transcript: Buffer): string {

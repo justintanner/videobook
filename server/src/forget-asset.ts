@@ -6,6 +6,7 @@ import type {
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { removeArtifactFromTimeline } from "./tools/delete-asset.js";
+import { forgetCaptionState } from "./captions/forget.js";
 
 /** One place at HEAD that still holds the artifact, as the engine reports it. */
 interface ForgetAssetReference {
@@ -234,6 +235,7 @@ export async function forgetAsset(
     if (deleted.error.code !== "IN_USE") throw new Error(deleted.error.message);
     return inUseOutcome(artifactId, label, referencesOf(deleted.error.details), clearedCells);
   }
+  forgetCaptionState(engine, artifactId);
   let forgottenObjects = 0;
   let sharedObjects = 0;
   let reclaimedBytes = 0;

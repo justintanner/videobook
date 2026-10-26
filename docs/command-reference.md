@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (227)
+## MCP endpoints (228)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -32,6 +32,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `audio_mix` — Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
 - `cancel_job` — Cancel a queued or running persistent job
+- `caption_video` — Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, or save word, timing, phrase, position and style edits against the draft revision.
 - `chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
 - `chat` — Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.
@@ -238,7 +239,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (301; 145 dedicated command routes)
+## Slash actions (302; 145 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -275,6 +276,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/books` — Open the book selector dropdown; UI: `open_projects`
 - `/cancel-job` — Cancel a queued or running persistent job; MCP: `cancel_job`
 - `/caption` — Preview a sequence caption with timing and style; preview or workspace operation
+- `/caption-video` — Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, or save word, timing, phrase, position and style edits against the draft revision.; MCP: `caption_video`
 - `/chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.; MCP: `chain`
 - `/character` — Create a character folder; MCP: `create_character`
 - `/character-new` — Create a reusable Videobook character entity; MCP: `create_entity`

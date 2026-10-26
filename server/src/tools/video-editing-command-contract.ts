@@ -260,6 +260,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "animate_keywords", exposure: "direct", command: "/keywords", purpose: "Configure transcript-timed keyword graphics" },
   { tool: "alive_captions", exposure: "ui", command: "/alive", purpose: "Analyze a video for stacked, frame-aware alive captions" },
   { tool: "set_alive_captions", exposure: "ui", command: "/alive", purpose: "Save alive caption style, motion and placement" },
+  { tool: "caption_video", exposure: "ui", command: "/subs", purpose: "Prepare, edit and render TikTok-style subtitles in the composer" },
   { tool: "detect_scenes", exposure: "direct", command: "/detect-scenes", purpose: "Detect visual scene boundaries" },
   { tool: "suggest_cuts", exposure: "direct", command: "/suggest-cuts", purpose: "Suggest removable video ranges" },
   { tool: "analyze_jokes", exposure: "direct", command: "/analyze-jokes", purpose: "Analyze edit points around jokes" },

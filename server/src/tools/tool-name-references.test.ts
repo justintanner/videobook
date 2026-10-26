@@ -6,11 +6,12 @@ import { createEngine } from "videobook-engine";
 import { CHAIN_TOOL_CATALOG } from "../chain-plan.js";
 import {
   AUTO_APPLY_TOOL_NAMES,
+  EDITOR_ONLY_TOOL_NAMES,
   NESTED_TIMESTAMP_PARAMS,
   READ_ONLY_TOOL_NAMES,
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
-import { BILLABLE_TOOL_NAMES } from "../paid-tools.js";
+import { BILLABLE_TOOL_NAMES, BILLABLE_TOOL_OPERATIONS } from "../paid-tools.js";
 import { WORKFLOW_TOOLS } from "../workspace-action-catalog.js";
 import { WORKSPACE_TOOL_GROUPS } from "../workspace-action-groups.js";
 import { getAllToolDefs } from "./index.js";
@@ -35,7 +36,8 @@ describe("tool name references", () => {
       readOnly: [...READ_ONLY_TOOL_NAMES],
       timestamps: [...Object.keys(TIMESTAMP_PARAMS), ...Object.keys(NESTED_TIMESTAMP_PARAMS)],
       chainSteps: Object.keys(CHAIN_TOOL_CATALOG),
-      billable: [...BILLABLE_TOOL_NAMES],
+      billable: [...BILLABLE_TOOL_NAMES, ...Object.keys(BILLABLE_TOOL_OPERATIONS)],
+      editorOnly: [...EDITOR_ONLY_TOOL_NAMES],
       contracts: VIDEO_EDITING_TOOL_CONTRACTS.map((contract) => contract.tool),
       workflows: Object.keys(WORKFLOW_TOOLS),
     };

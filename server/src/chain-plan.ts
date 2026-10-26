@@ -761,7 +761,7 @@ export async function preflightChainPlan(
       pins,
       autoApply: autoApplyStep,
       effect,
-      requiresApproval: !autoApplyStep && toolSpendsMoney(step.tool),
+      requiresApproval: !autoApplyStep && toolSpendsMoney(step.tool, step.params),
     });
   }
 

@@ -119,7 +119,7 @@ describe("caption analysis components", () => {
 
   it("measures vocal timing once, then serves the cached result without another job or write", async () => {
     const artifactId = await speechVideo(TRANSCRIPT);
-    const first = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, force: [] });
+    const first = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, languages: [], force: [] });
     expect(first.state.transcript).toMatchObject({ status: "ready", silent: false });
     expect(first.state.regions?.status).toBe("unavailable");
     await settled(artifactId, "vocal", "ready");
@@ -129,7 +129,7 @@ describe("caption analysis components", () => {
     expect(ready.vocal?.value?.words[2].onset).toBeCloseTo(1, 1);
     expect(ready.vocal?.value?.onsets.length).toBeGreaterThan(0);
     const createdAt = ready.vocal?.provenance?.createdAt;
-    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, force: [] });
+    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, languages: [], force: [] });
     expect(jobsOf(CAPTION_VOCAL.jobType, artifactId)).toHaveLength(1);
     expect((await analysisState(artifactId)).vocal?.provenance?.createdAt).toBe(createdAt);
     expect(engine.settings.get(`captions.prepare.${artifactId}`)).toBeNull();
@@ -139,7 +139,7 @@ describe("caption analysis components", () => {
     const artifactId = await speechVideo(TRANSCRIPT);
     await pauseBookQueueForTests(bookId);
     try {
-      await Promise.all([1, 2, 3].map(() => prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: [] })));
+      await Promise.all([1, 2, 3].map(() => prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: [] })));
       const jobs = jobsOf(CAPTION_VOCAL.jobType, artifactId);
       expect(jobs).toHaveLength(1);
       expect((await analysisState(artifactId)).vocal).toMatchObject({ status: "queued", jobId: jobs[0].id });
@@ -161,13 +161,13 @@ describe("caption analysis components", () => {
 
   it("deduplicates forced refreshes and keeps the last result when a refresh is cancelled", async () => {
     const artifactId = await speechVideo(TRANSCRIPT);
-    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: [] });
+    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: [] });
     await settled(artifactId, "vocal", "ready");
     const before = (await analysisState(artifactId)).vocal;
     await pauseBookQueueForTests(bookId);
     try {
-      await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: ["vocal"] });
-      await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: ["vocal"] });
+      await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: ["vocal"] });
+      await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: ["vocal"] });
       const refresh = jobsOf(CAPTION_VOCAL.jobType, artifactId).filter((job) => job.state === "queued");
       expect(refresh).toHaveLength(1);
       expect((await analysisState(artifactId)).vocal).toMatchObject({ status: "queued", value: before?.value });
@@ -185,7 +185,7 @@ describe("caption analysis components", () => {
     await pauseBookQueueForTests(bookId);
     let key: string | undefined;
     try {
-      const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: [] });
+      const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: [] });
       key = prepared.state.vocal?.key;
       await writeVideo(artifactId, await render("changed.mp4", true, "red"));
     } finally {
@@ -201,10 +201,10 @@ describe("caption analysis components", () => {
 
   it("reports transcript availability and fails closed on placeholder keys without calling the provider", async () => {
     const artifactId = await speechVideo(null);
-    const unavailable = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: [] });
+    const unavailable = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: [] });
     expect(unavailable.state.transcript).toMatchObject({ status: "unavailable", error: expect.stringMatching(/ELEVENLABS_API_KEY/) });
     vi.stubEnv("ELEVENLABS_API_KEY", "test-caption-analysis");
-    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, force: [] });
+    await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: false, languages: [], force: [] });
     expect(jobsOf(CAPTION_TRANSCRIPT_JOB, artifactId)).toHaveLength(0);
     const source = await captionMediaSource(engine, artifactId);
     await queue.enqueue(`caption-transcript:${artifactId}:${source.mediaHash}`, {
@@ -221,7 +221,7 @@ describe("caption analysis components", () => {
 
   it("treats a video without audio as silent and needs no further work", async () => {
     const artifactId = await createVideo(silent, null);
-    const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, force: [] });
+    const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, languages: [], force: [] });
     expect(prepared.state).toMatchObject({ transcript: { status: "ready", silent: true }, vocal: null, regions: null });
     expect(engine.settings.get(`captions.prepare.${artifactId}`)).toBeNull();
   });
@@ -246,7 +246,7 @@ describe("caption analysis components", () => {
       }],
     });
     if (!written.ok) throw new Error(written.error.message);
-    const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, force: [] });
+    const prepared = await prepareCaptionAnalysis(engine, bookId, artifactId, { regions: true, languages: [], force: [] });
     expect(prepared.state.regions).toMatchObject({ status: "ready", provenance: { analyzer: "alive-captions", provider: "openai" } });
     expect(prepared.state.regions?.value?.frames[0].regions[0]).toMatchObject({ kind: "face" });
     expect(prepared.state.vocal).toMatchObject({ status: "ready" });

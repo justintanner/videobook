@@ -7,6 +7,7 @@ import {
   intelligenceRequest,
   type ResponsesFn,
 } from "../openai-intelligence.js";
+import { SUBTITLE_LANGUAGE_NAMES } from "../subtitle-languages.js";
 
 const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
 
@@ -84,27 +85,7 @@ const ISO3_TO_ISO1: Record<string, string> = {
   ron: "ro",
 };
 
-const LANGUAGE_NAMES: Record<string, string> = {
-  en: "English",
-  zh: "Chinese",
-  es: "Spanish",
-  pt: "Portuguese",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-  nl: "Dutch",
-  pl: "Polish",
-  ru: "Russian",
-  tr: "Turkish",
-  ar: "Arabic",
-  hi: "Hindi",
-  id: "Indonesian",
-  ja: "Japanese",
-  ko: "Korean",
-  vi: "Vietnamese",
-  th: "Thai",
-  uk: "Ukrainian",
-};
+const LANGUAGE_NAMES = SUBTITLE_LANGUAGE_NAMES;
 
 export function iso1FromIso3(code: string | null | undefined): string | null {
   if (!code) return null;

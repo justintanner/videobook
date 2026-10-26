@@ -18,6 +18,14 @@ export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
  * action catalog's confirmation policy and the chain's per-step approval gate so
  * the two can never drift apart.
  */
-export function toolSpendsMoney(name: string): boolean {
-  return BILLABLE_TOOL_NAMES.has(name);
+export const BILLABLE_TOOL_OPERATIONS: Readonly<Record<string, ReadonlySet<string>>> = {
+  caption_video: new Set(["prepare"]),
+};
+
+export function toolSpendsMoney(name: string, args?: Record<string, unknown>): boolean {
+  if (BILLABLE_TOOL_NAMES.has(name)) return true;
+  const operations = BILLABLE_TOOL_OPERATIONS[name];
+  if (!operations) return false;
+  if (!args) return true;
+  return operations.has(typeof args.op === "string" ? args.op : "get");
 }
