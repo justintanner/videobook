@@ -22,12 +22,12 @@ const execFileAsync = promisify(execFile);
 /** Loud bursts at 0.5 s and 1.5 s, a quiet one at 2.5 s. */
 const BURSTS = "sin(2*PI*440*t)*(0.8*between(t,0.5,0.8)+0.8*between(t,1.5,1.8)+0.2*between(t,2.5,2.8))";
 
-describe("alive caption vocal analysis", () => {
+describe("caption vocal analysis", () => {
   let dir: string;
   let videoPath: string;
 
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), "videobook-alive-audio-test-"));
+    dir = await mkdtemp(join(tmpdir(), "videobook-caption-audio-test-"));
     videoPath = join(dir, "bursts.mp4");
     await execFileAsync(FFMPEG, [
       "-y",

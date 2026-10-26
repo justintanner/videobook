@@ -23,6 +23,7 @@ interface ConfirmSheetProps {
   ariaLabel: string
   applyLabel?: string
   busy: boolean
+  cancelLabel?: string
   busyLabel?: string
   children: ReactNode
   effect?: ConfirmSheetEffect | null
@@ -47,6 +48,7 @@ export function ConfirmSheet({
   ariaLabel,
   busy,
   busyLabel = 'Applying…',
+  cancelLabel = 'Cancel',
   children,
   effect = null,
   hints = null,
@@ -106,6 +108,7 @@ export function ConfirmSheet({
             applyLabel={applyLabel}
             busy={busy}
             busyLabel={status.message ?? busyLabel}
+            cancelLabel={cancelLabel}
             failed={status.state === 'failed'}
             onCancel={onCancel}
           />

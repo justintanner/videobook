@@ -18,7 +18,7 @@ const EVENTS = [
   "poster-enqueue-failed", "proxy-assessment-enqueue-failed", "duration-backfill-enqueue-failed",
   "watermark-probe-fallback", "generation-error-clear-failed", "timeline-orientation-failed",
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
-  "tag-asset-failed", "voice-session-closed", "alive-captions-regions-failed",
+  "tag-asset-failed", "voice-session-closed",
   "caption-preparation-continue-failed", "caption-transcript-publish-failed",
   "model-unresolvable",
 ] as const;

@@ -167,7 +167,7 @@ function setStyle(document: CaptionDocument, style: Partial<CaptionStyle>): Capt
   return { ...document, style: parsed.data };
 }
 
-export function applyCaptionEdit(document: CaptionDocument, edit: CaptionEdit): CaptionDocument {
+function applyCaptionEdit(document: CaptionDocument, edit: CaptionEdit): CaptionDocument {
   switch (edit.op) {
     case "set_word_text": return setWordText(document, edit.word_id, edit.text);
     case "set_word_timing": return setWordTiming(document, edit.word_id, edit.start, edit.end);

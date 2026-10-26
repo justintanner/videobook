@@ -127,7 +127,7 @@ export function isActiveJob(job: Job | null): boolean {
   return Boolean(job && ACTIVE_JOB_STATES.has(job.state));
 }
 
-export function latestComponentJob(engine: Engine, spec: AnalysisComponentSpec, key: string): Job | null {
+function latestComponentJob(engine: Engine, spec: AnalysisComponentSpec, key: string): Job | null {
   return latestJobWhere(engine, spec.jobType, (job) => job.payload.componentKey === key);
 }
 

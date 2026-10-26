@@ -345,15 +345,9 @@ import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
-import {
-  aliveErrorMessage,
-  aliveSettingsArgs,
-  parseAliveStudioData,
-  resolveAliveCommandAsset,
-  type AliveOrientation,
-} from '@/videobook/alive-captions'
-import type { AliveStudioAsset, AliveStudioState } from '@/components/videobook/AliveCaptionsStudio'
-import type { AliveSettings } from '../server/src/remotion/subtitles/alive-types'
+import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
+import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
+import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
 import {
   changedNotebookGridNodes,
   nextNotebookCreationSlot,
@@ -651,11 +645,6 @@ const MusicVideoEditor = lazy(async () => {
   return { default: module.MusicVideoEditor }
 })
 
-const AliveCaptionsStudio = lazy(async () => {
-  const module = await import('@/components/videobook/AliveCaptionsStudio')
-  return { default: module.AliveCaptionsStudio }
-})
-
 type MusicVideoPreparedSetup = Extract<
   MusicVideoSetupState,
   { status: 'ready' }
@@ -671,13 +660,6 @@ type MusicVideoSession = {
   setup:
     | Exclude<MusicVideoSetupState, { status: 'ready' }>
     | MusicVideoPreparedSetup
-}
-
-type AliveCaptionsSession = {
-  key: string
-  asset: AliveStudioAsset
-  returnFocus: HTMLElement | null
-  state: AliveStudioState
 }
 
 type MediaFullscreenSession = {
@@ -788,6 +770,7 @@ type PendingChatAction =
       review: ChainStepReviewValue
       remaining: number
     }
+  | { kind: 'subtitles'; assetId: string }
   | {
       kind: 'transcribe'
       assetId: string | null
@@ -1375,7 +1358,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
-  const [aliveSession, setAliveSession] = useState<AliveCaptionsSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
   const [mediaFullscreenSidebarEditing, setMediaFullscreenSidebarEditing] =
@@ -2025,6 +2007,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSelectedCellIds(next)
   }, [])
 
+  const subtitles = useSubtitleEditor({ bookId, ready: mcp.state === 'ready', call })
   const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
@@ -2898,11 +2881,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       void call('chain', { action: 'cancel', book_id: bookId, chain_id: chainId })
         .catch(() => undefined)
     }
+    if (pendingChatAction?.kind === 'subtitles') subtitles.close()
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     setPendingWatermarkReview(null)
     focusCommandComposer()
-  }, [bookId, call, cancelChatReview, focusCommandComposer, pendingChatAction])
+  }, [bookId, call, cancelChatReview, focusCommandComposer, pendingChatAction, subtitles])
   const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'routed') return current
@@ -6869,44 +6853,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     restoreFocus()
   }, [])
 
-  const closeAliveCaptions = useCallback(() => {
-    const restoreFocus = capturePointerComposerFocus()
-    setAliveSession(null)
-    restoreFocus()
-  }, [])
-
-  const updateAliveState = (sessionKey: string, state: AliveStudioState) => {
-    setAliveSession((current) => current?.key === sessionKey ? { ...current, state } : current)
-  }
-
-  const loadAliveCaptions = async (sessionKey: string, artifactId: string, reanalyze: boolean, chat?: ChatExecution) => {
-    try {
-      const result = await call('alive_captions', { book_id: bookId, asset_id: artifactId, reanalyze }, { chat })
-      updateAliveState(sessionKey, { status: 'ready', data: parseAliveStudioData(result) })
-    } catch (error) {
-      // A failed re-run keeps the loaded analysis on screen and reports inline.
-      if (reanalyze) throw new Error(aliveErrorMessage(error), { cause: error })
-      updateAliveState(sessionKey, { status: 'error', message: aliveErrorMessage(error) })
-    }
-  }
-
-  const saveAliveCaptions = async (artifactId: string, settings: AliveSettings) => {
-    try {
-      await call('set_alive_captions', { book_id: bookId, asset_id: artifactId, ...aliveSettingsArgs(settings) })
-    } catch (error) {
-      throw new Error(aliveErrorMessage(error), { cause: error })
-    }
-  }
-
-  const renderAliveCaptions = async (artifactId: string, settings: AliveSettings, orientation: AliveOrientation) => {
-    await saveAliveCaptions(artifactId, settings)
-    await call('render_video', {
-      book_id: bookId,
-      asset_id: artifactId,
-      orientation,
-      subtitles_enabled: true,
-      highlight_style: 'alive',
+  const openSubtitles = (artifactId: string, chat?: ChatExecution): ComposerOutcome => {
+    const holder = notebook?.cells.find((cell) => cell.outputArtifactId === artifactId)
+    const sourceId = holder?.inputs?.sourceOperation === 'caption_video' && typeof holder.inputs.sourceArtifactId === 'string'
+      ? holder.inputs.sourceArtifactId
+      : artifactId
+    const asset = assets.find((entry) => entry.artifactId === sourceId)
+    if (!asset || (asset.type !== 'video' && asset.type !== 'final')) return { ok: false, message: 'Subtitles need a video. Choose a video cell.' }
+    if (asset.status !== 'ready' || !asset.mediaUrl) return { ok: false, message: 'Wait for the video to finish processing before adding subtitles.' }
+    presentChat(chat, () => setMediaFullscreen(null))
+    setTimelinePreview(null)
+    setMusicVideoSession(null)
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
+    reviewChat(chat, false, () => setPendingWatermarkReview(null))
+    reviewChat(chat, true, () => setPendingChatAction({ kind: 'subtitles', assetId: sourceId }))
+    setComposerDockOpen(true)
+    subtitles.open({
+      artifactId: sourceId,
+      label: asset.label,
+      mediaUrl: asset.mediaUrl,
+      address: commandMentionAssets.find((mention) => mention.artifactId === sourceId)?.cellAddress ?? null,
+      notebookId: notebook?.id ?? null,
     })
+    return { ok: true, message: `Subtitles opened for ${asset.label}` }
   }
 
   const completeVideoDownload = async (
@@ -8053,6 +8022,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.tool === 'upload_post_to_dropbox' || plan.tool === 'save_post_to_icloud') {
       return openSourceDeliveryReview(asString(plan.params.post_cell_id) ?? undefined, plan.tool === 'upload_post_to_dropbox' ? 'dropbox' : 'icloud', chat)
     }
+    if (plan.tool === 'show_subtitles') {
+      const assetId = asString(plan.params.asset_id)
+      if (!assetId) return { ok: false, message: 'Name the video to caption.' }
+      if (isCurrent?.() === false || chat?.isCurrent() === false) {
+        return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
+      }
+      return openSubtitles(assetId, chat)
+    }
     if (plan.tool === 'show_media_fullscreen') {
       const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
       if (!target.ok) return target
@@ -8683,6 +8660,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       collapseComposerAfterCellCreation(chat)
       return { ok: true, message: `Cold-open copy created as ${output.address}` }
     }
+    if (pendingChatAction.kind === 'subtitles') {
+      const outcome = await subtitles.render()
+      if (!outcome.ok) return { ok: false, message: outcome.message }
+      await refreshBookData(bookId, notebook?.id, undefined, chat)
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      subtitles.close()
+      if (outcome.cellId) selectCanvasCell(outcome.cellId)
+      collapseComposerAfterCellCreation(chat)
+      return { ok: true, message: outcome.message }
+    }
     if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
       const post = notebookPosts.find(item => item.id === review.postId) ?? null
@@ -9204,6 +9191,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const assetRef = resolvedRest.split(/\s+/).find((token) => token.length > 0)
         return openTranscribeReview({ assetRef, chat })
       }
+      if (commandToken === '/subs' || commandToken === '/alive') {
+        const target = subtitlesCommandTarget(resolvedRest)
+        const selected = !resolvedRest.trim() ? selectedNotebookCell?.outputArtifactId ?? mediaFullscreen?.asset.artifactId : undefined
+        const asset = target ? assets.find((candidate) => candidate.artifactId === target || candidate.id === target) : undefined
+        if (target && !asset) return { ok: false, message: `Video ${target} was not found.` }
+        if (asset || selected) return openSubtitles(asset?.artifactId ?? selected!, chat)
+      }
       const availableActions = workspaceActions.length ? workspaceActions : asWorkspaceActionCatalog(await call('list_workspace_actions', { detail: 'full' }, { chat })).actions
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
@@ -9400,34 +9394,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           sequence, chat,
         ).catch(() => undefined)
         return { ok: true, message: `Music-video editor opened for ${audioAsset.label}` }
-      }
-      if (command.uiAction === 'open_alive_captions') {
-        const parsed = parseCommandArgs(resolvedRest, command.params)
-        const resolved = resolveAliveCommandAsset(asString(parsed.asset_ref), assets)
-        if (!resolved.ok) return resolved
-        const video = resolved.asset
-        const sessionKey = uuidv7()
-        const returnFocus = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
-          ? document.activeElement
-          : document.querySelector<HTMLElement>('[aria-label="Videobook command input"]')
-        presentChat(chat, () => setMediaFullscreen(null))
-        setTimelinePreview(null)
-        setMusicVideoSession(null)
-        setAliveSession({
-          key: sessionKey,
-          asset: {
-            artifactId: video.artifactId,
-            label: video.label,
-            mediaUrl: video.mediaUrl,
-            width: video.width,
-            height: video.height,
-            fps: video.fps,
-          },
-          returnFocus,
-          state: { status: 'loading' },
-        })
-        void loadAliveCaptions(sessionKey, video.artifactId, false, chat)
-        return { ok: true, message: `Alive captions opened for ${video.label}` }
       }
       if (command.uiAction === 'speak_preview') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -10367,6 +10333,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       && (contextMenuVisualAsset.type === 'video'
         || contextMenuVisualAsset.type === 'final')
     ) {
+      contextMenuActions.push({ id: 'subtitles', label: 'Subtitles', icon: 'subtitles', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({ id: 'cold-open', label: 'Edit cold open', icon: 'split', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({
         id: 'download',
@@ -10528,6 +10495,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       openMediaLibrary(contextMenuCell.id)
       return
     }
+    if (actionId === 'subtitles' && contextMenuVisualAsset) {
+      const result = openSubtitles(contextMenuVisualAsset.artifactId)
+      if (!result.ok) setNotice(result.message, 'error')
+      return
+    }
     if (actionId === 'cold-open' && contextMenuVisualAsset) {
       const result = openColdOpenReview(contextMenuVisualAsset.artifactId)
       if (!result.ok) setNotice(result.message, 'error')
@@ -10629,7 +10601,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const currentActionDiscovery = actionDiscovery?.bookId === bookId && actionDiscovery.session === composerSession ? actionDiscovery : null
   const workspaceChatPreview = workspacePreview?.turnId !== undefined && workspacePreview.turnId === chatTurns.at(-1)?.id
   const temporaryActionComposer = Boolean(currentActionComposer && (workspacePreview || mediaFullscreen))
-  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession && !aliveSession
+  const showCommandComposer = !timelinePreviewOpen && !musicVideoSession
   // A spoken decision about the review already on screen. Apply and cancel run
   // the same composer commands the sheet's own buttons do, so the two routes
   // cannot drift; revise changes the prompt and leaves the review open, which
@@ -10844,6 +10816,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       )
     }
     if (!pendingChatAction) return null
+    if (pendingChatAction.kind === 'subtitles') {
+      return <SubtitlesSheet editor={subtitles} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
+    }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction
       const addressByArtifactId = new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress]))
@@ -11978,21 +11953,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               musicVideoSession.audioArtifactId,
               nextSequence ?? sequence,
             )}
-          />
-        </Suspense>
-      )}
-
-      {aliveSession && (
-        <Suspense fallback={<div role="status">Loading alive captions…</div>}>
-          <AliveCaptionsStudio
-            key={aliveSession.key}
-            asset={aliveSession.asset}
-            state={aliveSession.state}
-            returnFocus={aliveSession.returnFocus}
-            onClose={closeAliveCaptions}
-            onSave={(settings) => saveAliveCaptions(aliveSession.asset.artifactId, settings)}
-            onRender={(settings, orientation) => renderAliveCaptions(aliveSession.asset.artifactId, settings, orientation)}
-            onReanalyze={() => loadAliveCaptions(aliveSession.key, aliveSession.asset.artifactId, true)}
           />
         </Suspense>
       )}

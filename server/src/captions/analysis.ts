@@ -120,7 +120,7 @@ export function captionTranslationState(
   );
 }
 
-export function silentTranscriptHash(mediaHash: string): string {
+function silentTranscriptHash(mediaHash: string): string {
   return `silent:${mediaHash}`;
 }
 
@@ -169,7 +169,7 @@ function transcriptUnavailable(): string | null {
   return getApiKey("ELEVENLABS_API_KEY") ? null : "Word timings need ElevenLabs speech-to-text. Add ELEVENLABS_API_KEY in provider settings.";
 }
 
-export function captionTranscriptState(engine: Engine, source: CaptionMediaSource): CaptionTranscriptState {
+function captionTranscriptState(engine: Engine, source: CaptionMediaSource): CaptionTranscriptState {
   if (source.transcriptFile) return { status: "ready", jobId: null, error: null, hash: source.transcriptFile.objectHash, silent: false };
   if (!source.hasAudio) return { status: "ready", jobId: null, error: null, hash: silentTranscriptHash(source.mediaHash), silent: true };
   const own = latestJobWhere(engine, CAPTION_TRANSCRIPT_JOB, (job) => transcriptJobFor(job, source));
@@ -404,7 +404,7 @@ async function readLegacyAnalysis(engine: Engine, source: CaptionMediaSource): P
   return transcript.ok && legacy.fingerprint === legacyFingerprint(source, transcript.value) ? legacy : null;
 }
 
-export async function importLegacyAliveAnalysis(engine: Engine, source: CaptionMediaSource): Promise<boolean> {
+async function importLegacyAliveAnalysis(engine: Engine, source: CaptionMediaSource): Promise<boolean> {
   const legacy = await readLegacyAnalysis(engine, source);
   if (!legacy) return false;
   const transcript = await readCaptionTranscript(engine, source);

@@ -7,7 +7,7 @@ export interface PhraseWord {
   end: number;
 }
 
-export const PHRASE_LIMITS = {
+const PHRASE_LIMITS = {
   gapSeconds: 0.45,
   maxWords: 7,
   maxChars: 28,

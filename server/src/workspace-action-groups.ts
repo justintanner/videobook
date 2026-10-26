@@ -26,7 +26,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
   ],
   Video: [
     "prepare_cold_open", "edit_cold_open", "trim_video", "split_video", "extract_video_clip", "split_video_by_durations",
-    "pad_video", "set_video_overlay", "animate_keywords", "alive_captions", "set_alive_captions", "caption_video",
+    "pad_video", "set_video_overlay", "animate_keywords", "caption_video",
     "detect_scenes", "suggest_cuts", "analyze_jokes", "apply_cuts",
     "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
     "extract_frame",

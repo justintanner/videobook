@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { runFfmpeg } from "../ffmpeg.js";
 
 /**
- * Vocal timing for alive captions: decode a band-limited mono track, then
+ * Vocal timing for captions: decode a band-limited mono track, then
  * derive a loudness envelope, vocal onsets and per-word energy from it.
  */
 
@@ -20,7 +20,7 @@ const DEFAULT_SNAP_SECONDS = 0.15;
 
 /** Decode the first audio stream as 8 kHz mono float PCM filtered to the vocal band; callers check the probe for audio first. */
 export async function decodeVocalPcm(inputPath: string, signal?: AbortSignal): Promise<Float32Array | null> {
-  const dir = await mkdtemp(join(tmpdir(), "videobook-alive-audio-"));
+  const dir = await mkdtemp(join(tmpdir(), "videobook-caption-audio-"));
   const output = join(dir, "vocal.f32");
   try {
     await runFfmpeg([

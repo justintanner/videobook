@@ -48,7 +48,6 @@ import { cropAssetDef } from "./crop-asset.js";
 import { invertImageDef } from "./invert-image.js";
 import { setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
-import { aliveCaptionsDef, setAliveCaptionsDef } from "./alive-captions.js";
 import { captionVideoDef } from "./caption-video.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
@@ -153,8 +152,6 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     invertImageDef(engine),
     setVideoOverlayDef(engine),
     animateKeywordsDef(engine),
-    aliveCaptionsDef(engine),
-    setAliveCaptionsDef(engine),
     captionVideoDef(engine),
     detectScenesDef(engine),
     suggestCutsDef(engine),

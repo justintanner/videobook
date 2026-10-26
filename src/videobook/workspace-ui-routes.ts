@@ -14,7 +14,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_projects: { kind: 'existing' },
   open_music_video: { kind: 'existing' },
   start_goal: { kind: 'existing' },
-  open_alive_captions: { kind: 'existing' },
   open_cold_open: { kind: 'existing' },
   open_post_dropbox: { kind: 'existing' },
   open_post_icloud: { kind: 'existing' },
@@ -117,7 +116,7 @@ const FIELD_ALIASES: Record<string, string> = {
 
 const SUBTITLE_CHOICES: Record<string, readonly string[]> = {
   position: ['top', 'middle', 'bottom'],
-  highlight_style: ['impact', 'highlight', 'alive'],
+  highlight_style: ['impact', 'highlight'],
   font_size: ['small', 'medium', 'large'],
 }
 const SUBTITLE_ALIASES: Record<string, Record<string, string>> = {

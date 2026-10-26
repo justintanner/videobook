@@ -5,7 +5,7 @@ import type { CaptionDocument, CaptionWord } from "./model.js";
 import { ORIGINAL_CAPTION_LANGUAGE } from "./model.js";
 import { joinCaptionWords } from "./script.js";
 
-export const CAPTION_TRANSCRIPT_PROVIDER = "videobook-captions";
+const CAPTION_TRANSCRIPT_PROVIDER = "videobook-captions";
 
 function corrected(word: CaptionWord): boolean {
   return word.textCorrected || word.timingCorrected || word.hidden || word.analysed === null;

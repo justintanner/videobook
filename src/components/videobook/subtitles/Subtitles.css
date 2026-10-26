@@ -1,0 +1,480 @@
+.confirm-subtitles {
+  display: grid;
+  min-height: 0;
+  height: 100%;
+  grid-template-columns: auto minmax(0, 1.2fr) minmax(220px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'status status status'
+    'preview transcript controls';
+  gap: 10px;
+}
+
+.subtitles-status {
+  grid-area: status;
+  display: grid;
+  gap: 6px;
+}
+
+.subtitles-status:empty {
+  display: none;
+}
+
+.confirm-subtitles button:not(.subtitles-word):not(.subtitles-phrase-head):not(.subtitles-drag-block) {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.confirm-subtitles button:not(.subtitles-word):not(.subtitles-phrase-head):hover:not(:disabled),
+.confirm-subtitles button[aria-pressed='true']:not(.subtitles-word):not(.subtitles-phrase-head) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+}
+
+.confirm-subtitles button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.subtitles-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.subtitles-banner[data-tone='warning'] {
+  border-color: rgba(240, 168, 96, 0.5);
+}
+
+.subtitles-banner[data-tone='error'] {
+  border-color: rgba(240, 126, 126, 0.55);
+  color: #f3c5c5;
+}
+
+.subtitles-banner-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.subtitles-banner ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+}
+
+.subtitles-preview {
+  grid-area: preview;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.subtitles-stage {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+}
+
+.subtitles-stage:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.subtitles-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.subtitles-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(135deg, rgba(99, 199, 216, 0.16) 0 6px, rgba(99, 199, 216, 0.05) 6px 12px);
+  color: rgba(214, 244, 250, 0.82);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.subtitles-guide span {
+  position: absolute;
+  left: 6px;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.subtitles-guide-top {
+  top: 0;
+}
+
+.subtitles-guide-top span {
+  bottom: 4px;
+}
+
+.subtitles-guide-bottom {
+  bottom: 0;
+}
+
+.subtitles-guide-bottom span {
+  top: 4px;
+}
+
+.subtitles-guide-right {
+  left: auto;
+  right: 0;
+}
+
+.subtitles-drag-block {
+  position: absolute;
+  pointer-events: auto;
+  cursor: ns-resize;
+  border: 1px dashed rgba(114, 231, 170, 0.75);
+  touch-action: none;
+}
+
+.subtitles-drag-block[data-selected='true'] {
+  border-style: solid;
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.subtitles-transport {
+  display: grid;
+  grid-template-columns: auto minmax(60px, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+}
+
+.subtitles-seek {
+  width: 100%;
+  min-width: 0;
+}
+
+.subtitles-time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subtitles-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.subtitles-transcript {
+  grid-area: transcript;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.subtitles-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.subtitles-muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.subtitles-phrases {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.subtitles-phrase {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid transparent;
+}
+
+.subtitles-phrase[data-selected='true'] {
+  border-color: var(--line-bright);
+  background: rgba(47, 127, 82, 0.12);
+}
+
+.subtitles-phrase-head {
+  display: grid;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  align-content: start;
+  gap: 2px;
+  padding: 3px 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.subtitles-phrase-pin {
+  color: var(--cyan);
+}
+
+.subtitles-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.subtitles-word {
+  cursor: pointer;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.subtitles-word[data-active='true'] {
+  border-color: #ffe14d;
+  color: #ffe14d;
+}
+
+.subtitles-word[aria-pressed='true'] {
+  border-color: var(--green);
+  background: var(--control-bg-active);
+}
+
+.subtitles-word[data-corrected='true'] {
+  border-style: dashed;
+}
+
+.subtitles-word[data-hidden='true'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.subtitles-word-editor {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  gap: 6px 8px;
+  padding: 8px;
+  border: 1px solid var(--line-bright);
+  background: var(--panel-soft);
+}
+
+.subtitles-word-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px;
+}
+
+.subtitles-word-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.subtitles-nudge {
+  display: inline-grid;
+  grid-template-columns: 24px 64px 24px;
+  gap: 2px;
+}
+
+.subtitles-nudge input {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.subtitles-controls {
+  grid-area: controls;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.subtitles-group {
+  display: grid;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.subtitles-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.subtitles-field input[type='range'],
+.subtitles-field select {
+  width: 100%;
+}
+
+.subtitles-field-wide input {
+  width: 100%;
+}
+
+.subtitles-colors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.subtitles-colors input[type='color'] {
+  width: 100%;
+  height: 26px;
+  padding: 0;
+}
+
+.subtitles-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.subtitles-segmented button {
+  flex: 1 1 auto;
+  font-size: 11px;
+}
+
+.subtitles-segmented button[aria-pressed='true'] {
+  border-color: var(--control-border-active);
+  background: var(--control-bg-active);
+  color: var(--control-fg-hover);
+}
+
+.subtitles-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.subtitles-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.subtitles-position {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-subtitles button.subtitles-primary {
+  border-color: var(--green);
+  color: var(--control-fg-hover);
+}
+
+
+.subtitles-footer {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.subtitles-footer button {
+  font-size: 11px;
+}
+
+.subtitles-save-state {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.subtitles-save-state[data-state='error'],
+.subtitles-save-state[data-state='conflict'] {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .confirm-subtitles {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      'status'
+      'preview'
+      'controls'
+      'transcript';
+  }
+
+  .subtitles-preview {
+    height: min(46dvh, 420px);
+  }
+
+  .subtitles-transcript,
+  .subtitles-controls {
+    overflow: visible;
+  }
+
+  .subtitles-phrases {
+    overflow: visible;
+  }
+
+  .subtitles-word-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.command-composer[data-resizable-review='true']:has(.confirm-sheet-subtitles) {
+  height: var(--composer-review-height, min(900px, 86dvh));
+}
+
+.command-composer[data-resizable-review='true'] .command-composer-dock-body > .confirm-sheet-subtitles {
+  flex-basis: var(--confirm-review-height, 84%);
+}

@@ -7,6 +7,7 @@ export function ConfirmSheetActions({
   applyLabel,
   busy,
   busyLabel,
+  cancelLabel = 'Cancel',
   failed,
   onCancel,
 }: {
@@ -15,6 +16,7 @@ export function ConfirmSheetActions({
   applyLabel: string
   busy: boolean
   busyLabel: string
+  cancelLabel?: string
   failed: boolean
   onCancel: () => void
 }) {
@@ -35,7 +37,7 @@ export function ConfirmSheetActions({
             )}
       </button>
       <button type="button" disabled={busy} onClick={onCancel}>
-        Cancel <kbd>Esc</kbd>
+        {cancelLabel} <kbd>Esc</kbd>
       </button>
     </div>
   )

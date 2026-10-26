@@ -10,9 +10,8 @@ export const ORIGINAL_CAPTION_LANGUAGE = "original";
 export type CaptionAspect = typeof CAPTION_ASPECTS[number];
 export type CaptionPreset = typeof CAPTION_PRESETS[number];
 export type CaptionMotion = typeof CAPTION_MOTIONS[number];
-export type CaptionBackground = typeof CAPTION_BACKGROUNDS[number];
 
-export const MAX_CAPTION_WORDS = 20_000;
+const MAX_CAPTION_WORDS = 20_000;
 export const MAX_CAPTION_WORD_LENGTH = 80;
 export const MIN_CAPTION_WORD_SECONDS = 0.04;
 export const MAX_CAPTION_OFFSET_MS = 2_000;
@@ -33,15 +32,13 @@ export const captionPositionsSchema = z.object({
 
 export type CaptionPositions = z.infer<typeof captionPositionsSchema>;
 
-export const analysedWordSchema = z.object({
+const analysedWordSchema = z.object({
   text: z.string(),
   start: seconds,
   end: seconds,
   onset: seconds,
   energy: ratio,
 }).strict();
-
-export type AnalysedWord = z.infer<typeof analysedWordSchema>;
 
 export const captionWordSchema = z.object({
   id: z.string().regex(/^w\d+$/u),
@@ -147,10 +144,6 @@ export const CAPTION_ASPECT_SIZES: Record<CaptionAspect, { width: number; height
   "4:5": { width: 1080, height: 1350 },
   "16:9": { width: 1920, height: 1080 },
 };
-
-export function isCaptionAspect(value: unknown): value is CaptionAspect {
-  return typeof value === "string" && (CAPTION_ASPECTS as readonly string[]).includes(value);
-}
 
 export function nextCaptionId(document: Pick<CaptionDocument, "nextId">, prefix: "w" | "p"): { id: string; nextId: number } {
   return { id: `${prefix}${document.nextId}`, nextId: document.nextId + 1 };

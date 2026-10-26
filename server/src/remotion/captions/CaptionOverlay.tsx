@@ -81,7 +81,7 @@ function visibleLines(block: CaptionBlock, document: CaptionDocument, time: numb
   return line ? [line] : [];
 }
 
-export const CaptionBlockView: React.FC<{ block: CaptionBlock; document: CaptionDocument; stack: string; time: number }> = ({ block, document, stack, time }) => {
+const CaptionBlockView: React.FC<{ block: CaptionBlock; document: CaptionDocument; stack: string; time: number }> = ({ block, document, stack, time }) => {
   const visibility = cueVisibility(block.cue, time, block.fontSize);
   const face = captionPresetFont(document.style.preset);
   const lines = visibleLines(block, document, time);

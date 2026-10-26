@@ -8,11 +8,10 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (228)
+## MCP endpoints (226)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
-- `alive_captions` — Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript.
@@ -201,7 +200,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `service_status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.
-- `set_alive_captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_har_capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.
@@ -239,14 +237,12 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (302; 145 dedicated command routes)
+## Slash actions (299; 144 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
-- `/alive` — Open the full-screen alive captions studio: stacked, frame-aware subtitles timed to the vocals; UI: `open_alive_captions`
-- `/alive-captions` — Read a video's alive-caption analysis (phrases, vocal onsets, per-word energy, loudness, face and text regions) and its saved caption settings, analyzing first when it is missing or stale.; MCP: `alive_captions`
 - `/analyze-editing-moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.; MCP: `analyze_editing_moments`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -486,7 +482,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
 - `/service-status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.; MCP: `service_status`
-- `/set-alive-captions` — Save a video's alive caption style (stack, punch or karaoke), word entrance (pop, slam or rise), energy sizing, onset snapping, face and text avoidance and colors; by default its renders switch to alive subtitles.; MCP: `set_alive_captions`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
 - `/set-har-capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.; MCP: `set_har_capture`
@@ -510,7 +505,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/split-video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.; MCP: `split_video`
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
-- `/subs` — Subtitle settings; UI: `settings_subs`
+- `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`
 - `/suggest-asset-tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.; MCP: `suggest_asset_tags`
 - `/suggest-cuts` — Suggest video trims for pacing and transitions, using dialogue when available; MCP: `suggest_cuts`
 - `/suggest-sequence-coverage` — Rank existing visual moments for a sequence range before offering generation; MCP: `suggest_sequence_coverage`

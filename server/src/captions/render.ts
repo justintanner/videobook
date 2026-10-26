@@ -103,7 +103,7 @@ function resultString(job: Job | null, key: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-export function captionRenderStatus(engine: Engine, request: CaptionRenderRequest): CaptionRenderStatus {
+function captionRenderStatus(engine: Engine, request: CaptionRenderRequest): CaptionRenderStatus {
   const job = request.jobId ? engine.jobs.queue.get(request.jobId) : null;
   const status = jobStatus(job);
   return {
@@ -123,7 +123,7 @@ export function latestCaptionRender(engine: Engine, artifactId: string, language
   return request ? captionRenderStatus(engine, request) : null;
 }
 
-export function isCaptionOutputCell(cell: NotebookCell, sourceArtifactId: string, language: string): boolean {
+function isCaptionOutputCell(cell: NotebookCell, sourceArtifactId: string, language: string): boolean {
   return cell.type === "video"
     && cell.inputs?.sourceOperation === CAPTION_SOURCE_OPERATION
     && cell.inputs?.sourceArtifactId === sourceArtifactId

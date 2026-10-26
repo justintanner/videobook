@@ -1,6 +1,7 @@
 import {
   Braces,
   Camera,
+  Captions,
   Columns3,
   Copy,
   Download,
@@ -43,6 +44,7 @@ type NotebookCellContextActionIcon =
   | 'run'
   | 'source'
   | 'split'
+  | 'subtitles'
   | 'upload'
   | 'more'
 
@@ -86,6 +88,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   run: Play,
   source: Braces,
   split: Scissors,
+  subtitles: Captions,
   upload: Upload,
   more: Ellipsis,
 }

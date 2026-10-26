@@ -87,10 +87,6 @@ export interface CaptionLayoutInput {
   aspect?: CaptionAspect;
 }
 
-export function captionFrameSize(aspect: CaptionAspect): { width: number; height: number } {
-  return CAPTION_ASPECT_SIZES[aspect];
-}
-
 export function captionTextWidthLimit(aspect: CaptionAspect): number {
   const frame = CAPTION_ASPECT_SIZES[aspect];
   const zone = CAPTION_SAFE_ZONES[aspect];

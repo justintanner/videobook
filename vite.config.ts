@@ -21,8 +21,8 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/MusicVideoEditor')) {
     return 'music-video'
   }
-  if (id.includes('/src/components/videobook/AliveCaptions') || id.includes('/src/remotion/AliveCaptionsPreview')) {
-    return 'alive-captions'
+  if (id.includes('/src/components/videobook/subtitles/SubtitlesBody') || id.includes('/src/components/videobook/subtitles/SubtitlesPreview') || id.includes('/server/src/remotion/captions/')) {
+    return 'subtitles-editor'
   }
   if (id.includes('/src/components/videobook/confirm/bodies/')) {
     return 'confirm-bodies'

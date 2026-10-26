@@ -62,7 +62,7 @@ async function loadTextSubset(family: string, text: string): Promise<void> {
   });
 }
 
-export async function loadCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<CaptionScript>, text: string): Promise<void> {
+async function loadCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<CaptionScript>, text: string): Promise<void> {
   await loadBundledFonts(urls);
   await Promise.all(captionScriptFamilies(scripts).map((family) => loadTextSubset(family, text)));
 }

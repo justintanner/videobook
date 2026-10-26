@@ -1,35 +1,21 @@
 import type { Engine } from "videobook-engine";
-import { analyzeAliveCaptions } from "../alive-captions/analyze.js";
-import type { AliveAnalysis } from "../remotion/subtitles/alive-types.js";
+import { prepareCaptionAnalysis } from "../captions/analysis.js";
 import { registerJobHandler } from "../queue.js";
-import { withLockedLocalLease } from "./_lease.js";
 
-const LOCK_DURATION_MS = 600_000;
-
-type AnalyzeAliveCaptionsPayload = {
-  type: "analyze_alive_captions";
+type LegacyAnalyzeAliveCaptionsPayload = {
   assetId: string;
-  assetDir: string;
   bookId: string;
   force?: boolean;
 };
 
-export interface AnalyzeAliveCaptionsResult {
-  analysis: AliveAnalysis;
-}
-
 export function registerAnalyzeAliveCaptionsJob(engine: Engine): void {
-  registerJobHandler("analyze_alive_captions", async (payload, ctx) => {
-    const { assetId, assetDir, force = false } = payload as AnalyzeAliveCaptionsPayload;
-    return withLockedLocalLease(
-      engine,
-      assetId,
-      assetDir,
-      ctx,
-      "analyze",
-      { durationMs: LOCK_DURATION_MS, data: { state: "analyzing-alive-captions" } },
-      async () => ({ analysis: await analyzeAliveCaptions(engine, assetId, ctx.signal, force) }) satisfies AnalyzeAliveCaptionsResult,
-      { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
-    );
+  registerJobHandler("analyze_alive_captions", async (payload) => {
+    const { assetId, bookId, force = false } = payload as LegacyAnalyzeAliveCaptionsPayload;
+    const prepared = await prepareCaptionAnalysis(engine, bookId, assetId, {
+      regions: true,
+      languages: [],
+      force: force ? ["vocal", "regions"] : [],
+    });
+    return { assetId, transcript: prepared.state.transcript.status, vocal: prepared.state.vocal?.status ?? null };
   });
 }
