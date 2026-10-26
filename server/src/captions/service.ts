@@ -216,7 +216,7 @@ async function buildSeed(engine: Engine, context: Omit<DraftContext, "seed" | "s
     words: translated ?? vocalWords(transcript, vocal),
     style,
   });
-  const revision = `seed:${createHash("sha256").update(JSON.stringify([context.source.mediaHash, bindings, style, language])).digest("hex").slice(0, 32)}`;
+  const revision = `seed:${createHash("sha256").update(JSON.stringify(document)).digest("hex").slice(0, 32)}`;
   return { revision, document };
 }
 

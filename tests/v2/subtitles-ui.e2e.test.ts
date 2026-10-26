@@ -11,6 +11,7 @@ import { BookManager } from '../../server/src/book-manager.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
 import { extractVideoPoster } from '../../server/src/video-poster.js'
+import { testBudget } from '../../server/src/test-budget.js'
 import { availablePort, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
@@ -27,6 +28,8 @@ const TRANSCRIPT = {
     { text: 'tight.', start: 2.55, end: 3.1, type: 'word' },
   ],
 }
+const THAI_TEXT = 'นี่คือสวนสนุกร้างที่ไม่มีใครมานานแล้ว'
+const THAI_WORDS = ['นี่', 'คือ', 'สวน', 'สนุก', 'ร้าง', 'ที่', 'ไม่มี', 'ใคร', 'มา', 'นาน', 'แล้ว']
 
 describe('subtitle editor in the composer', () => {
   let root = ''
@@ -85,7 +88,10 @@ describe('subtitle editor in the composer', () => {
     await engine.files.writeFromPath(secondId, 'original.mp4', secondFixture)
     await registerMediaProbe(engine, secondId, 'original.mp4', await probeVideo(secondFixture))
     await engine.files.write(secondId, 'original.jpg', await extractVideoPoster(secondFixture, 3))
-    await engine.files.write(secondId, 'elevenlabs.json', JSON.stringify({ language_code: 'eng', words: [{ text: 'Second', start: 0.3, end: 0.8, type: 'word' }, { text: 'take', start: 0.9, end: 1.4, type: 'word' }] }))
+    await engine.files.write(secondId, 'elevenlabs.json', JSON.stringify({
+      language_code: 'tha', text: THAI_TEXT,
+      words: [...THAI_TEXT].map((text, index) => ({ text, start: (index + 2) * 0.05, end: (index + 3) * 0.05, type: 'word' })),
+    }))
     const notebook = engine.notebooks.list()[0]!
     notebookId = notebook.id
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 0 }, outputArtifactId: sourceId }))
@@ -197,10 +203,16 @@ describe('subtitle editor in the composer', () => {
     await command('/subs @a2')
     await command('/subs @a1')
     await expect.poll(() => word('rode').isVisible(), { timeout: 30_000 }).toBe(true)
-    expect(await word('Second').count()).toBe(0)
+    expect(await word('สวน').count()).toBe(0)
     await expect.poll(async () => (await draft(secondId)).status, { timeout: 30_000 }).toBe('ready')
     await command('/subs @a2')
-    await expect.poll(() => word('Second').isVisible(), { timeout: 30_000 }).toBe(true)
+    await expect.poll(() => word('สวน').isVisible(), { timeout: testBudget(30_000) }).toBe(true)
+    expect(await sheet().locator('.subtitles-word').allTextContents()).toEqual(THAI_WORDS)
+    expect(await sheet().locator('.subtitles-phrase').count()).toBe(3)
+    await word('สนุก').click()
+    await expect.poll(() => word('สนุก').getAttribute('data-active'), { timeout: testBudget(10_000) }).toBe('true')
+    await expect.poll(() => stage.evaluate((element) => [...element.querySelectorAll('span')].find((span) => span.textContent === 'สนุก')?.style.color ?? null), { timeout: testBudget(35_000) }).toBe('rgb(255, 225, 77)')
+    await shot('subtitles-thai-grouped')
     expect(await word('rode').count()).toBe(0)
     await command('/subs @a1')
     await expect.poll(() => word('rode').isVisible(), { timeout: 30_000 }).toBe(true)
@@ -237,4 +249,20 @@ describe('subtitle editor in the composer', () => {
     expect(download).toBe(200)
     expect(errors).toEqual([])
   }, 300_000)
+
+  it('edits and reloads complete Thai words', async () => {
+    await command('/subs @a2')
+    await expect.poll(() => word('ร้าง').isVisible(), { timeout: testBudget(30_000) }).toBe(true)
+    await word('ร้าง').click()
+    const editor = sheet().getByLabel('Word text', { exact: true })
+    await editor.fill('เก่า')
+    await editor.press('Enter')
+    await saved()
+    await page.reload()
+    await command('/subs @a2')
+    await expect.poll(() => word('เก่า').isVisible(), { timeout: testBudget(30_000) }).toBe(true)
+    expect(await sheet().locator('.subtitles-word').allTextContents()).toEqual(THAI_WORDS.map((text) => text === 'ร้าง' ? 'เก่า' : text))
+    expect((await draft(secondId)).document.words.find((item) => item.text === 'เก่า')).toMatchObject({ textCorrected: true })
+    expect(errors).toEqual([])
+  }, testBudget(60_000))
 })

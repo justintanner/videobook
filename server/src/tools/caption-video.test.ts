@@ -10,6 +10,8 @@ import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-e
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { LEGACY_ALIVE_SETTINGS_KEY } from "../captions/legacy.js";
 import type { CaptionDocument } from "../captions/model.js";
+import { groupPhrases } from "../captions/phrasing.js";
+import { captionsToSubtitleFile } from "../captions/export.js";
 import type { CaptionReadModel } from "../captions/service.js";
 import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
@@ -170,6 +172,43 @@ describe("caption_video", () => {
     expect(rebound).toMatchObject({ error: true, body: { status: "invalid" } });
     const both = await call({ asset_id: assetId, op: "update", expected_revision: replaced.revision, edits: [], resolve: "discard" });
     expect(both).toMatchObject({ error: true, body: { status: "invalid" } });
+  });
+
+  it("loads a saved character-level Thai draft as complete words and fences the old review", async () => {
+    const text = "นี่คือสวนสนุกร้าง";
+    const tokens = [...text].map((part, index) => ({ text: part, start: (index + 1) / 10, end: (index + 2) / 10, type: "word" }));
+    const assetId = await video({ transcript: { language_code: "tha", text, words: tokens } });
+    const full = await ready(assetId);
+    expect(full.document.words.map((word) => word.text)).toEqual(["นี่", "คือ", "สวน", "สนุก", "ร้าง"]);
+    const words = tokens.map((token, index) => ({
+      ...full.document.words[0], id: `w${index + 1}`, text: token.text, start: token.start, end: token.end,
+      analysed: { text: token.text, start: token.start, end: token.end, onset: token.start, energy: 0.5 },
+    }));
+    const phrases = groupPhrases(words).map((wordIds, index) => ({ id: `p${words.length + index + 1}`, wordIds, positions: {} }));
+    const legacy = {
+      revision: randomUUID(), updatedAt: new Date().toISOString(),
+      document: {
+        ...full.document, words, phrases, nextId: words.length + phrases.length + 1, wordSegmentationVersion: undefined,
+        style: { ...full.document.style, fontScale: 1.35, snapToOnsets: false }, positions: { "9:16": 0.68 },
+      },
+    };
+    const key = `captions.draft.${assetId}.original`;
+    expect(engine.settings.set(key, legacy).ok).toBe(true);
+    const recovered = await ok({ asset_id: assetId, detail: "full" });
+    expect(recovered.draft).toMatchObject({ saved: true, word_count: 5, phrase_count: 2 });
+    expect(recovered.document.words.map((word) => word.text)).toEqual(["นี่", "คือ", "สวน", "สนุก", "ร้าง"]);
+    expect(recovered.document.style.fontScale).toBe(1.35);
+    expect(recovered.document.positions).toEqual({ "9:16": 0.68 });
+    expect(recovered.draft.revision).not.toBe(legacy.revision);
+    expect((await ok({ asset_id: assetId })).draft.revision).toBe(recovered.draft.revision);
+    expect(engine.settings.get(key)).toEqual(legacy);
+    expect(await call({ asset_id: assetId, op: "update", expected_revision: legacy.revision, edits: [{ op: "set_word_text", word_id: "w7", text: "สวน!" }] }))
+      .toMatchObject({ error: true, body: { status: "conflict", revision: recovered.draft.revision } });
+    const saved = await save({ asset_id: assetId, expected_revision: recovered.draft.revision, edits: [{ op: "set_word_text", word_id: "w7", text: "สวน!" }], detail: "full" });
+    const reloaded = await ok({ asset_id: assetId, detail: "full" });
+    expect(reloaded.draft.revision).toBe(saved.revision);
+    expect(reloaded.document.words.find((word) => word.id === "w7")).toMatchObject({ text: "สวน!", textCorrected: true, start: 0.7, end: 1 });
+    expect(captionsToSubtitleFile(reloaded.document, "srt")).toContain("นี่คือสวน! สนุก\n");
   });
 
   it("flags newer analysis and reseeds while keeping corrections", async () => {

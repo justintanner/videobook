@@ -106,6 +106,7 @@ export const captionDocumentSchema = z.object({
   language: z.string().min(1).max(16),
   sourceLanguage: z.string().max(16).nullable(),
   wordTiming: z.enum(["measured", "estimated"]),
+  wordSegmentationVersion: z.literal(1).optional(),
   source: captionSourceSchema,
   bindings: captionBindingsSchema,
   aspect: aspectSchema,
