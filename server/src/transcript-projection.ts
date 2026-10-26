@@ -1,7 +1,7 @@
 import type { ArtifactKind, ArtifactManifestFile, Engine } from "videobook-engine";
-import { joinCaptionWords } from "./captions/script.js";
+import { joinCaptionWords, keepTranscriptSpace } from "./captions/script.js";
 import { assessDialogQuality } from "./dialog-quality.js";
-import { joinUnspacedLetters } from "./transcript-words.js";
+import { joinUnspacedLetters, textWords } from "./transcript-words.js";
 
 /** Artifact kinds whose media can carry speech worth transcribing. */
 export function hasSpokenAudio(kind: ArtifactKind): boolean {
@@ -199,8 +199,7 @@ export async function readAssetTranscript(
 }
 
 function countWords(text: string): number {
-  const stripped = text.replace(/\[[^\]]*\]/g, "").trim();
-  return stripped.length === 0 ? 0 : stripped.split(/\s+/).length;
+  return textWords(text.replace(/\[[^\]]*\]/g, "")).length;
 }
 
 function transcriptSummary(
@@ -235,7 +234,7 @@ function transcriptSourceSummary(
   return {
     ...summary,
     words: transcript.words.map((word) => ({
-      text: word.text,
+      text: keepTranscriptSpace(word.text, word.spaceAfter),
       start: word.start,
       end: word.end,
     })),

@@ -2,7 +2,7 @@ import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, Easing } from "remotion";
 import { loadFont } from "@remotion/google-fonts/Anton";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
-import { getCurrentWordIndex } from "../util.js";
+import { getCurrentWordIndex, joinsPreviousWord } from "../util.js";
 import { getImpactFontSize, getYPosition, POP_DURATION_FRAMES, POP_SCALE_START, POP_SCALE_END } from "../constants.js";
 
 const { fontFamily } = loadFont();
@@ -44,6 +44,7 @@ export const Impact: React.FC<ImpactProps> = ({
   if (!activeChunk || activeChunk.words.length === 0) return null;
 
   const wordIdx = getCurrentWordIndex(activeChunk.words, currentTime);
+  const gapPx = Math.round(fontPx * 0.25);
 
   return (
     <div
@@ -66,7 +67,7 @@ export const Impact: React.FC<ImpactProps> = ({
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          gap: `${Math.round(fontPx * 0.25)}px`,
+          gap: `${gapPx}px`,
           maxWidth: `${width - 80}px`,
           padding: "0 40px",
         }}
@@ -107,6 +108,7 @@ export const Impact: React.FC<ImpactProps> = ({
                 whiteSpace: "nowrap",
                 transform: `scale(${scale})`,
                 display: "inline-block",
+                marginLeft: joinsPreviousWord(activeChunk.words, i) ? -gapPx : 0,
                 userSelect: "none",
               }}
             >

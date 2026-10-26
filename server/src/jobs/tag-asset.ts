@@ -35,6 +35,7 @@ import {
 } from "../asset-tag-extraction.js";
 import { readTaggingSettings } from "../tag-settings.js";
 import { TAG_ANALYZER_VERSION } from "../tag-vocabulary.js";
+import { textWords } from "../transcript-words.js";
 
 const ANALYSIS_FILENAME = ".original.analysis.json";
 
@@ -129,7 +130,7 @@ async function transcriptEvidence(
   if (!latest) return null;
   const segments = latest.segments ?? [];
   const wordCount = segments.reduce(
-    (total, segment) => total + segment.text.trim().split(/\s+/u).filter(Boolean).length,
+    (total, segment) => total + textWords(segment.text).length,
     0,
   );
   const speakers = new Set(

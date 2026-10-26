@@ -1,4 +1,4 @@
-import { joinCaptionWords } from "../../captions/script.js";
+import { captionTextLength, joinCaptionWords } from "../../captions/script.js";
 import type { Segment, Chunk, Word, Orientation, SubtitleStyle } from "./types.js";
 
 const CHUNK_LIMITS: Record<string, [number, number]> = {
@@ -43,11 +43,11 @@ export function chunkSegments(
         chunkStart = word.start;
       }
 
-      const potentialText = joinCaptionWords([...currentWords, word].map((w) => w.word.trim()));
+      const potentialLength = captionTextLength([...currentWords, word].map((w) => w.word.trim()));
       const potentialDuration = word.end - chunkStart;
       const wouldExceed =
         currentWords.length >= maxWords ||
-        potentialText.length > maxChars ||
+        potentialLength > maxChars ||
         potentialDuration > MAX_DURATION;
 
       if (wouldExceed && currentWords.length > 0) {

@@ -1,6 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findVideoFile } from "videobook-engine";
+import { joinCaptionWords } from "../captions/script.js";
+import { joinUnspacedLetters } from "../transcript-words.js";
 const MAX_FRAMES = 15;
 const SILENCE_MARKER_THRESHOLD_S = 0.5;
 export const DEAD_AIR_THRESHOLD_S = 1.5;
@@ -79,7 +81,7 @@ export function extractSilenceCandidates(
   words: ElevenLabsWord[],
   minDurationS: number,
 ): SilenceCandidate[] {
-  const wordEntries = words.filter((w) => w.type === "word");
+  const wordEntries = joinUnspacedLetters(words).filter((w) => w.type === "word");
   const out: SilenceCandidate[] = [];
   for (let i = 1; i < wordEntries.length; i++) {
     const prev = wordEntries[i - 1];
@@ -114,7 +116,7 @@ function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
   const flush = () => {
     if (currentTurn.length === 0) return;
     const spk = currentSpeaker ?? "?";
-    lines.push(`[t=${turnStart.toFixed(2)} spk=${spk}] ${currentTurn.join(" ")}`);
+    lines.push(`[t=${turnStart.toFixed(2)} spk=${spk}] ${joinCaptionWords(currentTurn)}`);
     currentTurn = [];
   };
 

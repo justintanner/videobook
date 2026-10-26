@@ -403,12 +403,14 @@ describe('cue formatting', () => {
     )
   })
 
-  it('joins Thai words without spaces and keeps the space before a Latin word', () => {
+  it('joins Thai words without spaces and starts a new line where Thai has a space', () => {
     expect(formatTranscriptCues([
       { text: 'ฉัน', start: 0, end: 0.5 },
       { text: 'ชอบ', start: 0.5, end: 1 },
-      { text: 'Bangkok', start: 1, end: 1.5 },
-    ])).toBe('0:00  ฉันชอบ Bangkok')
+      { text: 'Bangkok ', start: 1, end: 1.5 },
+      { text: 'มาก ', start: 1.5, end: 1.8 },
+      { text: 'แมว', start: 1.9, end: 2.3 },
+    ])).toBe('0:00  ฉันชอบ Bangkok มาก\n0:01  แมว')
   })
 })
 

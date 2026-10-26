@@ -1,3 +1,4 @@
+import { joinsWithoutSpace } from "../captions/script.js";
 import type { Word } from "./subtitles/types.js";
 
 export function isValidHex(hex: string): boolean {
@@ -17,4 +18,8 @@ export function getCurrentWordIndex(words: Word[], currentTime: number, lingerDu
     }
   }
   return -1;
+}
+
+export function joinsPreviousWord(words: readonly Word[], index: number): boolean {
+  return index > 0 && index < words.length && joinsWithoutSpace(words[index - 1].word, words[index].word);
 }

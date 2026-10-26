@@ -1,4 +1,5 @@
 import type { Engine } from "videobook-engine";
+import { textWords } from "./transcript-words.js";
 
 type DialogQuality = {
   hasDialog: boolean;
@@ -20,7 +21,7 @@ export function assessDialogQuality(data: { text?: string }): DialogQuality {
     return { hasDialog: false, reason: "noise_only", text: trimmed, wordCount: 0 };
   }
 
-  const words = stripped.split(/\s+/);
+  const words = textWords(stripped);
   const wordCount = words.length;
 
   if (wordCount < 3) {

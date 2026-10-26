@@ -112,7 +112,7 @@ describe("readAssetTranscriptSources", () => {
       word_count: 3,
       words: [
         { text: "ฉัน", start: 0, end: 0.5 },
-        { text: "ชอบ", start: 0.5, end: 1.25 },
+        { text: "ชอบ ", start: 0.5, end: 1.25 },
         { text: "แมว", start: 1.5, end: 2.25 },
       ],
     });

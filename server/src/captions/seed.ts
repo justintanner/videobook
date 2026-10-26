@@ -11,7 +11,6 @@ import type {
 import { CAPTION_DOCUMENT_VERSION, DEFAULT_CAPTION_ASPECT, DEFAULT_CAPTION_STYLE } from "./model.js";
 import { captionDisplayText } from "./edits.js";
 import { groupPhrases } from "./phrasing.js";
-import { normalizeCaptionWords } from "./word-segmentation.js";
 
 export interface CaptionSeedWord {
   text: string;
@@ -72,7 +71,7 @@ function phrasesFor(words: readonly CaptionWord[], firstNumber: number): Caption
 export function seedCaptionDocument(input: CaptionSeedInput): CaptionDocument {
   const words = usableWords(input.words).map((word, index) => seedWord(word, index + 1));
   const phrases = phrasesFor(words, words.length + 1);
-  return normalizeCaptionWords({
+  return {
     version: CAPTION_DOCUMENT_VERSION,
     language: input.language,
     sourceLanguage: input.sourceLanguage,
@@ -85,7 +84,7 @@ export function seedCaptionDocument(input: CaptionSeedInput): CaptionDocument {
     words,
     phrases,
     nextId: words.length + phrases.length + 1,
-  });
+  };
 }
 
 function normalized(text: string): string {

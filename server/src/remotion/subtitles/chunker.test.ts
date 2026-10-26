@@ -240,4 +240,13 @@ describe("chunkSegments", () => {
     const result = chunkSegments(segments);
     expect(result.length).toBeGreaterThan(1);
   });
+
+  it("joins Thai words without spaces and does not count vowel or tone marks toward the width", () => {
+    const words = [
+      { word: "เดี๋ยวๆ", start: 0, end: 0.4 },
+      { word: "เดี๋ยว", start: 0.4, end: 0.8 },
+    ];
+    const chunks = chunkSegments([{ start: 0, end: 0.8, text: "", words }], "portrait", "impact");
+    expect(chunks.map((chunk) => chunk.text)).toEqual(["เดี๋ยวๆเดี๋ยว"]);
+  });
 });

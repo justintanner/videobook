@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { joinUnspacedLetters, splitUnspacedText } from "./transcript-words.js";
+import { joinUnspacedLetters, splitUnspacedText, textWords } from "./transcript-words.js";
 
 function letters(texts: readonly string[], start: number, step: number) {
   return texts.map((text, index) => ({ text, start: start + index * step, end: start + (index + 1) * step, type: "word" }));
@@ -10,6 +10,14 @@ describe("unspaced transcript words", () => {
     const words = joinUnspacedLetters(letters(["ฉั", "น", "ช", "อ", "บ", "กิ", "น", "ข้", "า", "ว", "ม", "า", "ก"], 0, 0.25));
     expect(words.map((word) => word.text)).toEqual(["ฉัน", "ชอบ", "กิน", "ข้าว", "มาก"]);
     expect(words[1]).toEqual({ text: "ชอบ", start: 0.5, end: 1.25, type: "word" });
+  });
+
+  it("finds the same words whether a provider splits Thai by code point or by grapheme", () => {
+    const text = "นี่คือสวนสนุกร้างที่ไม่มีใครมานานแล้ว";
+    const words = ["นี่", "คือ", "สวน", "สนุก", "ร้าง", "ที่", "ไม่มี", "ใคร", "มา", "นาน", "แล้ว"];
+    const graphemes = [...new Intl.Segmenter("th", { granularity: "grapheme" }).segment(text)].map((part) => part.segment);
+    expect(joinUnspacedLetters(letters([...text], 0, 0.05)).map((word) => word.text)).toEqual(words);
+    expect(joinUnspacedLetters(letters(graphemes, 0, 0.05)).map((word) => word.text)).toEqual(words);
   });
 
   it("ends a run of letters at spacing and audio events and leaves spaced words alone", () => {
@@ -33,6 +41,21 @@ describe("unspaced transcript words", () => {
 
   it("keeps trailing punctuation with the word before it", () => {
     expect(joinUnspacedLetters(letters(["喝", "牛", "奶", "。"], 0, 0.25)).map((token) => token.text)).toEqual(["喝", "牛奶。"]);
+  });
+
+  it("keeps Thai syllables whole where the dictionary has no word for them", () => {
+    const words = splitUnspacedText("ลงสไลเดอร์เลยเหรอเนี่ย");
+    expect(words.join("")).toBe("ลงสไลเดอร์เลยเหรอเนี่ย");
+    expect(words).toContain("เหรอ");
+    expect(words.some((word) => /^(?:อร์|รอ)/u.test(word))).toBe(false);
+    expect(joinUnspacedLetters(letters(["จ", "ริ", "ง", "เ", "ห", "ร", "อ"], 0, 0.25)).map((word) => word.text)).toEqual(["จริง", "เหรอ"]);
+    expect(splitUnspacedText("จะเทอะไร")).toEqual(["จะ", "เท", "อะไร"]);
+    expect(splitUnspacedText("ซื้อสบู่ใหม่")).toEqual(["ซื้อ", "สบู่", "ใหม่"]);
+  });
+
+  it("lists the words of mixed spaced and unspaced text", () => {
+    expect(textWords(" ฉันชอบ iPhone ใหม่กัน  hello ")).toEqual(["ฉัน", "ชอบ", "iPhone", "ใหม่", "กัน", "hello"]);
+    expect(textWords("   ")).toEqual([]);
   });
 
   it("splits unspaced translated text into words", () => {

@@ -8,8 +8,6 @@ import { captionCase, captionScripts, captionTextLength, joinCaptionWords, keepT
 import type { CaptionSeedWord } from "./seed.js";
 import { reseedCaptionDocument, seedCaptionDocument } from "./seed.js";
 import { activeCaptionCue, activeCaptionWord, captionCues, effectiveWordTiming } from "./timing.js";
-import { groupPhrases } from "./phrasing.js";
-import { normalizeCaptionWords } from "./word-segmentation.js";
 
 function word(text: string, start: number, end: number, onset = start, energy = 0.5): CaptionSeedWord {
   return { text, start, end, onset, energy, speaker: null };
@@ -39,21 +37,6 @@ const SPOKEN = [
   word("and", 4.1, 4.2),
   word("bright", 4.2, 4.6),
 ];
-
-const THAI_TEXT = "นี่คือสวนสนุกร้างที่ไม่มีใครมานานแล้ว";
-const THAI_WORDS = ["นี่", "คือ", "สวน", "สนุก", "ร้าง", "ที่", "ไม่มี", "ใคร", "มา", "นาน", "แล้ว"];
-
-function thaiCharacters(): CaptionSeedWord[] {
-  return [...THAI_TEXT].map((text, index) => word(text, 0.1 + index * 0.05, 0.15 + index * 0.05));
-}
-
-function legacyThaiDocument(): CaptionDocument {
-  const input = thaiCharacters();
-  const document = seed(input.map((item) => ({ ...item, text: "x" })));
-  const words = document.words.map((item, index) => ({ ...item, text: input[index].text, analysed: { ...item.analysed!, text: input[index].text } }));
-  const phrases = groupPhrases(words).map((wordIds, index) => ({ id: `p${words.length + index + 1}`, wordIds, positions: {} }));
-  return { ...document, words, phrases, nextId: words.length + phrases.length + 1 };
-}
 
 describe("caption seeding and phrasing", () => {
   it("seeds a valid draft with display text, stable ids and karaoke-sized phrases", () => {
@@ -129,73 +112,6 @@ describe("caption seeding and phrasing", () => {
     expect(captionDisplayText(" down, ")).toBe("down");
     expect(captionDisplayText("really?")).toBe("really?");
     expect(captionDisplayText("...")).toBe("...");
-  });
-
-  it("groups Thai codepoints and graphemes into whole words before phrasing and karaoke timing", () => {
-    const input = thaiCharacters();
-    const document = seed(input);
-    expect(document.words.map((item) => item.text)).toEqual(THAI_WORDS);
-    expect(captionDocumentProblems(document)).toEqual([]);
-    expect(joinCaptionWords(document.words.map((item) => item.text))).toBe(THAI_TEXT);
-    expect(document.phrases.map((phrase) => phrase.wordIds.map((id) => document.words.find((item) => item.id === id)!.text))).toEqual([THAI_WORDS]);
-    expect(document.words[0]).toMatchObject({ id: "w1", start: 0.1, end: 0.25, analysed: { text: "นี่", start: 0.1, end: 0.25, onset: 0.1 } });
-    expect(document.words.at(-1)!.end).toBeCloseTo(input.at(-1)!.end, 6);
-    expect(activeCaptionWord(captionCues(document)[0], 0.2)?.text).toBe("นี่");
-    const graphemes = [...new Intl.Segmenter("th", { granularity: "grapheme" }).segment(THAI_TEXT)];
-    expect(seed(graphemes.map((part, index) => word(part.segment, index * 0.1, index * 0.1 + 0.1))).words.map((item) => item.text)).toEqual(THAI_WORDS);
-    expect(normalizeCaptionWords(document)).toBe(document);
-    expect(captionsToSubtitleFile(document, "srt")).toContain(`${THAI_TEXT}\n`);
-  });
-
-  it("keeps provider word timings intact and respects Thai pauses, speakers and other scripts", () => {
-    const measured = [word("สวนสนุก", 0.1, 0.8, 0.05), word("ร้าง", 0.8, 1.1), word("TikTok", 1.1, 1.5)];
-    expect(seed(measured).words.map((item) => item.text)).toEqual(["สวนสนุก", "ร้าง", "TikTok"]);
-    expect(seed(measured).words[0]).toMatchObject({ start: 0.1, end: 0.8, analysed: { onset: 0.05 } });
-    expect(seed([word("สวัส", 0, 0.2), word("ดี", 1, 1.2)]).words.map((item) => item.text)).toEqual(["สวัส", "ดี"]);
-    expect(seed([{ ...word("สวัส", 0, 0.2), speaker: "a" }, { ...word("ดี", 0.2, 0.4), speaker: "b" }]).words.map((item) => item.text)).toEqual(["สวัส", "ดี"]);
-  });
-
-  it("repairs saved automatic Thai phrase breaks while keeping styling and stable word ids", () => {
-    const legacy = applyCaptionEdits(legacyThaiDocument(), [
-      { op: "set_style", style: { fontScale: 1.35, background: "black" } },
-      { op: "set_position", y: 0.68 },
-    ]);
-    expect(legacy.phrases.map((phrase) => phrase.wordIds.length)).toEqual([18, 19]);
-    const grouped = normalizeCaptionWords(legacy);
-    expect(grouped.words.map((item) => item.text)).toEqual(THAI_WORDS);
-    expect(grouped.words[2].id).toBe("w7");
-    expect(grouped.phrases).toHaveLength(1);
-    expect(grouped.style).toEqual(legacy.style);
-    expect(grouped.positions).toEqual({ "9:16": 0.68 });
-    expect(captionDocumentProblems(grouped)).toEqual([]);
-    expect(normalizeCaptionWords(grouped)).toBe(grouped);
-  });
-
-  it("preserves corrected, hidden and inserted words and manual phrase positions during grouping", () => {
-    const legacy = applyCaptionEdits(legacyThaiDocument(), [
-      { op: "set_word_text", word_id: "w1", text: "นี่!" },
-      { op: "set_word_timing", word_id: "w2", start: 0.15, end: 0.21 },
-      { op: "hide_word", word_id: "w3", hidden: true },
-      { op: "insert_word", after_word_id: legacyThaiDocument().words.at(-1)!.id, text: "Hello", start: 2, end: 2.2 },
-      { op: "set_phrase_position", phrase_id: legacyThaiDocument().phrases[1].id, y: 0.3 },
-    ]);
-    const grouped = normalizeCaptionWords(legacy);
-    for (const item of legacy.words.filter((item) => item.textCorrected || item.timingCorrected || item.hidden || item.analysed === null)) {
-      expect(grouped.words.find((candidate) => candidate.id === item.id)).toEqual(item);
-    }
-    expect(grouped.phrases.map((phrase) => [phrase.id, phrase.positions])).toEqual(legacy.phrases.map((phrase) => [phrase.id, phrase.positions]));
-    expect(captionDocumentProblems(grouped)).toEqual([]);
-    expect(normalizeCaptionWords(grouped)).toBe(grouped);
-  });
-
-  it("keeps manual phrase boundaries stable on repeated saved-draft loads", () => {
-    const legacy = legacyThaiDocument();
-    const joined = applyCaptionEdits(legacy, [{ op: "merge_phrase", phrase_id: legacy.phrases[0].id }]);
-    const grouped = normalizeCaptionWords(joined);
-    expect(grouped.phrases.map((phrase) => phrase.id)).toEqual(joined.phrases.map((phrase) => phrase.id));
-    const loaded = captionDocumentSchema.parse(grouped);
-    expect(normalizeCaptionWords(loaded)).toEqual(grouped);
-    expect(captionDocumentProblems(grouped)).toEqual([]);
   });
 });
 

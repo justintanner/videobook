@@ -1,4 +1,4 @@
-import { joinCaptionWords } from '../../server/src/captions/script'
+import { hasTranscriptSpace, joinCaptionWords, joinsWithoutSpace } from '../../server/src/captions/script'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 type MediaTranscriptKind = 'timed' | 'plain' | 'silence'
@@ -196,9 +196,10 @@ function cuesFromTimedWords(
     const last = current.at(-1)
     const gap = last ? word.start - last.end : 0
     const sentenceEnd = last ? /[.!?]$/.test(last.text.trim()) : false
+    const clauseEnd = last ? hasTranscriptSpace(last.text) && joinsWithoutSpace(last.text, word.text) : false
     if (
       current.length > 0
-      && (gap > CUE_GAP_SECONDS || sentenceEnd || current.length >= CUE_MAX_WORDS)
+      && (gap > CUE_GAP_SECONDS || sentenceEnd || clauseEnd || current.length >= CUE_MAX_WORDS)
     ) {
       const text = cueText(current)
       if (text) cues.push({ start: current[0]!.start, text })

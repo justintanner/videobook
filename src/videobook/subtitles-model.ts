@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { captionDocumentSchema, DEFAULT_CAPTION_STYLE } from '../../server/src/captions/model'
+import { CAPTION_DOCUMENT_VERSION, captionDocumentSchema, DEFAULT_CAPTION_STYLE } from '../../server/src/captions/model'
 import type { CaptionDocument, CaptionWord } from '../../server/src/captions/model'
 import { effectiveWordTiming } from '../../server/src/captions/timing'
 
@@ -173,7 +173,7 @@ export function activeSubtitleJobIds(read: SubtitlesRead | null): number[] {
 
 export function placeholderCaptionDocument(read: SubtitlesRead): CaptionDocument {
   return {
-    version: 1,
+    version: CAPTION_DOCUMENT_VERSION,
     language: read.language,
     sourceLanguage: null,
     wordTiming: 'measured',

@@ -15,8 +15,10 @@ import type {
   TranscriptSegmentKind,
 } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
+import { joinsWithoutSpace } from "../captions/script.js";
 import { fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
 import { audioObjectHash, hasCurrentElevenLabsTranscript, recordElevenLabsTranscript } from "../transcript-components.js";
+import { joinUnspacedLetters } from "../transcript-words.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
@@ -131,6 +133,7 @@ export async function writeElevenLabsTranscript(
 
 type TimedTranscriptWord = ElevenLabsTranscriptWord & {
   channelIndex: number;
+  spaceBefore: boolean;
 };
 
 type SegmentDraft = {
@@ -192,17 +195,21 @@ function normalizedTranscripts(
   return [];
 }
 
+function channelWords(transcript: ElevenLabsTranscript): TimedTranscriptWord[] {
+  const tokens = joinUnspacedLetters(transcript.words);
+  return tokens.map((word, index) => ({
+    ...word,
+    channelIndex: transcript.channel_index,
+    spaceBefore: index > 0 && tokens[index - 1].type === "spacing",
+  }));
+}
+
 function transcriptSegments(
   transcripts: ElevenLabsTranscript[],
   stream: ArtifactStream,
 ): ImportTranscriptSegment[] {
   const timedWords = transcripts
-    .flatMap((transcript) =>
-      transcript.words.map((word) => ({
-        ...word,
-        channelIndex: transcript.channel_index,
-      }))
-    )
+    .flatMap(channelWords)
     .filter((word) =>
       word.type !== "spacing"
       && Number.isFinite(word.start)
@@ -312,11 +319,14 @@ function audioEventKind(text: string): TranscriptSegmentKind {
 }
 
 function joinedSpeech(words: TimedTranscriptWord[]): string {
-  return words
-    .map((word) => word.text.trim())
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+([,.;:!?])/g, "$1");
+  let text = "";
+  for (const word of words) {
+    const next = word.text.trim();
+    if (!next) continue;
+    const glue = text.length > 0 && (word.spaceBefore || !joinsWithoutSpace(text, next));
+    text += glue ? ` ${next}` : next;
+  }
+  return text.replace(/\s+([,.;:!?])/g, "$1");
 }
 
 function wordConfidence(word: TimedTranscriptWord): number | undefined {

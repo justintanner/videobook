@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   isValidHex,
   getCurrentWordIndex,
+  joinsPreviousWord,
 } from "./util.js";
 import type { Word } from "./subtitles/types.js";
 
@@ -105,5 +106,13 @@ describe("getCurrentWordIndex", () => {
     it("no extension with lingerDuration=0 (default)", () => {
       expect(getCurrentWordIndex(words, 0.55, 0)).toBe(-1);
     });
+  });
+});
+
+describe("joinsPreviousWord", () => {
+  it("joins Thai and CJK words without a gap and keeps gaps around spaced words", () => {
+    const words: Word[] = ["ฉัน", "ชอบ", "Bangkok", "天気", "です"].map((word, index) => ({ word, start: index, end: index + 1 }));
+    expect(words.map((_, index) => joinsPreviousWord(words, index))).toEqual([false, true, false, false, true]);
+    expect(joinsPreviousWord(words, words.length)).toBe(false);
   });
 });

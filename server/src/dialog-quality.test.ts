@@ -88,6 +88,12 @@ describe("assessDialogQuality", () => {
     expect(result.wordCount).toBe(9);
   });
 
+  it("counts Thai and Chinese words even though they are written without spaces", () => {
+    expect(assessDialogQuality({ text: "ทุกคนดูนี่สิ" })).toMatchObject({ hasDialog: true, reason: "real_dialog", wordCount: 5 });
+    expect(assessDialogQuality({ text: "我们今天去公园玩吧" })).toMatchObject({ hasDialog: true, wordCount: 6 });
+    expect(assessDialogQuality({ text: "สวัสดี" })).toMatchObject({ hasDialog: false, reason: "too_short", wordCount: 1 });
+  });
+
   it("preserves the original trimmed text in the result", () => {
     const result = assessDialogQuality({
       text: "  The quick brown fox jumps over the lazy dog  ",

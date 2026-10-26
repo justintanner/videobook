@@ -9,6 +9,12 @@ export interface TranscriptToken {
 
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+const THAI_ONSET = "(?:[กขคปพต][รลว]|ห[งญนมยรลว]|อย|[ก-ฮ])";
+const THAI_DEPENDENT_START = /^(?:[ะ-ฺ็-๎]|[ก-ฮ]์)/u;
+const THAI_OE_OPENING = new RegExp(`เ${THAI_ONSET}[่-๋]?$`, "u");
+const THAI_OE_CLOSING = /^อ(?:$|[ก-ฮ]์|[เ-ไ]|[^\u0E00-\u0E7F])/u;
+const THAI_LEADING_ONSET = /[เแโใไ]([ก-ฮ])$/u;
+const THAI_CLUSTER = /^(?:[กขคปพต][รลว]|ห[งญนมยรลว]|อย)$/u;
 
 function isWordToken(token: TranscriptToken): boolean {
   return (token.type ?? "word") === "word";
@@ -19,10 +25,19 @@ function continuesLetters(token: TranscriptToken, letters: readonly TranscriptTo
   return isUnspacedText(token.text) || (letters.length > 0 && !LETTER_OR_DIGIT.test(token.text));
 }
 
+function splitsThaiSyllable(text: string, index: number): boolean {
+  const before = text.slice(Math.max(0, index - 4), index);
+  const after = text.slice(index, index + 3);
+  if (THAI_DEPENDENT_START.test(after)) return true;
+  if (THAI_OE_OPENING.test(before) && THAI_OE_CLOSING.test(after)) return true;
+  const onset = THAI_LEADING_ONSET.exec(before);
+  return onset !== null && THAI_CLUSTER.test(onset[1] + after.charAt(0));
+}
+
 function wordStarts(text: string): Set<number> {
   const starts = new Set<number>();
   for (const segment of wordSegmenter.segment(text)) {
-    if (segment.isWordLike) starts.add(segment.index);
+    if (segment.isWordLike && !splitsThaiSyllable(text, segment.index)) starts.add(segment.index);
   }
   return starts;
 }
@@ -60,10 +75,11 @@ export function joinUnspacedLetters<T extends TranscriptToken>(tokens: readonly 
 }
 
 export function splitUnspacedText(text: string): string[] {
-  const words: string[] = [];
-  for (const segment of wordSegmenter.segment(text)) {
-    if (segment.isWordLike || words.length === 0) words.push(segment.segment);
-    else words[words.length - 1] += segment.segment;
-  }
-  return words;
+  const cuts = [...wordStarts(text)].filter((index) => index > 0).sort((left, right) => left - right);
+  return [0, ...cuts].map((start, index) => text.slice(start, cuts[index] ?? text.length)).filter((word) => word.length > 0);
+}
+
+export function textWords(text: string): string[] {
+  return text.split(/\s+/u).filter((chunk) => chunk.length > 0)
+    .flatMap((chunk) => (isUnspacedText(chunk) ? splitUnspacedText(chunk) : [chunk]));
 }

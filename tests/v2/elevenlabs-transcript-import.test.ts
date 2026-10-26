@@ -13,29 +13,19 @@ describe('ElevenLabs transcript import', () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('imports exact timed speech, speakers, confidence, and audio events', async () => {
+  async function audioArtifact() {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-transcript-import-'))
     const engine = createEngine({ durableWrites: false, rootDir: join(rootDir, 'book'),
     initialBookName: 'transcript-import', })
     await engine.ready
     const artifact = await engine.artifacts.create('audio', 'interview')
-    expect(artifact.ok).toBe(true)
-    if (!artifact.ok) return
-    const written = await engine.files.write(
-      artifact.value.artifactId,
-      'original.wav',
-      Buffer.from('audio'),
-    )
-    expect(written.ok).toBe(true)
-    if (!written.ok) return
+    if (!artifact.ok) throw new Error(artifact.error.message)
+    const written = await engine.files.write(artifact.value.artifactId, 'original.wav', Buffer.from('audio'))
+    if (!written.ok) throw new Error(written.error.message)
     const manifest = await engine.files.manifest(artifact.value.artifactId)
-    expect(manifest.ok).toBe(true)
-    if (!manifest.ok) return
-    const objectHash = manifest.value.files.find(
-      (file) => file.name === 'original.wav',
-    )?.objectHash
-    expect(objectHash).toBeTruthy()
-    if (!objectHash) return
+    if (!manifest.ok) throw new Error(manifest.error.message)
+    const objectHash = manifest.value.files.find((file) => file.name === 'original.wav')?.objectHash
+    if (!objectHash) throw new Error('missing audio file')
     const stream = await engine.streams.register({
       artifactId: artifact.value.artifactId,
       sourcePath: 'original.wav',
@@ -51,8 +41,12 @@ describe('ElevenLabs transcript import', () => {
         channelLayout: 'stereo',
       },
     })
-    expect(stream.ok).toBe(true)
-    if (!stream.ok) return
+    if (!stream.ok) throw new Error(stream.error.message)
+    return { engine, artifactId: artifact.value.artifactId }
+  }
+
+  it('imports exact timed speech, speakers, confidence, and audio events', async () => {
+    const { engine, artifactId } = await audioArtifact()
     const response: ElevenLabsSpeechToTextResponse = {
       language_code: 'en',
       language_probability: 0.99,
@@ -104,7 +98,7 @@ describe('ElevenLabs transcript import', () => {
 
     const transcript = await importElevenLabsTranscript(
       engine,
-      artifact.value.artifactId,
+      artifactId,
       response,
       { tagAudioEvents: true, diarize: true },
     )
@@ -136,6 +130,36 @@ describe('ElevenLabs transcript import', () => {
         durationTicks: 48_000,
       }),
     }))
+    engine.close()
+  })
+
+  it('stores Thai speech as whole words and keeps the space between Thai clauses', async () => {
+    const { engine, artifactId } = await audioArtifact()
+    const letters = (texts: string[], start: number) => texts.map((text, index) => ({
+      text, start: start + index * 0.1, end: start + (index + 1) * 0.1, type: 'word' as const, speaker_id: 'speaker-1',
+    }))
+    const response: ElevenLabsSpeechToTextResponse = {
+      language_code: 'tha',
+      language_probability: 0.99,
+      text: 'ฉันชอบกินข้าวมาก แมวนอนอยู่บนโต๊ะ',
+      channel_index: 0,
+      transcription_id: 'scribe-thai',
+      audio_duration_secs: 5,
+      words: [
+        ...letters(['ฉั', 'น', 'ช', 'อ', 'บ', 'กิ', 'น', 'ข้', 'า', 'ว', 'ม', 'า', 'ก'], 0),
+        { text: ' ', start: 1.3, end: 1.3, type: 'spacing', speaker_id: 'speaker-1' },
+        ...letters(['แ', 'ม', 'ว', 'น', 'อ', 'น', 'อ', 'ยู่', 'บ', 'น', 'โ', 'ต๊'], 1.5),
+        { text: 'ะ', start: 2.7, end: 2.7, type: 'word', speaker_id: 'speaker-1' },
+      ],
+    }
+
+    const transcript = await importElevenLabsTranscript(engine, artifactId, response, { tagAudioEvents: true, diarize: true })
+
+    expect(transcript.segments).toHaveLength(1)
+    expect(transcript.segments[0]?.text).toBe('ฉันชอบกินข้าวมาก แมวนอนอยู่บนโต๊ะ')
+    expect(transcript.segments[0]?.words.map((word) => word.text)).toEqual([
+      'ฉัน', 'ชอบ', 'กิน', 'ข้าว', 'มาก', 'แมว', 'นอน', 'อยู่', 'บน', 'โต๊ะ',
+    ])
     engine.close()
   })
 })

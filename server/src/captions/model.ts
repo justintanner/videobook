@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CAPTION_DOCUMENT_VERSION = 1;
+export const CAPTION_DOCUMENT_VERSION = 2;
 export const CAPTION_ASPECTS = ["9:16", "1:1", "4:5", "16:9"] as const;
 export const CAPTION_PRESETS = ["karaoke", "stack", "punch"] as const;
 export const CAPTION_MOTIONS = ["pop", "slam", "rise"] as const;
@@ -106,7 +106,6 @@ export const captionDocumentSchema = z.object({
   language: z.string().min(1).max(16),
   sourceLanguage: z.string().max(16).nullable(),
   wordTiming: z.enum(["measured", "estimated"]),
-  wordSegmentationVersion: z.literal(1).optional(),
   source: captionSourceSchema,
   bindings: captionBindingsSchema,
   aspect: aspectSchema,

@@ -1,8 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import type { CaptionDocument } from "./model.js";
 import { captionDocumentSchema } from "./model.js";
-import { normalizeCaptionWords } from "./word-segmentation.js";
 
 export interface CaptionDraft {
   revision: string;
@@ -27,15 +26,11 @@ export function readCaptionDraft(engine: Engine, artifactId: string, language: s
   const value = engine.settings.get<Record<string, unknown>>(draftKey(artifactId, language));
   if (!value || typeof value.revision !== "string" || typeof value.updatedAt !== "string") return null;
   const parsed = captionDocumentSchema.safeParse(value.document);
-  if (!parsed.success) return null;
-  const document = normalizeCaptionWords(parsed.data);
-  const revision = document === parsed.data ? value.revision
-    : `grouped:${createHash("sha256").update(JSON.stringify([value.revision, document])).digest("hex").slice(0, 32)}`;
-  return { revision, updatedAt: value.updatedAt, document };
+  return parsed.success ? { revision: value.revision, updatedAt: value.updatedAt, document: parsed.data } : null;
 }
 
 export function writeCaptionDraft(engine: Engine, artifactId: string, language: string, document: CaptionDocument): CaptionDraft {
-  const draft: CaptionDraft = { revision: randomUUID(), updatedAt: new Date().toISOString(), document: normalizeCaptionWords(captionDocumentSchema.parse(document)) };
+  const draft: CaptionDraft = { revision: randomUUID(), updatedAt: new Date().toISOString(), document: captionDocumentSchema.parse(document) };
   const written = engine.settings.set(draftKey(artifactId, language), draft);
   if (!written.ok) throw new Error(written.error.message);
   const languages = draftLanguages(engine, artifactId);

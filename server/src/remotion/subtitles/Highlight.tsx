@@ -1,7 +1,7 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Chunk, FontSizePreset, SubtitlePosition, Orientation } from "./types.js";
-import { getCurrentWordIndex } from "../util.js";
+import { getCurrentWordIndex, joinsPreviousWord } from "../util.js";
 import { getHighlightFontSize, getYPosition } from "../constants.js";
 
 interface HighlightProps {
@@ -44,6 +44,7 @@ export const Highlight: React.FC<HighlightProps> = ({
 
   const boxPadding = 8;
   const boxRadius = 8;
+  const gapPx = Math.round(fontPx * 0.3);
 
   return (
     <div
@@ -67,7 +68,7 @@ export const Highlight: React.FC<HighlightProps> = ({
           flexWrap: "wrap",
           justifyContent: "center",
           alignItems: "center",
-          gap: `${Math.round(fontPx * 0.3)}px`,
+          gap: `${gapPx}px`,
           maxWidth: `${width - 80}px`,
           padding: "0 40px",
         }}
@@ -76,6 +77,8 @@ export const Highlight: React.FC<HighlightProps> = ({
           const isActive = i === wordIdx;
           const text = word.word.trim().toUpperCase();
           if (!text) return null;
+          const joinsBefore = joinsPreviousWord(activeChunk.words, i);
+          const joinsAfter = joinsPreviousWord(activeChunk.words, i + 1);
           return (
             <span
               key={i}
@@ -89,7 +92,8 @@ export const Highlight: React.FC<HighlightProps> = ({
                 paintOrder: strokeWidth > 0 ? "stroke fill" : undefined,
                 textShadow: shadowBlur > 0 ? `${Math.round(shadowBlur / 2)}px ${Math.round(shadowBlur / 2)}px ${shadowBlur}px rgba(0,0,0,${shadowOpacity / 100})` : undefined,
                 whiteSpace: "nowrap",
-                padding: `${boxPadding}px`,
+                padding: `${boxPadding}px ${joinsAfter ? 0 : boxPadding}px ${boxPadding}px ${joinsBefore ? 0 : boxPadding}px`,
+                marginLeft: joinsBefore ? -gapPx : 0,
                 borderRadius: isActive ? boxRadius : 0,
                 backgroundColor: isActive ? highlightColor : "transparent",
               }}
