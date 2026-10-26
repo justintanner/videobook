@@ -33,8 +33,38 @@ and the package uses [Semantic Versioning](https://semver.org/).
   are discarded. Subtitles render with bundled Montserrat and Anton (OFL),
   load Noto Sans subsets on demand for other scripts, and handle
   right-to-left text.
+- `force` on `transcribe`, `translate_subtitles`, `describe_image`,
+  `detect_scenes`, `suggest_cuts`, `suggest_sfx` and `analyze_jokes`
+  (`analyze_video` already had it) to run again on unchanged inputs.
 
 ### Changed
+
+- Every analysis tool is keyed by the content it reads: speech-to-text by the
+  transcribed audio and settings, translations by the timed transcript and
+  language, video analysis by the video and the transcript it used, image
+  descriptions by the image, scene scans by the video, cut and sound-effect
+  suggestions by the video, transcripts, analysis and instructions, and joke
+  analysis by the timed transcript. A repeat returns `status: "cached"`
+  (suggestions and jokes include the earlier entries) without a provider
+  call, a job or a write; otherwise the tools return `queued` or `running`
+  with a numeric `job_id`, and concurrent or forced requests join one job.
+  These tools no longer return `enqueued`, `already_analyzed` or string job
+  ids.
+  Automatic transcription and analysis jobs skip the provider when their
+  result is current, results whose inputs changed mid-run are discarded, a
+  failed refresh keeps the previous result, and undoing an edit serves the
+  earlier analyses again. Sidecars written by earlier versions are adopted
+  once instead of being paid for again.
+- `describe_image` returns the script asset it already wrote for an unchanged
+  image instead of creating a new one per call.
+- Captions, keyword titles and watermark placement share one cache of face
+  and on-screen-text regions per video frame, so each pass only sends frames
+  no earlier pass analysed.
+- A render with a translated `subtitle_language` fails with the reason when
+  the translation cannot be made, instead of burning the original language.
+- Editing a video's picture or sound still deletes its video analysis and,
+  for sound or timing edits, its transcripts; scene scans, suggestions and
+  joke analyses are kept and simply stop matching the edited media.
 
 - `/alive` opens the new subtitle editor. Saved Alive caption settings seed
   the editor's style, a matching saved Alive analysis is reused instead of
