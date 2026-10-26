@@ -151,7 +151,7 @@ describe("suggest_cuts tool", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(JSON.parse((result.content as TextContent)[0].text)).toMatchObject({ asset_id: assetId, status: "enqueued" });
+    expect(JSON.parse((result.content as TextContent)[0].text)).toMatchObject({ asset_id: assetId, status: "queued" });
     expect(engine.jobs.queue.list({ type: "suggest_cuts" })).toMatchObject([{
       payload: { assetId, instructions: "smoother transitions and better timing" },
     }]);
@@ -181,7 +181,7 @@ describe("suggest_cuts tool", () => {
     expect(engine.jobs.queue.list({ type: "suggest_cuts" })).toHaveLength(0);
     const result = await client.callTool({ name: "chat", arguments: { book_id: bookId, action_plan: plan } });
     expect(result.isError).toBeUndefined();
-    expect(JSON.parse((result.content as TextContent)[0].text)).toMatchObject({ asset_id: assetId, status: "enqueued" });
+    expect(JSON.parse((result.content as TextContent)[0].text)).toMatchObject({ asset_id: assetId, status: "queued" });
   });
 
   it.each(["missing", "empty"])("builds visual context for a %s transcript without claiming silence", async (transcriptState) => {

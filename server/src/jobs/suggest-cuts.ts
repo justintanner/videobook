@@ -11,6 +11,8 @@ import {
   intelligenceRequest,
 } from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
+import { runSidecarAnalysis } from "../analysis-sidecars.js";
+import { SUGGESTED_CUTS, suggestionRecord } from "../suggestion-components.js";
 import {
   TRIM_BUDGET_FRACTION,
   DEAD_AIR_THRESHOLD_S,
@@ -29,6 +31,7 @@ type SuggestCutsPayload = {
   assetDir: string;
   bookId: string;
   instructions?: string;
+  force?: boolean;
 };
 
 const SYSTEM_PROMPT_CUTS = `You are a senior video editor reviewing a short clip. From the timestamped frames, optional transcript, and metadata you receive, return a strict JSON object suggesting sections to cut. Follow the user's editing request when provided.
@@ -92,98 +95,101 @@ const ModelOutputSchema = z.object({
   summary: z.string(),
 });
 
+async function suggestCuts(engine: Engine, assetId: string, instructions: string | undefined, signal: AbortSignal) {
+  const apiKey = getApiKey("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+
+  const loaded = await loadAssetForAnalysis(engine, assetId, { requireTranscript: false });
+  if (!loaded.ok) throw new Error(loaded.error.message);
+  const { frameNames, transcript, meta, prior } = loaded.value;
+
+  const candidates = transcript.source === "elevenlabs"
+    ? extractSilenceCandidates(transcript.words, DEAD_AIR_THRESHOLD_S)
+    : [];
+  const duration = typeof meta?.duration === "number" && Number.isFinite(meta.duration) && meta.duration > 0
+    ? meta.duration : null;
+  const trimBudgetS = duration !== null ? duration * TRIM_BUDGET_FRACTION : Infinity;
+
+  const sampled = sampleFrames(frameNames);
+  const frameParts: OpenAiResponseInputContent[] = [];
+  for (const file of sampled) {
+    const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
+    if (!frameRead.ok) throw new Error(frameRead.error.message);
+    frameParts.push(
+      { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
+      {
+        type: "input_image",
+        image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
+        detail: "high",
+      },
+    );
+  }
+
+  const contextString = buildCutsContext(meta, prior, transcript, sampled.length, candidates, trimBudgetS, instructions);
+  const userContent: OpenAiResponseInputContent[] = [
+    { type: "input_text", text: contextString },
+    ...frameParts,
+  ];
+
+  const responses = buildIntelligenceResponses(apiKey);
+  const response = await responses(intelligenceRequest({
+    instructions: SYSTEM_PROMPT_CUTS,
+    input: [{ role: "user", content: userContent }],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "suggested_cuts",
+        schema: SUGGEST_CUTS_JSON_SCHEMA,
+        strict: true,
+      },
+    },
+    max_output_tokens: 4096,
+  }), signal);
+  const outputText = firstResponseText(response);
+
+  let parsed: { trims: Trim[]; summary: string };
+  try {
+    parsed = ModelOutputSchema.parse(JSON.parse(outputText));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Model output failed schema validation: ${msg}`);
+  }
+
+  const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS, {
+    duration, transcriptSource: transcript.source,
+  });
+  if (dropped.length > 0) {
+    logger.warn("suggest-cuts-dropped", { assetId, count: dropped.length });
+  }
+
+  return {
+    trims: kept,
+    summary: parsed.summary,
+    based_on: {
+      frames: sampled.length,
+      transcript_source: transcript.source,
+      silence_candidates: candidates,
+      trim_budget_s: Number.isFinite(trimBudgetS) ? trimBudgetS : null,
+      dropped_trims: dropped.map((d) => ({ trim: d.trim, reason: d.reason })),
+    },
+    model: INTELLIGENCE_MODEL,
+    asset_id: assetId,
+  };
+}
+
 export function registerSuggestCutsJob(engine: Engine): void {
   registerJobHandler("suggest_cuts", async (payload, ctx) => {
-    const { assetId, instructions } = payload as SuggestCutsPayload;
+    const { assetId, instructions, force } = payload as SuggestCutsPayload;
 
     return withLocalLease(engine, assetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("OPENAI_API_KEY");
-      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
-
-      const loaded = await loadAssetForAnalysis(engine, assetId, { requireTranscript: false });
-      if (!loaded.ok) throw new Error(loaded.error.message);
-      const { frameNames, transcript, meta, prior } = loaded.value;
-
-      const candidates = transcript.source === "elevenlabs"
-        ? extractSilenceCandidates(transcript.words, DEAD_AIR_THRESHOLD_S)
-        : [];
-      const duration = typeof meta?.duration === "number" && Number.isFinite(meta.duration) && meta.duration > 0
-        ? meta.duration : null;
-      const trimBudgetS = duration !== null ? duration * TRIM_BUDGET_FRACTION : Infinity;
-
-      const sampled = sampleFrames(frameNames);
-      const frameParts: OpenAiResponseInputContent[] = [];
-      for (const file of sampled) {
-        const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
-        if (!frameRead.ok) throw new Error(frameRead.error.message);
-        frameParts.push(
-          { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
-          {
-            type: "input_image",
-            image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
-            detail: "high",
-          },
-        );
-      }
-
-      const contextString = buildCutsContext(meta, prior, transcript, sampled.length, candidates, trimBudgetS, instructions);
-      const userContent: OpenAiResponseInputContent[] = [
-        { type: "input_text", text: contextString },
-        ...frameParts,
-      ];
-
-      const responses = buildIntelligenceResponses(apiKey);
-      const response = await responses(intelligenceRequest({
-        instructions: SYSTEM_PROMPT_CUTS,
-        input: [{ role: "user", content: userContent }],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "suggested_cuts",
-            schema: SUGGEST_CUTS_JSON_SCHEMA,
-            strict: true,
-          },
-        },
-        max_output_tokens: 4096,
-      }), ctx.signal);
-      const outputText = firstResponseText(response);
-
-      let parsed: { trims: Trim[]; summary: string };
-      try {
-        parsed = ModelOutputSchema.parse(JSON.parse(outputText));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Model output failed schema validation: ${msg}`);
-      }
-
-      const { kept, dropped } = filterValidTrims(parsed.trims, candidates, trimBudgetS, {
-        duration, transcriptSource: transcript.source,
+      const outcome = await runSidecarAnalysis(engine, SUGGESTED_CUTS, {
+        force: force === true,
+        record: () => suggestionRecord(engine, SUGGESTED_CUTS, assetId, { instructions: instructions?.trim() || null }),
+        compute: () => suggestCuts(engine, assetId, instructions, ctx.signal),
+        provenance: { analyzer: "suggest-cuts", provider: "openai", model: INTELLIGENCE_MODEL },
       });
-      if (dropped.length > 0) {
-        logger.warn("suggest-cuts-dropped", { assetId, count: dropped.length });
-      }
-
-      const final = {
-        trims: kept,
-        summary: parsed.summary,
-        based_on: {
-          frames: sampled.length,
-          transcript_source: transcript.source,
-          silence_candidates: candidates,
-          trim_budget_s: Number.isFinite(trimBudgetS) ? trimBudgetS : null,
-          dropped_trims: dropped.map((d) => ({ trim: d.trim, reason: d.reason })),
-        },
-        model: INTELLIGENCE_MODEL,
-        asset_id: assetId,
-      };
-
-      const writeResult = await engine.files.write(assetId, ".suggest-cuts.json", JSON.stringify(final, null, 2)
-      );
-      if (!writeResult.ok) {
-        throw new Error(`Suggestions generated but failed to persist: ${writeResult.error.message}`);
-      }
-
-      return { success: true, trims: kept.length, dropped: dropped.length };
+      if (outcome.cached) return { success: true, cached: true };
+      return { success: true, trims: outcome.value.trims.length, dropped: outcome.value.based_on.dropped_trims.length };
     });
   });
 }

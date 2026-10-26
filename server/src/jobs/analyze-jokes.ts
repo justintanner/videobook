@@ -9,6 +9,8 @@ import {
   intelligenceRequest,
 } from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
+import { runSidecarAnalysis } from "../analysis-sidecars.js";
+import { JOKES, jokesRecord } from "../suggestion-components.js";
 import type { ElevenLabs, ElevenLabsWord } from "../tools/_suggest-shared.js";
 
 type AnalyzeJokesPayload = {
@@ -16,6 +18,7 @@ type AnalyzeJokesPayload = {
   assetId: string;
   assetDir: string;
   bookId: string;
+  force?: boolean;
 };
 
 const JOKE_TYPES = [
@@ -103,71 +106,74 @@ function buildJokesContext(eleven: ElevenLabs): string {
   ].join("\n");
 }
 
+async function analyzeJokes(engine: Engine, assetId: string, signal: AbortSignal) {
+  const apiKey = getApiKey("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+
+  const read = await engine.files.read(assetId, "elevenlabs.json");
+  if (!read.ok) {
+    throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
+  }
+
+  let eleven: ElevenLabs;
+  try {
+    eleven = JSON.parse(read.value.toString()) as ElevenLabs;
+  } catch {
+    throw new Error(`elevenlabs.json for ${assetId} is not valid JSON`);
+  }
+  if (!Array.isArray(eleven.words) || spokenWords(eleven.words).length === 0) {
+    throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
+  }
+
+  const responses = buildIntelligenceResponses(apiKey, { timeout: 240_000 });
+  const result = await responses(intelligenceRequest({
+    instructions: SYSTEM_PROMPT,
+    input: [{ role: "user", content: buildJokesContext(eleven) }],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "analyze_jokes_result",
+        schema: JOKES_JSON_SCHEMA,
+        strict: true,
+      },
+    },
+    max_output_tokens: 4096,
+  }), signal);
+  const outputText = firstResponseText(result);
+
+  let parsed: ModelOutput;
+  try {
+    parsed = ModelOutputSchema.parse(JSON.parse(outputText));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Model output failed schema validation: ${msg}`);
+  }
+
+  return {
+    jokes: parsed.jokes,
+    summary: parsed.summary,
+    based_on: {
+      transcript_source: "elevenlabs" as const,
+      word_count: spokenWords(eleven.words).length,
+    },
+    model: INTELLIGENCE_MODEL,
+    asset_id: assetId,
+  };
+}
+
 export function registerAnalyzeJokesJob(engine: Engine): void {
   registerJobHandler("analyze_jokes", async (payload, ctx) => {
-    const { assetId } = payload as AnalyzeJokesPayload;
+    const { assetId, force } = payload as AnalyzeJokesPayload;
 
     return withLocalLease(engine, assetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("OPENAI_API_KEY");
-      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
-
-      const read = await engine.files.read(assetId, "elevenlabs.json");
-      if (!read.ok) {
-        throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
-      }
-
-      let eleven: ElevenLabs;
-      try {
-        eleven = JSON.parse(read.value.toString()) as ElevenLabs;
-      } catch {
-        throw new Error(`elevenlabs.json for ${assetId} is not valid JSON`);
-      }
-      if (!Array.isArray(eleven.words) || spokenWords(eleven.words).length === 0) {
-        throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
-      }
-
-      const responses = buildIntelligenceResponses(apiKey, { timeout: 240_000 });
-      const result = await responses(intelligenceRequest({
-        instructions: SYSTEM_PROMPT,
-        input: [{ role: "user", content: buildJokesContext(eleven) }],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "analyze_jokes_result",
-            schema: JOKES_JSON_SCHEMA,
-            strict: true,
-          },
-        },
-        max_output_tokens: 4096,
-      }), ctx.signal);
-      const outputText = firstResponseText(result);
-
-      let parsed: ModelOutput;
-      try {
-        parsed = ModelOutputSchema.parse(JSON.parse(outputText));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Model output failed schema validation: ${msg}`);
-      }
-
-      const final = {
-        jokes: parsed.jokes,
-        summary: parsed.summary,
-        based_on: {
-          transcript_source: "elevenlabs" as const,
-          word_count: spokenWords(eleven.words).length,
-        },
-        model: INTELLIGENCE_MODEL,
-        asset_id: assetId,
-      };
-
-      const writeResult = await engine.files.write(assetId, ".analyze-jokes.json", JSON.stringify(final, null, 2)
-      );
-      if (!writeResult.ok) {
-        throw new Error(`Jokes analyzed but failed to persist: ${writeResult.error.message}`);
-      }
-
-      return { success: true, jokes: parsed.jokes.length };
+      const outcome = await runSidecarAnalysis(engine, JOKES, {
+        force: force === true,
+        record: () => jokesRecord(engine, assetId),
+        compute: () => analyzeJokes(engine, assetId, ctx.signal),
+        provenance: { analyzer: "analyze-jokes", provider: "openai", model: INTELLIGENCE_MODEL },
+      });
+      if (outcome.cached) return { success: true, cached: true };
+      return { success: true, jokes: outcome.value.jokes.length };
     });
   });
 }

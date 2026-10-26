@@ -108,3 +108,23 @@ export async function recordSidecarAnalysis(engine: Engine, spec: SidecarAnalysi
   if (!sidecarHash) throw new Error(`${spec.sidecar} was not written.`);
   writeSidecarRecord(engine, spec, input, sidecarHash, input.provenance);
 }
+
+export async function runSidecarAnalysis<T>(
+  engine: Engine,
+  spec: SidecarAnalysisSpec,
+  input: {
+    force: boolean;
+    record: () => Promise<SidecarInput>;
+    compute: () => Promise<T>;
+    provenance: SidecarProvenance;
+  },
+): Promise<{ cached: true } | { cached: false; value: T }> {
+  const record = await input.record();
+  if (!input.force && await cachedSidecarAnalysis(engine, spec, record)) return { cached: true };
+  const value = await input.compute();
+  if ((await input.record()).key !== record.key) throw new Error(STALE_ANALYSIS_INPUTS);
+  const written = await engine.files.write(record.artifactId, spec.sidecar, JSON.stringify(value, null, 2));
+  if (!written.ok) throw new Error(`${spec.sidecar} could not be saved: ${written.error.message}`);
+  await recordSidecarAnalysis(engine, spec, { ...record, provenance: input.provenance });
+  return { cached: false, value };
+}

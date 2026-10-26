@@ -14,7 +14,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
-- `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript.
+- `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript. Returns status cached when the current transcript was already analysed; pass force to analyse again.
 - `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
 - `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
 - `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
@@ -215,9 +215,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
 - `suggest_asset_tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.
-- `suggest_cuts` — Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts.
+- `suggest_cuts` — Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts. Returns status cached when the same video, transcript and instructions were already reviewed; pass force for fresh suggestions.
 - `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
-- `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx.
+- `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx. Returns status cached when the same video and transcript were already reviewed; pass force for fresh suggestions.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
 - `transcribe` — Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text. Returns status cached when the current audio already has a transcript with these settings; a repeated or concurrent request joins the running job.
