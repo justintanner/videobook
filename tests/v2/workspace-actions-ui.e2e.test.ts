@@ -63,6 +63,7 @@ describe('workspace action launcher with real endpoints', () => {
   const COMPOSER_SHEET_ACTIONS: Readonly<Record<string, string>> = {
     'command.upload-post-to-dropbox': 'Select a Post cell',
     'command.save-post-to-icloud': 'Select a Post cell',
+    'tool.transcribe': 'Choose a video or audio clip',
   }
 
   async function openActions(command?: string): Promise<void> {

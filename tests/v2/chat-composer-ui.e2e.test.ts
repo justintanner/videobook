@@ -5041,6 +5041,7 @@ describe('chat composer browser flow', () => {
       'Edit cell',
       'Create Post',
       'Open media',
+      'Subtitles',
       'Edit cold open',
       'Download video',
       'Extract frame',
