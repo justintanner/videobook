@@ -902,6 +902,15 @@ async function stopBookRunner(bookId: string): Promise<void> {
   }
 }
 
+export async function waitForBookJob<T = unknown>(
+  bookId: string,
+  jobId: number,
+  timeoutMs = 300_000,
+): Promise<T> {
+  const { runner } = await ensureBookReady({ bookId });
+  return await runner.waitFor(jobId, timeoutMs) as T;
+}
+
 export async function waitForJob(
   jobId: string,
   timeoutMs = 300_000,

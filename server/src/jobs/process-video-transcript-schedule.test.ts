@@ -6,6 +6,7 @@ import {
   planVideoTranscriptJobs,
   type PlanVideoTranscriptJobsInput,
 } from "./process-video.js";
+import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey, openAiTranscriptKey } from "../transcript-components.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -17,6 +18,7 @@ const BASE: PlanVideoTranscriptJobsInput = {
   bookId: "book-1",
   videoFilename: "original.mp4",
   identity: "rev-abc",
+  audioHash: null,
   hasOpenAiKey: false,
   hasElevenLabsKey: false,
 };
@@ -85,6 +87,13 @@ describe("planVideoTranscriptJobs", () => {
     expect(payload.videoPath.startsWith(BASE.assetDir)).toBe(true);
     expect(payload.videoPath).not.toContain("videobook-source");
     expect(payload.sourceFilename).toBe("original.mp3");
+  });
+
+  it("names the transcript component each job fills once the audio hash is known", () => {
+    const jobs = plan({ hasOpenAiKey: true, hasElevenLabsKey: true, audioHash: "a".repeat(64) });
+    expect(jobs[0].payload.componentKey).toBe(openAiTranscriptKey("a".repeat(64)));
+    expect(jobs[1].payload.componentKey).toBe(elevenLabsTranscriptKey("a".repeat(64), DEFAULT_TRANSCRIPT_OPTIONS));
+    expect(plan({ hasOpenAiKey: true }).map((job) => job.payload.componentKey)).toEqual([undefined]);
   });
 
   it("schedules nothing for silent video", () => {

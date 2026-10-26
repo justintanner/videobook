@@ -3,7 +3,7 @@ import { appendDiagnostic } from "../diagnostics.js";
 import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 
 import { logger } from "../logger.js";
 import { queue, registerJobHandler, type JobHandlerContext } from "../queue.js";
@@ -15,6 +15,8 @@ import {
 } from "./_lease.js";
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "../lazy-render.js";
+import { cachedSidecarAnalysis, fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
+import { OPENAI_TRANSCRIPT, openAiTranscriptRecord, recordOpenAiTranscript } from "../transcript-components.js";
 
 const CHUNK_SECONDS = 5 * 60;
 
@@ -25,6 +27,7 @@ type TranscribeVideoAudioPayload = {
   assetDir: string;
   bookId: string;
   sourceFilename?: string;
+  force?: boolean;
 };
 
 type TranscribeVideoAudioResult = {
@@ -32,6 +35,7 @@ type TranscribeVideoAudioResult = {
   reason?: string;
   text?: string;
   chunk_count?: number;
+  cached?: boolean;
 };
 
 type OpenAiProvider = ReturnType<typeof createOpenAi>;
@@ -65,6 +69,14 @@ async function transcribeChunked(provider: OpenAiProvider, mediaPath: string, du
   }
 }
 
+async function transcriptMediaHash(engine: Engine, payload: TranscribeVideoAudioPayload): Promise<string | null> {
+  for (const name of [payload.sourceFilename ?? "original.mp3", basename(payload.videoPath)]) {
+    const hash = await fileObjectHash(engine, payload.assetId, name);
+    if (hash) return hash;
+  }
+  return null;
+}
+
 export async function runTranscribeVideoAudio(
   engine: Engine,
   payload: TranscribeVideoAudioPayload,
@@ -76,6 +88,10 @@ export async function runTranscribeVideoAudio(
   if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
   const result = await withLocalLease(engine, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
+    const mediaHash = await transcriptMediaHash(engine, payload);
+    if (mediaHash && !payload.force && await cachedSidecarAnalysis(engine, OPENAI_TRANSCRIPT, openAiTranscriptRecord(assetId, mediaHash))) {
+      return { success: true, cached: true };
+    }
     try {
       const provider = createOpenAi({ apiKey, timeout: 120_000 });
       const probe = await probeVideo(videoPath);
@@ -96,8 +112,11 @@ export async function runTranscribeVideoAudio(
         );
       }
 
+      if (await transcriptMediaHash(engine, payload) !== mediaHash) throw new Error(STALE_ANALYSIS_INPUTS);
       const jsonString = JSON.stringify({ text }, null, 2);
-      await engine.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
+      const written = await engine.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
+      if (!written.ok) throw new Error(written.error.message);
+      if (mediaHash) await recordOpenAiTranscript(engine, assetId, mediaHash);
       await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
         type: "semantic_index",
         assetId,

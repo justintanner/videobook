@@ -22,8 +22,6 @@ import type {
   Chunk,
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
-import { requireApiKey } from "../api-key.js";
-import { buildIntelligenceResponses } from "../openai-intelligence.js";
 import { resolveOsgImagePath } from "../osg-assets.js";
 import { claimLockedLease } from "./_lease.js";
 import { ensureElevenLabsTranscript } from "./_transcribe.js";
@@ -31,10 +29,9 @@ import { ingestWorkspaceOutputs } from "./_persist-output.js";
 import {
   iso1FromIso3,
   readLanguageCode,
-  sidecarMatchesSource,
   translatedTranscriptFilename,
-  translateTranscript,
 } from "./_translate-transcript.js";
+import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
 import {
   LANDSCAPE_WIDTH,
   LANDSCAPE_HEIGHT,
@@ -130,33 +127,14 @@ async function resolveSubtitleSegments(
   if (subtitleLanguage === "original" || subtitleLanguage === sourceIso1) {
     return sourceSegments;
   }
-
-  const sidecarFilename = translatedTranscriptFilename(subtitleLanguage);
-  const existing = await engine.files.read(assetId, sidecarFilename);
-  if (existing.ok) {
-    try {
-      const sidecar = JSON.parse(existing.value.toString()) as unknown;
-      if (sidecarMatchesSource(sidecar, sourceSegments)) {
-        return parseSegments(sidecar as Parameters<typeof parseSegments>[0]);
-      }
-    } catch {
-      // unreadable sidecar — re-translate below
-    }
-  }
-
   try {
-    const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
-    const sidecar = await translateTranscript(raw, subtitleLanguage, responses, signal);
-    const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
-    );
-    if (!writeResult.ok) {
-      logger.warn("subtitle-cache-failed", { assetId, error: writeResult.error });
-    }
-    return parseSegments(sidecar as unknown as Parameters<typeof parseSegments>[0]);
+    await ensureTranscriptTranslation(engine, assetId, subtitleLanguage, { force: false, signal });
   } catch (err) {
-    logger.warn("subtitle-translation-failed", { assetId, error: err });
-    return sourceSegments;
+    throw new Error(`Subtitles could not be translated into ${subtitleLanguage}: ${err instanceof Error ? err.message : String(err)}`);
   }
+  const sidecar = await readArtifactJson(engine, assetId, translatedTranscriptFilename(subtitleLanguage));
+  if (!sidecar) throw new Error(`The ${subtitleLanguage} subtitles for ${assetId} are unreadable. Translate them again.`);
+  return parseSegments(sidecar as Parameters<typeof parseSegments>[0]);
 }
 
 function preserveArtifactState(error: unknown): Error {

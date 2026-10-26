@@ -6,6 +6,14 @@ import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { registerMediaStreams } from "./process-video.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
+import { fileObjectHash, sidecarJobKey } from "../analysis-sidecars.js";
+import {
+  DEFAULT_TRANSCRIPT_OPTIONS,
+  ELEVENLABS_TRANSCRIPT,
+  elevenLabsTranscriptKey,
+  OPENAI_TRANSCRIPT,
+  openAiTranscriptKey,
+} from "../transcript-components.js";
 
 type ProcessAudioPayload = {
   type: "process_audio";
@@ -51,8 +59,10 @@ export async function processAudioFile(
       assetId: payload.assetId,
       bookId: payload.bookId,
     } as unknown as Record<string, unknown>);
-    if (getApiKey("ELEVENLABS_API_KEY")) {
-      await queue.enqueue(`transcribe-audio-${payload.assetId}-${Date.now()}`, {
+    const audioHash = await fileObjectHash(engine, payload.assetId, payload.sourceFilename);
+    if (audioHash && getApiKey("ELEVENLABS_API_KEY")) {
+      const componentKey = elevenLabsTranscriptKey(audioHash, DEFAULT_TRANSCRIPT_OPTIONS);
+      await queue.enqueue(sidecarJobKey(ELEVENLABS_TRANSCRIPT, componentKey), {
         type: "transcribe",
         audioPath: payload.audioPath,
         audioFilename: payload.sourceFilename,
@@ -61,15 +71,18 @@ export async function processAudioFile(
         assetId: payload.assetId,
         assetDir: payload.assetDir,
         bookId: payload.bookId,
+        componentKey,
       } as unknown as Record<string, unknown>);
-    } else if (getApiKey("OPENAI_API_KEY")) {
-      await queue.enqueue(`transcribe-audio-${payload.assetId}-${Date.now()}`, {
+    } else if (audioHash && getApiKey("OPENAI_API_KEY")) {
+      const componentKey = openAiTranscriptKey(audioHash);
+      await queue.enqueue(sidecarJobKey(OPENAI_TRANSCRIPT, componentKey), {
         type: "transcribe_video_audio",
         videoPath: payload.audioPath,
         sourceFilename: payload.sourceFilename,
         assetId: payload.assetId,
         assetDir: payload.assetDir,
         bookId: payload.bookId,
+        componentKey,
       } as unknown as Record<string, unknown>);
     }
   }

@@ -567,6 +567,7 @@ import {
   transcribeClipChoices,
   transcribeEstimateView,
   transcribeLanguageOverride,
+  transcribeRequestOutcome,
   transcribeToolArgs,
   transcribeValidation,
 } from '@/videobook/transcribe-review'
@@ -3454,6 +3455,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     artifactId: string
     insight: MediaInsightKind
     since: number
+    jobId?: number | null
     hadInsight: boolean
   }): Promise<MediaInsightWatchStep> => {
     const deadline = Date.now() + mediaInsightWatchTimeoutMs
@@ -3499,6 +3501,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         insight: params.insight,
         artifactId: params.artifactId,
         since: params.since,
+        jobId: params.jobId,
         hasInsight: assetHasInsight(asset, params.insight),
         hadInsight: params.hadInsight,
         jobs: nextJobs,
@@ -8581,14 +8584,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ...mediaInsightRunningPatch('transcript', true),
       error: null,
     })
+    let outcome: ReturnType<typeof transcribeRequestOutcome>
     try {
-      await call('transcribe', transcribeToolArgs({
+      outcome = transcribeRequestOutcome(await call('transcribe', transcribeToolArgs({
         bookId,
         assetId,
         languageCode,
         diarize: action.diarize,
         tagAudioEvents: action.tagAudioEvents,
-      }), { chat })
+      }), { chat }))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       updateMediaInsightWork(assetId, {
@@ -8605,6 +8609,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     reviewChat(chat, false, () => setPendingChatAction(null))
     const address = commandMentionAssets.find((asset) => asset.artifactId === assetId)?.cellAddress
     const label = address ? `@${address}` : assetById.get(assetId)?.label ?? assetId
+    if (outcome.kind === 'cached') {
+      updateMediaInsightWork(assetId, { ...mediaInsightRunningPatch('transcript', false), error: null })
+      const message = `${label} already has this transcript`
+      presentChat(chat, () => setNotice(message))
+      return { ok: true, message, nextInput: '' }
+    }
     const message = `Transcription queued for ${label}`
     presentChat(chat, () => setNotice(message))
     if (notebookId) {
@@ -8614,6 +8624,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         artifactId: assetId,
         insight: 'transcript',
         since,
+        jobId: outcome.jobId,
         hadInsight,
       }).then((step) => {
         updateMediaInsightWork(assetId, {

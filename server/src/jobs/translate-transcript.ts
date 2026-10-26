@@ -1,23 +1,17 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
-import { requireApiKey } from "../api-key.js";
-import { buildIntelligenceResponses } from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
-import { parseSegments } from "../remotion/subtitles/segments.js";
-import {
-  iso1FromIso3,
-  readLanguageCode,
-  sidecarMatchesSource,
-  translatedTranscriptFilename,
-  translateTranscript,
-} from "./_translate-transcript.js";
+import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
+import { TIMED_TRANSCRIPT_FILE } from "../transcript-projection.js";
+import { iso1FromIso3, readLanguageCode } from "./_translate-transcript.js";
 
 type TranslateTranscriptPayload = {
   type: "translate_transcript";
   assetId: string;
   bookId: string;
   targetLanguage: string;
+  force?: boolean;
 };
 
 type TranslateTranscriptResult = {
@@ -43,41 +37,14 @@ export async function runTranslateTranscript(
     ctx,
     "transcribe",
     async (): Promise<TranslateTranscriptResult> => {
-      const readResult = await engine.files.read(assetId, "elevenlabs.json");
-      if (!readResult.ok) {
-        throw new Error(`No transcript for ${assetId}: ${readResult.error.message}. Transcribe the asset first.`);
-      }
-      const raw = JSON.parse(readResult.value.toString()) as unknown;
-
+      const raw = await readArtifactJson(engine, assetId, TIMED_TRANSCRIPT_FILE);
+      if (!raw) throw new Error(`No transcript for ${assetId}. Transcribe the asset first.`);
       if (iso1FromIso3(readLanguageCode(raw)) === targetLanguage) {
         return { success: true, targetLanguage, skipped: "matches-source" };
       }
-
-      const sidecarFilename = translatedTranscriptFilename(targetLanguage);
-      const existing = await engine.files.read(assetId, sidecarFilename);
-      if (existing.ok) {
-        const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
-        try {
-          const sidecar = JSON.parse(existing.value.toString()) as unknown;
-          if (sidecarMatchesSource(sidecar, sourceSegments)) {
-            return { success: true, targetLanguage, cached: true };
-          }
-        } catch {
-          // unreadable sidecar — re-translate below
-        }
-      }
-
-      const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
-      const sidecar = await translateTranscript(raw, targetLanguage, responses, ctx.signal);
-
-      const writeResult = await engine.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
-      );
-      if (!writeResult.ok) {
-        throw new Error(`Failed to write ${sidecarFilename}: ${writeResult.error.message}`);
-      }
-
+      const status = await ensureTranscriptTranslation(engine, assetId, targetLanguage, { force: payload.force === true, signal: ctx.signal });
+      if (status === "cached") return { success: true, targetLanguage, cached: true };
       await engine.history.recordOperation("translate_transcript", assetId, { targetLanguage });
-
       return { success: true, targetLanguage };
     },
   );

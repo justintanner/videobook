@@ -20,6 +20,7 @@ type TranscribePayload = {
   assetId: string;
   assetDir: string;
   bookId: string;
+  force?: boolean;
 };
 
 export function registerTranscribeJob(engine: Engine): void {
@@ -31,6 +32,7 @@ export function registerTranscribeJob(engine: Engine): void {
       languageCode,
       assetId,
       bookId,
+      force,
     } = payload as TranscribePayload;
 
     const result = await withLocalLease(
@@ -39,20 +41,22 @@ export function registerTranscribeJob(engine: Engine): void {
       ctx,
       "transcribe",
       async () => {
-        await transcribeAssetToElevenLabsJson(engine, assetId, audioFilename, {
+        const { cached } = await transcribeAssetToElevenLabsJson(engine, assetId, audioFilename, {
           tagAudioEvents,
           diarize,
           ...(languageCode ? { languageCode } : {}),
-        });
-        return { success: true, provider: "elevenlabs" as const };
+        }, { force: force === true });
+        return { success: true, provider: "elevenlabs" as const, cached };
       },
       { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
     );
-    await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
-      type: "semantic_index",
-      assetId,
-      bookId,
-    } as unknown as Record<string, unknown>);
+    if (!result.cached) {
+      await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
+        type: "semantic_index",
+        assetId,
+        bookId,
+      } as unknown as Record<string, unknown>);
+    }
     try {
       await enqueueLazyAnalysisIfSlotted(engine, bookId, assetId);
     } catch (err) {

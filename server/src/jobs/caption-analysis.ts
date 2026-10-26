@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Engine } from "videobook-engine";
-import { getApiKey, requireApiKey } from "../api-key.js";
+import { getApiKey } from "../api-key.js";
 import { runAnalysisComponentJob } from "../analysis-components.js";
 import {
   CAPTION_REGIONS,
@@ -27,11 +27,14 @@ import { captionMediaSource } from "../captions/source.js";
 import { analyzeVocalTiming } from "../captions/vocal.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { logger } from "../logger.js";
-import { buildIntelligenceResponses, INTELLIGENCE_MODEL } from "../openai-intelligence.js";
+import { INTELLIGENCE_MODEL } from "../openai-intelligence.js";
 import { registerJobHandler } from "../queue.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
+import { audioObjectHash } from "../transcript-components.js";
 import { requestElevenLabsTranscript, writeElevenLabsTranscript } from "./_transcribe.js";
-import { sidecarMatchesSource, translatedTranscriptFilename, translateTranscript } from "./_translate-transcript.js";
+import { translatedTranscriptFilename } from "./_translate-transcript.js";
+import { fileObjectHash } from "../analysis-sidecars.js";
+import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
 
 const TRANSCRIBE_OPTIONS = { tagAudioEvents: true, diarize: true } as const;
 
@@ -93,10 +96,12 @@ async function runTranscript(engine: Engine, payload: TranscriptPayload, signal:
     return { transcriptHash: source.transcriptFile.objectHash, reused: true };
   }
   const audio = await sourceAudio(engine, source, signal);
+  const audioHash = await audioObjectHash(engine, source.artifactId, audio);
   const response = await requestElevenLabsTranscript(engine, source.artifactId, audio, TRANSCRIBE_OPTIONS);
   signal.throwIfAborted();
   await currentSource(engine, payload);
-  await writeElevenLabsTranscript(engine, source.artifactId, response, TRANSCRIBE_OPTIONS);
+  if (await audioObjectHash(engine, source.artifactId, audio) !== audioHash) throw new Error(STALE_SOURCE);
+  await writeElevenLabsTranscript(engine, source.artifactId, response, TRANSCRIBE_OPTIONS, audioHash);
   const written = await currentSource(engine, payload);
   await continuePreparation(engine, payload);
   return { transcriptHash: written.transcriptFile?.objectHash ?? null, reused: false };
@@ -174,39 +179,17 @@ async function runRegions(engine: Engine, payload: ComponentPayload, signal: Abo
 
 type SegmentsInput = Parameters<typeof parseSegments>[0];
 
-async function readJson(engine: Engine, artifactId: string, name: string): Promise<unknown> {
-  const read = await engine.files.read(artifactId, name);
-  if (!read.ok) return null;
-  try {
-    return JSON.parse(read.value.toString()) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-async function translatedSidecar(engine: Engine, source: CaptionMediaSource, language: string, force: boolean, signal: AbortSignal): Promise<unknown> {
-  const raw = await readJson(engine, source.artifactId, "elevenlabs.json");
-  if (!raw) throw new Error(STALE_SOURCE);
-  const filename = translatedTranscriptFilename(language);
-  const existing = force ? null : await readJson(engine, source.artifactId, filename);
-  if (existing && sidecarMatchesSource(existing, parseSegments(raw as SegmentsInput))) return existing;
-  const sidecar = await translateTranscript(raw, language, buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY")), signal);
-  signal.throwIfAborted();
-  await unchangedSource(engine, source.artifactId, source.mediaHash);
-  const written = await engine.files.write(source.artifactId, filename, JSON.stringify(sidecar, null, 2));
-  if (!written.ok) throw new Error(written.error.message);
-  return sidecar;
-}
-
 async function translation(engine: Engine, source: CaptionMediaSource, language: string, force: boolean, signal: AbortSignal): Promise<CaptionTranslation> {
-  const sidecar = await translatedSidecar(engine, source, language, force, signal);
+  await ensureTranscriptTranslation(engine, source.artifactId, language, { force, signal });
+  await unchangedSource(engine, source.artifactId, source.mediaHash);
   const filename = translatedTranscriptFilename(language);
-  const manifest = await engine.files.manifest(source.artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
-  const file = manifest.value.files.find((entry) => entry.name === filename);
-  if (!file) throw new Error("The translated subtitles were not saved.");
+  const [sidecar, fileHash] = await Promise.all([
+    readArtifactJson(engine, source.artifactId, filename),
+    fileObjectHash(engine, source.artifactId, filename),
+  ]);
+  if (!sidecar || !fileHash) throw new Error("The translated subtitles were not saved.");
   const wordCount = parseSegments(sidecar as SegmentsInput).reduce((count, segment) => count + segment.words.length, 0);
-  return { file: filename, fileHash: file.objectHash, language, wordCount };
+  return { file: filename, fileHash, language, wordCount };
 }
 
 async function runTranslation(engine: Engine, payload: TranslationPayload, signal: AbortSignal) {

@@ -11,6 +11,7 @@ function job(
   partial: Partial<MediaInsightWatchJob> & Pick<MediaInsightWatchJob, 'state'>,
 ): MediaInsightWatchJob {
   return {
+    id: 1,
     artifactId,
     type: 'transcribe',
     enqueuedAt: since + 10,
@@ -61,6 +62,27 @@ describe('mediaInsightWatchStep', () => {
       hasInsight: true,
       hadInsight: true,
       jobs: [job({ state: 'done', enqueuedAt: since - 1 })],
+    })).toEqual({ kind: 'continue' })
+  })
+
+  it('follows the job the server named even when it started before the request', () => {
+    expect(mediaInsightWatchStep({
+      insight: 'transcript',
+      artifactId,
+      since,
+      jobId: 7,
+      hasInsight: true,
+      hadInsight: true,
+      jobs: [job({ id: 7, state: 'done', enqueuedAt: since - 5 }), job({ id: 8, state: 'failed', error: { message: 'other run' } })],
+    })).toEqual({ kind: 'ready' })
+    expect(mediaInsightWatchStep({
+      insight: 'transcript',
+      artifactId,
+      since,
+      jobId: 7,
+      hasInsight: true,
+      hadInsight: true,
+      jobs: [job({ id: 7, state: 'running', enqueuedAt: since - 5 })],
     })).toEqual({ kind: 'continue' })
   })
 

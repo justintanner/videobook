@@ -39,7 +39,8 @@ export interface AnalysisComponentState<T> {
 }
 
 const ACTIVE_JOB_STATES = new Set(["queued", "running", "completing"]);
-const RETAINED_KEYS_PER_COMPONENT = 3;
+const RETAINED_SOURCES_PER_COMPONENT = 3;
+const RETAINED_KEYS_PER_COMPONENT = 12;
 const JOB_SCAN_LIMIT = 500;
 
 function canonical(value: unknown): unknown {
@@ -66,7 +67,13 @@ function indexKey(artifactId: string): string {
   return `analysis.index.${artifactId}`;
 }
 
-type AnalysisIndex = Record<string, Array<{ key: string; at: number }>>;
+interface AnalysisIndexEntry {
+  key: string;
+  at: number;
+  sourceHash?: string;
+}
+
+type AnalysisIndex = Record<string, AnalysisIndexEntry[]>;
 
 function readIndex(engine: Engine, artifactId: string): AnalysisIndex {
   const value = engine.settings.get<AnalysisIndex>(indexKey(artifactId));
@@ -93,12 +100,26 @@ export function readAnalysisComponent<T>(
   return parsed.success ? { ...raw, value: parsed.data } : null;
 }
 
-function retain(engine: Engine, artifactId: string, component: string, key: string): void {
+function recentSources(entries: readonly AnalysisIndexEntry[]): Set<string> {
+  const sources: string[] = [];
+  for (const entry of [...entries].reverse()) {
+    const source = entry.sourceHash ?? entry.key;
+    if (!sources.includes(source)) sources.push(source);
+  }
+  return new Set(sources.slice(0, RETAINED_SOURCES_PER_COMPONENT));
+}
+
+function retainedAnalysisEntries(entries: readonly AnalysisIndexEntry[]): AnalysisIndexEntry[] {
+  const sources = recentSources(entries);
+  return entries.filter((entry) => sources.has(entry.sourceHash ?? entry.key)).slice(-RETAINED_KEYS_PER_COMPONENT);
+}
+
+function retain(engine: Engine, artifactId: string, component: string, key: string, sourceHash: string): void {
   const index = readIndex(engine, artifactId);
-  const entries = (index[component] ?? []).filter((entry) => entry.key !== key);
-  entries.push({ key, at: Date.now() });
-  const kept = entries.slice(-RETAINED_KEYS_PER_COMPONENT);
-  for (const dropped of entries.slice(0, entries.length - kept.length)) engine.settings.delete(settingsKey(component, dropped.key));
+  const entries = [...(index[component] ?? []).filter((entry) => entry.key !== key), { key, at: Date.now(), sourceHash }];
+  const kept = retainedAnalysisEntries(entries);
+  const keptKeys = new Set(kept.map((entry) => entry.key));
+  for (const dropped of entries) if (!keptKeys.has(dropped.key)) engine.settings.delete(settingsKey(component, dropped.key));
   const stored = engine.settings.set(indexKey(artifactId), { ...index, [component]: kept });
   if (!stored.ok) throw new Error(stored.error.message);
 }
@@ -106,7 +127,11 @@ function retain(engine: Engine, artifactId: string, component: string, key: stri
 export function writeAnalysisComponent<T>(engine: Engine, stored: StoredAnalysisComponent<T>): void {
   const written = engine.settings.set(settingsKey(stored.component, stored.key), stored);
   if (!written.ok) throw new Error(written.error.message);
-  retain(engine, stored.artifactId, stored.component, stored.key);
+  retain(engine, stored.artifactId, stored.component, stored.key, stored.sourceHash);
+}
+
+export function hasAnalysisRecords(engine: Engine, artifactId: string, component: string): boolean {
+  return (readIndex(engine, artifactId)[component] ?? []).length > 0;
 }
 
 export function forgetAnalysisComponents(engine: Engine, artifactId: string): void {
@@ -127,7 +152,7 @@ export function isActiveJob(job: Job | null): boolean {
   return Boolean(job && ACTIVE_JOB_STATES.has(job.state));
 }
 
-function latestComponentJob(engine: Engine, spec: AnalysisComponentSpec, key: string): Job | null {
+export function latestComponentJob(engine: Engine, spec: AnalysisComponentSpec, key: string): Job | null {
   return latestJobWhere(engine, spec.jobType, (job) => job.payload.componentKey === key);
 }
 

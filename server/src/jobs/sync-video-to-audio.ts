@@ -58,7 +58,7 @@ type InstalledAudioSync = {
 
 type PreparedAudioSyncTranscript = {
   transcript: unknown;
-  replacement: ElevenLabsSpeechToTextResponse | null;
+  replacement: { response: ElevenLabsSpeechToTextResponse; audioHash: string } | null;
 };
 
 export function resolveSyncVideoToAudioAnchors(
@@ -189,7 +189,7 @@ export async function prepareAudioSyncTranscript(
   if (!hasTimedSpeechWords(replacement)) {
     throw new Error(`Auto-transcription for ${assetId} did not return timed speech words`);
   }
-  return { transcript: replacement, replacement };
+  return { transcript: replacement, replacement: { response: replacement, audioHash: audioFile.objectHash } };
 }
 
 async function deleteIfPresent(
@@ -402,8 +402,9 @@ export function registerSyncVideoToAudioJob(engine: Engine): void {
             await writeElevenLabsTranscript(
               engine,
               assetId,
-              preparedTranscript.replacement,
+              preparedTranscript.replacement.response,
               AUTO_TRANSCRIBE_OPTIONS,
+              preparedTranscript.replacement.audioHash,
             );
           }
           for (const filename of STALE_VISUAL_DERIVATIVES) {

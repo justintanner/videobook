@@ -84,7 +84,7 @@ describe("transcribe tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.provider).toBe("openai");
-    expect(parsed.status).toBe("enqueued");
+    expect(parsed.status).toBe("queued");
   });
 
   it("returns error for nonexistent asset", async () => {
@@ -143,7 +143,7 @@ describe("transcribe tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.status).toBe("enqueued");
+    expect(parsed.status).toBe("queued");
     expect(parsed.asset_id).toBe(asset.value.artifactId);
     expect(parsed.job_id).toBeDefined();
   });

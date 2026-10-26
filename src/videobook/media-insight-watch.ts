@@ -7,6 +7,7 @@ const mediaInsightJobTypes: Record<MediaInsightKind, readonly string[]> = {
 }
 
 export type MediaInsightWatchJob = {
+  id: number
   artifactId: string | null
   type: string
   state: string
@@ -25,23 +26,34 @@ function fallbackFailureMessage(insight: MediaInsightKind): string {
     : 'Video analysis failed'
 }
 
+function isRequestedRun(job: MediaInsightWatchJob, input: {
+  insight: MediaInsightKind
+  artifactId: string
+  since: number
+  jobId?: number | null
+}): boolean {
+  if (input.jobId != null) return job.id === input.jobId
+  return job.artifactId === input.artifactId
+    && mediaInsightJobTypes[input.insight].includes(job.type)
+    && job.enqueuedAt >= input.since
+}
+
 /**
- * Decide whether an enqueued transcribe / analyze job has settled. Jobs older
- * than `since` are ignored so a previous run's completed job never resolves a
- * fresh request.
+ * Decide whether an enqueued transcribe / analyze job has settled. When the
+ * server names the job that serves the request (a shared run may predate it),
+ * only that job counts; otherwise jobs older than `since` are ignored so a
+ * previous run's completed job never resolves a fresh request.
  */
 export function mediaInsightWatchStep(input: {
   insight: MediaInsightKind
   artifactId: string
   since: number
+  jobId?: number | null
   hasInsight: boolean
   hadInsight: boolean
   jobs: readonly MediaInsightWatchJob[]
 }): MediaInsightWatchStep {
-  const runs = input.jobs.filter((job) =>
-    job.artifactId === input.artifactId
-    && mediaInsightJobTypes[input.insight].includes(job.type)
-    && job.enqueuedAt >= input.since)
+  const runs = input.jobs.filter((job) => isRequestedRun(job, input))
   const failed = runs.find((job) =>
     job.state === 'failed' || job.state === 'aborted')
   if (failed) {

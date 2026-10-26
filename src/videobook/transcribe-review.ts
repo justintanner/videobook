@@ -86,6 +86,18 @@ export function transcribeToolArgs(input: {
   }
 }
 
+export type TranscribeRequestOutcome =
+  | { kind: 'cached' }
+  | { kind: 'queued'; jobId: number | null }
+
+export function transcribeRequestOutcome(value: unknown): TranscribeRequestOutcome {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+  if (record?.status === 'cached') return { kind: 'cached' }
+  return { kind: 'queued', jobId: typeof record?.job_id === 'number' ? record.job_id : null }
+}
+
 export function transcribeEstimateView(estimate: Record<string, unknown> | null): {
   usd: number | null
   unavailable: boolean

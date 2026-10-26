@@ -57,6 +57,7 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
 import type { VideoProxyAssessment } from "../video-proxy.js";
+import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey } from "../transcript-components.js";
 import {
   assetDuration,
   assetMediaUrls,
@@ -1446,6 +1447,7 @@ export async function reconcileProjectWork(
       assetId: action.assetId,
       assetDir: action.assetDir,
       bookId: book_id,
+      componentKey: elevenLabsTranscriptKey(action.audioHash, DEFAULT_TRANSCRIPT_OPTIONS),
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
   }
@@ -1459,6 +1461,7 @@ export async function reconcileProjectWork(
       bookId: book_id,
       videoFilename: action.videoFilename,
       identity: action.revision,
+      audioHash: action.audioHash,
       hasOpenAiKey: true,
       hasElevenLabsKey: false,
     });
@@ -1632,6 +1635,7 @@ type TranscribeAction = {
   assetDir: string;
   audioPath: string;
   audioFilename: string;
+  audioHash: string;
 };
 
 async function findAutoTranscribeActions(
@@ -1676,6 +1680,7 @@ async function findAutoTranscribeActions(
         assetDir: manifest.path,
         audioPath: join(manifest.path, audioFile.name),
         audioFilename: audioFile.name,
+        audioHash: audioFile.objectHash,
       };
     })
   );
@@ -1687,6 +1692,7 @@ type PlainTranscriptAction = {
   assetDir: string;
   videoFilename: string;
   revision: string;
+  audioHash: string;
 };
 
 async function findAutoPlainTranscriptActions(
@@ -1733,6 +1739,7 @@ async function findAutoPlainTranscriptActions(
         assetDir: manifest.path,
         videoFilename: videoFile.name,
         revision,
+        audioHash: audioFile.objectHash,
       };
     })
   );

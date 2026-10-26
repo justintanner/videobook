@@ -20,6 +20,7 @@ import { readAssetTranscript } from "../transcript-projection.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import { frameVocabularyFor, MAX_AUTOMATIC_TAGS } from "../tag-vocabulary.js";
+import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey } from "../transcript-components.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -331,5 +332,6 @@ async function maybeEnqueueAutoTranscribe(
     assetId,
     assetDir,
     bookId,
+    componentKey: elevenLabsTranscriptKey(audioFile.objectHash, DEFAULT_TRANSCRIPT_OPTIONS),
   } as unknown as Record<string, unknown>);
 }

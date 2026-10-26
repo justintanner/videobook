@@ -5,6 +5,7 @@ import {
   transcribeClipChoices,
   transcribeEstimateView,
   transcribeLanguageOverride,
+  transcribeRequestOutcome,
   transcribeToolArgs,
   transcribeValidation,
   type TranscribeAssetRef,
@@ -150,6 +151,13 @@ describe('transcribe review apply', () => {
       diarize: true,
       tagAudioEvents: true,
     })).not.toHaveProperty('language_code')
+  })
+
+  it('reads a cached transcript or the job that serves the request', () => {
+    expect(transcribeRequestOutcome({ status: 'cached', job_id: null })).toEqual({ kind: 'cached' })
+    expect(transcribeRequestOutcome({ status: 'running', job_id: 42 })).toEqual({ kind: 'queued', jobId: 42 })
+    expect(transcribeRequestOutcome({ status: 'queued' })).toEqual({ kind: 'queued', jobId: null })
+    expect(transcribeRequestOutcome(null)).toEqual({ kind: 'queued', jobId: null })
   })
 
   it('hides an estimate that the server could not price', () => {

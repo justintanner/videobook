@@ -31,6 +31,12 @@ import {
   videoProxyMetadata,
   videoProxyValidationError,
 } from "../video-proxy.js";
+import { fileObjectHash } from "../analysis-sidecars.js";
+import {
+  DEFAULT_TRANSCRIPT_OPTIONS,
+  elevenLabsTranscriptKey,
+  openAiTranscriptKey,
+} from "../transcript-components.js";
 
 type ProcessVideoPayload = {
   type: "process_video";
@@ -61,6 +67,7 @@ export type PlanVideoTranscriptJobsInput = {
   bookId: string;
   videoFilename: string;
   identity: string;
+  audioHash: string | null;
   hasOpenAiKey: boolean;
   hasElevenLabsKey: boolean;
 };
@@ -73,6 +80,7 @@ type OpenAiVideoTranscriptPayload = {
   bookId: string;
   sourceFilename: "original.mp3";
   mediaRevision: string;
+  componentKey?: string;
 };
 
 type ElevenLabsVideoTranscriptPayload = {
@@ -84,6 +92,7 @@ type ElevenLabsVideoTranscriptPayload = {
   assetId: string;
   assetDir: string;
   bookId: string;
+  componentKey?: string;
 };
 
 type VideoTranscriptJobPlan =
@@ -107,6 +116,7 @@ export function planVideoTranscriptJobs(
         bookId: input.bookId,
         sourceFilename: "original.mp3",
         mediaRevision: input.identity,
+        ...(input.audioHash ? { componentKey: openAiTranscriptKey(input.audioHash) } : {}),
       },
     });
   }
@@ -122,6 +132,7 @@ export function planVideoTranscriptJobs(
         assetId: input.assetId,
         assetDir: input.assetDir,
         bookId: input.bookId,
+        ...(input.audioHash ? { componentKey: elevenLabsTranscriptKey(input.audioHash, DEFAULT_TRANSCRIPT_OPTIONS) } : {}),
       },
     });
   }
@@ -553,6 +564,7 @@ async function processVideoSnapshot(
       bookId,
       videoFilename: activeSourcePath,
       identity: await videoTranscriptIdentity(engine, assetId, activeSourcePath),
+      audioHash: await fileObjectHash(engine, assetId, "original.mp3"),
       hasOpenAiKey: Boolean(getApiKey("OPENAI_API_KEY")),
       hasElevenLabsKey: Boolean(getApiKey("ELEVENLABS_API_KEY")),
     });

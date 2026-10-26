@@ -15,6 +15,8 @@ import type {
   TranscriptSegmentKind,
 } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
+import { fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
+import { audioObjectHash, hasCurrentElevenLabsTranscript, recordElevenLabsTranscript } from "../transcript-components.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
@@ -60,14 +62,23 @@ export async function transcribeAssetToElevenLabsJson(
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
-): Promise<void> {
+  run: { force?: boolean } = {},
+): Promise<{ cached: boolean }> {
+  const audioHash = await audioObjectHash(engine, assetId, audioFilename);
+  if (!run.force && await hasCurrentElevenLabsTranscript(engine, { artifactId: assetId, audioHash, options })) {
+    return { cached: true };
+  }
   const response = await requestElevenLabsTranscript(
     engine,
     assetId,
     audioFilename,
     options,
   );
-  await writeElevenLabsTranscript(engine, assetId, response, options);
+  if (await fileObjectHash(engine, assetId, audioFilename) !== audioHash) {
+    throw new Error(STALE_ANALYSIS_INPUTS);
+  }
+  await writeElevenLabsTranscript(engine, assetId, response, options, audioHash);
+  return { cached: false };
 }
 
 export async function requestElevenLabsTranscript(
@@ -101,6 +112,7 @@ export async function writeElevenLabsTranscript(
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
+  audioHash: string,
 ): Promise<void> {
   const transcriptionStr = JSON.stringify(response, null, 2);
   const writeResult = await engine.files.write(assetId, "elevenlabs.json", transcriptionStr
@@ -114,6 +126,7 @@ export async function writeElevenLabsTranscript(
       ...(options.languageCode ? { language_code: options.languageCode } : {}),
     }
   );
+  await recordElevenLabsTranscript(engine, { artifactId: assetId, audioHash, options });
 }
 
 type TimedTranscriptWord = ElevenLabsTranscriptWord & {

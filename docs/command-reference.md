@@ -220,8 +220,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
-- `transcribe` — Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text.
-- `translate_subtitles` — Translate an asset's transcript subtitles into another language for renders with that subtitle_language; cached per language until the asset is re-transcribed.
+- `transcribe` — Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text. Returns status cached when the current audio already has a transcript with these settings; a repeated or concurrent request joins the running job.
+- `translate_subtitles` — Translate an asset's transcript subtitles into another language for renders with that subtitle_language. Returns status cached when the current transcript already has that translation; a repeated or concurrent request joins the running job.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.
 - `update_entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity

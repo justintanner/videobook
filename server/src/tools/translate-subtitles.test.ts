@@ -42,10 +42,11 @@ describe("translate_subtitles tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when OPENAI_API_KEY is not set", async () => {
+  it("returns error when OPENAI_API_KEY is not set and the translation has to run", async () => {
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create({ kind: "video", label: "needs-key" });
     if (!asset.ok) throw new Error(asset.error.message);
+    await fs.files.write(asset.value.artifactId, "elevenlabs.json", JSON.stringify({ words: [] }));
 
     const result = await client.callTool({
       name: "translate_subtitles",
@@ -105,8 +106,8 @@ describe("translate_subtitles tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.status).toBe("enqueued");
+    expect(parsed.status).toBe("queued");
     expect(parsed.language).toBe("en");
-    expect(parsed.job_id).toContain(`translate-${asset.value.artifactId}-en`);
+    expect(parsed.job_id).toEqual(expect.any(Number));
   });
 });
