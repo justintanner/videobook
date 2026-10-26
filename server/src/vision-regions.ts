@@ -10,8 +10,8 @@ import type { KeywordOccupiedRegion } from "./remotion/keyword-placement.js";
 /**
  * Shared "what must an overlay not cover" vision pass: send labelled frames to
  * the intelligence model and get back face/text/graphic boxes per frame,
- * normalized to 0..1. Used by keyword-graphics placement (per-cue frames) and
- * watermark placement (evenly sampled frames).
+ * normalized to 0..1. Used by the shared frame-regions cache that captions,
+ * keyword-graphics placement and watermark placement read from.
  */
 
 const OCCUPIED_REGIONS_JSON_SCHEMA = {

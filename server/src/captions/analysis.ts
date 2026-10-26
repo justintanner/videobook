@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Engine, Job } from "videobook-engine";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
+import { storeFrameRegions } from "../frame-regions.js";
 import type { AnalysisComponentSpec, AnalysisComponentState, AnalysisComponentStatus } from "../analysis-components.js";
 import {
   analysisComponentKey,
@@ -418,10 +419,12 @@ async function importLegacyAliveAnalysis(engine: Engine, source: CaptionMediaSou
   }
   const regionsKey = regionsComponentKey(source.mediaHash, transcript.hash);
   if (legacy.regionsAnalyzed && !readAnalysisComponent(engine, CAPTION_REGIONS, regionsKey, regionsValueSchema)) {
+    const regions = regionsValueSchema.parse(legacyRegions(legacy));
     writeAnalysisComponent(engine, {
       component: CAPTION_REGIONS.component, key: regionsKey, artifactId: source.artifactId, sourceHash: source.mediaHash,
-      provenance: legacyProvenance("openai"), value: regionsValueSchema.parse(legacyRegions(legacy)),
+      provenance: legacyProvenance("openai"), value: regions,
     });
+    storeFrameRegions(engine, source.artifactId, source.mediaHash, regions.frames);
   }
   return true;
 }

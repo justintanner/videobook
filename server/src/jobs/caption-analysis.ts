@@ -20,8 +20,8 @@ import {
   vocalValueSchema,
 } from "../captions/analysis.js";
 import type { CaptionRegions, CaptionTranscript, CaptionTranslation } from "../captions/analysis.js";
-import { detectFrameRegions, extractFrames } from "../captions/frames.js";
-import type { FrameRegion } from "../captions/frames.js";
+import { extractFrames } from "../captions/frames.js";
+import { frameRegionsAt } from "../frame-regions.js";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
 import { analyzeVocalTiming } from "../captions/vocal.js";
@@ -120,17 +120,20 @@ async function currentKey(engine: Engine, payload: ComponentPayload, keyFor: (me
   return transcript ? keyFor(source.mediaHash, transcript.hash) : null;
 }
 
-function clampRegion(region: FrameRegion): FrameRegion {
-  const unit = (value: number) => Math.max(0, Math.min(1, value));
-  return { kind: region.kind, confidence: unit(region.confidence), x: unit(region.x), y: unit(region.y), width: unit(region.width), height: unit(region.height) };
-}
-
-async function analyzeRegions(source: CaptionMediaSource, transcript: CaptionTranscript, signal: AbortSignal): Promise<CaptionRegions> {
-  const apiKey = getApiKey("OPENAI_API_KEY");
-  if (!apiKey) throw new Error("Face and on-screen text avoidance needs OPENAI_API_KEY.");
-  const frames = await extractFrames(source.path, regionFrameRequests(transcript.words, source.durationSeconds), source.durationSeconds, signal);
-  const regions = await detectFrameRegions(frames, apiKey, signal);
-  return { frames: frames.map((frame) => ({ time: frame.time, regions: (regions.get(frame.id) ?? []).map(clampRegion) })) };
+async function analyzeRegions(engine: Engine, source: CaptionMediaSource, transcript: CaptionTranscript, signal: AbortSignal): Promise<CaptionRegions> {
+  const frames = await frameRegionsAt({
+    engine,
+    artifactId: source.artifactId,
+    mediaHash: source.mediaHash,
+    times: regionFrameRequests(transcript.words, source.durationSeconds).map((request) => request.time),
+    frames: async (times) => {
+      const requests = times.map((time, index) => ({ id: `f${index}`, time }));
+      return (await extractFrames(source.path, requests, source.durationSeconds, signal)).map((frame) => frame.buffer);
+    },
+    apiKey: getApiKey("OPENAI_API_KEY"),
+    signal,
+  });
+  return { frames };
 }
 
 async function runVocal(engine: Engine, payload: ComponentPayload, signal: AbortSignal) {
@@ -167,7 +170,7 @@ async function runRegions(engine: Engine, payload: ComponentPayload, signal: Abo
     compute: async () => {
       const { source, transcript } = await sourceTranscript(engine, payload);
       return {
-        value: await analyzeRegions(source, transcript, signal),
+        value: await analyzeRegions(engine, source, transcript, signal),
         sourceHash: source.mediaHash,
         provenance: { analyzer: "caption-regions", provider: "openai", model: INTELLIGENCE_MODEL },
       };

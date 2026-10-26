@@ -1,5 +1,6 @@
 import { isSubtitleStyle } from "../remotion/subtitles/styles.js";
 import type { Engine } from "videobook-engine";
+import { findVideoFile } from "videobook-engine";
 import sharp from "sharp";
 import { getApiKey } from "../api-key.js";
 import { sampleEvenly } from "../frame-utils.js";
@@ -23,7 +24,7 @@ import type {
   SubtitlePosition,
 } from "../remotion/subtitles/types.js";
 import { RENDER_ORIENTATIONS, readStoredRenderDefaults } from "../tools/reconcile-project-work.js";
-import { detectOccupiedRegions } from "../vision-regions.js";
+import { frameRegionsAt } from "../frame-regions.js";
 import { BADGE_ASPECT } from "../watermark-badge.js";
 import { withLockedLocalLease } from "./_lease.js";
 
@@ -44,14 +45,6 @@ export interface OsgPlacementResult {
   analysis: OsgPlacementAnalysis;
 }
 
-const SYSTEM_PROMPT = `You are a precise video-layout analyst. Each attached image is a frame sampled evenly across a video clip that will carry a small persistent corner watermark.
-
-For every frame, identify all occupied regions the watermark must not cover:
-- every visible human face, including partial faces and faces in posters or screens
-- every existing visible text block, subtitle, caption, title, logo, watermark, or graphic
-
-Return one entry for every cue_id. Coordinates use a normalized image scale from 0 to 1000: x and y are the top-left corner, followed by width and height. Use tight boxes around the visible occupied content. Do not return boxes for bodies, clothing, scenery, microphones, or ordinary objects. Return an empty occupied_regions array only when none of the listed content is visible. Never omit, rename, or duplicate a cue_id.`;
-
 function isSubtitlePosition(value: unknown): value is SubtitlePosition {
   return value === "top" || value === "middle" || value === "bottom";
 }
@@ -63,7 +56,7 @@ function isFontSizePreset(value: unknown): value is FontSizePreset {
 async function readSourceDimensions(
   engine: Engine,
   assetId: string,
-  firstFrame: Buffer,
+  firstFrame: () => Promise<Buffer>,
 ): Promise<{ width: number; height: number }> {
   const meta = await engine.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(assetId, "original");
   if (meta.ok
@@ -73,7 +66,7 @@ async function readSourceDimensions(
   }
   // Only the aspect matters for mapping onto the render canvas, so the sampled
   // frame's dimensions are an equivalent fallback.
-  const probed = await sharp(firstFrame).metadata();
+  const probed = await sharp(await firstFrame()).metadata();
   if (!probed.width || !probed.height) {
     throw new Error(`Could not determine source dimensions for ${assetId}`);
   }
@@ -124,53 +117,53 @@ interface OsgPlacementRequest {
   signal: AbortSignal;
 }
 
-/**
- * Sample frames, ask the vision model for occupied regions, and pick the
- * least-busy corner per orientation. Writes the analysis cache on success.
- * Throws when vision is unavailable (no key, no frames) so callers can fall
- * back to a coarser placement.
- */
-export async function analyzeOsgPlacement(
-  engine: Engine,
-  request: OsgPlacementRequest,
-): Promise<OsgPlacementAnalysis> {
-  const { assetId, fingerprint, userScale, badgeAspect = BADGE_ASPECT, signal } = request;
-  const apiKey = getApiKey("OPENAI_API_KEY");
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
-
+async function placementFrames(engine: Engine, assetId: string): Promise<{ sampled: string[]; mediaHash: string }> {
+  const manifest = await engine.files.manifest(assetId);
+  const mediaHash = manifest.ok ? findVideoFile(manifest.value.files)?.objectHash : null;
   const listResult = await engine.files.listSubdir(assetId, "original_frames");
   const frameFiles = listResult.ok
     ? listResult.value
         .filter((f) => f.endsWith(".jpg"))
         .sort((a, b) => parseFloat(a) - parseFloat(b))
     : [];
-  if (frameFiles.length === 0) {
+  if (frameFiles.length === 0 || !mediaHash) {
     throw new Error(`no_frames: asset ${assetId} has no original_frames to analyze`);
   }
-  const sampled = sampleEvenly(frameFiles, MAX_FRAMES);
+  return { sampled: sampleEvenly(frameFiles, MAX_FRAMES), mediaHash };
+}
 
-  const frames: Array<{ id: string; label: string; buffer: Buffer }> = [];
-  for (const file of sampled) {
-    signal.throwIfAborted();
-    const read = await engine.files.read(assetId, `original_frames/${file}`);
-    if (!read.ok) throw new Error(read.error.message);
-    frames.push({
-      id: file,
-      label: `timestamp=${parseFloat(file).toFixed(3)}s`,
-      buffer: Buffer.from(read.value),
-    });
-  }
+async function readPlacementFrame(engine: Engine, assetId: string, file: string, signal: AbortSignal): Promise<Buffer> {
+  signal.throwIfAborted();
+  const read = await engine.files.read(assetId, `original_frames/${file}`);
+  if (!read.ok) throw new Error(read.error.message);
+  return Buffer.from(read.value);
+}
 
-  const source = await readSourceDimensions(engine, assetId, frames[0].buffer);
-  const regionsByFrame = await detectOccupiedRegions(frames, {
-    apiKey,
+/**
+ * Sample frames, look up their occupied regions (asking the vision model only
+ * for frames no earlier caption, keyword or watermark pass covered), and pick
+ * the least-busy corner per orientation. Writes the analysis cache on success.
+ * Throws when there are no frames, or when uncached frames need vision and no
+ * key is set, so callers can fall back to a coarser placement.
+ */
+export async function analyzeOsgPlacement(
+  engine: Engine,
+  request: OsgPlacementRequest,
+): Promise<OsgPlacementAnalysis> {
+  const { assetId, fingerprint, userScale, badgeAspect = BADGE_ASPECT, signal } = request;
+  const { sampled, mediaHash } = await placementFrames(engine, assetId);
+  const fileAt = new Map(sampled.map((file) => [parseFloat(file), file]));
+  const frames = await frameRegionsAt({
+    engine,
+    artifactId: assetId,
+    mediaHash,
+    times: sampled.map((file) => parseFloat(file)),
+    frames: (times) => Promise.all(times.map((time) => readPlacementFrame(engine, assetId, fileAt.get(time) ?? sampled[0], signal))),
+    apiKey: getApiKey("OPENAI_API_KEY"),
     signal,
-    instructions: SYSTEM_PROMPT,
-    schemaName: "osg_placement_analysis",
-    errorLabel: "OSG placement",
-    timeout: 240_000,
   });
-  const regions = [...regionsByFrame.values()].flat();
+  const regions = frames.flatMap((frame) => frame.regions);
+  const source = await readSourceDimensions(engine, assetId, () => readPlacementFrame(engine, assetId, sampled[0], signal));
 
   const positions = await chooseWatermarkPositions(
     engine, assetId, regions, source.width, source.height, userScale, badgeAspect,

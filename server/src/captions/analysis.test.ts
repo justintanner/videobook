@@ -11,7 +11,8 @@ import { analysisComponentKey, readAnalysisComponent, writeAnalysisComponent } f
 import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
-import { pauseBookQueueForTests, queue, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
+import { missingFrameTimes, storeFrameRegions } from "../frame-regions.js";
+import { pauseBookQueueForTests, queue, resumeBookQueueForTests, waitForBookJob, waitForBookQueuesIdleForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 import { testBudget } from "../test-budget.js";
 import {
@@ -20,6 +21,9 @@ import {
   CAPTION_VOCAL,
   captionAnalysisStateFor,
   prepareCaptionAnalysis,
+  readCaptionTranscript,
+  regionFrameRequests,
+  regionsComponentKey,
   regionsValueSchema,
   vocalValueSchema,
 } from "./analysis.js";
@@ -253,6 +257,30 @@ describe("caption analysis components", () => {
     expect(prepared.state.vocal?.value?.words.map((word) => word.onset)).toEqual([0.5, 0.72, 1, 2.5]);
     expect(jobsOf(CAPTION_VOCAL.jobType, artifactId)).toHaveLength(0);
     expect(jobsOf(CAPTION_REGIONS.jobType, artifactId)).toHaveLength(0);
+    expect(missingFrameTimes(engine, source.mediaHash, [1.1])).toEqual([]);
+  });
+
+  it("builds caption regions from frames that keyword or watermark placement already analysed", async () => {
+    const artifactId = await speechVideo(TRANSCRIPT);
+    const source = await captionMediaSource(engine, artifactId);
+    const transcript = await readCaptionTranscript(engine, source);
+    if (!transcript) throw new Error("transcript missing");
+    const face = { kind: "face" as const, confidence: 0.9, x: 0.2, y: 0.1, width: 0.3, height: 0.4 };
+    const times = regionFrameRequests(transcript.words, source.durationSeconds).map((request) => request.time);
+    storeFrameRegions(engine, artifactId, source.mediaHash, times.map((time) => ({ time, regions: [face] })));
+
+    const job = await queue.enqueue(`caption-regions-${artifactId}`, {
+      type: CAPTION_REGIONS.jobType,
+      bookId,
+      sourceArtifactId: artifactId,
+      mediaHash: source.mediaHash,
+      transcriptHash: transcript.hash,
+      componentKey: regionsComponentKey(source.mediaHash, transcript.hash),
+    });
+    await waitForBookJob(bookId, job.id, testBudget(30_000));
+    const state = await analysisState(artifactId);
+    expect(state.regions).toMatchObject({ status: "ready" });
+    expect(state.regions?.value?.frames.map((frame) => frame.regions)).toEqual(times.map(() => [face]));
   });
 
   it("runs a queued legacy Alive analysis job as caption preparation", async () => {

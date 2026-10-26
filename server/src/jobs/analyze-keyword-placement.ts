@@ -1,11 +1,12 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { getApiKey } from "../api-key.js";
 import { runFfmpeg, probeVideo } from "../ffmpeg.js";
-import { detectOccupiedRegions } from "../vision-regions.js";
+import { fileObjectHash } from "../analysis-sidecars.js";
+import { frameRegionsAt } from "../frame-regions.js";
 import { writeKeywordPlacementAnalysis } from "../keyword-placement-cache.js";
 import { registerJobHandler } from "../queue.js";
 import {
@@ -47,14 +48,6 @@ interface ExtractedKeywordFrame {
 export interface AnalyzeKeywordPlacementResult {
   analysis: KeywordPlacementAnalysis;
 }
-
-const SYSTEM_PROMPT = `You are a precise video-layout analyst. Each attached image is a frame extracted at the exact midpoint of a spoken keyword.
-
-For every frame, identify all occupied regions that cinematic keyword typography must not cover:
-- every visible human face, including partial faces and faces in posters or screens
-- every existing visible text block, subtitle, caption, title, logo, watermark, or graphic
-
-Return one entry for every cue_id. Coordinates use a normalized image scale from 0 to 1000: x and y are the top-left corner, followed by width and height. Use tight boxes around the visible occupied content. Do not return boxes for bodies, clothing, scenery, microphones, or ordinary objects. Return an empty occupied_regions array only when none of the listed content is visible. Never omit, rename, or duplicate a cue_id.`;
 
 function escapeXml(value: string): string {
   return value
@@ -144,26 +137,25 @@ export async function extractKeywordFrames(
 }
 
 async function analyzeFrames(
+  engine: Engine,
+  assetId: string,
+  videoPath: string,
   frames: ExtractedKeywordFrame[],
-  apiKey: string,
   signal: AbortSignal,
-): Promise<Map<string, KeywordOccupiedRegion[]>> {
-  return detectOccupiedRegions(
-    frames.map((frame) => ({
-      id: frame.cueId,
-      label: `keyword=${frame.text}; timestamp=${frame.frameTime.toFixed(3)}s`,
-      buffer: frame.buffer,
-    })),
-    {
-      apiKey,
-      signal,
-      instructions: SYSTEM_PROMPT,
-      schemaName: "keyword_placement_analysis",
-      errorLabel: "Keyword placement",
-      timeout: 240_000,
-      maxOutputTokens: 8192,
-    },
-  );
+): Promise<KeywordOccupiedRegion[][]> {
+  const mediaHash = await fileObjectHash(engine, assetId, basename(videoPath));
+  if (!mediaHash) throw new Error(`The video for ${assetId} changed while keyword placement was being analysed. Run it again.`);
+  const byTime = new Map(frames.map((frame) => [frame.frameTime, frame.buffer]));
+  const regions = await frameRegionsAt({
+    engine,
+    artifactId: assetId,
+    mediaHash,
+    times: frames.map((frame) => frame.frameTime),
+    frames: async (times) => times.map((time) => byTime.get(time) ?? Buffer.alloc(0)),
+    apiKey: getApiKey("OPENAI_API_KEY"),
+    signal,
+  });
+  return regions.map((frame) => frame.regions);
 }
 
 async function writeContactSheetIfChanged(
@@ -195,11 +187,9 @@ export function registerAnalyzeKeywordPlacementJob(engine: Engine): void {
       "analyze",
       { durationMs: LOCK_DURATION_MS, data: { state: "analyzing-keyword-placement" } },
       async () => {
-        const apiKey = getApiKey("OPENAI_API_KEY");
-        if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
         const probe = await probeVideo(videoPath, { signal: ctx.signal });
         const extracted = await extractKeywordFrames(videoPath, graphics, probe.duration, ctx.signal);
-        const regions = await analyzeFrames(extracted.frames, apiKey, ctx.signal);
+        const regions = await analyzeFrames(engine, assetId, videoPath, extracted.frames, ctx.signal);
         const analysis: KeywordPlacementAnalysis = {
           version: KEYWORD_PLACEMENT_VERSION,
           fingerprint,
@@ -207,11 +197,11 @@ export function registerAnalyzeKeywordPlacementJob(engine: Engine): void {
           sourceHeight: probe.height,
           frameCacheFilename: KEYWORD_FRAME_CACHE_FILENAME,
           analyzedAt: new Date().toISOString(),
-          cues: extracted.frames.map((frame) => ({
+          cues: extracted.frames.map((frame, index) => ({
             cueId: frame.cueId,
             text: frame.text,
             frameTime: frame.frameTime,
-            regions: regions.get(frame.cueId) ?? [],
+            regions: regions[index] ?? [],
           })),
         };
         await writeContactSheetIfChanged(engine, assetId, extracted.contactSheet);

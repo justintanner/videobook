@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import type { AnalysisComponentState } from "../analysis-components.js";
+import { missingFrameTimes } from "../frame-regions.js";
 import { iso1FromIso3 } from "../jobs/_translate-transcript.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
@@ -137,7 +138,7 @@ function paidWork(context: Pick<DraftContext, "source" | "analysis" | "translati
   if (analysis.transcript.status === "missing" || analysis.transcript.status === "failed") {
     work.push({ component: "transcript", provider: "elevenlabs", description: `Transcribe ${clock(source.durationSeconds)} of audio with ElevenLabs`, usd: null });
   }
-  if (analysis.regions && (analysis.regions.status === "missing" || analysis.regions.status === "failed")) {
+  if (analysis.regions && regionFrames !== 0 && (analysis.regions.status === "missing" || analysis.regions.status === "failed")) {
     work.push({ component: "regions", provider: "openai", description: `Check ${regionFrames ?? "each phrase's"} frames for faces and on-screen text with OpenAI`, usd: null });
   }
   if (language !== ORIGINAL_CAPTION_LANGUAGE && (!context.translation || context.translation.status === "missing" || context.translation.status === "failed")) {
@@ -300,7 +301,9 @@ function readModel(context: DraftContext, language: string, detail: "summary" | 
 async function regionFrameCount(engine: Engine, context: DraftContext): Promise<number | null> {
   if (!context.analysis.regions || context.analysis.regions.status === "ready") return null;
   const transcript = await readCaptionTranscript(engine, context.source);
-  return transcript ? regionFrameRequests(transcript.words, context.source.durationSeconds).length : null;
+  if (!transcript) return null;
+  const times = regionFrameRequests(transcript.words, context.source.durationSeconds).map((request) => request.time);
+  return missingFrameTimes(engine, context.source.mediaHash, times).length;
 }
 
 export async function readCaptions(engine: Engine, artifactId: string, language: string, detail: "summary" | "full"): Promise<CaptionReadModel> {
