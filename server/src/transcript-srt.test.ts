@@ -59,6 +59,17 @@ describe("transcriptToSrt", () => {
     expect(cues[0]?.start).toBe(srtTimestamp(0));
   });
 
+  it("keeps Thai words whole and unspaced instead of spacing out ElevenLabs letters", () => {
+    const letters = ["ฉั", "น", "ช", "อ", "บ", "กิ", "น", "ข้", "า", "ว", "ม", "า", "ก"];
+    const srt = transcriptToSrt({
+      words: letters.map((text, index) => ({ text, start: index * 0.25, end: (index + 1) * 0.25, type: "word" })),
+    });
+    const cues = parseSrt(srt);
+    expect(cues.map((cue) => cue.text).join("")).toBe("ฉันชอบกินข้าวมาก");
+    expect(cues.some((cue) => cue.text.includes(" "))).toBe(false);
+    expect(cues[0].text).toBe("ฉันชอบ");
+  });
+
   it("errors when the sidecar has no timed speech", () => {
     expect(() => transcriptToSrt({
       text: "[music]",

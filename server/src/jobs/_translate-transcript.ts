@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isUnspacedText, joinCaptionWords, joinsWithoutSpace } from "../captions/script.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import type { Segment, Word } from "../remotion/subtitles/types.js";
 import {
@@ -8,6 +9,7 @@ import {
   type ResponsesFn,
 } from "../openai-intelligence.js";
 import { SUBTITLE_LANGUAGE_NAMES } from "../subtitle-languages.js";
+import { splitUnspacedText } from "../transcript-words.js";
 
 const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
 
@@ -15,7 +17,7 @@ type SidecarWord = {
   text: string;
   start: number;
   end: number;
-  type: "word";
+  type: "word" | "spacing";
 };
 
 type SidecarSegment = {
@@ -108,21 +110,6 @@ const SENTENCE_END_RE = /[.!?。！？…]["'"』」)]*$/;
 const MAX_SENTENCE_WORDS = 30;
 const PAUSE_GAP_SECONDS = 0.8;
 
-const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/;
-
-function joinWordTexts(texts: string[]): string {
-  let joined = "";
-  for (const text of texts) {
-    if (joined.length === 0) {
-      joined = text;
-      continue;
-    }
-    const cjkBoundary = CJK_RE.test(joined.slice(-1)) && CJK_RE.test(text.charAt(0));
-    joined += cjkBoundary ? text : ` ${text}`;
-  }
-  return joined;
-}
-
 export function groupIntoSentences(words: Word[]): SourceSentence[] {
   const sentences: SourceSentence[] = [];
   let current: Word[] = [];
@@ -133,7 +120,7 @@ export function groupIntoSentences(words: Word[]): SourceSentence[] {
       sentences.push({
         start: current[0].start,
         end: current[current.length - 1].end,
-        text: joinWordTexts(texts),
+        text: joinCaptionWords(texts),
       });
     }
     current = [];
@@ -154,25 +141,26 @@ export function groupIntoSentences(words: Word[]): SourceSentence[] {
 
 // ── Word-timing synthesis for translated text ──
 
-function tokenizeForTiming(text: string): string[] {
-  const tokens: string[] = [];
-  for (const rough of text.split(/\s+/)) {
-    if (rough.length === 0) continue;
-    // CJK targets arrive as long unspaced runs; split into bigrams so
-    // word-highlight styles still animate.
-    if (rough.length > 2 && CJK_RE.test(rough)) {
-      for (let i = 0; i < rough.length; i += 2) tokens.push(rough.slice(i, i + 2));
-    } else {
-      tokens.push(rough);
-    }
-  }
-  return tokens;
+type TimingToken = {
+  text: string;
+  spaceBefore: boolean;
+};
+
+function tokenizeForTiming(text: string): TimingToken[] {
+  return text.split(/\s+/u).filter((chunk) => chunk.length > 0).flatMap((chunk) => {
+    const parts = isUnspacedText(chunk) ? splitUnspacedText(chunk) : [chunk];
+    return parts.map((part, index) => ({ text: part, spaceBefore: index === 0 }));
+  });
+}
+
+function keepsSpace(tokens: readonly TimingToken[], index: number): boolean {
+  return index > 0 && tokens[index].spaceBefore && joinsWithoutSpace(tokens[index - 1].text, tokens[index].text);
 }
 
 export function synthesizeWordTimings(text: string, start: number, end: number): SidecarWord[] {
   const tokens = tokenizeForTiming(text);
   if (tokens.length === 0) return [];
-  const weights = tokens.map((t) => Math.max(1, t.length));
+  const weights = tokens.map((t) => Math.max(1, t.text.length));
   const totalWeight = weights.reduce((sum, w) => sum + w, 0);
   const duration = Math.max(0, end - start);
 
@@ -182,7 +170,8 @@ export function synthesizeWordTimings(text: string, start: number, end: number):
     const wordStart = start + (duration * consumed) / totalWeight;
     consumed += weights[i];
     const wordEnd = start + (duration * consumed) / totalWeight;
-    words.push({ text: tokens[i], start: wordStart, end: wordEnd, type: "word" });
+    if (keepsSpace(tokens, i)) words.push({ text: " ", start: wordStart, end: wordStart, type: "spacing" });
+    words.push({ text: tokens[i].text, start: wordStart, end: wordEnd, type: "word" });
   }
   return words;
 }

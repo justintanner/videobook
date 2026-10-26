@@ -4,7 +4,7 @@ import { captionDocumentSchema, DEFAULT_CAPTION_STYLE } from "./model.js";
 import { applyCaptionEdits, CaptionEditError, captionDocumentProblems, captionDisplayText } from "./edits.js";
 import { captionsToSubtitleFile } from "./export.js";
 import { styleFromLegacyAliveSettings } from "./legacy.js";
-import { captionCase, captionScripts, joinCaptionWords, textDirection } from "./script.js";
+import { captionCase, captionScripts, captionTextLength, joinCaptionWords, keepTranscriptSpace, textDirection } from "./script.js";
 import type { CaptionSeedWord } from "./seed.js";
 import { reseedCaptionDocument, seedCaptionDocument } from "./seed.js";
 import { activeCaptionCue, activeCaptionWord, captionCues, effectiveWordTiming } from "./timing.js";
@@ -104,6 +104,27 @@ describe("caption seeding and phrasing", () => {
     expect(joinCaptionWords(["Hello", "世界", "again"])).toBe("Hello 世界 again");
   });
 
+  it("splits a long clause into the fewest phrases of even length", () => {
+    const words = ["one", "two", "three", "four", "five", "six", "seven", "eight"].map((text, index) => word(text, index * 0.2, index * 0.2 + 0.2));
+    const document = seed(words);
+    expect(document.phrases.map((phrase) => phrase.wordIds.map((id) => document.words.find((item) => item.id === id)!.text)))
+      .toEqual([["one", "two", "three", "four"], ["five", "six", "seven", "eight"]]);
+  });
+
+  it("phrases Thai by visible width and starts a new phrase where the transcript had a space", () => {
+    const thai = seed([
+      ...["ฉัน", "ชอบ", "กิน", "ข้าว"].map((text, index) => word(text, 0.5 + index * 0.25, 0.75 + index * 0.25)),
+      word(keepTranscriptSpace("มาก", true), 1.5, 1.75),
+      ...["แมว", "นอน", "อยู่", "บน", "โต๊ะ"].map((text, index) => word(text, 2 + index * 0.2, 2.2 + index * 0.2)),
+    ]);
+    const phrases = thai.phrases.map((phrase) => joinCaptionWords(phrase.wordIds.map((id) => thai.words.find((item) => item.id === id)!.text)));
+    expect(phrases).toEqual(["ฉันชอบกินข้าวมาก", "แมวนอนอยู่บนโต๊ะ"]);
+    expect(thai.words[4]).toMatchObject({ text: "มาก", analysed: { text: "มาก " } });
+    expect(keepTranscriptSpace("Hello", true)).toBe("Hello");
+    expect(captionTextLength(["ที่", "ไม่มี", "ใคร"])).toBe(7);
+    expect(captionTextLength(["天気", "です"])).toBe(8);
+  });
+
   it("strips trailing clause punctuation for display but keeps questions", () => {
     expect(captionDisplayText(" down, ")).toBe("down");
     expect(captionDisplayText("really?")).toBe("really?");
@@ -116,16 +137,14 @@ describe("caption seeding and phrasing", () => {
     expect(document.words.map((item) => item.text)).toEqual(THAI_WORDS);
     expect(captionDocumentProblems(document)).toEqual([]);
     expect(joinCaptionWords(document.words.map((item) => item.text))).toBe(THAI_TEXT);
-    expect(document.phrases.map((phrase) => phrase.wordIds.map((id) => document.words.find((item) => item.id === id)!.text))).toEqual([
-      ["นี่", "คือ", "สวน", "สนุก"], ["ร้าง", "ที่", "ไม่มี"], ["ใคร", "มา", "นาน", "แล้ว"],
-    ]);
+    expect(document.phrases.map((phrase) => phrase.wordIds.map((id) => document.words.find((item) => item.id === id)!.text))).toEqual([THAI_WORDS]);
     expect(document.words[0]).toMatchObject({ id: "w1", start: 0.1, end: 0.25, analysed: { text: "นี่", start: 0.1, end: 0.25, onset: 0.1 } });
     expect(document.words.at(-1)!.end).toBeCloseTo(input.at(-1)!.end, 6);
     expect(activeCaptionWord(captionCues(document)[0], 0.2)?.text).toBe("นี่");
     const graphemes = [...new Intl.Segmenter("th", { granularity: "grapheme" }).segment(THAI_TEXT)];
     expect(seed(graphemes.map((part, index) => word(part.segment, index * 0.1, index * 0.1 + 0.1))).words.map((item) => item.text)).toEqual(THAI_WORDS);
     expect(normalizeCaptionWords(document)).toBe(document);
-    expect(captionsToSubtitleFile(document, "srt")).toContain("นี่คือสวนสนุก\n");
+    expect(captionsToSubtitleFile(document, "srt")).toContain(`${THAI_TEXT}\n`);
   });
 
   it("keeps provider word timings intact and respects Thai pauses, speakers and other scripts", () => {
@@ -141,11 +160,11 @@ describe("caption seeding and phrasing", () => {
       { op: "set_style", style: { fontScale: 1.35, background: "black" } },
       { op: "set_position", y: 0.68 },
     ]);
-    expect(legacy.phrases[0].wordIds).toHaveLength(7);
+    expect(legacy.phrases.map((phrase) => phrase.wordIds.length)).toEqual([18, 19]);
     const grouped = normalizeCaptionWords(legacy);
     expect(grouped.words.map((item) => item.text)).toEqual(THAI_WORDS);
     expect(grouped.words[2].id).toBe("w7");
-    expect(grouped.phrases).toHaveLength(3);
+    expect(grouped.phrases).toHaveLength(1);
     expect(grouped.style).toEqual(legacy.style);
     expect(grouped.positions).toEqual({ "9:16": 0.68 });
     expect(captionDocumentProblems(grouped)).toEqual([]);

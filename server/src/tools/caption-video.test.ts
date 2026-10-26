@@ -8,13 +8,17 @@ import { randomUUID } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { NOTEBOOK_GRID_COLUMN_COUNT, NOTEBOOK_GRID_ROW_COUNT } from "videobook-engine";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { writeAnalysisComponent } from "../analysis-components.js";
+import { CAPTION_TRANSLATION, translationComponentKey } from "../captions/analysis.js";
+import { captionsToSubtitleFile } from "../captions/export.js";
 import { LEGACY_ALIVE_SETTINGS_KEY } from "../captions/legacy.js";
 import type { CaptionDocument } from "../captions/model.js";
 import { groupPhrases } from "../captions/phrasing.js";
-import { captionsToSubtitleFile } from "../captions/export.js";
+import { joinCaptionWords } from "../captions/script.js";
 import type { CaptionReadModel } from "../captions/service.js";
 import { createEngineForTest } from "../engine.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { synthesizeWordTimings } from "../jobs/_translate-transcript.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { toolSpendsMoney } from "../paid-tools.js";
 import { pauseBookQueueForTests, queue, resumeBookQueueForTests, waitForBookQueuesIdleForTests } from "../queue.js";
@@ -37,6 +41,27 @@ function transcript(third = "burning.") {
       { text: "quiet", start: 2.5, end: 2.8, type: "word" },
     ],
   };
+}
+
+function letters(texts: readonly string[], start: number, step: number) {
+  return texts.map((text, index) => ({ text, start: start + index * step, end: start + (index + 1) * step, type: "word" }));
+}
+
+const THAI_CLAUSES = ["ฉันชอบกินข้าวมาก", "แมวนอนอยู่บนโต๊ะ"];
+
+function thaiTranscript() {
+  return {
+    language_code: "tha",
+    words: [
+      ...letters(["ฉั", "น", "ช", "อ", "บ", "กิ", "น", "ข้", "า", "ว", "ม", "า", "ก"], 0.5, 0.1),
+      { text: " ", start: 1.8, end: 1.8, type: "spacing" },
+      ...letters(["แ", "ม", "ว", "น", "อ", "น", "อ", "ยู่", "บ", "น", "โ", "ต๊", "ะ"], 2, 0.08),
+    ],
+  };
+}
+
+function phraseTexts(document: CaptionDocument): string[] {
+  return document.phrases.map((phrase) => joinCaptionWords(phrase.wordIds.map((id) => document.words.find((word) => word.id === id)!.text)));
 }
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -83,6 +108,12 @@ describe("caption_video", () => {
     await writeVideo(created.value.artifactId, await render(options.audio ?? true));
     if (options.transcript !== null) await writeTranscript(created.value.artifactId, options.transcript ?? transcript());
     return created.value.artifactId;
+  }
+
+  async function fileHashes(artifactId: string): Promise<Record<string, string>> {
+    const manifest = await engine.files.manifest(artifactId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    return Object.fromEntries(manifest.value.files.map((file) => [file.name, file.objectHash]));
   }
 
   async function call(args: Record<string, unknown>): Promise<{ error: boolean; body: Payload }> {
@@ -150,6 +181,36 @@ describe("caption_video", () => {
     expect(summary.envelope).toBeUndefined();
   });
 
+  it("captions Thai from ElevenLabs letters as whole words and keeps its clause space", async () => {
+    const assetId = await video({ transcript: thaiTranscript() });
+    const full = await ready(assetId);
+    expect(full.document.words.map((word) => word.text)).toEqual(["ฉัน", "ชอบ", "กิน", "ข้าว", "มาก", "แมว", "นอน", "อยู่", "บน", "โต๊ะ"]);
+    expect(full.document.words[1]).toMatchObject({ start: 0.7, end: 1 });
+    expect(phraseTexts(full.document)).toEqual(THAI_CLAUSES);
+    expect(full.draft).toMatchObject({ word_count: 10, phrase_count: 2 });
+    expect(captionsToSubtitleFile(full.document, "srt")).toContain(`${THAI_CLAUSES[0]}\n`);
+  });
+
+  it("seeds Thai subtitles from a translation with one phrase per Thai clause", async () => {
+    const assetId = await video();
+    const text = THAI_CLAUSES.join(" ");
+    const sidecar = { targetLanguage: "th", segments: [{ start: 0.5, end: 2.8, text, words: synthesizeWordTimings(text, 0.5, 2.8) }] };
+    const written = await engine.files.write(assetId, "elevenlabs.th.json", JSON.stringify(sidecar));
+    if (!written.ok) throw new Error(written.error.message);
+    const hashes = await fileHashes(assetId);
+    writeAnalysisComponent(engine, {
+      component: CAPTION_TRANSLATION.component,
+      key: translationComponentKey(hashes["original.mp4"], hashes["elevenlabs.json"], "th"),
+      artifactId: assetId,
+      sourceHash: hashes["original.mp4"],
+      provenance: { analyzer: "test", version: CAPTION_TRANSLATION.version, provider: null, model: null, createdAt: new Date().toISOString() },
+      value: { file: "elevenlabs.th.json", fileHash: hashes["elevenlabs.th.json"], language: "th", wordCount: 10 },
+    });
+    const full = await ready(assetId, "th");
+    expect(full.document).toMatchObject({ language: "th", wordTiming: "estimated" });
+    expect(phraseTexts(full.document)).toEqual(THAI_CLAUSES);
+  });
+
   it("saves edits against the reviewed revision and refuses stale revisions", async () => {
     const assetId = await video();
     const full = await ready(assetId);
@@ -195,7 +256,7 @@ describe("caption_video", () => {
     const key = `captions.draft.${assetId}.original`;
     expect(engine.settings.set(key, legacy).ok).toBe(true);
     const recovered = await ok({ asset_id: assetId, detail: "full" });
-    expect(recovered.draft).toMatchObject({ saved: true, word_count: 5, phrase_count: 2 });
+    expect(recovered.draft).toMatchObject({ saved: true, word_count: 5, phrase_count: 1 });
     expect(recovered.document.words.map((word) => word.text)).toEqual(["นี่", "คือ", "สวน", "สนุก", "ร้าง"]);
     expect(recovered.document.style.fontScale).toBe(1.35);
     expect(recovered.document.positions).toEqual({ "9:16": 0.68 });
@@ -208,7 +269,7 @@ describe("caption_video", () => {
     const reloaded = await ok({ asset_id: assetId, detail: "full" });
     expect(reloaded.draft.revision).toBe(saved.revision);
     expect(reloaded.document.words.find((word) => word.id === "w7")).toMatchObject({ text: "สวน!", textCorrected: true, start: 0.7, end: 1 });
-    expect(captionsToSubtitleFile(reloaded.document, "srt")).toContain("นี่คือสวน! สนุก\n");
+    expect(captionsToSubtitleFile(reloaded.document, "srt")).toContain("นี่คือสวน! สนุกร้าง\n");
   });
 
   it("flags newer analysis and reseeds while keeping corrections", async () => {

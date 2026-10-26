@@ -19,11 +19,12 @@ import { timedTranscriptFrom } from "../transcript-projection.js";
 import { parseLegacyAliveAnalysis, LEGACY_ALIVE_ANALYSIS_KEY } from "./legacy.js";
 import type { LegacyAliveAnalysis } from "./legacy.js";
 import { groupPhrases } from "./phrasing.js";
+import { keepTranscriptSpace } from "./script.js";
 import type { CaptionMediaSource } from "./source.js";
 import { captionMediaSource, TIMED_TRANSCRIPT_FILENAME } from "./source.js";
 
 export const CAPTION_TRANSCRIPT_JOB = "caption_transcript";
-export const CAPTION_VOCAL: AnalysisComponentSpec = { component: "caption-vocal", version: 1, jobType: "caption_vocal" };
+export const CAPTION_VOCAL: AnalysisComponentSpec = { component: "caption-vocal", version: 2, jobType: "caption_vocal" };
 export const CAPTION_REGIONS: AnalysisComponentSpec = { component: "caption-regions", version: 1, jobType: "caption_regions" };
 export const CAPTION_TRANSLATION: AnalysisComponentSpec = { component: "caption-translation", version: 1, jobType: "caption_translation" };
 export const CAPTION_COMPONENTS = ["transcript", "vocal", "regions", "translation"] as const;
@@ -151,7 +152,7 @@ export async function readCaptionTranscript(engine: Engine, source: CaptionMedia
   }
   const parsed = timedTranscriptFrom(raw);
   const words = parsed?.kind === "timed"
-    ? parsed.words.map((word) => ({ text: word.text.trim(), start: word.start, end: word.end, speaker: word.speakerId }))
+    ? parsed.words.map((word) => ({ text: keepTranscriptSpace(word.text, word.spaceAfter), start: word.start, end: word.end, speaker: word.speakerId }))
       .filter((word) => word.text.length > 0)
     : [];
   return { hash: source.transcriptFile.objectHash, language: parsed?.kind === "timed" ? parsed.languageCode : null, words };

@@ -81,6 +81,9 @@ describe("groupIntoSentences", () => {
 
     const latin = groupIntoSentences([word("drink", 0, 0.2), word("milk", 0.2, 0.5)]);
     expect(latin[0].text).toBe("drink milk");
+
+    const thai = groupIntoSentences([word("ฉัน", 0, 0.2), word("ชอบ", 0.2, 0.5)]);
+    expect(thai[0].text).toBe("ฉันชอบ");
   });
 
   it("splits on pauses longer than 0.8s", () => {
@@ -123,9 +126,18 @@ describe("synthesizeWordTimings", () => {
     expect(long).toBeGreaterThan(short);
   });
 
-  it("splits unspaced CJK output into bigrams so highlight animates", () => {
+  it("splits unspaced output into words so highlight follows real words", () => {
     const words = synthesizeWordTimings("来宝宝喝牛奶", 0, 3);
-    expect(words.map((w) => w.text)).toEqual(["来宝", "宝喝", "牛奶"]);
+    expect(words.map((w) => w.text)).toEqual(["来", "宝宝", "喝", "牛奶"]);
+  });
+
+  it("keeps a space between Thai clauses as a spacing entry that parseSegments splits on", () => {
+    const words = synthesizeWordTimings("ฉันชอบกินข้าวมาก แมวนอนอยู่บนโต๊ะ", 0, 3);
+    expect(words.map((w) => w.text)).toEqual(["ฉัน", "ชอบ", "กิน", "ข้าว", "มาก", " ", "แมว", "นอน", "อยู่", "บน", "โต๊ะ"]);
+    expect(words[5].type).toBe("spacing");
+    expect(synthesizeWordTimings("drink the milk", 0, 1).map((w) => w.type)).toEqual(["word", "word", "word"]);
+    const segments = parseSegments({ segments: [{ start: 0, end: 3, text: "", words }] });
+    expect(segments.map((segment) => segment.text)).toEqual(["ฉันชอบกินข้าวมาก", "แมวนอนอยู่บนโต๊ะ"]);
   });
 
   it("returns empty for blank text", () => {
@@ -171,6 +183,26 @@ describe("translateTranscript", () => {
     expect(parsed[0].words.length).toBeGreaterThan(0);
     expect(parsed[0].words[0].start).toBe(0.0);
     expect(parsed[0].words[parsed[0].words.length - 1].end).toBeCloseTo(1.2, 10);
+  });
+
+  it("sends a Thai transcript to the translator as whole clauses, one per line", async () => {
+    const letters = (texts: string[], start: number) => texts.map((text, index) => ({ text, start: start + index * 0.1, end: start + (index + 1) * 0.1, type: "word" }));
+    const thai = {
+      language_code: "tha",
+      words: [
+        ...letters(["ฉั", "น", "ช", "อ", "บ", "กิ", "น", "ข้", "า", "ว", "ม", "า", "ก"], 0),
+        { text: " ", start: 1.3, end: 1.3, type: "spacing" },
+        ...letters(["แ", "ม", "ว", "น", "อ", "น", "อ", "ยู่", "บ", "น", "โ", "ต๊", "ะ"], 1.5),
+      ],
+    };
+    const captured = { input: "" };
+    const responses = fakeResponses({ translations: ["I really like eating rice.", "The cat sleeps on the table."] }, (request) => {
+      captured.input = JSON.stringify(request.input);
+    });
+    const sidecar = await translateTranscript(thai, "en", responses);
+    expect(captured.input).toContain("ฉันชอบกินข้าวมาก");
+    expect(captured.input).toContain("แมวนอนอยู่บนโต๊ะ");
+    expect(sidecar.segments.map((segment) => [segment.start, segment.text])).toEqual([[0, "I really like eating rice."], [1.5, "The cat sleeps on the table."]]);
   });
 
   it("uses the shared intelligence defaults and a strict response schema", async () => {

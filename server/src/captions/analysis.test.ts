@@ -128,7 +128,7 @@ describe("caption analysis components", () => {
     expect(first.state.regions?.status).toBe("unavailable");
     await settled(artifactId, "vocal", "ready");
     const ready = await analysisState(artifactId);
-    expect(ready.vocal?.provenance).toMatchObject({ analyzer: "caption-vocal-dsp", version: 1, provider: null });
+    expect(ready.vocal?.provenance).toMatchObject({ analyzer: "caption-vocal-dsp", version: CAPTION_VOCAL.version, provider: null });
     expect(ready.vocal?.value?.words).toHaveLength(4);
     expect(ready.vocal?.value?.words[2].onset).toBeCloseTo(1, 1);
     expect(ready.vocal?.value?.onsets.length).toBeGreaterThan(0);

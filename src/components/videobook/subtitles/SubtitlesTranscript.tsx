@@ -206,7 +206,7 @@ export function SubtitlesTranscript(props: SubtitlesTranscriptProps) {
     <section className="subtitles-transcript" aria-label="Transcript">
       <div className="subtitles-section-head">
         <span className="confirm-section-label">Transcript</span>
-        <span className="subtitles-muted">{rows.length} phrases · click a word to play from it</span>
+        <span className="subtitles-muted">{rows.length} {rows.length === 1 ? 'phrase' : 'phrases'} · click a word to play from it</span>
       </div>
       {selectedWord && phraseOfSelected && (
         <WordEditor

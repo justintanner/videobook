@@ -1,5 +1,7 @@
 import type { ArtifactKind, ArtifactManifestFile, Engine } from "videobook-engine";
+import { joinCaptionWords } from "./captions/script.js";
 import { assessDialogQuality } from "./dialog-quality.js";
+import { joinUnspacedLetters } from "./transcript-words.js";
 
 /** Artifact kinds whose media can carry speech worth transcribing. */
 export function hasSpokenAudio(kind: ArtifactKind): boolean {
@@ -16,6 +18,7 @@ type TranscriptWord = {
   start: number;
   end: number;
   speakerId: string | null;
+  spaceAfter: boolean;
 };
 
 type AssetTranscript =
@@ -85,25 +88,31 @@ function isSpeech(word: RawTimedWord): boolean {
   return word.type !== "audio_event" && word.type !== "spacing";
 }
 
+function spokenWords(tokens: readonly RawTimedWord[]): TranscriptWord[] {
+  return tokens.flatMap((word, index) => isSpeech(word) ? [{
+    text: word.text,
+    start: word.start,
+    end: word.end,
+    speakerId: word.speaker_id ?? null,
+    spaceAfter: index + 1 < tokens.length && !isSpeech(tokens[index + 1]),
+  }] : []);
+}
+
 export function timedTranscriptFrom(raw: unknown): AssetTranscript | null {
   const transcript = firstChannelTranscript(raw);
   if (!transcript || !Array.isArray(transcript.words)) return null;
-  const speech = transcript.words.filter(isTimedWord).filter(isSpeech);
+  const tokens = joinUnspacedLetters(transcript.words.filter(isTimedWord));
+  const speech = tokens.filter(isSpeech);
   if (speech.length === 0) return { kind: "silence" };
-  const textEntries = transcript.words.filter(isTimedWord).filter((word) => word.type !== "audio_event");
+  const textEntries = tokens.filter((word) => word.type !== "audio_event");
   const reconstructedText = textEntries.some((word) => word.type === "spacing")
     ? textEntries.map((word) => word.text).join("").replace(/\s+/gu, " ").trim()
-    : speech.map((word) => word.text.trim()).join(" ");
+    : joinCaptionWords(speech.map((word) => word.text.trim()));
   return {
     kind: "timed",
     languageCode: transcript.language_code ?? null,
     text: transcript.text ?? reconstructedText,
-    words: speech.map((word) => ({
-      text: word.text,
-      start: word.start,
-      end: word.end,
-      speakerId: word.speaker_id ?? null,
-    })),
+    words: spokenWords(tokens),
   };
 }
 

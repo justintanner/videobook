@@ -90,6 +90,34 @@ describe("readAssetTranscriptSources", () => {
     expect(JSON.stringify(sources)).not.toContain("scribe-should-not-ship");
   });
 
+  it("projects ElevenLabs Thai letters as whole words", async () => {
+    const { engine, artifactId } = await createVideo();
+    const letters = (texts: string[], start: number) => texts.map((text, index) => ({ text, start: start + index * 0.25, end: start + (index + 1) * 0.25, type: "word" }));
+    const thai = {
+      language_code: "tha",
+      text: "ฉันชอบ แมว",
+      words: [
+        ...letters(["ฉั", "น", "ช", "อ", "บ"], 0),
+        { text: " ", start: 1.25, end: 1.25, type: "spacing" },
+        ...letters(["แ", "ม", "ว"], 1.5),
+      ],
+    };
+    const written = await engine.files.write(artifactId, "elevenlabs.json", JSON.stringify(thai));
+    if (!written.ok) throw new Error(written.error.message);
+    const sources = await readAssetTranscriptSources(engine, artifactId);
+    expect(sources?.elevenlabs).toEqual({
+      kind: "timed",
+      language_code: "tha",
+      text: "ฉันชอบ แมว",
+      word_count: 3,
+      words: [
+        { text: "ฉัน", start: 0, end: 0.5 },
+        { text: "ชอบ", start: 0.5, end: 1.25 },
+        { text: "แมว", start: 1.5, end: 2.25 },
+      ],
+    });
+  });
+
   it("returns elevenlabs alone when the plain sidecar is missing", async () => {
     const { engine, artifactId } = await createVideo();
     const written = await engine.files.write(

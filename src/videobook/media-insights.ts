@@ -1,3 +1,4 @@
+import { joinCaptionWords } from '../../server/src/captions/script'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 type MediaTranscriptKind = 'timed' | 'plain' | 'silence'
@@ -182,6 +183,10 @@ export function visionAnalysisDetailLabel(
 const CUE_GAP_SECONDS = 0.4
 const CUE_MAX_WORDS = 12
 
+function cueText(words: readonly TimedTranscriptWord[]): string {
+  return joinCaptionWords(words.map((item) => item.text.replace(/\s+/g, ' ').trim()))
+}
+
 function cuesFromTimedWords(
   words: readonly TimedTranscriptWord[],
 ): { start: number; text: string }[] {
@@ -195,14 +200,14 @@ function cuesFromTimedWords(
       current.length > 0
       && (gap > CUE_GAP_SECONDS || sentenceEnd || current.length >= CUE_MAX_WORDS)
     ) {
-      const text = current.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim()
+      const text = cueText(current)
       if (text) cues.push({ start: current[0]!.start, text })
       current = []
     }
     current.push(word)
   }
   if (current.length > 0) {
-    const text = current.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim()
+    const text = cueText(current)
     if (text) cues.push({ start: current[0]!.start, text })
   }
   return cues

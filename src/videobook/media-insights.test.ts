@@ -402,6 +402,14 @@ describe('cue formatting', () => {
       '0:00  Hello world\n0:05  this later',
     )
   })
+
+  it('joins Thai words without spaces and keeps the space before a Latin word', () => {
+    expect(formatTranscriptCues([
+      { text: 'ฉัน', start: 0, end: 0.5 },
+      { text: 'ชอบ', start: 0.5, end: 1 },
+      { text: 'Bangkok', start: 1, end: 1.5 },
+    ])).toBe('0:00  ฉันชอบ Bangkok')
+  })
 })
 
 describe('canDownloadTranscriptSrt', () => {

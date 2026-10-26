@@ -65,6 +65,20 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - Editing a video's picture or sound still deletes its video analysis and,
   for sound or timing edits, its transcripts; scene scans, suggestions and
   joke analyses are kept and simply stop matching the edited media.
+- Thai, Lao, Khmer, Burmese, Chinese and Japanese speech is read as words.
+  ElevenLabs returns these scripts a letter at a time; transcripts,
+  subtitles, SRT exports, the transcript card and translations now join the
+  letters into dictionary words without spaces between them, and a space in
+  Thai ends a subtitle phrase so it is never silently dropped. Subtitle
+  phrases are measured by visible width (Thai vowel and tone marks take
+  none, CJK characters take two), the seven-word cap applies only to spaced
+  scripts, and a clause too long for one phrase splits into the fewest even
+  phrases. Translations from Thai send whole clauses to the translator, and
+  translations into these languages time real words instead of character
+  pairs. Saved subtitle drafts with letter-by-letter Thai are regrouped into
+  words when they load, keeping corrections, styling and manual phrase
+  breaks. Caption vocal timing is measured again once per video for the new
+  words.
 
 - `/alive` opens the new subtitle editor. Saved Alive caption settings seed
   the editor's style, a matching saved Alive analysis is reused instead of

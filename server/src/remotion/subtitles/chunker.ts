@@ -1,3 +1,4 @@
+import { joinCaptionWords } from "../../captions/script.js";
 import type { Segment, Chunk, Word, Orientation, SubtitleStyle } from "./types.js";
 
 const CHUNK_LIMITS: Record<string, [number, number]> = {
@@ -42,7 +43,7 @@ export function chunkSegments(
         chunkStart = word.start;
       }
 
-      const potentialText = [...currentWords, word].map((w) => w.word.trim()).join(" ");
+      const potentialText = joinCaptionWords([...currentWords, word].map((w) => w.word.trim()));
       const potentialDuration = word.end - chunkStart;
       const wouldExceed =
         currentWords.length >= maxWords ||
@@ -50,7 +51,7 @@ export function chunkSegments(
         potentialDuration > MAX_DURATION;
 
       if (wouldExceed && currentWords.length > 0) {
-        const chunkText = currentWords.map((w) => w.word.trim()).join(" ");
+        const chunkText = joinCaptionWords(currentWords.map((w) => w.word.trim()));
         const chunkEnd = currentWords[currentWords.length - 1].end;
         chunked.push({
           start: chunkStart,
@@ -69,7 +70,7 @@ export function chunkSegments(
       const isLast = idx === words.length - 1;
 
       if ((isSentenceEnd || isLast) && currentWords.length > 0) {
-        const chunkText = currentWords.map((w) => w.word.trim()).join(" ");
+        const chunkText = joinCaptionWords(currentWords.map((w) => w.word.trim()));
         const chunkEnd = currentWords[currentWords.length - 1].end;
         chunked.push({
           start: chunkStart!,

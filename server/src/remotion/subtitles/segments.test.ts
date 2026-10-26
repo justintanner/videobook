@@ -248,4 +248,19 @@ describe("parseSegments", () => {
     expect(result[0].text).toBe("First");
     expect(result[1].text).toBe("Second");
   });
+
+  it("merges unspaced letters into words and starts a new segment where Thai puts a space", () => {
+    const letters = (texts: string[], start: number) => texts.map((text, index) => ({ text, start: start + index * 0.25, end: start + (index + 1) * 0.25, type: "word" }));
+    const result = parseSegments({
+      words: [
+        ...letters(["ฉั", "น", "ช", "อ", "บ"], 0),
+        { text: " ", start: 1.25, end: 1.25, type: "spacing" },
+        ...letters(["แ", "ม", "ว"], 1.5),
+        { text: " ", start: 2.25, end: 2.25, type: "spacing" },
+        { text: "Bangkok", start: 2.25, end: 2.75, type: "word" },
+      ],
+    });
+    expect(result.map((segment) => [segment.text, segment.start, segment.end])).toEqual([["ฉันชอบ", 0, 1.25], ["แมว Bangkok", 1.5, 2.75]]);
+    expect(result[0].words).toEqual([{ word: "ฉัน", start: 0, end: 0.5 }, { word: "ชอบ", start: 0.5, end: 1.25 }]);
+  });
 });

@@ -5,6 +5,7 @@ import { missingFrameTimes } from "../frame-regions.js";
 import { iso1FromIso3 } from "../jobs/_translate-transcript.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
+import type { Segment } from "../remotion/subtitles/types.js";
 import type { CaptionAnalysisState, CaptionComponentName, CaptionRegions, CaptionTranslation, CaptionVocal } from "./analysis.js";
 import {
   captionAnalysisStateFor,
@@ -21,6 +22,7 @@ import { LEGACY_ALIVE_SETTINGS_KEY, styleFromLegacyAliveSettings } from "./legac
 import type { CaptionAspect, CaptionDocument, CaptionStyle } from "./model.js";
 import { captionDocumentSchema, DEFAULT_CAPTION_STYLE, ORIGINAL_CAPTION_LANGUAGE } from "./model.js";
 import type { CaptionSeedWord } from "./seed.js";
+import { keepTranscriptSpace } from "./script.js";
 import { reseedCaptionDocument, seedCaptionDocument } from "./seed.js";
 import type { CaptionMediaSource } from "./source.js";
 import { captionMediaSource } from "./source.js";
@@ -163,19 +165,23 @@ function vocalWords(transcript: Awaited<ReturnType<typeof readCaptionTranscript>
   }));
 }
 
+function segmentWords(segment: Segment, spaceAfter: boolean): CaptionSeedWord[] {
+  return segment.words.map((word, index) => ({
+    text: keepTranscriptSpace(word.word, spaceAfter && index === segment.words.length - 1),
+    start: word.start,
+    end: word.end,
+    onset: word.start,
+    energy: 0.5,
+    speaker: null,
+  }));
+}
+
 async function translatedWords(engine: Engine, artifactId: string, translation: CaptionTranslation): Promise<CaptionSeedWord[] | null> {
   const read = await engine.files.read(artifactId, translation.file);
   if (!read.ok) return null;
   try {
     const segments = parseSegments(JSON.parse(read.value.toString()) as Parameters<typeof parseSegments>[0]);
-    return segments.flatMap((segment) => segment.words.map((word) => ({
-      text: word.word,
-      start: word.start,
-      end: word.end,
-      onset: word.start,
-      energy: 0.5,
-      speaker: null,
-    })));
+    return segments.flatMap((segment, index) => segmentWords(segment, index < segments.length - 1));
   } catch {
     return null;
   }

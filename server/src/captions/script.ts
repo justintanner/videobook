@@ -12,6 +12,8 @@ export type CaptionScript =
 
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 const RTL = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}]/u;
+const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const ZERO_WIDTH = /[\p{Mn}\p{Me}\p{Cf}]/u;
 const LETTER = /\p{L}/u;
 
 const SCRIPT_PATTERNS: ReadonlyArray<[CaptionScript, RegExp]> = [
@@ -56,12 +58,24 @@ export function captionScripts(text: string, language: string | null = null): Se
   return scripts;
 }
 
+export function joinsWithoutSpace(left: string, right: string): boolean {
+  return isUnspacedText(left.trim().at(-1) ?? "") && isUnspacedText(right.trim().charAt(0));
+}
+
+export function keepTranscriptSpace(text: string, spaceAfter: boolean): string {
+  const trimmed = text.trim();
+  return spaceAfter && isUnspacedText(trimmed.at(-1) ?? "") ? `${trimmed} ` : trimmed;
+}
+
+export function hasTranscriptSpace(text: string): boolean {
+  return /\s$/u.test(text);
+}
+
 export function joinCaptionWords(words: readonly string[]): string {
   let text = "";
   for (const word of words) {
     if (!word) continue;
-    const previous = text.at(-1) ?? "";
-    const glue = text.length > 0 && !(isUnspacedText(previous) && isUnspacedText(word.charAt(0)));
+    const glue = text.length > 0 && !joinsWithoutSpace(text, word);
     text += glue ? ` ${word}` : word;
   }
   return text;
@@ -76,6 +90,11 @@ export function captionCase(text: string, uppercase: boolean, language: string |
   }
 }
 
+function columns(char: string): number {
+  if (ZERO_WIDTH.test(char)) return 0;
+  return WIDE.test(char) ? 2 : 1;
+}
+
 export function captionTextLength(words: readonly string[]): number {
-  return [...joinCaptionWords(words)].length;
+  return [...joinCaptionWords(words)].reduce((sum, char) => sum + columns(char), 0);
 }
