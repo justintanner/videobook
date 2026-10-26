@@ -2,7 +2,8 @@ import type { Engine } from "videobook-engine";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
-import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
+import { readArtifactJson } from "../analysis-sidecars.js";
+import { ensureTranscriptTranslation } from "../transcript-translation.js";
 import { TIMED_TRANSCRIPT_FILE } from "../transcript-projection.js";
 import { iso1FromIso3, readLanguageCode } from "./_translate-transcript.js";
 

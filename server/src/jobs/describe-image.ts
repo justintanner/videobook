@@ -10,6 +10,15 @@ import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import {
+  cachedSidecarAnalysis,
+  fileObjectHash,
+  readArtifactJson,
+  recordSidecarAnalysis,
+  rememberSidecarOutput,
+  STALE_ANALYSIS_INPUTS,
+} from "../analysis-sidecars.js";
+import { IMAGE_DESCRIPTION, imageDescriptionRecord } from "../vision-components.js";
+import {
   INTELLIGENCE_MODEL,
   buildIntelligenceResponses,
   firstResponseText,
@@ -26,6 +35,7 @@ type DescribeImagePayload = {
   // needs the cached JSON, not a user-visible script asset.
   assetId?: string;
   bookId: string;
+  force?: boolean;
 };
 
 export type DescribeImageResult = {
@@ -183,61 +193,82 @@ export async function describeImageBytes(
   return parsed;
 }
 
+type DescribedSource =
+  | { kind: "source_deleted" }
+  | { kind: "described"; result: DescribeImageResult; key: string };
+
+async function describeSource(engine: Engine, payload: DescribeImagePayload): Promise<DescribedSource> {
+  const { sourceAssetId, sourceImageFilename } = payload;
+  const imageHash = await fileObjectHash(engine, sourceAssetId, sourceImageFilename);
+  if (!imageHash) throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: the file is missing`);
+  const record = imageDescriptionRecord(engine, sourceAssetId, imageHash);
+  if (!payload.force && await cachedSidecarAnalysis(engine, IMAGE_DESCRIPTION, record)) {
+    const cached = await readArtifactJson(engine, sourceAssetId, ANALYSIS_FILENAME) as DescribeImageResult;
+    return { kind: "described", result: cached, key: record.key };
+  }
+
+  const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
+  const readResult = await engine.files.read(sourceAssetId, sourceImageFilename);
+  if (!readResult.ok) {
+    throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
+  }
+  const parsed = await describeImageBytes(Buffer.from(readResult.value), mimeForFilename(sourceImageFilename), responses);
+  if (await fileObjectHash(engine, sourceAssetId, sourceImageFilename) !== imageHash) throw new Error(STALE_ANALYSIS_INPUTS);
+
+  const cacheResult = await engine.files.write(sourceAssetId, ANALYSIS_FILENAME, JSON.stringify(parsed, null, 2));
+  if (!cacheResult.ok) {
+    if (cacheResult.error.code === "NOT_FOUND") return { kind: "source_deleted" };
+    logger.warn("description-cache-failed", { assetId: sourceAssetId, error: cacheResult.error });
+  } else {
+    await recordSidecarAnalysis(engine, IMAGE_DESCRIPTION, {
+      ...record,
+      provenance: { analyzer: "image-description", provider: "openai", model: VISION_MODEL },
+    });
+  }
+
+  // The structured tags rode along with the prompt, so tagging is now a
+  // read of what this request already returned.
+  await enqueueAssetTagging(engine, sourceAssetId);
+  return { kind: "described", result: parsed, key: record.key };
+}
+
+export async function writeDescriptionScript(
+  engine: Engine,
+  scriptAssetId: string,
+  sourceAssetId: string,
+  described: { result: DescribeImageResult; key: string },
+): Promise<void> {
+  const writeResult = await engine.files.write(scriptAssetId, SCRIPT_FILENAME, formatMarkdown(described.result));
+  if (!writeResult.ok) {
+    throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
+  }
+  await engine.metadata.artifacts.write(scriptAssetId, "original", {
+      origin: "describe_image",
+      sourceAssetId,
+      model: VISION_MODEL,
+      processed_at: new Date().toISOString(),
+      variant: "full",
+    }
+  );
+  rememberSidecarOutput(engine, IMAGE_DESCRIPTION, described.key, scriptAssetId);
+}
+
 export function registerDescribeImageJob(engine: Engine): void {
   registerJobHandler("describe_image", async (payload, ctx) => {
-    const {
-      sourceAssetId,
-      sourceImageFilename,
-      assetId: scriptAssetId,
-    } = payload as DescribeImagePayload;
+    const request = payload as DescribeImagePayload;
+    const { sourceAssetId, assetId: scriptAssetId } = request;
 
     // When scriptAssetId is set, the queue wrote a pending row on it; claim
     // the lease so the wrapper finalizes it (ready/error). Analysis-only
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(engine, targetAssetId, ctx, "describe", async () => {
-      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
-
-      const readResult = await engine.files.read(sourceAssetId, sourceImageFilename);
-      if (!readResult.ok) {
-        throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
+      const described = await describeSource(engine, request);
+      if (described.kind === "source_deleted") {
+        return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
       }
-      const buffer = Buffer.from(readResult.value);
-      const mime = mimeForFilename(sourceImageFilename);
-
-      const parsed = await describeImageBytes(buffer, mime, responses);
-
-      const analysisJson = JSON.stringify(parsed, null, 2);
-      const cacheResult = await engine.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson);
-      if (!cacheResult.ok) {
-        if (cacheResult.error.code === "NOT_FOUND") {
-          return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
-        }
-        logger.warn("description-cache-failed", { assetId: sourceAssetId, error: cacheResult.error });
-      }
-
-      // The structured tags rode along with the prompt, so tagging is now a
-      // read of what this request already returned.
-      await enqueueAssetTagging(engine, sourceAssetId);
-
-      if (scriptAssetId) {
-        const markdown = formatMarkdown(parsed);
-        const writeResult = await engine.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
-        if (!writeResult.ok) {
-          throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
-        }
-
-        await engine.metadata.artifacts.write(scriptAssetId, "original", {
-            origin: "describe_image",
-            sourceAssetId,
-            model: VISION_MODEL,
-            processed_at: new Date().toISOString(),
-            variant: "full",
-          }
-        );
-      }
-
-      return { success: true, sourceAssetId, scriptAssetId, prompt: parsed.prompt };
+      if (scriptAssetId) await writeDescriptionScript(engine, scriptAssetId, sourceAssetId, described);
+      return { success: true, sourceAssetId, scriptAssetId, prompt: described.result.prompt };
     });
   });
 }

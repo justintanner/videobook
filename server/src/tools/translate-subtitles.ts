@@ -1,9 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { cachedSidecarAnalysis, requestSidecarAnalysis } from "../analysis-sidecars.js";
+import { readArtifactJson, requestSidecarAnalysis, sidecarAnalysisNeedsRun } from "../analysis-sidecars.js";
 import { iso1FromIso3, readLanguageCode } from "../jobs/_translate-transcript.js";
 import { TIMED_TRANSCRIPT_FILE } from "../transcript-projection.js";
-import { readArtifactJson, transcriptTranslationRecord, transcriptTranslationSpec } from "../transcript-translation.js";
+import { transcriptTranslationRecord, transcriptTranslationSpec } from "../transcript-translation.js";
 import type { ToolDef } from "./tool-def.js";
 import { requireArtifactKind } from "./_shared.js";
 
@@ -62,7 +62,7 @@ export function translateSubtitlesDef(engine: Engine): ToolDef {
 
       const spec = transcriptTranslationSpec(language);
       const record = transcriptTranslationRecord(engine, asset_id, transcript.objectHash, language);
-      if ((force || !await cachedSidecarAnalysis(engine, spec, record)) && !process.env.OPENAI_API_KEY) {
+      if (!process.env.OPENAI_API_KEY && await sidecarAnalysisNeedsRun(engine, spec, { ...record, force })) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],

@@ -16,7 +16,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript.
 - `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
-- `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.
+- `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
 - `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
 - `apply_cuts` — Remove one or more time ranges from a video in place, then reprocess its frames, transcript and analysis. Take ranges from suggest_cuts or choose them.
 - `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.
@@ -63,8 +63,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `delete_entity` — Delete a reusable prompt, scene or character
 - `delete_notebook` — Delete a notebook and its cells, edges, and runs
 - `delete_notebook_cell` — Delete one notebook cell and incident edges
-- `describe_image` — Write a reproduction-ready prompt for an image asset into a new script asset using vision (asynchronous).
-- `detect_scenes` — Find natural visual breaks in a video in a background job: shot cuts and motion-settle moments inside steady shots, each with a time and score. Read-only.
+- `describe_image` — Write a reproduction-ready prompt for an image asset into a script asset using vision (asynchronous). Returns status cached with the existing script when the current image was already described; a repeated or concurrent request joins the running job.
+- `detect_scenes` — Find natural visual breaks in a video in a background job: shot cuts and motion-settle moments inside steady shots, each with a time and score. Read-only. Returns status cached with the counts when the current video was already scanned.
 - `disconnect_notebook_cells` — Delete a notebook edge
 - `doctor` — Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. gc reclaims catalog storage for this book.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
@@ -247,7 +247,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
 - `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
-- `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.; MCP: `analyze_video`
+- `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.; MCP: `analyze_video`
 - `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
 - `/apply-watermark` — Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.; MCP: `apply_watermark`

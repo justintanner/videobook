@@ -31,7 +31,8 @@ import {
   readLanguageCode,
   translatedTranscriptFilename,
 } from "./_translate-transcript.js";
-import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
+import { readArtifactJson } from "../analysis-sidecars.js";
+import { ensureTranscriptTranslation } from "../transcript-translation.js";
 import {
   LANDSCAPE_WIDTH,
   LANDSCAPE_HEIGHT,

@@ -8,6 +8,7 @@ import { sampleEvenly } from "../frame-utils.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
+  INTELLIGENCE_MODEL,
   intelligenceRequest,
 } from "../openai-intelligence.js";
 import {
@@ -21,6 +22,15 @@ import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import { frameVocabularyFor, MAX_AUTOMATIC_TAGS } from "../tag-vocabulary.js";
 import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey } from "../transcript-components.js";
+import { cachedSidecarAnalysis, recordSidecarAnalysis, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
+import { VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
+import {
+  hasRealVideoAnalysis,
+  sameVideoAnalysisInputs,
+  VIDEO_ANALYSIS,
+  videoAnalysisInputs,
+  videoAnalysisRecord,
+} from "../vision-components.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -34,6 +44,7 @@ type AnalyzeVideoPayload = {
    * assume a timeline — auto-transcription and lazy rendering — stay put.
    */
   purpose?: "tagging";
+  force?: boolean;
 };
 
 const MAX_FRAMES = 15;
@@ -163,127 +174,155 @@ function sampleFrames(frames: string[]): string[] {
   return sampleEvenly(frames, MAX_FRAMES);
 }
 
+async function framePrompt(engine: Engine, assetId: string): Promise<{ parts: OpenAiResponseInputContent[]; count: number }> {
+  const listResult = await engine.files.listSubdir(assetId, "original_frames");
+  const frameFiles = listResult.ok
+    ? listResult.value
+        .filter((f) => f.endsWith(".jpg"))
+        .sort((a, b) => parseFloat(a) - parseFloat(b))
+    : [];
+  const sampled = sampleFrames(frameFiles);
+  if (sampled.length === 0) {
+    throw new Error(`No frames to analyze for ${assetId}; process the video before analyzing it`);
+  }
+  const parts: OpenAiResponseInputContent[] = [];
+  for (const file of sampled) {
+    const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
+    if (!frameRead.ok) throw new Error(frameRead.error.message);
+    parts.push(
+      { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
+      {
+        type: "input_image",
+        image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
+        detail: "high",
+      },
+    );
+  }
+  return { parts, count: sampled.length };
+}
+
+async function contextPrompt(engine: Engine, assetId: string, hasTranscription: boolean, frameCount: number): Promise<string> {
+  const metaResult = await engine.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original");
+  const metadata = metaResult.ok ? metaResult.value : null;
+  // Prefers ElevenLabs word cues, falls back to the plain ingest transcript —
+  // a manual /transcribe leaves only the former behind.
+  let transcriptionText = "";
+  if (hasTranscription) {
+    const transcript = await readAssetTranscript(engine, assetId);
+    if (transcript.kind === "timed" || transcript.kind === "plain") {
+      transcriptionText = transcript.text;
+    }
+  }
+  const contextParts: string[] = [];
+  if (metadata) {
+    const durationStr = typeof metadata.duration === "number" ? `${metadata.duration.toFixed(1)}s` : "unknown";
+    contextParts.push(`Video metadata: ${metadata.width}x${metadata.height}, duration ${durationStr}`);
+  }
+  if (transcriptionText) {
+    contextParts.push(`Transcription:\n${transcriptionText}`);
+  }
+  contextParts.push(`${frameCount} frames from the video are attached below.`);
+  return contextParts.join("\n\n");
+}
+
+async function requestVideoAnalysis(
+  engine: Engine,
+  assetId: string,
+  hasTranscription: boolean,
+  signal: AbortSignal,
+): Promise<{ analysis: Record<string, unknown>; failure: string | null }> {
+  const frames = await framePrompt(engine, assetId);
+  const userContent: OpenAiResponseInputContent[] = [
+    { type: "input_text", text: await contextPrompt(engine, assetId, hasTranscription, frames.count) },
+    ...frames.parts,
+  ];
+  const apiKey = getApiKey("OPENAI_API_KEY");
+  if (!apiKey) return { analysis: FALLBACK_ANALYSIS, failure: "OPENAI_API_KEY is not set" };
+  try {
+    const responses = buildIntelligenceResponses(apiKey, { timeout: 180_000 });
+    const response = await responses(intelligenceRequest({
+      instructions: SYSTEM_PROMPT,
+      input: [{ role: "user", content: userContent }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "video_analysis",
+          schema: ANALYZE_VIDEO_JSON_SCHEMA,
+          strict: true,
+        },
+      },
+      max_output_tokens: 4096,
+    }), signal);
+    return { analysis: JSON.parse(firstResponseText(response)) as Record<string, unknown>, failure: null };
+  } catch (e) {
+    logger.error("video-analysis-failed", { assetId, error: e });
+    return { analysis: FALLBACK_ANALYSIS, failure: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function runVideoAnalysis(engine: Engine, payload: AnalyzeVideoPayload, signal: AbortSignal) {
+  const { assetId, assetDir, bookId, hasTranscription, purpose } = payload;
+  const inputs = await videoAnalysisInputs(engine, assetId, hasTranscription);
+  const record = inputs ? videoAnalysisRecord(engine, assetId, inputs) : null;
+  if (record && !payload.force && await cachedSidecarAnalysis(engine, VIDEO_ANALYSIS, record)) {
+    return { success: true, fallback: false, cached: true };
+  }
+  const { analysis, failure } = await requestVideoAnalysis(engine, assetId, hasTranscription, signal);
+  const usedFallback = analysis === FALLBACK_ANALYSIS;
+  if (usedFallback && await hasRealVideoAnalysis(engine, assetId)) {
+    throw new Error(`The video could not be analysed, so its previous analysis was kept: ${failure ?? "no result"}`);
+  }
+  if (!usedFallback && !sameVideoAnalysisInputs(await videoAnalysisInputs(engine, assetId, hasTranscription), inputs)) {
+    throw new Error(STALE_ANALYSIS_INPUTS);
+  }
+
+  const written = await engine.files.write(assetId, VIDEO_ANALYSIS_FILE, JSON.stringify(analysis, null, 2));
+  if (!written.ok) throw new Error(written.error.message);
+  if (record && !usedFallback) {
+    await recordSidecarAnalysis(engine, VIDEO_ANALYSIS, {
+      ...record,
+      provenance: { analyzer: "video-analysis", provider: "openai", model: INTELLIGENCE_MODEL },
+    });
+  }
+  await queue.enqueue(`semantic-index-${assetId}-analysis-${Date.now()}`, {
+    type: "semantic_index",
+    assetId,
+    bookId,
+  } as unknown as Record<string, unknown>);
+
+  // A failed analysis wrote the empty fallback shape; tagging it would fence
+  // the asset against the next successful run, so only a real result is
+  // offered to the tagger.
+  if (!usedFallback) {
+    await enqueueAssetTagging(engine, assetId);
+  }
+
+  // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
+  // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
+  // prior failure or in-progress task, and we haven't already transcribed.
+  if (purpose !== "tagging") {
+    await maybeEnqueueAutoTranscribe(engine, assetId, assetDir, bookId);
+  }
+
+  return { success: true, fallback: usedFallback, analysis };
+}
+
 export function registerAnalyzeVideoJob(engine: Engine): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
-    const {
-      assetId, assetDir, bookId, hasTranscription, purpose,
-    } = payload as AnalyzeVideoPayload;
-
-    const result = await withLocalLease(engine, assetId, ctx, "analyze", async () => {
-    {
-
-    const metaResult = await engine.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original"
+    const request = payload as AnalyzeVideoPayload;
+    const result = await withLocalLease(
+      engine,
+      request.assetId,
+      ctx,
+      "analyze",
+      () => runVideoAnalysis(engine, request, ctx.signal),
+      { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
     );
-    const metadata = metaResult.ok ? metaResult.value : null;
-
-    const listResult = await engine.files.listSubdir(assetId, "original_frames");
-    const frameFiles = listResult.ok
-      ? listResult.value
-          .filter((f) => f.endsWith(".jpg"))
-          .sort((a, b) => parseFloat(a) - parseFloat(b))
-      : [];
-
-    const sampled = sampleFrames(frameFiles);
-    if (sampled.length === 0) {
-      throw new Error(`No frames to analyze for ${assetId}; process the video before analyzing it`);
-    }
-    const frameParts: OpenAiResponseInputContent[] = [];
-    for (const file of sampled) {
-      const frameRead = await engine.files.read(assetId, `original_frames/${file}`);
-      if (!frameRead.ok) throw new Error(frameRead.error.message);
-      frameParts.push(
-        { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
-        {
-          type: "input_image",
-          image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
-          detail: "high",
-        },
-      );
-    }
-
-    // Prefers ElevenLabs word cues, falls back to the plain ingest transcript —
-    // a manual /transcribe leaves only the former behind.
-    let transcriptionText = "";
-    if (hasTranscription) {
-      const transcript = await readAssetTranscript(engine, assetId);
-      if (transcript.kind === "timed" || transcript.kind === "plain") {
-        transcriptionText = transcript.text;
-      }
-    }
-
-    const contextParts: string[] = [];
-    if (metadata) {
-      const durationStr = typeof metadata.duration === "number" ? `${metadata.duration.toFixed(1)}s` : "unknown";
-      contextParts.push(`Video metadata: ${metadata.width}x${metadata.height}, duration ${durationStr}`);
-    }
-    if (transcriptionText) {
-      contextParts.push(`Transcription:\n${transcriptionText}`);
-    }
-    contextParts.push(`${sampled.length} frames from the video are attached below.`);
-
-    const userContent: OpenAiResponseInputContent[] = [
-      { type: "input_text", text: contextParts.join("\n\n") },
-      ...frameParts,
-    ];
-
-    let analysis: Record<string, unknown> = FALLBACK_ANALYSIS;
-
-    const apiKey = getApiKey("OPENAI_API_KEY");
-
-    if (apiKey) {
-      try {
-        const responses = buildIntelligenceResponses(apiKey, { timeout: 180_000 });
-        const response = await responses(intelligenceRequest({
-          instructions: SYSTEM_PROMPT,
-          input: [{ role: "user", content: userContent }],
-          text: {
-            format: {
-              type: "json_schema",
-              name: "video_analysis",
-              schema: ANALYZE_VIDEO_JSON_SCHEMA,
-              strict: true,
-            },
-          },
-          max_output_tokens: 4096,
-        }), ctx.signal);
-        analysis = JSON.parse(firstResponseText(response)) as Record<string, unknown>;
-      } catch (e) {
-        logger.error("video-analysis-failed", { assetId, error: e });
-      }
-    }
-
-    const jsonString = JSON.stringify(analysis, null, 2);
-    await engine.files.write(assetId, ".original.analysis.json", jsonString);
-    await queue.enqueue(`semantic-index-${assetId}-analysis-${Date.now()}`, {
-      type: "semantic_index",
-      assetId,
-      bookId,
-    } as unknown as Record<string, unknown>);
-
-    const usedFallback = analysis === FALLBACK_ANALYSIS;
-    // A failed analysis wrote the empty fallback shape; tagging it would fence
-    // the asset against the next successful run, so only a real result is
-    // offered to the tagger.
-    if (!usedFallback) {
-      await enqueueAssetTagging(engine, assetId);
-    }
-
-    // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
-    // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
-    // prior failure or in-progress task, and we haven't already transcribed.
-    if (purpose !== "tagging") {
-      await maybeEnqueueAutoTranscribe(engine, assetId, assetDir, bookId);
-    }
-
-    return { success: true, fallback: usedFallback, analysis };
-
-    }
-    }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
     // Rendering follows analysis for assets on a timeline. A run that exists
     // only to feed the tagger has no timeline behind it, so it renders nothing.
-    if (purpose !== "tagging") {
+    if (request.purpose !== "tagging") {
       try {
-        await enqueueLazyTimelineRender(engine, bookId, assetId);
+        await enqueueLazyTimelineRender(engine, request.bookId, request.assetId);
       } catch (err) {
         void err;
       }

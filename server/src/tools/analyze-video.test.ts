@@ -109,12 +109,12 @@ describe("analyze_video tool", () => {
     expect(result.isError).toBe(false);
     const parsed = JSON.parse(result.text) as {
       status: string;
-      job_id: string;
+      job_id: number;
       asset_id: string;
     };
-    expect(parsed.status).toBe("enqueued");
+    expect(parsed.status).toBe("queued");
     expect(parsed.asset_id).toBe(assetId);
-    expect(parsed.job_id).toBe(`analyze-video-${assetId}`);
+    expect(parsed.job_id).toEqual(expect.any(Number));
   }, testBudget(30_000));
 
   it("skips assets that already carry an analysis unless forced", async () => {
@@ -129,10 +129,10 @@ describe("analyze_video tool", () => {
 
     const skipped = await callAnalyze({ asset_id: assetId });
     expect(skipped.isError).toBe(false);
-    expect(JSON.parse(skipped.text).status).toBe("already_analyzed");
+    expect(JSON.parse(skipped.text).status).toBe("cached");
 
     const forced = await callAnalyze({ asset_id: assetId, force: true });
     expect(forced.isError).toBe(false);
-    expect(JSON.parse(forced.text).status).toBe("enqueued");
+    expect(JSON.parse(forced.text).status).toBe("queued");
   }, testBudget(30_000));
 });

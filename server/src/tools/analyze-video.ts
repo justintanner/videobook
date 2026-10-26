@@ -1,15 +1,12 @@
 import type { Engine } from "videobook-engine";
-import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
-import { queue } from "../queue.js";
+import { requestSidecarAnalysis, sidecarAnalysisNeedsRun } from "../analysis-sidecars.js";
+import { VIDEO_ANALYSIS, videoAnalysisInputs, videoAnalysisRecord } from "../vision-components.js";
 import {
   PLAIN_TRANSCRIPT_FILE,
   TIMED_TRANSCRIPT_FILE,
 } from "../transcript-projection.js";
-import {
-  isAnalyzableVideo,
-  VIDEO_ANALYSIS_FILE,
-} from "../video-analysis-projection.js";
+import { isAnalyzableVideo } from "../video-analysis-projection.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
 function error(text: string): ToolResult {
@@ -41,12 +38,12 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
   return {
     name: "analyze_video",
     description:
-      "Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes.",
+      "Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.",
     schema: {
       asset_id: z.string().describe("Video artifact id"),
       book_id: z.string().describe("Book UUID"),
       force: z.boolean().optional().default(false)
-        .describe("Re-analyze even when the asset already has an analysis"),
+        .describe("Re-analyze even when the current video and transcript were already analysed"),
     },
     handler: async (args) => {
       const { asset_id, book_id, force } = args as {
@@ -54,8 +51,6 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
         book_id: string;
         force: boolean;
       };
-
-      if (!process.env.OPENAI_API_KEY) return error("OPENAI_API_KEY is not set");
 
       const artifact = engine.artifacts.get(asset_id);
       if (!artifact.ok) return error(artifact.error.message);
@@ -65,25 +60,22 @@ export function analyzeVideoDef(engine: Engine): ToolDef {
         );
       }
 
-      const manifestResult = await engine.files.manifest(asset_id);
-      if (!manifestResult.ok) return error(manifestResult.error.message);
-      if (!findVideoFile(manifestResult.value.files)) {
+      const manifest = await engine.files.manifest(asset_id);
+      if (!manifest.ok) return error(manifest.error.message);
+      const payload = await analyzeVideoJobPayload(engine, asset_id, book_id);
+      const inputs = await videoAnalysisInputs(engine, asset_id, payload.hasTranscription === true);
+      if (!inputs) {
         return error(
           `${asset_id} has no video file yet; wait for its generation or processing to finish before analyzing it`,
         );
       }
 
-      if (!force && (await engine.files.read(asset_id, VIDEO_ANALYSIS_FILE)).ok) {
-        return ok({ asset_id, status: "already_analyzed" });
+      const record = videoAnalysisRecord(engine, asset_id, inputs);
+      if (!process.env.OPENAI_API_KEY && await sidecarAnalysisNeedsRun(engine, VIDEO_ANALYSIS, { ...record, force })) {
+        return error("OPENAI_API_KEY is not set");
       }
-
-      // Stable dedupe key: repeated clicks collapse onto one queued job, and the
-      // partial unique index only covers active states so a later re-analysis
-      // still enqueues.
-      const jobId = `analyze-video-${asset_id}`;
-      await queue.enqueue(jobId, await analyzeVideoJobPayload(engine, asset_id, book_id));
-
-      return ok({ asset_id, job_id: jobId, status: "enqueued" });
+      const requested = await requestSidecarAnalysis(engine, VIDEO_ANALYSIS, { ...record, force, payload: { ...payload, bookId: book_id } });
+      return ok({ asset_id, job_id: requested.jobId, status: requested.status });
     },
   };
 }

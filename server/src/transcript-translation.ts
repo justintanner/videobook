@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { analysisComponentKey } from "./analysis-components.js";
 import type { SidecarAnalysisSpec, SidecarInput } from "./analysis-sidecars.js";
-import { cachedSidecarAnalysis, fileObjectHash, recordSidecarAnalysis, STALE_ANALYSIS_INPUTS } from "./analysis-sidecars.js";
+import { cachedSidecarAnalysis, fileObjectHash, readArtifactJson, recordSidecarAnalysis, STALE_ANALYSIS_INPUTS } from "./analysis-sidecars.js";
 import { requireApiKey } from "./api-key.js";
 import { sidecarMatchesSource, translatedTranscriptFilename, translateTranscript } from "./jobs/_translate-transcript.js";
 import { buildIntelligenceResponses, INTELLIGENCE_MODEL } from "./openai-intelligence.js";
@@ -23,16 +23,6 @@ export function transcriptTranslationSpec(language: string): SidecarAnalysisSpec
 
 function transcriptTranslationKey(transcriptHash: string, language: string): string {
   return analysisComponentKey(transcriptTranslationSpec(language), { sourceHash: transcriptHash, options: { language, model: INTELLIGENCE_MODEL } });
-}
-
-export async function readArtifactJson(engine: Engine, artifactId: string, name: string): Promise<unknown> {
-  const read = await engine.files.read(artifactId, name);
-  if (!read.ok) return null;
-  try {
-    return JSON.parse(read.value.toString()) as unknown;
-  } catch {
-    return null;
-  }
 }
 
 async function legacyTranslationMatches(engine: Engine, artifactId: string, language: string): Promise<boolean> {

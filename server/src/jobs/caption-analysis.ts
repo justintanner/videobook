@@ -33,8 +33,8 @@ import { parseSegments } from "../remotion/subtitles/segments.js";
 import { audioObjectHash } from "../transcript-components.js";
 import { requestElevenLabsTranscript, writeElevenLabsTranscript } from "./_transcribe.js";
 import { translatedTranscriptFilename } from "./_translate-transcript.js";
-import { fileObjectHash } from "../analysis-sidecars.js";
-import { ensureTranscriptTranslation, readArtifactJson } from "../transcript-translation.js";
+import { fileObjectHash, readArtifactJson } from "../analysis-sidecars.js";
+import { ensureTranscriptTranslation } from "../transcript-translation.js";
 
 const TRANSCRIBE_OPTIONS = { tagAudioEvents: true, diarize: true } as const;
 
