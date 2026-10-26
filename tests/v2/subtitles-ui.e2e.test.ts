@@ -193,6 +193,12 @@ describe('subtitle editor in the composer', () => {
     await expect.poll(() => word('rode').isVisible(), { timeout: 30_000 }).toBe(true)
     expect((await draft()).document.phrases[1].positions).toEqual({ '9:16': 0.25 })
 
+    expect((await draft(secondId)).status).toBe('needs_prepare')
+    await command('/subs @a2')
+    await command('/subs @a1')
+    await expect.poll(() => word('rode').isVisible(), { timeout: 30_000 }).toBe(true)
+    expect(await word('Second').count()).toBe(0)
+    await expect.poll(async () => (await draft(secondId)).status, { timeout: 30_000 }).toBe('ready')
     await command('/subs @a2')
     await expect.poll(() => word('Second').isVisible(), { timeout: 30_000 }).toBe(true)
     expect(await word('rode').count()).toBe(0)

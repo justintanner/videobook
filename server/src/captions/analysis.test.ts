@@ -255,6 +255,13 @@ describe("caption analysis components", () => {
     expect(jobsOf(CAPTION_REGIONS.jobType, artifactId)).toHaveLength(0);
   });
 
+  it("runs a queued legacy Alive analysis job as caption preparation", async () => {
+    const artifactId = await speechVideo(TRANSCRIPT);
+    await queue.enqueue(`alive-captions-${artifactId}-legacy`, { type: "analyze_alive_captions", assetId: artifactId, assetDir: "unused", bookId, force: false });
+    await settled(artifactId, "vocal", "ready");
+    expect(jobsOf(CAPTION_VOCAL.jobType, artifactId)).toHaveLength(1);
+  });
+
   it("keeps the newest three results per component and artifact", async () => {
     const artifactId = await speechVideo(TRANSCRIPT);
     const keys = [1, 2, 3, 4].map((index) => analysisComponentKey(CAPTION_REGIONS, { sourceHash: `hash-${index}` }));

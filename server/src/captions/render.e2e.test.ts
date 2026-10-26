@@ -225,6 +225,43 @@ describe("caption render", () => {
     expect(Math.max(...blurred)).toBeGreaterThan(20);
   });
 
+  async function scriptRender(words: Array<{ text: string; start: number; end: number }>, language: string): Promise<{ path: string; box: Box }> {
+    const created = await engine.artifacts.create("video", `script ${language}`);
+    if (!created.ok) throw new Error(created.error.message);
+    const previous = assetId;
+    assetId = created.value.artifactId;
+    try {
+      const sourcePath = join(tempDir, `script-${language}.mp4`);
+      await execFileAsync(FFMPEG, [
+        "-y", "-f", "lavfi", "-i", "color=c=0x204060:s=640x360:r=30:d=2",
+        "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100:duration=2",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", sourcePath,
+      ]);
+      const written = await engine.files.write(assetId, "original.mp4", await readFile(sourcePath));
+      if (!written.ok) throw new Error(written.error.message);
+      await registerMediaProbe(engine, assetId, "original.mp4", await probeVideo(await outputPath(assetId)));
+      const transcript = await engine.files.write(assetId, "elevenlabs.json", JSON.stringify({ language_code: language, words: words.map((word) => ({ ...word, type: "word" })) }));
+      if (!transcript.ok) throw new Error(transcript.error.message);
+      await call({ op: "prepare" });
+      await expect.poll(async () => (await call<Read>({})).status, { timeout: testBudget(60_000) }).toBe("ready");
+      const read = await call<Read>({});
+      const saved = await call<{ revision: string }>({ op: "update", expected_revision: read.draft!.revision, edits: [{ op: "set_style", style: { snapToOnsets: false } }] });
+      await call({ op: "render", expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: randomUUID() });
+      await expect.poll(async () => (await call<Read>({})).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
+      const render = (await call<Read>({})).render!;
+      const path = await outputPath(render.output_asset_id);
+      return { path, box: colorBox(await frame(path, 0.5), HIGHLIGHT, 60) };
+    } finally {
+      assetId = previous;
+    }
+  }
+
+  it("draws Cyrillic words with the bundled font subsets", async () => {
+    const { box } = await scriptRender([{ text: "Привет", start: 0.2, end: 0.9 }, { text: "мир", start: 1.0, end: 1.6 }], "rus");
+    expect(box.count).toBeGreaterThan(200);
+    expect(box.maxX - box.minX).toBeGreaterThan(80);
+  });
+
   it("refuses to render a stale revision or a changed video", async () => {
     const current = await call<Read>({});
     await expect(call({ op: "render", notebook_id: notebookId, expected_revision: "stale", source_hash: sourceHash, request_id: randomUUID() }))

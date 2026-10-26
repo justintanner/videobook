@@ -6,6 +6,50 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A TikTok-style subtitle editor in the chat composer. `/subs @video`, a
+  video cell's Subtitles menu item, or asking chat or voice for subtitles
+  opens it beside the chat: a portrait preview that plays with audio and
+  highlights each spoken word, an editable transcript (text, timing, hidden
+  and inserted words, phrase splits and joins), style, size, colours,
+  outline, padding, language, frame and timing controls, and a draggable,
+  keyboard-adjustable vertical position for all phrases or one. Drafts save
+  as you edit, export to SRT or WebVTT, and Render creates a new subtitled
+  video cell below the source (later renders become versions of it). The
+  source video is never changed.
+- `caption_video` MCP tool with `op: get | prepare | update | render`. `get`
+  reads the draft and preparation status without starting work (`detail:
+  full` adds the document, face/text regions and loudness envelope);
+  `prepare` starts word-timed transcription, vocal timing, optional face
+  and on-screen-text placement and translation; `update` saves edits, a
+  replacement document or a resolution (`reseed`, `realign`,
+  `keep_timings`, `discard`) against `expected_revision`; `render` takes the
+  reviewed revision, `source_hash` and a stable `request_id` and returns the
+  same job on retries. Only `prepare` spends money.
+- Caption analysis is keyed by content: repeated or concurrent requests reuse
+  one job, cached results return without provider calls, a failed refresh
+  keeps the last result, and results for a video that changed mid-analysis
+  are discarded. Subtitles render with bundled Montserrat and Anton (OFL),
+  load Noto Sans subsets on demand for other scripts, and handle
+  right-to-left text.
+
+### Changed
+
+- `/alive` opens the new subtitle editor. Saved Alive caption settings seed
+  the editor's style, a matching saved Alive analysis is reused instead of
+  being paid for again, stored renders that still use the `alive` subtitle
+  style render through the new captions, and queued `analyze_alive_captions`
+  jobs run caption preparation.
+- `render_video` and `render_project` no longer accept `highlight_style:
+  "alive"`; use `caption_video` for word-timed subtitles.
+
+### Removed
+
+- The `alive_captions` and `set_alive_captions` MCP tools and the
+  full-screen Alive captions studio. Use `caption_video` and the subtitle
+  editor instead.
+
 ## [0.3.2] - 2026-10-26
 
 ### Added
