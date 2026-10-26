@@ -39,6 +39,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Actions form and a timeline track's add-clip chooser are no longer
+  modal dialogs. Both open as a review docked in the chat composer, like a
+  generation review: Apply, or Enter on `/apply`, runs the action or adds the
+  chosen clip, and Cancel, Escape or `/cancel` closes it. An action that needs
+  confirmation shows its review and estimated cost on the first Apply and runs
+  on the second; read results and their links stay on the review. In the
+  fullscreen timeline editor the add-clip review docks at the editor's foot.
 - Every analysis tool is keyed by the content it reads: speech-to-text by the
   transcribed audio and settings, translations by the timed transcript and
   language, video analysis by the video and the transcript it used, image

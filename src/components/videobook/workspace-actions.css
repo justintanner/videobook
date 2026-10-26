@@ -165,19 +165,55 @@
 }
 
 .workspace-action-form {
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  font-size: 11px;
 }
 
-.workspace-action-heading {
-  margin: 16px 0 8px;
+.workspace-action-description {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .workspace-action-fields {
   display: grid;
-  gap: 16px;
-  margin: 20px 0;
+  gap: 12px;
+}
+
+.confirm-sheet-workspace-action code {
+  overflow-wrap: anywhere;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.confirm-sheet-workspace-action .confirm-sheet-body button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.confirm-sheet-workspace-action .confirm-sheet-body button:hover:not(:disabled),
+.confirm-sheet-workspace-action .confirm-sheet-body button:focus-visible:not(:disabled),
+.confirm-sheet-workspace-action .confirm-sheet-body button[aria-pressed='true'] {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+  background: var(--control-bg-hover);
+}
+
+.confirm-sheet-workspace-action .confirm-sheet-body button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .workspace-action-field > label {
@@ -220,15 +256,9 @@
 .workspace-action-review,
 .workspace-action-result {
   padding: 12px;
-  margin: 12px 0;
   border: 1px solid var(--line-bright);
   border-radius: 5px;
   overflow-wrap: anywhere;
-}
-
-.workspace-action-error {
-  color: var(--danger);
-  padding: 8px 0;
 }
 
 .workspace-action-result-fields > div {
@@ -250,17 +280,6 @@
   gap: 8px;
   list-style: decimal;
   padding-left: 20px;
-}
-
-.workspace-action-form footer {
-  position: sticky;
-  bottom: -16px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 0;
-  background: var(--surface);
-  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 600px) {

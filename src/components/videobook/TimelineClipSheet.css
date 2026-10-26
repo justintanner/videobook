@@ -1,0 +1,89 @@
+.timeline-clip-form {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.timeline-source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 40dvh;
+  overflow: auto;
+}
+
+.timeline-source-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.confirm-sheet .timeline-source-list > button,
+.confirm-sheet .timeline-source-more {
+  display: flex;
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: #bee5d0;
+  background: rgba(1, 9, 5, 0.9);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.confirm-sheet .timeline-source-more {
+  justify-self: start;
+  min-height: 28px;
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+}
+
+.confirm-sheet .timeline-source-list > button:hover:not(:disabled),
+.confirm-sheet .timeline-source-list > button:focus-visible:not(:disabled),
+.confirm-sheet .timeline-source-more:hover:not(:disabled),
+.confirm-sheet .timeline-source-more:focus-visible:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+}
+
+.confirm-sheet .timeline-source-list > button[aria-pressed='true'] {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(50, 147, 91, 0.16);
+}
+
+.confirm-sheet .timeline-source-list > button:disabled,
+.confirm-sheet .timeline-source-more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.timeline-source-list > button > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-source-list img {
+  width: 64px;
+  height: 42px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  background: #000;
+}
+
+.confirm-sheet-timeline-clip .confirm-sheet-head > .confirm-sheet-address {
+  display: block;
+  flex: 0 1 auto;
+  max-width: 20ch;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+}

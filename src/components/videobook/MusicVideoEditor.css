@@ -267,3 +267,19 @@
 @media (max-width: 900px) and (max-height: 500px) {
   .music-video-editor-main { grid-template-rows: minmax(0, 1fr) 150px minmax(0, 30dvh); }
 }
+
+.music-video-clip-sheet {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 20;
+  border: 1px solid rgba(114, 231, 170, 0.22);
+  border-left: 3px solid var(--mv-accent);
+  border-radius: 2px;
+  background: #05150d;
+  box-shadow: 0 20px 34px rgba(0, 0, 0, 0.62);
+}
+.music-video-clip-sheet > .confirm-sheet { max-height: min(60dvh, 520px); }
+.music-video-clip-sheet .confirm-sheet-actions > button { gap: 7px; padding: 0 12px; border-radius: 0; font-size: 11px; }
+.music-video-clip-sheet .confirm-sheet-actions > button:not(.confirm-sheet-apply) { color: var(--ink); background: rgba(25, 79, 49, 0.32); }

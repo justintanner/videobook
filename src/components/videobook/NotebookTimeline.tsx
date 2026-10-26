@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { Film, Plus, Trash2, X } from 'lucide-react'
 import type { Sequence, SequenceClip, SequenceTrack } from 'videobook-engine'
 import { notebookGrid } from '@/videobook/notebook-grid'
-import { handleModalDialogKeyDown } from '@/videobook/modal-dialog-interactions'
-import { restoreFocusElement } from '@/videobook/command-composer-focus'
 import type { TimelineAsset, useTimelineAssembly } from '@/videobook/useTimelineAssembly'
 import { clipWaveform, nearestBeat } from '../../../server/src/rhythm/timing'
 import type { MusicAnalysis } from '../../../server/src/rhythm/model'
@@ -54,52 +51,6 @@ function trimmedRange(drag: TrimDrag, frame: number, bounds: { min: number; max:
 function timeLabel(seconds: number): string {
   const minutes = Math.floor(seconds / 60)
   return `${minutes}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`
-}
-
-function TimelinePicker({ assembly }: Pick<NotebookTimelineProps, 'assembly'>) {
-  const dialog = useRef<HTMLDialogElement>(null)
-  const [query, setQuery] = useState('')
-  useEffect(() => {
-    const trigger = document.activeElement
-    const element = dialog.current
-    element?.showModal()
-    element?.querySelector('input')?.focus()
-    return () => {
-      element?.close()
-      restoreFocusElement(trigger instanceof HTMLElement ? trigger : null)
-    }
-  }, [])
-  const picker = assembly.picker
-  if (!picker) return null
-  const items = picker.items.filter((asset) => asset.label.toLowerCase().includes(query.toLowerCase()))
-  return createPortal(
-    <dialog
-      ref={dialog}
-      className="timeline-source-picker"
-      aria-label="Add a timeline clip"
-      data-composer-focus="preserve"
-      onCancel={(event) => { event.preventDefault(); assembly.closePicker() }}
-      onKeyDown={(event) => {
-        event.stopPropagation()
-        handleModalDialogKeyDown(event, { busy: false, container: event.currentTarget, onClose: assembly.closePicker })
-      }}
-      onClick={(event) => { if (event.target === event.currentTarget) assembly.closePicker() }}
-    >
-      <header><strong>Add a clip</strong><button type="button" onClick={assembly.closePicker} aria-label="Close clip picker"><X size={16} /></button></header>
-      <input autoFocus aria-label="Filter timeline sources" placeholder="Filter media by name" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <div className="timeline-source-list">
-        {items.map((asset) => (
-          <button key={asset.artifactId} type="button" disabled={assembly.busy} onClick={() => void assembly.append(picker.trackId, asset.artifactId)}>
-            {asset.thumbnailUrl ? <img src={asset.thumbnailUrl} alt="" loading="lazy" /> : <Film size={24} />}
-            <span>{asset.label}</span><Plus size={16} />
-          </button>
-        ))}
-        {items.length === 0 && <p>No matching media on this page.</p>}
-      </div>
-      {assembly.error && <p role="alert">{assembly.error}</p>}
-      {picker.offset !== null && <button type="button" disabled={assembly.busy} onClick={() => void assembly.loadMore()}>Load more media</button>}
-    </dialog>, document.body,
-  )
 }
 
 export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, address, onSeek, onPreview, onExport, onRemove, presentation = 'canvas', toolbar, onSelectClip, onMoveClip, onRemoveClip, onTrimClip, trimBounds, rhythm }: NotebookTimelineProps) {
@@ -319,7 +270,6 @@ export function NotebookTimeline({ sequence, assets, assembly, disabled, frame, 
           <div style={{ width: contentWidth, height: 1 }} />
         </div>
       </div>
-      {assembly.picker && <TimelinePicker assembly={assembly} />}
     </section>
   )
 }

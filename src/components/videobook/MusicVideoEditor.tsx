@@ -30,6 +30,7 @@ import { initialMusicDockView, type MusicLibraryTab } from '@/videobook/composer
 import { formatTimecode } from '@/videobook/timecode'
 import { restoreFocusElement } from '@/videobook/command-composer-focus'
 import { NotebookTimeline, type NotebookTimelineProps } from './NotebookTimeline'
+import { TimelineClipSheet } from './TimelineClipSheet'
 import { MusicRhythmControls } from './MusicRhythmControls'
 import { MusicDraftControls } from './MusicDraftControls'
 import { MusicVideoClipInspector, type ClipFit } from './MusicVideoClipInspector'
@@ -783,6 +784,11 @@ export function MusicVideoEditor({
     }
   }
 
+  const appendPickedClip = () => {
+    const picker = assembly.picker
+    if (picker?.selectedArtifactId) void assembly.append(picker.trackId, picker.selectedArtifactId)
+  }
+
   const dialogKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
     if (event.defaultPrevented || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     const target = event.target as HTMLElement
@@ -1170,6 +1176,24 @@ export function MusicVideoEditor({
           {overflowFrames > 0 && <p>{overflowFrames} frames beyond soundtrack</p>}
         </section>
       </main>
+
+      {assembly.picker && (
+        <div className="music-video-clip-sheet" onKeyDown={(event) => { if (event.key !== 'Tab') event.stopPropagation() }}>
+          <TimelineClipSheet
+            key={assembly.picker.trackId}
+            trackName={sequence.tracks.find((track) => track.trackId === assembly.picker?.trackId)?.name ?? 'track'}
+            items={assembly.picker.items}
+            selectedArtifactId={assembly.picker.selectedArtifactId}
+            hasMore={assembly.picker.offset !== null}
+            busy={assembly.busy}
+            error={assembly.error}
+            onSelect={assembly.selectPickerItem}
+            onLoadMore={() => void assembly.loadMore()}
+            onApply={appendPickedClip}
+            onCancel={assembly.closePicker}
+          />
+        </div>
+      )}
 
       <footer className="music-video-status" aria-live="polite">
         <span>{working ?? (draft ? 'Draft ready · review it, then apply or discard' : 'Saved')}</span>

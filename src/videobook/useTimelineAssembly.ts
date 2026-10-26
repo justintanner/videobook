@@ -51,6 +51,7 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
     trackId: string
     items: Asset[]
     offset: number | null
+    selectedArtifactId: string | null
   } | null>(null)
   const pickerEpoch = useRef(0)
   useEffect(() => {
@@ -59,17 +60,20 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
     return () => { current.active = false }
   }, [scope])
 
-  async function run(action: (isCurrent: () => boolean) => Promise<void>) {
+  async function run(action: (isCurrent: () => boolean) => Promise<void>): Promise<string | null> {
     const current = scopeRef.current
-    if (!options.ready || current.key !== scope || !current.active || current.pending) return
+    if (!options.ready || current.key !== scope || !current.active || current.pending) return 'The timeline is busy. Try again in a moment.'
     const isCurrent = () => current.active && scopeRef.current === current
     current.pending = true
     setWork({ scope, busy: true, error: '' })
     try {
       await action(isCurrent)
       if (isCurrent()) setWork({ scope, busy: false, error: '' })
+      return null
     } catch (error) {
-      if (isCurrent()) setWork({ scope, busy: false, error: error instanceof Error ? error.message : String(error) })
+      const message = error instanceof Error ? error.message : String(error)
+      if (isCurrent()) setWork({ scope, busy: false, error: message })
+      return message
     } finally {
       current.pending = false
     }
@@ -89,16 +93,20 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
       const items = assets.filter((asset) => asset.mediaUrl && asset.status === 'ready'
         && (track.kind === 'audio' ? asset.type === 'audio' : asset.type === 'video' || asset.type === 'final'))
       const page = recordValue(recordValue(result)?.page)
-      setPicker((current) => ({
-        scope, trackId,
-        items: append && current?.scope === scope && current.trackId === trackId ? [...current.items, ...items] : items,
-        offset: page?.hasMore === true ? offset + 100 : null,
-      }))
+      setPicker((current) => {
+        const continued = append && current?.scope === scope && current.trackId === trackId
+        return {
+          scope, trackId,
+          items: continued ? [...current.items, ...items] : items,
+          offset: page?.hasMore === true ? offset + 100 : null,
+          selectedArtifactId: continued ? current.selectedArtifactId : null,
+        }
+      })
     })
   }
 
-  async function edit(request: Record<string, unknown>) {
-    await run(async (isCurrent) => {
+  async function edit(request: Record<string, unknown>): Promise<string | null> {
+    return await run(async (isCurrent) => {
       if (!sequence) throw new Error('The timeline is not ready')
       const plan = await call('plan_sequence_edit', {
         book_id: bookId, source_surface: 'ui', actor: 'videobook-user',
@@ -147,6 +155,7 @@ export function useTimelineAssembly<Asset extends TimelineAsset>(options: Timeli
     loadMore: () => picker?.offset !== null && picker
       ? loadPage(picker.trackId, picker.offset, true) : Promise.resolve(),
     closePicker: () => { pickerEpoch.current += 1; setPicker(null) },
+    selectPickerItem: (artifactId: string) => setPicker((current) => current && { ...current, selectedArtifactId: artifactId }),
     append: (trackId: string, artifactId: string) => edit({ kind: 'append', track_id: trackId, artifact_id: artifactId }),
     removeClip: (clipId: string) => edit({ kind: 'remove_clip', clip_id: clipId, ripple: true }),
     addTrack: () => trackChange('add_sequence_track', { kind: 'audio' }),

@@ -138,12 +138,14 @@ describe('music video recovery and export in the browser', () => {
     const picker = page.getByRole('dialog', { name: 'Add a timeline clip' })
     await picker.getByLabel('Filter timeline sources').fill('encoded-song')
     await picker.locator('.timeline-source-list button').click()
+    await picker.getByRole('button', { name: /^Add clip/u }).click()
     await picker.waitFor({ state: 'hidden', timeout: 30_000 })
     await expect.poll(async () => (await sequence()).clips.length, { timeout: 30_000 }).toBe(1)
     const videoTrack = (await sequence()).tracks.find(track => track.kind === 'video')!
     await timeline.getByLabel(`Add clip to ${videoTrack.name}`, { exact: true }).click()
     await picker.getByLabel('Filter timeline sources').fill('portrait')
     await picker.locator('.timeline-source-list button').click()
+    await picker.getByRole('button', { name: /^Add clip/u }).click()
     await picker.waitFor({ state: 'hidden', timeout: 30_000 })
     await expect.poll(async () => (await sequence()).clips.length, { timeout: 30_000 }).toBe(2)
     const clips = (await sequence()).clips

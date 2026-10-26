@@ -73,22 +73,6 @@
 .timeline-audio-content { position: relative; }
 .timeline-horizontal { height: 14px; flex-shrink: 0; overflow-x: auto; margin-left: var(--timeline-label-width, 200px); }
 .timeline-error { color: #ffb5a8; padding: 3px 10px; }
-.timeline-source-picker {
-  color: var(--text);
-  background: var(--panel, #151a18);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  width: min(560px, calc(100vw - 32px));
-  max-height: min(640px, 80dvh);
-  padding: 16px;
-}
-.timeline-source-picker::backdrop { background: rgb(0 0 0 / 60%); }
-.timeline-source-picker header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.timeline-source-picker input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
-.timeline-source-list { display: grid; gap: 8px; max-height: 50dvh; overflow: auto; }
-.timeline-source-list button { display: flex; align-items: center; gap: 12px; text-align: left; min-height: 54px; }
-.timeline-source-list button > span { flex: 1; }
-.timeline-source-list img { width: 64px; height: 42px; object-fit: contain; }
 .timeline-waveform { position: absolute; inset: 3px 0; width: 100%; height: calc(100% - 6px); pointer-events: none; fill: #96cceb; opacity: .58; }
 .timeline-clip > span { position: relative; z-index: 1; text-shadow: 0 1px 3px #07111d; }
 .timeline-track-audio .timeline-clip > span { align-self: flex-start; padding-top: 3px; }

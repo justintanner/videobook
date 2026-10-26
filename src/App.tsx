@@ -213,9 +213,19 @@ import {
   type NotebookCellContextAction,
 } from '@/components/videobook/NotebookCellContextMenu'
 import { BookProjectMenu } from '@/components/videobook/BookProjectMenu'
-import { WorkspaceActionsDialog } from '@/components/videobook/WorkspaceActionsDialog'
-import type { WorkspaceActionReview, WorkspaceActionResult } from '@/components/videobook/WorkspaceActionsDialog'
-import { asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
+import { WorkspaceActionSheet } from '@/components/videobook/WorkspaceActionSheet'
+import { TimelineClipSheet } from '@/components/videobook/TimelineClipSheet'
+import { workspaceActionFormValid } from '@/videobook/workspace-action-form'
+import {
+  effectiveWorkspaceActionValues,
+  patchWorkspaceActionDraft,
+  seedWorkspaceActionDraft,
+  workspaceActionVariants,
+  type WorkspaceActionDraft,
+  type WorkspaceActionResult,
+  type WorkspaceActionReview,
+} from '@/videobook/workspace-action-draft'
+import { actionUnavailableReason, asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
 import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
@@ -1244,6 +1254,20 @@ type TimelinePreviewSession = {
   initialFrame: number
   returnFocus: HTMLElement | null
 }
+type WorkspaceActionSheetState = {
+  key: number
+  bookId: string
+  actionId: string
+  values?: Record<string, unknown>
+  query?: string
+  opener: HTMLElement | null
+  resources?: WorkspaceActionResources
+  draft?: WorkspaceActionDraft
+  review?: WorkspaceActionReview
+  result?: WorkspaceActionResult
+  running?: boolean
+}
+type WorkspaceActionRun = WorkspaceActionResult & { close?: boolean }
 const nodeTypes = { cell: CellNode, timeline: TimelineNode, goal: GoalCellNode }
 const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
@@ -1287,15 +1311,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const [workspaceActions, setWorkspaceActions] = useState<WorkspaceAction[]>([])
   const [actionCatalogStatus, setActionCatalogStatus] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null })
-  const [actionDialog, setActionDialog] = useState<{
-    key: number
-    actionId?: string
-    values?: Record<string, unknown>
-    query?: string
-    opener: HTMLElement | null
-    resources?: WorkspaceActionResources
-    result?: WorkspaceActionResult
-  } | null>(null)
+  const [actionSheet, setActionSheet] = useState<WorkspaceActionSheetState | null>(null)
   const actionCatalogRequestRef = useRef(0)
   const transcribeEstimateRequestRef = useRef(0)
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
@@ -1394,6 +1410,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [uploading, setUploading] = useState(false)
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
   const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
+  const actionSheetAction = workspaceActions.find((action) => action.id === actionSheet?.actionId) ?? null
+  const currentActionSheet = actionSheet && (actionSheet.bookId === bookId || actionSheetAction?.scope === 'global') ? actionSheet : null
   const voiceOutcomeRef = useRef<((outcome: VoiceOutcome) => void) | null>(null)
   const voiceTypedTurnRef = useRef<((input: string, message: string) => void) | null>(null)
   const voiceActiveRef = useRef(false)
@@ -1803,6 +1821,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ? notebook?.cells.find((cell) => cell.id === timelinePreview.cellId && cell.type === 'timeline')
     : undefined
   const timelinePreviewOpen = Boolean(timelinePreviewCell && sequence && screen === 'notebook')
+  const composerClipPicker = timelinePreviewOpen || musicVideoSession ? null : timeline.picker
+  const composerReviewOpen = Boolean(pendingWatermarkReview || pendingCommandPlan || pendingChatAction || currentActionSheet || composerClipPicker)
 
   const { preview: generationCellPreview, select: selectGenerationCellPreview } = useGenerationCellPreview({
     bookId, notebook, ready: mcp.state === 'ready', call,
@@ -4106,7 +4126,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     actionCatalogRequestRef.current += 1
     reviewChat(input.chat, false, () => setPendingCommandPlan(null))
     reviewChat(input.chat, false, () => setPendingWatermarkReview(null))
-    reviewChat(input.chat, false, () => setActionDialog(null))
+    reviewChat(input.chat, false, () => setActionSheet(null))
     reviewChat(input.chat, false, () => setActionDiscovery(null))
     reviewChat(input.chat, true, () => setPendingChatAction({
       kind: 'transcribe',
@@ -4155,16 +4175,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (mcp.state !== 'ready') return
     setComposerDockOpen(true)
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const opener = returnFocus ?? actionDialog?.opener ?? (active === document.body || active?.closest('.command-composer')
+    const opener = returnFocus ?? actionSheet?.opener ?? (active === document.body || active?.closest('.command-composer')
       ? document.querySelector<HTMLElement>('[aria-label="Videobook command input"]') : active)
     const targetBookId = typeof values?.book_id === 'string' ? values.book_id : bookId
     const request = ++actionCatalogRequestRef.current
     if (actionId) {
       setActionDiscovery(null)
-      setActionDialog({ key: request, actionId, values, query, opener })
+      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      timeline.closePicker()
+      reviewChat(chat, true, () => setActionSheet({ key: request, bookId, actionId, values, query, opener }))
     } else {
       const session = targetBookId === bookId && mediaFullscreen?.asset.type === 'image' ? `image-edit:${mediaFullscreen.key}` : `chat:${targetBookId}`
-      setActionDialog(null)
+      setActionSheet(null)
       setActionDiscovery({ key: request, query: query ?? '', values, bookId: targetBookId, session })
       setActionComposer({ bookId: targetBookId, session, opener })
     }
@@ -4188,7 +4210,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues, { chat }),
         } : undefined
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
-        setActionDialog((current) => current?.key === request ? { ...current, values: { ...seededValues, ...resources.values }, resources, result } : current)
+        const loadedValues = { ...seededValues, ...resources.values }
+        const draft = seedWorkspaceActionDraft(action, workspaceActionSheetContext(resources), loadedValues)
+        setActionSheet((current) => current?.key === request ? { ...current, values: loadedValues, resources, result, draft } : current)
       }
       setActionCatalogStatus({ loading: false, error: null })
     } catch (cause) {
@@ -4203,6 +4227,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setActionDiscovery(null)
     setActionComposer(null)
     restoreCommandComposerFocus(() => opener?.isConnected ? opener : null)
+  }
+
+  const dismissActionSheet = () => {
+    const restoreFocus = captureDismissedComposerFocus(currentActionSheet?.opener ?? null)
+    actionCatalogRequestRef.current += 1
+    cancelChatReview()
+    setActionSheet(null)
+    restoreFocus()
+  }
+
+  const updateActionSheetDraft = (
+    change: (draft: WorkspaceActionDraft, action: WorkspaceAction, context: WorkspaceActionContext) => WorkspaceActionDraft,
+  ) => {
+    setActionSheet((current) => {
+      const action = workspaceActions.find((entry) => entry.id === current?.actionId)
+      if (!current?.draft || !action) return current
+      const draft = change(current.draft, action, workspaceActionSheetContext(current.resources))
+      return { ...current, draft, review: undefined, result: undefined }
+    })
   }
 
   const refreshChatModels = useCallback(async () => {
@@ -9140,11 +9183,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           return await applyPendingChatAction(applyCommand.promptOverride, chat)
         }
         if (pendingCommandPlan) return await applyPendingCommandPlan(chat)
+        if (currentActionSheet) return await applyPendingWorkspaceAction(chat)
+        if (composerClipPicker) return await applyTimelineClip()
         return { ok: false, message: 'There is no pending action to apply.' }
       }
       if (normalizedInput === '/cancel') {
         if (!pendingWatermarkReview && !pendingChatAction && !pendingCommandPlan) {
-          return { ok: false, message: 'There is no pending action to cancel.' }
+          if (!currentActionSheet && !composerClipPicker) return { ok: false, message: 'There is no pending action to cancel.' }
+          if (currentActionSheet) actionCatalogRequestRef.current += 1
+          reviewChat(chat, false, () => currentActionSheet ? setActionSheet(null) : timeline.closePicker())
+          return { ok: true, message: 'Pending action cancelled' }
         }
         reviewChat(chat, false, () => setPendingWatermarkReview(null))
         reviewChat(chat, false, () => setPendingChatAction(null))
@@ -9471,18 +9519,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const executeWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<WorkspaceActionResult> => {
-    const openedDialog = actionDialog
+  const executeWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>, chat?: ChatExecution): Promise<WorkspaceActionRun> => {
     if (action.handler.kind !== 'tool') {
       if (action.handler.kind === 'ui' && action.handler.action === 'open_actions') {
-        await openWorkspaceActions()
-        return { message: 'Actions opened' }
+        await openWorkspaceActions(undefined, undefined, undefined, undefined, chat)
+        return { message: 'Actions opened', close: true }
       }
-      const uiResult = await executeWorkspaceUiRoute(action, values)
+      const uiResult = await executeWorkspaceUiRoute(action, values, chat)
       if (uiResult) {
         if (!uiResult.ok) throw new Error(uiResult.message)
-        setActionDialog((current) => current === openedDialog ? null : current)
-        return { message: uiResult.message }
+        return { message: uiResult.message, close: true }
       }
       const args = Object.keys(action.inputSchema.properties ?? {}).map((name) => values[name])
         .filter((value) => value !== undefined && value !== null)
@@ -9490,10 +9536,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const input = action.command === '/export-sequence'
         ? `/export-sequence --aspect ${String(values.aspect ?? '16:9')} --captions ${String(values.captions ?? 'burned')}`
         : `${action.command}${args ? ` ${args}` : ''}`
-      const result = await executeCommand(input)
+      const result = await executeCommand(input, undefined, chat)
       if (!result.ok) throw new Error(result.message)
-      setActionDialog((current) => current === openedDialog ? null : current)
-      return { message: result.message }
+      return { message: result.message, close: true }
     }
     const tool = action.handler.tool
     if (tool === 'delete_asset' && values.forget === true) {
@@ -9501,8 +9546,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!target) throw new Error('Choose media from the current project.')
       const result = await forgetAsset({ ...target, errorMessage: null, lastUsedAt: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)
       if (!result.ok) throw new Error(result.message)
-      setActionDialog(null)
-      return { message: result.message }
+      return { message: result.message, close: true }
     }
     if (tool === 'create_book' || tool === 'rename_book' || tool === 'delete_book') {
       const result = tool === 'create_book'
@@ -9513,26 +9557,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!result.ok) throw new Error(result.error)
       return { message: `${action.title} complete` }
     }
-    const value = await call(tool, values)
+    const value = await call(tool, values, { chat })
     if (recordValue(value)?.kind === 'chat-action-plan') {
-      const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''))
+      const result = await previewRoutedChatAction(asChatActionPlan(value), String(values.prompt ?? ''), undefined, chat)
       if (!result.ok) throw new Error(result.message)
-      setActionDialog(null)
-      return { message: result.message }
+      return { message: result.message, close: true }
     }
     if (tool === 'get_notebook' && typeof values.notebook_id === 'string') {
-      await refreshBookData(String(values.book_id ?? bookId), values.notebook_id)
+      await refreshBookData(String(values.book_id ?? bookId), values.notebook_id, undefined, chat)
       navigate('notebook')
-      setActionDialog(null)
-      return { message: 'Notebook opened' }
+      return { message: 'Notebook opened', close: true }
     }
     if (recordValue(value)?.planVersion === 1 && Array.isArray(recordValue(value)?.stages)) {
-      const result = await previewCommandPlan(asCommandPlan(value))
+      const result = await previewCommandPlan(asCommandPlan(value), chat)
       if (!result.ok) throw new Error(result.message)
-      setActionDialog(null)
-      return { message: result.message }
+      return { message: result.message, close: true }
     }
-    const completed = await completeWorkspaceToolResult(tool, value, values, action.title)
+    const completed = await completeWorkspaceToolResult(tool, value, values, action.title, chat)
     if (!completed.ok) throw new Error(completed.message)
     return { message: completed.message, value }
   }
@@ -9553,6 +9594,47 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { message: action.confirmation === 'external'
       ? `${action.title} sends the selected content outside this workspace. Review the destination and content before confirming.`
       : `${action.title} changes or removes the selected content. Review the target and values before confirming.` }
+  }
+
+  const applyTimelineClip = async (): Promise<ComposerOutcome> => {
+    const picker = composerClipPicker
+    const item = picker?.items.find((asset) => asset.artifactId === picker.selectedArtifactId)
+    if (!picker || !item) return { ok: false, message: 'Choose a clip to add.', nextInput: '/apply', selectInput: false }
+    const trackName = sequence?.tracks.find((track) => track.trackId === picker.trackId)?.name ?? 'the timeline'
+    const failure = await timeline.append(picker.trackId, item.artifactId)
+    if (failure) return { ok: false, message: failure, nextInput: '/apply', selectInput: false }
+    return { ok: true, message: `Added ${item.label} to ${trackName}` }
+  }
+
+  const applyPendingWorkspaceAction = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
+    const sheet = currentActionSheet
+    const action = actionSheetAction
+    const retry = (message: string): ComposerOutcome => ({ ok: false, message, nextInput: '/apply', selectInput: false })
+    const markReview = (open: boolean) => reviewChat(chat, open, () => undefined)
+    if (!sheet?.draft || !action) return retry('The action is still loading.')
+    const unavailable = actionUnavailableReason(action, workspaceActionContext)
+    if (unavailable) return retry(unavailable)
+    if (!workspaceActionFormValid()) return retry('Fix the highlighted field, then apply.')
+    const values = effectiveWorkspaceActionValues(action, sheet.draft)
+    const update = (patch: Partial<WorkspaceActionSheetState> | null) => setActionSheet((current) =>
+      current?.key !== sheet.key ? current : patch && { ...current, ...patch })
+    update({ running: true })
+    try {
+      if (action.confirmation !== 'none' && !sheet.review) {
+        const review = await reviewWorkspaceAction(action, values)
+        update({ review, running: false })
+        markReview(true)
+        return applyReadyOutcome(`${review.cost ? `${review.cost}. ` : ''}Apply again to run ${action.title}.`)
+      }
+      markReview(false)
+      const run = await executeWorkspaceAction(action, values, chat)
+      update(run.close ? null : { result: { message: run.message, value: run.value }, review: undefined, running: false })
+      return { ok: true, message: run.message }
+    } catch (cause) {
+      update({ running: false })
+      markReview(true)
+      return retry(cause instanceof Error ? cause.message : String(cause))
+    }
   }
 
   const runComposerCommand = async (
@@ -9721,15 +9803,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const beginComposerTurn = (input: string): ChatExecution => {
-    const continuingReview = /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)
-      && Boolean(pendingChatAction || pendingCommandPlan || pendingWatermarkReview)
+    const continuingReview = /^\/(?:apply|cancel)(?:\s|$)/iu.test(input) && composerReviewOpen
     if (!continuingReview) {
       if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
       selectCanvasCell(null)
       setSourceViewCellId(null)
       setHistoryViewCellId(null)
       setWorkspacePreview(null)
-      setActionDialog(null)
+      setActionSheet(null)
+      timeline.closePicker()
       if (mediaFullscreen) closeMediaFullscreen()
       setNoticeState(null)
     }
@@ -10660,7 +10742,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? { kind: 'chain-step' }
         : pendingChatAction?.kind === 'transcribe'
           ? { kind: 'transcribe' }
-          : pendingChatAction || pendingCommandPlan || pendingWatermarkReview
+          : composerReviewOpen
             ? { kind: 'other' }
             : { kind: 'none' }
     const plan = planVoiceReviewCommand(command, pending)
@@ -10684,9 +10766,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     notebookId: notebook?.id,
     scope: composerSession,
     available: showCommandComposer && mcp.state === 'ready' && Boolean(bookId) && !mediaFullscreen && !workspacePreview && !musicVideoSession,
-    disabled: busy || Boolean(pendingWatermarkReview || pendingCommandPlan || pendingChatAction),
+    disabled: busy || composerReviewOpen,
     onUserTurn: () => {
-      if (pendingWatermarkReview || pendingCommandPlan || pendingChatAction) return
+      if (composerReviewOpen) return
       voiceChatRef.current = claimVoiceTurn()
       selectCanvasCell(null)
       setSourceViewCellId(null)
@@ -10696,7 +10778,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const chat = voiceChatRef.current ?? claimVoiceTurn()
       const current = () => isCurrent() && chat.isCurrent()
       if (!current()) return { status: 'cancelled', message: 'A newer message replaced this request.' }
-      if (busy || pendingChatAction || pendingCommandPlan || pendingWatermarkReview) return { status: 'failed', message: 'Finish the current command or use Apply or Cancel on screen first.' }
+      if (busy || composerReviewOpen) return { status: 'failed', message: 'Finish the current command or use Apply or Cancel on screen first.' }
       const plan = asChatActionPlan(event.plan)
       if (plan.bookId !== bookId) return { status: 'cancelled', message: 'The project changed. Repeat the command here.' }
       const outcome = await previewRoutedChatAction(plan, event.prompt, current, chat)
@@ -11244,7 +11326,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     return context
   }, [assets, bookId, books, notebook, selectedNotebookCell, selectedNotebookCells, sequence])
-  const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, Boolean(pendingCommandPlan || pendingChatAction || pendingWatermarkReview)), [commands, pendingCommandPlan, pendingChatAction, pendingWatermarkReview])
+  const workspaceActionSheetContext = (resources?: WorkspaceActionResources): WorkspaceActionContext => ({
+    ...workspaceActionContext,
+    entities: resources?.entities,
+    choices: { ...workspaceActionContext.choices, ...resources?.choices },
+  })
+  const actionSheetElement = currentActionSheet ? (
+    <WorkspaceActionSheet
+      key={`${currentActionSheet.key}:${currentActionSheet.actionId}`}
+      action={actionSheetAction}
+      variants={workspaceActionVariants(workspaceActions, actionSheetAction)}
+      context={workspaceActionSheetContext(currentActionSheet.resources)}
+      draft={currentActionSheet.draft ?? null}
+      review={currentActionSheet.review ?? null}
+      result={currentActionSheet.result ?? null}
+      loading={actionCatalogStatus.loading}
+      error={actionCatalogStatus.error}
+      busy={Boolean(currentActionSheet.running)}
+      applyFormId={COMMAND_COMPOSER_FORM_ID}
+      onChange={(name, value) => updateActionSheetDraft((draft, action, context) => patchWorkspaceActionDraft(action, context, draft, name, value))}
+      onPatch={(patch) => updateActionSheetDraft((draft) => ({ ...draft, ...patch }))}
+      onCancelReview={() => setActionSheet((current) => current && { ...current, review: undefined })}
+      onBack={() => {
+        cancelChatReview()
+        void openWorkspaceActions(undefined, currentActionSheet.values, currentActionSheet.query, currentActionSheet.opener)
+      }}
+      onOpenAction={(actionId, values) => void openWorkspaceActions(actionId, { ...currentActionSheet.values, ...values })}
+      onCancel={dismissActionSheet}
+    />
+  ) : null
+  const composerCommands = useMemo(() => pendingWorkspaceCommands(commands, composerReviewOpen), [commands, composerReviewOpen])
   const openTimelinePreview = (cellId: string, frame = timeline.frame) => {
     if (!sequence) return
     selectCanvasCell(cellId)
@@ -11263,10 +11374,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     musicRhythm.stop()
     setTimelinePreview(null)
   }
+  const openTimelinePicker = (trackId: string) => {
+    if (!timelinePreviewOpen && !musicVideoSession) {
+      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      else if (actionSheet) cancelChatReview()
+      actionCatalogRequestRef.current += 1
+      setActionSheet(null)
+      setActionDiscovery(null)
+      setComposerDockOpen(true)
+    }
+    return timeline.openPicker(trackId)
+  }
+  const timelineAssembly = { ...timeline, openPicker: openTimelinePicker }
   const timelineContext: TimelineContextValue = {
     sequence,
     assets,
-    assembly: timelinePreviewOpen ? { ...timeline, picker: null } : timeline,
+    assembly: timelinePreviewOpen ? { ...timelineAssembly, picker: null } : timelineAssembly,
     disabled: busy || mcp.state !== 'ready',
     frame: timeline.frame,
     onSeek: openTimelinePreview,
@@ -11277,6 +11400,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (cell) void deleteNotebookCells([cell])
     },
   }
+  const clipSheetElement = composerClipPicker ? (
+    <TimelineClipSheet
+      key={composerClipPicker.trackId}
+      trackName={sequence?.tracks.find((track) => track.trackId === composerClipPicker.trackId)?.name ?? 'track'}
+      items={composerClipPicker.items}
+      selectedArtifactId={composerClipPicker.selectedArtifactId}
+      hasMore={composerClipPicker.offset !== null}
+      busy={timeline.busy}
+      error={timeline.error}
+      applyFormId={COMMAND_COMPOSER_FORM_ID}
+      onSelect={timeline.selectPickerItem}
+      onLoadMore={() => void timeline.loadMore()}
+      onCancel={timeline.closePicker}
+    />
+  ) : null
   const selectedMediaLibraryState = mediaLibraryPanelState
     && (mediaLibraryPanelState.cellId === null
       || (selectedNotebookCell?.id === mediaLibraryPanelState.cellId
@@ -11939,17 +12077,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <Suspense fallback={<div role="status">Loading music-video editor…</div>}>
           <MusicVideoEditor
             key={musicVideoSession.key}
-            assembly={timeline}
+            assembly={timelineAssembly}
             rhythm={musicRhythm}
             onFrameUpdate={timeline.seek}
-            onExport={() => { closeMusicVideoEditor(); timelineContext.onExport() }}
+            onExport={() => { timeline.closePicker(); closeMusicVideoEditor(); timelineContext.onExport() }}
             sequence={sequence}
             assets={assets}
             audioArtifactId={musicVideoSession.audioArtifactId}
             setup={musicVideoSession.setup}
             returnFocus={musicVideoSession.returnFocus}
             onApplySetup={applyMusicVideoSetup}
-            onClose={() => { musicRhythm.stop(); closeMusicVideoEditor() }}
+            onClose={() => { timeline.closePicker(); musicRhythm.stop(); closeMusicVideoEditor() }}
             onCommit={commitMusicVideoEdit}
             onPlanDraft={planMusicDraft}
             onApplyDraft={applyMusicDraft}
@@ -11974,7 +12112,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             key={`${bookId}:${timelinePreviewCell.id}`}
             sequence={sequence}
             assets={assets}
-            assembly={timeline}
+            assembly={timelineAssembly}
             rhythm={musicRhythm}
             setup={{ status: 'timeline' }}
             address={notebookGridTag(timelinePreviewCell.slot)}
@@ -12048,18 +12186,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         composerPortalRef={setPreviewComposerTarget} actionsOpen={Boolean(currentActionComposer || workspaceChatPreview)}
         onClose={() => { setWorkspacePreview(null); setActionDiscovery(null); setActionComposer(null) }}
         onActions={() => void openWorkspaceActions(undefined, workspacePreview.media ? { asset_id: workspacePreview.media.assetId } : undefined)} />}
-      {actionDialog?.actionId && <WorkspaceActionsDialog key={actionDialog.key} actions={workspaceActions} context={{
-        ...workspaceActionContext,
-        entities: actionDialog.resources?.entities,
-        choices: { ...workspaceActionContext.choices, ...actionDialog.resources?.choices },
-      }}
-        initialActionId={actionDialog.actionId} initialValues={actionDialog.values}
-        initialResult={actionDialog.result}
-        returnFocus={actionDialog.opener} loading={actionCatalogStatus.loading} error={actionCatalogStatus.error}
-        onClose={() => { actionCatalogRequestRef.current += 1; setActionDialog(null) }}
-        onBack={() => void openWorkspaceActions(undefined, actionDialog.values, actionDialog.query, actionDialog.opener)}
-        onOpenAction={(actionId, values) => void openWorkspaceActions(actionId, { ...actionDialog.values, ...values })}
-        onExecute={executeWorkspaceAction} onReview={reviewWorkspaceAction} />}
 
       <CommandComposer
         chatTurns={chatTurns}
@@ -12100,7 +12226,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled={
           busy
           || mediaFullscreenSidebarEditing
-          || !bookId
+          || (!bookId && !currentActionSheet)
           || mcp.state !== 'ready'
         }
         modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
@@ -12120,14 +12246,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? '/apply'
             : pendingChatAction?.kind === 'generation' || pendingChatAction?.kind === 'transcribe'
             ? '/apply '
-            : pendingCommandPlan || pendingChatAction
+            : pendingCommandPlan || pendingChatAction || currentActionSheet || composerClipPicker
               ? '/apply'
               : undefined}
         replacePendingInput={pendingChatAction?.kind === 'transcribe'}
         notice={notice
           ? { message: notice.text, tone: notice.tone }
           : null}
-        outcomeSlot={confirmSheet ? 'sheet' : 'composer'}
+        outcomeSlot={confirmSheet || actionSheetElement || clipSheetElement ? 'sheet' : 'composer'}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
         onDismissPanel={(
@@ -12136,7 +12262,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           || pendingChatAction
         )
           ? dismissPendingCommandPlan
-          : undefined}
+          : currentActionSheet ? dismissActionSheet : composerClipPicker ? timeline.closePicker : undefined}
         onExecute={executeComposerCommand}
         voiceCatalog={elevenLabsVoices}
         voice={voice}
@@ -12150,7 +12276,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         onModelChange={changeChatModel}
         onSuccessfulExecute={revealSuccessfulComposerResult}
       >
-        {confirmSheet}
+        {confirmSheet ?? actionSheetElement ?? clipSheetElement}
       </CommandComposer>
     </main>
   )
