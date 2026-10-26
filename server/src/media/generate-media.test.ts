@@ -334,7 +334,8 @@ describe("generic media generation", () => {
     ["kie:pixverse-v6-max/text-to-video", {}, {}, { quality: "1080p", duration: 12, aspect_ratio: "9:16" }],
     ["kie:pixverse-v6-max/image-to-video", { image: ["a.png"] }, { image_urls: ["a.png"] }, { quality: "1080p", duration: 12 }],
     ["kie:omnihuman-2-0", { image: ["a.png"], audio: ["b.mp3"] }, { image_urls: ["a.png"], audio_url: "b.mp3" }, { enable_watermark: false }],
-    ["kie:grok-imagine-video-1-5-preview", { image: ["a.png"], first_frame: ["b.png"] }, { image_urls: ["a.png"], first_frame_url: "b.png" }, { duration: 12, resolution: "720p" }],
+    ["kie:grok-imagine-video-1-5-preview", { image: ["a.png"], first_frame: ["b.png"] }, { image_urls: ["a.png"], first_frame_url: "b.png" }, { duration: 12, resolution: "1080p", nsfw_checker: false }],
+    ["kie:bytedance/seedance-2-5", {}, {}, { duration: 12, resolution: "1080p", aspect_ratio: "9:16", generate_audio: true, nsfw_checker: false }],
   ] as const)("submits %s to KIE createTask with its catalog defaults", async (model, names, urlFields, fields) => {
     const url = (name: string) => `${baseURL}/files/${name}`;
     const refs = Object.fromEntries(Object.entries(names).map(([role, list]) => [role, list.map(url)]));

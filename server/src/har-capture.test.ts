@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createEngine, type Engine } from "videobook-engine";
-import { findMatchingRow, type Har } from "@apicity/har";
+import { findMatchingRow, matchHarEntrySpanning, matchHarEntryStrict, type Har } from "@apicity/har";
 import { appState, createFileApplicationState } from "./app-state.js";
 import { withBookContext } from "./book-context.js";
 import { createFal, createKie, createX, submitMediaJob, uploadFalFile, uploadAlibabaFile } from "./usage-providers.js";
@@ -144,9 +144,13 @@ describe("opt-in provider HAR diagnostics", () => {
     }
   });
 
-  it("names fal queue submit, status and result captures by the catalog rows apicity har report resolves", async () => {
+  it("matches fal queue submit, status and result captures strictly to the catalog rows apicity har report resolves", async () => {
     await writeHarSettings({ mode: "all" });
-    const fal = createFal({ apiKey: "test", queueBaseURL: url });
+    const toStub: typeof fetch = (input, init) => {
+      const target = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      return fetch(target.replace("https://queue.fal.run", url), init);
+    };
+    const fal = createFal({ apiKey: "test", fetch: toStub });
     const endpoint_id = "fal-ai/flux/dev";
     await fal.v1.queue.submit({ endpoint_id, input: { prompt: "test" } });
     await fal.v1.queue.status({ endpoint_id, request_id: "one" });
@@ -167,8 +171,13 @@ describe("opt-in provider HAR diagnostics", () => {
     for (const file of files) {
       const candidates = catalog.filter((row) => row.provider === file.log._apicity?.provider && row.dotPath === file.log._apicity?.endpoint);
       expect(candidates).toHaveLength(1);
-      const resolved = findMatchingRow(file.log.entries[0], candidates, { provider: "fal" }) ?? (file.log.entries.length === 1 ? candidates[0] : null);
-      expect(resolved).toBe(candidates[0]);
+      const row = candidates[0]!;
+      expect(file.log.entries).toHaveLength(1);
+      for (const entry of file.log.entries) {
+        expect(entry.request.url.startsWith("https://queue.fal.run/fal-ai/flux/dev")).toBe(true);
+        expect(findMatchingRow(entry, candidates, { provider: "fal" })).toBe(row);
+        expect(matchHarEntryStrict(entry, row) || matchHarEntrySpanning(entry, row)).toBe(true);
+      }
     }
   });
 

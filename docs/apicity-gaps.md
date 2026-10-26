@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.18.1 (2026-10-25). Image, video and audio
+Videobook now uses Apicity 0.19.0 (2026-10-26). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -629,6 +629,26 @@ settings in `video_config`.
   without a link. The client raises timeouts and aborts as `MachGenError` 408
   and 499, so polls keep a task on 408, 429 and 499 and fail it on other 4xx.
 
+**0.19.0 (2026-10-26, vb-q375).** `@apicity/machgen` 0.19.0 lists 28 video
+models and publishes per-model grids (`MACHGEN_VIDEO_GRIDS`,
+`MACHGEN_VIDEO_UPSCALE`) that `MachGenGenerateRequestSchema` now enforces with
+MachGen's own 400 wording. Videobook still catalogs the six models above. All
+1,725 combinations of their task types, resolutions, aspect ratios and
+durations pass the new checks, except the 72 that Videobook's own guards
+already refuse (1440p or first-plus-last-frame H3 runs over 15 seconds, and
+Seedance 2.5 `-1` reference-video edits at a fixed aspect ratio). The other 22
+models, including the UPSCALE task type, are not catalogued (vb-tutc), and
+`machgen.test.ts` names them so the next apicity model needs a decision.
+`reference_video_start_secs` became `number[]`, but Videobook never sends it.
+Estimates follow the 0.19.0 pricebook through `@apicity/cost`. An H3 run with
+first and last frames is now priced at the image-to-video rate, 0.035 USD/s
+at 480p instead of 0.05. Every model that takes a reference video bills its
+seconds on top of the output, so Wan 3.0 references with a video now cost
+more; Videobook already passes `costHints.inputDurationSeconds` for connected
+reference videos. The 0.19.0 grid lists 1080 for H3, but the pricebook still
+has no 1080p rate, so the catalog keeps leaving it out. Grok Imagine Video 1.5
+was already priced at 1080p in 0.18.1.
+
 ---
 
 ## 45. (gap) Fal queue status and result have no endpoint catalog rows — RESOLVED in 0.18.1
@@ -671,6 +691,57 @@ outcomes against the released rows. The submit row's path is a single
 multi-segment endpoint id, so the report, like the test, attributes a submit
 capture as the capture's only entry.
 
+**Strict in 0.19.0 (2026-10-26, vb-q375).** `@apicity/har` 0.19.0 gives
+`findMatchingRow` a third pass in which fal's `{endpoint_id}` spans whole
+path segments (`ac-bynay5`), and `apicity har report` counts a full-URL
+match, spanning or not, as `strict`. The same four captures at
+`https://queue.fal.run` report 4 calls (3 ok, 1 provider error), 0 unmatched
+exchanges and 0 unresolved calls under both CLIs. Under 0.18.1 `matchedBy`
+splits them into `soleEntry` 1 (submit) and `lenient` 3 (the polls); under
+0.19.0 all four are `strict`. The 0.18.1 report also listed the successful
+submit under schema too strict (`endpoint_id` and `input` missing, `prompt`
+unknown), because it validated the wire body against the whole request
+schema; the 0.19.0 report checks the annotated input and finds nothing
+(`ac-dvsxwf`). `server/src/har-capture.test.ts` now sends its fal calls to
+the real queue host through a stub fetch and requires each exchange to match
+its row through the full URL, with no sole-entry fallback. A capture made
+against a local base URL still matches only leniently, because the strict
+passes compare the host.
+
+---
+
+## 46. (decision) KIE 0.19.0 schema default changes — DECIDED 2026-10-26
+
+`@apicity/kie` 0.19.0 changes two schema defaults, and Videobook fills omitted
+fields from the schema because `buildWireRequest` sends the parsed request.
+Each field was audited across the catalog entry, `list_generation_models`
+and the job paths (`generate_video`, notebook cells, goal plans, chains and
+chat routing, which drops unrequested settings so the defaults apply).
+
+- `bytedance/seedance-2-5` `generate_audio` now defaults to `false`; KIE's
+  own default when the field is omitted is still `true`. Videobook keeps
+  `true`: the catalog entry spreads `LIGHTNING_VIDEO_OPTIONS`, whose
+  `generate_audio: true` is a Videobook product setting, so every catalog
+  request (text, frames, references and the v2v edit) still sends `true`,
+  and the option still describes `true`. Goal plans and the notebook
+  animate branch already set the field explicitly. Nothing changes for
+  users.
+- `grok-imagine-video-1-5-preview` `nsfw_checker` now defaults to `false`,
+  the default KIE's docs and live model schema give, and Videobook follows it.
+  Videobook 0.3.1 sent `true` only because the 0.18.1 schema disagreed with
+  KIE. Every other KIE video model in the catalog that takes the field
+  (Seedance 2.5 and its draft completion, the `grok-imagine/*` slugs and both
+  Wan 3.0 models) already sends `false`. A request can still pass
+  `nsfw_checker: true`, and chat routing keeps the setting when the request
+  asks for safety filtering.
+
+The same release adds the preview's 1080p tier (one `image_urls` entry,
+0.04 USD/s). The preferred-defaults rule picks the highest resolution, so
+the preview now defaults to 1080p as `grok-imagine/image-to-video` already
+does. A request with more than one image needs 480p or 720p, and the
+schema refuses it locally before any spend. `kie-0190.test.ts` and
+`generate-media.test.ts` pin these values.
+
 ---
 
 | Status       | Sections                                                            | What Videocity still carries                           |
@@ -683,8 +754,9 @@ capture as the capture's only entry.
 | **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`       |
-| **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871)        |
+| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`; 22 0.19.0 models uncatalogued (vb-tutc) |
+| **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871); strict matching in 0.19.0 |
+| **DECIDED**  | §46 KIE 0.19.0 default changes                                      | Seedance 2.5 audio on through the catalog defaults     |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |

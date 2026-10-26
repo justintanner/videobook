@@ -6,8 +6,32 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-26
+
+### Added
+
+- The KIE Grok Imagine Video 1.5 preview's 1080p tier, priced at $0.04 per
+  second. At 1080p it takes exactly one image (`image_urls`); 480p and 720p
+  still take more.
+
 ### Changed
 
+- Every `@apicity` package is at 0.19.0.
+- The KIE Grok Imagine Video 1.5 preview defaults to 1080p, its highest
+  resolution, as `kie:grok-imagine/image-to-video` already does. A request
+  with more than one image needs 480p or 720p and is refused before
+  anything is spent.
+- The KIE Grok Imagine Video 1.5 preview sends `nsfw_checker: false` by
+  default, the default KIE documents and every other KIE video model with
+  the setting already sends. 0.3.1 sent `true`; pass `nsfw_checker: true` to
+  keep KIE's content filter on.
+- KIE Seedance 2.5 keeps generating audio by default. apicity 0.19.0 now
+  defaults `generate_audio` to `false`, but Videobook still sends `true`
+  unless a request turns audio off.
+- MachGen estimates follow the 0.19.0 pricebook. A MiniMax H3 run with a
+  first and a last frame is priced at the image-to-video rate ($0.035 per
+  second at 480p instead of $0.05), and Wan 3.0 references that include a
+  video add the reference video's seconds to the output's.
 - KIE OmniHuman 2.0 generations turn KIE's watermark off by default
   (`enable_watermark: false`); pass `enable_watermark: true` to keep it.
   OmniHuman 2.0 videos generated with 0.3.1 carry the watermark. OmniHuman
@@ -15,6 +39,10 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A catalog model the installed apicity packages cannot resolve no longer
+  fails the whole model listing, which left every book looking empty on
+  load. The listing skips that model and logs a `model-unresolvable`
+  warning naming it.
 - Queued KIE OmniHuman 1.5 and 2.0 generations pass their driving audio's
   length to the cost estimate, so the KIE paygate estimate is bounded and the
   usage row is priced.

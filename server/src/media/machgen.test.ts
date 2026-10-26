@@ -40,9 +40,16 @@ function request(id: string, call: WireRequestInput): Record<string, unknown> {
 }
 
 describe("MachGen catalog", () => {
-  it("catalogs every MachGen video model apicity publishes with its task types", () => {
-    expect(Object.keys(MACHGEN_MODELS).sort()).toEqual(Object.keys(MACHGEN_VIDEO_MODEL_TASK_TYPES).sort());
-    for (const [apiId, tasks] of Object.entries(MACHGEN_VIDEO_MODEL_TASK_TYPES)) {
+  it("catalogs six of the MachGen video models apicity publishes with their generation task types", () => {
+    const published: Record<string, readonly string[]> = MACHGEN_VIDEO_MODEL_TASK_TYPES;
+    expect(Object.keys(published).filter((apiId) => !(apiId in MACHGEN_MODELS)).sort()).toEqual([
+      "Grok-Imagine-Video", "HappyHorse-1.0", "Kling-o3", "Kling-v3", "LTX-2.3-Pro", "MiniMax-H3-Turbo",
+      "Pixverse-C1", "Pixverse-V6", "Seedance-2.0-Fast", "Seedance-2.0-Mini",
+      "Topaz-Video-Generative", "Topaz-Video-Generative-Fast", "Topaz-Video-Precision", "Topaz-Video-Precision-Animation",
+      "Veo-3.1", "Veo-3.1-Fast", "Vidu-Q3", "Vidu-Q3-Pro", "Vidu-Q3-Pro-Fast", "Vidu-Q3-Turbo", "Vidu-Q4-Preview", "Wan2.2-A14B",
+    ]);
+    for (const apiId of Object.keys(MACHGEN_MODELS)) {
+      const tasks = (published[apiId] ?? []).filter((task) => task !== "UPSCALE");
       const model = resolveModel(`machgen:${apiId}`);
       expect(model).toMatchObject({ provider: "machgen", apiId, media: "video" });
       expect(model.title).toMatch(/\(MachGen\)$/u);
