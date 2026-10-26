@@ -168,6 +168,7 @@ export default defineConfig({
       'server/src/remotion/subtitles/chunker.test.ts',
       'server/src/remotion/subtitles/alive-layout.test.ts',
       'server/src/alive-captions/**/*.test.ts',
+      'server/src/captions/**/*.test.ts',
       'src/videobook/alive-captions.test.ts',
       'server/src/remotion/subtitles/segments.test.ts',
       'server/src/remotion/util.test.ts',
