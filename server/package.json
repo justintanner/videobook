@@ -39,7 +39,6 @@
     "@apicity/alibaba": "^0.19.0",
     "@apicity/b2": "^0.19.0",
     "@apicity/cost": "^0.19.0",
-    "@apicity/dropbox": "^0.19.0",
     "@apicity/elevenlabs": "^0.19.0",
     "@apicity/fal": "^0.19.0",
     "@apicity/free-media-upload": "^0.19.0",

@@ -27,11 +27,8 @@ describe("service connection tools", () => {
     return JSON.parse((result.content as TextContent)[0]!.text) as Record<string, unknown>;
   }
 
-  it("reports X, Dropbox and iCloud status through one tool", async () => {
+  it("reports X and iCloud status through one tool", async () => {
     expect(await status({ service: "x", refresh_account: true })).toMatchObject({ connected: false, has_credentials: false });
-    expect(Object.keys(await status({ service: "dropbox" }))).toEqual(
-      expect.arrayContaining(["connected", "pending", "has_credentials", "redirect_uri"]),
-    );
     expect(Object.keys(await status({ service: "icloud" }))).toEqual(
       expect.arrayContaining(["available", "root", "shared", "role", "reason"]),
     );
@@ -44,8 +41,10 @@ describe("service connection tools", () => {
   });
 
   it("rejects services it cannot connect", async () => {
-    const result = await client.callTool({ name: "connect_service", arguments: { service: "icloud" } });
-    expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0]!.text).toMatch(/Input validation error/u);
+    for (const service of ["icloud", "dropbox"]) {
+      const result = await client.callTool({ name: "connect_service", arguments: { service } });
+      expect(result.isError).toBe(true);
+      expect((result.content as TextContent)[0]!.text).toMatch(/Input validation error/u);
+    }
   });
 });

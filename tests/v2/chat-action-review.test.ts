@@ -192,7 +192,7 @@ describe('routedActionReview', () => {
       params: {
         asset_id: 'vid-source',
         orientation: 'portrait',
-        platform: 'x',
+        to: 'x',
         scheduled_for: '2026-08-25T03:00:00.000Z',
         text: postText,
       },
@@ -246,7 +246,7 @@ describe('routedActionReview', () => {
   it('labels an immediate media-only X post', () => {
     expect(routedActionReview({
       tool: 'post',
-      params: { asset_id: 'img-source', platform: 'x' },
+      params: { asset_id: 'img-source', to: 'x' },
       input: 'post @b2 to X',
     })).toMatchObject({
       title: 'Post to X',

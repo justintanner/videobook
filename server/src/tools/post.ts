@@ -1,10 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { PostView } from "../posts/post-contract.js";
+import { POST_PLATFORMS } from "../posts/post-contract.js";
+import type { PostPlatform, PostView } from "../posts/post-contract.js";
+import type { PostDownload } from "../posts/post-folder.js";
+import type { PostDeliverJob } from "../jobs/post-record.js";
 import { queue } from "../queue.js";
 import { schedulePost } from "../scheduled-posts.js";
 import type { PostToXResult, XPostFollowup } from "../x/post-contract.js";
 import { X_PREMIUM_POST_MAX_CHARACTERS } from "../x/account.js";
-import type { ToolDef } from "./tool-def.js";
+import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const SCHEDULE_LEAD_MS = 5_000;
 
@@ -48,163 +52,157 @@ const followupSchema = z.object({
   { message: "A follow-up needs text or at least one image" },
 );
 
+const POST_DESTINATIONS = ["icloud", "download", "x", "draft"] as const;
+type PostDestination = typeof POST_DESTINATIONS[number];
+
+interface PostArgs {
+  book_id: string;
+  to: PostDestination;
+  asset_id?: string;
+  post_cell_id?: string;
+  source_cell_id?: string;
+  notebook_id?: string;
+  text?: string;
+  platform?: PostPlatform;
+  folder?: string;
+  orientation?: "portrait" | "landscape";
+  scheduled_for?: string;
+  followups?: XPostFollowup[];
+}
+
+interface DeliveredPost {
+  post: PostView;
+  download?: PostDownload;
+}
+
+function textResult(value: unknown): ToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+}
+
+function toolError(message: string): ToolResult {
+  return { isError: true, content: [{ type: "text", text: message }] };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function deliveredMessage(to: Exclude<PostDestination, "x">, result: DeliveredPost): string {
+  const address = result.post.address;
+  if (to === "icloud") return `Saved ${address} to iCloud · Videobook/${result.post.runtime.icloud?.folder ?? ""}`;
+  if (to === "download") return `${address} is ready to download as ${result.download?.filename ?? "a clip"} with its caption`;
+  return `Saved ${address} as a draft`;
+}
+
+async function deliverPost(args: PostArgs & { to: Exclude<PostDestination, "x"> }): Promise<ToolResult> {
+  const job: PostDeliverJob = {
+    to: args.to,
+    postCellId: args.post_cell_id,
+    create: args.post_cell_id ? undefined : { assetId: args.asset_id, notebookId: args.notebook_id, sourceCellId: args.source_cell_id, platform: args.platform, caption: args.text },
+    caption: args.text,
+    platform: args.platform,
+    folder: args.folder,
+  };
+  try {
+    const result = await queue.enqueueAndWait<DeliveredPost>(`post-${args.to}-${args.post_cell_id ?? randomUUID()}-${randomUUID()}`, { type: "post_deliver", bookId: args.book_id, ...job });
+    return textResult({ ...result, message: deliveredMessage(args.to, result) });
+  } catch (error) {
+    return toolError(errorMessage(error));
+  }
+}
+
+async function scheduleXPost(args: PostArgs, prepared: PostView, scheduledFor: string): Promise<ToolResult> {
+  try {
+    const result = await schedulePost(
+      { asset_id: prepared.definition.source!.snapshotArtifactId!, book_id: args.book_id, platform: "x", text: args.text, post_cell_id: prepared.id },
+      scheduledFor,
+    );
+    return textResult({
+      status: "scheduled",
+      schedule_id: result.schedule_id,
+      scheduled_for: result.scheduled_for,
+      platform: "x",
+      cell_id: prepared.id,
+      cell_address: prepared.address,
+      message: `Scheduled ${prepared.address} for ${result.scheduled_for}`,
+    });
+  } catch (error) {
+    return toolError(`Failed to schedule post: ${errorMessage(error)}`);
+  }
+}
+
+async function publishToX(args: PostArgs): Promise<ToolResult> {
+  if (!args.text?.trim() && !args.post_cell_id) return toolError("A post title is required");
+  let prepared: PostView;
+  try {
+    prepared = await queue.enqueueAndWait<PostView>(`post-prepare-${args.post_cell_id ?? args.asset_id}-${Date.now()}`, { type: "post_prepare_x", bookId: args.book_id, assetId: args.asset_id, postCellId: args.post_cell_id, text: args.text, orientation: args.orientation, followups: args.followups });
+  } catch (error) {
+    return toolError(errorMessage(error));
+  }
+  if (args.scheduled_for) {
+    const when = new Date(args.scheduled_for).getTime();
+    if (Number.isNaN(when)) return toolError(`Invalid scheduled_for: ${args.scheduled_for}`);
+    if (when - Date.now() > SCHEDULE_LEAD_MS) return scheduleXPost(args, prepared, args.scheduled_for);
+  }
+  try {
+    const result = await queue.enqueueAndWait<PostToXResult>(`post-x-${prepared.id}`, {
+      type: "post_to_x",
+      assetId: prepared.definition.source!.snapshotArtifactId!,
+      postCellId: prepared.id,
+      bookId: args.book_id,
+      text: args.text,
+      orientation: args.orientation,
+      followups: args.followups,
+    });
+    return textResult(postToolResultPayload(result, "x"));
+  } catch (error) {
+    return toolError(`Post failed: ${errorMessage(error)}`);
+  }
+}
+
 export function postDef(): ToolDef {
   return {
     name: "post",
     description:
-      "Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.",
+      "Post a clip or image in one step. to: icloud saves the clip and caption.txt to iCloud Drive › Videobook for the phones; download freezes them and returns download links for a manual upload; x publishes to X now or at scheduled_for, with optional thread replies; draft only saves the Post. Pass asset_id for a new Post or post_cell_id to send an existing one.",
     schema: {
-      post_cell_id: z.string().uuid().optional().describe("Existing Post cell to publish; uses its frozen media and caption"),
-      asset_id: z.string().optional().describe("Asset to post (e.g. vid-clip-name, img-photo-name)"),
       book_id: z.string().describe("Book id containing the asset"),
-      platform: z.enum(["x"]).default("x").describe("Target platform; defaults to 'x'"),
+      to: z.enum(POST_DESTINATIONS).describe("Where the post goes: icloud, download, x or draft"),
+      asset_id: z.string().optional().describe("Clip or image to post; creates a new Post beside its cell"),
+      post_cell_id: z.string().uuid().optional().describe("Existing Post to send; uses its frozen media and caption"),
+      source_cell_id: z.string().uuid().optional().describe("Notebook cell to post when it is known; creates a new Post beside it"),
+      notebook_id: z.string().uuid().optional().describe("draft only: notebook for a Post that has no clip yet"),
       text: z
         .string()
         .trim()
         .max(X_PREMIUM_POST_MAX_CHARACTERS)
         .optional()
         .describe(
-          "Title of the root post (X limit 280 chars, or 25000 when the connected account has X Premium; service_status with service x reports post_max_characters). Publishing requires one; pass it only when the user supplied it, since the confirm sheet asks for a missing title before applying.",
+          "Caption saved with the clip, or the X post title (X limit 280 chars, or 25000 when the connected account has X Premium; service_status with service x reports post_max_characters). Pass it only when the user supplied it; the review sheet asks for a missing X title.",
         ),
+      platform: z.enum(POST_PLATFORMS).optional().describe("icloud, download and draft: where the clip will be posted by hand, for the caption and link checks; defaults to tiktok"),
+      folder: z.string().max(500).optional().describe("icloud only: folder inside iCloud Drive › Videobook"),
       orientation: z
         .enum(["portrait", "landscape"])
         .optional()
         .describe(
-          "Force a target video orientation. Pads with black bars to 1080x1920 (portrait) or 1920x1080 (landscape) before upload. Skipped when source already matches.",
+          "x only: pad the video with black bars to 1080x1920 (portrait) or 1920x1080 (landscape) before upload. Skipped when the source already matches.",
         ),
       scheduled_for: z
         .string()
         .datetime()
         .optional()
-        .describe("ISO 8601 timestamp to publish at. Omit to post immediately."),
+        .describe("x only: ISO 8601 time to publish at. Omit to post immediately; list_posts with status scheduled shows pending posts and update_post with cancel_schedule cancels one."),
       followups: z
         .array(followupSchema)
         .max(25)
         .optional()
-        .describe("Ordered replies to publish as a thread after the root post."),
+        .describe("x only: ordered replies to publish as a thread after the root post."),
     },
     handler: async (args) => {
-      const {
-        asset_id,
-        post_cell_id,
-        book_id,
-        platform = "x",
-        text,
-        orientation,
-        scheduled_for,
-        followups,
-      } =
-        args as {
-          asset_id?: string;
-          post_cell_id?: string;
-          book_id: string;
-          platform?: "x";
-          text?: string;
-          orientation?: "portrait" | "landscape";
-          scheduled_for?: string;
-          followups?: XPostFollowup[];
-        };
-
-      if (platform !== "x") {
-        return {
-          isError: true as const,
-          content: [
-            { type: "text" as const, text: `Unsupported platform: ${platform}` },
-          ],
-        };
-      }
-
-      if (!text?.trim() && !post_cell_id) {
-        return {
-          isError: true as const,
-          content: [
-            { type: "text" as const, text: "A post title is required" },
-          ],
-        };
-      }
-
-      let prepared: PostView;
-      try {
-        prepared = await queue.enqueueAndWait<PostView>(`post-prepare-${post_cell_id ?? asset_id}-${Date.now()}`, { type: "post_prepare_x", bookId: book_id, assetId: asset_id, postCellId: post_cell_id, text, orientation, followups });
-      } catch (error) {
-        return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] };
-      }
-      const frozenAssetId = prepared.definition.source!.snapshotArtifactId!;
-      if (scheduled_for) {
-        const when = new Date(scheduled_for).getTime();
-        if (Number.isNaN(when)) {
-          return {
-            isError: true as const,
-            content: [
-              { type: "text" as const, text: `Invalid scheduled_for: ${scheduled_for}` },
-            ],
-          };
-        }
-        if (when - Date.now() > SCHEDULE_LEAD_MS) {
-          try {
-            const result = await schedulePost(
-              { asset_id: frozenAssetId, book_id, platform, text, post_cell_id: prepared.id },
-              scheduled_for,
-            );
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    status: "scheduled",
-                    schedule_id: result.schedule_id,
-                    scheduled_for: result.scheduled_for,
-                    platform,
-                    cell_id: prepared.id,
-                    cell_address: prepared.address,
-                  }),
-                },
-              ],
-            };
-          } catch (err) {
-            return {
-              isError: true as const,
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Failed to schedule post: ${err instanceof Error ? err.message : String(err)}`,
-                },
-              ],
-            };
-          }
-        }
-      }
-
-      const jobId = `post-x-${prepared.id}`;
-      try {
-        const result = await queue.enqueueAndWait<PostToXResult>(jobId, {
-          type: "post_to_x",
-          assetId: frozenAssetId,
-          postCellId: prepared.id,
-          bookId: book_id,
-          text,
-          orientation,
-          followups,
-        });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(postToolResultPayload(result, platform)),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [
-            {
-              type: "text" as const,
-              text: `Post failed: ${err instanceof Error ? err.message : String(err)}`,
-            },
-          ],
-        };
-      }
+      const input = args as unknown as PostArgs;
+      if (input.to === "x") return publishToX(input);
+      return deliverPost({ ...input, to: input.to });
     },
   };
 }

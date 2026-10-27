@@ -7,10 +7,8 @@ import type { Server, RequestListener } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngine } from "videobook-engine";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
-import { createDropbox } from "@apicity/dropbox";
 import { createX } from "@apicity/x";
 import { createPost, freezePostOutbound, getPost, linkPost, listPosts, migrateLegacyPosts, patchPostRuntime, readPostRuntime, updatePost } from "../posts/post-store.js";
-import { dropboxContentHash, uploadPostToDropbox } from "../posts/dropbox-upload.js";
 import { icloudStatus, postIcloudSyncStatus, savePostToICloud } from "../posts/icloud-drive.js";
 import { parseUbiquitousStates, summarizeUbiquitousSync } from "../posts/icloud-status.js";
 import { nextPostMetricAt, recordPostMetrics, refreshPostMetrics } from "../posts/post-metrics.js";
@@ -138,97 +136,6 @@ describe("Post publication records", () => {
     const schema = z.object(postRecordDefs(engine).find(def => def.name === "record_post_metrics")!.schema);
     expect(schema.safeParse({ book_id: "book", post_cell_id: post.id, observed_at: new Date().toISOString(), values: { likes: 0 } }).success).toBe(true);
     expect(schema.safeParse({ book_id: "book", post_cell_id: post.id, observed_at: new Date().toISOString(), values: { likes: -1 } }).success).toBe(false);
-  });
-
-  it("resumes lost chunk acknowledgments and caption failures across restart without duplicate delivery", async () => {
-    const video = Buffer.alloc(8 * 1024 * 1024 + 100, "v");
-    value(await engine.files.write(source.outputArtifactId!, "original.mp4", video));
-    const files = new Map<string, { bytes: Buffer; rev: string }>();
-    const sessions = new Map<string, Buffer>();
-    let videoFinishes = 0;
-    let failCaption = true;
-    let failAppend = true;
-    const base = await serve(async (req, res) => {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(Buffer.from(chunk));
-      const body = Buffer.concat(chunks);
-      const args = JSON.parse(String(req.headers["dropbox-api-arg"] ?? "{}")) as { cursor?: { session_id: string; offset: number }; commit?: { path: string } };
-      res.setHeader("Content-Type", "application/json");
-      const metadata = (path: string, file: { bytes: Buffer; rev: string }) => ({ ".tag": "file", id: `id:${path}`, rev: file.rev, name: path.split("/").at(-1), size: file.bytes.length, content_hash: dropboxContentHash(file.bytes), client_modified: new Date().toISOString(), server_modified: new Date().toISOString() });
-      if (req.url === "/files/get_metadata") {
-        const path = (JSON.parse(body.toString()) as { path: string }).path;
-        const file = files.get(path);
-        res.writeHead(file ? 200 : 409).end(JSON.stringify(file ? metadata(path, file) : { error_summary: "path/not_found/", error: { ".tag": "path", path: { ".tag": "not_found" } } }));
-      } else if (req.url === "/files/upload_session/start") {
-        const id = `session-${sessions.size}`;
-        sessions.set(id, body);
-        res.end(JSON.stringify({ session_id: id }));
-      } else if (req.url === "/files/upload_session/append_v2") {
-        const previous = sessions.get(args.cursor!.session_id)!;
-        if (args.cursor!.offset !== previous.length) { res.writeHead(409).end(JSON.stringify({ error_summary: "incorrect_offset/", error: { ".tag": "incorrect_offset", correct_offset: previous.length } })); return; }
-        sessions.set(args.cursor!.session_id, Buffer.concat([previous, body]));
-        if (failAppend) { failAppend = false; res.writeHead(503).end(JSON.stringify({ error_summary: "acknowledgment_lost" })); return; }
-        res.end("null");
-      } else if (req.url === "/files/upload_session/finish") {
-        const path = args.commit!.path;
-        if (path.endsWith("caption.txt") && failCaption) { failCaption = false; res.writeHead(503).end(JSON.stringify({ error_summary: "temporarily_unavailable" })); return; }
-        if (path.endsWith(".mp4")) videoFinishes += 1;
-        const file = { bytes: sessions.get(args.cursor!.session_id)!, rev: "rev1" };
-        files.set(path, file);
-        res.end(JSON.stringify(metadata(path, file)));
-      } else res.writeHead(404).end("{}");
-    });
-    const client = createDropbox({ oauthToken: "local-test-token", apiBaseURL: base, contentBaseURL: base });
-    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Caption", credits: "Credit" });
-    await expect(uploadPostToDropbox(engine, post.id, { client })).rejects.toThrow("503");
-    expect(readPostRuntime(engine, post.id).dropbox?.video.offset).toBe(0);
-    await expect(uploadPostToDropbox(engine, post.id, { client })).rejects.toThrow("503");
-    expect(readPostRuntime(engine, post.id).dropbox?.video.rev).toBe("rev1");
-    engine.close();
-    engine = createEngine({ rootDir: root, durableWrites: false });
-    await engine.ready;
-    await uploadPostToDropbox(engine, post.id, { client });
-    expect(videoFinishes).toBe(1);
-    expect(getPost(engine, post.id).runtime.status).toBe("ready");
-    expect([...files.values()][0]!.bytes.equals(video)).toBe(true);
-    expect([...files.values()][1]!.bytes.toString()).toBe("Caption\n\nCredit");
-  });
-
-  it("saves an edited caption before the first Dropbox delivery and refuses to change it afterwards", async () => {
-    const files = new Map<string, Buffer>();
-    const sessions = new Map<string, Buffer>();
-    const base = await serve(async (req, res) => {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(Buffer.from(chunk));
-      const body = Buffer.concat(chunks);
-      const args = JSON.parse(String(req.headers["dropbox-api-arg"] ?? "{}")) as { cursor?: { session_id: string }; commit?: { path: string } };
-      res.setHeader("Content-Type", "application/json");
-      const metadata = (path: string, bytes: Buffer) => ({ ".tag": "file", id: `id:${path}`, rev: "rev1", name: path.split("/").at(-1), size: bytes.length, content_hash: dropboxContentHash(bytes), client_modified: new Date().toISOString(), server_modified: new Date().toISOString() });
-      if (req.url === "/files/get_metadata") {
-        const path = (JSON.parse(body.toString()) as { path: string }).path;
-        const file = files.get(path);
-        res.writeHead(file ? 200 : 409).end(JSON.stringify(file ? metadata(path, file) : { error_summary: "path/not_found/", error: { ".tag": "path", path: { ".tag": "not_found" } } }));
-      } else if (req.url === "/files/upload_session/start") {
-        const id = `session-${sessions.size}`;
-        sessions.set(id, body);
-        res.end(JSON.stringify({ session_id: id }));
-      } else if (req.url === "/files/upload_session/append_v2") {
-        sessions.set(args.cursor!.session_id, Buffer.concat([sessions.get(args.cursor!.session_id)!, body]));
-        res.end("null");
-      } else if (req.url === "/files/upload_session/finish") {
-        const bytes = sessions.get(args.cursor!.session_id)!;
-        files.set(args.commit!.path, bytes);
-        res.end(JSON.stringify(metadata(args.commit!.path, bytes)));
-      } else res.writeHead(404).end("{}");
-    });
-    const client = createDropbox({ oauthToken: "local-test-token", apiBaseURL: base, contentBaseURL: base });
-    const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Draft caption" });
-    await uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Edited in review" });
-    expect(getPost(engine, post.id).definition.caption).toBe("Edited in review");
-    expect(files.get("/Deliveries/skate/caption.txt")?.toString()).toBe("Edited in review");
-    await expect(uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Another caption" })).rejects.toThrow("frozen at its first delivery");
-    await uploadPostToDropbox(engine, post.id, { client, folder: "/Deliveries/skate", caption: "Edited in review" });
-    expect(getPost(engine, post.id).runtime.dropbox?.completedAt).toBeTruthy();
   });
 
   describe("iCloud Drive delivery", () => {

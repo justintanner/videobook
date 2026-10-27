@@ -15,8 +15,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_music_video: { kind: 'existing' },
   start_goal: { kind: 'existing' },
   open_cold_open: { kind: 'existing' },
-  open_post_dropbox: { kind: 'existing' },
-  open_post_icloud: { kind: 'existing' },
   open_watermark: { kind: 'existing' },
   speak_preview: { kind: 'existing' },
   x_connect: { kind: 'existing' },
@@ -40,7 +38,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   settings_portrait: { kind: 'form', tool: 'render_video' },
   settings_square: { kind: 'form', tool: 'render_video' },
   viewer_focus_file: { kind: 'form', tool: 'asset_manifest' },
-  open_post_composer: { kind: 'form', tool: 'post' },
+  open_post_composer: { kind: 'existing' },
   timeline_audio_add: { kind: 'form', tool: 'add_timeline_audio' },
   timeline_audio_move: { kind: 'form', tool: 'move_timeline_audio' },
   timeline_audio_remove: { kind: 'form', tool: 'remove_timeline_audio' },
@@ -68,7 +66,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
 export function workspaceUiFormValues(action: UiActionId, values: Record<string, unknown>, frameRate: number): Record<string, unknown> {
   const result = { ...values }
   if (action === 'open_osg' && values.image) result.osg_asset_id = values.image
-  if (action === 'open_post_composer' && values.asset_ref) result.asset_id = values.asset_ref
   if (action === 'open_crop' && values.ratio !== undefined && values.ratio !== null && String(values.ratio).trim() !== '') {
     result.ratio = cropRatio(values.ratio)
   }

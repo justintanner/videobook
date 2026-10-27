@@ -80,6 +80,18 @@ function sendHealth(_req: Request, res: Response): void {
   });
 }
 
+function unsafeFilenameCharacter(character: string): boolean {
+  const code = character.charCodeAt(0);
+  return character === "/" || character === "\\" || code < 32 || code === 127;
+}
+
+function attachmentName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const name = value.trim();
+  if (!name || name.length > 255 || [...name].some(unsafeFilenameCharacter)) return null;
+  return name;
+}
+
 async function sendArtifactFile(req: Request, res: Response): Promise<void> {
   const bookId = String(req.params[0]);
   const artifactId = String(req.params[1]);
@@ -95,6 +107,8 @@ async function sendArtifactFile(req: Request, res: Response): Promise<void> {
     return;
   }
   res.type(filename);
+  const saveAs = attachmentName(req.query.download);
+  if (saveAs) res.attachment(saveAs);
   res.setHeader("Accept-Ranges", "bytes");
   const etag = `"${createHash("sha256").update(result.value).digest("hex")}"`;
   res.setHeader("ETag", etag);

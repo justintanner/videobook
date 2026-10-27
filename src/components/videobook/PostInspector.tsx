@@ -3,7 +3,7 @@ import type { NotebookCell } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { POST_METRIC_NAMES, POST_PLATFORMS } from '../../../server/src/posts/post-contract'
 import type { PostDefinition, PostMetrics, PostPlatform, PostView } from '../../../server/src/posts/post-contract'
-import { icloudPhoneReceipt, icloudProgressLabel } from '@/videobook/post-delivery-review'
+import { icloudPhoneReceipt, icloudProgressLabel, postDownloadFor } from '@/videobook/post-delivery-review'
 import type { ICloudSyncView } from '@/videobook/post-delivery-review'
 import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import type { DeliveryDestination } from '@/videobook/post-delivery-review'
@@ -19,11 +19,12 @@ function localObservationTime() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 23)
 }
 
-export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onSelectCell, onDeliver, onReviewX, onDelete }: {
+export function PostInspector({ post, cells, asset, bookId, bookName, call, onRefresh, onSelectCell, onDeliver, onReviewX, onDelete }: {
   post: PostView
   cells: readonly NotebookCell[]
   asset?: AssetRecord
   bookId: string
+  bookName: string
   call?: PostToolCall
   onRefresh: () => Promise<unknown>
   onSelectCell: (id: string) => void
@@ -47,11 +48,13 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
   const locked = Boolean(post.runtime.outbound || post.runtime.url || post.runtime.status === 'scheduled')
   const source = cells.find(cell => cell.id === post.definition.source?.cellId)
   const latest = post.runtime.metrics.at(-1)
+  const download = post.runtime.download ? postDownloadFor(post, { bookId, name: bookName }) : null
+  const xBusy = ['scheduled', 'needs_reconciliation', 'posting'].includes(post.runtime.status)
   const dirty = platform !== post.definition.platform || caption !== post.definition.caption || credits !== post.definition.credits || account !== post.definition.account
   const run = (tool: string, args: Record<string, unknown> = {}) => actions.run(tool, { post_cell_id: post.id, ...args })
   const link = async (args: PostLinkArgs) => {
     if (!call) return
-    await call('link_post', { book_id: bookId, post_cell_id: post.id, ...args })
+    await call('update_post', { book_id: bookId, post_cell_id: post.id, ...args })
     await onRefresh()
   }
   return <section className="post-inspector" aria-label="Post details">
@@ -75,21 +78,21 @@ export function PostInspector({ post, cells, asset, bookId, call, onRefresh, onS
     {actions.error && <p role="alert" className="post-error">{actions.error}</p>}
     {post.runtime.error && <p role="alert" className="post-error">{post.runtime.error}</p>}
     {!post.runtime.url && <div className="post-delivery">
-      <h3>Deliver</h3>
-      <p>Review the clip and caption, then save them where you will publish.</p>
+      <h3>Post</h3>
+      <p>Save the clip and caption to iPhone, download them for a manual upload, or publish to X.</p>
       <button type="button" aria-pressed={post.definition.delivery === 'icloud'} onClick={() => onDeliver('icloud')}>Save to iPhone</button>
-      <button type="button" aria-pressed={post.definition.delivery === 'dropbox'} onClick={() => onDeliver('dropbox')}>Upload to Dropbox</button>
-      {post.definition.platform === 'x' && !post.runtime.xRequest && !['scheduled', 'needs_reconciliation', 'posting'].includes(post.runtime.status) && <button type="button" disabled={actions.busy || !post.definition.source?.snapshotArtifactId || !caption.trim() || dirty} onClick={() => void onReviewX(post)}>Review X post…</button>}
-      {post.definition.platform === 'x' && post.runtime.xRequest && post.runtime.status === 'failed' && <button type="button" disabled={actions.busy} onClick={() => void run('post')}>Retry saved X post</button>}
-      {dirty && <small>Save your draft before delivering.</small>}
-      {post.runtime.scheduledFor && <p>Scheduled for {new Date(post.runtime.scheduledFor).toLocaleString()}</p>}
+      <button type="button" aria-pressed={post.definition.delivery === 'download'} onClick={() => onDeliver('download')}>Download</button>
+      {!post.runtime.xRequest && !xBusy && <button type="button" disabled={actions.busy || !post.definition.source?.snapshotArtifactId || dirty} onClick={() => void onReviewX(post)}>Post to X…</button>}
+      {post.definition.platform === 'x' && post.runtime.xRequest && ['failed', 'draft'].includes(post.runtime.status) && <button type="button" disabled={actions.busy} onClick={() => void run('post', { to: 'x' })}>{post.runtime.status === 'failed' ? 'Retry saved X post' : 'Post to X now'}</button>}
+      {dirty && <small>Save your draft before posting.</small>}
+      {post.runtime.status === 'scheduled' && post.runtime.scheduledFor && <p>Scheduled for {new Date(post.runtime.scheduledFor).toLocaleString()} <button type="button" disabled={actions.busy || !call} onClick={() => void run('update_post', { cancel_schedule: true })}>Cancel scheduled post</button></p>}
     </div>}
     {post.runtime.icloud?.completedAt && <div className="post-receipt"><strong>{icloudPhoneReceipt(post.runtime.icloud.folder)}</strong>{icloudProgress && <small>{icloudProgress}</small>}</div>}
-    {post.runtime.dropbox && <div className="post-receipt"><strong>{post.runtime.dropbox.completedAt ? 'Dropbox files ready' : 'Dropbox upload saved'}</strong><span>{post.runtime.dropbox.folder}</span><small>Clip: {post.runtime.dropbox.video.rev ? 'uploaded' : `${post.runtime.dropbox.video.offset.toLocaleString()} bytes saved`} · Caption: {post.runtime.dropbox.caption.rev ? 'uploaded' : 'pending'}</small></div>}
+    {download && <div className="post-receipt"><strong>Downloaded for manual upload</strong><a href={download.clip_url} download={download.filename}>{download.filename}</a><a href={download.caption_url} download>caption.txt</a></div>}
     {post.runtime.url ? <div className="post-receipt"><a href={post.runtime.url} target="_blank" rel="noreferrer">Open published post ↗</a><span>{post.runtime.postedAt ? new Date(post.runtime.postedAt).toLocaleString() : 'Publication time unknown'}</span>{post.runtime.x?.replies.map(reply => <a key={reply.tweet_id} href={reply.tweet_url} target="_blank" rel="noreferrer">Open reply ↗</a>)}</div> : <PostLinkField post={post} disabled={actions.busy || !call || dirty} className="post-delivery post-link-field" onLink={link} />}
     {post.runtime.url && <div className="post-results"><h3>Results</h3>
       {latest ? <><div className="post-metric-grid">{POST_METRIC_NAMES.map(name => <div key={name}><strong>{latest.values[name]?.toLocaleString() ?? '—'}</strong><span>{name}</span></div>)}</div><small>Observed {new Date(latest.observedAt).toLocaleString()} · {latest.source}</small>{latest.mediaViews !== undefined && <p>{latest.mediaViews.toLocaleString()} X media views · shared across posts using this media</p>}</> : <p>No observations yet. Unknown metrics appear as —.</p>}
-      {post.definition.platform === 'x' && <><button type="button" disabled={actions.busy} onClick={() => void run('refresh_post_metrics')}>Refresh now</button><small>{post.runtime.nextMetricAt ? `Next check ${new Date(post.runtime.nextMetricAt).toLocaleString()}` : post.runtime.metricsPaused ? 'Automatic checks paused; reconnect X and refresh.' : 'Scheduled observations complete.'}</small>{post.runtime.metricsError && <p className="post-error">{post.runtime.metricsError}</p>}</>}
+      {post.definition.platform === 'x' && <><button type="button" disabled={actions.busy} onClick={() => void run('record_post_metrics')}>Refresh now</button><small>{post.runtime.nextMetricAt ? `Next check ${new Date(post.runtime.nextMetricAt).toLocaleString()}` : post.runtime.metricsPaused ? 'Automatic checks paused; reconnect X and refresh.' : 'Scheduled observations complete.'}</small>{post.runtime.metricsError && <p className="post-error">{post.runtime.metricsError}</p>}</>}
       <details onToggle={event => { if (event.currentTarget.open) setObservedAt(localObservationTime()) }}><summary>Add manual observation</summary><form onSubmit={event => {
         event.preventDefault()
         const values: PostMetrics = {}

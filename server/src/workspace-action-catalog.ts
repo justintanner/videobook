@@ -26,10 +26,7 @@ const uiActions = new Set<string>(UI_ACTION_IDS);
 const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 
 export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason: string }>> = {
-  upload_post_to_dropbox: { actionId: "command.upload-post-to-dropbox", reason: "Uploads after the composer review shows the Post, its editable caption and the destination folder." },
-  save_post_to_icloud: { actionId: "command.save-post-to-icloud", reason: "Saves after the composer delivery sheet shows the Post, its caption and the iPhone folder." },
-  post_icloud_sync_status: { actionId: "command.save-post-to-icloud", reason: "Reports iCloud upload progress for a Post the delivery sheet already saved." },
-  draft_post_copy: { actionId: "command.save-post-to-icloud", reason: "Drafts the caption and tags in the delivery sheet from the clip analysis, and rewrites them with an Astra prompt." },
+  draft_post_copy: { actionId: "command.post", reason: "Drafts the caption and tags in the post sheet from the clip analysis, and rewrites them with an Astra prompt." },
   prepare_cold_open: { actionId: "command.edit-cold-open", reason: "Selects a highlight in the cold-open review." },
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },
   video_goal: {

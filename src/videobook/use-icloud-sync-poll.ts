@@ -24,7 +24,7 @@ export function useIcloudSyncPoll(
     const tick = async () => {
       if (stopped || Date.now() > deadline) return
       try {
-        const sync = icloudSyncFromTool(await call('post_icloud_sync_status', { book_id: bookId, post_cell_id: postId }, { background: true }))
+        const sync = icloudSyncFromTool(await call('service_status', { service: 'icloud', book_id: bookId, post_cell_id: postId }, { background: true }))
         if (stopped) return
         onSyncRef.current(sync)
         if (!icloudSyncShouldPoll(sync.phase)) stopped = true

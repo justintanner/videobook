@@ -21,7 +21,6 @@ type ProviderGroup =
   | "elevenlabs"
   | "openai"
   | "xai"
-  | "dropbox"
   | "x"
   | "kimicoding"
   | "fal"
@@ -83,8 +82,6 @@ const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
   XAI_API_KEY: { provider: "xai", label: "xAI", live: "xai-tokens" },
   X_CLIENT_ID: { provider: "x", label: "X OAuth" },
   X_CLIENT_SECRET: { provider: "x", label: "X OAuth" },
-  DROPBOX_CLIENT_ID: { provider: "dropbox", label: "Dropbox OAuth" },
-  DROPBOX_CLIENT_SECRET: { provider: "dropbox", label: "Dropbox OAuth" },
   KIMI_CODING_API_KEY: { provider: "kimicoding", label: "Kimi Coding" },
   FAL_API_KEY: { provider: "fal", label: "FAL" },
   FAL_ADMIN_API_KEY: { provider: "fal", label: "FAL admin" },
@@ -105,8 +102,6 @@ const ROW_ORDER: readonly ManagedEnvKey[] = [
   "XAI_API_KEY",
   "X_CLIENT_ID",
   "X_CLIENT_SECRET",
-  "DROPBOX_CLIENT_ID",
-  "DROPBOX_CLIENT_SECRET",
   "KIMI_CODING_API_KEY",
   "FAL_API_KEY",
   "FAL_ADMIN_API_KEY",

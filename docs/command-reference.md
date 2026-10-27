@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (226)
+## MCP endpoints (219)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -44,7 +44,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `concat_images` — Combine 1-9 image assets into one new image sheet, each fit without stretching; one or two inputs use a two-slot sheet (landscape side by side, portrait stacked).
 - `configure_asset_tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
-- `connect_service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.
+- `connect_service` — Start connecting an X account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.
 - `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
 - `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
 - `create_book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.
@@ -52,7 +52,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_entity` — Create a reusable prompt, scene or character
 - `create_notebook` — Create an empty notebook
 - `create_notebook_cell` — Create a UUIDv7 notebook cell
-- `create_post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.
 - `create_qart` — Create scan-safe color and monochrome QR mosaics from a source image artifact. The image is sampled per QR module with protected QR structures and white quiet zones.
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
@@ -100,7 +99,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `get_music_analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio
 - `get_notebook` — Read a notebook graph
 - `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
-- `get_post` — Read a Post with its frozen source, lineage, publication receipt and timestamped results.
 - `get_primary_sequence` — Read the canonical primary sequence
 - `get_render_settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)
 - `get_search_coverage` — Read progressive semantic-index coverage for a book or artifact
@@ -112,7 +110,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `inspect_generation_request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
-- `link_post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.
 - `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.
 - `list_book_actions` — List authored semantic revisions for a book
 - `list_books` — List all Videobook books
@@ -129,7 +126,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `list_notebook_generation_plans` — List durable generation plans and their retryable lifecycle state
 - `list_notebook_run_plans` — List durable aggregate workbook run plans and their lifecycle state
 - `list_notebooks` — List canonical notebook documents
-- `list_posts` — List this book's publications and performance observations for comparison.
+- `list_posts` — List this book's Posts with their status, frozen source, lineage, delivery receipts, scheduled time and timestamped results. post_cell_id reads one Post; status scheduled lists the X posts waiting to publish.
 - `list_prompt_history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.
 - `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
 - `list_workspace_actions` — List workspace actions (tools, app screens and composite commands) as id, command, title, group and what each runs. Filter with query, group or ids; detail full adds typed inputs, surfaces, confirmation policy and tool coverage.
@@ -149,8 +146,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `plan_sequence_edit` — Compile one or more sequence edits (insert, trim, move, volume, captions, ...) into one reviewable CommandPlan
 - `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
 - `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
-- `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
-- `post_icloud_sync_status` — Read whether a saved Post's clip and caption.txt have finished uploading to iCloud. A folder outside iCloud Drive reports that it is not an iCloud folder.
+- `post` — Post a clip or image in one step. to: icloud saves the clip and caption.txt to iCloud Drive › Videobook for the phones; download freezes them and returns download links for a manual upload; x publishes to X now or at scheduled_for, with optional thread replies; draft only saves the Post. Pass asset_id for a new Post or post_cell_id to send an existing one.
 - `prepare_cold_open` — Suggest an exciting 2-5 second highlight of a video for a cold open (cached, or an analysis job to read with list_jobs). Start here for cold opens: review the range, then create the copy with edit_cold_open.
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
@@ -160,10 +156,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
 - `read_transcript` — Read a video or audio asset's transcript: timed per-word cues when available, otherwise plain text; kind reports timed, plain, silence or missing. raw returns the stored file unparsed.
 - `reconcile_project_work` — Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.
-- `record_post_metrics` — Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.
+- `record_post_metrics` — Record a performance observation for a published Post: omit values to fetch current X metrics, or pass values for a manual observation (observed_at defaults to now). Omit unavailable metrics; zero means an observed zero.
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate, audio_generate.
 - `recover_asset` — Clear a failed asset's generation error and keep its media, returning it to ready. Use clean_failed_assets instead to delete failed generations.
-- `refresh_post_metrics` — Fetch a current X metrics observation. Non-X publications use record_post_metrics. Unknown values remain unknown.
 - `register_search_manifest` — Register an immutable semantic-index model manifest
 - `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
@@ -194,12 +189,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `rewrite_script` — Rewrite a script asset's markdown in place without re-reading the source image: variant full (reproduction prompt and breakdown) or tldr (one or two sentences), with an optional platform preset and custom_prompt instruction. Asynchronous; earlier versions stay in history.
 - `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
 - `run_notebook_cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.
-- `save_post_to_icloud` — Deliver a Post's frozen media and caption.txt to the shared iCloud Drive Videobook folder (folder is relative to it) so they appear in Files on the phones. A caption saves to the Post first. Repeats are no-ops and never replace different files.
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
 - `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
-- `service_status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.
+- `service_status` — Read X or iCloud Drive status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones, or, with book_id and post_cell_id, whether that Post's clip and caption.txt finished uploading.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_har_capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.
@@ -226,18 +220,17 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `trim_video` — Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.
 - `update_entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity
 - `update_notebook_cell` — Update one notebook cell
-- `update_post` — Edit a Post draft or its notes. Delivered media, caption and source versions are immutable; create another Post for a repost.
+- `update_post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.
 - `update_script` — Update a script asset's markdown content (original.md).
 - `update_sequence_rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio
 - `update_timeline_audio` — Update an audio overlay's volume or fades
 - `upload_file` — Upload a media or markdown file into a Videobook project as an asset
-- `upload_post_to_dropbox` — Upload the frozen Post media and caption.txt to a private Dropbox folder. A caption saves to the Post first and freezes with the first delivery. Interrupted uploads resume without replacing unrelated files.
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (299; 144 dedicated command routes)
+## Slash actions (293; 142 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -291,7 +284,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
 - `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
-- `/connect-service` — Start connecting an X or Dropbox account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.; MCP: `connect_service`
+- `/connect-service` — Start connecting an X account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.; MCP: `connect_service`
 - `/connect-x` — Connect your X (Twitter) account via browser OAuth; UI: `x_connect`
 - `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
 - `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
@@ -300,7 +293,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
 - `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
-- `/create-post` — Create a Post cell to track one publication. Freezes the selected source clip and its upstream idea/prompt lineage; place the cell beside the source.; MCP: `create_post`
 - `/create-watermark-card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.; MCP: `create_watermark_card`
 - `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
 - `/crop-asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_asset`
@@ -357,7 +349,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/get-music-analysis` — Read cached music beats, waveform, analysis job status and optional section energy/label suggestions for the current source audio; MCP: `get_music_analysis`
 - `/get-notebook` — Read a notebook graph; MCP: `get_notebook`
 - `/get-notebook-cell-details` — Return selected-cell details including raw Dolt row, edges, and action validation; MCP: `get_notebook_cell_details`
-- `/get-post` — Read a Post with its frozen source, lineage, publication receipt and timestamped results.; MCP: `get_post`
 - `/get-primary-sequence` — Read the canonical primary sequence; MCP: `get_primary_sequence`
 - `/get-render-settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations); MCP: `get_render_settings`
 - `/get-search-coverage` — Read progressive semantic-index coverage for a book or artifact; MCP: `get_search_coverage`
@@ -378,7 +369,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
-- `/link-post` — Attach the actual URL and publication time after manually posting. Freezes media and caption; duplicate publication URLs are rejected.; MCP: `link_post`
 - `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.; MCP: `list_assets`
 - `/list-book-actions` — List authored semantic revisions for a book; MCP: `list_book_actions`
 - `/list-books` — List all Videobook books; MCP: `list_books`
@@ -394,7 +384,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-notebook-actions` — List the deterministic notebook action catalog for runnable cells; MCP: `list_notebook_actions`
 - `/list-notebook-generation-plans` — List durable generation plans and their retryable lifecycle state; MCP: `list_notebook_generation_plans`
 - `/list-notebook-run-plans` — List durable aggregate workbook run plans and their lifecycle state; MCP: `list_notebook_run_plans`
-- `/list-posts` — List this book's publications and performance observations for comparison.; MCP: `list_posts`
+- `/list-posts` — List this book's Posts with their status, frozen source, lineage, delivery receipts, scheduled time and timestamped results. post_cell_id reads one Post; status scheduled lists the X posts waiting to publish.; MCP: `list_posts`
 - `/list-prompt-history` — List recent prompts newest-first, for one surface or every surface, in the current book or across the whole library.; MCP: `list_prompt_history`
 - `/list-sequence-replace-targets` — List clips that a search moment can explicitly replace; MCP: `list_sequence_replace_targets`
 - `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
@@ -424,7 +414,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/plan-sequence-sound-effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan; MCP: `plan_sequence_sound_effects`
 - `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`
 - `/portrait` — Show portrait crop (1080x1920); UI: `viewer_set_portrait`
-- `/post` — Post a video or image asset to X (Twitter), now or scheduled; UI: `open_post_composer`
+- `/post` — Post a clip in one step: save it to iPhone through iCloud, download it for a manual upload, or publish it to X now or scheduled; UI: `open_post_composer`
 - `/prepare-search-reference` — Prepare an existing image or video asset for temporary reverse search; MCP: `prepare_search_reference`
 - `/preview-edit-intent` — Preview one CommandPlan edit stage through the canonical engine diff; MCP: `preview_edit_intent`
 - `/preview-notebook-generation` — Preview the exact provider payload a generation cell would submit, without running it; MCP: `preview_notebook_generation`
@@ -436,10 +426,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/read-asset-metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.; MCP: `read_asset_metadata`
 - `/read-file-at-commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.; MCP: `read_file_at_commit`
 - `/reconcile-project-work` — Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.; MCP: `reconcile_project_work`
-- `/record-post-metrics` — Append a manual performance observation with its actual timestamp. Omit unavailable metrics; zero means an observed zero.; MCP: `record_post_metrics`
+- `/record-post-metrics` — Record a performance observation for a published Post: omit values to fetch current X metrics, or pass values for a manual observation (observed_at defaults to now). Omit unavailable metrics; zero means an observed zero.; MCP: `record_post_metrics`
 - `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
 - `/reframe` — Preview a crop transform for a visual sequence clip; preview or workspace operation
-- `/refresh-post-metrics` — Fetch a current X metrics observation. Non-X publications use record_post_metrics. Unknown values remain unknown.; MCP: `refresh_post_metrics`
 - `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
 - `/relayout-notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.; MCP: `relayout_notebook`
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
@@ -473,7 +462,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
 - `/run-notebook-cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
-- `/save-post-to-icloud` — Review a Post's clip and caption, then save them to the shared iCloud Drive Videobook folder so they appear on iPhone; UI: `open_post_icloud`
 - `/say` — Generate speech audio from text with ElevenLabs; MCP: `generate_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
 - `/scene-new` — Create a reusable scene entity; MCP: `create_entity`
@@ -481,7 +469,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-library-assets` — Search ready audio, image, and video assets across all books; MCP: `search_library_assets`
 - `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
-- `/service-status` — Read X, Dropbox or iCloud Drive delivery status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones.; MCP: `service_status`
+- `/service-status` — Read X or iCloud Drive status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones, or, with book_id and post_cell_id, whether that Post's clip and caption.txt finished uploading.; MCP: `service_status`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
 - `/set-har-capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.; MCP: `set_har_capture`
@@ -514,7 +502,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
 - `/tldr` — Rewrite a script asset in place as a 1–2 sentence TLDR; MCP: `rewrite_script`
-- `/tool-post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.; MCP: `post`
+- `/tool-post` — Post a clip or image in one step. to: icloud saves the clip and caption.txt to iCloud Drive › Videobook for the phones; download freezes them and returns download links for a manual upload; x publishes to X now or at scheduled_for, with optional thread replies; draft only saves the Post. Pass asset_id for a new Post or post_cell_id to send an existing one.; MCP: `post`
 - `/tool-rename-all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.; MCP: `rename_all`
 - `/track-add` — Add a video, audio or caption track; preview or workspace operation
 - `/track-remove` — Remove an empty sequence track; preview or workspace operation
@@ -525,12 +513,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
 - `/update-entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity; MCP: `update_entity`
 - `/update-notebook-cell` — Update one notebook cell; MCP: `update_notebook_cell`
-- `/update-post` — Edit a Post draft or its notes. Delivered media, caption and source versions are immutable; create another Post for a repost.; MCP: `update_post`
+- `/update-post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.; MCP: `update_post`
 - `/update-script` — Update a script asset's markdown content (original.md).; MCP: `update_script`
 - `/update-sequence-rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio; MCP: `update_sequence_rhythm`
 - `/update-timeline-audio` — Update an audio overlay's volume or fades; MCP: `update_timeline_audio`
 - `/upload` — Upload a file; UI: `open_upload`
-- `/upload-post-to-dropbox` — Review a Post's clip, caption and destination folder, then upload them to a private Dropbox folder; UI: `open_post_dropbox`
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
 - `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`

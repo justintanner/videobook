@@ -2,7 +2,6 @@ import { createFreeMediaUpload as freemediaupload } from "@apicity/free-media-up
 import { createKimiCoding as kimicoding } from "@apicity/kimicoding";
 import { createXOAuth as xoauth } from "@apicity/x";
 import { createX as x } from "@apicity/x";
-import { createDropbox as dropbox } from "@apicity/dropbox";
 import { createB2 as b2 } from "@apicity/b2";
 import { createOpenAi as openai } from "@apicity/openai";
 import { createXai as xai } from "@apicity/xai";
@@ -44,10 +43,6 @@ export function createMachGen(options: NonNullable<Parameters<typeof machgen>[0]
 
 export function createB2(options: Parameters<typeof b2>[0]): ReturnType<typeof b2> {
   return capturedProvider("b2", (fetch) => b2({ ...options, fetch }), options?.fetch);
-}
-
-export function createDropbox(options: Parameters<typeof dropbox>[0]): ReturnType<typeof dropbox> {
-  return capturedProvider("dropbox", (fetch) => dropbox({ ...options, fetch }), options?.fetch);
 }
 
 export function createX(options: Parameters<typeof x>[0]): ReturnType<typeof x> {

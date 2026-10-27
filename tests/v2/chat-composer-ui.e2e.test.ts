@@ -2867,7 +2867,7 @@ describe('chat composer browser flow', () => {
           asset_id: videoArtifactId,
           book_id: bookId,
           orientation: 'portrait',
-          platform: 'x',
+          to: 'x',
           scheduled_for: '2099-08-25T03:00:00.000Z',
           text: postText,
         },
@@ -3039,7 +3039,7 @@ describe('chat composer browser flow', () => {
         params: {
           asset_id: threadVideoArtifactId,
           book_id: bookId,
-          platform: 'x',
+          to: 'x',
           text: 'Generated with Videobook.',
         },
         message: 'Posting to X.',

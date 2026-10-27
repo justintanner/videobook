@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { HarCaptureSettings } from './HarCaptureSettings'
-import { DropboxConnectionCard } from './DropboxConnectionCard'
 import type { PostToolCall } from '@/videobook/use-post-actions'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
@@ -29,7 +28,7 @@ interface SettingsScreenProps {
 
 type SettingsEditor = ReturnType<typeof useSettingsEditor>
 
-const APPLICATION_PROVIDERS = ['x', 'b2', 'dropbox']
+const APPLICATION_PROVIDERS = ['x', 'b2']
 
 function statusLabel(keyStatus: string): string {
   if (keyStatus === 'configured') return 'Set'
@@ -157,7 +156,7 @@ export function SettingsScreen({ call, providers, loading, error, refreshed, sto
   connection, busy, onRefresh, onSave, onConnect }: SettingsScreenProps) {
   const editor = useSettingsEditor(onSave)
   const aiProviders = providers.filter(provider => !APPLICATION_PROVIDERS.includes(provider.provider))
-  const accountCredentials = providers.filter(provider => provider.provider === 'x' || provider.provider === 'dropbox')
+  const accountCredentials = providers.filter(provider => provider.provider === 'x')
   const storageCredentials = providers.filter(provider => provider.provider === 'b2')
 
   return <section className="workspace-screen settings-screen" aria-label="Settings">
@@ -194,11 +193,9 @@ export function SettingsScreen({ call, providers, loading, error, refreshed, sto
             <div className="settings-section-heading"><h2 id="settings-accounts-heading">Accounts</h2></div>
             <div className="settings-list">
               <XConnectionCard busy={busy} connection={connection} onConnect={onConnect} />
-              <DropboxConnectionCard call={call} />
             </div>
             <Disclosure summary="App credentials">
               <CredentialRows providers={accountCredentials} editor={editor} busy={busy} />
-              <p className="settings-note">Dropbox redirect: http://127.0.0.1:8766/callback</p>
             </Disclosure>
           </section>
 

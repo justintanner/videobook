@@ -117,8 +117,7 @@ plan skips AI planning. Every paid stage or revision requires an explicit action
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
 model choices and saved producer reruns keep their chosen model. Apicity 0.15.0
 supplies the NB 2.1 schema and pricing; the OpenAI and xAI packages retain the
-repository's realtime patches, and the X and Dropbox packages keep their posting
-patches.
+repository's realtime patches, and the X package keeps its posting patches.
 
 Video generation also includes **Vidu Q4 image-to-video** and **Vidu Q4
 reference-to-video** through KIE. Both support 3–16 seconds, 540p through 4k,
@@ -148,24 +147,29 @@ the billed unit. See [docs/apicity-gaps.md](docs/apicity-gaps.md).
 
 ## Posts and results
 
-Select a finished image or video cell and choose **Create Post** from its menu,
-(or use **Add cell → Post**). Each Post represents one publication on X,
-Instagram, TikTok, YouTube or another platform. It preserves the source clip
-version and upstream idea/prompt lineage even when the original cells move or
-change. Use a separate Post for each platform or repost.
+Post a finished image or video in one step: type `/post @a1` (optionally
+followed by a caption), or choose **Post…** from the clip's menu. The sheet
+offers three destinations:
 
-Save the caption and credits, then upload the frozen media and `caption.txt` to
-Dropbox for manual publication. The default folder is
-`/Videobook/<book-name>/<post-cell-id>/`; a custom folder is optional. Uploads
-remain private and resume from saved checkpoints. After publishing, paste the
-actual post URL and publication time into the Post. X also supports the existing
-review, thread and scheduling workflow, targeting the same Post cell.
+- **iCloud · iPhone** saves the clip and `caption.txt` to iCloud Drive ›
+  Videobook, so they appear in Files on your phones.
+- **Download** downloads the clip to this computer, with links to the clip and
+  `caption.txt`, for a manual upload.
+- **X** opens the X review to publish now or on a schedule, with optional
+  thread replies.
 
-Connect Dropbox in Settings. Configure the Dropbox app key (`DROPBOX_CLIENT_ID`)
-and optional app secret (`DROPBOX_CLIENT_SECRET`), register the redirect URI
-`http://127.0.0.1:8766/callback`, and enable `files.content.write` and
-`files.metadata.read` permissions in the Dropbox app. OAuth requests offline
-access; refreshable credentials stay in application state outside the book.
+Each Post represents one publication on X, Instagram, TikTok, YouTube or another
+platform. It preserves the source clip version and upstream idea/prompt lineage
+even when the original cells move or change. The first delivery freezes the
+clip and caption, so post the clip again for a different caption or a repost.
+After posting by hand, paste the actual post URL and publication time into the
+Post. **Add cell → Post** makes an empty Post to fill in later.
+
+Over MCP the whole flow is one `post` call with `to` set to `icloud`,
+`download`, `x` or `draft`; `download` returns links served with
+`Content-Disposition: attachment`. `list_posts` with `status: "scheduled"` lists
+the X posts waiting to publish, and `update_post` with `cancel_schedule: true`
+cancels one and returns the Post to a draft.
 
 The **Posts** table compares publications within a book, including observations
 at similar ages. X metrics are collected after publication/linking, then at 1h,

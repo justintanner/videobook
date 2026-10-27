@@ -6,31 +6,29 @@ import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody
 import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
 import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
 import {
-  defaultDropboxFolder,
+  copyWithCaption,
   defaultIcloudFolder,
+  deliveredPostFromTool,
   deliveryCaptionLocked,
-  fetchDropboxConnection,
   fetchIcloudStatus,
   latestPostForSource,
   postDeliveryArgs,
   postDeliveryReceipt,
-  postDeliveryTool,
   postDeliveryValidation,
-  postPlatformArgs,
+  postFrozen,
   postReviewDraftArgs,
   resolveDeliveryPost,
   resolveDeliverySource,
   reviewWithIcloudStatus,
-  startDropboxConnection,
-  waitForDropboxConnection,
   type DeliveryDestination,
   type PostDeliveryReview,
 } from '@/videobook/post-delivery-review'
+import { saveDownload } from '@/videobook/browser-download'
 import {
   appendCopyDraft,
+  copyCaption,
   copyDraftArgs,
   copyNeedsDraft,
-  initialCopyState,
   postCopyDraftFromTool,
   type PostCopyState,
 } from '@/videobook/post-copy-review'
@@ -130,6 +128,7 @@ import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-a
 import {
   adaptCommandArgs,
   normalizePostCommandArgs,
+  postCommandTarget,
   parseCommandArgs,
   selectCommandForInput,
   type CommandToolArgs,
@@ -4501,7 +4500,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook || mcp.state !== 'ready') return
     setBusy(true)
     try {
-      const post = await call('create_post', { book_id: bookId, notebook_id: notebook.id, ...(sourceCellId ? { source_cell_id: sourceCellId } : {}) }) as PostView
+      const { post } = deliveredPostFromTool(await call('post', { book_id: bookId, to: 'draft', notebook_id: notebook.id, ...(sourceCellId ? { source_cell_id: sourceCellId } : {}) }))
       await refreshBookData(bookId, notebook.id)
       openCellInspector(post.id)
       setNotice(`Created Post ${post.address}`)
@@ -7876,12 +7875,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return initialXPostThreadReview({ steps, credits }, maxCharacters)
   }
 
-  const reviewPublicationOnX = async (post: PostView) => {
-    const assetId = post.definition.source?.snapshotArtifactId
-    if (!assetId) return
+  const reviewPublicationOnX = async (post: PostView, caption = post.definition.caption) => {
+    const source = post.definition.source
+    if (!source?.snapshotArtifactId) return
+    const params = post.definition.platform === 'x' || !postFrozen(post)
+      ? { book_id: bookId, to: 'x', asset_id: source.snapshotArtifactId, post_cell_id: post.id, text: caption }
+      : { book_id: bookId, to: 'x', asset_id: source.artifactId, text: caption }
     const plan: ChatActionPlan = {
       kind: 'chat-action-plan', planId: uuidv7(), bookId, prompt: `Post ${post.address} to X`,
-      routedTool: 'post', tool: 'post', params: { book_id: bookId, asset_id: assetId, post_cell_id: post.id, platform: 'x', text: post.definition.caption },
+      routedTool: 'post', tool: 'post', params,
       message: 'Review your X publication', summary: 'Publish the saved clip to X', effect: 'mutation',
       confirmation: { required: true, reason: 'Publishes this clip to X' },
     }
@@ -7916,14 +7918,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const updatePendingDelivery = (patch: Partial<PostDeliveryReview>) => setPendingChatAction(current =>
     current?.kind === 'post-delivery' ? { ...current, review: { ...current.review, ...patch } } : current)
 
-  const checkPostDropboxConnection = async () => {
-    try {
-      updatePendingDelivery({ connection: await fetchDropboxConnection(deliveryStatusCall) })
-    } catch (error) {
-      updatePendingDelivery({ connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
-    }
-  }
-
   const checkPostIcloudStatus = async () => {
     try {
       const status = await fetchIcloudStatus(deliveryStatusCall)
@@ -7935,47 +7929,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const connectPostDropbox = async () => {
-    const popup = window.open('about:blank', '_blank')
-    updatePendingDelivery({ connecting: true })
-    try {
-      const authorizeUrl = await startDropboxConnection(call)
-      if (popup) popup.location.href = authorizeUrl
-      else window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
-      const scope = watchScopeRef.current.bookId
-      const connection = await waitForDropboxConnection(deliveryStatusCall, delay, () => watchScopeRef.current.bookId === scope)
-      updatePendingDelivery({ connection, connecting: false })
-    } catch (error) {
-      popup?.close()
-      updatePendingDelivery({ connecting: false, connection: { connected: false, pending: false, hasCredentials: true, error: error instanceof Error ? error.message : String(error) } })
-    }
-  }
-
-  const openPostDeliveryReview = (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution): ComposerOutcome => {
-    if (mcp.state !== 'ready' || !bookId || !notebook) return { ok: false, message: 'Open a connected notebook before delivering a Post.' }
+  const openPostDeliveryReview = (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution, caption?: string): ComposerOutcome => {
+    if (mcp.state !== 'ready' || !bookId || !notebook) return { ok: false, message: 'Open a connected notebook before posting.' }
     const post = resolveDeliveryPost(notebookPosts, notebook.cells, reference, selectedNotebookCell?.id ?? null)
-    const hint = entry === 'dropbox' ? '/upload-post-to-dropbox @b1' : '/save-post-to-icloud @b1'
     if (!post) {
       return { ok: false, message: reference?.trim()
-        ? `${reference.trim()} is not a Post or a clip. Select one or use ${hint}.`
-        : `Select a Post cell or use ${hint}.` }
+        ? `${reference.trim()} is not a Post or a clip. Select one or use /post @a1.`
+        : 'Select a clip or a Post cell, or use /post @a1.' }
     }
-    return openDeliveryReviewForPost(post, entry, chat)
+    return openDeliveryReviewForPost(post, entry, chat, caption)
   }
 
-  const openSourceDeliveryReview = async (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution): Promise<ComposerOutcome> => {
+  const openSourceDeliveryReview = async (reference: string | undefined, entry: DeliveryDestination, chat?: ChatExecution, caption?: string): Promise<ComposerOutcome> => {
     const trimmed = reference?.trim()
-    const source = trimmed && mcp.state === 'ready' && bookId && notebook
-      && !resolveDeliveryPost(notebookPosts, notebook.cells, trimmed, null)
-      ? resolveDeliverySource(notebook.cells, trimmed)
+    const sourceReference = trimmed || selectedNotebookCell?.id
+    const source = sourceReference && mcp.state === 'ready' && bookId && notebook
+      && !resolveDeliveryPost(notebookPosts, notebook.cells, sourceReference, null)
+      ? resolveDeliverySource(notebook.cells, sourceReference)
       : null
-    if (!source || !bookId || !notebook) return openPostDeliveryReview(reference, entry, chat)
-    const existing = latestPostForSource(notebookPosts, source.id)
-    if (existing) return openDeliveryReviewForPost(existing, entry, chat)
+    if (!source || !bookId || !notebook) return openPostDeliveryReview(trimmed, entry, chat, caption)
+    const existing = latestPostForSource(notebookPosts.filter(post => !post.runtime.url), source.id)
+    if (existing) return openDeliveryReviewForPost(existing, entry, chat, caption)
     try {
-      const created = await call('create_post', { book_id: bookId, notebook_id: notebook.id, source_cell_id: source.id }) as PostView
+      const { post } = deliveredPostFromTool(await call('post', { book_id: bookId, to: 'draft', notebook_id: notebook.id, source_cell_id: source.id }))
       await refreshBookData(bookId, notebook.id)
-      return openDeliveryReviewForPost(created, entry, chat)
+      return openDeliveryReviewForPost(post, entry, chat, caption)
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -8012,10 +7990,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     void draftPostCopyFor(review.bookId, post.id, review.copy, review.copy.language, review.copy.prompt.trim() || null)
   }
 
-  const openDeliveryReviewForPost = (post: PostView, entry: DeliveryDestination, chat?: ChatExecution): ComposerOutcome => {
-    if (!bookId || !notebook) return { ok: false, message: 'Open a connected notebook before delivering a Post.' }
+  const openDeliveryReviewForPost = (post: PostView, entry: DeliveryDestination, chat?: ChatExecution, caption?: string): ComposerOutcome => {
+    if (!bookId || !notebook) return { ok: false, message: 'Open a connected notebook before posting.' }
     const bookName = activeBook?.name ?? 'book'
-    const copy = initialCopyState(post)
+    const copy = copyWithCaption(post, caption)
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction({
@@ -8029,24 +8007,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         pinnedDestination: false,
         copy,
         icloudFolder: defaultIcloudFolder(post, bookName),
-        dropboxFolder: defaultDropboxFolder(post, bookName),
-        connection: null,
-        connecting: false,
         icloud: null,
         receipt: null,
         sync: null,
+        download: null,
       },
     }))
     setComposerDockOpen(true)
     void checkPostIcloudStatus()
-    if (entry === 'dropbox') void checkPostDropboxConnection()
     if (copyNeedsDraft(copy, copy.language, deliveryCaptionLocked(post))) void draftPostCopyFor(bookId, post.id, copy, copy.language, null)
-    return applyReadyOutcome(entry === 'dropbox' ? 'Dropbox upload review opened' : 'Save to iPhone review opened')
+    return applyReadyOutcome(entry === 'download' ? 'Download review opened' : 'Save to iPhone review opened')
   }
 
   const chooseDeliveryDestination = (destination: DeliveryDestination) => {
-    updatePendingDelivery({ destination, pinnedDestination: true })
-    if (destination === 'dropbox') void checkPostDropboxConnection()
+    updatePendingDelivery({ destination, pinnedDestination: true, receipt: null, sync: null, download: null })
+  }
+
+  const postDeliveryToX = (post: PostView, review: PostDeliveryReview) => {
+    void reviewPublicationOnX(post, deliveryCaptionLocked(post) ? post.definition.caption : copyCaption(review.copy))
+  }
+
+  const copyPostCaption = async (caption: string) => {
+    try {
+      await navigator.clipboard.writeText(caption)
+      setNotice('Caption copied')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    }
   }
 
   const previewRoutedChatAction = async (
@@ -8066,8 +8053,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (plan.tool === 'prepare_cold_open' || plan.tool === 'edit_cold_open') {
       return openColdOpenReview(asString(plan.params.asset_id) ?? undefined, chat)
     }
-    if (plan.tool === 'upload_post_to_dropbox' || plan.tool === 'save_post_to_icloud') {
-      return openSourceDeliveryReview(asString(plan.params.post_cell_id) ?? undefined, plan.tool === 'upload_post_to_dropbox' ? 'dropbox' : 'icloud', chat)
+    if (plan.tool === 'post' && ['icloud', 'download', 'draft'].includes(String(plan.params.to))) {
+      const reference = asString(plan.params.post_cell_id) ?? asString(plan.params.source_cell_id) ?? asString(plan.params.asset_id) ?? undefined
+      return openSourceDeliveryReview(reference, plan.params.to === 'download' ? 'download' : 'icloud', chat, asString(plan.params.text) ?? undefined)
     }
     if (plan.tool === 'show_subtitles') {
       const assetId = asString(plan.params.asset_id)
@@ -8310,15 +8298,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       plan,
       xPostMaxCharacters(xConnectionStatus ?? xConnection.status), chat,
     )
+    const destinedPlan = postPlan && plan.params.to === undefined
+      ? { ...plan, params: { ...plan.params, to: 'x' } }
+      : plan
     const reviewedPlan = xPostReview
       ? {
-          ...plan,
+          ...destinedPlan,
           params: reviseXPostFollowups(
-            plan.params,
+            destinedPlan.params,
             xPostFollowupsFromThread(xPostReview),
           ),
         }
-      : plan
+      : destinedPlan
     if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
     reviewChat(chat, false, () => setPendingCommandPlan(null))
     reviewChat(chat, true, () => setPendingChatAction({ kind: 'routed', plan: reviewedPlan, xPostReview }))
@@ -8729,22 +8720,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!post || validation.blocking) return { ok: false, message: validation.blocking ?? 'This Post is no longer on the canvas.' }
       const current = () => watchScopeRef.current.bookId === review.bookId
         && watchScopeRef.current.notebookId === review.notebookId && (chat?.isCurrent() ?? true)
-      const platformArgs = postPlatformArgs(post, review)
-      if (platformArgs) await call('update_post', platformArgs, { chat })
-      const saved = await call(postDeliveryTool(review.destination), postDeliveryArgs(post, review), { chat }) as PostView
+      const delivered = deliveredPostFromTool(await call('post', postDeliveryArgs(post, review), { chat }))
+      if (delivered.download) saveDownload(delivered.download.clip_url, delivered.download.filename)
       await refreshBookData(review.bookId, review.notebookId, current, chat)
-      const message = postDeliveryReceipt(saved, review.destination)
+      const message = postDeliveryReceipt(delivered, review.destination)
       if (current()) {
-        reviewChat(chat, true, () => setPendingChatAction({
-          kind: 'post-delivery',
-          review: {
-            ...review,
-            icloudFolder: saved.runtime.icloud?.folder ?? review.icloudFolder,
-            dropboxFolder: saved.runtime.dropbox?.folder ?? review.dropboxFolder,
-            receipt: message,
-            sync: null,
-          },
-        }))
+        reviewChat(chat, true, () => setPendingChatAction(latest => latest?.kind === 'post-delivery'
+          && latest.review.postId === review.postId && latest.review.destination === review.destination
+          ? {
+              kind: 'post-delivery',
+              review: {
+                ...latest.review,
+                icloudFolder: delivered.post.runtime.icloud?.folder ?? latest.review.icloudFolder,
+                receipt: message,
+                sync: null,
+                download: delivered.download,
+              },
+            }
+          : latest))
       }
       return { ok: true, message }
     }
@@ -9477,8 +9470,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const parsed = parseCommandArgs(resolvedRest, command.params)
         return openColdOpenReview(asString(parsed.asset_ref) ?? undefined, chat)
       }
-      if (command.uiAction === 'open_post_dropbox' || command.uiAction === 'open_post_icloud') {
-        return openSourceDeliveryReview(rest || undefined, command.uiAction === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
+      if (command.uiAction === 'open_post_composer') {
+        const target = postCommandTarget(rest)
+        return openSourceDeliveryReview(target.reference, 'icloud', chat, target.text)
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
@@ -9643,9 +9637,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (context?.action) {
       const action = workspaceActions.find(entry => entry.id === context.action?.id)
       if (!action) return { ok: false, message: 'Reload Actions and choose the command again.', nextInput: input }
-      if (action.handler.kind === 'ui' && (action.handler.action === 'open_post_dropbox' || action.handler.action === 'open_post_icloud')) {
-        const reference = input.trim().slice(action.command.length).trim()
-        return openSourceDeliveryReview(reference || undefined, action.handler.action === 'open_post_dropbox' ? 'dropbox' : 'icloud', chat)
+      if (action.handler.kind === 'ui' && action.handler.action === 'open_post_composer') {
+        const target = postCommandTarget(input.trim().slice(action.command.length))
+        const reference = target.reference ?? asString(context.action.values?.asset_ref) ?? undefined
+        return openSourceDeliveryReview(reference, 'icloud', chat, target.text ?? asString(context.action.values?.text) ?? undefined)
       }
       if (action.handler.kind === 'tool' && action.handler.tool === 'transcribe') {
         const command = workspaceActionCommands([action], []).find((entry) => entry.command === action.command)
@@ -10382,7 +10377,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const deliveryDisabled = busy || mcp.state !== 'ready'
       contextMenuActions.push(
         { id: 'save-iphone', label: 'Save to iPhone', icon: 'upload', disabled: deliveryDisabled },
-        { id: 'upload-dropbox', label: 'Upload to Dropbox', icon: 'upload', disabled: deliveryDisabled },
+        { id: 'download-post', label: 'Download', icon: 'upload', disabled: deliveryDisabled },
       )
     }
     contextMenuActions.push({
@@ -10410,7 +10405,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
     }
     if (contextMenuVisualAsset && contextMenuCell.type !== 'post' && ['video', 'image', 'final'].includes(contextMenuVisualAsset.type)) {
-      contextMenuActions.push({ id: 'create-post', label: 'Create Post', icon: 'inspect', disabled: busy || mcp.state !== 'ready' })
+      contextMenuActions.push({ id: 'create-post', label: 'Post…', icon: 'upload', disabled: busy || mcp.state !== 'ready' })
     }
     if (contextMenuVisualAsset) {
       contextMenuActions.push({
@@ -10568,12 +10563,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const handleCellContextAction = (actionId: string) => {
     if (!contextMenuCell) return
-    if (actionId === 'save-iphone' || actionId === 'upload-dropbox') {
-      const result = openPostDeliveryReview(contextMenuCell.id, actionId === 'upload-dropbox' ? 'dropbox' : 'icloud')
+    if (actionId === 'save-iphone' || actionId === 'download-post') {
+      const result = openPostDeliveryReview(contextMenuCell.id, actionId === 'download-post' ? 'download' : 'icloud')
       if (!result.ok) setNotice(result.message, 'error')
       return
     }
-    if (actionId === 'create-post') { void createPublication(contextMenuCell.id); return }
+    if (actionId === 'create-post') {
+      void openSourceDeliveryReview(contextMenuCell.id, 'icloud').then(result => { if (!result.ok) setNotice(result.message, 'error') })
+      return
+    }
     if (actionId === 'inspect') {
       openCellInspector(contextMenuCell.id)
       return
@@ -11036,14 +11034,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <ConfirmSheet
           kind="post-delivery"
           ariaLabel="Post delivery"
-          tag="DELIVER"
-          title={icloud ? 'Save to iPhone' : 'Upload to Dropbox'}
+          tag="POST"
+          title={icloud ? 'Save to iPhone' : 'Download for manual upload'}
           address={post?.address ?? null}
-          effect={{ label: icloud ? 'iCloud · shared folder' : 'Leaves workspace · private', tone: icloud ? 'default' : 'warning' }}
+          effect={{ label: icloud ? 'iCloud · shared folder' : 'This computer · Downloads', tone: 'default' }}
           validation={postDeliveryValidation(post, review)}
           busy={busy}
-          busyLabel={icloud ? 'Saving to iPhone…' : 'Uploading to Dropbox…'}
-          applyLabel="Upload"
+          busyLabel={icloud ? 'Saving to iPhone…' : 'Preparing download…'}
+          applyLabel={icloud ? 'Save to iPhone' : 'Download'}
           applyFormId={COMMAND_COMPOSER_FORM_ID}
           onCancel={dismissPendingCommandPlan}
         >
@@ -11056,15 +11054,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               onCopyChange={copy => updatePendingDelivery({ copy })}
               onLanguage={language => choosePostCopyLanguage(post, review, language)}
               onRegen={() => regenPostCopy(post, review)}
-              onFolderChange={folder => updatePendingDelivery(icloud ? { icloudFolder: folder } : { dropboxFolder: folder })}
+              onFolderChange={folder => updatePendingDelivery({ icloudFolder: folder })}
               onDestination={chooseDeliveryDestination}
-              onConnect={() => void connectPostDropbox()}
-              onCheckConnection={() => void checkPostDropboxConnection()}
+              onPostToX={() => postDeliveryToX(post, review)}
+              onCopyCaption={caption => void copyPostCaption(caption)}
               onOpenPost={() => openCellInspector(post.id)}
               onLink={async args => {
-                const draftArgs = postReviewDraftArgs(post, review)
-                if (draftArgs) await call('update_post', draftArgs)
-                await call('link_post', { book_id: review.bookId, post_cell_id: post.id, ...args })
+                await call('update_post', { book_id: review.bookId, post_cell_id: post.id, ...postReviewDraftArgs(post, review), ...args })
                 await refreshBookData(review.bookId, review.notebookId)
                 dismissPendingCommandPlan()
               }}
@@ -11177,6 +11173,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               connection={xConnection}
               onChange={updatePendingXPostDraft}
               onConnect={() => void connectX()}
+              onDestination={destination => {
+                const reference = asString(plan.params.post_cell_id) ?? asString(plan.params.asset_id) ?? undefined
+                void openSourceDeliveryReview(reference, destination, undefined, xPostDraftFromParams(plan.params).postText || undefined)
+                  .then(result => { if (!result.ok) setNotice(result.message, 'error') })
+              }}
               onThreadOptionsChange={updatePendingXPostThreadOptions}
               onThreadCreditsChange={updatePendingXPostThreadCredits}
               onThreadPromptChange={updatePendingXPostThreadPrompt}
@@ -11586,7 +11587,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       </header>
       {mediaLibraryContent ?? (selectedPost ? (
         <PostInspector key={selectedPost.id} post={selectedPost} cells={notebook?.cells ?? []}
-          asset={selectedCell.data.asset} bookId={bookId} call={mcp.state === 'ready' ? call : undefined}
+          asset={selectedCell.data.asset} bookId={bookId} bookName={activeBook?.name ?? 'book'} call={mcp.state === 'ready' ? call : undefined}
           onRefresh={() => refreshBookData(bookId, notebook?.id)} onSelectCell={openCellInspector}
           onDeliver={destination => {
             const result = openPostDeliveryReview(selectedPost.id, destination)

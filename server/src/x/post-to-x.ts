@@ -14,7 +14,7 @@ import {
   xPostMaxCharacters,
 } from "./account.js";
 import type { ApplicationStateStore } from "../app-state.js";
-import { ensureXPost } from "../posts/x-post-target.js";
+import { ensureXPost } from "../posts/post-target.js";
 import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime } from "../posts/post-store.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import type { PostRuntime } from "../posts/post-contract.js";

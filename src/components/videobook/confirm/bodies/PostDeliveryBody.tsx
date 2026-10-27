@@ -1,17 +1,17 @@
 import { useState, type KeyboardEvent } from 'react'
-import { Check, ChevronLeft, ChevronRight, Film, Sparkles, TriangleAlert, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Download, Film, Sparkles, TriangleAlert, X } from 'lucide-react'
 import type { PostView } from '../../../../../server/src/posts/post-contract'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
 import {
   deliveryCaptionLocked,
-  dropboxFolderError,
   icloudProgressLabel,
   icloudShareHint,
   POST_CAPTION_LIMIT,
   type DeliveryDestination,
   type PostDeliveryReview,
 } from '@/videobook/post-delivery-review'
+import type { PostDownload } from '../../../../../server/src/posts/post-folder'
 import { icloudFolderError } from '../../../../../server/src/posts/post-folder'
 import {
   PLATFORM_NAMES,
@@ -46,8 +46,8 @@ type PostDeliveryBodyProps = {
   onRegen: () => void
   onFolderChange: (folder: string) => void
   onDestination: (destination: DeliveryDestination) => void
-  onConnect: () => void
-  onCheckConnection: () => void
+  onPostToX: () => void
+  onCopyCaption: (caption: string) => void
   onOpenPost: () => void
   onLink: (args: PostLinkArgs) => Promise<unknown>
 }
@@ -78,7 +78,7 @@ function PostPreview({ post, asset, onOpenPost }: Pick<PostDeliveryBodyProps, 'p
           ? <span>Clip saved {new Date(post.definition.createdAt).toLocaleString()}</span>
           : <span className="post-delivery-warning"><TriangleAlert size={12} aria-hidden="true" />No saved source clip</span>}
         {post.runtime.icloud?.completedAt && <span className="post-delivery-done"><Check size={12} aria-hidden="true" />Already on iPhone; saving again checks the files</span>}
-        {post.runtime.dropbox?.completedAt && <span className="post-delivery-done"><Check size={12} aria-hidden="true" />Already in Dropbox; uploading again checks the files</span>}
+        {post.runtime.download?.completedAt && <span className="post-delivery-done"><Check size={12} aria-hidden="true" />Downloaded before; downloading again gives the same files</span>}
         {!frozen && <button type="button" onClick={onOpenPost}>Choose a clip in the Post panel</button>}
       </div>
     </article>
@@ -247,20 +247,12 @@ function CaptionField({ post, review, busy, onCopyChange, onLanguage, onRegen }:
   )
 }
 
-function DropboxAccount({ review, busy, onConnect, onCheckConnection }: Pick<PostDeliveryBodyProps, 'review' | 'busy' | 'onConnect' | 'onCheckConnection'>) {
-  const connection = review.connection
-  if (!connection) return <p className="post-delivery-account">Checking Dropbox…</p>
-  if (connection.connected) {
-    return <p className="post-delivery-account post-delivery-account-ready"><Check size={12} aria-hidden="true" />Dropbox connected</p>
-  }
+function DownloadLinks({ download, busy, onCopyCaption }: { download: PostDownload; busy: boolean; onCopyCaption: (caption: string) => void }) {
   return (
-    <div className="post-delivery-account post-delivery-account-missing">
-      <span>{review.connecting || connection.pending ? 'Waiting for Dropbox approval…' : 'Dropbox not connected'}</span>
-      <div>
-        <button type="button" disabled={busy || review.connecting || !connection.hasCredentials} onClick={onConnect}>Connect Dropbox ↗</button>
-        <button type="button" disabled={busy} onClick={onCheckConnection}>Check again</button>
-      </div>
-      {connection.error && <small className="confirm-field-error">{connection.error}</small>}
+    <div className="post-delivery-downloads">
+      <a href={download.clip_url} download={download.filename}><Download size={12} aria-hidden="true" />{download.filename}</a>
+      <a href={download.caption_url} download><Download size={12} aria-hidden="true" />caption.txt</a>
+      <button type="button" disabled={busy || !download.caption} onClick={() => onCopyCaption(download.caption)}>Copy caption</button>
     </div>
   )
 }
@@ -270,13 +262,32 @@ function icloudFolderLabel(folder: string): string {
   return trimmed || '…'
 }
 
+function IcloudDestination({ review, busy, onFolderChange }: Pick<PostDeliveryBodyProps, 'review' | 'busy' | 'onFolderChange'>) {
+  const folder = review.icloudFolder
+  const folderError = icloudFolderError(folder)
+  const share = icloudShareHint(review.icloud)
+  return (
+    <>
+      {share && <p className={review.icloud?.shared === false ? 'post-delivery-warning' : 'post-delivery-done'}>{share}</p>}
+      <label className="confirm-field" htmlFor="post-delivery-folder">Folder</label>
+      <input
+        id="post-delivery-folder"
+        type="text"
+        value={folder}
+        disabled={busy}
+        spellCheck={false}
+        aria-invalid={folderError ? true : undefined}
+        onChange={event => onFolderChange(event.target.value)}
+      />
+      <small>Appears on iPhone in Files › Shared › Videobook › {icloudFolderLabel(folder)}</small>
+    </>
+  )
+}
+
 export function PostDeliveryBody(props: PostDeliveryBodyProps) {
   const icloud = props.review.destination === 'icloud'
-  const folder = icloud ? props.review.icloudFolder : props.review.dropboxFolder
-  const folderError = icloud ? icloudFolderError(props.review.icloudFolder) : dropboxFolderError(props.review.dropboxFolder)
-  const share = icloudShareHint(props.review.icloud)
   const progress = props.review.receipt && icloud ? icloudProgressLabel(props.review.sync?.phase ?? null, props.review.sync?.error) : null
-  const unavailable = props.review.icloud && !props.review.icloud.available ? (props.review.icloud.reason ?? "iCloud Drive isn't available on this Mac.") : null
+  const unavailable = icloud && props.review.icloud && !props.review.icloud.available ? (props.review.icloud.reason ?? "iCloud Drive isn't available on this Mac.") : null
   return (
     <div className="post-delivery-body">
       <PostPreview post={props.post} asset={props.asset} onOpenPost={props.onOpenPost} />
@@ -285,42 +296,16 @@ export function PostDeliveryBody(props: PostDeliveryBodyProps) {
         <span className="post-delivery-heading">Destination</span>
         <div className="post-delivery-switch" role="group" aria-label="Destination">
           <button type="button" aria-pressed={icloud} disabled={props.busy} onClick={() => props.onDestination('icloud')}>iCloud · iPhone</button>
-          <button type="button" aria-pressed={!icloud} disabled={props.busy} onClick={() => props.onDestination('dropbox')}>Dropbox</button>
+          <button type="button" aria-pressed={!icloud} disabled={props.busy} onClick={() => props.onDestination('download')}>Download</button>
+          <button type="button" aria-pressed={false} disabled={props.busy} onClick={props.onPostToX}>X</button>
         </div>
         {unavailable && <p className="post-delivery-warning"><TriangleAlert size={12} aria-hidden="true" />{unavailable}</p>}
-        {icloud ? (
-          <>
-            {share && <p className={props.review.icloud?.shared === false ? 'post-delivery-warning' : 'post-delivery-done'}>{share}</p>}
-            <label className="confirm-field" htmlFor="post-delivery-folder">Folder</label>
-            <input
-              id="post-delivery-folder"
-              type="text"
-              value={folder}
-              disabled={props.busy}
-              spellCheck={false}
-              aria-invalid={folderError ? true : undefined}
-              onChange={event => props.onFolderChange(event.target.value)}
-            />
-            <small>Appears on iPhone in Files › Shared › Videobook › {icloudFolderLabel(folder)}</small>
-          </>
-        ) : (
-          <>
-            <DropboxAccount review={props.review} busy={props.busy} onConnect={props.onConnect} onCheckConnection={props.onCheckConnection} />
-            <label className="confirm-field" htmlFor="post-delivery-folder">Folder</label>
-            <input
-              id="post-delivery-folder"
-              type="text"
-              value={folder}
-              disabled={props.busy}
-              spellCheck={false}
-              aria-invalid={folderError ? true : undefined}
-              onChange={event => props.onFolderChange(event.target.value)}
-            />
-            <small>Uploads clip and caption.txt here. Other files in the folder are kept.</small>
-          </>
-        )}
+        {icloud
+          ? <IcloudDestination review={props.review} busy={props.busy} onFolderChange={props.onFolderChange} />
+          : <small>Downloads the clip and caption.txt to this computer for a manual upload.</small>}
         {props.review.receipt && <p className="post-delivery-receipt">{props.review.receipt}</p>}
         {progress && <p className="post-delivery-progress">{progress}</p>}
+        {!icloud && props.review.download && <DownloadLinks download={props.review.download} busy={props.busy} onCopyCaption={props.onCopyCaption} />}
         {!props.post.runtime.url && <PostLinkField post={props.post} disabled={props.busy || Boolean(props.review.copy.drafting)} className="post-delivery-link" onLink={props.onLink} />}
       </div>
     </div>

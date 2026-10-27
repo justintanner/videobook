@@ -578,6 +578,14 @@ export function normalizePostCommandArgs(rest: string): { asset_ref?: string; te
   return { text: tokens.join(' ') };
 }
 
+export function postCommandTarget(rest: string): { reference?: string; text?: string } {
+  const parsed = normalizePostCommandArgs(rest);
+  return {
+    ...(parsed.asset_ref ? { reference: rest.trim().split(/\s+/u)[0] } : {}),
+    ...(parsed.text ? { text: parsed.text } : {}),
+  };
+}
+
 export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {
     const inputs = args.inputs;

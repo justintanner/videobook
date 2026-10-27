@@ -448,7 +448,7 @@ describe("chatActionPlanSchema and applyChatActionPlan", () => {
       prompt: "post the clip to X",
       routedTool: "post",
       tool: "post",
-      params: { asset_id: uuidv7(), book_id: bookId, platform: "x" },
+      params: { asset_id: uuidv7(), book_id: bookId, to: "x" },
       message: "Posting to X.",
       summary: "Post to X",
       effect: "mutation",

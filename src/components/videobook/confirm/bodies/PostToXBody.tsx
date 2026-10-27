@@ -25,7 +25,9 @@ import {
   xPostMaxCharacters,
   type XConnectionState,
 } from '@/videobook/x-connection'
+import type { DeliveryDestination } from '@/videobook/post-delivery-review'
 import { PromptEcho, RoutedSettings } from './RoutedSettings'
+import './PostDeliveryBody.css'
 
 type PostToXPreviewAsset = {
   type: string
@@ -40,6 +42,7 @@ export function PostToXBody({
   draft,
   onChange,
   onConnect,
+  onDestination,
   onThreadCreditsChange,
   onThreadOptionsChange,
   onThreadPromptChange,
@@ -54,6 +57,7 @@ export function PostToXBody({
   draft: XPostDraft
   onChange: (patch: XPostDraftPatch) => void
   onConnect?: () => void
+  onDestination?: (destination: DeliveryDestination) => void
   onThreadCreditsChange?: (text: string) => void
   onThreadOptionsChange?: (patch: Partial<XPostThreadOptions>) => void
   onThreadPromptChange?: (stepId: string, text: string) => void
@@ -88,6 +92,13 @@ export function PostToXBody({
   return (
     <div className="confirm-routed confirm-post">
       <div className="confirm-routed-main">
+        {onDestination && (
+          <div className="post-delivery-switch" role="group" aria-label="Destination">
+            <button type="button" aria-pressed={false} disabled={busy} onClick={() => onDestination('icloud')}>iCloud · iPhone</button>
+            <button type="button" aria-pressed={false} disabled={busy} onClick={() => onDestination('download')}>Download</button>
+            <button type="button" aria-pressed={true} disabled={busy}>X</button>
+          </div>
+        )}
         <PromptEcho prompt={prompt} />
         <RoutedSettings columns={2} settings={settings} />
       </div>

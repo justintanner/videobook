@@ -108,7 +108,7 @@ function notebookConnectionError(
   const target = notebook.cells.find((cell) => cell.id === targetId);
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
-  if (source.type === "post" || target.type === "post") return "Post connections are frozen; use create_post or update_post to choose a source";
+  if (source.type === "post" || target.type === "post") return "Post connections are frozen; use post or update_post to choose a source";
   if (notebookConnectionWouldCreateCycle(notebook.edges, sourceId, targetId)) {
     return `Connecting ${notebookGridTag(source.slot)} to ${notebookGridTag(target.slot)} would create a cycle`;
   }
@@ -1404,7 +1404,7 @@ export function videobookDomainDefs(
         expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
-        if ((args.cell as CellInput).type === "post") return failure("Use create_post to freeze source media and create a Post cell");
+        if ((args.cell as CellInput).type === "post") return failure("Use post to freeze source media and create a Post cell");
         if ((args.cell as CellInput).type === "goal") return failure(GOAL_TILE_CREATE_ERROR);
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
         let requestedCell: NotebookCell = cell;
@@ -1529,7 +1529,7 @@ export function videobookDomainDefs(
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
                 found = true;
-                if (patch.type === "post" && cell.type !== "post") throw new Error("Use create_post to freeze source media and create a Post cell");
+                if (patch.type === "post" && cell.type !== "post") throw new Error("Use post to freeze source media and create a Post cell");
                 if (cell.type === "post") {
                   if (Object.keys(patch).some((key) => key !== "slot" && key !== "label")) throw new Error("Use update_post to edit publication details");
                   return { ...cell, ...(patch.slot ? { slot: patch.slot } : {}), ...(patch.label !== undefined ? { label: patch.label } : {}) };

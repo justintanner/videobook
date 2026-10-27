@@ -692,7 +692,7 @@ Parameter guidelines:
 - For duplicate_asset, use asset_id for the source, pass an explicit empty grid address as destination without @, and omit destination when the copy should go directly below the source
 - When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
 - When the user asks for a cold open or an exciting highlight before the full clip, use prepare_cold_open. The user reviews its range before edit_cold_open creates the copy. Never invent source hashes or request IDs.
-- When the user wants to send, deliver, or save a Post to the phone or iPhone, or deliver a Post without naming a service, use save_post_to_icloud. Use upload_post_to_dropbox only when the user says Dropbox
+- When the user wants to post, send, deliver, or save a clip or Post to the phone or iPhone, or deliver it without naming a service, use post with to icloud. Use to download for a download link or a manual upload, and to x only when the user names X or Twitter
 - When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
 - When the user asks to trim or tighten a video for better pacing, timing or transitions without specifying cut ranges, use suggest_cuts and preserve the editing goal in instructions. It can assess visual pacing without a transcript. Never invent trim timestamps
 - For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)

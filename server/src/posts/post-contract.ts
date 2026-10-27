@@ -4,7 +4,7 @@ export const POST_METRIC_NAMES = ["views", "impressions", "likes", "replies", "r
 export type PostMetricName = typeof POST_METRIC_NAMES[number];
 export type PostMetrics = Partial<Record<PostMetricName, number | null>>;
 
-export type PostDelivery = "icloud" | "dropbox";
+export type PostDelivery = "icloud" | "download";
 
 export interface PostDefinition {
   version: 1;
@@ -36,23 +36,17 @@ export interface PostMetricSnapshot {
   note?: string;
 }
 
-export interface PostUploadFile {
-  path: string;
-  hash: string;
-  sessionId?: string;
-  offset: number;
-  id?: string;
-  rev?: string;
-}
-
 export interface PostICloudFile {
   path: string;
   sha256: string;
   size: number;
 }
 
+export const POST_STATUSES = ["draft", "uploading", "ready", "scheduled", "posting", "posted", "partially_posted", "failed", "needs_reconciliation"] as const;
+export type PostStatus = typeof POST_STATUSES[number];
+
 export interface PostRuntime {
-  status: "draft" | "uploading" | "ready" | "scheduled" | "posting" | "posted" | "partially_posted" | "failed" | "needs_reconciliation";
+  status: PostStatus;
   url?: string;
   postedAt?: string;
   error?: string | null;
@@ -68,7 +62,7 @@ export interface PostRuntime {
     attachments?: Array<{ artifactId: string; filename: string; revision: string; objectHash: string }>;
   };
   x?: { tweetId: string; mediaId: string; replies: Array<{ tweet_id: string; tweet_url: string; media_ids: string[]; text: string | null; posted_at: string }>; followupError?: { reply_number: number; message: string } | null };
-  dropbox?: { folder: string; video: PostUploadFile; caption: PostUploadFile; completedAt?: string };
+  download?: { completedAt: string };
   icloud?: { folder: string; video?: PostICloudFile; caption?: PostICloudFile; completedAt?: string };
   metrics: PostMetricSnapshot[];
   nextMetricAt?: string | null;

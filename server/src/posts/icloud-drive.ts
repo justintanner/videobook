@@ -3,8 +3,8 @@ import { copyFile, mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import type { Engine } from "videobook-engine";
-import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime, updatePost } from "./post-store.js";
-import type { PostICloudFile, PostRuntime } from "./post-contract.js";
+import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime, savePostDraft } from "./post-store.js";
+import type { PostICloudFile, PostPlatform, PostRuntime } from "./post-contract.js";
 import { defaultPostFolderName, icloudFolderError } from "./post-folder.js";
 import { readUbiquitousStates, summarizeUbiquitousSync, type ICloudSyncStatus } from "./icloud-status.js";
 
@@ -56,13 +56,6 @@ export async function icloudStatus() {
   return { available: !reason, root, shared: state?.ubiquitous ? state.shared : null, role: state?.ubiquitous ? state.role : null, reason };
 }
 
-async function applyCaption(engine: Engine, id: string, caption: string | undefined) {
-  const post = getPost(engine, id);
-  if (caption === undefined || caption === post.definition.caption) return post;
-  if (post.runtime.outbound) throw new Error("This Post's caption was frozen at its first delivery. Create a new Post to deliver a different caption.");
-  return updatePost(engine, id, { caption });
-}
-
 async function placeFile(target: string, bytes: Buffer): Promise<void> {
   const stagingDir = join(homedir(), "Library/Caches/videobook/icloud-staging");
   await mkdir(stagingDir, { recursive: true });
@@ -92,7 +85,7 @@ async function deliverFile(root: string, path: string, bytes: Buffer, recorded: 
   return file;
 }
 
-export async function savePostToICloud(engine: Engine, id: string, options: { folder?: string; caption?: string } = {}) {
+export async function savePostToICloud(engine: Engine, id: string, options: { folder?: string; caption?: string; platform?: PostPlatform } = {}) {
   if (["posting", "needs_reconciliation", "scheduled"].includes(getPost(engine, id).runtime.status)) throw new Error("Resolve or cancel the current publication before saving to iCloud");
   const root = icloudRoot();
   const unavailable = await icloudUnavailableReason(root);
@@ -101,7 +94,7 @@ export async function savePostToICloud(engine: Engine, id: string, options: { fo
   const folder = (options.folder ?? current.runtime.icloud?.folder ?? defaultPostFolderName(engine.book.get().name, current.address, id)).trim().replace(/\/+$/u, "");
   const folderError = icloudFolderError(folder);
   if (folderError) throw new Error(folderError);
-  const post = await applyCaption(engine, id, options.caption);
+  const post = await savePostDraft(engine, id, { caption: options.caption, platform: options.platform });
   const outbound = await freezePostOutbound(engine, id);
   const media = await engine.files.readAtRevision(outbound.artifactId, outbound.filename, outbound.revision);
   if (!media.ok) throw new Error(media.error.message);

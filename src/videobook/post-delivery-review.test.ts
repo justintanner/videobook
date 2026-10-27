@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell } from 'videobook-engine'
 import type { PostView } from '../../server/src/posts/post-contract'
 import {
-  defaultDropboxFolder,
+  copyWithCaption,
   defaultIcloudFolder,
+  deliveredPostFromTool,
   deliveryDestinationForEntry,
   icloudPhoneReceipt,
   icloudProgressLabel,
@@ -21,15 +22,18 @@ import {
   postDeliveryArgs,
   postDeliveryReceipt,
   postDeliveryValidation,
+  postDownloadFor,
+  postFrozen,
   resolveDeliveryPost,
   resolveDeliverySource,
   reviewWithIcloudStatus,
   type ICloudStatus,
-  postPlatformArgs,
   postReviewDraftArgs,
   type PostDeliveryReview,
 } from './post-delivery-review'
-import { editCopyVersion, initialCopyState } from './post-copy-review'
+import { copyCaption, editCopyVersion, initialCopyState } from './post-copy-review'
+
+const OUTBOUND = { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' }
 
 function postView(overrides: Partial<PostView['runtime']> = {}, frozen = true): PostView {
   return {
@@ -68,12 +72,10 @@ function review(overrides: Partial<PostDeliveryReview> = {}): PostDeliveryReview
     pinnedDestination: false,
     copy: initialCopyState(postView()),
     icloudFolder: 'my-book/post-b1-479eab',
-    dropboxFolder: '/Videobook/my-book/post-b1-479eab',
-    connection: { connected: true, pending: false, hasCredentials: true, error: null },
-    connecting: false,
     icloud: status(),
     receipt: null,
     sync: null,
+    download: null,
     ...overrides,
   }
 }
@@ -108,25 +110,20 @@ describe('post delivery review', () => {
     expect(latestPostForSource([older, newer], 'other-cell')).toBeNull()
   })
 
-  it('starts on iCloud unless the entry is Dropbox or iCloud Drive is unavailable', () => {
+  it('starts on iCloud unless the entry is Download or iCloud Drive is unavailable', () => {
     expect(deliveryDestinationForEntry('icloud', null)).toBe('icloud')
     expect(deliveryDestinationForEntry('icloud', status())).toBe('icloud')
-    expect(deliveryDestinationForEntry('dropbox', status())).toBe('dropbox')
-    expect(deliveryDestinationForEntry('icloud', status({ available: false, reason: 'missing' }))).toBe('dropbox')
+    expect(deliveryDestinationForEntry('download', status())).toBe('download')
+    expect(deliveryDestinationForEntry('icloud', status({ available: false, reason: 'missing' }))).toBe('download')
     const opened = review({ entry: 'icloud', destination: 'icloud', icloud: null })
-    expect(reviewWithIcloudStatus(opened, status({ available: false, reason: 'iCloud Drive is not set up on this Mac.' })).destination).toBe('dropbox')
+    expect(reviewWithIcloudStatus(opened, status({ available: false, reason: 'iCloud Drive is not set up on this Mac.' })).destination).toBe('download')
     expect(reviewWithIcloudStatus({ ...opened, pinnedDestination: true }, status({ available: false })).destination).toBe('icloud')
   })
 
   it('suggests the shared folder shape and keeps a folder already used', () => {
     expect(defaultIcloudFolder(postView(), 'My Book!')).toBe('my-book/post-b1-479eab')
-    expect(defaultDropboxFolder(postView(), 'My Book!')).toBe('/Videobook/my-book/post-b1-479eab')
-    const used = postView({
-      icloud: { folder: 'phones/skate', completedAt: '2026-10-14T10:00:00.000Z' },
-      dropbox: { folder: '/Clients/rain', video: { path: '/Clients/rain/clip.mp4', hash: 'a', offset: 0 }, caption: { path: '/Clients/rain/caption.txt', hash: 'b', offset: 0 } },
-    })
+    const used = postView({ icloud: { folder: 'phones/skate', completedAt: '2026-10-14T10:00:00.000Z' } })
     expect(defaultIcloudFolder(used, 'My Book')).toBe('phones/skate')
-    expect(defaultDropboxFolder(used, 'My Book')).toBe('/Clients/rain')
   })
 
   it('explains each reason a delivery is unavailable and keeps the phone hint non-blocking', () => {
@@ -138,8 +135,8 @@ describe('post delivery review', () => {
     expect(postDeliveryValidation(postView(), review({ icloudFolder: '' })).blocking).toBe('Choose an iCloud folder.')
     expect(postDeliveryValidation(postView(), review({ icloudFolder: '/Users/me' })).blocking).toContain('inside iCloud Drive')
     expect(postDeliveryValidation(postView(), review({ icloudFolder: 'a/../b' })).blocking).toContain('..')
-    expect(postDeliveryValidation(postView(), review({ destination: 'dropbox', dropboxFolder: 'clips' })).blocking).toContain('Start the Dropbox folder with /')
-    expect(postDeliveryValidation(postView(), review({ destination: 'dropbox', connection: { connected: false, pending: false, hasCredentials: false, error: null } })).blocking).toContain('DROPBOX_CLIENT_ID')
+    expect(postDeliveryValidation(postView(), review({ destination: 'download', icloud: status({ available: false }), icloudFolder: '' }))).toEqual({ blocking: null, notice: null })
+    expect(postDeliveryValidation(postView({}, false), review({ destination: 'download' })).blocking).toContain('has no saved source clip')
     expect(postDeliveryValidation(postView(), review())).toEqual({ blocking: null, notice: null })
     expect(icloudShareHint(status({ shared: false }))).toBe('Share iCloud Drive › Videobook with your phones first')
     expect(icloudShareHint(status({ shared: true }))).toBe('Shared with your iPhones')
@@ -147,28 +144,42 @@ describe('post delivery review', () => {
     expect(postDeliveryValidation(postView(), review({ icloud: status({ shared: false }) })).blocking).toBeNull()
   })
 
-  it('sends the caption only when it changed and is still editable', () => {
-    expect(postDeliveryArgs(postView(), review({ icloudFolder: 'skate/' }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, folder: 'skate' })
-    const edited = editCopyVersion(initialCopyState(postView()), { body: 'New', tags: ['rain'] })
-    expect(postDeliveryArgs(postView(), review({ copy: edited }))).toMatchObject({ caption: 'New\n\n#rain' })
-    const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
-    expect(postDeliveryArgs(frozen, review({ copy: edited }))).not.toHaveProperty('caption')
-  })
-
-  it('saves the reviewed caption and platform before linking a Post that skipped delivery', () => {
-    expect(postReviewDraftArgs(postView(), review())).toBeNull()
+  it('posts in one call with the caption and platform only when they changed and are still editable', () => {
+    expect(postDeliveryArgs(postView(), review({ icloudFolder: 'skate/' }))).toEqual({ book_id: 'book-1', to: 'icloud', post_cell_id: postView().id, folder: 'skate' })
     const edited = { ...editCopyVersion(initialCopyState(postView()), { body: 'New', tags: ['rain'] }), platform: 'instagram' as const }
-    expect(postReviewDraftArgs(postView(), review({ copy: edited }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, platform: 'instagram', caption: 'New\n\n#rain' })
-    const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
-    expect(postReviewDraftArgs(frozen, review({ copy: edited }))).toBeNull()
+    expect(postDeliveryArgs(postView(), review({ copy: edited, destination: 'download' }))).toEqual({ book_id: 'book-1', to: 'download', post_cell_id: postView().id, platform: 'instagram', text: 'New\n\n#rain' })
+    const frozen = postView({ outbound: OUTBOUND })
+    expect(postDeliveryArgs(frozen, review({ copy: edited }))).toEqual({ book_id: 'book-1', to: 'icloud', post_cell_id: postView().id, folder: 'my-book/post-b1-479eab' })
   })
 
-  it('saves a changed platform before delivery while the Post is still a draft', () => {
-    expect(postPlatformArgs(postView(), review())).toBeNull()
-    const copy = { ...initialCopyState(postView()), platform: 'x' as const }
-    expect(postPlatformArgs(postView(), review({ copy }))).toEqual({ book_id: 'book-1', post_cell_id: postView().id, platform: 'x' })
-    const frozen = postView({ outbound: { artifactId: 'out', filename: 'clip.mp4', caption: 'Draft caption', frozenAt: '2026-10-14T10:00:00.000Z', revision: 'r2', objectHash: 'h2' } })
-    expect(postPlatformArgs(frozen, review({ copy }))).toBeNull()
+  it('saves the reviewed caption and platform with the published link of a Post that skipped delivery', () => {
+    expect(postReviewDraftArgs(postView(), review())).toEqual({})
+    const edited = { ...editCopyVersion(initialCopyState(postView()), { body: 'New', tags: ['rain'] }), platform: 'instagram' as const }
+    expect(postReviewDraftArgs(postView(), review({ copy: edited }))).toEqual({ platform: 'instagram', caption: 'New\n\n#rain' })
+    expect(postReviewDraftArgs(postView({ outbound: OUTBOUND }), review({ copy: edited }))).toEqual({})
+  })
+
+  it('prefills a caption typed after /post unless the Post was already delivered', () => {
+    expect(copyCaption(copyWithCaption(postView(), '  Skate day  '))).toBe('Skate day')
+    expect(copyCaption(copyWithCaption(postView(), undefined))).toBe('Draft caption')
+    expect(copyCaption(copyWithCaption(postView({ outbound: OUTBOUND }), 'Changed'))).toBe('Draft caption')
+    expect(postFrozen(postView())).toBe(false)
+    expect(postFrozen(postView({ outbound: OUTBOUND }))).toBe(true)
+    expect(postFrozen(postView({ status: 'scheduled' }))).toBe(true)
+  })
+
+  it('builds download links for the frozen clip and reads them from the post result', () => {
+    expect(postDownloadFor(postView(), { bookId: 'book-1', name: 'My Book' })).toBeNull()
+    const links = postDownloadFor(postView({ outbound: OUTBOUND }), { bookId: 'book-1', name: 'My Book' })
+    expect(links).toEqual({
+      clip_url: '/files/book-1/out/clip.mp4?download=my-book-post-b1-479eab.mp4',
+      caption_url: '/files/book-1/out/caption.txt?download=my-book-post-b1-479eab.txt',
+      filename: 'my-book-post-b1-479eab.mp4',
+      caption: 'Draft caption',
+    })
+    expect(deliveredPostFromTool({ post: postView(), download: links }).download).toEqual(links)
+    expect(deliveredPostFromTool({ post: postView() }).download).toBeNull()
+    expect(deliveredPostFromTool({ post: postView(), download: { clip_url: '/files/x' } }).download).toBeNull()
   })
 
   it('waits for Astra and warns past the platform limit', () => {
@@ -176,7 +187,7 @@ describe('post delivery review', () => {
     expect(postDeliveryValidation(postView(), review({ copy: drafting })).blocking).toBe('Astra is writing the caption…')
     const long = editCopyVersion({ ...initialCopyState(postView()), platform: 'x' }, { body: 'a'.repeat(281) })
     expect(postDeliveryValidation(postView(), review({ copy: long }))).toEqual({ blocking: null, notice: "Over X's 280-character limit. Shorten it or regen with Astra." })
-    expect(postDeliveryArgs(postView(), review({ destination: 'dropbox', dropboxFolder: '/Out/' })).folder).toBe('/Out')
+    expect(postDeliveryArgs(postView(), review({ destination: 'download' }))).not.toHaveProperty('folder')
   })
 
   it('shows upload progress only for a real iCloud folder and stops polling once it settles', () => {
@@ -191,10 +202,11 @@ describe('post delivery review', () => {
     expect(icloudSyncShouldPoll('error')).toBe(false)
     expect(icloudSyncShouldPoll('not-icloud')).toBe(false)
     expect(icloudSyncFromTool({ phase: 'not-icloud', error: null })).toEqual({ phase: 'not-icloud', error: null })
-    expect(postDeliveryReceipt(postView({ icloud: { folder: 'my-book/post-b1-479eab', completedAt: '2026-10-15T00:00:00.000Z' } }), 'icloud')).toBe('Saved @b1 to iCloud · Videobook/my-book/post-b1-479eab')
+    expect(postDeliveryReceipt({ post: postView({ icloud: { folder: 'my-book/post-b1-479eab', completedAt: '2026-10-15T00:00:00.000Z' } }), download: null }, 'icloud')).toBe('Saved @b1 to iCloud · Videobook/my-book/post-b1-479eab')
+    expect(postDeliveryReceipt({ post: postView(), download: postDownloadFor(postView({ outbound: OUTBOUND }), { bookId: 'book-1', name: 'My Book' }) }, 'download')).toBe('Downloaded @b1 as my-book-post-b1-479eab.mp4')
     expect(icloudPhoneReceipt('my-book/post-b1-479eab')).toBe('On iPhone · iCloud Drive › Videobook › my-book/post-b1-479eab')
     expect(postDeliveryBadges(postView())).toEqual([])
-    expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate', completedAt: '2026-10-15T00:00:00.000Z' }, dropbox: { folder: '/Clients/rain', video: { path: '/Clients/rain/clip.mp4', hash: 'a', offset: 0 }, caption: { path: '/Clients/rain/caption.txt', hash: 'b', offset: 0 }, completedAt: '2026-10-15T00:00:00.000Z' } }))).toEqual(['iPhone', 'Dropbox'])
+    expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate', completedAt: '2026-10-15T00:00:00.000Z' }, download: { completedAt: '2026-10-15T00:00:00.000Z' } }))).toEqual(['iPhone', 'Downloaded'])
     expect(postDeliveryBadges(postView({ icloud: { folder: 'phones/skate' } }))).toEqual([])
   })
 
@@ -205,7 +217,7 @@ describe('post delivery review', () => {
     expect(postAwaitingLink(delivered)).toBe(true)
     expect(postAwaitingLink(postView({ ...delivered.runtime, url: 'https://www.tiktok.com/@jtbkk/video/1', postedAt: '2026-10-15T01:00:00.000Z' }))).toBe(false)
     expect(postLinkPrompt(delivered)).toBe('Posted on TikTok? Paste the link')
-    expect(postTileNextStep(postView())).toBe('Save to iPhone or paste TikTok link')
+    expect(postTileNextStep(postView())).toBe('Save, download or paste TikTok link')
     expect(postTileNextStep(delivered)).toBe('Paste TikTok link')
     expect(postTileStatus(postView())).toBe('draft')
     expect(postTileStatus(delivered)).toBe('needs_link')

@@ -1,19 +1,12 @@
 import type { NotebookCell } from 'videobook-engine'
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import type { PostView } from '../../server/src/posts/post-contract'
-import { defaultPostFolderName, icloudFolderError } from '../../server/src/posts/post-folder'
+import { defaultPostFolderName, icloudFolderError, postDownloadLinks, type PostDownload } from '../../server/src/posts/post-folder'
 import type { ConfirmValidation } from './confirm-validation'
-import { copyCaption, copyLimitNotice, type PostCopyState } from './post-copy-review'
+import { captionLanguage, copyCaption, copyLimitNotice, editCopyVersion, initialCopyState, type PostCopyState } from './post-copy-review'
 import { PLATFORM_NAMES } from '../../server/src/posts/post-copy-format'
 
-export type DeliveryDestination = 'icloud' | 'dropbox'
-
-export type DropboxConnection = {
-  connected: boolean
-  pending: boolean
-  hasCredentials: boolean
-  error: string | null
-}
+export type DeliveryDestination = 'icloud' | 'download'
 
 export type ICloudStatus = {
   available: boolean
@@ -39,12 +32,15 @@ export type PostDeliveryReview = {
   pinnedDestination: boolean
   copy: PostCopyState
   icloudFolder: string
-  dropboxFolder: string
-  connection: DropboxConnection | null
-  connecting: boolean
   icloud: ICloudStatus | null
   receipt: string | null
   sync: ICloudSyncView | null
+  download: PostDownload | null
+}
+
+export type DeliveredPost = {
+  post: PostView
+  download: PostDownload | null
 }
 
 type DeliveryCall = (tool: string, args: Record<string, unknown>) => Promise<unknown>
@@ -93,14 +89,13 @@ export function defaultIcloudFolder(post: PostView, bookName: string): string {
   return post.runtime.icloud?.folder ?? defaultPostFolderName(bookName, post.address, post.id)
 }
 
-export function defaultDropboxFolder(post: PostView, bookName: string): string {
-  if (post.runtime.dropbox?.folder) return post.runtime.dropbox.folder
-  return `/Videobook/${defaultPostFolderName(bookName, post.address, post.id)}`
+export function postDownloadFor(post: PostView, book: { bookId: string; name: string }): PostDownload | null {
+  return post.runtime.outbound ? postDownloadLinks(book, post, post.runtime.outbound) : null
 }
 
 export function deliveryDestinationForEntry(entry: DeliveryDestination, status: ICloudStatus | null): DeliveryDestination {
-  if (entry === 'dropbox') return 'dropbox'
-  if (status && !status.available) return 'dropbox'
+  if (entry === 'download') return 'download'
+  if (status && !status.available) return 'download'
   return 'icloud'
 }
 
@@ -116,22 +111,15 @@ export function deliveryCaptionLocked(post: PostView): boolean {
   return Boolean(post.runtime.outbound)
 }
 
-export function dropboxFolderError(folder: string): string | null {
-  const trimmed = folder.trim()
-  if (!trimmed) return 'Choose a Dropbox folder.'
-  if (!trimmed.startsWith('/')) return 'Start the Dropbox folder with /, like /Videobook/clips.'
-  if (trimmed.split('/').includes('..') || [...trimmed].some(character => character.charCodeAt(0) < 32)) {
-    return 'Use a Dropbox folder without .. segments or control characters.'
-  }
-  return null
+export function postFrozen(post: PostView): boolean {
+  return Boolean(post.runtime.outbound || post.runtime.url || post.runtime.status === 'scheduled')
 }
 
-function connectionError(connection: DropboxConnection | null, connecting: boolean): string | null {
-  if (connecting) return 'Finish connecting Dropbox in the other tab.'
-  if (!connection) return 'Checking the Dropbox connection…'
-  if (connection.connected) return null
-  if (!connection.hasCredentials) return 'Dropbox delivery is not configured. Set DROPBOX_CLIENT_ID on the server.'
-  return 'Connect Dropbox to upload.'
+export function copyWithCaption(post: PostView, caption: string | undefined): PostCopyState {
+  const copy = initialCopyState(post)
+  const text = caption?.trim()
+  if (!text || deliveryCaptionLocked(post)) return copy
+  return editCopyVersion({ ...copy, language: captionLanguage(text) }, { body: text })
 }
 
 function postBlocking(post: PostView | null, caption: string): string | null {
@@ -161,13 +149,7 @@ function copyNotice(post: PostView | null, review: PostDeliveryReview): string |
 
 export function postDeliveryValidation(post: PostView | null, review: PostDeliveryReview): ConfirmValidation {
   const common = postBlocking(post, copyCaption(review.copy)) ?? copyBlocking(post, review)
-  if (review.destination === 'dropbox') {
-    const blocking = common ?? dropboxFolderError(review.dropboxFolder) ?? connectionError(review.connection, review.connecting)
-    const notice = post?.runtime.dropbox && !post.runtime.dropbox.completedAt && post.runtime.dropbox.folder === review.dropboxFolder.trim()
-      ? 'A previous upload to this folder stopped early. Uploading resumes where it left off.'
-      : copyNotice(post, review)
-    return { blocking, notice: blocking ? null : notice }
-  }
+  if (review.destination === 'download') return { blocking: common, notice: common ? null : copyNotice(post, review) }
   const availability = !review.icloud
     ? 'Checking iCloud Drive…'
     : review.icloud.available ? null : (review.icloud.reason ?? ICLOUD_UNAVAILABLE)
@@ -175,39 +157,49 @@ export function postDeliveryValidation(post: PostView | null, review: PostDelive
   return { blocking, notice: blocking ? null : copyNotice(post, review) }
 }
 
-export function postDeliveryArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> {
-  const folder = (review.destination === 'icloud' ? review.icloudFolder : review.dropboxFolder).trim().replace(/\/+$/u, '')
-  return {
-    book_id: review.bookId,
-    post_cell_id: post.id,
-    folder,
-    ...(!deliveryCaptionLocked(post) && copyCaption(review.copy) !== post.definition.caption ? { caption: copyCaption(review.copy) } : {}),
-  }
-}
-
-export function postPlatformArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> | null {
-  if (deliveryCaptionLocked(post) || review.copy.platform === post.definition.platform) return null
-  return { book_id: review.bookId, post_cell_id: post.id, platform: review.copy.platform }
-}
-
-export function postReviewDraftArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> | null {
-  if (deliveryCaptionLocked(post)) return null
+export function postReviewDraftArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> {
+  if (deliveryCaptionLocked(post)) return {}
   const caption = copyCaption(review.copy)
-  const patch = {
+  return {
     ...(review.copy.platform !== post.definition.platform ? { platform: review.copy.platform } : {}),
     ...(caption !== post.definition.caption ? { caption } : {}),
   }
-  return Object.keys(patch).length > 0 ? { book_id: review.bookId, post_cell_id: post.id, ...patch } : null
 }
 
-export function postDeliveryTool(destination: DeliveryDestination): 'save_post_to_icloud' | 'upload_post_to_dropbox' {
-  return destination === 'icloud' ? 'save_post_to_icloud' : 'upload_post_to_dropbox'
+export function postDeliveryArgs(post: PostView, review: PostDeliveryReview): Record<string, unknown> {
+  const { caption, ...draft } = postReviewDraftArgs(post, review)
+  return {
+    book_id: review.bookId,
+    to: review.destination,
+    post_cell_id: post.id,
+    ...(review.destination === 'icloud' ? { folder: review.icloudFolder.trim().replace(/\/+$/u, '') } : {}),
+    ...draft,
+    ...(caption === undefined ? {} : { text: caption }),
+  }
 }
 
-export function postDeliveryBadges(post: PostView): Array<'iPhone' | 'Dropbox'> {
-  const badges: Array<'iPhone' | 'Dropbox'> = []
+function stringField(value: Record<string, unknown>, name: string): string | null {
+  return typeof value[name] === 'string' ? value[name] : null
+}
+
+function downloadFromTool(value: unknown): PostDownload | null {
+  const download = record(value)
+  const clipUrl = stringField(download, 'clip_url')
+  const captionUrl = stringField(download, 'caption_url')
+  const filename = stringField(download, 'filename')
+  if (!clipUrl || !captionUrl || !filename) return null
+  return { clip_url: clipUrl, caption_url: captionUrl, filename, caption: stringField(download, 'caption') ?? '' }
+}
+
+export function deliveredPostFromTool(value: unknown): DeliveredPost {
+  const result = record(value)
+  return { post: result.post as PostView, download: downloadFromTool(result.download) }
+}
+
+export function postDeliveryBadges(post: PostView): Array<'iPhone' | 'Downloaded'> {
+  const badges: Array<'iPhone' | 'Downloaded'> = []
   if (post.runtime.icloud?.completedAt) badges.push('iPhone')
-  if (post.runtime.dropbox?.completedAt) badges.push('Dropbox')
+  if (post.runtime.download?.completedAt) badges.push('Downloaded')
   return badges
 }
 
@@ -233,7 +225,7 @@ export function postTileStatus(post: PostView): string {
 export function postTileNextStep(post: PostView): string | null {
   if (post.runtime.postedAt || post.runtime.url) return null
   if (postAwaitingLink(post)) return post.definition.platform === 'other' ? 'Paste the published link' : `Paste ${postPlatformName(post)} link`
-  return post.definition.platform === 'other' ? 'Save to iPhone or paste link' : `Save to iPhone or paste ${postPlatformName(post)} link`
+  return post.definition.platform === 'other' ? 'Save, download or paste link' : `Save, download or paste ${postPlatformName(post)} link`
 }
 
 export function postTilePostedOn(post: PostView): string | null {
@@ -258,13 +250,11 @@ export function icloudPhoneReceipt(folder: string): string {
   return `On iPhone · iCloud Drive › Videobook › ${folder}`
 }
 
-export function postDeliveryReceipt(post: PostView, destination: DeliveryDestination): string {
-  if (destination === 'icloud') {
-    const folder = post.runtime.icloud?.folder
-    return folder ? `Saved ${post.address} to iCloud · Videobook/${folder}` : `Saved ${post.address} to iCloud`
-  }
-  const folder = post.runtime.dropbox?.folder
-  return folder ? `Uploaded ${post.address} to Dropbox · ${folder}` : `Uploaded ${post.address} to Dropbox`
+export function postDeliveryReceipt(delivered: DeliveredPost, destination: DeliveryDestination): string {
+  const { post, download } = delivered
+  if (destination === 'download') return download ? `Downloaded ${post.address} as ${download.filename}` : `${post.address} is ready to download`
+  const folder = post.runtime.icloud?.folder
+  return folder ? `Saved ${post.address} to iCloud · Videobook/${folder}` : `Saved ${post.address} to iCloud`
 }
 
 export function icloudProgressLabel(phase: ICloudSyncPhase | null, error?: string | null): string | null {
@@ -289,16 +279,6 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-export async function fetchDropboxConnection(call: DeliveryCall): Promise<DropboxConnection> {
-  const status = record(await call('service_status', { service: 'dropbox' }))
-  return {
-    connected: status.connected === true,
-    pending: status.pending === true,
-    hasCredentials: status.has_credentials !== false,
-    error: typeof status.error === 'string' && status.error ? status.error : null,
-  }
-}
-
 export async function fetchIcloudStatus(call: DeliveryCall): Promise<ICloudStatus> {
   const status = record(await call('service_status', { service: 'icloud' }))
   const role = status.role === 'owner' || status.role === 'participant' ? status.role : null
@@ -309,23 +289,4 @@ export async function fetchIcloudStatus(call: DeliveryCall): Promise<ICloudStatu
     role,
     reason: typeof status.reason === 'string' && status.reason ? status.reason : null,
   }
-}
-
-export async function startDropboxConnection(call: DeliveryCall): Promise<string> {
-  const result = record(await call('connect_service', { service: 'dropbox' }))
-  if (typeof result.authorize_url !== 'string') throw new Error('Dropbox did not return an authorization link.')
-  return result.authorize_url
-}
-
-export async function waitForDropboxConnection(
-  call: DeliveryCall,
-  sleep: (ms: number) => Promise<void>,
-  isCurrent: () => boolean,
-): Promise<DropboxConnection> {
-  let status = await fetchDropboxConnection(call)
-  for (let attempt = 0; attempt < 90 && status.pending && !status.connected && isCurrent(); attempt += 1) {
-    await sleep(2000)
-    status = await fetchDropboxConnection(call)
-  }
-  return status
 }

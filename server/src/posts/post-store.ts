@@ -174,6 +174,16 @@ export async function updatePost(engine: Engine, id: string, patch: Partial<Pick
   return getPost(engine, id);
 }
 
+export async function savePostDraft(engine: Engine, id: string, draft: { caption?: string; platform?: PostPlatform }): Promise<PostView> {
+  const post = getPost(engine, id);
+  const patch: { caption?: string; platform?: PostPlatform } = {};
+  if (draft.caption !== undefined && draft.caption !== post.definition.caption) patch.caption = draft.caption;
+  if (draft.platform !== undefined && draft.platform !== post.definition.platform) patch.platform = draft.platform;
+  if (Object.keys(patch).length === 0) return post;
+  if (post.runtime.outbound) throw new Error("This Post's caption was frozen at its first delivery. Create a new Post to deliver a different caption.");
+  return updatePost(engine, id, patch);
+}
+
 export async function freezePostOutbound(engine: Engine, id: string, media?: { bytes: Buffer; filename: string }): Promise<NonNullable<PostRuntime["outbound"]>> {
   const post = getPost(engine, id);
   if (post.runtime.outbound) return post.runtime.outbound;
