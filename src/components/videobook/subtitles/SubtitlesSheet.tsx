@@ -4,7 +4,8 @@ import { captionsToSubtitleFile, type CaptionExportFormat } from '../../../../se
 import type { CaptionDocument } from '../../../../server/src/captions/model'
 import { ConfirmSheet } from '../confirm/ConfirmSheet'
 import type { SubtitleEditor, SubtitleSaveState } from '@/videobook/useSubtitleEditor'
-import { subtitlesRenderBlocker } from '@/videobook/subtitles-model'
+import { subtitlesRenderBlocker, type SubtitleRenderOutput } from '@/videobook/subtitles-model'
+import type { ConfirmSheetEffect } from '../confirm/ConfirmSheetHints'
 
 const SubtitlesBody = lazy(async () => ({ default: (await import('./SubtitlesBody')).SubtitlesBody }))
 
@@ -14,6 +15,23 @@ const SAVE_LABELS: Record<SubtitleSaveState, string> = {
   saving: 'Saving…',
   error: 'Not saved',
   conflict: 'Changed elsewhere',
+}
+
+const OUTPUT_EFFECTS: Record<SubtitleRenderOutput, ConfirmSheetEffect> = {
+  new: { label: 'New video cell · source kept', tone: 'default' },
+  replace: { label: 'Replaces the video · earlier version kept', tone: 'warning' },
+}
+
+function OutputChoice({ editor }: { editor: SubtitleEditor }) {
+  const { state } = editor
+  const replaceable = state.target?.kind === 'video'
+  return (
+    <div className="subtitles-segmented subtitles-output" role="group" aria-label="Render output">
+      <button type="button" aria-pressed={state.output === 'new'} disabled={state.rendering} onClick={() => editor.setOutput('new')}>New video</button>
+      <button type="button" aria-pressed={state.output === 'replace'} disabled={state.rendering || !replaceable}
+        title={replaceable ? undefined : 'An exported timeline can only render a new copy.'} onClick={() => editor.setOutput('replace')}>Replace video</button>
+    </div>
+  )
 }
 
 function download(document: CaptionDocument, label: string, format: CaptionExportFormat) {
@@ -41,13 +59,14 @@ export function SubtitlesSheet({ editor, applyFormId, onClose }: { editor: Subti
       applyLabel="Render"
       cancelLabel="Close"
       busy={state.rendering}
-      busyLabel="Rendering…"
-      effect={{ label: 'Renders a new subtitled video cell · source kept', tone: 'default' }}
+      busyLabel="Queuing render…"
+      effect={OUTPUT_EFFECTS[state.output]}
       validation={{ blocking, notice: state.save === 'saved' ? null : SAVE_LABELS[state.save] }}
       applyFormId={applyFormId}
       onCancel={onClose}
       secondaryActions={(
         <div className="subtitles-footer">
+          <OutputChoice editor={editor} />
           <button type="button" aria-label="Undo" title="Undo (⌘Z)" disabled={state.past.length === 0 || state.rendering} onClick={editor.undo}><Undo2 size={14} aria-hidden="true" /></button>
           <button type="button" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={state.future.length === 0 || state.rendering} onClick={editor.redo}><Redo2 size={14} aria-hidden="true" /></button>
           <span className="subtitles-save-state" data-state={state.save}>{SAVE_LABELS[state.save]}</span>

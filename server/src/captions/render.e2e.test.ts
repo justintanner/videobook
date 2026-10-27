@@ -262,6 +262,60 @@ describe("caption render", () => {
     expect(box.maxX - box.minX).toBeGreaterThan(80);
   });
 
+  it("burns the reviewed subtitles into the source video in place and keeps its earlier version", async () => {
+    const created = await engine.artifacts.create("video", "in place");
+    if (!created.ok) throw new Error(created.error.message);
+    const sourceId = created.value.artifactId;
+    const sourcePath = join(tempDir, "in-place.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y", "-f", "lavfi", "-i", "color=c=0x2060a0:s=640x360:r=30:d=2",
+      "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=44100:duration=2",
+      "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", sourcePath,
+    ]);
+    const written = await engine.files.write(sourceId, "original.mp4", await readFile(sourcePath));
+    if (!written.ok) throw new Error(written.error.message);
+    await registerMediaProbe(engine, sourceId, "original.mp4", await probeVideo(await outputPath(sourceId)));
+    const transcript = await engine.files.write(sourceId, "elevenlabs.json", JSON.stringify(TRANSCRIPT));
+    if (!transcript.ok) throw new Error(transcript.error.message);
+    const notebook = engine.notebooks.read(notebookId);
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const sourceCell = engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 4 }, outputArtifactId: sourceId });
+    const placed = await engine.notebooks.write({ ...notebook.value, cells: [...notebook.value.cells, sourceCell] });
+    if (!placed.ok) throw new Error(placed.error.message);
+    const cellCount = notebook.value.cells.length + 1;
+    const own = { asset_id: sourceId };
+    await call({ ...own, op: "prepare" });
+    await expect.poll(async () => (await call<Read>(own)).status, { timeout: testBudget(60_000) }).toBe("ready");
+    const read = await call<Read>(own);
+    const saved = await call<{ revision: string }>({ ...own, op: "update", expected_revision: read.draft!.revision, edits: [{ op: "set_style", style: { snapToOnsets: false } }] });
+    const historyOf = async () => JSON.parse(((await client.callTool({ name: "asset_history", arguments: { book_id: bookId, asset_id: sourceId } })).content as TextContent)[0].text) as Array<{ hash: string }>;
+    const before = await historyOf();
+    const requestId = randomUUID();
+    const queued = await call<{ job_id: number; status: string; output_artifact_id: string }>({
+      ...own, op: "render", output: "replace", notebook_id: notebookId, expected_revision: saved.revision, source_hash: read.source.media_hash, request_id: requestId,
+    });
+    expect(queued).toMatchObject({ output_artifact_id: sourceId, status: "queued" });
+    await expect.poll(async () => (await call<Read>(own)).render?.status, { timeout: testBudget(300_000), interval: 1000 }).toBe("completed");
+    const render = (await call<Read>(own)).render!;
+    expect(render).toMatchObject({ output_asset_id: sourceId, cell_id: sourceCell.id, address: "@a5", error: null });
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+
+    const after = engine.notebooks.read(notebookId);
+    expect(after.ok && after.value.cells).toHaveLength(cellCount);
+    const manifest = await engine.files.manifest(sourceId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    expect(manifest.value.files.find((file) => file.name === "original.mp4")?.objectHash).not.toBe(read.source.media_hash);
+    expect(manifest.value.files.map((file) => file.name)).toContain("proxy.mp4");
+    expect(manifest.value.files.map((file) => file.name)).not.toContain("captions.json");
+    const path = await outputPath(sourceId);
+    expect(await probeVideo(path)).toMatchObject({ width: WIDTH, height: HEIGHT, hasAudio: true });
+    expect(colorBox(await frame(path, 0.5), HIGHLIGHT, 60).count).toBeGreaterThan(200);
+    expect((await historyOf()).length).toBeGreaterThan(before.length);
+    const provenance = await engine.metadata.artifacts.read<Record<string, unknown>>(sourceId, "captions");
+    expect(provenance.ok && provenance.value).toMatchObject({ sourceArtifactId: sourceId, requestId, output: "replace" });
+    expect((await call<Read>(own)).draft).toMatchObject({ stale_source: true });
+  });
+
   it("refuses to render a stale revision or a changed video", async () => {
     const current = await call<Read>({});
     await expect(call({ op: "render", notebook_id: notebookId, expected_revision: "stale", source_hash: sourceHash, request_id: randomUUID() }))

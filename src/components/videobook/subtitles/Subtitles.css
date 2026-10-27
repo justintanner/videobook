@@ -431,6 +431,36 @@
   font-size: 11px;
 }
 
+.subtitles-footer > .subtitles-output {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin-right: 6px;
+}
+
+.subtitles-output button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.subtitles-output button:hover:not(:disabled) {
+  border-color: var(--control-border-hover);
+  color: var(--control-fg-hover);
+}
+
+.subtitles-output button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .subtitles-save-state {
   color: var(--muted);
   font-size: 11px;

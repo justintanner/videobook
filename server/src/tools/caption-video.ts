@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CAPTION_COMPONENTS } from "../captions/analysis.js";
 import type { CaptionEdit } from "../captions/edits.js";
 import { CAPTION_ASPECTS, CAPTION_BACKGROUNDS, CAPTION_MOTIONS, CAPTION_PRESETS, ORIGINAL_CAPTION_LANGUAGE } from "../captions/model.js";
-import { latestCaptionRender, requestCaptionRender } from "../captions/render.js";
+import { CAPTION_RENDER_OUTPUTS, latestCaptionRender, requestCaptionRender, type CaptionRenderOutput } from "../captions/render.js";
 import type { CaptionReadModel, CaptionResolution } from "../captions/service.js";
 import { CaptionServiceError, prepareCaptions, readCaptions, updateCaptions } from "../captions/service.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -50,7 +50,7 @@ const schema = {
   asset_id: z.string().min(1).describe("Video artifact UUID or notebook address such as @a1"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address"),
   op: z.enum(["get", "prepare", "update", "render"]).optional()
-    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement or translation (transcription, placement and translation are paid); update saves edits against expected_revision; render queues a subtitled copy of exactly that revision as a new video (a version of the earlier copy when one exists)"),
+    .describe("get (default) reads the draft and preparation status without starting work; prepare starts missing transcription, vocal timing, face/text placement or translation (transcription, placement and translation are paid); update saves edits against expected_revision; render queues the subtitles of exactly that revision as a background job and returns at once"),
   language: z.string().regex(/^(original|[a-z]{2})$/u).optional()
     .describe("original (default) for the spoken language with real word timings, or an ISO 639-1 code for translated subtitles with estimated timing"),
   detail: z.enum(["summary", "full"]).optional().describe("summary (default) omits the document, regions and loudness envelope"),
@@ -59,6 +59,8 @@ const schema = {
   expected_revision: z.string().optional().describe("update and render: the draft revision from get that these edits apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.media_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
+  output: z.enum(CAPTION_RENDER_OUTPUTS).optional()
+    .describe("render: new (default) writes a subtitled copy into a new video cell below the source, a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
   edits: z.array(editSchema).max(500).optional()
     .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect)"),
   document: advertisedAs(z.unknown(), {
@@ -76,6 +78,7 @@ type CaptionVideoArgs = {
   op?: "get" | "prepare" | "update" | "render";
   source_hash?: string;
   request_id?: string;
+  output?: CaptionRenderOutput;
   language?: string;
   detail?: "summary" | "full";
   regions?: boolean;
@@ -128,8 +131,16 @@ async function render(engine: Engine, args: CaptionVideoArgs, artifactId: string
     expectedRevision: args.expected_revision,
     sourceHash: args.source_hash,
     notebookId: args.notebook_id ?? null,
+    output: args.output ?? "new",
   });
-  return { asset_id: artifactId, language, render: status };
+  return {
+    asset_id: artifactId,
+    language,
+    job_id: status.job_id,
+    status: status.status,
+    output_artifact_id: status.output_asset_id,
+    render: status,
+  };
 }
 
 function withRender(engine: Engine, model: CaptionReadModel) {
@@ -140,8 +151,8 @@ export function captionVideoDef(engine: Engine): ToolDef {
   return {
     name: "caption_video",
     description:
-      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision into a new subtitled video cell (the source is kept).",
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      "Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision in the background into a new subtitled video cell (the source is kept) or into the source video in place.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema,
     handler: async (input) => {
       const args = input as unknown as CaptionVideoArgs;

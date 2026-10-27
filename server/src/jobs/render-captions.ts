@@ -12,7 +12,7 @@ import { probeVideo } from "../ffmpeg.js";
 import { logger } from "../logger.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { mutateNotebook } from "../notebook-mutations.js";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { renderBrowserExecutable } from "../remotion/browser.js";
 import type { CaptionCompositionProps } from "../remotion/captions/CaptionComposition.js";
@@ -20,7 +20,8 @@ import { captionDurationInFrames } from "../remotion/captions/composition-meta.j
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 import { extractVideoPoster } from "../video-poster.js";
 import type { JobHandlerContext } from "../queue.js";
-import { withLocalLease } from "./_lease.js";
+import { withLocalLease, withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 interface RenderCaptionsPayload {
   bookId: string;
@@ -30,6 +31,7 @@ interface RenderCaptionsPayload {
 
 const SNAPSHOT_NAME = ".captions-source";
 const RENDER_NAME = ".captions-render.mp4";
+const IN_PLACE_LOCK_MS = 30 * 60_000;
 
 function requireRequest(engine: Engine, payload: RenderCaptionsPayload): CaptionRenderRequest {
   const request = readCaptionRenderRequest(engine, payload.requestId);
@@ -160,6 +162,11 @@ async function writeOutput(engine: Engine, request: CaptionRenderRequest, output
   if (!poster.ok) throw new Error(poster.error.message);
   const snapshot = await engine.files.write(request.outputArtifactId, "captions.json", JSON.stringify(request.document, null, 2));
   if (!snapshot.ok) throw new Error(snapshot.error.message);
+  await writeProvenance(engine, request);
+  return probe.videoDuration;
+}
+
+async function writeProvenance(engine: Engine, request: CaptionRenderRequest): Promise<void> {
   const provenance = await engine.metadata.artifacts.write(request.outputArtifactId, "captions", {
     sourceArtifactId: request.sourceArtifactId,
     sourceHash: request.sourceHash,
@@ -168,9 +175,9 @@ async function writeOutput(engine: Engine, request: CaptionRenderRequest, output
     revision: request.revision,
     aspect: request.document.aspect,
     preset: request.document.style.preset,
+    output: request.output,
   });
   if (!provenance.ok) throw new Error(provenance.error.message);
-  return probe.videoDuration;
 }
 
 async function publishCorrections(engine: Engine, bookId: string, request: CaptionRenderRequest): Promise<void> {
@@ -202,9 +209,62 @@ async function renderCaptions(engine: Engine, payload: RenderCaptionsPayload, ct
   }
 }
 
+function sourcePlacement(engine: Engine, request: CaptionRenderRequest): { cellId: string | null; address: string | null } {
+  const notebook = request.notebookId ? engine.notebooks.read(request.notebookId) : null;
+  const cell = notebook?.ok ? notebook.value.cells.find((entry) => entry.outputArtifactId === request.sourceArtifactId) : undefined;
+  return cell ? { cellId: cell.id, address: notebookGridTag(cell.slot) } : { cellId: null, address: null };
+}
+
+async function burnIntoSource(engine: Engine, bookId: string, request: CaptionRenderRequest, source: CaptionMediaSource, signal: AbortSignal): Promise<string> {
+  await reviewedSource(engine, request);
+  const outputPath = join(source.directory, RENDER_NAME);
+  try {
+    await renderComposition({ request, source, snapshotPath: source.path, outputPath, signal });
+    signal.throwIfAborted();
+    await reviewedSource(engine, request);
+    await publishCorrections(engine, bookId, request);
+    await replaceArtifactFileFromPath(engine, source.artifactId, source.file.name, outputPath);
+    await writeProvenance(engine, request);
+    return join(source.directory, source.file.name);
+  } finally {
+    await rm(outputPath, { force: true });
+  }
+}
+
+async function renderCaptionsInPlace(engine: Engine, bookId: string, request: CaptionRenderRequest, ctx: JobHandlerContext) {
+  const source = await reviewedSource(engine, request);
+  const videoPath = await withLockedLocalLease(
+    engine,
+    source.artifactId,
+    source.directory,
+    ctx,
+    "render",
+    { durationMs: IN_PLACE_LOCK_MS, data: { state: "rendering" } },
+    () => burnIntoSource(engine, bookId, request, source, ctx.signal),
+    { durationMs: IN_PLACE_LOCK_MS, waitForActiveMs: 30_000 },
+  );
+  await queue.enqueue(`process-video-${source.artifactId}-${Date.now()}`, {
+    type: "process_video",
+    videoPath,
+    assetId: source.artifactId,
+    assetDir: source.directory,
+    bookId,
+    provenance: { origin: "captions", request_id: request.requestId, captioned_at: new Date().toISOString() },
+    force: true,
+    skipDownstreamJobs: true,
+    preserveAudioArtifacts: true,
+  });
+  const placement = sourcePlacement(engine, request);
+  return { output_asset_id: source.artifactId, cell_id: placement.cellId, address: placement.address };
+}
+
 export function registerRenderCaptionsJob(engine: Engine): void {
   registerJobHandler(CAPTION_RENDER_JOB, async (input, ctx) => {
     const payload = input as unknown as RenderCaptionsPayload;
+    const request = readCaptionRenderRequest(engine, payload.requestId);
+    if (request?.output === "replace" && request.outputArtifactId === payload.assetId) {
+      return renderCaptionsInPlace(engine, payload.bookId, request, ctx);
+    }
     return withLocalLease(engine, payload.assetId, ctx, "render", () => renderCaptions(engine, payload, ctx));
   });
 }

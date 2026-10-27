@@ -68,6 +68,15 @@ export function parseSubtitlesRead(value: unknown): SubtitlesRead {
   return subtitlesReadSchema.parse(value)
 }
 
+export type SubtitleRenderOutput = 'new' | 'replace'
+
+export function subtitlesRenderQueuedMessage(output: SubtitleRenderOutput, target: { label: string; address: string | null }): string {
+  const name = target.address ? `@${target.address}` : target.label
+  return output === 'replace'
+    ? `Burning subtitles into ${name}. The video updates in place when the render finishes.`
+    : `Rendering subtitles for ${name}. The subtitled copy appears below it when the render finishes.`
+}
+
 export function parseSubtitlesRender(value: unknown): SubtitlesRender {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>).render : null
   return renderSchema.parse(record)

@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyCaptionEdits, CaptionEditError, type CaptionEdit } from '../../server/src/captions/edits'
 import type { CaptionDocument } from '../../server/src/captions/model'
+import type { ChatExecution } from './chat-turns'
 import {
   activeSubtitleJobIds,
   parseSubtitlesRead,
   parseSubtitlesRender,
+  subtitlesRenderQueuedMessage,
   subtitlesToolError,
+  type SubtitleRenderOutput,
   type SubtitlesRead,
 } from './subtitles-model'
 
-export type SubtitleCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean }) => Promise<unknown>
+export type SubtitleCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean; chat?: ChatExecution }) => Promise<unknown>
 
 export interface SubtitleTarget {
   artifactId: string
+  kind: 'video' | 'final'
   label: string
   mediaUrl: string
   address: string | null
@@ -38,13 +42,12 @@ export interface SubtitleEditorState {
   coalesceKey: string | null
   preparing: boolean
   rendering: boolean
+  output: SubtitleRenderOutput
 }
 
 export interface SubtitleRenderOutcome {
   ok: boolean
   message: string
-  cellId?: string | null
-  address?: string | null
 }
 
 const EMPTY: SubtitleEditorState = {
@@ -63,12 +66,12 @@ const EMPTY: SubtitleEditorState = {
   coalesceKey: null,
   preparing: false,
   rendering: false,
+  output: 'new',
 }
 
 const AUTOSAVE_MS = 700
 const POLL_MS = 1000
 const HISTORY_LIMIT = 100
-const RENDER_POLLS = 1800
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -100,7 +103,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
   const epoch = useRef(0)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef<Promise<boolean> | null>(null)
-  const renderRequest = useRef<{ revision: string; id: string } | null>(null)
+  const renderRequest = useRef<{ revision: string; output: SubtitleRenderOutput; id: string } | null>(null)
 
   const commit = useCallback((update: (current: SubtitleEditorState) => SubtitleEditorState) => {
     const next = update(stateRef.current)
@@ -317,40 +320,31 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     await reload()
   }, [bookId, call, reload])
 
-  const awaitRender = useCallback(async (ticket: number, requestId: string): Promise<SubtitleRenderOutcome> => {
-    for (let attempt = 0; attempt < RENDER_POLLS; attempt += 1) {
-      await wait(POLL_MS)
-      if (ticket !== epoch.current) return { ok: false, message: 'The subtitle editor closed; the render keeps going and its cell appears when it finishes.' }
-      const read = await fetchRead()
-      commit((current) => withRead(current, read))
-      const render = read.render
-      if (!render || render.request_id !== requestId) continue
-      if (render.status === 'completed') {
-        return { ok: true, message: `Subtitled copy created${render.address ? ` as @${render.address}` : ''}`, cellId: render.cell_id, address: render.address }
-      }
-      if (render.status === 'failed') return { ok: false, message: render.error ?? 'The subtitle render failed.' }
-    }
-    return { ok: false, message: 'The render is still running. Check Jobs, then reopen the subtitles.' }
-  }, [commit, fetchRead])
+  const setOutput = useCallback((output: SubtitleRenderOutput) => {
+    commit((value) => ({ ...value, output }))
+  }, [commit])
 
-  const render = useCallback(async (): Promise<SubtitleRenderOutcome> => {
+  const render = useCallback(async (chat?: ChatExecution): Promise<SubtitleRenderOutcome> => {
     const ticket = epoch.current
     if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the subtitles before rendering.' }
     const current = stateRef.current
     if (!current.target || !current.revision || !current.read) return { ok: false, message: 'The subtitles are not ready to render.' }
-    const requestId = renderRequest.current?.revision === current.revision ? renderRequest.current.id : crypto.randomUUID()
-    renderRequest.current = { revision: current.revision, id: requestId }
+    const output = current.output
+    const previous = renderRequest.current
+    const requestId = previous?.revision === current.revision && previous.output === output ? previous.id : crypto.randomUUID()
+    renderRequest.current = { revision: current.revision, output, id: requestId }
     commit((value) => ({ ...value, rendering: true, error: null }))
     try {
       parseSubtitlesRender(await call('caption_video', {
         ...baseArgs(),
         op: 'render',
+        output,
         notebook_id: current.target.notebookId ?? undefined,
         expected_revision: current.revision,
         source_hash: current.read.source.media_hash,
         request_id: requestId,
-      }))
-      return await awaitRender(ticket, requestId)
+      }, { chat }))
+      return { ok: true, message: subtitlesRenderQueuedMessage(output, current.target) }
     } catch (error) {
       const failure = subtitlesToolError(error)
       if (failure.status === 'conflict') commit((value) => ({ ...value, save: 'conflict', conflictRevision: failure.revision, saveError: failure.message }))
@@ -358,7 +352,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     } finally {
       if (ticket === epoch.current) commit((value) => ({ ...value, rendering: false }))
     }
-  }, [awaitRender, baseArgs, call, commit, flush])
+  }, [baseArgs, call, commit, flush])
 
   return {
     state,
@@ -373,6 +367,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     keepMine,
     resolve,
     cancelPreparation,
+    setOutput,
     render,
     flush,
   }

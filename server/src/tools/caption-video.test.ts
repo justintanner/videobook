@@ -332,8 +332,10 @@ describe("caption_video", () => {
     const base = { asset_id: assetId, op: "render", notebook_id: notebookId, source_hash: full.source.media_hash };
     await pauseBookQueueForTests(realBookId);
     try {
-      const first = await ok<{ render: { status: string; job_id: number; output_asset_id: string } }>({ ...base, expected_revision: full.draft.revision, request_id: requestId });
+      const first = await ok<{ job_id: number; status: string; output_artifact_id: string; render: { status: string; job_id: number; output_asset_id: string } }>({ ...base, expected_revision: full.draft.revision, request_id: requestId });
       expect(first.render).toMatchObject({ status: "queued" });
+      expect(first).toMatchObject({ job_id: first.render.job_id, status: "queued", output_artifact_id: first.render.output_asset_id });
+      expect(first.render.output_asset_id).not.toBe(assetId);
       const persisted = await ok({ asset_id: assetId });
       expect(persisted.draft).toMatchObject({ saved: true });
       expect(persisted).toMatchObject({ render: { status: "queued", job_id: first.render.job_id } });
@@ -357,6 +359,35 @@ describe("caption_video", () => {
     const crowded = await notebookWith(full2.asset_id, true);
     const noRoom = await call({ asset_id: full2.asset_id, op: "render", notebook_id: crowded, source_hash: full2.source.media_hash, expected_revision: full2.draft.revision, request_id: randomUUID() });
     expect(noRoom).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/empty cell/) } });
+  });
+
+  it("queues an in-place render into the source without an empty cell and keeps a request to one output", async () => {
+    const full = await ready(await video());
+    const crowded = await notebookWith(full.asset_id, true);
+    const realBookId = engine.book.get().bookId;
+    const base = {
+      asset_id: full.asset_id, op: "render", notebook_id: crowded, source_hash: full.source.media_hash,
+      expected_revision: full.draft.revision, request_id: randomUUID(),
+    };
+    await pauseBookQueueForTests(realBookId);
+    try {
+      const replaced = await ok<{ job_id: number; status: string; output_artifact_id: string; render: { job_id: number; output_asset_id: string } }>({ ...base, output: "replace" });
+      expect(replaced).toMatchObject({
+        status: "queued", job_id: replaced.render.job_id, output_artifact_id: full.asset_id, render: { output_asset_id: full.asset_id },
+      });
+      const job = engine.jobs.queue.get(replaced.job_id);
+      expect(job?.payload).toMatchObject({ type: "render_captions", assetId: full.asset_id });
+      const switched = await call({ ...base, output: "new" });
+      expect(switched).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/different render/) } });
+      const saved = await ok({ asset_id: full.asset_id });
+      const newCopy = await call({ ...base, expected_revision: saved.draft.revision, request_id: randomUUID() });
+      expect(newCopy).toMatchObject({ error: true, body: { status: "invalid", message: expect.stringMatching(/empty cell/) } });
+      for (const queued of engine.jobs.queue.list({ type: "render_captions", limit: 50 }).filter((candidate) => candidate.state === "queued")) {
+        await engine.jobs.queue.abort(queued.id, "in-place render validation test");
+      }
+    } finally {
+      await resumeBookQueueForTests(realBookId);
+    }
   });
 
   it("forgetting a video clears its drafts, cached analysis and render records", async () => {

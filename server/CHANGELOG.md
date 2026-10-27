@@ -36,6 +36,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - `force` on `transcribe`, `translate_subtitles`, `describe_image`,
   `detect_scenes`, `suggest_cuts`, `suggest_sfx` and `analyze_jokes`
   (`analyze_video` already had it) to run again on unchanged inputs.
+- Subtitles can replace the video in place instead of adding a new cell:
+  choose Replace video beside the subtitle editor's export buttons. Render
+  burns the subtitles into the source video, keeps its earlier version in
+  history, and the cell shows RENDERING until the job finishes.
+  `caption_video` render takes `output: "new" | "replace"`.
 
 ### Changed
 
@@ -50,6 +55,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
   below 2K) instead of their highest resolution; 4K stays available to
   choose. New goals plan their scene at 2K. Video models keep their highest
   resolution, and a resolution a notebook remembers from a cell still applies.
+- Render in the subtitle editor no longer waits for the video: it queues the
+  render, closes the editor and frees the chat, and the chat turn follows the
+  job until the subtitled copy or the updated video is ready. `caption_video`
+  render also returns the job's `job_id`, `status` and `output_artifact_id`
+  at the top level.
 - Every analysis tool is keyed by the content it reads: speech-to-text by the
   transcribed audio and settings, translations by the timed transcript and
   language, video analysis by the video and the transcript it used, image

@@ -44,6 +44,7 @@ describe('subtitle editor in the composer', () => {
   let secondId = ''
   let notebookId = ''
   const calls: string[] = []
+  const renders: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
   const sheet = () => page.getByRole('dialog', { name: 'Subtitles editor', exact: true })
@@ -113,7 +114,9 @@ describe('subtitle editor in the composer', () => {
     page.on('pageerror', error => errors.push(error.message))
     page.on('request', request => {
       if (request.method() !== 'POST' || !request.url().endsWith('/mcp')) return
-      calls.push(...toolCalls(request.postDataJSON()).map(item => item.name))
+      const observed = toolCalls(request.postDataJSON())
+      calls.push(...observed.map(item => item.name))
+      renders.push(...observed.filter(item => item.name === 'caption_video' && item.arguments.op === 'render').map(item => item.arguments))
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl)
@@ -225,9 +228,19 @@ describe('subtitle editor in the composer', () => {
     await shot('subtitles-phone')
     await page.setViewportSize({ width: 1440, height: 1000 })
 
+    const outputChoice = sheet().getByRole('group', { name: 'Render output', exact: true })
+    expect(await outputChoice.getByRole('button', { name: 'New video', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await sheet().getByText('New video cell · source kept').isVisible()).toBe(true)
     await sheet().getByRole('button', { name: /^Render/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 15_000 })
+    expect(renders.at(-1)).toMatchObject({ op: 'render', output: 'new', asset_id: sourceId })
+    expect(['queued', 'running']).toContain((await call<{ render: { status: string } }>('caption_video', { asset_id: sourceId })).render.status)
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(2)
+    await expect.poll(() => page.locator('.command-send .busy-indicator').count()).toBe(0)
+    const turn = page.locator('.chat-turn').last()
+    expect(['queued', 'working']).toContain(await turn.getAttribute('data-status'))
     await expect.poll(async () => (await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells.length, { timeout: 120_000 }).toBe(3)
-    await sheet().waitFor({ state: 'hidden', timeout: 30_000 })
+    await expect.poll(() => turn.getAttribute('data-status'), { timeout: 60_000 }).toBe('completed')
     const notebook = await call<NotebookWire>('get_notebook', { notebook_id: notebookId })
     const output = notebook.cells.find((cell) => cell.output_artifact_id !== sourceId && cell.output_artifact_id !== secondId)!
     expect(output.slot).toEqual({ row: 1, column: 0 })
@@ -248,8 +261,21 @@ describe('subtitle editor in the composer', () => {
     expect(playback).toMatchObject({ width: 1080, height: 1920 })
     const download = await page.evaluate(async ({ book, artifact }) => (await fetch(`/files/${book}/${artifact}/original.mp4`)).status, { book: bookId, artifact: output.output_artifact_id })
     expect(download).toBe(200)
+
+    const before = (await call<{ source: { media_hash: string } }>('caption_video', { asset_id: sourceId })).source.media_hash
+    await command('/subs @a1')
+    await expect.poll(() => word('rode').isVisible(), { timeout: 30_000 }).toBe(true)
+    await sheet().getByRole('group', { name: 'Render output', exact: true }).getByRole('button', { name: 'Replace video', exact: true }).click()
+    expect(await sheet().getByText('Replaces the video · earlier version kept').isVisible()).toBe(true)
+    await sheet().getByRole('button', { name: /^Render/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 15_000 })
+    expect(renders.at(-1)).toMatchObject({ op: 'render', output: 'replace', asset_id: sourceId })
+    await expect.poll(async () => (await call<{ render: { status: string; output_asset_id: string } }>('caption_video', { asset_id: sourceId })).render, { timeout: 120_000 })
+      .toMatchObject({ status: 'completed', output_asset_id: sourceId })
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(3)
+    await expect.poll(async () => (await call<{ source: { media_hash: string } }>('caption_video', { asset_id: sourceId })).source.media_hash, { timeout: 60_000 }).not.toBe(before)
     expect(errors).toEqual([])
-  }, 300_000)
+  }, 420_000)
 
   it('edits and reloads complete Thai words', async () => {
     await command('/subs @a2')

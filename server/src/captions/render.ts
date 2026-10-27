@@ -12,11 +12,14 @@ import { captionMediaSource } from "./source.js";
 
 export const CAPTION_RENDER_JOB = "render_captions";
 export const CAPTION_SOURCE_OPERATION = "caption_video";
+export const CAPTION_RENDER_OUTPUTS = ["new", "replace"] as const;
+export type CaptionRenderOutput = typeof CAPTION_RENDER_OUTPUTS[number];
 const FULL_NOTEBOOK = "The notebook needs one empty cell for the subtitled copy.";
 
 export interface CaptionRenderRequest {
   requestId: string;
   fingerprint: string;
+  output: CaptionRenderOutput;
   sourceArtifactId: string;
   outputArtifactId: string;
   notebookId: string | null;
@@ -51,7 +54,8 @@ export function readCaptionRenderRequest(engine: Engine, requestId: string): Cap
   const value = engine.settings.get<CaptionRenderRequest>(requestKey(requestId));
   if (!value || typeof value.outputArtifactId !== "string") return null;
   const document = captionDocumentSchema.safeParse(value.document);
-  return document.success ? { ...value, document: document.data } : null;
+  if (!document.success) return null;
+  return { ...value, output: value.output === "replace" ? "replace" : "new", document: document.data };
 }
 
 function requestIndexKey(artifactId: string): string {
@@ -84,8 +88,9 @@ function writeRequest(engine: Engine, request: CaptionRenderRequest): void {
   if (!stored.ok) throw new Error(stored.error.message);
 }
 
-function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string): string {
-  return createHash("sha256").update(JSON.stringify([sourceArtifactId, notebookId, sourceHash, language, revision])).digest("hex");
+function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string, output: CaptionRenderOutput): string {
+  const fields = [sourceArtifactId, notebookId, sourceHash, language, revision, ...(output === "replace" ? [output] : [])];
+  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
 }
 
 function jobStatus(job: Job | null): CaptionRenderStatus["status"] {
@@ -173,11 +178,12 @@ export interface CaptionRenderInput {
   expectedRevision: string;
   sourceHash: string;
   notebookId: string | null;
+  output: CaptionRenderOutput;
 }
 
 export async function requestCaptionRender(engine: Engine, bookId: string, artifactId: string, language: string, input: CaptionRenderInput): Promise<CaptionRenderStatus> {
   return withNotebookMutation(`captions-render:${bookId}:${input.requestId}`, async () => {
-    const expected = fingerprint(artifactId, input.notebookId, input.sourceHash, language, input.expectedRevision);
+    const expected = fingerprint(artifactId, input.notebookId, input.sourceHash, language, input.expectedRevision, input.output);
     const existing = readCaptionRenderRequest(engine, input.requestId);
     const reused = existing ? reusable(engine, existing, expected) : null;
     if (reused) return reused;
@@ -189,12 +195,18 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
     if (!draft.document.words.some((word) => !word.hidden && word.text.trim())) {
       throw new CaptionServiceError("invalid", "These subtitles have no words to render.");
     }
-    checkDestination(engine, input.notebookId, artifactId, language);
+    if (input.output === "replace" && source.kind !== "video") {
+      throw new CaptionServiceError("invalid", "Only a video cell can take its subtitles in place. Render a new copy of an exported timeline.");
+    }
+    if (input.output === "new") checkDestination(engine, input.notebookId, artifactId, language);
     const request: CaptionRenderRequest = {
       requestId: input.requestId,
       fingerprint: expected,
+      output: input.output,
       sourceArtifactId: artifactId,
-      outputArtifactId: existing?.outputArtifactId ?? await outputArtifact(engine, source.label, language),
+      outputArtifactId: input.output === "replace"
+        ? artifactId
+        : existing?.outputArtifactId ?? await outputArtifact(engine, source.label, language),
       notebookId: input.notebookId,
       language,
       revision: draft.revision,

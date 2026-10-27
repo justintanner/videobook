@@ -6916,6 +6916,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setComposerDockOpen(true)
     subtitles.open({
       artifactId: sourceId,
+      kind: asset.type === 'final' ? 'final' : 'video',
       label: asset.label,
       mediaUrl: asset.mediaUrl,
       address: commandMentionAssets.find((mention) => mention.artifactId === sourceId)?.cellAddress ?? null,
@@ -8715,13 +8716,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: `Cold-open copy created as ${output.address}` }
     }
     if (pendingChatAction.kind === 'subtitles') {
-      const outcome = await subtitles.render()
+      const outcome = await subtitles.render(chat)
       if (!outcome.ok) return { ok: false, message: outcome.message }
-      await refreshBookData(bookId, notebook?.id, undefined, chat)
       reviewChat(chat, false, () => setPendingChatAction(null))
       subtitles.close()
-      if (outcome.cellId) selectCanvasCell(outcome.cellId)
-      collapseComposerAfterCellCreation(chat)
       return { ok: true, message: outcome.message }
     }
     if (pendingChatAction.kind === 'post-delivery') {
