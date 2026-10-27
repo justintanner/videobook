@@ -31,15 +31,19 @@ function StatusBanners({ editor }: { editor: SubtitleEditor }) {
       {read.status === 'needs_prepare' && paid.length > 0 && (
         <Banner>
           <div className="subtitles-banner-text">
-            <strong>Prepare subtitles</strong>
+            <strong>Subtitles need a quick prep pass</strong>
             <ul>{paid.map((work) => <li key={work.component}>{work.description}</li>)}</ul>
+            <span className="subtitles-banner-hint">Render prepares them first, then renders.</span>
           </div>
           <button type="button" className="subtitles-primary" disabled={state.preparing} onClick={() => void editor.prepare()}>Prepare</button>
         </Banner>
       )}
       {(read.status === 'preparing' || state.preparing) && (
         <Banner>
-          <span className="subtitles-banner-text">{subtitlesPreparationLabel(read)}</span>
+          <span className="subtitles-banner-text">
+            {subtitlesPreparationLabel(read)}
+            {state.renderQueued && <span className="subtitles-banner-hint"> Renders when ready.</span>}
+          </span>
           <button type="button" onClick={() => void editor.cancelPreparation()}>Cancel</button>
         </Banner>
       )}

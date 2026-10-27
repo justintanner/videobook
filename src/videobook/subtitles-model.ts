@@ -204,9 +204,14 @@ export function placeholderCaptionDocument(read: SubtitlesRead): CaptionDocument
   }
 }
 
+export function subtitlesPreparesBeforeRender(read: SubtitlesRead | null): boolean {
+  return read?.status === 'needs_prepare' || read?.status === 'preparing'
+}
+
 export function subtitlesRenderBlocker(read: SubtitlesRead | null, document: CaptionDocument | null, conflict: boolean): string | null {
   if (!read) return 'Loading subtitles…'
   if (read.status === 'silent') return 'This video has no audio to caption.'
+  if (subtitlesPreparesBeforeRender(read)) return null
   if (read.status !== 'ready' || !document) return read.message ?? 'Prepare the subtitles first.'
   if (read.draft?.stale_source) return 'The video changed. Realign, keep the timings or discard the edits first.'
   if (conflict) return 'These subtitles changed elsewhere. Reload them or keep your version first.'

@@ -6,6 +6,8 @@ import {
   activeSubtitleJobIds,
   parseSubtitlesRead,
   parseSubtitlesRender,
+  subtitlesPreparesBeforeRender,
+  subtitlesRenderBlocker,
   subtitlesRenderQueuedMessage,
   subtitlesToolError,
   type SubtitleRenderOutput,
@@ -41,6 +43,7 @@ export interface SubtitleEditorState {
   future: CaptionDocument[]
   coalesceKey: string | null
   preparing: boolean
+  renderQueued: boolean
   rendering: boolean
   output: SubtitleRenderOutput
 }
@@ -65,12 +68,14 @@ const EMPTY: SubtitleEditorState = {
   future: [],
   coalesceKey: null,
   preparing: false,
+  renderQueued: false,
   rendering: false,
   output: 'new',
 }
 
 const AUTOSAVE_MS = 700
 const POLL_MS = 1000
+const SETTLE_MS = 200
 const HISTORY_LIMIT = 100
 
 function wait(ms: number): Promise<void> {
@@ -324,8 +329,26 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     commit((value) => ({ ...value, output }))
   }, [commit])
 
+  const settlePreparation = useCallback(async (ticket: number) => {
+    if (stateRef.current.read?.status === 'needs_prepare') await prepare()
+    while (ticket === epoch.current && stateRef.current.preparing) await wait(SETTLE_MS)
+  }, [prepare])
+
+  const prepareBeforeRender = useCallback(async (ticket: number): Promise<SubtitleRenderOutcome | null> => {
+    if (!subtitlesPreparesBeforeRender(stateRef.current.read)) return null
+    commit((value) => ({ ...value, renderQueued: true, error: null }))
+    await settlePreparation(ticket)
+    if (ticket !== epoch.current) return { ok: false, message: 'The subtitles closed before they were ready.' }
+    const latest = commit((value) => ({ ...value, renderQueued: false }))
+    if (subtitlesPreparesBeforeRender(latest.read)) return { ok: false, message: 'Preparation stopped, so nothing was rendered.' }
+    const blocker = subtitlesRenderBlocker(latest.read, latest.document, latest.save === 'conflict')
+    return blocker ? { ok: false, message: latest.error ?? blocker } : null
+  }, [commit, settlePreparation])
+
   const render = useCallback(async (chat?: ChatExecution): Promise<SubtitleRenderOutcome> => {
     const ticket = epoch.current
+    const unprepared = await prepareBeforeRender(ticket)
+    if (unprepared) return unprepared
     if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the subtitles before rendering.' }
     const current = stateRef.current
     if (!current.target || !current.revision || !current.read) return { ok: false, message: 'The subtitles are not ready to render.' }
@@ -352,7 +375,7 @@ export function useSubtitleEditor(options: { bookId: string | null; ready: boole
     } finally {
       if (ticket === epoch.current) commit((value) => ({ ...value, rendering: false }))
     }
-  }, [baseArgs, call, commit, flush])
+  }, [baseArgs, call, commit, flush, prepareBeforeRender])
 
   return {
     state,

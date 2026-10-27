@@ -58,8 +58,8 @@ export function SubtitlesSheet({ editor, applyFormId, onClose }: { editor: Subti
       address={state.target?.address ? `@${state.target.address}` : null}
       applyLabel="Render"
       cancelLabel="Close"
-      busy={state.rendering}
-      busyLabel="Queuing render…"
+      busy={state.rendering || state.renderQueued}
+      busyLabel={state.renderQueued ? 'Preparing, then rendering…' : 'Queuing render…'}
       effect={OUTPUT_EFFECTS[state.output]}
       validation={{ blocking, notice: state.save === 'saved' ? null : SAVE_LABELS[state.save] }}
       applyFormId={applyFormId}
