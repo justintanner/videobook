@@ -117,6 +117,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
   full-screen Alive captions studio. Use `caption_video` and the subtitle
   editor instead.
 
+### Fixed
+
+- Settings shows the selected project's storage after switching projects
+  while a storage check for the previous project is still loading.
+- Trimming an audio asset updates its recorded duration, streams and
+  waveform, so the library and timeline report the trimmed length.
+
 ### Security
 
 - Dependencies move to patched releases: the MCP TypeScript SDK server and

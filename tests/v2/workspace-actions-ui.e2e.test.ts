@@ -91,7 +91,7 @@ describe('workspace action launcher with real endpoints', () => {
     origin = `http://127.0.0.1:${mcpPort}`
     appUrl = `http://127.0.0.1:${vitePort}`
     const env = {
-      ...process.env, PORT: String(mcpPort), OPENAI_API_KEY: '', KIE_API_KEY: '', FAL_API_KEY: '',
+      ...process.env, PORT: String(mcpPort), OPENAI_API_KEY: '', KIE_API_KEY: 'test-workspace-actions-e2e', FAL_API_KEY: 'test-workspace-actions-e2e',
       KIMI_CODING_API_KEY: '', DASHSCOPE_API_KEY: '', ELEVENLABS_API_KEY: '',
       VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'), VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime/app-state.json'),
       VIDEOBOOK_DOWNLOADS_DIR: join(rootDir, 'downloads'), X_CLIENT_ID: '', X_CLIENT_SECRET: '', XAI_API_KEY: '',
@@ -333,7 +333,7 @@ describe('workspace action launcher with real endpoints', () => {
   it('switches the generation model while retaining the draft and reviews cost without generating', async () => {
     const action = catalog.actions.find(entry => entry.id === 'tool.generate_image')!
     const listed = record(await call('list_generation_models', { media: 'image', operation: 'text_to_image' }))
-    const [first, second] = (listed?.models as Record<string, unknown>[]).map(model => String(model.id))
+    const [first, second] = (listed?.models as Record<string, unknown>[]).filter(model => model.available === true).map(model => String(model.id))
     await openActions(action.command)
     const prompt = page.getByRole('textbox', { name: /^Prompt\b/u })
     await prompt.fill('Keep the same scene and use a watercolor style')

@@ -4,7 +4,8 @@ import { rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, extname } from "node:path";
 import { registerJobHandler } from "../queue.js";
-import { FFPROBE, runFfmpeg } from "../ffmpeg.js";
+import { extractWaveform, FFPROBE, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { registerMediaStreams } from "./process-video.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { AUDIO_TRIM_EPSILON_SECONDS, validateAudioTrimRange } from "../audio-trim-range.js";
@@ -190,17 +191,21 @@ export function registerTrimAudioJob(engine: Engine): void {
           const original = await engine.files.read(assetId, inputFilename);
           if (!original.ok) throw new Error(original.error.message);
           await runTrimAudio(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
+          const output = await probeVideo(outputPath);
           await replaceArtifactFileFromPath(
             engine,
             assetId,
             inputFilename,
             outputPath,
           );
+          const previous = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
           const provenanceResult = await engine.metadata.artifacts.write(assetId, "original", {
+            ...(previous.ok ? previous.value : {}),
             origin: "trim_audio",
             source_asset_id: assetId,
-            ...commitParams,
+            ...Object.fromEntries(Object.entries(commitParams).map(([name, value]) => [name, value ?? null])),
             trimmed_at: new Date().toISOString(),
+            duration: output.audioDuration ?? output.duration,
           });
           if (!provenanceResult.ok) {
             const rollback = await engine.files.write(assetId, inputFilename, original.value
@@ -212,6 +217,9 @@ export function registerTrimAudioJob(engine: Engine): void {
             }
             throw new Error(provenanceResult.error.message);
           }
+          await registerMediaStreams(engine, assetId, inputFilename, output);
+          const waveform = await engine.metadata.waveforms.write(assetId, await extractWaveform(inputPath));
+          if (!waveform.ok) throw new Error(waveform.error.message);
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
       );

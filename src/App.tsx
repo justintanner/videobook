@@ -6145,7 +6145,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const loadSettingsOnOpen = useEffectEvent(() => {
-    if (!settingsLoading) void refreshSettings()
+    if (!settingsLoading || (storage?.bookId ?? '') !== bookId) void refreshSettings()
   })
   const settingsReady = screen === 'settings' && mcp.state === 'ready'
   useEffect(() => {
