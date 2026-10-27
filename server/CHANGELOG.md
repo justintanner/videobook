@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-27
+
 ### Added
 
 - A TikTok-style subtitle editor in the chat composer. `/subs @video`, a
@@ -41,17 +43,25 @@ and the package uses [Semantic Versioning](https://semver.org/).
   burns the subtitles into the source video, keeps its earlier version in
   history, and the cell shows RENDERING until the job finishes.
   `caption_video` render takes `output: "new" | "replace"`.
+- `/post` posts a clip in one step. One sheet offers three destinations:
+  iCloud · iPhone, Download (the clip and caption.txt download to this
+  computer for a manual upload) and X, now or scheduled. Applying a
+  destination creates the Post when needed, freezes the clip and caption and
+  delivers them. A clip's menu offers Post…, and a Post's menu offers Save to
+  iPhone and Download.
+- `/files` serves an artifact file as an attachment when given
+  `?download=<name>`, so download links save instead of playing inline.
 - Eighteen more MachGen video models. The picker offers LTX 2.3 Pro,
   MiniMax H3 Turbo, Seedance 2.0 Fast and Mini, Kling 3.0 and Kling 3.0 Omni,
   Veo 3.1 and Veo 3.1 Fast, Pixverse V6 and C1, HappyHorse 1.0 and Grok
   Imagine Video. Wan 2.2 A14B, Vidu Q3, Q3 Turbo, Q3 Pro, Q3 Pro Fast and Q4
-  Preview, which MachGen keeps out of its own picker, are available through
-  `generate_video` and `list_generation_models` with `include_hidden`. Each
-  model offers the resolutions, lengths, aspect ratios, frames and references
-  MachGen accepts for it and is priced from MachGen's pricebook. Kling 3.0
-  Omni takes multi-shot settings: `shot_type: "intelligence"` lets the model
-  plan the shots, and `"customize"` takes `multi_prompt` and `shot_durations`,
-  which must add up to the duration.
+  Preview, which MachGen hides from its own picker or keeps private, are
+  available through `generate_video` and `list_generation_models` with
+  `include_hidden`. Each model offers the resolutions, lengths, aspect ratios,
+  frames and references MachGen accepts for it and is priced from MachGen's
+  pricebook. Kling 3.0 Omni takes multi-shot settings: `shot_type:
+  "intelligence"` lets the model plan the shots, and `"customize"` takes
+  `multi_prompt` and `shot_durations`, which must add up to the duration.
 - MiniMax H3 2K regeneration (`machgen:MiniMax-H3/upscale`, available through
   `generate_video`): connect a 5-15 second MiniMax H3 768p video that MachGen
   generated, and MachGen renders it again at 1440p from its original prompt
@@ -60,6 +70,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The posting MCP tools shrink from 15 to 8. `post` takes `to: icloud |
+  download | x | draft` with `asset_id` for a new Post or `post_cell_id` for
+  an existing one. `list_posts` reads one Post with `post_cell_id` and the
+  X posts waiting to publish with `status: "scheduled"`. `update_post` takes
+  `url` and `posted_at` after posting by hand, and `cancel_schedule` to turn a
+  scheduled X post back into a draft. `record_post_metrics` without values
+  fetches the current X metrics. `service_status` with `service: "icloud"`,
+  `book_id` and `post_cell_id` reports whether a Post's files finished
+  uploading.
 - The Actions form and a timeline track's add-clip chooser are no longer
   modal dialogs. Both open as a review docked in the chat composer, like a
   generation review: Apply, or Enter on `/apply`, runs the action or adds the
@@ -129,12 +148,23 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- The `create_post`, `get_post`, `link_post`, `save_post_to_icloud`,
+  `post_icloud_sync_status`, `refresh_post_metrics` and
+  `upload_post_to_dropbox` MCP tools and their slash commands. Use `post`,
+  `list_posts`, `update_post`, `record_post_metrics` and `service_status`
+  instead.
+- Dropbox delivery: the Dropbox connection in `connect_service` and
+  `service_status`, its Settings card and the `@apicity/dropbox` dependency.
+  It needed a Dropbox app that was never configured, and Download covers
+  manual uploads.
 - The `alive_captions` and `set_alive_captions` MCP tools and the
   full-screen Alive captions studio. Use `caption_video` and the subtitle
   editor instead.
 
 ### Fixed
 
+- A Post delivery that finishes no longer overwrites a destination chosen
+  while it was still running.
 - Settings shows the selected project's storage after switching projects
   while a storage check for the previous project is still loading.
 - Trimming an audio asset updates its recorded duration, streams and
