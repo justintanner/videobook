@@ -117,6 +117,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   full-screen Alive captions studio. Use `caption_video` and the subtitle
   editor instead.
 
+### Security
+
+- Dependencies move to patched releases: the MCP TypeScript SDK server and
+  client 2.4.0, vite 7.3.7, vitest 4.1.12, zod 4.6.7 (also inside Remotion
+  Studio, through an override), undici 7.30.1, hono 4.13.14, body-parser
+  2.4.0, follow-redirects 1.16.2, fast-uri 3.1.9 and ip-address 10.7.5.
+  `npm audit` reports no vulnerabilities.
+
 ## [0.3.2] - 2026-10-26
 
 ### Added
