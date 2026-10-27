@@ -649,6 +649,82 @@ reference videos. The 0.19.0 grid lists 1080 for H3, but the pricebook still
 has no 1080p rate, so the catalog keeps leaving it out. Grok Imagine Video 1.5
 was already priced at 1080p in 0.18.1.
 
+**Every generation model (2026-10-27, vb-tutc).** Videobook now catalogs all
+24 MachGen generation models. The four Topaz upscalers stay out: Topaz bills
+vendor credits that depend on the source, so `@apicity/cost` fails closed on
+them, and `machgen.test.ts` names them so a new apicity model still needs a
+decision. `server/src/media/machgen.ts` reads heights, durations, aspect
+ratios, end-frame and lone-end-frame support and reference caps from
+`MACHGEN_VIDEO_GRIDS`. Its hand table keeps only what the grids leave out, from
+the model capability contract in the machgen.ai/generate bundle served on
+2026-10-27:
+
+- The `generate_audio` toggle (`supportsAudio`), `seed` (`supportsSeed`),
+  prompt limits, and which tasks need a prompt (`requiresPrompt`; text to video
+  always does). Seedance 2.0 Fast and Mini, MiniMax H3 and H3 Turbo need one
+  for every task, and Vidu Q4 Preview for references only.
+- Private heights. MiniMax H3 and H3 Turbo list 1080p, but MachGen answers 403
+  to accounts without access and the pricebook has no rate, so both leave it
+  out.
+- The reference kinds HappyHorse 1.0 and 1.1 take (images), which the grids do
+  not check.
+- Wan 3.0's fixed `aspect_ratio: "adaptive"`, `fps: 30`, `audio: true`.
+
+Each model offers the union of its task grids' heights and durations, and the
+first non-empty aspect list among text, reference and image to video. Guards
+refuse what a task's own grid lacks. Vidu Q3 Pro takes references only at 540p
+and 720p, so its References mode defaults to 720p and refuses 1080p. A task
+whose grid lists no aspect ratio follows the image (the field is omitted). One
+that lists only `adaptive` gets `adaptive`, as Seedance 2.5 frames already did.
+A test builds every offered combination of task inputs, resolution, aspect
+ratio, duration and audio for all 24 models: 36,057 of them. The 34,273 that
+Videobook's guards let through all pass `MachGenGenerateRequestSchema` 0.19.0
+and price from `@apicity/cost` with no warning (except `-1` lengths, which
+MachGen bills by the generated length). The guards refuse the other 1,784:
+1,620 MiniMax H3 runs over 15 seconds at 1440p or with both frames, 36
+Seedance 2.5 `-1` reference-video edits at a fixed aspect ratio, and 128 Vidu
+Q3 Pro reference runs at 1080p.
+
+Models MachGen hides from its own picker (`hideInGeneratePicker`: Wan 2.2
+A14B, Vidu Q3 Turbo, Q3 Pro, Q3 and Q3 Pro Fast) or marks private (Vidu Q4
+Preview) are `hidden` entries, reachable through `generate_video` and
+`list_generation_models` with `include_hidden`. The other twelve are in the
+picker: LTX 2.3 Pro, MiniMax H3 Turbo, Seedance 2.0 Fast and Mini, Kling 3.0
+and 3.0 Omni, Veo 3.1 and 3.1 Fast, Pixverse V6 and C1, HappyHorse 1.0 and
+Grok Imagine Video.
+
+Kling 3.0 Omni takes multi-shot settings: `shot_type` `intelligence` lets the
+model plan the shots, and `customize` sends `multi_prompt` (up to 6 shots of up
+to 512 characters) with `shot_durations`, which must add up to `duration`
+(MachGen's own UI sends their sum as `duration_secs`). Kling 3.0's
+`negative_prompt` is not offered: MachGen's UI always pairs it with a
+`guidance_scale` whose default the contract does not publish. Kling elements
+need ids from a Kling elements library, so they are not offered either. Neither
+is Seedance 2.0's `bitrate_mode`.
+
+`@apicity/cost` 0.19.0 prices MiniMax H3 Turbo at its promotional 0.01 USD/s,
+which ends 2026-11-01T06:59Z (list price 0.02 USD/s). After that, its estimates
+come out at half the bill until apicity updates the rate. Vidu Q4 Preview
+takes MP3 audio references of 3-12 s only; Videobook checks the lengths but
+does not convert other formats.
+
+**MiniMax H3 2K regeneration (2026-10-27, vb-s91f).** `machgen:MiniMax-H3/upscale`
+is the H3 UPSCALE task as an `upscale_video` entry. It takes one connected book
+video and re-renders it at 1440p from its original prompt and inputs. Before
+any request, `server/src/media/generation-source.ts` reads that video's
+`provider-task` record and `generation-payload`. It refuses the video unless
+MachGen generated it with MiniMax-H3 at 768p for 5-15 seconds (MachGen's
+`sourceRequirement`), and refuses URLs and videos still generating. An
+accepted source becomes its MachGen asset URL with a `#t=0,<seconds>` media
+fragment. That URL is never fetched or uploaded: the wire turns it into
+`src_task_ids: [<task id>]` with `video_config: {height: 1440, duration_secs:
+<seconds>}`, the shape of the ac-ks4no2 quote probes. The same seconds go to
+`costHints.inputDurationSeconds`, so the estimate is 0.05 USD/s on the source
+length twice (in and out) with no warning. The tool check, the job, cost
+estimates and both notebook preview paths resolve the source the same way.
+The entry is hidden, because MachGen's own picker offers the upscale only for a
+qualifying source and Videobook's picker filters by media kind alone.
+
 ---
 
 ## 45. (gap) Fal queue status and result have no endpoint catalog rows — RESOLVED in 0.18.1
@@ -754,7 +830,7 @@ schema refuses it locally before any spend. `kie-0190.test.ts` and
 | **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | per-model table in `server/src/media/machgen.ts`; 22 0.19.0 models uncatalogued (vb-tutc) |
+| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | grid-derived specs plus a capability table in `server/src/media/machgen.ts`; Topaz upscalers uncatalogued; H3 2K regeneration from a connected source (vb-tutc, vb-s91f) |
 | **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871); strict matching in 0.19.0 |
 | **DECIDED**  | §46 KIE 0.19.0 default changes                                      | Seedance 2.5 audio on through the catalog defaults     |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |

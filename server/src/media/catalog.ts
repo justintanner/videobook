@@ -1,6 +1,6 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
-import type { InputRules, ModeSpec, ModelEntry, RefRole } from "./types.js";
+import type { InputRules, ModeSpec, ModelEntry, Operation, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
   { id: "t2v", label: "Text to video", roles: [] },
@@ -33,14 +33,46 @@ const XAI_MODES: readonly ModeSpec[] = [
 ];
 
 const MACHGEN_FRAMES: ModeSpec = { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"] };
+const MACHGEN_FRAME_OR_LAST: ModeSpec = { ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] };
+const MACHGEN_FIRST_FRAME: ModeSpec = { ...MACHGEN_FRAMES, roles: ["first_frame"] };
 const MACHGEN_MEDIA: readonly RefRole[] = ["image", "video", "audio"];
+const MACHGEN_IMAGES: readonly RefRole[] = ["image"];
 
-function machgenModes(frames: ModeSpec, references: readonly RefRole[], requireAny: readonly RefRole[] = references): readonly ModeSpec[] {
+interface MachGenTasks {
+  text?: boolean;
+  frames?: ModeSpec;
+  references?: readonly RefRole[];
+  requireAny?: readonly RefRole[];
+  referenceDefaults?: Record<string, unknown>;
+}
+
+function machgenOperations({ text = true, frames, references }: MachGenTasks): Operation[] {
   return [
-    { id: "t2v", label: "Text to video", roles: [] },
-    frames,
-    { id: "r2v", label: "References", roles: references, requireAny },
+    ...(text ? ["text_to_video" as const] : []),
+    ...(frames ? ["image_to_video" as const] : []),
+    ...(references ? ["reference_to_video" as const] : []),
   ];
+}
+
+function machgenReferenceMode({ references, requireAny = references, referenceDefaults }: MachGenTasks): ModeSpec[] {
+  if (!references) return [];
+  return [{
+    id: "r2v",
+    label: "References",
+    roles: references,
+    ...(requireAny ? { requireAny } : {}),
+    ...(referenceDefaults ? { defaults: referenceDefaults } : {}),
+  }];
+}
+
+function machgenModes(tasks: MachGenTasks): readonly ModeSpec[] | undefined {
+  const { text = true, frames, references } = tasks;
+  const modes: ModeSpec[] = [
+    ...(text ? [{ id: "t2v", label: "Text to video", roles: [] }] : []),
+    ...(frames ? [frames] : []),
+    ...machgenReferenceMode(tasks),
+  ];
+  return modes.length === 1 && !references ? undefined : modes;
 }
 
 function machgenClips(maximumSeconds: number): InputRules {
@@ -48,7 +80,23 @@ function machgenClips(maximumSeconds: number): InputRules {
   return { refDurationMs: { video: window, audio: window } };
 }
 
-const MACHGEN_VIDEO = ["text_to_video", "image_to_video", "reference_to_video"] as const;
+function machgenModel(apiId: string, title: string, tasks: MachGenTasks, extra: Partial<ModelEntry> = {}): ModelEntry {
+  const modes = machgenModes(tasks);
+  return {
+    id: `machgen:${apiId}`,
+    media: "video",
+    operations: machgenOperations(tasks),
+    title: `${title} (MachGen)`,
+    dialect: "natural_strip_frames",
+    ...(modes ? { modes } : {}),
+    ...extra,
+  };
+}
+
+const MACHGEN_REFERENCE_MEDIA: MachGenTasks = { frames: MACHGEN_FRAMES, references: MACHGEN_MEDIA };
+const MACHGEN_SEEDANCE_20: MachGenTasks = { ...MACHGEN_REFERENCE_MEDIA, requireAny: ["image", "video"] };
+const MACHGEN_IMAGE_REFERENCES: MachGenTasks = { frames: MACHGEN_FIRST_FRAME, references: MACHGEN_IMAGES };
+const MACHGEN_VIDU_Q3: MachGenTasks = { frames: MACHGEN_FRAMES, references: MACHGEN_IMAGES };
 
 const SPEAKER = "Speaker 1";
 
@@ -279,54 +327,41 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:pixelcut/looping-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
   { id: "fal:creatify/boreal", media: "video", operations: ["text_to_video", "image_to_video", "lip_sync"] },
   { id: "fal:mirelo-ai/sfx2.0/video-to-video", media: "video", operations: ["edit_video"], prompt: "text_prompt", defaults: { num_samples: 1 } },
+  machgenModel("MiniMax-H3", "MiniMax H3", { frames: MACHGEN_FRAME_OR_LAST, references: MACHGEN_MEDIA }, { rules: machgenClips(15) }),
+  machgenModel("Seedance-2.5", "Seedance 2.5", MACHGEN_REFERENCE_MEDIA, { guide: "seedance25", frameOptions: { aspect_ratio: "adaptive" }, rules: machgenClips(30) }),
+  machgenModel("Seedance-2.0", "Seedance 2.0", MACHGEN_SEEDANCE_20, { guide: "seedance2", rules: machgenClips(15) }),
+  machgenModel("Alibaba-Wan-3.0", "Wan 3.0", MACHGEN_REFERENCE_MEDIA, { rules: machgenClips(15) }),
+  machgenModel("HappyHorse-1.1", "HappyHorse 1.1", MACHGEN_IMAGE_REFERENCES),
+  machgenModel("Grok-Imagine-Video-1.5", "Grok Imagine Video 1.5", { text: false, frames: MACHGEN_FIRST_FRAME }, { guide: "grok_imagine" }),
+  machgenModel("MiniMax-H3-Turbo", "MiniMax H3 Turbo", { frames: MACHGEN_FRAME_OR_LAST, references: MACHGEN_MEDIA }, { rules: machgenClips(15) }),
+  machgenModel("Seedance-2.0-Fast", "Seedance 2.0 Fast", MACHGEN_SEEDANCE_20, { guide: "seedance2", rules: machgenClips(15) }),
+  machgenModel("Seedance-2.0-Mini", "Seedance 2.0 Mini", MACHGEN_SEEDANCE_20, { guide: "seedance2", rules: machgenClips(15) }),
+  machgenModel("LTX-2.3-Pro", "LTX 2.3 Pro", { frames: MACHGEN_FRAMES }),
+  machgenModel("Kling-v3", "Kling 3.0", { frames: MACHGEN_FRAMES }, { guide: "kling30" }),
+  machgenModel("Kling-o3", "Kling 3.0 Omni", { references: MACHGEN_IMAGES }, { guide: "kling30" }),
+  machgenModel("Veo-3.1", "Veo 3.1", {}),
+  machgenModel("Veo-3.1-Fast", "Veo 3.1 Fast", {}),
+  machgenModel("Pixverse-V6", "Pixverse V6", MACHGEN_IMAGE_REFERENCES),
+  machgenModel("Pixverse-C1", "Pixverse C1", MACHGEN_IMAGE_REFERENCES),
+  machgenModel("HappyHorse-1.0", "HappyHorse 1.0", MACHGEN_IMAGE_REFERENCES),
+  machgenModel("Grok-Imagine-Video", "Grok Imagine Video", {}, { guide: "grok_imagine" }),
+  machgenModel("Wan2.2-A14B", "Wan 2.2 A14B", { frames: MACHGEN_FIRST_FRAME }, { hidden: true }),
+  machgenModel("Vidu-Q3-Turbo", "Vidu Q3 Turbo", MACHGEN_VIDU_Q3, { hidden: true }),
+  machgenModel("Vidu-Q3-Pro", "Vidu Q3 Pro", { ...MACHGEN_VIDU_Q3, referenceDefaults: { resolution: "720p" } }, { hidden: true }),
+  machgenModel("Vidu-Q3", "Vidu Q3", { text: false, references: MACHGEN_IMAGES }, { hidden: true }),
+  machgenModel("Vidu-Q3-Pro-Fast", "Vidu Q3 Pro Fast", { text: false, frames: MACHGEN_FIRST_FRAME }, { hidden: true }),
+  machgenModel("Vidu-Q4-Preview", "Vidu Q4 Preview", { text: false, frames: MACHGEN_FIRST_FRAME, references: ["image", "audio"], requireAny: ["image"] }, {
+    hidden: true,
+    rules: { refDurationMs: { audio: { minimum: 3000, maximum: 12000, maximumTotal: 36000 } } },
+  }),
   {
-    id: "machgen:MiniMax-H3",
+    id: "machgen:MiniMax-H3/upscale",
     media: "video",
-    operations: MACHGEN_VIDEO,
-    title: "MiniMax H3 (MachGen)",
-    dialect: "natural_strip_frames",
-    modes: machgenModes({ ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] }, MACHGEN_MEDIA),
-    rules: machgenClips(15),
+    operations: ["upscale_video"],
+    title: "MiniMax H3 2K Regeneration (MachGen)",
+    description: "Re-render a 5-15 s MiniMax H3 768p video MachGen generated at 1440p from its original prompt and inputs. Connect that video; MachGen bills its length twice, in and out.",
+    hidden: true,
   },
-  {
-    id: "machgen:Seedance-2.5",
-    media: "video",
-    operations: MACHGEN_VIDEO,
-    title: "Seedance 2.5 (MachGen)",
-    guide: "seedance25",
-    dialect: "natural_strip_frames",
-    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA),
-    frameOptions: { aspect_ratio: "adaptive" },
-    rules: machgenClips(30),
-  },
-  {
-    id: "machgen:Seedance-2.0",
-    media: "video",
-    operations: MACHGEN_VIDEO,
-    title: "Seedance 2.0 (MachGen)",
-    guide: "seedance2",
-    dialect: "natural_strip_frames",
-    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA, ["image", "video"]),
-    rules: machgenClips(15),
-  },
-  {
-    id: "machgen:Alibaba-Wan-3.0",
-    media: "video",
-    operations: MACHGEN_VIDEO,
-    title: "Wan 3.0 (MachGen)",
-    dialect: "natural_strip_frames",
-    modes: machgenModes(MACHGEN_FRAMES, MACHGEN_MEDIA),
-    rules: machgenClips(15),
-  },
-  {
-    id: "machgen:HappyHorse-1.1",
-    media: "video",
-    operations: MACHGEN_VIDEO,
-    title: "HappyHorse 1.1 (MachGen)",
-    dialect: "natural_strip_frames",
-    modes: machgenModes({ ...MACHGEN_FRAMES, roles: ["first_frame"] }, ["image"]),
-  },
-  { id: "machgen:Grok-Imagine-Video-1.5", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 (MachGen)", guide: "grok_imagine", dialect: "natural_strip_frames" },
 
   { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
   { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },

@@ -13,6 +13,7 @@ import { buildWireRequest } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
+import { resolveGenerationSource } from "../media/generation-source.js";
 import { adapterFor } from "../media/adapters/index.js";
 import { completeMediaGeneration } from "../media/complete.js";
 import type { MediaRefs, ResolvedModel } from "../media/types.js";
@@ -92,7 +93,10 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
     ?? (await checkSeedanceEditSource(engine, model, job.refs, job.mode))
     ?? await checkRefDurations(engine, model, job.refs);
   if (durationError) throw new Error(durationError);
-  const refs = await uploadRefs(engine, adapter, job.refs);
+  const source = await resolveGenerationSource(engine, model, job.refs);
+  if (!source.ok) throw new Error(source.error);
+  const uploaded = await uploadRefs(engine, adapter, source.refs);
+  const refs = { ...uploaded, sourceVideoIds: [...source.sourceVideoIds, ...uploaded.sourceVideoIds] };
   const built = buildWireRequest(model, { prompt, refUrls: refs.urls, options: job.options, mode: job.mode });
   if (!built.ok) throw new Error(built.error);
   assertProviderPayload(built.request, { toolName: model.id, wire: true });
@@ -106,7 +110,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
     assetId: job.assetId,
     assetDir: job.assetDir,
     meta,
-    costHints: await generationSourceCostHints(engine, refs, job),
+    costHints: { ...await generationSourceCostHints(engine, refs, job), ...source.costHints },
   });
   if (result.kind === "done") {
     await completeMediaGeneration({ engine, assetId: job.assetId, assetDir: job.assetDir, bookId: job.bookId, meta, outputs: result.outputs });

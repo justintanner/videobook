@@ -34,7 +34,8 @@ async function submit(request: Record<string, unknown>, context: SubmitContext):
   const response = await machgenProvider().api.v0.generate(request as unknown as MachGenGenerateRequest, context.ctx.signal);
   const taskId = nonEmpty(response.task_id);
   if (!taskId) throw new Error("MachGen accepted the request without a task id");
-  await writePendingTask(context, taskId, MEDIA_TASK_TYPES.machgen, { machgenModel: context.model.apiId });
+  const machgenModel = typeof request.model === "string" ? request.model : context.model.apiId;
+  await writePendingTask(context, taskId, MEDIA_TASK_TYPES.machgen, { machgenModel });
   return { kind: "pending", taskId };
 }
 

@@ -11,6 +11,7 @@ import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
 import { checkSeedanceEditSource, normalizeRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
+import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
@@ -85,10 +86,12 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
     : {};
   const sourceError = await checkSeedanceEditSource(engine, model, refs, input.mode);
   if (sourceError) return unavailable(sourceError);
-  const hints = { ...await mediaHints(engine, refs, model), ...await seedanceDraftCostHints(engine, model.id, options) };
+  const source = await resolveGenerationSource(engine, model, refs);
+  if (!source.ok) return unavailable(source.error);
+  const hints = { ...await mediaHints(engine, refs, model), ...await seedanceDraftCostHints(engine, model.id, options), ...source.costHints };
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
-    refUrls: placeholderRefs(refs),
+    refUrls: placeholderRefs(source.refs),
     options,
     mode: text(input.mode),
   }, hints);

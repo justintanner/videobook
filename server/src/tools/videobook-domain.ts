@@ -63,6 +63,7 @@ import {
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { previewGeneration } from "../media/preview.js";
+import { sourcedGenerationInput } from "../media/generation-source.js";
 import {
   readNotebookStickySettings,
   rememberNotebookStickySettings,
@@ -2077,9 +2078,11 @@ export function videobookDomainDefs(
               message: reference.message,
             })),
           ];
-          const mediaPreview = promptLeaks.length === 0 && !prepared.imageEdit
-            ? previewGeneration(prepared.input)
+          const sourced = promptLeaks.length === 0 && !prepared.imageEdit
+            ? await sourcedGenerationInput(engine, prepared.input)
             : null;
+          if (sourced && !sourced.ok) return failure(sourced.error);
+          const mediaPreview = sourced?.ok ? previewGeneration(sourced.input) : null;
           if (mediaPreview && !mediaPreview.ok) return failure(mediaPreview.error);
           const translated = promptLeaks.length === 0
             ? prepared.imageEdit

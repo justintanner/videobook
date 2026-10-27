@@ -7,6 +7,7 @@ import { previewPlaceholderUrl } from "../preview-payload.js";
 import { resolveModel, UnknownModelError } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeRefs } from "../media/refs.js";
+import { resolveGenerationSource } from "../media/generation-source.js";
 import { PROVIDER_ENV_KEYS } from "../media/adapters/index.js";
 import { listModels, modelListing } from "../media/listing.js";
 import { OPERATIONS_BY_MEDIA, REF_ROLES, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
@@ -80,9 +81,11 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
   if (!process.env[envKey]) return `${envKey} environment variable is not set`;
   const operationError = checkOperation(model, args.operation);
   if (operationError) return operationError;
+  const source = await resolveGenerationSource(engine, model, refs);
+  if (!source.ok) return source.error;
   const built = buildWireRequest(model, {
     prompt: optionalString(args.prompt),
-    refUrls: placeholderRefs(refs),
+    refUrls: placeholderRefs(source.refs),
     options: optionsOf(args.options),
     mode: optionalString(args.mode),
   });

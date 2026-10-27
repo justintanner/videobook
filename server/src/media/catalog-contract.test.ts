@@ -7,6 +7,7 @@ import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { buildWireRequest } from "./request.js";
 import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
+import { machgenTaskUrl } from "./machgen.js";
 import { OPERATIONS_BY_MEDIA, type MediaRefs, type ModeSpec, type Operation, type ResolvedModel } from "./types.js";
 
 const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
@@ -18,6 +19,7 @@ const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
 
 const SAMPLE_REFS: Record<string, MediaRefs> = {
   "kie:grok-imagine/image-to-video": { image: ["https://example.com/image0.png"] },
+  "machgen:MiniMax-H3/upscale": { video: [machgenTaskUrl("task-1", 10)] },
 };
 
 function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {

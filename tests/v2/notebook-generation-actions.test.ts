@@ -329,16 +329,30 @@ describe('notebook generation actions', () => {
         .sort()
     const all = [
       'machgen:Alibaba-Wan-3.0',
+      'machgen:Grok-Imagine-Video',
       'machgen:Grok-Imagine-Video-1.5',
+      'machgen:HappyHorse-1.0',
       'machgen:HappyHorse-1.1',
+      'machgen:Kling-o3',
+      'machgen:Kling-v3',
+      'machgen:LTX-2.3-Pro',
       'machgen:MiniMax-H3',
+      'machgen:MiniMax-H3-Turbo',
+      'machgen:Pixverse-C1',
+      'machgen:Pixverse-V6',
       'machgen:Seedance-2.0',
+      'machgen:Seedance-2.0-Fast',
+      'machgen:Seedance-2.0-Mini',
       'machgen:Seedance-2.5',
+      'machgen:Veo-3.1',
+      'machgen:Veo-3.1-Fast',
     ]
-    const withoutGrok = all.filter((model) => model !== 'machgen:Grok-Imagine-Video-1.5')
+    const textOnly = ['machgen:Grok-Imagine-Video', 'machgen:Veo-3.1', 'machgen:Veo-3.1-Fast']
+    const withFrames = all.filter((model) => !textOnly.includes(model))
+    const withImages = withFrames.filter((model) => model !== 'machgen:Grok-Imagine-Video-1.5')
 
-    expect(machgen([])).toEqual(withoutGrok)
-    expect(machgen([{ kind: 'image', target: 'first_frame' }])).toEqual(all)
+    expect(machgen([])).toEqual(all.filter((model) => model !== 'machgen:Grok-Imagine-Video-1.5'))
+    expect(machgen([{ kind: 'image', target: 'first_frame' }])).toEqual(withFrames)
     const frames = [
       { kind: 'image' as const, target: 'first_frame' },
       { kind: 'image' as const, target: 'last_frame' },
@@ -346,15 +360,25 @@ describe('notebook generation actions', () => {
     const modes = (model: string, inputs: Array<{ kind: 'image'; target: string }>) =>
       compatibleGenerationModes(catalog.find((action) => action.model === model)!, inputs).map((mode) => mode.id)
     expect(modes('machgen:MiniMax-H3', [frames[1]!])).toEqual(['i2v', 'r2v'])
+    expect(modes('machgen:MiniMax-H3-Turbo', [frames[1]!])).toEqual(['i2v', 'r2v'])
+    expect(modes('machgen:Kling-v3', frames)).toEqual(['i2v'])
+    expect(modes('machgen:Pixverse-V6', frames)).toEqual(['r2v'])
     expect(modes('machgen:Seedance-2.5', [frames[1]!])).toEqual(['r2v'])
     expect(modes('machgen:Seedance-2.0', frames)).toEqual(['i2v', 'r2v'])
     expect(modes('machgen:HappyHorse-1.1', frames)).toEqual(['r2v'])
     expect(modes('machgen:Grok-Imagine-Video-1.5', frames)).toEqual([])
-    expect(machgen([{ kind: 'image', target: 'image' }])).toEqual(withoutGrok)
-    expect(machgen([{ kind: 'video', target: 'video' }]))
-      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:Seedance-2.0', 'machgen:Seedance-2.5'])
+    expect(machgen([{ kind: 'image', target: 'image' }])).toEqual(withImages)
+    expect(machgen([{ kind: 'video', target: 'video' }])).toEqual([
+      'machgen:Alibaba-Wan-3.0',
+      'machgen:MiniMax-H3',
+      'machgen:MiniMax-H3-Turbo',
+      'machgen:Seedance-2.0',
+      'machgen:Seedance-2.0-Fast',
+      'machgen:Seedance-2.0-Mini',
+      'machgen:Seedance-2.5',
+    ])
     expect(machgen([{ kind: 'audio', target: 'audio' }]))
-      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:Seedance-2.5'])
+      .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:Seedance-2.5'])
 
     const h3 = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
     expect(generationActionLabel(h3)).toBe('MiniMax H3 (MachGen) · MachGen')

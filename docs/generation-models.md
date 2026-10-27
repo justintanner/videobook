@@ -63,7 +63,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | xai:grok-imagine-video-1.5 | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
 | fal:alibaba.happyHorse.v1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 
-- Models: 177
+- Models: 196
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -222,6 +222,25 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:Alibaba-Wan-3.0` | Wan 3.0 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
 | `machgen:HappyHorse-1.1` | HappyHorse 1.1 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-9 | t2v, i2v, r2v | visible |
 | `machgen:Grok-Imagine-Video-1.5` | Grok Imagine Video 1.5 (MachGen) | video | image_to_video | first_frame 1-1 |  | visible |
+| `machgen:MiniMax-H3-Turbo` | MiniMax H3 Turbo (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
+| `machgen:Seedance-2.0-Fast` | Seedance 2.0 Fast (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
+| `machgen:Seedance-2.0-Mini` | Seedance 2.0 Mini (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
+| `machgen:LTX-2.3-Pro` | LTX 2.3 Pro (MachGen) | video | text_to_video, image_to_video | first_frame 0-1, last_frame 0-1 | t2v, i2v | visible |
+| `machgen:Kling-v3` | Kling 3.0 (MachGen) | video | text_to_video, image_to_video | first_frame 0-1, last_frame 0-1 | t2v, i2v | visible |
+| `machgen:Kling-o3` | Kling 3.0 Omni (MachGen) | video | text_to_video, reference_to_video | image 0-7 | t2v, r2v | visible |
+| `machgen:Veo-3.1` | Veo 3.1 (MachGen) | video | text_to_video | none |  | visible |
+| `machgen:Veo-3.1-Fast` | Veo 3.1 Fast (MachGen) | video | text_to_video | none |  | visible |
+| `machgen:Pixverse-V6` | Pixverse V6 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-3 | t2v, i2v, r2v | visible |
+| `machgen:Pixverse-C1` | Pixverse C1 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-3 | t2v, i2v, r2v | visible |
+| `machgen:HappyHorse-1.0` | HappyHorse 1.0 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-9 | t2v, i2v, r2v | visible |
+| `machgen:Grok-Imagine-Video` | Grok Imagine Video (MachGen) | video | text_to_video | none |  | visible |
+| `machgen:Wan2.2-A14B` | Wan 2.2 A14B (MachGen) | video | text_to_video, image_to_video | first_frame 0-1 | t2v, i2v | hidden |
+| `machgen:Vidu-Q3-Turbo` | Vidu Q3 Turbo (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |
+| `machgen:Vidu-Q3-Pro` | Vidu Q3 Pro (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |
+| `machgen:Vidu-Q3` | Vidu Q3 (MachGen) | video | reference_to_video | image 0-7 |  | hidden |
+| `machgen:Vidu-Q3-Pro-Fast` | Vidu Q3 Pro Fast (MachGen) | video | image_to_video | first_frame 1-1 |  | hidden |
+| `machgen:Vidu-Q4-Preview` | Vidu Q4 Preview (MachGen) | video | image_to_video, reference_to_video | first_frame 0-1, image 0-9, audio 0-3 | i2v, r2v | hidden |
+| `machgen:MiniMax-H3/upscale` | MiniMax H3 2K Regeneration (MachGen) | video | upscale_video | video 1-1 |  | hidden |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |

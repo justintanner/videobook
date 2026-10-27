@@ -41,6 +41,22 @@ and the package uses [Semantic Versioning](https://semver.org/).
   burns the subtitles into the source video, keeps its earlier version in
   history, and the cell shows RENDERING until the job finishes.
   `caption_video` render takes `output: "new" | "replace"`.
+- Eighteen more MachGen video models. The picker offers LTX 2.3 Pro,
+  MiniMax H3 Turbo, Seedance 2.0 Fast and Mini, Kling 3.0 and Kling 3.0 Omni,
+  Veo 3.1 and Veo 3.1 Fast, Pixverse V6 and C1, HappyHorse 1.0 and Grok
+  Imagine Video. Wan 2.2 A14B, Vidu Q3, Q3 Turbo, Q3 Pro, Q3 Pro Fast and Q4
+  Preview, which MachGen keeps out of its own picker, are available through
+  `generate_video` and `list_generation_models` with `include_hidden`. Each
+  model offers the resolutions, lengths, aspect ratios, frames and references
+  MachGen accepts for it and is priced from MachGen's pricebook. Kling 3.0
+  Omni takes multi-shot settings: `shot_type: "intelligence"` lets the model
+  plan the shots, and `"customize"` takes `multi_prompt` and `shot_durations`,
+  which must add up to the duration.
+- MiniMax H3 2K regeneration (`machgen:MiniMax-H3/upscale`, available through
+  `generate_video`): connect a 5-15 second MiniMax H3 768p video that MachGen
+  generated, and MachGen renders it again at 1440p from its original prompt
+  and inputs. It costs $0.05 per second of the source, counted twice (in and
+  out). Other videos and URLs are refused before anything is spent.
 
 ### Changed
 
