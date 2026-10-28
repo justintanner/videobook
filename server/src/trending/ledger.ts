@@ -15,7 +15,7 @@ function write(engine: Engine, key: string, value: unknown): void {
   if (!result.ok) throw new Error(result.error.message);
 }
 
-export function validateLocalDate(date: string): string {
+function validateLocalDate(date: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)
     || !Number.isFinite(Date.parse(date))
     || new Date(date).toISOString().slice(0, 10) !== date) {

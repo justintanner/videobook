@@ -42,15 +42,6 @@ export interface SourceHealth {
   lastCapturedAt?: string;
 }
 
-export interface TrendingSource {
-  id: string;
-  sample(
-    input: { country: string; window: TrendingSchedule["window"]; limit: number; options?: Record<string, unknown> },
-    ctx: { signal?: AbortSignal; observedAt: string },
-  ): Promise<Sighting[]>;
-  health(): SourceHealth;
-}
-
 export interface RankedVideo extends Sighting {
   rank: number;
   sources: string[];
