@@ -60,15 +60,51 @@ export function writeSchedule(engine: Engine, schedule: TrendingSchedule): Promi
   return serialize(engine, () => write(engine, "trending.schedule.v1", schedule));
 }
 
+export function cutLedgerDates(schedule: TrendingSchedule, cutAt: string): string[] {
+  const dates = new Set<string>();
+  const window = Math.max(48, schedule.windowHours);
+  for (let hour = 0; hour <= Math.max(window + 24, 8 * 24); hour += 1) {
+    dates.add(localDate(new Date(Date.parse(cutAt) - hour * 3_600_000), schedule.timezone));
+  }
+  return [...dates];
+}
+
+function ledgerKey(date: string): string {
+  return `trending.ledger.${validateLocalDate(date)}`;
+}
+
+function readLedgerDates(engine: Engine): string[] {
+  return engine.settings.get<string[]>("trending.ledgers.v1") ?? [];
+}
+
 export function readLedger(engine: Engine, date: string): TrendingLedger {
-  return engine.settings.get<TrendingLedger>(`trending.ledger.${validateLocalDate(date)}`)
+  return engine.settings.get<TrendingLedger>(ledgerKey(date))
     ?? { sightings: [], sourceHealth: {}, completedSlots: [] };
 }
 
 export function updateLedger(
   engine: Engine, date: string, update: (ledger: TrendingLedger) => TrendingLedger,
 ): Promise<void> {
-  return serialize(engine, () => write(engine, `trending.ledger.${validateLocalDate(date)}`, update(readLedger(engine, date))));
+  return serialize(engine, () => {
+    const ledger = update(readLedger(engine, date));
+    const dates = readLedgerDates(engine);
+    if (!dates.includes(date)) write(engine, "trending.ledgers.v1", [...dates, date].sort());
+    write(engine, ledgerKey(date), ledger);
+  });
+}
+
+export function pruneLedgers(engine: Engine, before: string): Promise<string[]> {
+  return serialize(engine, () => {
+    validateLocalDate(before);
+    const dates = readLedgerDates(engine);
+    const expired = dates.filter((date) => date < before);
+    for (const date of expired) {
+      const deleted = engine.settings.delete(ledgerKey(date));
+      if (!deleted.ok) throw new Error(deleted.error.message);
+    }
+    if (expired.length > 0) write(engine, "trending.ledgers.v1", dates.filter((date) => date >= before));
+    return expired;
+  });
 }
 
 export function readRuns(engine: Engine): TrendingRunRecord[] {

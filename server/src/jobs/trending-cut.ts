@@ -5,7 +5,7 @@ import { appendDiagnostic } from "../diagnostics.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { buildDayBook } from "../trending/day-book.js";
-import { localDate, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
+import { cutLedgerDates, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
 import { rankVideos } from "../trending/ranking.js";
 import type { RankedVideo, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
 
@@ -58,12 +58,7 @@ async function cut(
   let run = readRuns(engine).find((entry) => entry.date === date);
   if (run?.completed) return run;
   if (!run) {
-    const dates = new Set<string>();
-    const window = Math.max(48, schedule.windowHours);
-    for (let hour = 0; hour <= Math.max(window + 24, 8 * 24); hour += 1) {
-      dates.add(localDate(new Date(Date.parse(cutAt) - hour * 3_600_000), schedule.timezone));
-    }
-    const sightings = [...dates].flatMap((day) => readLedger(engine, day).sightings);
+    const sightings = cutLedgerDates(schedule, cutAt).flatMap((day) => readLedger(engine, day).sightings);
     const videos = rankVideos(sightings, schedule, { cutAt, fallback: sightings.filter((row) => row.source === "tiktok-creative-center") });
     run = { date, cutAt, dayBookId: "", videos, downloads: videos.map((video) => ({ videoId: video.videoId, status: "pending" })), spend: 0, errors: [] };
     await writeRun(engine, run);

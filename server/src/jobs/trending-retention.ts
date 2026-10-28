@@ -6,8 +6,10 @@ import { activeBookEngine } from "../book-context.js";
 import { appendDiagnostic } from "../diagnostics.js";
 import { queue, registerJobHandler, stopBookQueue } from "../queue.js";
 import {
-  dayBookSlug, readHistory, readRuns, readSchedule, removeRun, retentionStart, writeHistory, writeRetention, writeRun,
+  cutLedgerDates, dayBookSlug, pruneLedgers, readHistory, readRuns, readSchedule, removeRun, retentionStart, writeHistory,
+  writeRetention, writeRun,
 } from "../trending/ledger.js";
+import { trendingCutTime } from "../trending/scheduler.js";
 import type { TrendingRetentionState, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
 
 export type ArchiveResearchClip = (input: {
@@ -88,7 +90,9 @@ export async function retainTrending(
     if (!schedule) return undefined;
     await books.ready();
     const keepFrom = retentionStart(date, schedule.retentionDays);
-    const state: TrendingRetentionState = { lastDate: date, lastRunAt: new Date().toISOString(), deleted: [], errors: [] };
+    const state: TrendingRetentionState = {
+      lastDate: date, lastRunAt: new Date().toISOString(), deleted: [], prunedLedgers: [], errors: [],
+    };
     if (!keepFrom) state.errors.push(`Invalid retention window: ${schedule.retentionDays} days`);
     for (const run of keepFrom ? readRuns(control).filter((entry) => entry.date < keepFrom) : []) {
       try {
@@ -96,6 +100,14 @@ export async function retainTrending(
         if (deleted) state.deleted.push(deleted);
       } catch (error) {
         state.errors.push(`${run.date}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (keepFrom) {
+      try {
+        const cutReads = cutLedgerDates(schedule, trendingCutTime(schedule, date));
+        state.prunedLedgers = await pruneLedgers(control, [keepFrom, ...cutReads].sort()[0]);
+      } catch (error) {
+        state.errors.push(`Ledger pruning failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     await writeRetention(control, state);

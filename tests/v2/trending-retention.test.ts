@@ -9,7 +9,8 @@ import { retainTrending, type ArchiveResearchClip } from "../../server/src/jobs/
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
 import {
-  localDate, readHistory, readRetention, readRuns, readSchedule, updateLedger, writeHistory, writeRetention, writeRun,
+  localDate, pruneLedgers, readHistory, readRetention, readRuns, readSchedule, updateLedger, writeHistory, writeRetention,
+  writeRun, writeSchedule,
 } from "../../server/src/trending/ledger.js";
 import { createTrendingScheduler } from "../../server/src/trending/scheduler.js";
 import type { TrendingSchedule } from "../../server/src/trending/types.js";
@@ -134,9 +135,47 @@ describe("trending day-book retention", () => {
     const control = await setup({ retentionDays: 0 });
     const kept = await cutDay(control, "2026-01-01", ["kept"]);
     const refused = await retainTrending(control.engine, books, "2026-10-28");
-    expect(refused).toMatchObject({ deleted: [], errors: ["Invalid retention window: 0 days"] });
+    expect(refused).toMatchObject({ deleted: [], prunedLedgers: [], errors: ["Invalid retention window: 0 days"] });
     expect(books.get(kept.day.bookId).ok).toBe(true);
     expect(readRuns(control.engine).map((run) => run.date)).toEqual(["2026-01-01"]);
+    expect(control.engine.settings.get("trending.ledger.2025-12-31")).not.toBeNull();
+  }, testBudget(60_000));
+
+  it("prunes sighting ledgers older than the retention window and keeps every date the day's cut reads", async () => {
+    const control = await setup();
+    const dates = ["2026-09-01", "2026-09-27", "2026-09-28", "2026-10-19", "2026-10-20", "2026-10-27"];
+    for (const date of dates) {
+      const observedAt = `${date}T05:00:00.000Z`;
+      await updateLedger(control.engine, date, (ledger) => ({
+        ...ledger, sightings: [sighting(`cc-${date}`, { source: "tiktok-creative-center", observedAt, createdAt: observedAt })],
+      }));
+    }
+    const stored = () => dates.filter((date) => control.engine.settings.get(`trending.ledger.${date}`) !== null);
+
+    const state = await retainTrending(control.engine, books, "2026-10-28");
+    expect(state).toMatchObject({ prunedLedgers: ["2026-09-01", "2026-09-27"], errors: [] });
+    expect(stored()).toEqual(["2026-09-28", "2026-10-19", "2026-10-20", "2026-10-27"]);
+    expect(readRetention(control.engine)).toEqual(state);
+    expect((await retainTrending(control.engine, books, "2026-10-28"))?.prunedLedgers).toEqual([]);
+    expect(stored()).toEqual(["2026-09-28", "2026-10-19", "2026-10-20", "2026-10-27"]);
+
+    await writeSchedule(control.engine, { ...readSchedule(control.engine)!, retentionDays: 1 });
+    expect((await retainTrending(control.engine, books, "2026-10-28"))?.prunedLedgers).toEqual(["2026-09-28", "2026-10-19"]);
+    expect(stored()).toEqual(["2026-10-20", "2026-10-27"]);
+    const run = (await cutTrending(control.engine, books, "2026-10-28", "2026-10-28T00:00:00.000Z", enqueue))!;
+    expect(run.videos.map((video) => [video.videoId, video.fallback])).toEqual([["cc-2026-10-27", false], ["cc-2026-10-20", true]]);
+  }, testBudget(90_000));
+
+  it("prunes ledgers only after the ledger writes queued before it", async () => {
+    const control = await setup();
+    const expired = updateLedger(control.engine, "2026-09-01", (ledger) => ({ ...ledger, completedSlots: ["2026-09-01T00:00:00.000Z"] }));
+    const pruned = pruneLedgers(control.engine, "2026-09-28");
+    const kept = updateLedger(control.engine, "2026-09-28", (ledger) => ledger);
+    await Promise.all([expired, kept]);
+    expect(await pruned).toEqual(["2026-09-01"]);
+    expect(control.engine.settings.get("trending.ledger.2026-09-01")).toBeNull();
+    expect(control.engine.settings.get("trending.ledger.2026-09-28")).not.toBeNull();
+    expect(await pruneLedgers(control.engine, "2026-09-28")).toEqual([]);
   }, testBudget(60_000));
 
   it("archives completed ranked clips before deleting and keeps the book when archiving fails", async () => {
@@ -203,7 +242,7 @@ describe("trending day-book retention", () => {
     expect(retries.length).toBeGreaterThan(0);
     expect(new Set(retries)).toEqual(new Set(["2026-10-27"]));
 
-    await writeRetention(control.engine, { lastDate: "2026-10-29", lastRunAt: "2026-10-29T00:01:00.000Z", deleted: [], errors: [] });
+    await writeRetention(control.engine, { lastDate: "2026-10-29", lastRunAt: "2026-10-29T00:01:00.000Z", deleted: [], prunedLedgers: [], errors: [] });
     now = new Date("2026-10-29T00:05:00.000Z");
     await createTrendingScheduler(options).tick();
     now = new Date("2026-10-30T00:05:00.000Z");
@@ -235,7 +274,7 @@ describe("trending day-book retention", () => {
       days: 7, archiveTopClips: true, nextRun: "2026-10-28T17:30:00.000Z",
       lastRun: {
         lastDate: "2026-10-28", lastRunAt: expect.any(String), errors: [],
-        deleted: [{ date: "2026-10-01", bookId: day.bookId, name: "tiktok-th-2026-10-01" }],
+        deleted: [{ date: "2026-10-01", bookId: day.bookId, name: "tiktok-th-2026-10-01" }], prunedLedgers: ["2026-09-30"],
       },
       recentDeletions: [{ date: "2026-10-01", dayBookId: day.bookId, dayBookName: "tiktok-th-2026-10-01", deletedAt: expect.any(String) }],
     });

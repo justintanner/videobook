@@ -90,5 +90,6 @@ export interface TrendingRetentionState {
   lastDate: string;
   lastRunAt: string;
   deleted: { date: string; bookId: string; name: string }[];
+  prunedLedgers: string[];
   errors: string[];
 }
