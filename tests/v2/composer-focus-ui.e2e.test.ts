@@ -409,21 +409,14 @@ describe('composer focus through real workspace interactions', () => {
     expect(draft).toBe('draft')
   })
 
-  it('selects a clip from its play ring, the way a picture selects from anywhere', async () => {
+  it('selects a clip from its tile without playing it inline', async () => {
     await page.locator('.react-flow__pane').click({ position: { x: 850, y: 450 } })
     await focused(input())
     expect(await cell(videoCellId).getAttribute('data-selection')).toBeNull()
-    // The ring sits dead centre of the tile: a press there plays the clip and
-    // selects the cell, so a clip answers a press the way a picture does.
-    await cell(videoCellId).getByLabel('Play @a1', { exact: true }).click()
+    expect(await cell(videoCellId).getByLabel('Play @a1', { exact: true }).count()).toBe(0)
+    await cell(videoCellId).locator('.cell-media').click()
     expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
-    await expect.poll(async () => await cell(videoCellId)
-      .locator('video')
-      .evaluate(element =>
-        element instanceof HTMLMediaElement ? !element.paused : false),
-      { timeout: 15_000 }).toBe(true)
-    await cell(videoCellId).getByLabel('Pause @a1', { exact: true }).click()
-    await focused(input())
+    expect(await cell(videoCellId).locator('video, audio').count()).toBe(0)
   })
 
   it('fits full-height media previews beside compact controls across viewport sizes', async () => {

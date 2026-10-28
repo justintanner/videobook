@@ -20,12 +20,9 @@ function imageFrame(prompt: string | null, producerAddress?: string): string {
     provenance: null,
   })
   return renderToStaticMarkup(createElement(CellMediaFrame, {
-    address: '@a1',
     producerAddress,
     posterUrl: 'https://example.test/still.png',
     waveform: null,
-    mediaUrl: 'https://example.test/still.png',
-    playbackKind: null,
     alt: 'still',
     title: prompt ?? undefined,
     badges,
@@ -70,12 +67,9 @@ describe('image preview frame', () => {
 
   it('omits the rail when the asset knows nothing about itself', () => {
     const html = renderToStaticMarkup(createElement(CellMediaFrame, {
-      address: '@a1',
-      posterUrl: 'https://example.test/still.png',
+        posterUrl: 'https://example.test/still.png',
       waveform: null,
-      mediaUrl: null,
-      playbackKind: null,
-      alt: 'still',
+        alt: 'still',
       badges: imagePreviewBadges({
         width: null,
         height: null,
@@ -106,11 +100,8 @@ describe('video preview frame', () => {
 
   function videoFrame(posterUrl: string | null): string {
     return renderToStaticMarkup(createElement(CellMediaFrame, {
-      address: '@b1',
       posterUrl,
       waveform: null,
-      mediaUrl: 'https://example.test/clip.mp4',
-      playbackKind: 'video',
       alt: 'source clip',
       badges,
       meter,
@@ -127,13 +118,13 @@ describe('video preview frame', () => {
     expect(html).not.toContain('<video')
   })
 
-  it('times the clip in the corner meter and names the play control', () => {
+  it('times the clip in the corner meter and offers no inline playback', () => {
     const html = videoFrame('https://example.test/poster.jpg')
 
     expect(html).toContain('class="cell-media-meter"')
     expect(html).toContain('>0:06</time>')
-    expect(html).toContain('aria-label="Play @b1"')
-    expect(html).toContain('class="cell-media-progress"')
+    expect(html).not.toContain('cell-media-play')
+    expect(html).not.toContain('cell-media-progress')
   })
 
   it('shows the pending face instead of an empty black square', () => {
@@ -161,11 +152,8 @@ describe('audio preview frame', () => {
     const badges = audioPreviewBadges(input)
     const meter = audioPreviewMeter(input)
     return renderToStaticMarkup(createElement(CellMediaFrame, {
-      address: '@b4',
       posterUrl: null,
       waveform,
-      mediaUrl: 'https://example.test/score.mp3',
-      playbackKind: 'audio',
       alt: 'score',
       badges,
       meter,
@@ -184,7 +172,7 @@ describe('audio preview frame', () => {
     expect(html).toContain('>48 kHz</span>')
     expect(html).toContain('>stereo</span>')
     expect(html).toContain('>0:12</time>')
-    expect(html).toContain('aria-label="Play @b4"')
+    expect(html).not.toContain('cell-media-play')
   })
 
   it('leaves the native audio player out of the grid', () => {

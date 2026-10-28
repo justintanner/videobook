@@ -3149,7 +3149,6 @@ textarea:focus-visible {
 }
 
 .cell-media img,
-.cell-media video,
 .cell-waveform {
   position: absolute;
   inset: 0;
@@ -3320,72 +3319,6 @@ textarea:focus-visible {
 
 .cell-family-audio .cell-media-meter {
   color: #e6c6d3;
-}
-
-/* The play ring: the one mark that separates playable media from a still. */
-.cell-media-play {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 2;
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  padding: 0;
-  transform: translate(-50%, -50%);
-  border: 1px solid var(--cell-accent-line);
-  border-radius: 999px;
-  color: var(--cell-accent);
-  background: rgba(2, 10, 7, 0.58);
-  opacity: 0.72;
-  cursor: pointer;
-  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
-}
-
-.cell-media-play svg {
-  margin-left: 2px;
-}
-
-.cell-media-play:hover,
-.cell-media-play:focus-visible {
-  border-color: var(--cell-accent);
-  color: #041109;
-  background: var(--cell-accent);
-  opacity: 1;
-}
-
-.cell-media-playing .cell-media-play {
-  opacity: 0;
-}
-
-.cell-media-playing .cell-media-play svg {
-  margin-left: 0;
-}
-
-.cell-media:hover .cell-media-play,
-.cell-media-playing .cell-media-play:focus-visible {
-  opacity: 1;
-}
-
-/* The progress hairline, zero width until playback starts. */
-/* Above the badge rail and the meter, which now share this edge: the
-   playback position is a 2px hairline and has to stay readable over both. */
-.cell-media-progress {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 3;
-  height: 2px;
-  background: var(--cell-accent-soft);
-  pointer-events: none;
-}
-
-.cell-media-progress > span {
-  display: block;
-  height: 100%;
-  background: var(--cell-accent);
 }
 
 .notebook-media-metadata {
