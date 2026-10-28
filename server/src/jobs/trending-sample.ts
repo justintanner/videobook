@@ -22,7 +22,11 @@ export async function sampleTrending(
       try {
         const source = sources.get(configured.id);
         if (!source) throw new Error(`Trending source unavailable: ${configured.id}`);
-        const snapshot = await source.sample({ country: schedule.country, window: schedule.window, limit: schedule.topN, options: configured.options }, { signal });
+        const snapshot = await source.sample({ country: schedule.country, window: schedule.window, limit: schedule.topN, options: configured.options }, { signal, previousHealth: previous });
+        if (!snapshot) {
+          await writeSourceHealth(engine, configured.id, { ...previous, ...source.health() });
+          continue;
+        }
         if (!Number.isFinite(Date.parse(snapshot.capturedAt))) throw new Error("Invalid source capture timestamp");
         const health = { ...source.health(), lastOk: new Date().toISOString(), lastCapturedAt: snapshot.capturedAt };
         if (previous.lastCapturedAt !== snapshot.capturedAt) {
@@ -32,6 +36,7 @@ export async function sampleTrending(
             ...ledger,
             sightings: [...ledger.sightings.filter((row) => row.source !== source.id || row.observedAt !== snapshot.capturedAt), ...sightings],
             sourceHealth: { ...ledger.sourceHealth, [source.id]: health },
+            ...(snapshot.details ? { sourceDetails: { ...ledger.sourceDetails, [source.id]: snapshot.details } } : {}),
           }));
         }
         await writeSourceHealth(engine, configured.id, health);

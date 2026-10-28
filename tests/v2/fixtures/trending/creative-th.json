@@ -1,0 +1,5 @@
+{"BaseResp":{"StatusCode":0,"StatusMessage":""},"entityInfos":[
+ {"itemInfo":{"itemID":7569000000000000001,"title":"Thai trend","createTime":1792454400,"authorID":7569000000000000999},"itemMetrics":{"videoViews":9000,"videoViewsLifeTime":12000},"itemAuthorInfo":{"handlerName":"thai","nickName":"Thai"},"itemAuthorMetrics":{"followers":1000}},
+ {"itemInfo":{"itemID":7569000000000000003,"title":"Weekly fallback","createTime":1792454400},"itemMetrics":{"videoViews":20000,"videoViewsLifeTime":90000},"itemAuthorInfo":{"handlerName":"weekly"},"itemAuthorMetrics":{"followers":2000}},
+ {"itemInfo":{"itemID":7569000000000000004,"title":"Ad","createTime":1792454400},"itemMetrics":{"videoViews":30000,"videoViewsLifeTime":300000},"itemAuthorInfo":{"handlerName":"brand"}}
+],"pagination":{"limit":4,"page":1,"pageCount":25,"totalCount":100,"hasMore":true}}

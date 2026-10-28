@@ -1,0 +1,11 @@
+{
+  "region": "thailand",
+  "captured_at": "2026-10-27T23:00:00.000Z",
+  "videos": [
+    {"id":"7569000000000000001","url":"https://www.tiktok.com/@thai/video/7569000000000000001","created_at":"2026-10-20T00:00:00Z","region":"TH","play_count":12000,"like_count":200,"comment_count":30,"share_count":40,"save_count":10,"text":"Thai trend","author":{"id":"123","username":"thai","nickname":"Thai"},"music":{"id":"456","title":"Original sound","author":"Thai"}},
+    {"id":"7569000000000000002","url":"https://www.tiktok.com/@brand/video/7569000000000000002","created_at":"2026-10-20T00:00:00Z","play_count":100000,"music":{"title":"Promoted music"}}
+  ],
+  "longest":[{"video":{"id":"7569000000000000001"},"snapshots":4}],
+  "sounds":[{"id":"456","title":"Original sound","creators":2,"original":true}],
+  "hashtags":[{"name":"thailand","creators":2}]
+}

@@ -30,6 +30,7 @@ export interface Sighting {
   createdAt: string;
   metrics: { views: number; likes: number; comments?: number; shares?: number; saves?: number };
   windowViews?: number;
+  fallback?: boolean;
   music?: { id?: string; title: string; author?: string };
   isAd?: boolean;
   source: string;
@@ -41,6 +42,7 @@ export interface SourceHealth {
   lastOk?: string;
   lastError?: string;
   lastCapturedAt?: string;
+  retryAfter?: string;
 }
 
 export interface RankedVideo extends Sighting {
@@ -53,6 +55,7 @@ export interface TrendingLedger {
   sightings: Sighting[];
   sourceHealth: Record<string, SourceHealth>;
   completedSlots: string[];
+  sourceDetails?: Record<string, { capturedAt: string; longest: unknown[]; sounds: unknown[]; hashtags: unknown[] }>;
 }
 
 export interface TrendingRunRecord {

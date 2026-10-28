@@ -56,8 +56,15 @@ export function rankVideos(
     const at = Date.parse(schedule.window === "posted" ? row.createdAt : row.observedAt);
     return at >= cut - hours * 3_600_000 && at <= cut;
   };
-  const candidates = sightings.filter(eligible);
-  const result = rankCandidates(candidates.filter((row) => within(row, schedule.windowHours)), schedule.ranking);
+  const candidates = sightings.filter((row) => !row.fallback && eligible(row));
+  const rankWindow = (hours: number): RankedVideo[] => {
+    const rows = candidates.filter((row) => within(row, hours));
+    const ids = new Set(rows.map((row) => row.videoId));
+    const crossChecks = sightings.filter((row) => row.fallback && ids.has(row.videoId)
+      && eligible(row) && Date.parse(row.observedAt) <= cut);
+    return rankCandidates([...rows, ...crossChecks], schedule.ranking);
+  };
+  const result = rankWindow(schedule.windowHours);
   const append = (rows: RankedVideo[], fallback: boolean): void => {
     const ids = new Set(result.map((row) => row.videoId));
     for (const row of rows) {
@@ -67,7 +74,7 @@ export function rankVideos(
       ids.add(row.videoId);
     }
   };
-  append(rankCandidates(candidates.filter((row) => within(row, Math.max(48, schedule.windowHours))), schedule.ranking), false);
+  append(rankWindow(Math.max(48, schedule.windowHours)), false);
   append(rankCandidates((options.fallback ?? []).filter((row) => eligible(row)
     && Date.parse(row.observedAt) <= cut && Date.parse(row.createdAt) <= cut), schedule.ranking), true);
   return result.slice(0, schedule.topN).map((row, index) => ({ ...row, rank: index + 1 }));

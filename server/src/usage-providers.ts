@@ -1,3 +1,5 @@
+import { createEndless as endless } from "@apicity/endless";
+import { createTiktokCreativeCenter as tiktokCreativeCenter } from "@apicity/tiktok-creative-center";
 import { createFreeMediaUpload as freemediaupload } from "@apicity/free-media-upload";
 import { createKimiCoding as kimicoding } from "@apicity/kimicoding";
 import { createXOAuth as xoauth } from "@apicity/x";
@@ -80,4 +82,12 @@ export function submitMediaJob(...args: Parameters<typeof submitKieMediaJob>): R
   const [provider, request, approval] = args;
   return withProviderCall(provider, { provider: "kie", endpoint: "api.v1.jobs.createTask", input: request },
     (original) => submitKieMediaJob(original, request, approval));
+}
+
+export function createEndless(options: Parameters<typeof endless>[0] = {}): ReturnType<typeof endless> {
+  return capturedProvider("endless", (fetch) => endless({ ...options, fetch }), options.fetch);
+}
+
+export function createTiktokCreativeCenter(options: Parameters<typeof tiktokCreativeCenter>[0] = {}): ReturnType<typeof tiktokCreativeCenter> {
+  return capturedProvider("tiktok-creative-center", (fetch) => tiktokCreativeCenter({ ...options, fetch }), options.fetch);
 }

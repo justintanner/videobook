@@ -1,0 +1,123 @@
+{
+  "BaseResp": {
+    "StatusCode": 0,
+    "StatusMessage": ""
+  },
+  "entityInfos": [
+    {
+      "itemAuthorInfo": {
+        "handlerName": "bebe.bpm",
+        "nickName": "bebe.bpm"
+      },
+      "itemAuthorMetrics": {
+        "followers": 182907
+      },
+      "itemInfo": {
+        "authorID": 7561973961975398407,
+        "contentType": 1,
+        "createTime": 1792388688,
+        "creatorID": 7522434872880301074,
+        "itemID": 7698250766473071893,
+        "title": "POV: พนักงานบัญชีที่ต้องอยู่กับตัวเลขทั้งวัน 🫠​ #ไอติมคิทแคท #พักNow   #KitKatIceCream #BreakNow #sponsorship "
+      },
+      "itemMetrics": {
+        "engagementRate": 0.008208901676115404,
+        "engagementRateLifeTime": 0.008208901676115404,
+        "organicVideoViews": 378054,
+        "organicVideoViewsLifeTime": 378054,
+        "sixSecondsVTR": 0.11798184473139553,
+        "sixSecondsVTRLifeTime": 0.11798184473139553,
+        "videoViews": 14786631,
+        "videoViewsLifeTime": 14786631
+      }
+    },
+    {
+      "itemAuthorInfo": {
+        "handlerName": "fxnta_f",
+        "nickName": "เจ้ายิ๋งแมวดำ"
+      },
+      "itemAuthorMetrics": {
+        "followers": 948775
+      },
+      "itemInfo": {
+        "authorID": 7566151428344872968,
+        "contentType": 1,
+        "createTime": 1792634093,
+        "creatorID": 6710884868589536258,
+        "itemID": 7699254234205785352,
+        "title": "เทคเดียวพอหมวยเหนื่อย"
+      },
+      "itemMetrics": {
+        "engagementRate": 0.1679665565368588,
+        "engagementRateLifeTime": 0.1679665565368588,
+        "organicVideoViews": 12993152,
+        "organicVideoViewsLifeTime": 12993152,
+        "sixSecondsVTR": 0.5338350397597939,
+        "sixSecondsVTRLifeTime": 0.5338350397597939,
+        "videoViews": 12993152,
+        "videoViewsLifeTime": 12993152
+      }
+    },
+    {
+      "itemAuthorInfo": {
+        "handlerName": "qwmhwa",
+        "nickName": "เนยเนย"
+      },
+      "itemAuthorMetrics": {
+        "followers": 227738
+      },
+      "itemInfo": {
+        "authorID": 7629324866484666369,
+        "contentType": 1,
+        "createTime": 1792384928,
+        "creatorID": 6987985192926135322,
+        "itemID": 7697662368347655432,
+        "title": "#บอดี้สูท "
+      },
+      "itemMetrics": {
+        "engagementRate": 0.22176753167462576,
+        "engagementRateLifeTime": 0.22176753167462576,
+        "organicVideoViews": 10564450,
+        "organicVideoViewsLifeTime": 10564450,
+        "sixSecondsVTR": 0.3619269722421752,
+        "sixSecondsVTRLifeTime": 0.36192694799986364,
+        "videoViews": 10564450,
+        "videoViewsLifeTime": 10564450
+      }
+    },
+    {
+      "itemAuthorInfo": {
+        "handlerName": "yadabimm_",
+        "nickName": "ยะดบ"
+      },
+      "itemAuthorMetrics": {
+        "followers": 845663
+      },
+      "itemInfo": {
+        "authorID": 7670160595548733447,
+        "contentType": 1,
+        "createTime": 1792637151,
+        "creatorID": 6963149684940620802,
+        "itemID": 7699074552122428693,
+        "title": "เพลงนี้ตลอดไปปปป #fyp #shopee "
+      },
+      "itemMetrics": {
+        "engagementRate": 0.20836083026361854,
+        "engagementRateLifeTime": 0.20836083026361854,
+        "organicVideoViews": 9488938,
+        "organicVideoViewsLifeTime": 9488938,
+        "sixSecondsVTR": 0.36096719756204343,
+        "sixSecondsVTRLifeTime": 0.36096719756204343,
+        "videoViews": 9488938,
+        "videoViewsLifeTime": 9488938
+      }
+    }
+  ],
+  "pagination": {
+    "hasMore": true,
+    "limit": 4,
+    "page": 1,
+    "pageCount": 25,
+    "totalCount": 100
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "BaseResp": {
+    "Extra": {
+      "traceparent": "02-441568f4e6ae87364c05054550e35620-36184cc0b9af151d-05"
+    },
+    "StatusCode": 0,
+    "StatusMessage": ""
+  },
+  "lastDailyEndTimestamp": 1792972800,
+  "lastMonthlyEndTimestamp": 1790726400,
+  "lastWeeklyEndTimestamp": 1792886400
+}

@@ -1,4 +1,6 @@
-import type { Sighting, SourceHealth, TrendingSchedule } from "./types.js";
+import { endlessSource } from "./sources/endless.js";
+import { tiktokCreativeCenterSource } from "./sources/tiktok-creative-center.js";
+import type { Sighting, SourceHealth, TrendingLedger, TrendingSchedule } from "./types.js";
 
 export interface TrendingSource {
   id: string;
@@ -7,8 +9,11 @@ export interface TrendingSource {
     window: TrendingSchedule["window"];
     limit: number;
     options?: Record<string, unknown>;
-  }, context: { signal: AbortSignal }): Promise<{ capturedAt: string; sightings: Sighting[] }>;
+  }, context: { signal: AbortSignal; previousHealth?: SourceHealth }): Promise<{ capturedAt: string; sightings: Sighting[]; details?: NonNullable<TrendingLedger["sourceDetails"]>[string] } | undefined>;
   health(): SourceHealth;
 }
 
-export const trendingSources = new Map<string, TrendingSource>();
+export const trendingSources = new Map<string, TrendingSource>([
+  ["endless", endlessSource()],
+  ["tiktok-creative-center", tiktokCreativeCenterSource()],
+]);
