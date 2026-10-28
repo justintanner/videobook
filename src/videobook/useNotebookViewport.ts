@@ -2,13 +2,15 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { revealNotebookCell } from './notebook-result-reveal'
 import { fitNotebookGridZoom } from './notebook-grid'
 
+const RESTING_COMPOSER_RESERVE = 160
+
 export function useNotebookViewport(bookId: string, notebookId: string | undefined, active: boolean) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [surface, setSurface] = useState({ width: 0, height: 0, minimumZoom: 0 })
+  const [surface, setSurface] = useState({ width: 0, height: 0, fitHeight: 0, minimumZoom: 0 })
   const appliedZoomRef = useRef(1)
   const anchorTopRef = useRef(0)
   const revealCleanupRef = useRef<(() => void) | null>(null)
-  const zoom = fitNotebookGridZoom(surface.width, surface.minimumZoom)
+  const zoom = fitNotebookGridZoom(surface.width, surface.minimumZoom, surface.fitHeight)
 
   const rememberPosition = useCallback(() => {
     const container = scrollRef.current
@@ -27,10 +29,13 @@ export function useNotebookViewport(bookId: string, notebookId: string | undefin
       const style = getComputedStyle(container)
       const width = Math.max(0, container.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
       const height = container.clientHeight
+      const composerReserve = Math.min(parseFloat(style.paddingBottom) || 0, RESTING_COMPOSER_RESERVE)
+      const fitHeight = Math.max(0, height - (parseFloat(style.paddingTop) || 0) - composerReserve)
       const minimumZoom = parseFloat(style.getPropertyValue('--notebook-minimum-zoom')) || 0
-      setSurface(current => current.width === width && current.height === height && current.minimumZoom === minimumZoom
+      setSurface(current => current.width === width && current.height === height
+        && current.fitHeight === fitHeight && current.minimumZoom === minimumZoom
         ? current
-        : { width, height, minimumZoom })
+        : { width, height, fitHeight, minimumZoom })
     }
     sync()
     container.addEventListener('scroll', rememberPosition, { passive: true })

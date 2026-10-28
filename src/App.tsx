@@ -299,6 +299,7 @@ import type {
 import {
   notebookEdges,
   notebookEdgesWithCellFocus,
+  notebookLineageCellIds,
   notebookConnectionTargetInput,
   notebookNodesWithCellStatus,
   type NotebookFlowEdge,
@@ -2801,14 +2802,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
   }, [cellRunErrors, highlightedCellIds, nodes, queuedCellIds, revealingCellIds])
+  const lineageCellIds = useMemo(
+    () => notebookLineageCellIds(edges, selectedCellId),
+    [edges, selectedCellId],
+  )
   const canvasPresentationNodes = useMemo(() => presentedNodes.map((node) => {
     const selected = selectedCellIds.has(node.id)
     const role = pendingReviewRoles.get(notebookGridAddress(node.data.slot))
-    const className = role ? `notebook-review-${role}` : undefined
+    const lineageDim = lineageCellIds !== null && !lineageCellIds.has(node.id)
+    const className = [
+      role ? `notebook-review-${role}` : '',
+      lineageDim ? 'notebook-lineage-dim' : '',
+    ].filter(Boolean).join(' ') || undefined
     return node.selected === selected && node.className === className
       ? node
       : { ...node, selected, className }
-  }), [pendingReviewRoles, presentedNodes, selectedCellIds])
+  }), [lineageCellIds, pendingReviewRoles, presentedNodes, selectedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -11813,7 +11822,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                                 <GoalMediaContext.Provider value={assetById}>
                                 <GoalMarksContext.Provider value={goalMarks}>
                                 <ReactFlow<CanvasNode, NotebookFlowEdge>
-                          className="notebook-flow"
+                          className={selectedCellId ? 'notebook-flow' : 'notebook-flow notebook-flow-at-rest'}
                       nodes={canvasPresentationNodes}
                       edges={focusedEdges}
                       nodeTypes={nodeTypes}

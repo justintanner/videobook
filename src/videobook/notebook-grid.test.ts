@@ -490,6 +490,13 @@ describe('notebook grid', () => {
     expect(notebookGridMetrics([], { viewportHeight: 600, zoom: 0.6 }).rowCount).toBe(4)
   })
 
+  it('shrinks the fit so the first three rows show in a short, wide viewport', () => {
+    const threeRows = 3 * notebookGrid.rowPitch - notebookGrid.gap
+    expect(fitNotebookGridZoom(2000, 0, 600)).toBeCloseTo(600 / threeRows)
+    expect(fitNotebookGridZoom(1224, 0, 2000)).toBe(fitNotebookGridZoom(1224))
+    expect(fitNotebookGridZoom(2000, 0.5, 200)).toBe(0.5)
+  })
+
   it('keeps cell details at screen size until cells drop below half scale', () => {
     expect(notebookGridDetailScale(1.2)).toBeCloseTo(1 / 1.2)
     expect(notebookGridDetailScale(0.6)).toBeCloseTo(1 / 0.6)

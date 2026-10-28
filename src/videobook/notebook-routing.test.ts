@@ -76,7 +76,7 @@ function fanOutDocument(count: number): NotebookDocument {
   const cells = [
     cell('source', 0, 0),
     ...Array.from({ length: count }, (_, index) =>
-      cell(`target-${index}`, index + 1, 2)),
+      cell(`target-${index}`, index + 2, 2)),
   ]
   const edges = Array.from({ length: count }, (_, index) => ({
     id: `edge-${index}`,
@@ -243,18 +243,20 @@ describe('notebook bus and river routing', () => {
     ])
   })
 
-  it('assigns directional source sides from the target column', () => {
+  it('routes the next row through the row gutter and farther rows by column', () => {
     const document = notebook(
       [
         cell('source', 1, 0),
-        cell('left', 2, -2),
-        cell('right', 2, 2),
-        cell('below', 3, 0),
+        cell('left', 3, -2),
+        cell('right', 3, 2),
+        cell('below', 4, 0),
+        cell('next-row', 2, 2),
       ],
       [
         { id: 'left-edge', source: 'source', target: 'left', targetInput: 'input' },
         { id: 'right-edge', source: 'source', target: 'right', targetInput: 'input' },
         { id: 'below-edge', source: 'source', target: 'below', targetInput: 'input' },
+        { id: 'next-row-edge', source: 'source', target: 'next-row', targetInput: 'input' },
       ],
     )
     const routes = notebookBusRiverRoutes(document)
@@ -273,8 +275,12 @@ describe('notebook bus and river routing', () => {
     })
     expect(routes.get('below-edge')).toMatchObject({
       sourceSide: 'bottom',
-      sourcePortIndex: 1,
       targetSide: 'top',
+    })
+    expect(routes.get('next-row-edge')).toMatchObject({
+      sourceSide: 'bottom',
+      targetSide: 'top',
+      directRowGutter: true,
     })
   })
 

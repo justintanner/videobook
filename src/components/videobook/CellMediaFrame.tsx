@@ -123,6 +123,13 @@ export function CellMediaFrame({
       }}
       onFocus={() => setArmed(true)}
     >
+      {!audioPoster && posterUrl && (
+        <span
+          className="cell-media-backdrop"
+          aria-hidden="true"
+          style={{ backgroundImage: `url(${JSON.stringify(posterUrl)})` }}
+        />
+      )}
       {audioPoster ? (
         waveform.length > 0
           ? <CellWaveform peaks={waveform} progress={progress} />

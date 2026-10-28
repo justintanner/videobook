@@ -33,6 +33,7 @@ export const notebookGrid = {
   columnCount: NOTEBOOK_GRID_COLUMN_COUNT,
   maximumRowCount: NOTEBOOK_GRID_ROW_COUNT,
   minimumRowCount: 3,
+  fitRowCount: 3,
   trailingRowCount: 1,
   detailZoomFloor: 0.5,
 } as const
@@ -380,9 +381,26 @@ export function notebookGridDetailScale(zoom: number): number {
   return 1 / Math.max(normalizeNotebookGridZoom(zoom), notebookGrid.detailZoomFloor)
 }
 
-export function fitNotebookGridZoom(viewportWidth: number, minimumZoom = 0): number {
+export function fitNotebookGridZoom(
+  viewportWidth: number,
+  minimumZoom = 0,
+  viewportHeight = 0,
+): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 1
-  return Math.max(Number.isFinite(minimumZoom) ? minimumZoom : 0, viewportWidth / gridWidth())
+  const widthZoom = viewportWidth / gridWidth()
+  const heightZoom = Number.isFinite(viewportHeight) && viewportHeight > 0
+    ? viewportHeight / firstRowsHeight()
+    : widthZoom
+  return Math.max(
+    Number.isFinite(minimumZoom) ? minimumZoom : 0,
+    Math.min(widthZoom, heightZoom),
+  )
+}
+
+function firstRowsHeight(): number {
+  return notebookGrid.originY * 2
+    + notebookGrid.fitRowCount * notebookGrid.rowPitch
+    - notebookGrid.gap
 }
 
 function gridWidth(): number {

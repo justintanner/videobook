@@ -443,6 +443,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }
   const audioPreviewCell = audioCell && playableAudio
   const visualPreviewCell = visualMediaCell && Boolean(mediaUrl || thumbnailUrl)
+  const mediaTile = visualPreviewCell && !emptyMediaSlot && data.kind !== 'post'
   const audioBadges = audioPreviewCell ? audioPreviewBadges(audioPreviewInput) : []
   const audioMeter = audioPreviewCell ? audioPreviewMeter(audioPreviewInput) : null
   const visualBadges = !visualPreviewCell
@@ -512,6 +513,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.deleting ? 'cell-node-deleting' : '',
         data.revealing ? 'cell-node-created' : '',
         data.highlighted ? 'cell-node-highlight' : '',
+        mediaTile ? 'cell-node-media-tile' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-lane-family={notebookLaneFamily(data.kind)}

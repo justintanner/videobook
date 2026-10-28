@@ -1596,53 +1596,16 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+/* Lanes stay in the DOM as the row-family record auto-arrange and the
+   captions read, but draw nothing: tinted bands behind the squares competed
+   with the media for attention and blurred where one row ended. */
 .notebook-lane {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  visibility: hidden;
   pointer-events: none;
-}
-
-.notebook-lane-image {
-  border-color: rgba(99, 199, 216, 0.16);
-  background:
-    linear-gradient(90deg, rgba(99, 199, 216, 0.07), rgba(99, 199, 216, 0.02) 28%, transparent 72%);
-}
-
-.notebook-lane-gen {
-  border-color: rgba(114, 231, 170, 0.16);
-  background:
-    linear-gradient(90deg, rgba(114, 231, 170, 0.07), rgba(72, 178, 111, 0.02) 28%, transparent 72%);
-}
-
-.notebook-lane-video {
-  border-color: rgba(114, 231, 170, 0.2);
-  background:
-    linear-gradient(90deg, rgba(79, 183, 125, 0.08), rgba(79, 183, 125, 0.02) 30%, transparent 74%);
-}
-
-.notebook-lane-audio {
-  border-color: rgba(201, 137, 162, 0.18);
-  background:
-    linear-gradient(90deg, rgba(201, 137, 162, 0.08), rgba(201, 137, 162, 0.02) 28%, transparent 72%);
-}
-
-.notebook-lane-work {
-  border-color: rgba(154, 168, 159, 0.16);
-  background:
-    linear-gradient(90deg, rgba(154, 168, 159, 0.07), rgba(154, 168, 159, 0.02) 28%, transparent 72%);
-}
-
-.notebook-lane-mixed {
-  border-color: rgba(126, 148, 136, 0.14);
-  background: rgba(18, 36, 27, 0.18);
-}
-
-.notebook-lane-starter {
-  opacity: 0.72;
 }
 
 .notebook-grid-square {
@@ -1650,9 +1613,9 @@ textarea:focus-visible {
   top: 0;
   left: 0;
   z-index: 1;
-  border: 1px solid rgba(107, 207, 153, 0.055);
+  border: 1px dashed rgba(107, 207, 153, 0.1);
   border-radius: 3px;
-  background: transparent;
+  background: rgba(114, 231, 170, 0.012);
   transition:
     border-color 120ms ease,
     background 120ms ease,
@@ -1700,29 +1663,27 @@ textarea:focus-visible {
   box-shadow: 0 0 0 1px rgba(99, 199, 216, 0.22);
 }
 
-/* An address on every empty square is noise: a mostly-empty lane reads as a
-   wall of labels. Only the square that starts a run carries one at rest, at
-   full contrast rather than dimmed; a drag lights up every dropzone, which is
-   when the rest of the addresses are worth reading. */
+/* Every square carries its own address, so @c4 reads off the board with no
+   rails to count along. Empty squares hold theirs dimmed; the square that
+   starts a run, a dropzone and a review target hold theirs at full contrast. */
 .notebook-grid-square-label {
   position: absolute;
   top: 10px;
   left: 13px;
-  color: #7fae92;
+  color: #5b8770;
   font-family: var(--mono);
   font-size: calc(11px * var(--notebook-detail-scale, 1));
   font-weight: 600;
   letter-spacing: 0.04em;
-  opacity: 0;
   text-transform: lowercase;
-  transition: opacity 120ms ease;
+  transition: color 120ms ease;
   white-space: nowrap;
 }
 
 .notebook-grid-square-run-start > .notebook-grid-square-label,
 .notebook-grid-square-dropzone > .notebook-grid-square-label,
 .notebook-grid-square-review > .notebook-grid-square-label {
-  opacity: 1;
+  color: #7fae92;
 }
 
 .notebook-grid-square-dropzone {
@@ -1850,12 +1811,18 @@ textarea:focus-visible {
   fill-opacity: 0.95;
 }
 
-.notebook-flow .workflow-edge-cell-dim .react-flow__edge-path {
-  stroke-opacity: 0.22;
+/* Wires are drawn for one chain at a time: select a cell and its lineage
+   appears, every wire into it and out of it as far as the chain runs. At
+   rest, and for the rest of the board, the wiring steps out of the way. */
+.notebook-flow .workflow-edge-cell-dim,
+.notebook-flow-at-rest .workflow-edge {
+  visibility: hidden;
+  pointer-events: none;
 }
 
-.notebook-flow .workflow-edge-cell-dim .bus-river-entry-dot {
-  fill-opacity: 0.3;
+.notebook-flow .react-flow__node.notebook-lineage-dim {
+  opacity: 0.38;
+  transition: opacity 160ms ease;
 }
 
 .cell-target-connection-count {
@@ -3189,6 +3156,77 @@ textarea:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* A portrait frame in a square tile: the same still, blurred and dimmed,
+   fills the bars either side instead of flat black. */
+.cell-media-backdrop {
+  position: absolute;
+  inset: -24px;
+  background-position: center;
+  background-size: cover;
+  filter: blur(14px) saturate(1.2) brightness(0.42);
+  pointer-events: none;
+}
+
+/* A media tile is all picture: no type header or footer band. The address
+   and the cell menu float on the bottom edge over a scrim, the badges move
+   to the top edge, and the meter keeps the bottom-right corner beside the
+   menu. */
+.cell-node-media-tile .cell-node-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.cell-node-media-tile .cell-node-header > * {
+  pointer-events: auto;
+}
+
+.cell-node-media-tile .cell-node-type {
+  display: none;
+}
+
+.cell-node-media-tile .cell-node-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  border-top: 0;
+  pointer-events: none;
+}
+
+.cell-node-media-tile .cell-node-footer > * {
+  pointer-events: auto;
+}
+
+.cell-node-media-tile .cell-media::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 48px;
+  background: linear-gradient(180deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.9) 70%);
+  content: '';
+  pointer-events: none;
+}
+
+.cell-node-media-tile .cell-media-rail {
+  top: 0;
+  bottom: auto;
+  background: linear-gradient(0deg, rgba(2, 10, 7, 0), rgba(2, 10, 7, 0.9) 62%);
+}
+
+.cell-node-media-tile .cell-media-meter {
+  right: 20px;
+  bottom: 3px;
+  background: none;
 }
 
 /* Audio's poster: the artifact's peaks, mirrored around the midline. */

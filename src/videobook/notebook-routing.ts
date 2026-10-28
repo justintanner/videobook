@@ -132,7 +132,12 @@ function assignGutterOffsets(
   return assignments
 }
 
+function targetInNextRow(candidate: RouteCandidate): boolean {
+  return candidate.targetRow === candidate.sourceRow + 1
+}
+
 function sourceSide(candidate: RouteCandidate): NotebookSourceSide {
+  if (targetInNextRow(candidate)) return 'bottom'
   if (candidate.targetColumn < candidate.sourceColumn) return 'left'
   if (candidate.targetColumn > candidate.sourceColumn) return 'right'
   return 'bottom'
@@ -160,6 +165,7 @@ function sourcePortAssignments(
 }
 
 function targetSide(candidate: RouteCandidate): NotebookTargetSide {
+  if (targetInNextRow(candidate)) return 'top'
   return candidate.sourceColumn < candidate.targetColumn ? 'left' : 'top'
 }
 
@@ -247,8 +253,7 @@ function riverGutter(
 }
 
 function directRowGutter(candidate: RouteCandidate): boolean {
-  return candidate.targetRow === candidate.sourceRow + 1
-    && candidate.targetColumn === candidate.sourceColumn
+  return targetInNextRow(candidate)
 }
 
 function horizontalAssignments(

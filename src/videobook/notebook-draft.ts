@@ -265,17 +265,81 @@ export function notebookEdges(
   })
 }
 
+interface NotebookLineageEdge {
+  source: string
+  target: string
+}
+
+function notebookReachableCellIds(
+  edges: readonly NotebookLineageEdge[],
+  cellId: string,
+  direction: 'upstream' | 'downstream',
+): Set<string> {
+  const reached = new Set<string>()
+  const pending = [cellId]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    for (const edge of edges) {
+      const [from, to] = direction === 'upstream'
+        ? [edge.target, edge.source]
+        : [edge.source, edge.target]
+      if (from !== current || reached.has(to) || to === cellId) continue
+      reached.add(to)
+      pending.push(to)
+    }
+  }
+  return reached
+}
+
+export interface NotebookCellLineage {
+  upstream: ReadonlySet<string>
+  downstream: ReadonlySet<string>
+}
+
+export function notebookCellLineage(
+  edges: readonly NotebookLineageEdge[],
+  cellId: string,
+): NotebookCellLineage {
+  return {
+    upstream: notebookReachableCellIds(edges, cellId, 'upstream'),
+    downstream: notebookReachableCellIds(edges, cellId, 'downstream'),
+  }
+}
+
+export function notebookLineageCellIds(
+  edges: readonly NotebookLineageEdge[],
+  cellId: string | null,
+): ReadonlySet<string> | null {
+  if (!cellId) return null
+  const lineage = notebookCellLineage(edges, cellId)
+  if (lineage.upstream.size === 0 && lineage.downstream.size === 0) return null
+  return new Set([cellId, ...lineage.upstream, ...lineage.downstream])
+}
+
+function edgeInLineage(
+  edge: NotebookLineageEdge,
+  cellId: string,
+  lineage: NotebookCellLineage,
+): boolean {
+  const feedsSelection = lineage.upstream.has(edge.source)
+    && (edge.target === cellId || lineage.upstream.has(edge.target))
+  const leavesSelection = lineage.downstream.has(edge.target)
+    && (edge.source === cellId || lineage.downstream.has(edge.source))
+  return feedsSelection || leavesSelection
+}
+
 export function notebookEdgesWithCellFocus(
   edges: NotebookFlowEdge[],
   selectedCellId: string | null,
 ): NotebookFlowEdge[] {
   if (!selectedCellId) return edges
+  const lineage = notebookCellLineage(edges, selectedCellId)
   return edges.map((edge) => {
     const classNames = new Set(
       (edge.className ?? '').split(/\s+/).filter(Boolean),
     )
     classNames.add(
-      edge.source === selectedCellId || edge.target === selectedCellId
+      edgeInLineage(edge, selectedCellId, lineage)
         ? 'workflow-edge-cell-focus'
         : 'workflow-edge-cell-dim',
     )

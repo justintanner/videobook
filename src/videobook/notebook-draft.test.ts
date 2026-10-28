@@ -5,6 +5,7 @@ import {
   notebookDocument,
   notebookEdges,
   notebookEdgesWithCellFocus,
+  notebookLineageCellIds,
   notebookNodes,
 } from './notebook-draft'
 import { notebookGutterLaneOffsets } from './notebook-routing'
@@ -242,7 +243,7 @@ describe('notebook draft conversion', () => {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
       type: 'generate_image' as const,
-      slot: { row: 1, column: 1 },
+      slot: { row: 2, column: 1 },
     }
     const connected: NotebookDocument = {
       ...source,
@@ -380,7 +381,7 @@ describe('notebook draft conversion', () => {
     ).toEqual({ 'reference-video': 2 })
   })
 
-  it('focuses only routes incident to the selected cell', () => {
+  it('focuses the routes into and out of the selected cell', () => {
     const secondSource = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000008',
@@ -421,6 +422,48 @@ describe('notebook draft conversion', () => {
     expect(targetFocused.every((edge) =>
       edge.className?.includes('workflow-edge-cell-focus'))).toBe(true)
     expect(notebookEdgesWithCellFocus(rendered, null)).toBe(rendered)
+  })
+
+  it('focuses the whole lineage of the selected cell, not its siblings', () => {
+    const cell = (suffix: string, column: number, row: number) => ({
+      ...source.cells[0]!,
+      id: `018f7cf5-0d31-7d96-8c0f-8000000001${suffix}`,
+      slot: { row, column },
+    })
+    const image = cell('01', 0, 0)
+    const generation = cell('02', 0, 1)
+    const take = cell('03', 0, 2)
+    const sibling = cell('04', 1, 2)
+    const edit = cell('05', 0, 3)
+    const unrelated = cell('06', 2, 2)
+    const edge = (suffix: string, from: string, to: string) => ({
+      id: `018f7cf5-0d31-7d96-8c0f-8000000002${suffix}`,
+      source: from,
+      target: to,
+      targetInput: 'media',
+    })
+    const chain: NotebookDocument = {
+      ...source,
+      cells: [image, generation, take, sibling, edit, unrelated],
+      edges: [
+        edge('01', image.id, generation.id),
+        edge('02', generation.id, take.id),
+        edge('03', generation.id, sibling.id),
+        edge('04', take.id, edit.id),
+      ],
+    }
+    const focused = notebookEdgesWithCellFocus(notebookEdges(chain), take.id)
+    const focusOf = (target: string) => focused.find((item) => item.target === target)
+      ?.className?.includes('workflow-edge-cell-focus')
+
+    expect(focusOf(generation.id)).toBe(true)
+    expect(focusOf(take.id)).toBe(true)
+    expect(focusOf(edit.id)).toBe(true)
+    expect(focusOf(sibling.id)).toBe(false)
+    expect([...notebookLineageCellIds(chain.edges, take.id) ?? []].sort())
+      .toEqual([image.id, generation.id, take.id, edit.id].sort())
+    expect(notebookLineageCellIds(chain.edges, unrelated.id)).toBeNull()
+    expect(notebookLineageCellIds(chain.edges, null)).toBeNull()
   })
 
   it('labels published-post tiles as X · POSTED', () => {
