@@ -11,7 +11,7 @@ import {
   videoPreviewBadges,
 } from '../../src/videobook/cell-preview'
 
-function imageFrame(prompt: string | null): string {
+function imageFrame(prompt: string | null, producerAddress?: string): string {
   const badges = imagePreviewBadges({
     width: 768,
     height: 1344,
@@ -21,6 +21,7 @@ function imageFrame(prompt: string | null): string {
   })
   return renderToStaticMarkup(createElement(CellMediaFrame, {
     address: '@a1',
+    producerAddress,
     posterUrl: 'https://example.test/still.png',
     waveform: null,
     mediaUrl: 'https://example.test/still.png',
@@ -196,5 +197,18 @@ describe('audio preview frame', () => {
     expect(html).toContain('cell-waveform-pending')
     expect(html).toContain('Waveform pending')
     expect(html).toContain('>Scene audio</span>')
+  })
+})
+
+
+describe('media source chip', () => {
+  it('shows the producer before the other badges', () => {
+    const html = imageFrame(null, '@b1')
+    expect(html).toContain('title="Source @b1">↳ @b1</span>')
+    expect(html.indexOf('↳ @b1')).toBeLessThan(html.indexOf('>768×1344</span>'))
+  })
+
+  it('omits the chip for media without a producer', () => {
+    expect(imageFrame(null)).not.toContain('cell-media-source')
   })
 })

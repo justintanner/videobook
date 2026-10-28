@@ -16,6 +16,7 @@ import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
 
 export interface CanvasCellData extends NotebookCellData {
+  producerAddress?: string
   post?: PostView
   postSource?: PostSourcePreview
   asset?: AssetRecord
@@ -103,19 +104,24 @@ function positiveMediaSetting(value: unknown): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
+function mediaProducer(document: NotebookDocument, cellId: string) {
+  const cell = document.cells.find((candidate) => candidate.id === cellId)
+  const producerCellId = asString(cell?.inputs?.producerCellId)
+    ?? document.edges.find((edge) =>
+      edge.target === cellId && edge.targetInput === 'media')?.source
+    ?? null
+  return producerCellId
+    ? document.cells.find((candidate) => candidate.id === producerCellId)
+    : undefined
+}
+
 function videoCanvasMetadata(
   document: NotebookDocument,
   cellId: string,
   asset: AssetRecord | undefined,
 ): { aspectRatio: string | null; durationSeconds: number | null } {
   const cell = document.cells.find((candidate) => candidate.id === cellId)
-  const producerCellId = asString(cell?.inputs?.producerCellId)
-    ?? document.edges.find((edge) =>
-      edge.target === cellId && edge.targetInput === 'media')?.source
-    ?? null
-  const producer = producerCellId
-    ? document.cells.find((candidate) => candidate.id === producerCellId)
-    : undefined
+  const producer = mediaProducer(document, cellId)
   const generationSettings = producer?.type === 'generate_video'
     ? recordValue(producer.inputs?.generationSettings)
     : null
@@ -150,6 +156,7 @@ export function canvasNodes(
   return notebookNodes(document).map((node) => {
     const post = (document as NotebookSnapshot).posts?.find(item => item.id === node.id)
     const postSource = post ? postSourcePreview(post, document.cells, byArtifactId) : null
+    const producer = mediaProducer(document, node.id)
     const frameIds = notebookSplitFrameIds(node.data.inputs)
     const asset = artifactForCell(byArtifactId, node.data.outputArtifactId)
     const videoMetadata = node.data.kind === 'video'
@@ -171,6 +178,7 @@ export function canvasNodes(
       ...node,
       data: {
         ...node.data,
+        ...(producer ? { producerAddress: notebookGridTag(producer.slot) } : {}),
         status: post?.runtime.status ?? work.status,
         ...(post ? { post } : {}),
         ...(postSource ? { postSource } : {}),

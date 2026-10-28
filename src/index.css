@@ -13433,3 +13433,7 @@ textarea:focus-visible {
     }
   }
 }
+
+.cell-media-badge.cell-media-source {
+  flex-shrink: 0;
+}

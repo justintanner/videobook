@@ -10,6 +10,7 @@ export type CellMediaPlaybackKind = 'video' | 'audio'
 type CellMediaFrameProps = {
   /** Grid address of the owning cell, for the play control's label. */
   address: string
+  producerAddress?: string
   /** Still shown at rest. Null means the pending face takes the frame. */
   posterUrl: string | null
   /** Peaks for an audio poster; null for visual media, empty while extracting. */
@@ -44,6 +45,7 @@ function mediaProgress(element: MediaElement): number {
  */
 export function CellMediaFrame({
   address,
+  producerAddress,
   posterUrl,
   waveform,
   mediaUrl,
@@ -170,8 +172,13 @@ export function CellMediaFrame({
         </span>
       )}
 
-      {badges.length > 0 && (
+      {(producerAddress || badges.length > 0) && (
         <div className="cell-media-rail" role="group" aria-label={metadataLabel}>
+          {producerAddress && (
+            <span className="cell-media-badge cell-media-source" title={`Source ${producerAddress}`}>
+              ↳ {producerAddress}
+            </span>
+          )}
           {badges.map((badge) => (
             <span
               key={badge.key}

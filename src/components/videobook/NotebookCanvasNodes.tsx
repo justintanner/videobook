@@ -669,6 +669,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         ) : audioPreviewCell ? (
           <CellMediaFrame
             address={address}
+            producerAddress={data.producerAddress}
             posterUrl={null}
             waveform={data.asset?.waveform ?? []}
             mediaUrl={mediaUrl ?? null}
@@ -683,6 +684,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         ) : visualPreviewCell ? (
           <CellMediaFrame
             address={address}
+            producerAddress={data.producerAddress}
             posterUrl={thumbnailUrl ?? (playableVideo ? null : mediaUrl ?? null)}
             waveform={null}
             mediaUrl={mediaUrl ?? null}
