@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Engine } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import { mutateNotebook } from "../../server/src/notebook-mutations.js";
@@ -21,6 +21,7 @@ import { cutAt, schedule, sighting } from "./trending-fixtures.js";
 let root: string;
 let books: BookManager;
 afterEach(async () => {
+  vi.useRealTimers();
   await books?.close();
   if (root) await rm(root, { recursive: true, force: true });
 });
@@ -71,6 +72,12 @@ function downloadView(day: Engine, run: TrendingRunRecord) {
 async function completeQueued(day: Engine) {
   for (let job = day.jobs.queue.dequeue(process.pid, testBudget(60_000)); job; job = day.jobs.queue.dequeue(process.pid, testBudget(60_000))) {
     await day.jobs.queue.complete(job.id);
+  }
+}
+
+async function failQueued(day: Engine, message: string) {
+  for (let job = day.jobs.queue.dequeue(process.pid, testBudget(60_000)); job; job = day.jobs.queue.dequeue(process.pid, testBudget(60_000))) {
+    await day.jobs.queue.fail(job.id, { error: { message }, allowRetry: false });
   }
 }
 
@@ -230,6 +237,8 @@ describe("trending research jobs", () => {
   }, testBudget(60_000));
 
   it("backs off failed downloads, preserves reasons and ranks, and stops at three attempts", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(cutAt);
     const control = await setup();
     await seed(control.engine);
     const run = (await cutTrending(control.engine, books, localDate(new Date(), schedule.timezone), cutAt, enqueue))!;
@@ -239,20 +248,37 @@ describe("trending research jobs", () => {
     const now = new Date();
     const originalDate = run.date;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      let job = day.jobs.queue.dequeue(process.pid, testBudget(60_000));
-      while (job) {
-        await day.jobs.queue.fail(job.id, { error: { message: `failure ${attempt}` }, allowRetry: false });
-        job = day.jobs.queue.dequeue(process.pid, testBudget(60_000));
-      }
+      await failQueued(day, `failure ${attempt}`);
       const failedAt = day.jobs.queue.get(readRuns(control.engine)[0].downloads[0].queueJobId!)!.finishedAt!;
       now.setTime(failedAt);
       await retryTrending(control.engine, day, originalDate, now, enqueue);
       expect(day.jobs.queue.list({ states: ["queued"] })).toHaveLength(0);
       now.setTime(failedAt + 600_000);
+      vi.setSystemTime(now);
       await retryTrending(control.engine, day, originalDate, now, enqueue);
       if (attempt < 3) expect(day.jobs.queue.list({ states: ["queued"] })).toHaveLength(2);
     }
     expect(day.jobs.queue.list({ type: "download_video" })).toHaveLength(6);
     expect(readRuns(control.engine)[0].downloads).toEqual(expect.arrayContaining([expect.objectContaining({ attempts: 3, error: "failure 3", status: "failed" })]));
+  }, testBudget(60_000));
+
+  it("retries failed downloads only until the run's local day ends", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime("2026-10-28T16:55:00.000Z");
+    const control = await setup();
+    await seed(control.engine);
+    const run = (await cutTrending(control.engine, books, localDate(new Date(), schedule.timezone), cutAt, enqueue))!;
+    const day = dayEngine(run);
+    await failQueued(day, "failure 1");
+    vi.setSystemTime("2026-10-28T16:59:00.000Z");
+    await retryTrending(control.engine, day, run.date, new Date(), enqueue);
+    expect(day.jobs.queue.list({ states: ["queued"] })).toHaveLength(2);
+    await failQueued(day, "failure 2");
+    vi.setSystemTime("2026-10-28T17:05:00.000Z");
+    await retryTrending(control.engine, day, run.date, new Date(), enqueue);
+    expect(day.jobs.queue.list({ states: ["queued"] })).toHaveLength(0);
+    expect(readRuns(control.engine)[0].downloads).toEqual(run.downloads.map(() => expect.objectContaining({
+      status: "failed", error: "failure 2", attempts: 2,
+    })));
   }, testBudget(60_000));
 });
