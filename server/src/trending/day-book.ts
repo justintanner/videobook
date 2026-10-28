@@ -2,7 +2,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { dayBookSlug } from "./ledger.js";
-import type { RankedVideo, TrendingSchedule } from "./types.js";
+import type { RankedVideo, TrendingRunRecord, TrendingSchedule } from "./types.js";
 
 export interface DayBookResult {
   bookId: string;
@@ -148,6 +148,29 @@ async function build(
   });
   if (!written.ok) throw new Error(written.error.message);
   return { bookId, notebookId: notebook.id, ranks };
+}
+
+export async function syncDayBookDownloads(engine: Engine, schedule: TrendingSchedule, run: TrendingRunRecord): Promise<void> {
+  if (!run.notebookId) return;
+  const written = await mutateNotebook(engine, run.notebookId, "trending-download-status", (notebook) => {
+    const cells = notebook.cells.map((cell) => {
+      const download = owned(cell, schedule.scheduleId) && cell.outputArtifactId
+        ? run.downloads.find((entry) => entry.artifactId === cell.outputArtifactId) : undefined;
+      if (!download) return cell;
+      const { error: _error, ...inputs } = cell.inputs ?? {};
+      return {
+        ...cell,
+        inputs: { ...inputs, state: download.status, ...(download.status === "failed" ? { error: download.error ?? "Download failed" } : {}) },
+      };
+    });
+    return {
+      ...notebook,
+      cells: cells.map((cell) => owned(cell, schedule.scheduleId) && cell.inputs?.workflowRole === "trending-summary"
+        ? { ...cell, prompt: summary(run.videos, schedule, run.cutAt, cells) }
+        : cell),
+    };
+  });
+  if (!written.ok) throw new Error(written.error.message);
 }
 
 export async function buildDayBook(

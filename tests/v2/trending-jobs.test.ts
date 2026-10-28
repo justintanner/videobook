@@ -4,14 +4,17 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
+import { mutateNotebook } from "../../server/src/notebook-mutations.js";
 import { enqueueOptions } from "../../server/src/queue.js";
 import { runFfmpeg } from "../../server/src/ffmpeg.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
 import { retryTrending } from "../../server/src/jobs/trending-retry.js";
 import { sampleTrending } from "../../server/src/jobs/trending-sample.js";
+import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
 import { localDate, readLedger, readRuns, readSchedule, readSourceHealth, updateLedger } from "../../server/src/trending/ledger.js";
 import type { TrendingSource } from "../../server/src/trending/sources.js";
+import type { TrendingRunRecord } from "../../server/src/trending/types.js";
 import { testBudget } from "../../server/src/test-budget.js";
 import { cutAt, schedule, sighting } from "./trending-fixtures.js";
 
@@ -46,6 +49,31 @@ async function seed(engine: Engine) {
   await updateLedger(engine, "2026-10-27", (ledger) => ({ ...ledger, sightings: [sighting("123"), sighting("456")] }));
 }
 
+function dayEngine(run: TrendingRunRecord): Engine {
+  const selected = books.get(run.dayBookId);
+  if (!selected.ok) throw new Error(selected.error.message);
+  return selected.value.engine;
+}
+
+function downloadView(day: Engine, run: TrendingRunRecord) {
+  const notebook = day.notebooks.read(run.notebookId!);
+  if (!notebook.ok) throw new Error(notebook.error.message);
+  const summary = notebook.value.cells.find((cell) => cell.inputs?.workflowRole === "trending-summary")!.prompt!;
+  return {
+    cells: run.videos.map((video) => {
+      const cell = notebook.value.cells.find((candidate) => candidate.inputs?.workflowRole === `trending-video-${video.rank}`)!;
+      return { state: cell.inputs?.state, error: cell.inputs?.error };
+    }),
+    summary: summary.split("\n").filter((line) => /^\| \d/.test(line)).map((line) => line.split(" | ")[6]),
+  };
+}
+
+async function completeQueued(day: Engine) {
+  for (let job = day.jobs.queue.dequeue(process.pid, testBudget(60_000)); job; job = day.jobs.queue.dequeue(process.pid, testBudget(60_000))) {
+    await day.jobs.queue.complete(job.id);
+  }
+}
+
 describe("trending research jobs", () => {
   it("bootstraps the control book and deduplicates snapshots while isolating source errors", async () => {
     const control = await setup();
@@ -74,6 +102,8 @@ describe("trending research jobs", () => {
     const notebook = day.notebooks.read(run.notebookId!);
     if (!notebook.ok) throw new Error(notebook.error.message);
     expect(notebook.value.cells.filter((cell) => cell.type === "video").every((cell) => cell.inputs?.jobId)).toBe(true);
+    const pending = { state: "pending", error: undefined };
+    expect(downloadView(day, run)).toEqual({ cells: [pending, pending], summary: ["pending", "pending"] });
     for (const job of day.jobs.queue.list({ type: "download_video" })) {
       expect(job.payload.bookId).toBe(run.dayBookId);
       expect(job.payload.research).toMatchObject({ country: "TH", date: run.date, scheduleId: schedule.scheduleId });
@@ -102,6 +132,11 @@ describe("trending research jobs", () => {
     }
     await retryTrending(control.engine, day, run.date, new Date(cutAt), enqueue);
     expect(readRuns(control.engine)[0].downloads.every((entry) => entry.status === "completed")).toBe(true);
+    const completed = { state: "completed", error: undefined };
+    expect(downloadView(day, run)).toEqual({ cells: [completed, completed], summary: ["completed", "completed"] });
+    const revisions = day.history.revisions(1000).length;
+    await retryTrending(control.engine, day, run.date, new Date(cutAt), enqueue);
+    expect(day.history.revisions(1000).length).toBe(revisions);
   }, testBudget(90_000));
 
   it("fills from a weekly snapshot outside the normal sighting window", async () => {
@@ -127,6 +162,7 @@ describe("trending research jobs", () => {
     };
     await expect(cutTrending(control.engine, books, "2026-10-28", cutAt, interrupted)).rejects.toThrow("Interrupted");
     const before = readRuns(control.engine)[0];
+    expect(before.errors).toEqual(["Interrupted enqueue"]);
     const selected = books.get(before.dayBookId);
     if (!selected.ok) throw new Error(selected.error.message);
     const day = selected.value.engine;
@@ -135,6 +171,62 @@ describe("trending research jobs", () => {
     const resumed = (await cutTrending(control.engine, books, before.date, cutAt, enqueue))!;
     expect(resumed.downloads.map((download) => download.artifactId)).toEqual(before.downloads.map((download) => download.artifactId));
     expect(day.jobs.queue.list({ type: "download_video" })).toHaveLength(2);
+    expect(resumed).toMatchObject({ completed: true, errors: [] });
+    expect(resumed.downloads.map((download) => download.status)).toEqual(["completed", "pending"]);
+    expect(downloadView(day, resumed)).toEqual({
+      cells: [{ state: "completed", error: undefined }, { state: "pending", error: undefined }], summary: ["completed", "pending"],
+    });
+  }, testBudget(60_000));
+
+  it("shows aborted downloads as failed, then clears their stale errors once a retry completes", async () => {
+    const control = await setup();
+    await seed(control.engine);
+    const retryAt = Date.now() + 600_000;
+    const date = localDate(new Date(retryAt), schedule.timezone);
+    const run = (await cutTrending(control.engine, books, date, cutAt, enqueue))!;
+    const day = dayEngine(run);
+    for (const download of run.downloads) expect(await day.jobs.queue.abort(download.queueJobId!, "Queue stopped")).toBe(true);
+    const userCells = [
+      day.notebooks.createCell({ type: "prompt", label: "My notes", prompt: "Keep this", slot: { row: 0, column: 3 } }),
+      day.notebooks.createCell({ type: "video", label: "My copy", slot: { row: 1, column: 3 }, outputArtifactId: run.downloads[0].artifactId!, inputs: { state: "ready" } }),
+    ];
+    const edited = await mutateNotebook(day, run.notebookId!, "user-edit", (notebook) => ({ ...notebook, cells: [...notebook.cells, ...userCells] }));
+    if (!edited.ok) throw new Error(edited.error.message);
+    const cellsOf = () => {
+      const notebook = day.notebooks.read(run.notebookId!);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      return notebook.value.cells;
+    };
+    const userIds = new Set(userCells.map((cell) => cell.id));
+    const before = cellsOf();
+    const identity = (cells: typeof before) => cells.filter((cell) => !userIds.has(cell.id)).map(({ id, outputArtifactId, slot }) => ({ id, outputArtifactId, slot }));
+    const tool = trendingResearchDef(books, { now: () => new Date(retryAt), enqueue });
+    const failedRuns = async () => JSON.parse((await tool.handler({ op: "status", country: "TH" })).content[0].text).schedules[0].recentFailures.runs;
+
+    await retryTrending(control.engine, day, date, new Date(), enqueue);
+    expect(readRuns(control.engine)[0].downloads).toEqual(run.downloads.map(() => expect.objectContaining({
+      status: "failed", error: "Queue stopped", attempts: 1, nextRetryAt: expect.any(String),
+    })));
+    const failed = { state: "failed", error: "Queue stopped" };
+    expect(downloadView(day, run)).toEqual({ cells: [failed, failed], summary: ["failed", "failed"] });
+    expect(await failedRuns()).toHaveLength(1);
+
+    await retryTrending(control.engine, day, date, new Date(retryAt), enqueue);
+    const pending = { state: "pending", error: undefined };
+    expect(downloadView(day, run)).toEqual({ cells: [pending, pending], summary: ["pending", "pending"] });
+    await completeQueued(day);
+    await retryTrending(control.engine, day, date, new Date(retryAt + 60_000), enqueue);
+
+    const recovered = readRuns(control.engine)[0];
+    expect(recovered.downloads.map(({ status, attempts, error, nextRetryAt }) => ({ status, attempts, error, nextRetryAt }))).toEqual(
+      run.downloads.map(() => ({ status: "completed", attempts: 2, error: undefined, nextRetryAt: undefined })),
+    );
+    const completed = { state: "completed", error: undefined };
+    expect(downloadView(day, run)).toEqual({ cells: [completed, completed], summary: ["completed", "completed"] });
+    expect(await failedRuns()).toEqual([]);
+    const after = cellsOf();
+    expect(after.filter((cell) => userIds.has(cell.id))).toEqual(before.filter((cell) => userIds.has(cell.id)));
+    expect(identity(after)).toEqual(identity(before));
   }, testBudget(60_000));
 
   it("backs off failed downloads, preserves reasons and ranks, and stops at three attempts", async () => {

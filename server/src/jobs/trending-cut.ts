@@ -1,10 +1,10 @@
-import type { Engine } from "videobook-engine";
+import type { Engine, Job } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { activeBookEngine } from "../book-context.js";
 import { appendDiagnostic } from "../diagnostics.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, registerJobHandler } from "../queue.js";
-import { buildDayBook } from "../trending/day-book.js";
+import { buildDayBook, syncDayBookDownloads } from "../trending/day-book.js";
 import { cutLedgerDates, readLedger, readRuns, readSchedule, writeRun } from "../trending/ledger.js";
 import { rankVideos } from "../trending/ranking.js";
 import type { RankedVideo, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
@@ -18,6 +18,18 @@ function researchProvenance(schedule: TrendingSchedule, run: TrendingRunRecord, 
     scheduleId: schedule.scheduleId, date: run.date, cutAt: run.cutAt, fallback: video.fallback,
     downstream: schedule.downstream,
   };
+}
+
+export function recordDownloadOutcome(download: TrendingRunRecord["downloads"][number], job: Job): void {
+  if (job.state === "done") {
+    download.status = "completed";
+    delete download.error;
+    delete download.nextRetryAt;
+  }
+  if (job.state === "failed" || job.state === "aborted") {
+    download.status = "failed";
+    download.error = job.error?.message ?? "Download failed";
+  }
 }
 
 export async function enqueueResearchDownload(
@@ -39,11 +51,13 @@ export async function enqueueResearchDownload(
   download.jobId = jobId;
   download.queueJobId = job.id;
   download.attempts = attempt;
+  recordDownloadOutcome(download, job);
   if (run.notebookId) {
     const result = await mutateNotebook(engine, run.notebookId, "trending-download", (notebook) => ({
       ...notebook,
-      cells: notebook.cells.map((cell) => cell.outputArtifactId === download.artifactId ? {
-        ...cell, inputs: { ...cell.inputs, sourceOperation: "download_video", sourceUrl: video.url, jobId, research, state: job.state === "done" ? "completed" : job.state === "failed" ? "failed" : "pending" },
+      cells: notebook.cells.map((cell) => cell.outputArtifactId === download.artifactId
+        && cell.inputs?.trendingScheduleId === schedule.scheduleId ? {
+        ...cell, inputs: { ...cell.inputs, sourceOperation: "download_video", sourceUrl: video.url, jobId, research },
       } : cell),
     }));
     if (!result.ok) throw new Error(result.error.message);
@@ -90,7 +104,9 @@ async function cut(
     await enqueueResearchDownload(selected.value.engine, schedule, record, download, enqueue);
     await writeRun(engine, record);
   }
+  await syncDayBookDownloads(selected.value.engine, schedule, record);
   record.completed = true;
+  record.errors = [];
   await writeRun(engine, record);
   return record;
 }

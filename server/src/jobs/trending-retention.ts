@@ -11,6 +11,7 @@ import {
 } from "../trending/ledger.js";
 import { trendingCutTime } from "../trending/scheduler.js";
 import type { TrendingRetentionState, TrendingRunRecord, TrendingSchedule } from "../trending/types.js";
+import { recordDownloadOutcome } from "./trending-cut.js";
 
 export type ArchiveResearchClip = (input: {
   day: ManagedBook;
@@ -36,11 +37,7 @@ const archiveResearchClip: ArchiveResearchClip = async ({ day, schedule, run, do
 function refreshOutcomes(day: Engine, run: TrendingRunRecord): void {
   for (const download of run.downloads) {
     const job = download.queueJobId ? day.jobs.queue.get(download.queueJobId) : null;
-    if (job?.state === "done") download.status = "completed";
-    if (job?.state === "failed" || job?.state === "aborted") {
-      download.status = "failed";
-      download.error = job.error?.message ?? download.error ?? "Download failed";
-    }
+    if (job) recordDownloadOutcome(download, job);
   }
 }
 

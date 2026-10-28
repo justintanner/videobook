@@ -186,7 +186,7 @@ unknown when they cannot be established.
 
 ## Research books
 
-`trending_research` manages one TikTok research schedule per country. The control book (`tiktok-th-research` for Thailand) stores the schedule, sighting ledger, source health and run history. At the daily cutoff, the scheduler creates a day book such as `tiktok-th-2026-10-28`: its notebook holds a summary at `@a1`, followed by ranked videos in column 1 and caption, metrics, author and source notes in column 2. Failed downloads retain their rank and failure reason.
+`trending_research` manages one TikTok research schedule per country. The control book (`tiktok-th-research` for Thailand) stores the schedule, sighting ledger, source health and run history. At the daily cutoff, the scheduler creates a day book such as `tiktok-th-2026-10-28`: its notebook holds a summary at `@a1`, followed by ranked videos in column 1 and caption, metrics, author and source notes in column 2. Rank cells and the summary's download status follow each download through completion, failure and retry: a failed download keeps its rank and latest failure reason, and a successful retry clears it.
 
 Create the Thailand schedule through the CLI relay:
 
