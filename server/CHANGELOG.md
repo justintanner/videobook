@@ -6,6 +6,26 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- Daily TikTok research books with ranked clips, source provenance and a
+  download-status summary. Country schedules support local cutoffs, sampling,
+  ranking, retention and optional downstream processing; repeated cuts reuse
+  the same day book, and schedules resume and catch up after a restart.
+- `trending_research` MCP tool with `schedule`, `unschedule`, `list`, `run`
+  and `status` operations, also available through `videobook run` for cron.
+- Endless public trends and TikTok Creative Center adapters through Apicity,
+  with normalized sightings, source health and promoted-content filtering.
+
+### Fixed
+
+- TikTok downloads use yt-dlp browser impersonation when available, optional
+  cookies, pacing and retries, with failure reasons retained on research cells.
+- Research rank cells and the summary now follow download completion and retry
+  recovery, clearing stale errors after a successful download.
+
 ## [0.3.3] - 2026-10-27
 
 ### Added
