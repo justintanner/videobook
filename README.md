@@ -355,6 +355,14 @@ Outside `op run`, values that are `op://` references and the vault named by
 override the bundled media binaries; without them the server falls back to
 `ffmpeg`, `ffprobe` and `yt-dlp` on PATH when a bundled binary is missing or
 built for another CPU.
+`VIDEOBOOK_YTDLP_COOKIES` names a Netscape-format cookies file for TikTok
+downloads. Each download gives yt-dlp a private copy, so the file only needs to
+be readable and is never rewritten; `videobook doctor` shows its path, never its
+contents, next to the impersonation targets the yt-dlp build supports. TikTok
+downloads use `--impersonate chrome` when available, start at least 5 seconds
+apart within a book, and retry HTTP 403, 429, 5xx and network failures up to
+three times with backoff. A failed download keeps its reason, the failure class
+and the tail of yt-dlp's message, in the artifact's `download-failure` metadata.
 
 ### Voice chat
 

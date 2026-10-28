@@ -15,7 +15,7 @@ import { FFPROBE, bundledFfprobe } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
 import { readOnePasswordSettings, type OnePasswordResolution } from "../one-password.js";
 import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
-import { resolveYtdlp } from "../ytdlp-binary.js";
+import { resolveYtdlp, ytdlpCookiesSetting, ytdlpImpersonateTargets, type YtdlpCookiesSetting } from "../ytdlp-binary.js";
 
 export type CheckStatus = "ok" | "warn" | "fail";
 
@@ -135,11 +135,26 @@ async function binaryCheck(id: string, label: string, binary: string, bundled: s
   }
 }
 
-function ytdlpCheck(): DoctorCheck {
+function cookiesDetail(cookies: YtdlpCookiesSetting | null): string {
+  if (!cookies) return "not set";
+  return cookies.readable ? cookies.path : `${cookies.path} (not readable)`;
+}
+
+async function ytdlpCheck(): Promise<DoctorCheck> {
   const binary = resolveYtdlp();
   if (binary) {
     const origin = binary.source === "PATH" ? "from PATH" : binary.source;
-    return check({ id: "yt-dlp", label: "yt-dlp", status: "ok", detail: `${binary.path} (${origin})`, required: false });
+    const targets = await ytdlpImpersonateTargets(binary.path);
+    const cookies = ytdlpCookiesSetting();
+    const unreadable = cookies !== null && !cookies.readable;
+    return check({
+      id: "yt-dlp",
+      label: "yt-dlp",
+      status: unreadable ? "warn" : "ok",
+      detail: `${binary.path} (${origin}); impersonation: ${targets.join(", ") || "none"}; cookies: ${cookiesDetail(cookies)}`,
+      ...(unreadable ? { remedy: "Point VIDEOBOOK_YTDLP_COOKIES at a readable Netscape cookies file, or unset it." } : {}),
+      required: false,
+    });
   }
   return check({
     id: "yt-dlp",
@@ -294,7 +309,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
     await libraryCheck(),
     await binaryCheck("ffmpeg", "ffmpeg", FFMPEG, bundledPath("ffmpeg-static"), "VIDEOBOOK_FFMPEG_PATH"),
     await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledFfprobe(), "VIDEOBOOK_FFPROBE_PATH"),
-    ytdlpCheck(),
+    await ytdlpCheck(),
     nativeCoreCheck(),
     searchRuntimeCheck(),
     await renderBrowserCheck(),

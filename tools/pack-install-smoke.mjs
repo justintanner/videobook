@@ -494,9 +494,9 @@ async function verifyYtdlpFallback(packageDir, env, label) {
   if (WINDOWS) await copyFile(real, join(binDir, 'yt-dlp.exe'))
   else await symlink(real, join(binDir, 'yt-dlp'))
   const onPath = await doctorYtdlpCheck(packageDir, withPath(env, `${env.PATH}${delimiter}${binDir}`))
-  expect(onPath?.status === 'ok' && onPath.detail.endsWith('(from PATH)'), `${label}: yt-dlp on PATH was not used: ${JSON.stringify(onPath)}`)
+  expect(onPath?.status === 'ok' && onPath.detail.includes(' (from PATH); impersonation: '), `${label}: yt-dlp on PATH was not used: ${JSON.stringify(onPath)}`)
   const override = await doctorYtdlpCheck(packageDir, { ...env, VIDEOBOOK_YTDLP_PATH: real })
-  expect(override?.status === 'ok' && override.detail === `${real} (VIDEOBOOK_YTDLP_PATH)`, `${label}: VIDEOBOOK_YTDLP_PATH was not used: ${JSON.stringify(override)}`)
+  expect(override?.status === 'ok' && override.detail.startsWith(`${real} (VIDEOBOOK_YTDLP_PATH); impersonation: `), `${label}: VIDEOBOOK_YTDLP_PATH was not used: ${JSON.stringify(override)}`)
   log(`${label}: yt-dlp download blocked; doctor resolves yt-dlp from PATH and VIDEOBOOK_YTDLP_PATH`)
 }
 

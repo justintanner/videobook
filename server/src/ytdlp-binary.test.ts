@@ -1,10 +1,31 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join } from "node:path";
 import { YtDlp } from "ytdlp-nodejs";
 import { afterEach, describe, expect, it } from "vitest";
-import { YTDLP_MISSING_MESSAGE, bundledYtdlp, findOnPath, resolveYtdlp, ytdlpRunOptions } from "./ytdlp-binary.js";
+import {
+  YTDLP_MISSING_MESSAGE,
+  bundledYtdlp,
+  findOnPath,
+  parseImpersonateTargets,
+  resolveYtdlp,
+  ytdlpCookiesSetting,
+  ytdlpImpersonateTargets,
+  ytdlpRunOptions,
+} from "./ytdlp-binary.js";
 import { testBudget } from "./test-budget.js";
+
+const IMPERSONATE_TARGETS = [
+  "[info] Available impersonate targets",
+  "Client          OS           Source",
+  "--------------------------------------",
+  "Tor             -            curl_cffi>=0.11 (unavailable)",
+  "Chrome-136      Macos-15     curl_cffi",
+  "Safari-18.0     Ios-18.0     curl_cffi",
+  "Chrome-99       Windows-10   curl_cffi",
+  "Edge-101        Windows-10   curl_cffi",
+  "",
+].join("\n");
 
 describe("yt-dlp binary resolution", () => {
   const roots: string[] = [];
@@ -60,6 +81,40 @@ describe("yt-dlp binary resolution", () => {
     const options = ytdlpRunOptions({ PATH: [join(base, "bin"), process.env.PATH ?? ""].join(delimiter) }, null);
     expect(options.binaryPath).toBe(onPath);
     expect(options.ffmpegPath && isAbsolute(options.ffmpegPath)).toBe(true);
+  });
+
+  it("lists the impersonation clients yt-dlp can use", () => {
+    expect(parseImpersonateTargets(IMPERSONATE_TARGETS)).toEqual(["chrome", "edge", "safari"]);
+    expect(parseImpersonateTargets("[info] Available impersonate targets\nClient  OS  Source\n------\nChrome  -  curl_cffi (unavailable)\n")).toEqual([]);
+    expect(parseImpersonateTargets("yt-dlp: error: no such option: --list-impersonate-targets\n")).toEqual([]);
+  });
+
+  it("probes impersonation once per binary and treats a failing probe as none", async () => {
+    const base = await root();
+    const probe = join(base, "yt-dlp");
+    await writeFile(probe, `#!/bin/sh\necho probed >> "${join(base, "probes")}"\ncat <<'TARGETS'\n${IMPERSONATE_TARGETS}TARGETS\n`);
+    await chmod(probe, 0o755);
+    const broken = join(base, "old-yt-dlp");
+    await writeFile(broken, "#!/bin/sh\necho 'yt-dlp: error: no such option: --list-impersonate-targets' >&2\nexit 2\n");
+    await chmod(broken, 0o755);
+
+    const [first, second] = await Promise.all([ytdlpImpersonateTargets(probe), ytdlpImpersonateTargets(probe)]);
+    expect(first).toEqual(["chrome", "edge", "safari"]);
+    expect(second).toBe(first);
+    expect(await ytdlpImpersonateTargets(probe)).toBe(first);
+    expect(await readFile(join(base, "probes"), "utf8")).toBe("probed\n");
+    expect(await ytdlpImpersonateTargets(broken)).toEqual([]);
+  });
+
+  it("reads VIDEOBOOK_YTDLP_COOKIES as a path that must be a readable file", async () => {
+    const base = await root();
+    const cookies = join(base, "cookies.txt");
+    await writeFile(cookies, "# Netscape HTTP Cookie File\n");
+    expect(ytdlpCookiesSetting({})).toBeNull();
+    expect(ytdlpCookiesSetting({ VIDEOBOOK_YTDLP_COOKIES: " " })).toBeNull();
+    expect(ytdlpCookiesSetting({ VIDEOBOOK_YTDLP_COOKIES: ` ${cookies} ` })).toEqual({ path: cookies, readable: true });
+    expect(ytdlpCookiesSetting({ VIDEOBOOK_YTDLP_COOKIES: join(base, "missing.txt") })).toEqual({ path: join(base, "missing.txt"), readable: false });
+    expect(ytdlpCookiesSetting({ VIDEOBOOK_YTDLP_COOKIES: base })).toEqual({ path: base, readable: false });
   });
 
   it("runs the yt-dlp that resolves on this machine through ytdlp-nodejs", async () => {

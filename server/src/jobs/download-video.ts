@@ -1,8 +1,10 @@
 import type { Engine } from "videobook-engine";
-import { join } from "node:path";
-import { stat, unlink } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { chmod, copyFile, mkdtemp, rm, stat, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { setTimeout as sleepFor } from "node:timers/promises";
 import { YtDlp } from "ytdlp-nodejs";
-import { ytdlpRunOptions } from "../ytdlp-binary.js";
+import { ytdlpCookiesSetting, ytdlpImpersonateTargets, ytdlpRunOptions } from "../ytdlp-binary.js";
 import { extractOpenGraph } from "@devmehq/open-graph-extractor";
 import type { IOGResult } from "@devmehq/open-graph-extractor";
 import { queue, registerJobHandler } from "../queue.js";
@@ -20,6 +22,224 @@ import {
 } from "./trim-video.js";
 
 const LOCK_DURATION_MS = 600_000;
+const TIKTOK_DOWNLOAD_SPACING_MS = 5_000;
+const YTDLP_RETRY_DELAYS_MS = [2_000, 4_000, 8_000];
+const FAILURE_TAIL_CHARS = 240;
+
+export const DOWNLOAD_FAILURE_METADATA_KEY = "download-failure";
+
+export type DownloadFailureClass =
+  | "private"
+  | "removed"
+  | "geo-blocked"
+  | "login-required"
+  | "unavailable"
+  | "rate-limited"
+  | "forbidden"
+  | "server-error"
+  | "network"
+  | "error";
+
+export interface DownloadFailure {
+  class: DownloadFailureClass;
+  reason: string;
+  transient: boolean;
+}
+
+export interface YtdlpSession {
+  readonly args: readonly string[];
+  readonly attempts: number;
+  run<T>(step: () => Promise<T>): Promise<T>;
+  close(): Promise<void>;
+}
+
+type DownloadSleep = (ms: number, signal?: AbortSignal) => Promise<void>;
+
+const FAILURE_PATTERNS: ReadonlyArray<readonly [DownloadFailureClass, RegExp]> = [
+  ["private", /\bprivate\b|permission to view/iu],
+  ["removed", /\b(?:removed|deleted)\b|no longer available|HTTP Error 410/iu],
+  ["geo-blocked", /geo[- ]?(?:restrict|block)|available (?:in|from) your (?:country|location|region)|IP address is blocked/iu],
+  ["login-required", /\blog ?in\b|\bsign in\b|cookies/iu],
+  ["unavailable", /(?:video|post|content|media)(?: is)? (?:not |un)available|not available|HTTP Error 404|Unsupported URL|No video formats found/iu],
+  ["rate-limited", /HTTP Error 429|Too Many Requests|rate[- ]?limit/iu],
+  ["forbidden", /HTTP Error 403|403 Forbidden/iu],
+  ["server-error", /HTTP Error 5\d\d/iu],
+  ["network", /timed out|timeout|connection (?:reset|refused|aborted)|remote end closed|name resolution|name or service not known|network is unreachable|no route to host|temporary failure|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|IncompleteRead|TransportError|curl: \(\d+\)/iu],
+];
+
+const TRANSIENT_FAILURES: ReadonlySet<DownloadFailureClass> = new Set(["rate-limited", "forbidden", "server-error", "network"]);
+
+const tiktokTurns = new Map<string, number>();
+
+function defaultDownloadSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return sleepFor(ms, undefined, { signal });
+}
+
+let downloadNow: () => number = Date.now;
+let downloadSleep: DownloadSleep = defaultDownloadSleep;
+
+export function configureDownloadClockForTests(options: {
+  now?: () => number;
+  sleep?: DownloadSleep;
+} | null): void {
+  downloadNow = options?.now ?? Date.now;
+  downloadSleep = options?.sleep ?? defaultDownloadSleep;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function failureTail(message: string): string {
+  const text = message
+    .replace(/^[\s\S]*yt-dlp exited with code -?\d+:\s*/u, "")
+    .replace(/;?\s*please report this issue[\s\S]*$/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return text.length > FAILURE_TAIL_CHARS ? `…${text.slice(1 - FAILURE_TAIL_CHARS)}` : text;
+}
+
+export function classifyDownloadFailure(message: string): DownloadFailure {
+  const failureClass = FAILURE_PATTERNS.find(([, pattern]) => pattern.test(message))?.[0] ?? "error";
+  return {
+    class: failureClass,
+    reason: `${failureClass}: ${failureTail(message)}`,
+    transient: TRANSIENT_FAILURES.has(failureClass),
+  };
+}
+
+export function isTikTokUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "tiktok.com" || host.endsWith(".tiktok.com");
+  } catch {
+    return false;
+  }
+}
+
+async function waitForTikTokTurn(bookId: string, signal?: AbortSignal): Promise<void> {
+  const now = downloadNow();
+  const start = Math.max(now, tiktokTurns.get(bookId) ?? now);
+  tiktokTurns.set(bookId, start + TIKTOK_DOWNLOAD_SPACING_MS);
+  if (start > now) await downloadSleep(start - now, signal);
+}
+
+async function stageCookiesCopy(): Promise<string | null> {
+  const cookies = ytdlpCookiesSetting();
+  if (!cookies?.readable) return null;
+  const directory = await mkdtemp(join(tmpdir(), "videobook-ytdlp-"));
+  const copy = join(directory, "cookies.txt");
+  try {
+    await copyFile(cookies.path, copy);
+    await chmod(copy, 0o600);
+    return copy;
+  } catch {
+    await rm(directory, { recursive: true, force: true });
+    return null;
+  }
+}
+
+export async function openYtdlpSession(input: {
+  url: string;
+  bookId: string;
+  binaryPath: string;
+  signal?: AbortSignal;
+}): Promise<YtdlpSession> {
+  const tiktok = isTikTokUrl(input.url);
+  if (tiktok) await waitForTikTokTurn(input.bookId, input.signal);
+  const impersonate = tiktok && (await ytdlpImpersonateTargets(input.binaryPath)).includes("chrome");
+  const cookies = tiktok ? await stageCookiesCopy() : null;
+  let attempts = 0;
+  return {
+    args: [
+      ...(impersonate ? ["--impersonate", "chrome"] : []),
+      ...(cookies ? ["--cookies", cookies] : []),
+    ],
+    get attempts() {
+      return attempts;
+    },
+    async run<T>(step: () => Promise<T>): Promise<T> {
+      attempts = 0;
+      for (;;) {
+        attempts += 1;
+        try {
+          return await step();
+        } catch (error) {
+          const delayMs = tiktok ? YTDLP_RETRY_DELAYS_MS[attempts - 1] : undefined;
+          if (delayMs === undefined || !classifyDownloadFailure(errorMessage(error)).transient) throw error;
+          await downloadSleep(delayMs, input.signal);
+        }
+      }
+    },
+    async close() {
+      if (cookies) await rm(dirname(cookies), { recursive: true, force: true });
+    },
+  };
+}
+
+export async function fetchVideoInfo(ytdlp: YtDlp, url: string, session: YtdlpSession): Promise<InfoResult> {
+  const result = await session.run(() => ytdlp
+    .execBuilder(url)
+    .options({ dumpSingleJson: true, flatPlaylist: true })
+    .addArgs(...session.args)
+    .exec());
+  return JSON.parse(result.output) as InfoResult;
+}
+
+export async function downloadVideoFile(
+  ytdlp: YtDlp,
+  url: string,
+  outputPath: string,
+  playlistItem: number | undefined,
+  session: YtdlpSession,
+): Promise<void> {
+  await session.run(() => ytdlp
+    .download(url)
+    .setOutputTemplate(outputPath)
+    .addArgs("--merge-output-format", "mp4")
+    .addArgs(...(playlistItem === undefined ? ["--no-playlist"] : ["--playlist-items", String(playlistItem)]))
+    .addArgs(...session.args)
+    .run());
+}
+
+async function recordDownloadFailure(
+  engine: Engine,
+  input: { assetId: string; url: string },
+  error: unknown,
+  attempts: number,
+): Promise<Error> {
+  const failure = classifyDownloadFailure(errorMessage(error));
+  await engine.metadata.artifacts.write(input.assetId, DOWNLOAD_FAILURE_METADATA_KEY, {
+    ...failure,
+    attempts,
+    url: input.url,
+    failedAt: new Date().toISOString(),
+  });
+  return new Error(failure.reason, { cause: error });
+}
+
+async function clearDownloadFailure(engine: Engine, assetId: string): Promise<void> {
+  const recorded = await engine.metadata.artifacts.read(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
+  if (recorded.ok) await engine.metadata.artifacts.delete(assetId, DOWNLOAD_FAILURE_METADATA_KEY);
+}
+
+async function withDownloadSession<T>(
+  engine: Engine,
+  input: { url: string; assetId: string; bookId: string; binaryPath: string; signal: AbortSignal },
+  run: (session: YtdlpSession) => Promise<T>,
+): Promise<T> {
+  const session = await openYtdlpSession(input);
+  try {
+    const result = await run(session);
+    await clearDownloadFailure(engine, input.assetId);
+    return result;
+  } catch (error) {
+    if (input.signal.aborted) throw error;
+    throw await recordDownloadFailure(engine, input, error, session.attempts);
+  } finally {
+    await session.close();
+  }
+}
 
 // Hidden filename so a failed video download doesn't leave behind an
 // `original.jpg` that sync's `findUnprocessedUploads` would pick up and
@@ -255,7 +475,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       ctx,
       "download",
       { durationMs: LOCK_DURATION_MS, data: { state: "downloading" } },
-      async () => {
+      () => withDownloadSession(engine, { url, assetId, bookId, binaryPath: ytdlp.binaryPath, signal: ctx.signal }, async (session) => {
       // (a) Pre-stage OG image as a hidden file. The b2 fallback (yt-dlp
       // returns "no video") promotes this to original.jpg on a fresh image
       // asset; a successful video download promotes it after step (d).
@@ -267,7 +487,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       // (b) Fetch ytdlp metadata
       let info: InfoResult;
       try {
-        info = await ytdlp.getInfoAsync(url) as unknown as InfoResult;
+        info = await fetchVideoInfo(ytdlp, url, session);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
 
@@ -437,18 +657,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       }
 
       // (d) Regular ytdlp download
-      const builder = ytdlp
-        .download(url)
-        .setOutputTemplate(outputPath)
-        .addArgs("--merge-output-format", "mp4");
-
-      if (playlistItem !== undefined) {
-        builder.addArgs("--playlist-items", String(playlistItem));
-      } else {
-        builder.addArgs("--no-playlist");
-      }
-
-      await builder.run();
+      await downloadVideoFile(ytdlp, url, outputPath, playlistItem, session);
 
       // (d2) Validate download output
       await validateDownloadOutput(outputPath);
@@ -529,7 +738,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
       } as unknown as Record<string, unknown>);
 
       return { success: true, exports };
-      },
+      }),
       { durationMs: LOCK_DURATION_MS },
     );
   });
