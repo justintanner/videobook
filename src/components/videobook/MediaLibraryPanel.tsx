@@ -1,5 +1,5 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
-import { Film, Image, Library, Plus, Search, Upload, X } from 'lucide-react'
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { AudioWaveform, Film, Image, Library, Play, Plus, Search, Upload, X } from 'lucide-react'
 import { AssetTagSummary } from '@/components/videobook/AssetTagSummary'
 import { BusyIndicator } from '@/components/videobook/BusyIndicator'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
@@ -9,6 +9,14 @@ import type { SearchReferenceDescriptor } from '@/videobook/search-reference'
 import type { SearchReferenceMode } from '@/videobook/search-reference-lifecycle'
 import type { LibraryBrowsePage } from '@/videobook/library-browse'
 import type { LibraryAssetRecord } from '@/videobook/workspace-responses'
+import {
+  mediaLibraryTileAspectLabel,
+  mediaLibraryTileBadge,
+  mediaLibraryTileRatio,
+  mediaLibraryTileSize,
+  type MediaLibraryTileBadge,
+  type MediaSize,
+} from '@/videobook/media-library-tile'
 
 export type MediaLibraryKind = 'all' | 'audio' | 'image' | 'video'
 
@@ -91,6 +99,17 @@ function canSearchSimilar(asset: LibraryAssetRecord): boolean {
   return asset.type === 'image' || asset.type === 'video' || asset.type === 'final'
 }
 
+function MediaLibraryTileBadgeIcon({ kind }: { kind: MediaLibraryTileBadge['kind'] }) {
+  if (kind === 'image') return <Image size={11} aria-hidden="true" />
+  if (kind === 'audio') return <AudioWaveform size={11} aria-hidden="true" />
+  return <Play size={9} fill="currentColor" aria-hidden="true" />
+}
+
+function MediaLibraryCardSource({ asset, targetBookId }: { asset: LibraryAssetRecord; targetBookId: string }) {
+  if (asset.owningBookId === targetBookId) return null
+  return <small>from {asset.owningBookName}</small>
+}
+
 function MediaLibraryCard({
   asset,
   state,
@@ -110,52 +129,67 @@ function MediaLibraryCard({
   onSimilar: (asset: LibraryAssetRecord) => void
   onToggleTagFilter: (term: TagFilterTerm) => void
 }) {
+  const [measured, setMeasured] = useState<MediaSize | null>(null)
   const active = state.activeArtifactId === asset.artifactId
   const label = asset.label.trim() || 'Untitled media'
   const used = relativeTime(asset.lastUsedAt, now)
+  const size = mediaLibraryTileSize(asset, measured)
+  const ratio = mediaLibraryTileRatio(size)
+  const badge = mediaLibraryTileBadge(asset, size)
+  const aspect = badge.kind === 'audio' ? null : mediaLibraryTileAspectLabel(size)
+  const tileStyle = { '--media-library-tile-ratio': ratio } as CSSProperties
   return (
-    <article className="media-library-asset">
-      <MediaLibraryAssetPreview asset={asset} />
+    <article className="media-library-asset" style={tileStyle}>
+      <span className="media-library-asset-media">
+        <MediaLibraryAssetPreview
+          asset={asset}
+          onMeasure={(width, height) => setMeasured({ width, height })}
+        />
+        {used && <span className="media-library-asset-used">Used {used}</span>}
+        <AssetTagSummary
+          tags={asset.tags}
+          limit={3}
+          onFilter={onToggleTagFilter}
+          activeTerms={state.tagFilters}
+        />
+        {badge.text !== null && (
+          <span className="media-library-asset-badge">
+            <MediaLibraryTileBadgeIcon kind={badge.kind} />{badge.text}
+          </span>
+        )}
+        {aspect && <span className="media-library-asset-aspect">{aspect}</span>}
+        <span className="media-library-asset-actions">
+          {canSearchSimilar(asset) && (
+            <button
+              type="button"
+              className="media-library-asset-similar"
+              disabled={busy}
+              title="Find similar media"
+              onClick={() => onSimilar(asset)}
+            >
+              <Search size={12} />Similar
+            </button>
+          )}
+          <span className="media-library-asset-use-hint" aria-hidden="true">Use</span>
+        </span>
+        {active && (
+          <span className="media-library-asset-busy">
+            <BusyIndicator size={16} />Attaching…
+          </span>
+        )}
+      </span>
       <span className="media-library-asset-copy">
         <strong>{label}</strong>
-        <small>
-          {asset.owningBookName}
-          {asset.owningBookId === targetBookId ? ' · this book' : ' · copy'}
-        </small>
+        <MediaLibraryCardSource asset={asset} targetBookId={targetBookId} />
       </span>
-      {used && <span className="media-library-asset-used">Used {used}</span>}
-      <AssetTagSummary
-        tags={asset.tags}
-        limit={2}
-        onFilter={onToggleTagFilter}
-        activeTerms={state.tagFilters}
+      <button
+        type="button"
+        className="media-library-asset-use"
+        disabled={busy}
+        aria-label={`Use ${label} from ${asset.owningBookName}`}
+        title={`Use ${label}`}
+        onClick={() => onAttach(asset)}
       />
-      {active && (
-        <span className="media-library-asset-busy">
-          <BusyIndicator size={16} />Attaching…
-        </span>
-      )}
-      <span className="media-library-asset-actions">
-        {canSearchSimilar(asset) && (
-          <button
-            type="button"
-            className="media-library-asset-similar"
-            disabled={busy}
-            title="Find similar media"
-            onClick={() => onSimilar(asset)}
-          >
-            <Search size={12} />Similar
-          </button>
-        )}
-        <button
-          type="button"
-          className="media-library-asset-use"
-          disabled={busy}
-          aria-label={`Use ${label} from ${asset.owningBookName}`}
-          title={`Use ${label}`}
-          onClick={() => onAttach(asset)}
-        />
-      </span>
     </article>
   )
 }

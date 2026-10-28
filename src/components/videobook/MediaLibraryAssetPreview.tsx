@@ -12,9 +12,11 @@ export type MediaLibraryPreviewAsset = {
 export function MediaLibraryAssetPreview({
   asset,
   eager = false,
+  onMeasure,
 }: {
   asset: MediaLibraryPreviewAsset
   eager?: boolean
+  onMeasure?: (width: number, height: number) => void
 }) {
   const [imageFailed, setImageFailed] = useState(false)
   const [videoFailed, setVideoFailed] = useState(false)
@@ -61,6 +63,7 @@ export function MediaLibraryAssetPreview({
         alt=""
         loading="lazy"
         decoding="async"
+        onLoad={(event) => onMeasure?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
         onError={() => setImageFailed(true)}
       />
     )
@@ -75,6 +78,7 @@ export function MediaLibraryAssetPreview({
             playsInline
             preload="metadata"
             aria-hidden="true"
+            onLoadedMetadata={(event) => onMeasure?.(event.currentTarget.videoWidth, event.currentTarget.videoHeight)}
             onError={() => setVideoFailed(true)}
           />
         ) : (

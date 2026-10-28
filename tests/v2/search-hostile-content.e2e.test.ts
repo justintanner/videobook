@@ -238,7 +238,10 @@ describe("hostile search content across browser surfaces", () => {
     await card.first().waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     expect(await card.count()).toBe(1);
     expect(await card.locator("strong").textContent()).toBe(LABEL);
-    expect(await card.locator("small").textContent()).toBe(`${BOOK_SLUG} · this book`);
+    expect(await card.locator(".media-library-asset-copy small").count()).toBe(0);
+    expect(await card.locator(".media-library-asset-use").getAttribute("aria-label")).toBe(
+      `Use ${LABEL} from ${BOOK_SLUG}`,
+    );
     expect(await executedMarkers(page)).toEqual([]);
     expect(await activeInjectedElements(page)).toBe(0);
     expect(pageErrors).toEqual([]);
@@ -255,9 +258,7 @@ describe("hostile search content across browser surfaces", () => {
     const asset = dialog.locator(".media-library-asset").first();
     await asset.waitFor({ state: "visible", timeout: MCP_ROUNDTRIP_MS });
     expect(await asset.locator("strong").textContent()).toBe(LABEL);
-    expect(await asset.locator("small").textContent()).toBe(
-      `${BOOK_SLUG} · this book`,
-    );
+    expect(await asset.locator(".media-library-asset-copy small").count()).toBe(0);
     expect(
       await asset
         .locator("button[aria-label]")
