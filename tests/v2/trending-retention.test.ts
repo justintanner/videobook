@@ -1,9 +1,15 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { indexKey, type ArchiveIndex } from "../../server/src/archive-b2.js";
+import { getArchiveStore } from "../../server/src/archive-store.js";
+import { scopedBookEngine } from "../../server/src/book-context.js";
 import { BookManager, type ManagedBook } from "../../server/src/book-manager.js";
-import { enqueueOptions } from "../../server/src/queue.js";
+import { runFfmpeg } from "../../server/src/ffmpeg.js";
+import { enqueueOptions, setEngineRoot } from "../../server/src/queue.js";
+import { registerArchiveClipJob } from "../../server/src/jobs/archive-clip.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
 import { retainTrending, type ArchiveResearchClip } from "../../server/src/jobs/trending-retention.js";
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
@@ -279,4 +285,47 @@ describe("trending day-book retention", () => {
       recentDeletions: [{ date: "2026-10-01", dayBookId: day.bookId, dayBookName: "tiktok-th-2026-10-01", deletedAt: expect.any(String) }],
     });
   }, testBudget(60_000));
+
+  it("archives a completed clip through the real archive_clip job into the local archive, then deletes the day book", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "trending-archive-"));
+    const previous = { key: process.env.ELEVENLABS_API_KEY, dir: process.env.VIDEOBOOK_ARCHIVE_DIR };
+    process.env.ELEVENLABS_API_KEY = "offline-elevenlabs-key";
+    process.env.VIDEOBOOK_ARCHIVE_DIR = join(scratch, "archive");
+    try {
+      const control = await setup({ archiveTopClips: true });
+      const { run, day } = await cutDay(control, "2026-09-26", ["clip"]);
+      const [download] = run.downloads;
+      const media = join(scratch, "clip.mp4");
+      await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=0.1", "-c:v", "libx264", media]);
+      const saved = await day.engine.files.writeFromPath(download.artifactId!, "original.mp4", media);
+      if (!saved.ok) throw new Error(saved.error.message);
+      const job = day.engine.jobs.queue.dequeue(process.pid, testBudget(60_000))!;
+      await day.engine.jobs.queue.complete(job.id);
+      await setEngineRoot(day.rootDir, day.engine);
+      registerArchiveClipJob(scopedBookEngine);
+
+      expect(await retainTrending(control.engine, books, "2026-10-28")).toMatchObject({
+        errors: [], deleted: [{ date: "2026-09-26", bookId: day.bookId, name: "tiktok-th-2026-09-26" }],
+      });
+      expect(books.get(day.bookId).ok).toBe(false);
+      expect(await exists(day.rootDir)).toBe(false);
+      expect(readHistory(control.engine)[0].downloads[0]).toMatchObject({ status: "completed", archivedAt: expect.any(String) });
+      const store = getArchiveStore();
+      const bytes = await readFile(media);
+      const index = await store.getJson<ArchiveIndex>(indexKey(store, createHash("sha256").update(bytes).digest("hex")));
+      expect(store.kind).toBe("local");
+      expect(index).toMatchObject({
+        title: "TikTok TH 2026-09-26 #1 author", people: [], ingests: [expect.any(String)], transcript: { chunk_count: 0 },
+        topics: [{ label: "tiktok-th-trending", source: "manual" }],
+        sources: [{ kind: "asset", book_id: day.bookId, asset_id: download.artifactId }],
+      });
+      expect(Buffer.from((await store.getBytes(index!.media.key))!)).toEqual(bytes);
+    } finally {
+      if (previous.key === undefined) delete process.env.ELEVENLABS_API_KEY;
+      else process.env.ELEVENLABS_API_KEY = previous.key;
+      if (previous.dir === undefined) delete process.env.VIDEOBOOK_ARCHIVE_DIR;
+      else process.env.VIDEOBOOK_ARCHIVE_DIR = previous.dir;
+      await rm(scratch, { recursive: true, force: true });
+    }
+  }, testBudget(90_000));
 });
