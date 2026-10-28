@@ -287,6 +287,22 @@ from external origins. Images and media may use local or embedded data sources;
 inline styles remain supported. This protects the trusted local origin when
 an imported file is opened directly in a browser.
 
+### Local push checks
+
+Enable the repository's Git hooks once per clone after installing dependencies:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The pre-push hook runs `npm run check:dead-code` when the pushed changes include
+TypeScript files (`.ts`, `.tsx`, `.mts`, or `.cts`). A failed check blocks the
+push. Documentation-only pushes and ref deletions skip it. New refs, or refs
+whose remote commit is unavailable locally, are checked against an empty tree.
+The check uses the current working tree, so push from the checkout containing
+the changes you intend to deliver. It runs locally without the full test suite;
+CI still runs its existing Knip check.
+
 ### Coding agents
 
 Shared project rules live in [AGENTS.md](AGENTS.md). Claude Code supports it
