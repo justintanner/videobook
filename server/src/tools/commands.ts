@@ -12,6 +12,21 @@ import {
 const CANONICAL_COMMANDS: Command[] = [
   ...VIDEO_EDITING_COMMANDS,
   {
+    command: "/trending",
+    description: "Sample a country's TikTok research now, or cut a day book for a local date",
+    example: "/trending TH",
+    category: "action",
+    icon: "TrendingUp",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "country", type: "string", required: true, description: "ISO alpha-2 country code" },
+      { name: "date", type: "string", required: false, description: "Local date to cut (YYYY-MM-DD); omit to sample" },
+    ],
+    mcpTool: { tool: "trending_research", injectParams: { op: "run" } },
+  },
+  {
     command: "/post",
     description: "Post a clip in one step: save it to iPhone through iCloud, download it for a manual upload, or publish it to X now or scheduled",
     example: "/post @a1 Check this out!",

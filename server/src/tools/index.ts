@@ -1,3 +1,4 @@
+import { trendingResearchDef } from "./trending-research.js";
 import { setHarCaptureDef } from "./set-har-capture.js";
 import { coldOpenDefs } from "./cold-open.js";
 import type { McpServer, StandardSchemaWithJSON } from "@modelcontextprotocol/server";
@@ -285,6 +286,7 @@ export function getAllToolDefs(
   books: BookManager = bookManager,
 ): ToolDef[] {
   const rawDefs: ToolDef[] = [
+    trendingResearchDef(books),
     apiStatusDef(),
     listChatModelsDef(),
     providerKeyStatusDef(),

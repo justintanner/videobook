@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (219)
+## MCP endpoints (220)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -216,6 +216,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
 - `transcribe` — Transcribe a video or audio asset: word-timed ElevenLabs speech-to-text when available, otherwise OpenAI speech-to-text. Returns status cached when the current audio already has a transcript with these settings; a repeated or concurrent request joins the running job.
 - `translate_subtitles` — Translate an asset's transcript subtitles into another language for renders with that subtitle_language. Returns status cached when the current transcript already has that translation; a repeated or concurrent request joins the running job.
+- `trending_research` — Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. TH defaults to Asia/Bangkok; other countries require timezone on creation.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.
 - `update_entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity
@@ -230,7 +231,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (293; 142 dedicated command routes)
+## Slash actions (294; 143 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -509,6 +510,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/transcribe` — Open a chat review to transcribe a video or audio clip; MCP: `transcribe`
 - `/transcript` — Read transcript of a video or audio asset; MCP: `read_transcript`
 - `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
+- `/trending` — Sample a country's TikTok research now, or cut a day book for a local date; MCP: `trending_research`
 - `/trim-audio` — Trim audio clip; MCP: `trim_audio`
 - `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
 - `/update-entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity; MCP: `update_entity`

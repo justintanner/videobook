@@ -184,6 +184,24 @@ has an uncertain outcome, check X and attach the existing post link. Create a
 new Post only after verifying that nothing was published. Legacy X tiles migrate in place, with historical media versions marked
 unknown when they cannot be established.
 
+## Research books
+
+`trending_research` manages one TikTok research schedule per country. The control book (`tiktok-th-research` for Thailand) stores the schedule, sighting ledger, source health and run history. At the daily cutoff, the scheduler creates a day book such as `tiktok-th-2026-10-28`: its notebook holds a summary at `@a1`, followed by ranked videos in column 1 and caption, metrics, author and source notes in column 2. Failed downloads retain their rank and failure reason.
+
+Create the Thailand schedule through the CLI relay:
+
+```bash
+videobook run trending_research op=schedule country=TH
+videobook run trending_research op=run country=TH
+videobook run trending_research op=status country=TH
+```
+
+Defaults are `Asia/Bangkok`, cutoff `00:30` local time, four samples per day, top 10, a 24-hour `trending` window, lifetime-view ranking, promoted content excluded, and 30-day retention. A trending window means videos observed in the country's feeds during that period; the videos themselves can be older. Use `window=posted` to restrict their creation dates. Other countries require an explicit timezone when first scheduled. Updates preserve unspecified settings and the schedule identity.
+
+The default source IDs are `endless` (country trending feed) and `tiktok-creative-center` (weekly organic cross-check and fallback). Optional Omkar feeds require a configured adapter and key. Live source adapters are a separate integration; until they are registered, sampling reports them as unavailable in status. One source failure does not stop the others. Retention and downstream processing depend on their corresponding job integrations. Downstream preferences default to transcription allowed when a key exists, with translation and vision analysis disabled.
+
+`op=list` lists schedules; `op=status` adds ledger counts, source health, recent failures and upcoming run times. `op=unschedule` disables automatic runs while preserving the books and history; re-enable with `op=schedule country=TH enabled=true`. `op=run` samples immediately. Add `date=2026-10-28` to enqueue a cut for that local date and its configured cutoff using the ledger currently available; completed cuts are idempotent. The chat command `/trending TH` samples, and `/trending TH 2026-10-28` cuts that date. A disabled schedule must be enabled before a manual run.
+
 ## Storage
 
 Each book owns an isolated `videobook-engine` v5.7.1 schema-v28 root under

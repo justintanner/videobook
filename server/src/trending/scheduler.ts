@@ -30,6 +30,22 @@ function dueEvents(schedule: TrendingSchedule, from: number, until: number) {
   return events;
 }
 
+export function trendingCutTime(schedule: TrendingSchedule, date: string): string {
+  const day = Date.parse(date);
+  const event = dueEvents(schedule, day - 86_400_000, day + 2 * 86_400_000)
+    .find((entry) => entry.type === "cut" && entry.date === date);
+  if (!event) throw new Error(`No cutoff exists for local date ${date}`);
+  return event.at;
+}
+
+export function nextTrendingEvents(schedule: TrendingSchedule, now: Date) {
+  const events = dueEvents(schedule, now.getTime() + 1, now.getTime() + 3 * 86_400_000);
+  return {
+    sample: events.find((event) => event.type === "sample")?.at ?? null,
+    cut: events.find((event) => event.type === "cut")?.at ?? null,
+  };
+}
+
 export function createTrendingScheduler(options: {
   engines?: () => Promise<Engine[]>;
   now?: () => Date;
