@@ -291,12 +291,12 @@ function notebookReachableCellIds(
   return reached
 }
 
-export interface NotebookCellLineage {
+interface NotebookCellLineage {
   upstream: ReadonlySet<string>
   downstream: ReadonlySet<string>
 }
 
-export function notebookCellLineage(
+function notebookCellLineage(
   edges: readonly NotebookLineageEdge[],
   cellId: string,
 ): NotebookCellLineage {
