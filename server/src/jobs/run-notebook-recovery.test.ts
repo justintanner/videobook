@@ -305,7 +305,7 @@ describe("awaiting notebook output startup recovery", () => {
     registerRunNotebookJob(engine);
     await setEngineRoot(rootDir, engine);
     const payload = { ...awaitPayload(fixture), runPlanId, outputCellId: output.id, cellIds: [fixture.cellId] };
-    await appQueue.enqueueAndWait("failed-provider-await", payload, 5_000);
+    await appQueue.enqueueAndWait("failed-provider-await", payload, testBudget(5_000));
     await expect.poll(() => engine.jobs.queue.list({ type: "run_notebook" })[0]?.state)
       .toBe("failed");
     const failed = engine.notebooks.read(fixture.notebookId);
@@ -319,7 +319,7 @@ describe("awaiting notebook output startup recovery", () => {
     expect((await engine.jobs.failures.clear(fixture.providerArtifactId)).ok).toBe(true);
     const bytes = await sharp({ create: { width: 32, height: 32, channels: 3, background: "red" } }).png().toBuffer();
     expect((await engine.files.write(fixture.providerArtifactId, "original.png", bytes)).ok).toBe(true);
-    await appQueue.enqueueAndWait("retried-provider-await", payload, 5_000);
+    await appQueue.enqueueAndWait("retried-provider-await", payload, testBudget(5_000));
     await expect.poll(() => engine.jobs.queue.list({ type: "run_notebook" })
       .some(job => job.state === "done")).toBe(true);
     const completed = engine.notebooks.read(fixture.notebookId);
@@ -1162,7 +1162,7 @@ describe("awaiting notebook output startup recovery", () => {
         ...runPayload(fixture),
         generationPlan: mismatchedPlan,
       } as unknown as Record<string, unknown>,
-      5_000,
+      testBudget(5_000),
     )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
@@ -1231,7 +1231,7 @@ describe("awaiting notebook output startup recovery", () => {
         runPlanId,
         generationPlan: runPlan,
       } as unknown as Record<string, unknown>,
-      5_000,
+      testBudget(5_000),
     )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
@@ -1260,7 +1260,7 @@ describe("awaiting notebook output startup recovery", () => {
     await expect(appQueue.enqueueAndWait(
       "stale-paid-ancestor-run",
       runPayload(fixture) as unknown as Record<string, unknown>,
-      5_000,
+      testBudget(5_000),
     )).rejects.toThrow(/saved plan no longer matches this cell's contents.*rerun the cell to replan/s);
 
     const notebook = engine.notebooks.read(fixture.notebookId);
@@ -1360,7 +1360,7 @@ describe("awaiting notebook output startup recovery", () => {
         force: true,
         runId,
       } satisfies RunNotebookPayload) as unknown as Record<string, unknown>,
-      5_000,
+      testBudget(5_000),
     )).rejects.toThrow("@a2 uses no model, which is not a generation model; pick one from list_generation_models");
 
     const notebook = engine.notebooks.read(created.value.id);

@@ -6,6 +6,7 @@ import type { Engine } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { enqueueOptions, queue, setEngineRoot } from "../queue.js";
 import { registerPostToXJob } from "./post-to-x.js";
+import { testBudget } from "../test-budget.js";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
@@ -80,7 +81,7 @@ describe("post_to_x job", () => {
       assetId,
       bookId,
       text: "hello",
-    }, 10_000)).rejects.toThrow(/No X access token is configured/);
+    }, testBudget(10_000))).rejects.toThrow(/No X access token is configured/);
 
     const status = await queue.getStatus("post-x-no-token");
     expect(status?.state).toBe("failed");

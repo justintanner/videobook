@@ -136,14 +136,14 @@ describe("local search provider registration", () => {
     process.env.VIDEOBOOK_MODEL_DOWNLOAD = "enabled";
     const { engine, artifactId, image, bookId } = await queuedImage("failed-queue");
     const payload = { type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference" };
-    await expect(queue.enqueueAndWait("failed-model", payload, 10_000)).rejects.toThrow();
+    await expect(queue.enqueueAndWait("failed-model", payload, testBudget(10_000))).rejects.toThrow();
     expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
       expect.objectContaining({ type, artifactId: null, error: expect.objectContaining({ code: "FEATURE_UNAVAILABLE" }) }),
     ]);
     expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready", ownerId: null } });
     expect(await engine.files.read(artifactId, "original.png")).toMatchObject({ ok: true, value: image });
     process.env.VIDEOBOOK_MODEL_DOWNLOAD = "disabled";
-    await expect(queue.enqueueAndWait("retry-model", { ...payload, type: "semantic_index" }, 10_000)).resolves.toMatchObject({ semanticVisual: "deferred" });
+    await expect(queue.enqueueAndWait("retry-model", { ...payload, type: "semantic_index" }, testBudget(10_000))).resolves.toMatchObject({ semanticVisual: "deferred" });
     expect(requests.length).toBeGreaterThan(0);
   });
 
@@ -157,7 +157,7 @@ describe("local search provider registration", () => {
     await expect(registerLocalClipSearchProvider(engine).prepare()).rejects.toMatchObject({ error: { code: "MODEL_UNAVAILABLE" } });
     await expect(queue.enqueueAndWait("corrupted-model", {
       type, assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
-    }, 10_000)).rejects.toThrow("integrity");
+    }, testBudget(10_000))).rejects.toThrow("integrity");
     expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
       expect.objectContaining({ type, artifactId: null, error: expect.objectContaining({ code: "MODEL_UNAVAILABLE" }) }),
     ]);
@@ -171,10 +171,10 @@ describe("local search provider registration", () => {
     installLocalSearchProviderFixtures(engine);
     await expect(queue.enqueueAndWait("index-for-similar", {
       type: "semantic_index", assetId: artifactId, bookId,
-    }, 30_000)).resolves.toMatchObject({ semanticVisual: "ready" });
+    }, testBudget(30_000))).resolves.toMatchObject({ semanticVisual: "ready" });
     const descriptor = await queue.enqueueAndWait("prepare-similar", {
       type: "prepare_search_reference", assetId: artifactId, bookId, mediaKind: "image", name: "Reference",
-    }, 30_000) as { reference_id: string };
+    }, testBudget(30_000)) as { reference_id: string };
     try {
       const prepared = searchReferenceStore.get(descriptor.reference_id);
       const result = await engine.temporalSearch.queryPrepared({ modalities: ["visual"] }, prepared.reference);
@@ -214,13 +214,13 @@ describe("local search provider registration", () => {
     installLocalSearchProviderFixtures(engine);
     expect((await engine.files.write(artifactId, "original.png", Buffer.from("invalid image"))).ok).toBe(true);
     const payload = { type: "semantic_index", assetId: artifactId, bookId };
-    await expect(queue.enqueueAndWait("malformed-model", payload, 30_000)).rejects.toThrow();
+    await expect(queue.enqueueAndWait("malformed-model", payload, testBudget(30_000))).rejects.toThrow();
     expect(engine.jobs.queue.list({ states: ["failed"] })).toEqual([
       expect.objectContaining({ error: expect.objectContaining({ code: "INVALID_INPUT" }) }),
     ]);
     expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready" } });
     expect((await engine.files.write(artifactId, "original.png", image)).ok).toBe(true);
-    await expect(queue.enqueueAndWait("corrected-model", payload, 30_000)).resolves.toMatchObject({ semanticVisual: "ready" });
+    await expect(queue.enqueueAndWait("corrected-model", payload, testBudget(30_000))).resolves.toMatchObject({ semanticVisual: "ready" });
     const manifest = await engine.files.manifest(artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     const hash = manifest.value.files.find((file) => file.name === "original.png")!.objectHash;
@@ -253,7 +253,7 @@ describe("local search provider registration", () => {
     })).ok).toBe(true);
     await expect(queue.enqueueAndWait("audio-model", {
       type: "semantic_index", assetId: artifactId, bookId: engine.book.get().bookId,
-    }, 30_000)).resolves.toMatchObject({ semanticVisual: "not-applicable", semanticAudio: "ready" });
+    }, testBudget(30_000))).resolves.toMatchObject({ semanticVisual: "not-applicable", semanticAudio: "ready" });
     expect(engine.jobs.artifactWork.read(artifactId)).toMatchObject({ ok: true, value: { status: "ready" } });
     expect(requests).toEqual([]);
   });

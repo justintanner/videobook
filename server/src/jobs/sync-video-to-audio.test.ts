@@ -16,6 +16,7 @@ import {
   resolveSyncVideoToAudioAnchors,
   validateAudioSyncOutput,
 } from "./sync-video-to-audio.js";
+import { testBudget } from "../test-budget.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -345,7 +346,7 @@ describe("audio sync transcript preparation and rollback", () => {
           assetDir: created.value.path,
           bookId,
         },
-        30_000,
+        testBudget(30_000),
       )).rejects.toThrow("was not found");
 
       const work = await fs.jobs.artifactWork.read(created.value.artifactId);

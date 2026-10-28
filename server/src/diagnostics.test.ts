@@ -12,6 +12,7 @@ import { queue, registerJobHandler, setEngineRoot } from "./queue.js";
 import { failPendingTaskAndLog } from "./jobs/task-failure.js";
 import { withLogging } from "./tools/log-wrapper.js";
 import { listPromptHistoryDef, recordPromptDef } from "./tools/prompt-history.js";
+import { testBudget } from "./test-budget.js";
 
 const PRIVATE = "Confidential transcript and prompt /private/media.mov https://media.example/video?token=plaincredential";
 const ID = "01900000-0000-7000-8000-000000000001";
@@ -94,7 +95,7 @@ describe("private runtime diagnostics", () => {
     registerJobHandler(type, async () => { throw failure; });
     await expect(queue.enqueueAndWait("private-diagnostic-attempt", {
       type, bookId, assetId: artifact.artifactId, prompt: PRIVATE, runId: PRIVATE,
-    }, 5_000)).rejects.toThrow(PRIVATE);
+    }, testBudget(5_000))).rejects.toThrow(PRIVATE);
     const status = await queue.getStatus("private-diagnostic-attempt");
     expect(status?.error?.message).toBe(PRIVATE);
     const records = current.logs.read("job-error");

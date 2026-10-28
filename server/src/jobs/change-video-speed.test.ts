@@ -241,7 +241,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId,
       },
-      120_000,
+      testBudget(120_000),
     );
 
     expect(result).toEqual({ success: true });
@@ -316,7 +316,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId: fs.book.get().bookId,
       },
-      120_000,
+      testBudget(120_000),
     );
 
     expect(result).toEqual({ success: true });
@@ -348,7 +348,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId: fs.book.get().bookId,
       },
-      120_000,
+      testBudget(120_000),
     );
 
     expect(result).toEqual({ success: true });
@@ -399,7 +399,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId: fs.book.get().bookId,
       },
-      120_000,
+      testBudget(120_000),
     );
 
     expect(result).toEqual({ success: true });
@@ -439,7 +439,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId: fs.book.get().bookId,
       },
-      120_000,
+      testBudget(120_000),
     );
 
     expect(result).toEqual({ success: true });
@@ -474,7 +474,7 @@ describe("change-video-speed job handler", () => {
         assetDir: asset.path,
         bookId: fs.book.get().bookId,
       },
-      120_000,
+      testBudget(120_000),
     )).rejects.toThrow(/audio/i);
 
     const manifest = valueOf(await fs.files.manifest(asset.artifactId));

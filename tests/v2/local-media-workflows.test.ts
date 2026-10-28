@@ -110,10 +110,10 @@ async function runWorkflow(operation: string) {
     registerPrepareSearchReferenceJob(scopedBookEngine)
     if (operation === 'cached') {
       installLocalSearchProviderFixtures(engine)
-      expect(await queue.enqueueAndWait('offline-index', { type: 'semantic_index', assetId: id, bookId: summary.bookId }, 30_000)).toMatchObject({ semanticVisual: 'ready' })
+      expect(await queue.enqueueAndWait('offline-index', { type: 'semantic_index', assetId: id, bookId: summary.bookId }, testBudget(30_000))).toMatchObject({ semanticVisual: 'ready' })
       const descriptor = await queue.enqueueAndWait('offline-reference', {
         type: 'prepare_search_reference', assetId: id, bookId: summary.bookId, mediaKind: 'image', name: 'Reference',
-      }, 30_000) as { reference_id: string }
+      }, testBudget(30_000)) as { reference_id: string }
       referenceId = descriptor.reference_id
       const prepared = searchReferenceStore.get(referenceId).reference
       expect((await engine.temporalSearch.prepare()).ok).toBe(true)
@@ -141,7 +141,7 @@ async function runWorkflow(operation: string) {
       const type = operation === 'migration-index' ? 'semantic_index' : operation
       await expect(queue.enqueueAndWait('missing-media', {
         type, migration: operation === 'migration-index', assetId: id, bookId: summary.bookId, mediaKind: 'image', name: 'Reference',
-      }, 10_000)).rejects.toThrow('not available locally')
+      }, testBudget(10_000))).rejects.toThrow('not available locally')
       expect(engine.jobs.queue.list({ states: ['failed'] })).toEqual([
         expect.objectContaining({ type, artifactId: null, error: expect.objectContaining({ code: 'MEDIA_MISSING' }) }),
       ])

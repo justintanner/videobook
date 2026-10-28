@@ -134,7 +134,7 @@ describe("complete_kie_task media generations", () => {
       taskId, taskType: "media_kie", assetId, assetDir, bookId,
       meta: { prompt: "a cat", sourceImageIds: [], media: "image", model: "kie:gpt-image-2-5-sunburst-text-to-image" },
       resultUrls: [imageUrl],
-    }, 10_000);
+    }, testBudget(10_000));
     await expect.poll(async () => {
       const result = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
       return result.ok ? result.value : null;
@@ -157,7 +157,7 @@ describe("complete_kie_task media generations", () => {
       meta: { prompt: "a dog", sourceImageIds: [], media: "image", model: "fal:fal-ai/qwen-image" },
       resultUrls: [],
       resultObject,
-    }, 10_000);
+    }, testBudget(10_000));
     expect(result.success).toBe(true);
     const original = await readOriginal(cfs, assetId, "original.png");
     expect(original.ok).toBe(true);
@@ -175,7 +175,7 @@ describe("complete_kie_task media generations", () => {
       meta: { prompt: "a cat", sourceImageIds: [], media: "image", model: "fal:fal-ai/qwen-image" },
       resultUrls: [],
       resultObject: { images: [] },
-    }, 10_000)).rejects.toThrow(/Provider returned no image/i);
+    }, testBudget(10_000))).rejects.toThrow(/Provider returned no image/i);
     const original = await readOriginal(cfs, assetId, "original.png");
     expect(original.ok).toBe(false);
   });
@@ -193,7 +193,7 @@ describe("complete_kie_task media generations", () => {
       taskId, taskType: "media_kie", assetId, assetDir, bookId,
       meta: { prompt: "waves", media: "video", model: "kie:bytedance/seedance-2-5" },
       resultUrls: [imageUrl.replace("image.png", "clip.mp4")],
-    }, 10_000);
+    }, testBudget(10_000));
     expect(result.success).toBe(true);
     const original = await readOriginal(cfs, assetId, "original.mp4");
     expect(original.ok).toBe(true);
@@ -222,7 +222,7 @@ describe("complete_kie_task media generations", () => {
         sourceAudioIds: [],
       },
       resultUrls: [imageUrl.replace("image.png", "clip.mp4")],
-    }, 10_000);
+    }, testBudget(10_000));
     expect(result.success).toBe(true);
     expect((await readOriginal(cfs, assetId, "original.mp4")).ok).toBe(true);
     await expect.poll(() => processed.length, { timeout: testBudget(10_000) }).toBe(1);
@@ -252,7 +252,7 @@ describe("complete_kie_task media generations", () => {
       meta: { prompt: "waves", media: "video", model: "kie:bytedance/seedance-2-5" },
       resultUrls: [imageUrl.replace("image.png", "missing/clip.mp4")],
     };
-    await expect(appQueue.enqueueAndWait(`complete-first-${assetId}`, payload, 10_000))
+    await expect(appQueue.enqueueAndWait(`complete-first-${assetId}`, payload, testBudget(10_000)))
       .rejects.toThrow(/Failed to download generated video: 404/);
     const failed = cfs.jobs.failures.read(assetId);
     expect(failed.ok ? failed.value?.message : "fail").toMatch(/404/);
@@ -261,7 +261,7 @@ describe("complete_kie_task media generations", () => {
     const retried = await appQueue.enqueueAndWait<Record<string, unknown>>(`retry-complete_kie_task-${assetId}`, {
       ...payload,
       resultUrls: [imageUrl.replace("image.png", "clip.mp4")],
-    }, 10_000);
+    }, testBudget(10_000));
     expect(retried).toEqual({ success: true });
     expect((await readOriginal(cfs, assetId, "original.mp4")).ok).toBe(true);
     const cleared = cfs.jobs.failures.read(assetId);
@@ -291,7 +291,7 @@ describe("complete_kie_task media generations", () => {
           meta: {},
           resultUrls: [],
         },
-        10_000,
+        testBudget(10_000),
       ),
     ).rejects.toThrow(/Unhandled provider task type: unknown_provider_task/);
 
