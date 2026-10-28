@@ -2,7 +2,13 @@ import type { Engine } from "videobook-engine";
 import { logger } from "../logger.js";
 import { listBookEngines, queue } from "../queue.js";
 import { localDate, readLedger, readRetention, readRuns, readSchedule, retentionStart } from "./ledger.js";
-import type { TrendingSchedule } from "./types.js";
+import type { TrendingRunRecord, TrendingSchedule } from "./types.js";
+
+function unsettled(download: TrendingRunRecord["downloads"][number], today: boolean): boolean {
+  return download.status === "pending"
+    || (download.status === "completed" && download.error !== undefined)
+    || (today && download.status === "failed" && (download.attempts ?? 1) < 3);
+}
 
 function dueEvents(schedule: TrendingSchedule, from: number, until: number) {
   const formatter = new Intl.DateTimeFormat("en-GB", {
@@ -90,8 +96,7 @@ export function createTrendingScheduler(options: {
         for (const run of readRuns(engine)) {
           const today = run.date === localDate(now, schedule.timezone);
           if (keepFrom && run.date < keepFrom) continue;
-          if (!run.completed || !run.downloads.some((download) => download.status === "pending"
-            || (today && download.status === "failed" && (download.attempts ?? 1) < 3))) continue;
+          if (!run.completed || !run.downloads.some((download) => unsettled(download, today))) continue;
           await enqueue(`trending-retry:${schedule.scheduleId}:${run.date}:${Math.floor(now.getTime() / 60_000)}`, {
             type: "trending_retry", bookId: run.dayBookId, controlBookId: bookId, date: run.date,
           });

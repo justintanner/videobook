@@ -7,7 +7,7 @@ import { BookManager } from "../../server/src/book-manager.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
 import { registerTrendingSampleJob, sampleTrending } from "../../server/src/jobs/trending-sample.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
-import { readLedger, readRuns } from "../../server/src/trending/ledger.js";
+import { readLedger, readRuns, writeRun } from "../../server/src/trending/ledger.js";
 import { createTrendingScheduler, stopTrendingSchedulerAndQueue, trendingScheduler } from "../../server/src/trending/scheduler.js";
 import { queue, setEngineRoot } from "../../server/src/queue.js";
 import { trendingSources } from "../../server/src/trending/sources.js";
@@ -112,4 +112,26 @@ describe("trending scheduler", () => {
     expect(engine.jobs.queue.list({ type: "trending_cut" })).toHaveLength(1);
     await restarted.stop();
   }, testBudget(120_000));
+
+  it("ticks a retry only for runs whose downloads are still unsettled", async () => {
+    root = await mkdtemp(join(tmpdir(), "trending-scheduler-"));
+    books = new BookManager({ libraryDir: root });
+    const control = await ensureControlBook(books, { ...schedule, createdAt: "2026-10-28T23:00:00.000Z", sources: [] });
+    const run = { cutAt: "2026-10-26T00:00:00.000Z", dayBookId: "day", videos: [], completed: true, spend: 0, errors: [] };
+    await writeRun(control.engine, { ...run, date: "2026-10-26", downloads: [{ videoId: "stale", status: "completed", attempts: 2, error: "Queue stopped" }] });
+    await writeRun(control.engine, { ...run, date: "2026-10-27", downloads: [{ videoId: "failed", status: "failed", attempts: 1, error: "Gone" }, { videoId: "done", status: "completed" }] });
+    await writeRun(control.engine, { ...run, date: "2026-10-29", downloads: [{ videoId: "failed-today", status: "failed", attempts: 1, error: "Gone" }] });
+    const retries: unknown[] = [];
+    const scheduler = createTrendingScheduler({
+      engines: async () => [control.engine], now: () => new Date("2026-10-29T05:00:00.000Z"),
+      enqueue: async (id: string, payload: Record<string, unknown>) => {
+        if (payload.type === "trending_retry") retries.push(payload.date);
+        return control.engine.jobs.queue.enqueue({ type: String(payload.type), payload, dedupeKey: id }).job;
+      },
+      enqueueAndWait: async <T>(): Promise<T> => undefined as T,
+    });
+    await scheduler.tick();
+    expect(retries).toEqual(["2026-10-26", "2026-10-29"]);
+    await scheduler.stop();
+  }, testBudget(60_000));
 });

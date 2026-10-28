@@ -12,7 +12,8 @@ import { retryTrending } from "../../server/src/jobs/trending-retry.js";
 import { sampleTrending } from "../../server/src/jobs/trending-sample.js";
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
-import { localDate, readLedger, readRuns, readSchedule, readSourceHealth, updateLedger } from "../../server/src/trending/ledger.js";
+import { localDate, readLedger, readRuns, readSchedule, readSourceHealth, updateLedger, writeRun } from "../../server/src/trending/ledger.js";
+import { createTrendingScheduler } from "../../server/src/trending/scheduler.js";
 import type { TrendingSource } from "../../server/src/trending/sources.js";
 import type { TrendingRunRecord } from "../../server/src/trending/types.js";
 import { testBudget } from "../../server/src/test-budget.js";
@@ -280,5 +281,65 @@ describe("trending research jobs", () => {
     expect(readRuns(control.engine)[0].downloads).toEqual(run.downloads.map(() => expect.objectContaining({
       status: "failed", error: "failure 2", attempts: 2,
     })));
+  }, testBudget(60_000));
+
+  it("reconciles a run an earlier build completed with stale failures on the next scheduler tick, without downloading again", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(cutAt);
+    const control = await setup();
+    await seed(control.engine);
+    const run = (await cutTrending(control.engine, books, localDate(new Date(), schedule.timezone), cutAt, enqueue))!;
+    const day = dayEngine(run);
+    for (const download of run.downloads) await day.jobs.queue.abort(download.queueJobId!, "Queue stopped");
+    vi.setSystemTime(Date.parse(cutAt) + 600_000);
+    await retryTrending(control.engine, day, run.date, new Date(), enqueue);
+    await completeQueued(day);
+    const retried = readRuns(control.engine)[0];
+    await writeRun(control.engine, { ...retried, downloads: retried.downloads.map((download) => ({ ...download, status: "completed" })) });
+    const marked = await mutateNotebook(day, run.notebookId!, "pre-fix-retry", (notebook) => ({
+      ...notebook,
+      cells: notebook.cells.map((cell) => String(cell.inputs?.workflowRole).startsWith("trending-video-")
+        ? { ...cell, inputs: { ...cell.inputs, error: "Queue stopped" } } : cell),
+    }));
+    if (!marked.ok) throw new Error(marked.error.message);
+    const tool = trendingResearchDef(books, { now: () => new Date(), enqueue });
+    const failedRuns = async () => JSON.parse((await tool.handler({ op: "status", country: "TH" })).content[0].text).schedules[0].recentFailures.runs;
+    const identity = () => {
+      const notebook = day.notebooks.read(run.notebookId!);
+      if (!notebook.ok) throw new Error(notebook.error.message);
+      return notebook.value.cells.map(({ id, outputArtifactId, slot }) => ({ id, outputArtifactId, slot }));
+    };
+    const stale = { state: "pending", error: "Queue stopped" };
+    expect(readRuns(control.engine)[0].downloads).toEqual(run.downloads.map(() => expect.objectContaining({
+      status: "completed", error: "Queue stopped", attempts: 2,
+    })));
+    expect(downloadView(day, run)).toEqual({ cells: [stale, stale], summary: ["pending", "pending"] });
+    expect(await failedRuns()).toHaveLength(1);
+    const before = identity();
+
+    vi.setSystemTime("2026-10-29T05:00:00.000Z");
+    const scheduler = createTrendingScheduler({
+      engines: async () => [control.engine], now: () => new Date(), enqueue,
+      enqueueAndWait: async <T>(): Promise<T> => undefined as T,
+    });
+    await scheduler.tick();
+    const [tick] = day.jobs.queue.list({ type: "trending_retry" });
+    expect(tick?.payload).toEqual({ type: "trending_retry", bookId: run.dayBookId, controlBookId: control.bookId, date: run.date });
+    await retryTrending(control.engine, day, String(tick.payload.date), new Date(), enqueue);
+
+    expect(readRuns(control.engine)[0].downloads).toEqual(retried.downloads.map(({ error: _error, ...download }) => ({ ...download, status: "completed" })));
+    const completed = { state: "completed", error: undefined };
+    expect(downloadView(day, run)).toEqual({ cells: [completed, completed], summary: ["completed", "completed"] });
+    expect(await failedRuns()).toEqual([]);
+    expect(day.jobs.queue.list({ type: "download_video" })).toHaveLength(4);
+    expect(identity()).toEqual(before);
+
+    const revisions = day.history.revisions(1000).length;
+    vi.setSystemTime("2026-10-29T05:01:00.000Z");
+    await scheduler.tick();
+    expect(day.jobs.queue.list({ type: "trending_retry" })).toHaveLength(1);
+    await retryTrending(control.engine, day, run.date, new Date(), enqueue);
+    expect(day.history.revisions(1000).length).toBe(revisions);
+    await scheduler.stop();
   }, testBudget(60_000));
 });
