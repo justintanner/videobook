@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { BookManager, ManagedBook } from "../book-manager.js";
 import { queue } from "../queue.js";
 import { ensureControlBook } from "../trending/control-book.js";
-import { controlBookSlug, localDate, readLedger, readRuns, readSchedule, readSourceHealth, writeSchedule } from "../trending/ledger.js";
+import {
+  controlBookSlug, localDate, readHistory, readLedger, readRetention, readRuns, readSchedule, readSourceHealth, writeSchedule,
+} from "../trending/ledger.js";
 import { nextTrendingEvents, trendingCutTime } from "../trending/scheduler.js";
 import type { TrendingSchedule } from "../trending/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -27,6 +29,7 @@ const schema = {
   downstream: z.object({ transcribe: z.boolean().optional(), translateTo: z.array(z.string().min(1)).optional(), analyze: z.boolean().optional() }).optional(),
   substitute_failures: z.boolean().optional(),
   retention_days: z.number().int().min(1).optional(),
+  archive_top_clips: z.boolean().optional().describe("Archive completed ranked clips through archive_clip before retention deletes a day book"),
   enabled: z.boolean().optional(),
   date: z.iso.date().optional().describe("Local date to cut using the current ledger; omit to sample now"),
 };
@@ -54,6 +57,7 @@ function makeSchedule(args: Args, previous: TrendingSchedule | undefined, now: D
     downstream: { transcribe: true, translateTo: [], analyze: false, ...previous?.downstream, ...args.downstream },
     substituteFailures: args.substitute_failures ?? previous?.substituteFailures ?? false,
     retentionDays: args.retention_days ?? previous?.retentionDays ?? 30,
+    archiveTopClips: args.archive_top_clips ?? previous?.archiveTopClips ?? false,
     enabled: args.enabled ?? previous?.enabled ?? true,
     createdAt: previous?.createdAt ?? now.toISOString(),
   };
@@ -66,11 +70,18 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
   const sourceHealth = readSourceHealth(book.engine);
   const counts: Record<string, number> = Object.fromEntries(schedule.sources.map(({ id }) => [id, 0]));
   for (const sighting of ledger.sightings) counts[sighting.source] = (counts[sighting.source] ?? 0) + 1;
+  const nextRuns = schedule.enabled ? nextTrendingEvents(schedule, now) : { sample: null, cut: null };
   return {
     bookId: book.bookId, schedule, ledgerDate, ledgerCounts: counts, sourceHealth,
     lastSample: [...ledger.completedSlots, ...Object.values(sourceHealth).flatMap((health) => health.lastOk ? [health.lastOk] : [])].sort().at(-1) ?? null,
     lastRun: [...runs].sort((a, b) => b.cutAt.localeCompare(a.cutAt))[0] ?? null,
-    nextRuns: schedule.enabled ? nextTrendingEvents(schedule, now) : { sample: null, cut: null },
+    nextRuns,
+    retention: {
+      days: schedule.retentionDays, archiveTopClips: schedule.archiveTopClips ?? false, nextRun: nextRuns.cut,
+      lastRun: readRetention(book.engine) ?? null,
+      recentDeletions: readHistory(book.engine).filter((entry) => entry.deletedAt).slice(-10)
+        .map(({ date, dayBookId, dayBookName, deletedAt }) => ({ date, dayBookId, dayBookName, deletedAt })),
+    },
     recentFailures: {
       sources: Object.entries(sourceHealth).filter(([, health]) => health.lastError).map(([source, health]) => ({ source, error: health.lastError })),
       runs: runs.filter((run) => run.errors.length || run.downloads.some((download) => download.error)).slice(-10),
@@ -85,7 +96,7 @@ export function trendingResearchDef(books: BookManager, options: {
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. TH defaults to Asia/Bangkok; other countries require timezone on creation.",
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first. TH defaults to Asia/Bangkok; other countries require timezone on creation.",
     scope: "global",
     schema,
     handler: async (input) => {

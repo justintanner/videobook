@@ -14,6 +14,7 @@ export interface TrendingSchedule {
   downstream: { transcribe: boolean; translateTo: string[]; analyze: boolean };
   substituteFailures: boolean;
   retentionDays: number;
+  archiveTopClips?: boolean;
   enabled: boolean;
   createdAt: string;
 }
@@ -70,7 +71,21 @@ export interface TrendingRunRecord {
     nextRetryAt?: string;
     status: "pending" | "completed" | "failed";
     error?: string;
+    archivedAt?: string;
   }[];
   spend: number;
+  errors: string[];
+}
+
+export interface TrendingHistoryEntry extends TrendingRunRecord {
+  dayBookName: string;
+  retainedAt: string;
+  deletedAt?: string;
+}
+
+export interface TrendingRetentionState {
+  lastDate: string;
+  lastRunAt: string;
+  deleted: { date: string; bookId: string; name: string }[];
   errors: string[];
 }

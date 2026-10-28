@@ -1,6 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { normalizeBookSlug } from "videobook-engine/book-slug";
-import type { SourceHealth, TrendingLedger, TrendingRunRecord, TrendingSchedule } from "./types.js";
+import type {
+  SourceHealth, TrendingHistoryEntry, TrendingLedger, TrendingRetentionState, TrendingRunRecord, TrendingSchedule,
+} from "./types.js";
 
 const chains = new WeakMap<Engine, Promise<unknown>>();
 
@@ -45,6 +47,11 @@ export function localDate(at: string | Date, timezone: string): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+export function retentionStart(date: string, retentionDays: number): string | undefined {
+  if (!Number.isSafeInteger(retentionDays) || retentionDays < 1) return undefined;
+  return new Date(Date.parse(validateLocalDate(date)) - retentionDays * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function readSchedule(engine: Engine): TrendingSchedule | undefined {
   return engine.settings.get<TrendingSchedule>("trending.schedule.v1") ?? undefined;
 }
@@ -73,6 +80,29 @@ export function writeRun(engine: Engine, run: TrendingRunRecord): Promise<void> 
   return serialize(engine, () => write(engine, "trending.runs.v1", [
     ...readRuns(engine).filter((entry) => entry.date !== run.date), run,
   ]));
+}
+
+export function removeRun(engine: Engine, date: string): Promise<void> {
+  return serialize(engine, () => write(engine, "trending.runs.v1", readRuns(engine).filter((entry) => entry.date !== date)));
+}
+
+export function readHistory(engine: Engine): TrendingHistoryEntry[] {
+  return engine.settings.get<TrendingHistoryEntry[]>("trending.history.v1") ?? [];
+}
+
+export function writeHistory(engine: Engine, entry: TrendingHistoryEntry): Promise<void> {
+  validateLocalDate(entry.date);
+  return serialize(engine, () => write(engine, "trending.history.v1", [
+    ...readHistory(engine).filter((previous) => previous.date !== entry.date), entry,
+  ].sort((left, right) => left.date.localeCompare(right.date))));
+}
+
+export function readRetention(engine: Engine): TrendingRetentionState | undefined {
+  return engine.settings.get<TrendingRetentionState>("trending.retention.v1") ?? undefined;
+}
+
+export function writeRetention(engine: Engine, state: TrendingRetentionState): Promise<void> {
+  return serialize(engine, () => write(engine, "trending.retention.v1", state));
 }
 
 export function readSourceHealth(engine: Engine): Record<string, SourceHealth> {

@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { logger } from "../logger.js";
 import { listBookEngines, queue } from "../queue.js";
-import { localDate, readLedger, readRuns, readSchedule } from "./ledger.js";
+import { localDate, readLedger, readRetention, readRuns, readSchedule, retentionStart } from "./ledger.js";
 import type { TrendingSchedule } from "./types.js";
 
 function dueEvents(schedule: TrendingSchedule, from: number, until: number) {
@@ -69,6 +69,7 @@ export function createTrendingScheduler(options: {
       const from = cursor ? Date.parse(cursor) + 60_000 : Date.parse(schedule.createdAt);
       if (cursor && from > now.getTime()) continue;
       try {
+        let retentionDate: string | undefined;
         for (const event of dueEvents(schedule, from, now.getTime())) {
           if (stopped) return;
           if (event.type === "sample" && !readLedger(engine, event.date).completedSlots.includes(event.at)) {
@@ -77,11 +78,18 @@ export function createTrendingScheduler(options: {
           if (event.type === "cut" && !readRuns(engine).some((run) => run.date === event.date && run.completed)) {
             await wait(`trending-cut:${schedule.scheduleId}:${event.date}`, { type: "trending_cut", bookId, date: event.date, cutAt: event.at });
           }
+          if (event.type === "cut") retentionDate = event.date;
+        }
+        const retained = readRetention(engine)?.lastDate;
+        if (retentionDate && (!retained || retained < retentionDate)) {
+          await enqueue(`trending-retention:${schedule.scheduleId}:${retentionDate}`, { type: "trending_retention", bookId, date: retentionDate });
         }
         const saved = engine.settings.set(cursorKey, new Date(Math.floor(now.getTime() / 60_000) * 60_000).toISOString());
         if (!saved.ok) throw new Error(saved.error.message);
+        const keepFrom = retentionStart(localDate(now, schedule.timezone), schedule.retentionDays);
         for (const run of readRuns(engine)) {
           const today = run.date === localDate(now, schedule.timezone);
+          if (keepFrom && run.date < keepFrom) continue;
           if (!run.completed || !run.downloads.some((download) => download.status === "pending"
             || (today && download.status === "failed" && (download.attempts ?? 1) < 3))) continue;
           await enqueue(`trending-retry:${schedule.scheduleId}:${run.date}:${Math.floor(now.getTime() / 60_000)}`, {

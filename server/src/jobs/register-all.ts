@@ -1,6 +1,7 @@
 import { registerTrendingSampleJob } from "./trending-sample.js";
 import { registerTrendingCutJob } from "./trending-cut.js";
 import { registerTrendingRetryJob } from "./trending-retry.js";
+import { registerTrendingRetentionJob } from "./trending-retention.js";
 import { registerPostRecordJobs } from "./post-record.js";
 import { registerColdOpenJobs } from "./cold-open.js";
 import type { Engine } from "videobook-engine";
@@ -95,6 +96,7 @@ export function registerAllJobHandlers(
   registerTrendingSampleJob();
   registerTrendingCutJob(books);
   registerTrendingRetryJob(books);
+  registerTrendingRetentionJob(books);
   registerTranscribeJob(engine);
   registerTranslateTranscriptJob(engine);
   registerDownloadVideoJob(engine);
