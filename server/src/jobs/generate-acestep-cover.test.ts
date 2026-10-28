@@ -166,7 +166,8 @@ async function scratchDirs(): Promise<string[]> {
 }
 
 describe("generate acestep cover job", () => {
-  let fixtureDir: string;
+  let suiteTmpdir: string;
+  let savedTmpdir: string | undefined;
   let sourceVideo: Buffer;
   let generatedAudio: Buffer;
   let shortGeneratedAudio: Buffer;
@@ -178,7 +179,10 @@ describe("generate acestep cover job", () => {
   let savedEnv: Record<string, string | undefined>;
 
   beforeAll(async () => {
-    fixtureDir = await mkdtemp(join(tmpdir(), "videobook-acestep-fixture-"));
+    savedTmpdir = process.env.TMPDIR;
+    suiteTmpdir = await mkdtemp(join(tmpdir(), "videobook-acestep-tmp-"));
+    process.env.TMPDIR = suiteTmpdir;
+    const fixtureDir = await mkdtemp(join(tmpdir(), "videobook-acestep-fixture-"));
     const sourcePath = join(fixtureDir, "source.mp4");
     const generatedPath = join(fixtureDir, "generated.wav");
     const shortGeneratedPath = join(fixtureDir, "generated-short.wav");
@@ -222,7 +226,9 @@ describe("generate acestep cover job", () => {
   }, testBudget(60_000));
 
   afterAll(async () => {
-    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
+    if (savedTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = savedTmpdir;
+    await rm(suiteTmpdir, { recursive: true, force: true, maxRetries: 3 });
   });
 
   beforeEach(async () => {
@@ -463,7 +469,7 @@ describe("generate acestep cover job", () => {
     registerAcestepCoverJob(fs);
     const jobId = `acestep-cover-failure-${Date.now()}`;
     try {
-      await expect(queue.enqueueAndWait(jobId, payload(), 30_000)).rejects.toThrow(
+      await expect(queue.enqueueAndWait(jobId, payload(), testBudget(30_000))).rejects.toThrow(
         "ace-server not found at /nonexistent/ace-server",
       );
       const status = await fs.status.get(outputAssetId);
