@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Engine } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
-import { sampleTrending } from "../../server/src/jobs/trending-sample.js";
+import { registerTrendingSampleJob, sampleTrending } from "../../server/src/jobs/trending-sample.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
 import { readLedger, readRuns } from "../../server/src/trending/ledger.js";
-import { createTrendingScheduler } from "../../server/src/trending/scheduler.js";
+import { createTrendingScheduler, stopTrendingSchedulerAndQueue, trendingScheduler } from "../../server/src/trending/scheduler.js";
+import { queue, setEngineRoot } from "../../server/src/queue.js";
+import { trendingSources } from "../../server/src/trending/sources.js";
 import { testBudget } from "../../server/src/test-budget.js";
 import { schedule } from "./trending-fixtures.js";
 
@@ -22,6 +24,48 @@ afterEach(async () => {
 });
 
 describe("trending scheduler", () => {
+  it("stops an active sample by cancelling the queue before waiting for the scheduler", async () => {
+    root = await mkdtemp(join(tmpdir(), "trending-shutdown-"));
+    books = new BookManager({ libraryDir: root });
+    const now = new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
+    const control = await ensureControlBook(books, {
+      ...schedule, timezone: "UTC", createdAt: now, samplesPerDay: 1440,
+      cutoffLocalTime: "23:59", sources: [{ id: "waiting" }],
+    });
+    await setEngineRoot(control.rootDir, control.engine);
+    registerTrendingSampleJob();
+    let started = false;
+    trendingSources.set("waiting", {
+      id: "waiting", health: () => ({}),
+      sample: async (_input, { signal }) => {
+        started = true;
+        await new Promise<void>((_resolve, reject) => {
+          if (signal.aborted) reject(signal.reason);
+          else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+        return { capturedAt: now, sightings: [] };
+      },
+    });
+    trendingScheduler.start();
+    try {
+      await expect.poll(() => started, { timeout: testBudget(10_000) }).toBe(true);
+      let stopped = false;
+      const stopping = stopTrendingSchedulerAndQueue().then(() => { stopped = true; });
+      try {
+        await expect.poll(() => stopped, { timeout: testBudget(5_000) }).toBe(true);
+        await stopping;
+      } finally {
+        await queue.stop();
+        await stopping;
+      }
+      expect(control.engine.jobs.queue.list({ type: "trending_sample" })[0]?.state).toBe("aborted");
+      expect(readLedger(control.engine, now.slice(0, 10)).completedSlots).toEqual([]);
+    } finally {
+      trendingSources.delete("waiting");
+      await stopTrendingSchedulerAndQueue();
+    }
+  }, testBudget(60_000));
+
   it.each([
     { start: "2026-03-08T05:00:00.000Z", before: "2026-03-08T06:00:00.000Z", end: "2026-03-09T03:59:00.000Z", cutoff: "02:30", cut: "2026-03-08T07:00:00.000Z", date: "2026-03-08" },
     { start: "2026-11-01T04:00:00.000Z", before: "2026-11-01T05:00:00.000Z", end: "2026-11-02T04:59:00.000Z", cutoff: "01:30", cut: "2026-11-01T05:30:00.000Z", date: "2026-11-01" },

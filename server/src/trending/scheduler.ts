@@ -100,3 +100,7 @@ export function createTrendingScheduler(options: {
 }
 
 export const trendingScheduler = createTrendingScheduler();
+
+export async function stopTrendingSchedulerAndQueue(): Promise<void> {
+  await Promise.all([trendingScheduler.stop(), queue.stop()]);
+}

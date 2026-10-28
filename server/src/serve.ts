@@ -1,4 +1,4 @@
-import { trendingScheduler } from "./trending/scheduler.js";
+import { stopTrendingSchedulerAndQueue } from "./trending/scheduler.js";
 import { flushHarCaptures } from "./har-capture.js";
 import { once } from "node:events";
 import type { Server } from "node:http";
@@ -11,7 +11,6 @@ import { hydrateLibrary } from "./hydration.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { logger } from "./logger.js";
 import { stopPostMetricsScheduler } from "./posts/post-metrics.js";
-import { queue } from "./queue.js";
 import { stopScheduler } from "./scheduled-posts.js";
 import { SERVER_VERSION } from "./server.js";
 import {
@@ -46,10 +45,9 @@ export interface RunningServer {
 async function shutdownServices(services: VideobookApp): Promise<void> {
   stopScheduler();
   stopPostMetricsScheduler();
-  await trendingScheduler.stop();
   await services.voiceSessions.close();
   await services.mcpHandler.close();
-  await queue.stop();
+  await stopTrendingSchedulerAndQueue();
   await flushHarCaptures();
   await stopAceServer();
   await bookManager.close();
