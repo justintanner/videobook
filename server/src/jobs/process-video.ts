@@ -556,8 +556,10 @@ async function processVideoSnapshot(
     // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
     // the slot-gated revival below for re-processed (trimmed/re-downloaded)
     // videos, whose analysis sidecar was just invalidated.
+    const research = provenance.research as { downstream?: { transcribe?: boolean } } | undefined;
+    const allowTranscription = research?.downstream?.transcribe !== false;
     const transcriptJobs = planVideoTranscriptJobs({
-      skipDownstreamJobs: Boolean(skipDownstreamJobs),
+      skipDownstreamJobs: Boolean(skipDownstreamJobs) || !allowTranscription,
       hasAudio: probe.hasAudio,
       assetId,
       assetDir,
@@ -577,7 +579,7 @@ async function processVideoSnapshot(
       // Analysis revival below still respects slotting; tagging does not,
       // because a Library clip has to be findable without being placed first.
       await enqueueAssetTagging(engine, assetId);
-      if (!skipDownstreamJobs && probe.hasAudio) {
+      if (!skipDownstreamJobs && allowTranscription && probe.hasAudio) {
         await enqueueVideoTranscriptJobs(transcriptJobs);
       } else if (!skipDownstreamJobs || reviveVisualAnalysis) {
         // Silent video: no transcribe job will run, so revive the slot-drop

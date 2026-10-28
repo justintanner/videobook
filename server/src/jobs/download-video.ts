@@ -385,6 +385,7 @@ type DownloadVideoPayload = {
   full: boolean;
   sourcePrefix: string;
   requestedRange?: { start?: number; end?: number };
+  research?: Record<string, unknown>;
 };
 
 type InfoResult = {
@@ -463,7 +464,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
     const {
       url,
       assetId, assetDir, exportVideos,
-      sourcePrefix, requestedRange,
+      sourcePrefix, requestedRange, research,
     } = payload as DownloadVideoPayload;
     const bookId = (payload as DownloadVideoPayload).bookId ?? "";
     const outputPath = join(assetDir, "original.mp4");
@@ -518,6 +519,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
           await engine.artifacts.delete(assetId);
 
           const provenance = {
+            ...(research ? { research } : {}),
             origin: "download",
             source_url: url,
             title: fallbackOgData?.ogTitle ?? "",
@@ -576,6 +578,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
             sourcePrefix,
             ...(requestedRange ? { requestedRange } : {}),
             _playlistItem: i + 1,
+            ...(research ? { research } : {}),
           } as unknown as Record<string, unknown>);
         }
       } else if (info._type === "playlist" && Array.isArray(info.entries) && info.entries.length === 1) {
@@ -632,6 +635,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
 
         // Build provenance
         const provenance = {
+          ...(research ? { research } : {}),
           origin: "download",
           source_url: url,
           title: itemInfo.title ?? info.title ?? "",
@@ -705,6 +709,7 @@ export function registerDownloadVideoJob(engine: Engine): void {
 
       // (f) Build provenance from ytdlp metadata
       const provenance = {
+        ...(research ? { research } : {}),
         origin: "download",
         source_url: url,
         title: info.title ?? "",

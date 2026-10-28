@@ -59,7 +59,18 @@ export interface TrendingRunRecord {
   cutAt: string;
   dayBookId: string;
   videos: RankedVideo[];
-  downloads: { videoId: string; artifactId?: string; status: "pending" | "completed" | "failed"; error?: string }[];
+  completed?: boolean;
+  notebookId?: string;
+  downloads: {
+    videoId: string;
+    artifactId?: string;
+    jobId?: string;
+    queueJobId?: number;
+    attempts?: number;
+    nextRetryAt?: string;
+    status: "pending" | "completed" | "failed";
+    error?: string;
+  }[];
   spend: number;
   errors: string[];
 }

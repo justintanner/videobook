@@ -20,7 +20,7 @@ const EVENTS = [
   "generation-cost-estimate", "job-error", "semantic-index-deferred",
   "tag-asset-failed", "voice-session-closed",
   "caption-preparation-continue-failed", "caption-transcript-publish-failed",
-  "model-unresolvable",
+  "model-unresolvable", "trending-sample-failed", "trending-cut-failed",
 ] as const;
 export type DiagnosticEvent = typeof EVENTS[number];
 const events = new Set<string>(EVENTS);

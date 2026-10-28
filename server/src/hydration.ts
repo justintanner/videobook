@@ -1,3 +1,4 @@
+import { trendingScheduler } from "./trending/scheduler.js";
 import type { BookManager, ManagedBook } from "./book-manager.js";
 import { startPostMetricsScheduler } from "./posts/post-metrics.js";
 import { queue } from "./queue.js";
@@ -17,6 +18,7 @@ export interface HydrationOptions {
   devFixtures: boolean;
   startQueue?: boolean;
   startPostMetrics?: boolean;
+  startTrending?: boolean;
   runStep?: HydrationStepRunner;
 }
 
@@ -77,5 +79,6 @@ export async function hydrateLibrary(books: BookManager, options: HydrationOptio
   if (options.startQueue !== false) await run({ phase: "reconcile", label: "queue.start()", run: () => queue.start() });
   await reconcileAfterQueue(books, run, reconcilers);
   await run({ phase: "reconcile", label: "loadAndArmAll()", run: () => loadAndArmAll() });
+  if (options.startQueue !== false && options.startTrending !== false) trendingScheduler.start();
   if (options.startPostMetrics !== false) startPostMetricsScheduler();
 }

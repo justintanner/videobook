@@ -1,3 +1,4 @@
+import { trendingScheduler } from "./trending/scheduler.js";
 import { flushHarCaptures } from "./har-capture.js";
 import { once } from "node:events";
 import type { Server } from "node:http";
@@ -45,6 +46,7 @@ export interface RunningServer {
 async function shutdownServices(services: VideobookApp): Promise<void> {
   stopScheduler();
   stopPostMetricsScheduler();
+  await trendingScheduler.stop();
   await services.voiceSessions.close();
   await services.mcpHandler.close();
   await queue.stop();
