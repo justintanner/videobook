@@ -44,7 +44,7 @@ describe("Post publication records", () => {
   afterEach(async () => {
     for (const server of servers.splice(0)) await new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); });
     engine.close();
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 3 });
   });
 
   async function serve(handler: RequestListener): Promise<string> {
@@ -151,7 +151,7 @@ describe("Post publication records", () => {
     afterEach(async () => {
       if (previous === undefined) delete process.env.VIDEOBOOK_ICLOUD_DIR;
       else process.env.VIDEOBOOK_ICLOUD_DIR = previous;
-      await rm(icloud, { recursive: true, force: true });
+      await rm(icloud, { recursive: true, force: true, maxRetries: 3 });
     });
 
     it("saves the clip and caption once, records them and never rewrites", async () => {
