@@ -21,6 +21,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
   duration already known to the transcribe, caption, sync, render, archive,
   extend and sound-removal paths. A request with no duration stays unpriced.
 
+### Security
+
+- `@modelcontextprotocol/node` 2.1.2 and `@hono/node-server` 2.1.5.
+  `hono` is no longer a direct server dependency; the SDK depends on it.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
