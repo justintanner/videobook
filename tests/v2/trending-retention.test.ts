@@ -437,6 +437,8 @@ describe("trending day-book retention", () => {
         json_key: transcriptJsonKey(store, sha256), text_key: transcriptTextKey(store, sha256), chunk_count: 1, provider: "elevenlabs",
       });
       expect(index.duration).toBeGreaterThan(0);
+      if (index.duration === null) throw new Error("archived clip has no duration");
+      const duration = index.duration;
       expect(await store.getJson(chunkKey(store, sha256, 0))).toEqual(speech);
       expect(await store.getJson(transcriptJsonKey(store, sha256))).toEqual({
         ...speech, transcription_id: null, audio_duration_secs: index.duration,
@@ -446,7 +448,11 @@ describe("trending day-book retention", () => {
       const usage = JSON.parse((await bookUsageDef(control.engine).handler({ book_id: control.bookId })).content[0]!.text);
       expect(usage.recent).toEqual([expect.objectContaining({
         provider: "elevenlabs", model: "scribe_v2", activity: "analysis", status: "completed", operation: "archive_clip", artifactId: null,
+        basis: "estimated", unit: "seconds", warnings: [],
       })]);
+      expect(usage.recent[0].units).toBeCloseTo(duration, 5);
+      expect(usage.recent[0].costUsd).toBeCloseTo(duration * 0.22 / 3600, 6);
+      expect(usage.totals.unpriced).toBe(0);
       expect(usage.groups).toEqual([expect.objectContaining({ activity: "analysis", provider: "elevenlabs", model: "scribe_v2", count: 1 })]);
       expect(readHistory(control.engine)[0].spend).toBe(usage.totals.estimatedUsd + usage.totals.reportedUsd);
     }, testBudget(90_000));

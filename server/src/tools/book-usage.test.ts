@@ -9,7 +9,7 @@ import type { Engine } from "videobook-engine";
 import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js";
 import { withBookContext, scopedBookEngine } from "../book-context.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
-import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage } from "../provider-usage.js";
+import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage, withUsageCostHints } from "../provider-usage.js";
 import { MODEL_ENTRIES } from "../media/catalog.js";
 import { parseModelId } from "../media/model-id.js";
 import { isKieVeoModel } from "../media/wire.js";
@@ -285,6 +285,32 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(response.id).toBe("invalid-usage");
     const summary = await scoped(() => bookUsageDef(scopedBookEngine).handler({ book_id: engine.book.get().bookId }));
     expect(JSON.parse(summary.content[0]!.text).incomplete).toBe(true);
+  });
+
+  it("prices scribe_v2 from a known duration and leaves an unknown duration unpriced", async () => {
+    const provider = createElevenLabs({ apiKey: "test", baseURL: url });
+    reply = { text: "hi" };
+    const file = new Blob([Uint8Array.from([1, 2, 3])], { type: "audio/mpeg" });
+    const request = { model_id: "scribe_v2", file };
+    await scoped(() => provider.v1.speechToText(request));
+    expect(engine.usage.recent(1)[0]).toMatchObject({
+      provider: "elevenlabs", model: "scribe_v2", activity: "analysis", basis: "unknown", costUsd: null, status: "completed",
+    });
+    const created = await engine.artifacts.create("audio", "clip");
+    if (!created.ok) throw new Error(created.error.message);
+    await engine.metadata.artifacts.write(created.value.artifactId, "generation-cost-hints", { durationSeconds: 4 });
+    await withBookContext(
+      { bookId: engine.book.get().bookId, engine, operation: "transcribe", artifactId: created.value.artifactId },
+      () => provider.v1.speechToText(request),
+    );
+    expect(engine.usage.recent(1)[0]).toMatchObject({ basis: "estimated", units: 4, unit: "seconds" });
+    expect(engine.usage.recent(1)[0]?.costUsd).toBeCloseTo(4 * 0.22 / 3600, 8);
+    await withBookContext(
+      { bookId: engine.book.get().bookId, engine, operation: "transcribe", artifactId: created.value.artifactId },
+      () => withUsageCostHints({ durationSeconds: 10 }, () => provider.v1.speechToText(request)),
+    );
+    expect(engine.usage.recent(1)[0]).toMatchObject({ basis: "estimated", units: 10, unit: "seconds", warnings: [] });
+    expect(engine.usage.recent(1)[0]?.costUsd).toBeCloseTo(10 * 0.22 / 3600, 8);
   });
 
   it("prices binary speech by characters and excludes calls without a book", async () => {

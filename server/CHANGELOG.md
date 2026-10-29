@@ -15,6 +15,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - `@apicity` 0.21.0, including the ElevenLabs `scribe_v2` cost rate.
   MachGen Seedance 2.5 and 2.0 estimates follow that package's public pricebook.
 
+### Changed
+
+- ElevenLabs `scribe_v2` speech-to-text usage is estimated from the audio
+  duration already known to the transcribe, caption, sync, render, archive,
+  extend and sound-removal paths. A request with no duration stays unpriced.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

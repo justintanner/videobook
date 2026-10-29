@@ -235,7 +235,8 @@ describe("transcribe tool", () => {
       await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "libmp3lame", "-b:a", "64k", media]);
       const saved = await fs.files.writeFromPath(assetId, "original.mp3", media);
       if (!saved.ok) throw new Error(saved.error.message);
-      await registerMediaStreams(fs, assetId, "original.mp3", await probeVideo(media));
+      const mediaProbe = await probeVideo(media);
+      await registerMediaStreams(fs, assetId, "original.mp3", mediaProbe);
       const settings = { asset_id: assetId, book_id: "test-proj", language_code: "en", diarize: false };
 
       const result = await client.callTool({ name: "transcribe", arguments: { ...settings, wait: true } });
@@ -267,6 +268,13 @@ describe("transcribe tool", () => {
         { kind: "speech", text: "Hello there", words: ["Hello", "there"] },
         { kind: "sound", text: "(laughter)", words: [] },
       ]);
+      const seconds = mediaProbe.audioDuration ?? mediaProbe.duration;
+      const usage = fs.usage.recent(10).find((row) => row.model === "scribe_v2");
+      expect(usage).toMatchObject({
+        provider: "elevenlabs", basis: "estimated", unit: "seconds", status: "completed", operation: "transcribe", warnings: [],
+      });
+      expect(usage?.units).toBeCloseTo(seconds, 3);
+      expect(usage?.costUsd).toBeCloseTo(seconds * 0.22 / 3600, 6);
 
       const again = await client.callTool({ name: "transcribe", arguments: settings });
       expect(JSON.parse((again.content as TextContent)[0].text)).toMatchObject({ status: "cached", job_id: null });

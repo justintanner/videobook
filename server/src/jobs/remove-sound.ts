@@ -5,6 +5,7 @@ import { extname, join } from "node:path";
 import { type ElevenLabsProvider, type ElevenLabsSpeechToTextResponse, type ElevenLabsTranscriptWord } from "@apicity/elevenlabs";
 import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
+import { withUsageCostHints } from "../provider-usage.js";
 import { ELEVENLABS_SCRIBE_MODEL } from "../elevenlabs-audio-extension.js";
 import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
@@ -290,12 +291,13 @@ export async function removeSoundWithElevenLabs(
   const source = await engine.files.read(payload.assetId, payload.filename);
   if (!source.ok) throw new Error(`Failed to read ${payload.assetId}: ${source.error.message}`);
   const sourceBytes = new Uint8Array(source.value);
-  const transcript = await provider.v1.speechToText({
+  const audioSeconds = inputProbe.audioDuration ?? duration;
+  const transcript = await withUsageCostHints({ durationSeconds: audioSeconds }, () => provider.v1.speechToText({
     model_id: ELEVENLABS_SCRIBE_MODEL,
     file: new Blob([sourceBytes], { type: mediaMime(payload.filename) }),
     tag_audio_events: true,
     diarize: false,
-  }, signal);
+  }, signal));
 
   const events = extractAudioEvents(transcript);
   const matched = matchSoundEvents(events, payload.sound);

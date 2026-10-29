@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
 import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
@@ -15,6 +16,7 @@ type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
 const cost = createCost();
+const usageCostHints = new AsyncLocalStorage<CostHints>();
 
 function object(value: unknown): RecordValue {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
@@ -209,6 +211,25 @@ async function costHints(engine: Engine, artifactId?: string): Promise<CostHints
   return { ...(durationSeconds !== null ? { durationSeconds } : {}), ...(inputDurationSeconds !== null ? { inputDurationSeconds } : {}) };
 }
 
+export function withUsageCostHints<T>(hints: CostHints, operation: () => Promise<T>): Promise<T> {
+  return usageCostHints.run(hints, operation);
+}
+
+function positiveSeconds(value: number | null): number | undefined {
+  return value !== null && value > 0 ? value : undefined;
+}
+
+function mergeCostHints(artifact: CostHints | undefined, explicit: CostHints | undefined): CostHints | undefined {
+  const durationSeconds = positiveSeconds(number(explicit?.durationSeconds));
+  const inputDurationSeconds = positiveSeconds(number(explicit?.inputDurationSeconds));
+  const overlay: CostHints = {
+    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    ...(inputDurationSeconds !== undefined ? { inputDurationSeconds } : {}),
+  };
+  if (!artifact && durationSeconds === undefined && inputDurationSeconds === undefined) return undefined;
+  return { ...artifact, ...overlay };
+}
+
 export function providerUsageFetch(provider: Provider, transport: typeof fetch = fetch): typeof fetch {
   return async (input, init) => {
     const context = currentBookContext();
@@ -224,6 +245,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const model = text(payload.model) ?? text(payload.model_id) ?? (provider === "fal" ? endpoint : endpoint.split("/").slice(-2).join("/"));
       let hints: CostHints | undefined;
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
+      hints = mergeCostHints(hints, usageCostHints.getStore());
       const activity = provider === "machgen" ? "video" : activityFor(provider, model, url.pathname, context.operation);
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",

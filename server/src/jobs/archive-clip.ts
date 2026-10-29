@@ -18,6 +18,7 @@ import { ytdlpRunOptions } from "../ytdlp-binary.js";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
+import { withUsageCostHints } from "../provider-usage.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -319,7 +320,9 @@ async function transcribeMedia(
         diarize: args.diarize,
         ...(args.languageCode ? { language_code: args.languageCode } : {}),
       };
-      const response = await provider.v1.speechToText(request);
+      const response = length > 0
+        ? await withUsageCostHints({ durationSeconds: length }, () => provider.v1.speechToText(request))
+        : await provider.v1.speechToText(request);
       await store.putJson(chunkKey(store, args.sha256, index), response);
       chunks.push({ transcript: transcriptFromResponse(response), offset: start });
     }

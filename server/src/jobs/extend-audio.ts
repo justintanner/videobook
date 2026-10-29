@@ -15,6 +15,7 @@ import {
 } from "../elevenlabs-audio-extension.js";
 import { extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { requireApiKey } from "../api-key.js";
+import { withUsageCostHints } from "../provider-usage.js";
 import { registerJobHandler } from "../queue.js";
 
 const ELEVENLABS_TIMEOUT_MS = 10 * 60_000;
@@ -227,12 +228,13 @@ export async function extendAudioWithElevenLabs(
   if (!source.ok) throw new Error(`Failed to read source audio: ${source.error.message}`);
 
   const sourceBytes = new Uint8Array(source.value);
-  const transcript = await provider.v1.speechToText({
+  const sourceSeconds = payload.sourceDurationMs / 1000;
+  const transcript = await withUsageCostHints({ durationSeconds: sourceSeconds }, () => provider.v1.speechToText({
     model_id: ELEVENLABS_SCRIBE_MODEL,
     file: new Blob([sourceBytes], { type: audioMime(payload.sourceFilename) }),
     tag_audio_events: true,
     diarize: false,
-  }, signal);
+  }, signal));
   const sourceDescription = describeSourceAudio(transcript);
   const continuationDurationMs = payload.targetDurationMs - payload.sourceDurationMs;
   const crossfadeMs = audioCrossfadeMs(payload.sourceDurationMs, continuationDurationMs);

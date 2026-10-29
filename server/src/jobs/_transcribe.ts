@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { elevenLabsClient } from "../media/elevenlabs-client.js";
 import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
@@ -19,6 +20,8 @@ import { joinsWithoutSpace } from "../captions/script.js";
 import { fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
 import { audioObjectHash, hasCurrentElevenLabsTranscript, recordElevenLabsTranscript } from "../transcript-components.js";
 import { joinUnspacedLetters } from "../transcript-words.js";
+import { probeVideo } from "../ffmpeg.js";
+import { withUsageCostHints } from "../provider-usage.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 
 const ELEVENLABS_TIMEOUT_MS = 5 * 60_000;
@@ -106,7 +109,21 @@ export async function requestElevenLabsTranscript(
     diarize: options.diarize,
     ...(options.languageCode ? { language_code: options.languageCode } : {}),
   };
-  return provider.v1.speechToText(request);
+  const durationSeconds = await knownAudioSeconds(engine, assetId, audioFilename);
+  const transcribe = () => provider.v1.speechToText(request);
+  return durationSeconds === undefined ? transcribe() : withUsageCostHints({ durationSeconds }, transcribe);
+}
+
+async function knownAudioSeconds(engine: Engine, assetId: string, filename: string): Promise<number | undefined> {
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) return undefined;
+  try {
+    const probe = await probeVideo(join(manifest.value.path, filename));
+    const seconds = probe.audioDuration ?? probe.duration;
+    return seconds > 0 ? seconds : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function writeElevenLabsTranscript(
