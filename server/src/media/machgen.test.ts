@@ -296,9 +296,9 @@ describe("MachGen catalog", () => {
     ["machgen:MiniMax-H3", { prompt: "x", options: { resolution: "768p", duration: 5 } }, {}, 0.2],
     ["machgen:MiniMax-H3", { prompt: "x", options: { resolution: "480p", duration: 20 } }, {}, 0.6125],
     ["machgen:MiniMax-H3", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "768p", duration: 5 } }, { inputDurationSeconds: 4 }, 0.54],
-    ["machgen:Seedance-2.5", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 1.15],
-    ["machgen:Seedance-2.5", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "720p", duration: 5 } }, { inputDurationSeconds: 4 }, 1.26],
-    ["machgen:Seedance-2.0", { prompt: "x", options: { resolution: "2160p", duration: 5 } }, {}, 3.9],
+    ["machgen:Seedance-2.5", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 1.1556],
+    ["machgen:Seedance-2.5", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "720p", duration: 5 } }, { inputDurationSeconds: 4 }, 1.24416],
+    ["machgen:Seedance-2.0", { prompt: "x", options: { resolution: "2160p", duration: 5 } }, {}, 3.888],
     ["machgen:Alibaba-Wan-3.0", { prompt: "x", options: { resolution: "1080p", duration: 10 } }, {}, 1.91],
     ["machgen:HappyHorse-1.1", { prompt: "x", options: { resolution: "1080p", duration: 5 } }, {}, 0.85],
     ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p", duration: 5 } }, {}, 0.475],
@@ -523,7 +523,7 @@ describe("MachGen provider tasks", () => {
     expect(hints.ok && hints.value).toEqual({ durationSeconds: 12 });
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
       provider: "machgen", model: "Seedance-2.5", activity: "video", status: "pending",
-      externalId: TASK_ID, basis: "estimated", costUsd: expect.closeTo(7.08, 6), warnings: [],
+      externalId: TASK_ID, basis: "estimated", costUsd: expect.closeTo(6.82344, 6), warnings: [],
     });
     expect(await readProviderTaskStatus(engine, assetId)).toEqual({ provider: "machgen", model: "Seedance-2.5", taskId: TASK_ID });
 

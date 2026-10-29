@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { BookManager, ManagedBook } from "../book-manager.js";
 import { queue } from "../queue.js";
 import { ensureControlBook } from "../trending/control-book.js";
-import { defaultTrendingSources } from "../trending/default-sources.js";
+import { defaultTrendingSources, omkarSourceAvailability } from "../trending/default-sources.js";
 import {
   controlBookSlug, localDate, readHistory, readLedger, readRetention, readRuns, readSchedule, readSourceHealth, writeSchedule,
 } from "../trending/ledger.js";
@@ -74,6 +74,7 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
   const nextRuns = schedule.enabled ? nextTrendingEvents(schedule, now) : { sample: null, cut: null };
   return {
     bookId: book.bookId, schedule, ledgerDate, ledgerCounts: counts, sourceHealth,
+    optionalSources: { omkar: omkarSourceAvailability() },
     lastSample: [...ledger.completedSlots, ...Object.values(sourceHealth).flatMap((health) => health.lastOk ? [health.lastOk] : [])].sort().at(-1) ?? null,
     lastRun: [...runs].sort((a, b) => b.cutAt.localeCompare(a.cutAt))[0] ?? null,
     nextRuns,
@@ -113,7 +114,7 @@ export function trendingResearchDef(books: BookManager, options: {
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is included only when OMKAR_API_KEY is set and @apicity/omkar is installed. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is an optional source included only when OMKAR_API_KEY is set and @apicity/omkar is installed. Status reports omkar as not configured when that key is unset. Each sample makes one Omkar trending request and does not retry it; set the omkar source option explore to true to add one Explore request for category all. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
     scope: "global",
     schema,
     handler: async (input) => {

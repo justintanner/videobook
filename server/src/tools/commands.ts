@@ -13,7 +13,7 @@ const CANONICAL_COMMANDS: Command[] = [
   ...VIDEO_EDITING_COMMANDS,
   {
     command: "/trending",
-    description: "Schedule or sample TikTok research. Defaults to Thailand: /trending schedule creates that schedule, /trending and /trending TH sample it, and a YYYY-MM-DD date cuts that local day. list, run, and status use the only schedule when there is exactly one.",
+    description: "Schedule or sample TikTok research. Defaults to Thailand: /trending schedule creates that schedule, /trending and /trending TH sample it, and a YYYY-MM-DD date cuts that local day. list, run, and status use the only schedule when there is exactly one. Omkar is optional and is included only when OMKAR_API_KEY is set; status shows omkar as not configured when the key is unset.",
     example: "/trending schedule",
     category: "action",
     icon: "TrendingUp",

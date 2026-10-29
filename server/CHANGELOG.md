@@ -6,6 +6,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Optional Omkar trending source for research schedules when `OMKAR_API_KEY`
+  is set, through `@apicity/omkar` 0.21.0. Status reports omkar as not
+  configured when the key is unset. The default Thailand schedule makes one
+  trending request per sample and does not retry it.
+- `@apicity` 0.21.0, including the ElevenLabs `scribe_v2` cost rate.
+  MachGen Seedance 2.5 and 2.0 estimates follow that package's public pricebook.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added

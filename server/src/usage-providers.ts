@@ -1,4 +1,5 @@
 import { createEndless as endless } from "@apicity/endless";
+import { createOmkar as omkar } from "@apicity/omkar";
 import { createTiktokCreativeCenter as tiktokCreativeCenter } from "@apicity/tiktok-creative-center";
 import { createFreeMediaUpload as freemediaupload } from "@apicity/free-media-upload";
 import { createKimiCoding as kimicoding } from "@apicity/kimicoding";
@@ -90,4 +91,8 @@ export function createEndless(options: Parameters<typeof endless>[0] = {}): Retu
 
 export function createTiktokCreativeCenter(options: Parameters<typeof tiktokCreativeCenter>[0] = {}): ReturnType<typeof tiktokCreativeCenter> {
   return capturedProvider("tiktok-creative-center", (fetch) => tiktokCreativeCenter({ ...options, fetch }), options.fetch);
+}
+
+export function createOmkar(options: Parameters<typeof omkar>[0] = {}): ReturnType<typeof omkar> {
+  return capturedProvider("omkar", (fetch) => omkar({ ...options, fetch }), options.fetch);
 }
