@@ -16,6 +16,7 @@ import type {
 } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { joinsWithoutSpace } from "../captions/script.js";
+import { providerEndpoints } from "../media/endpoints.js";
 import { fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
 import { audioObjectHash, hasCurrentElevenLabsTranscript, recordElevenLabsTranscript } from "../transcript-components.js";
 import { joinUnspacedLetters } from "../transcript-words.js";
@@ -98,7 +99,8 @@ export async function requestElevenLabsTranscript(
   const audioBytes = new Uint8Array(readResult.value);
   const audioBlob = new Blob([audioBytes], { type: inferAudioMime(audioFilename) });
 
-  const provider = createElevenLabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS });
+  const baseURL = providerEndpoints().elevenlabsBaseURL;
+  const provider = createElevenLabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS, ...(baseURL ? { baseURL } : {}) });
   const request: ElevenLabsSpeechToTextRequest = {
     model_id: "scribe_v2",
     file: audioBlob,
