@@ -1,4 +1,4 @@
-import { createElevenLabs } from "../usage-providers.js";
+import { elevenLabsClient } from "../media/elevenlabs-client.js";
 import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
 
@@ -32,7 +32,7 @@ type ApplySfxPayload = {
 };
 
 async function generateAndWriteSfx(
-  provider: ReturnType<typeof createElevenLabs>,
+  provider: ReturnType<typeof elevenLabsClient>,
   engine: Engine,
   entry: SfxEntry,
   index: number,
@@ -131,7 +131,7 @@ export function registerApplySfxJob(engine: Engine): void {
       "apply_sfx",
       { durationMs: LOCK_DURATION_MS, data: { state: "applying_sfx" } },
       async () => {
-      const provider = createElevenLabs({ apiKey, timeout: 60_000 });
+      const provider = elevenLabsClient({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
         sfx.map((entry, i) => generateAndWriteSfx(provider, engine, entry, i, assetId)),

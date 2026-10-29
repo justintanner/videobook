@@ -6,19 +6,16 @@ import type {
   ElevenLabsSoundGenerationRequest,
   ElevenLabsTextToSpeechRequest,
 } from "@apicity/elevenlabs";
-import { createElevenLabs } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
-import { providerEndpoints } from "../endpoints.js";
+import { elevenLabsClient } from "../elevenlabs-client.js";
 import type { ProviderAdapter, SubmitContext, SubmitResult } from "./types.js";
 
 const ASSET_SCHEME = "asset://";
 
-function elevenLabsProvider(): ReturnType<typeof createElevenLabs> {
-  const baseURL = providerEndpoints().elevenlabsBaseURL;
-  return createElevenLabs({
+function elevenLabsProvider(): ReturnType<typeof elevenLabsClient> {
+  return elevenLabsClient({
     apiKey: requireApiKey("ELEVENLABS_API_KEY"),
     timeout: 10 * 60_000,
-    ...(baseURL ? { baseURL } : {}),
   });
 }
 

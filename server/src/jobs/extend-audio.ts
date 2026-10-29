@@ -1,4 +1,4 @@
-import { createElevenLabs } from "../usage-providers.js";
+import { elevenLabsClient } from "../media/elevenlabs-client.js";
 import { extname, join } from "node:path";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -303,7 +303,7 @@ export function registerExtendAudioJob(engine: Engine): void {
   registerJobHandler("extend_audio", async (rawPayload, ctx) => {
     const payload = rawPayload as ExtendAudioPayload;
     ctx.getOwnerId();
-    const provider = createElevenLabs({
+    const provider = elevenLabsClient({
       apiKey: requireApiKey("ELEVENLABS_API_KEY"),
       timeout: ELEVENLABS_TIMEOUT_MS,
     });

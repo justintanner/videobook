@@ -1,4 +1,4 @@
-import { createElevenLabs } from "../usage-providers.js";
+import { elevenLabsClient } from "../media/elevenlabs-client.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
@@ -351,7 +351,7 @@ export async function removeSoundWithElevenLabs(
 export function registerRemoveSoundJob(engine: Engine): void {
   registerJobHandler("remove_sound", async (rawPayload, ctx) => {
     const payload = rawPayload as RemoveSoundPayload;
-    const provider = createElevenLabs({
+    const provider = elevenLabsClient({
       apiKey: requireApiKey("ELEVENLABS_API_KEY"),
       timeout: ELEVENLABS_TIMEOUT_MS,
     });

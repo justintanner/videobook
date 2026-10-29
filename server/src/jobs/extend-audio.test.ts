@@ -9,10 +9,13 @@ import { createElevenLabs } from "@apicity/elevenlabs";
 import { type Engine } from "videobook-engine";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { configureProviderEndpoints } from "../media/endpoints.js";
+import { queue, setEngineRoot, stopBookQueue } from "../queue.js";
 import {
   extendAudioWithElevenLabs,
   fillLoopableContinuation,
   hasAudibleContinuationTail,
+  registerExtendAudioJob,
   type ExtendAudioPayload,
 } from "./extend-audio.js";
 import { testBudget } from "../test-budget.js";
@@ -296,4 +299,53 @@ describe("extend audio ElevenLabs job", () => {
     const filledProbe = await probeVideo(filledPath);
     expect(filledProbe.audioDuration).toBeCloseTo(9.452, 1);
   }, testBudget(30_000));
+
+  it("sends the registered extend_audio job through the ElevenLabs endpoint override", async () => {
+    const previousKey = process.env.ELEVENLABS_API_KEY;
+    process.env.ELEVENLABS_API_KEY = "offline-elevenlabs-key";
+    const source = await fs.artifacts.create("aud", "source");
+    const output = await fs.artifacts.create("aud", "extended");
+    if (!source.ok) throw new Error(source.error.message);
+    if (!output.ok) throw new Error(output.error.message);
+    const sourceWrite = await fs.files.write(source.value.artifactId, "original.mp3", sourceAudio);
+    if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
+    const port = await listen(server);
+    const restoreEndpoints = configureProviderEndpoints({
+      elevenlabsBaseURL: `http://127.0.0.1:${port}`,
+    });
+    const payload: ExtendAudioPayload = {
+      type: "extend_audio",
+      audAssetId: output.value.artifactId,
+      sourceAssetId: source.value.artifactId,
+      sourceFilename: "original.mp3",
+      sourceDurationMs: 6_048,
+      targetDurationMs: 15_000,
+      bookId,
+    };
+
+    try {
+      await setEngineRoot(engineRoot, fs);
+      registerExtendAudioJob(fs);
+      const result = await queue.enqueueAndWait<Record<string, unknown>>(
+        `extend-audio-override-${output.value.artifactId}`,
+        payload,
+        testBudget(50_000),
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        provider: "elevenlabs",
+        sourceDescription: "horse neighing",
+      });
+      expect(transcribeRequest?.url).toBe("/v1/speech-to-text");
+      expect(transcribeRequest?.body.includes(Buffer.from("scribe_v2"))).toBe(true);
+      expect(soundRequest?.url.startsWith("/v1/sound-generation?")).toBe(true);
+      expect(soundRequest?.url).toContain("output_format=mp3_44100_128");
+    } finally {
+      restoreEndpoints();
+      await stopBookQueue(bookId);
+      if (previousKey === undefined) delete process.env.ELEVENLABS_API_KEY;
+      else process.env.ELEVENLABS_API_KEY = previousKey;
+    }
+  }, testBudget(60_000));
 });

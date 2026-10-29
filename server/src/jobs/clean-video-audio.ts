@@ -1,4 +1,4 @@
-import { createElevenLabs } from "../usage-providers.js";
+import { elevenLabsClient } from "../media/elevenlabs-client.js";
 import type { Engine } from "videobook-engine";
 
 import { extname, join } from "node:path";
@@ -226,7 +226,7 @@ export function registerCleanVideoAudioJob(engine: Engine): void {
 
         const sourceBytes = new Uint8Array(sourceResult.value);
         const sourceBlob = new Blob([sourceBytes], { type: inferVideoMime(videoFilename) });
-        const provider = createElevenLabs({ apiKey, timeout: PROVIDER_TIMEOUT_MS });
+        const provider = elevenLabsClient({ apiKey, timeout: PROVIDER_TIMEOUT_MS });
         const isolatedAudio = await provider.v1.audioIsolation({
           audio: sourceBlob,
           file_format: "other",
