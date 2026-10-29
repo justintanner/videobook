@@ -127,9 +127,11 @@ import {
 import { resolveGeneratedVideoArtifact } from 'videobook-engine/notebook-media-artifact'
 import {
   adaptCommandArgs,
+  applyInjectedCommandArgs,
   normalizePostCommandArgs,
   postCommandTarget,
   parseCommandArgs,
+  parseSlashCommandArgs,
   selectCommandForInput,
   type CommandToolArgs,
   type ServerCommand,
@@ -9262,7 +9264,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
       const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))
       if (advertisedCommand?.workspaceActionId || (advertisedAction && !rest && (advertisedAction.inputSchema.required ?? []).some((name) => !['book_id', 'notebook_id', 'sequence_id'].includes(name)))) {
-        const values = advertisedCommand ? parseCommandArgs(resolvedRest, advertisedCommand.params) : {}
+        const values = advertisedCommand ? parseSlashCommandArgs(advertisedCommand, resolvedRest) : {}
         await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values, undefined, undefined, chat)
         return { ok: true, message: 'Action options opened' }
       }
@@ -9499,12 +9501,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.tool === 'download_video' && !notebook) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
       }
-      const parsed = parseCommandArgs(resolvedRest, command.params)
+      const parsed = parseSlashCommandArgs(command, resolvedRest)
       const adapted = adaptCommandArgs(command.mcpTool.adapter, parsed)
-      const args: CommandToolArgs = {
-        ...adapted,
-        ...(command.mcpTool.injectParams ?? {}),
-      }
+      const args: CommandToolArgs = applyInjectedCommandArgs(command, adapted)
       if (command.mcpTool.autoInject?.includes('book_id')) args.book_id = bookId
       if (command.mcpTool.autoInject?.includes('notebook_id') && notebook) {
         args.notebook_id = notebook.id
@@ -9667,7 +9666,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const command = workspaceActionCommands([action], []).find(entry => entry.command === action.command)!
       const rest = resolveNotebookMentionAliases(input.trim().slice(action.command.length).trim(), gridMentionAssets)
-      await openWorkspaceActions(action.id, { ...context.action.values, ...parseCommandArgs(rest, command.params) }, undefined, undefined, chat)
+      await openWorkspaceActions(action.id, { ...context.action.values, ...parseSlashCommandArgs(command, rest) }, undefined, undefined, chat)
       return { ok: true, message: 'Action options opened' }
     }
     const outcome = await executeCommand(input, context, chat)

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { BookManager, ManagedBook } from "../book-manager.js";
 import { queue } from "../queue.js";
 import { ensureControlBook } from "../trending/control-book.js";
+import { defaultTrendingSources } from "../trending/default-sources.js";
 import {
   controlBookSlug, localDate, readHistory, readLedger, readRetention, readRuns, readSchedule, readSourceHealth, writeSchedule,
 } from "../trending/ledger.js";
@@ -12,7 +13,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const countries = new Set("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW".split(" "));
 const schema = {
-  op: z.enum(["schedule", "unschedule", "list", "run", "status"]),
+  op: z.enum(["schedule", "unschedule", "list", "run", "status"]).default("run"),
   platform: z.literal("tiktok").optional(),
   country: z.string().refine((value) => countries.has(value.toUpperCase()), "Country must be an ISO alpha-2 code").optional(),
   timezone: z.string().refine((value) => {
@@ -41,7 +42,7 @@ function json(value: unknown): ToolResult {
 }
 
 function makeSchedule(args: Args, previous: TrendingSchedule | undefined, now: Date): TrendingSchedule {
-  const country = args.country!;
+  const country = args.country ?? "TH";
   const timezone = args.timezone ?? previous?.timezone ?? (country === "TH" ? "Asia/Bangkok" : undefined);
   if (!timezone) throw new Error("timezone is required when creating a schedule outside TH");
   return {
@@ -53,8 +54,8 @@ function makeSchedule(args: Args, previous: TrendingSchedule | undefined, now: D
     windowHours: args.window_hours ?? previous?.windowHours ?? 24,
     excludePromoted: args.exclude_promoted ?? previous?.excludePromoted ?? true,
     ranking: args.ranking ?? previous?.ranking ?? "views",
-    sources: args.sources ?? previous?.sources ?? [{ id: "endless" }, { id: "tiktok-creative-center" }],
-    downstream: { transcribe: true, translateTo: [], analyze: false, ...previous?.downstream, ...args.downstream },
+    sources: args.sources ?? previous?.sources ?? defaultTrendingSources(),
+    downstream: { transcribe: false, translateTo: [], analyze: false, ...previous?.downstream, ...args.downstream },
     substituteFailures: args.substitute_failures ?? previous?.substituteFailures ?? false,
     retentionDays: args.retention_days ?? previous?.retentionDays ?? 30,
     archiveTopClips: args.archive_top_clips ?? previous?.archiveTopClips ?? false,
@@ -90,13 +91,29 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
   };
 }
 
+function listSchedules(books: BookManager): Array<{ book: ManagedBook; schedule: TrendingSchedule }> {
+  return books.list().flatMap(({ bookId }) => {
+    const selected = books.get(bookId);
+    if (!selected.ok) return [];
+    const schedule = readSchedule(selected.value.engine);
+    return schedule ? [{ book: selected.value, schedule }] : [];
+  });
+}
+
+function countryFor(op: Args["op"], country: string | undefined, schedules: Array<{ schedule: TrendingSchedule }>): string {
+  if (country) return country;
+  const only = schedules.length === 1 ? schedules[0] : undefined;
+  if ((op === "list" || op === "run" || op === "status") && only) return only.schedule.country;
+  return "TH";
+}
+
 export function trendingResearchDef(books: BookManager, options: {
   enqueue?: typeof queue.enqueue;
   now?: () => Date;
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. TH defaults to Asia/Bangkok; other countries require timezone on creation.",
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is included only when OMKAR_API_KEY is set and @apicity/omkar is installed. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.",
     scope: "global",
     schema,
     handler: async (input) => {
@@ -105,25 +122,23 @@ export function trendingResearchDef(books: BookManager, options: {
         const args = { ...parsed, country: parsed.country?.toUpperCase() };
         const now = (options.now ?? (() => new Date()))();
         await books.ready();
+        const schedules = listSchedules(books);
+        const country = countryFor(args.op, args.country, schedules);
         if (args.op === "list" || args.op === "status") {
-          const schedules = books.list().flatMap(({ bookId }) => {
-            const selected = books.get(bookId);
-            if (!selected.ok) return [];
-            const schedule = readSchedule(selected.value.engine);
-            if (!schedule || (args.country && schedule.country !== args.country)) return [];
-            return [args.op === "status" ? status(selected.value, schedule, args.date, now) : { bookId, schedule }];
+          return json({
+            schedules: schedules.filter((entry) => entry.schedule.country === country).map((entry) => (
+              args.op === "status" ? status(entry.book, entry.schedule, args.date, now) : { bookId: entry.book.bookId, schedule: entry.schedule }
+            )),
           });
-          return json({ schedules });
         }
-        if (!args.country) throw new Error(`country is required for ${args.op}`);
-        const selected = books.getByName(controlBookSlug(args.country));
+        const selected = books.getByName(controlBookSlug(country));
         const previous = selected.ok ? readSchedule(selected.value.engine) : undefined;
         if (args.op === "schedule") {
-          const schedule = makeSchedule(args, previous, now);
+          const schedule = makeSchedule({ ...args, country }, previous, now);
           const book = await ensureControlBook(books, schedule);
           return json({ bookId: book.bookId, schedule });
         }
-        if (!selected.ok || !previous) throw new Error(`No research schedule for ${args.country}; create one with op=schedule`);
+        if (!selected.ok || !previous) throw new Error(`No research schedule for ${country}; create one with op=schedule`);
         if (args.op === "unschedule") {
           const schedule = { ...previous, enabled: false };
           await writeSchedule(selected.value.engine, schedule);

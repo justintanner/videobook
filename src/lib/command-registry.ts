@@ -818,6 +818,49 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
   return args;
 }
 
+const TRENDING_OPS = new Set(['schedule', 'unschedule', 'list', 'run', 'status']);
+const TRENDING_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TRENDING_COUNTRY = /^[A-Za-z]{2}$/;
+
+export function parseTrendingCommandArgs(rest: string): Record<string, string> {
+  const tokens = rest.trim().split(/\s+/).filter((token) => token.length > 0);
+  const args: Record<string, string> = {};
+  let index = 0;
+  const head = tokens[0]?.toLowerCase();
+  if (head && TRENDING_OPS.has(head)) {
+    args.op = head;
+    index = 1;
+  } else {
+    args.op = 'run';
+  }
+  const country = tokens[index];
+  if (country && TRENDING_COUNTRY.test(country)) {
+    args.country = country.toUpperCase();
+    index += 1;
+  }
+  const date = tokens[index];
+  if (date && TRENDING_DATE.test(date)) {
+    args.date = date;
+    index += 1;
+  }
+  if (index < tokens.length) throw new Error(`Unexpected /trending argument "${tokens[index]}"`);
+  return args;
+}
+
+export function parseSlashCommandArgs(command: Pick<ServerCommand, 'command' | 'params'>, rest: string): Record<string, CommandArgValue> {
+  if (command.command === '/trending') return parseTrendingCommandArgs(rest);
+  return parseCommandArgs(rest, command.params);
+}
+
+export function applyInjectedCommandArgs(
+  command: Pick<ServerCommand, 'command' | 'mcpTool'>,
+  parsed: CommandToolArgs,
+): CommandToolArgs {
+  const injected = command.mcpTool?.injectParams ?? {};
+  if (command.command === '/trending') return { ...injected, ...parsed };
+  return { ...parsed, ...injected };
+}
+
 export function selectCommandForInput(commands: ServerCommand[], commandStr: string, rest: string): ServerCommand | undefined {
   const normalized = commandStr.toLowerCase();
   const exactMatches = commands.filter((command) => command.command.toLowerCase() === normalized);

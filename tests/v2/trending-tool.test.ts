@@ -7,9 +7,10 @@ import { BookManager } from "../../server/src/book-manager.js";
 import { enqueueOptions } from "../../server/src/queue.js";
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { getCanonicalCommands } from "../../server/src/tools/commands.js";
+import { defaultTrendingSources } from "../../server/src/trending/default-sources.js";
 import { readSchedule, updateLedger, writeSourceHealth } from "../../server/src/trending/ledger.js";
 import { nextTrendingEvents, trendingCutTime } from "../../server/src/trending/scheduler.js";
-import { parseCommandArgs } from "../../src/lib/command-registry.js";
+import { applyInjectedCommandArgs, parseTrendingCommandArgs } from "../../src/lib/command-registry.js";
 import { testBudget } from "../../server/src/test-budget.js";
 import { schedule, sighting } from "./trending-fixtures.js";
 
@@ -47,9 +48,14 @@ describe("trending_research", () => {
     expect((await tool.handler({ op: "list" })).content[0].text).toBe('{"schedules":[]}');
     expect((await tool.handler({ op: "schedule", country: "th" })).isError).toBeUndefined();
     const first = readSchedule(control().engine)!;
-    expect(first).toMatchObject({ country: "TH", timezone: "Asia/Bangkok", cutoffLocalTime: "00:30", topN: 10, samplesPerDay: 4, retentionDays: 30, enabled: true });
+    expect(first).toMatchObject({
+      platform: "tiktok", country: "TH", timezone: "Asia/Bangkok", cutoffLocalTime: "00:30",
+      topN: 10, samplesPerDay: 4, window: "trending", windowHours: 24, excludePromoted: true, ranking: "views",
+      sources: [{ id: "endless" }, { id: "tiktok-creative-center" }],
+      downstream: { transcribe: false, translateTo: [], analyze: false }, retentionDays: 30, enabled: true,
+    });
     await tool.handler({ op: "schedule", country: "TH", top_n: 5, downstream: { analyze: true } });
-    expect(readSchedule(control().engine)).toMatchObject({ scheduleId: first.scheduleId, createdAt: first.createdAt, topN: 5, downstream: { transcribe: true, analyze: true, translateTo: [] } });
+    expect(readSchedule(control().engine)).toMatchObject({ scheduleId: first.scheduleId, createdAt: first.createdAt, topN: 5, downstream: { transcribe: false, analyze: true, translateTo: [] } });
     const listed = JSON.parse((await tool.handler({ op: "list", country: "TH" })).content[0].text);
     expect(listed.schedules).toHaveLength(1);
     await tool.handler({ op: "unschedule", country: "TH" });
@@ -89,7 +95,7 @@ describe("trending_research", () => {
   it("returns structured errors for invalid parameters and missing schedules", async () => {
     const tool = await setup();
     for (const input of [
-      { op: "schedule" }, { op: "schedule", country: "ZZ" }, { op: "schedule", country: "USA" },
+      { op: "schedule", country: "ZZ" }, { op: "schedule", country: "USA" },
       { op: "schedule", country: "US" }, { op: "schedule", country: "TH", timezone: "Not/AZone" },
       { op: "schedule", country: "TH", cutoff_local_time: "24:00" },
       { op: "schedule", country: "TH", samples_per_day: 0 },
@@ -107,7 +113,55 @@ describe("trending_research", () => {
     expect(nextTrendingEvents(dst, new Date("2026-03-08T06:59:00.000Z")).cut).toBe("2026-03-08T07:00:00.000Z");
     const command = getCanonicalCommands().find((entry) => entry.command === "/trending")!;
     expect(command.mcpTool).toEqual({ tool: "trending_research", injectParams: { op: "run" } });
-    expect(parseCommandArgs("TH 2026-10-28", command.params)).toEqual({ country: "TH", date: "2026-10-28" });
-    expect(parseCommandArgs("TH", command.params)).toEqual({ country: "TH" });
+    expect(command.params.map((param) => [param.name, param.required])).toEqual([["op", false], ["country", false], ["date", false]]);
+    expect(parseTrendingCommandArgs("")).toEqual({ op: "run" });
+    expect(parseTrendingCommandArgs("schedule")).toEqual({ op: "schedule" });
+    expect(parseTrendingCommandArgs("TH")).toEqual({ op: "run", country: "TH" });
+    expect(parseTrendingCommandArgs("th 2026-10-28")).toEqual({ op: "run", country: "TH", date: "2026-10-28" });
+    expect(parseTrendingCommandArgs("schedule TH")).toEqual({ op: "schedule", country: "TH" });
+    expect(parseTrendingCommandArgs("status")).toEqual({ op: "status" });
+    expect(parseTrendingCommandArgs("2026-10-28")).toEqual({ op: "run", date: "2026-10-28" });
+    expect(applyInjectedCommandArgs(command, parseTrendingCommandArgs("schedule"))).toEqual({ op: "schedule" });
+    expect(applyInjectedCommandArgs(command, parseTrendingCommandArgs("TH"))).toEqual({ op: "run", country: "TH" });
+    expect(() => parseTrendingCommandArgs("schedule extra")).toThrow(/Unexpected \/trending argument/);
+  });
+
+  it("defaults an omitted schedule to Thailand and keeps list, run, and status on that schedule when another country exists", async () => {
+    const tool = await setup();
+    const created = JSON.parse((await tool.handler({ op: "schedule" })).content[0].text);
+    expect(created.schedule).toMatchObject({ country: "TH", timezone: "Asia/Bangkok", downstream: { transcribe: false } });
+    expect(JSON.parse((await tool.handler({ op: "status" })).content[0].text).schedules[0].schedule.country).toBe("TH");
+    await tool.handler({ op: "schedule", country: "US", timezone: "America/New_York" });
+    const listed = JSON.parse((await tool.handler({ op: "list" })).content[0].text).schedules;
+    expect(listed.map((entry: { schedule: { country: string } }) => entry.schedule.country)).toEqual(["TH"]);
+    const thailand = JSON.parse((await tool.handler({ op: "run" })).content[0].text);
+    expect(thailand.jobs[0].bookId).toBe(control().bookId);
+    await tool.handler({ op: "unschedule" });
+    expect(readSchedule(control().engine)?.enabled).toBe(false);
+    const unitedStates = books.getByName("tiktok-us-research");
+    if (!unitedStates.ok) throw new Error(unitedStates.error.message);
+    expect(readSchedule(unitedStates.value.engine)?.enabled).toBe(true);
+  }, testBudget(60_000));
+
+  it("uses the only schedule for list, run, and status, and still defaults unschedule to Thailand", async () => {
+    const tool = await setup();
+    await tool.handler({ op: "schedule", country: "US", timezone: "America/New_York" });
+    const unitedStates = books.getByName("tiktok-us-research");
+    if (!unitedStates.ok) throw new Error(unitedStates.error.message);
+    expect(JSON.parse((await tool.handler({ op: "list" })).content[0].text).schedules[0].schedule.country).toBe("US");
+    expect(JSON.parse((await tool.handler({ op: "status" })).content[0].text).schedules[0].schedule.country).toBe("US");
+    const sample = JSON.parse((await tool.handler({ op: "run" })).content[0].text);
+    expect(sample.jobs[0].bookId).toBe(unitedStates.value.bookId);
+    expect((await tool.handler({ op: "unschedule" })).isError).toBe(true);
+    expect(readSchedule(unitedStates.value.engine)?.enabled).toBe(true);
+  }, testBudget(60_000));
+
+  it("adds omkar only when its key and package are both available", () => {
+    const free = ["endless", "tiktok-creative-center"];
+    expect(defaultTrendingSources({ apiKey: null, packageInstalled: true }).map((source) => source.id)).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "test-omkar", packageInstalled: true }).map((source) => source.id)).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: false }).map((source) => source.id)).toEqual(free);
+    expect(defaultTrendingSources({ apiKey: "omkar-live", packageInstalled: true }).map((source) => source.id)).toEqual([...free, "omkar"]);
+    expect(defaultTrendingSources().some((source) => source.id === "omkar")).toBe(false);
   });
 });
