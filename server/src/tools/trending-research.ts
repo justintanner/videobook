@@ -80,7 +80,7 @@ function status(book: ManagedBook, schedule: TrendingSchedule, date: string | un
       days: schedule.retentionDays, archiveTopClips: schedule.archiveTopClips ?? false, nextRun: nextRuns.cut,
       lastRun: readRetention(book.engine) ?? null,
       recentDeletions: readHistory(book.engine).filter((entry) => entry.deletedAt).slice(-10)
-        .map(({ date, dayBookId, dayBookName, deletedAt }) => ({ date, dayBookId, dayBookName, deletedAt })),
+        .map(({ date, dayBookId, dayBookName, deletedAt, spend }) => ({ date, dayBookId, dayBookName, deletedAt, spend })),
     },
     recentFailures: {
       sources: Object.entries(sourceHealth).filter(([, health]) => health.lastError).map(([source, health]) => ({ source, error: health.lastError })),
@@ -96,7 +96,7 @@ export function trendingResearchDef(books: BookManager, options: {
 } = {}): ToolDef {
   return {
     name: "trending_research",
-    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. TH defaults to Asia/Bangkok; other countries require timezone on creation.",
+    description: "Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. TH defaults to Asia/Bangkok; other countries require timezone on creation.",
     scope: "global",
     schema,
     handler: async (input) => {

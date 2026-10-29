@@ -34,6 +34,17 @@ const archiveResearchClip: ArchiveResearchClip = async ({ day, schedule, run, do
   }, ARCHIVE_TIMEOUT_MS);
 };
 
+function keepArchiveUsage(control: Engine, day: ManagedBook): number {
+  let spendNanos = 0;
+  for (const entry of day.engine.usage.recent(200)) {
+    if (entry.operation !== "archive_clip") continue;
+    const kept = control.usage.record({ ...entry, artifactId: null });
+    if (!kept.ok) throw new Error(`Kept book ${day.name}: its archive usage could not be copied: ${kept.error.message}`);
+    if (kept.value.status === "completed") spendNanos += Math.round((kept.value.costUsd ?? 0) * 1e9);
+  }
+  return spendNanos / 1e9;
+}
+
 function refreshOutcomes(day: Engine, run: TrendingRunRecord): void {
   for (const download of run.downloads) {
     const job = download.queueJobId ? day.jobs.queue.get(download.queueJobId) : null;
@@ -68,6 +79,7 @@ async function retire(
       await writeRun(control, run);
     }
   }
+  run.spend = keepArchiveUsage(control, day);
   await writeHistory(control, { ...run, dayBookName: day.name, retainedAt });
   const deleted = await books.delete(day.bookId, {
     confirmName: day.name,

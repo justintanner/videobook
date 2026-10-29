@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { UsageInput } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { chunkKey, indexKey, transcriptJsonKey, transcriptTextKey, type ArchiveIndex } from "../../server/src/archive-b2.js";
 import { getArchiveStore } from "../../server/src/archive-store.js";
@@ -15,6 +16,7 @@ import { enqueueOptions, setEngineRoot } from "../../server/src/queue.js";
 import { registerArchiveClipJob } from "../../server/src/jobs/archive-clip.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
 import { retainTrending, type ArchiveResearchClip } from "../../server/src/jobs/trending-retention.js";
+import { bookUsageDef } from "../../server/src/tools/book-usage.js";
 import { trendingResearchDef } from "../../server/src/tools/trending-research.js";
 import { ensureControlBook } from "../../server/src/trending/control-book.js";
 import {
@@ -219,6 +221,45 @@ describe("trending day-book retention", () => {
     expect(calls).toHaveLength(2);
   }, testBudget(90_000));
 
+  it("copies the day book's archive usage into the control book and counts only completed cost as history spend", async () => {
+    const control = await setup({ archiveTopClips: true });
+    const { run, day } = await cutDay(control, "2026-09-26", ["clip"]);
+    const finished = day.engine.jobs.queue.dequeue(process.pid, testBudget(60_000))!;
+    await day.engine.jobs.queue.complete(finished.id);
+    const request = { provider: "elevenlabs", model: "scribe_v2", activity: "analysis", operation: "archive_clip", artifactId: run.downloads[0].artifactId! } as const;
+    const rows: UsageInput[] = [
+      { ...request, id: "archive-completed", status: "completed", basis: "estimated", costUsd: 0.0123, units: 41, unit: "second" },
+      { ...request, id: "archive-pending", status: "pending", basis: "estimated", costUsd: 0.5 },
+      { ...request, id: "archive-failed", status: "failed", basis: "unknown" },
+      { ...request, id: "other-operation", operation: "tag_asset", status: "completed", basis: "estimated", costUsd: 0.2 },
+    ];
+    const archive: ArchiveResearchClip = async ({ day: book }) => {
+      for (const row of rows) {
+        const recorded = book.engine.usage.record(row);
+        if (!recorded.ok) throw new Error(recorded.error.message);
+      }
+    };
+
+    expect(await retainTrending(control.engine, books, "2026-10-28", archive)).toMatchObject({
+      errors: [], deleted: [{ date: "2026-09-26", bookId: day.bookId }],
+    });
+
+    expect(books.get(day.bookId).ok).toBe(false);
+    const kept = control.engine.usage.recent().sort((left, right) => left.id.localeCompare(right.id));
+    expect(kept).toEqual([
+      expect.objectContaining({ id: "archive-completed", status: "completed", basis: "estimated", costUsd: 0.0123, units: 41, unit: "second" }),
+      expect.objectContaining({ id: "archive-failed", status: "failed", basis: "unknown", costUsd: null }),
+      expect.objectContaining({ id: "archive-pending", status: "pending", basis: "estimated", costUsd: 0.5 }),
+    ]);
+    expect(kept.every((row) => row.provider === "elevenlabs" && row.model === "scribe_v2" && row.activity === "analysis"
+      && row.operation === "archive_clip" && row.artifactId === null)).toBe(true);
+    const usage = JSON.parse((await bookUsageDef(control.engine).handler({ book_id: control.bookId })).content[0]!.text);
+    expect(usage.totals).toMatchObject({ count: 3, estimatedUsd: 0.0123, reportedUsd: 0, pendingCount: 1, pendingUsd: 0.5, unpriced: 1 });
+    const [entry] = readHistory(control.engine);
+    expect(entry).toMatchObject({ date: "2026-09-26", dayBookId: day.bookId, deletedAt: expect.any(String), spend: 0.0123 });
+    expect(entry.spend).toBe(usage.totals.estimatedUsd + usage.totals.reportedUsd);
+  }, testBudget(60_000));
+
   it("schedules retention once per cutoff date and stops retrying expired runs", async () => {
     const control = await setup({ createdAt: "2026-10-27T23:00:00.000Z" });
     const recent = await books.create("tiktok-th-2026-10-27");
@@ -285,7 +326,7 @@ describe("trending day-book retention", () => {
         lastDate: "2026-10-28", lastRunAt: expect.any(String), errors: [],
         deleted: [{ date: "2026-10-01", bookId: day.bookId, name: "tiktok-th-2026-10-01" }], prunedLedgers: ["2026-09-30"],
       },
-      recentDeletions: [{ date: "2026-10-01", dayBookId: day.bookId, dayBookName: "tiktok-th-2026-10-01", deletedAt: expect.any(String) }],
+      recentDeletions: [{ date: "2026-10-01", dayBookId: day.bookId, dayBookName: "tiktok-th-2026-10-01", deletedAt: expect.any(String), spend: 0 }],
     });
   }, testBudget(60_000));
 
@@ -369,7 +410,7 @@ describe("trending day-book retention", () => {
         sources: [{ kind: "asset", book_id: day.bookId, asset_id: download.artifactId }],
       });
       expect(Buffer.from((await store.getBytes(index.media.key))!)).toEqual(bytes);
-      return { store, sha256, index };
+      return { control, store, sha256, index };
     }
 
     it("archives a completed silent clip into the local archive without transcribing it, then deletes the day book", async () => {
@@ -379,7 +420,7 @@ describe("trending day-book retention", () => {
     }, testBudget(90_000));
 
     it("transcribes a clip with audio through the ElevenLabs endpoint override with the archiver's settings", async () => {
-      const { store, sha256, index } = await archiveClip([
+      const { control, store, sha256, index } = await archiveClip([
         "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
         "-c:v", "libx264", "-c:a", "aac", "-shortest",
       ]);
@@ -401,6 +442,13 @@ describe("trending day-book retention", () => {
         ...speech, transcription_id: null, audio_duration_secs: index.duration,
       });
       expect(await store.getText(transcriptTextKey(store, sha256))).toBe(speech.text);
+
+      const usage = JSON.parse((await bookUsageDef(control.engine).handler({ book_id: control.bookId })).content[0]!.text);
+      expect(usage.recent).toEqual([expect.objectContaining({
+        provider: "elevenlabs", model: "scribe_v2", activity: "analysis", status: "completed", operation: "archive_clip", artifactId: null,
+      })]);
+      expect(usage.groups).toEqual([expect.objectContaining({ activity: "analysis", provider: "elevenlabs", model: "scribe_v2", count: 1 })]);
+      expect(readHistory(control.engine)[0].spend).toBe(usage.totals.estimatedUsd + usage.totals.reportedUsd);
     }, testBudget(90_000));
   });
 });
