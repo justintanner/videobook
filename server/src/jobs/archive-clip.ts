@@ -18,6 +18,7 @@ import { ytdlpRunOptions } from "../ytdlp-binary.js";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
+import { providerEndpoints } from "../media/endpoints.js";
 import {
   buildIntelligenceResponses,
   firstResponseText,
@@ -300,7 +301,8 @@ async function transcribeMedia(
   }
 
   const apiKey = requireApiKey("ELEVENLABS_API_KEY");
-  const provider = createElevenLabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS });
+  const baseURL = providerEndpoints().elevenlabsBaseURL;
+  const provider = createElevenLabs({ apiKey, timeout: ELEVENLABS_TIMEOUT_MS, ...(baseURL ? { baseURL } : {}) });
   const dir = await mkdtemp(join(tmpdir(), "videocity-archive-audio-"));
   const chunks: Array<{ transcript: ElevenLabsTranscript; offset: number }> = [];
   try {

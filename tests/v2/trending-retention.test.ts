@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { indexKey, type ArchiveIndex } from "../../server/src/archive-b2.js";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { chunkKey, indexKey, transcriptJsonKey, transcriptTextKey, type ArchiveIndex } from "../../server/src/archive-b2.js";
 import { getArchiveStore } from "../../server/src/archive-store.js";
 import { scopedBookEngine } from "../../server/src/book-context.js";
 import { BookManager, type ManagedBook } from "../../server/src/book-manager.js";
 import { runFfmpeg } from "../../server/src/ffmpeg.js";
+import { configureProviderEndpoints } from "../../server/src/media/endpoints.js";
 import { enqueueOptions, setEngineRoot } from "../../server/src/queue.js";
 import { registerArchiveClipJob } from "../../server/src/jobs/archive-clip.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
@@ -286,17 +289,62 @@ describe("trending day-book retention", () => {
     });
   }, testBudget(60_000));
 
-  it("archives a completed clip through the real archive_clip job into the local archive, then deletes the day book", async () => {
-    const scratch = await mkdtemp(join(tmpdir(), "trending-archive-"));
-    const previous = { key: process.env.ELEVENLABS_API_KEY, dir: process.env.VIDEOBOOK_ARCHIVE_DIR };
-    process.env.ELEVENLABS_API_KEY = "offline-elevenlabs-key";
-    process.env.VIDEOBOOK_ARCHIVE_DIR = join(scratch, "archive");
-    try {
+  describe("through the real archive_clip job", () => {
+    const speech = {
+      language_code: "eng", language_probability: 0.98, text: "Hello there (laughter)", channel_index: 0,
+      transcription_id: "stub-transcription", audio_duration_secs: 1,
+      words: [
+        { text: "Hello", start: 0.1, end: 0.4, type: "word", speaker_id: "speaker_0" },
+        { text: " ", start: 0.4, end: 0.45, type: "spacing", speaker_id: "speaker_0" },
+        { text: "there", start: 0.45, end: 0.7, type: "word", speaker_id: "speaker_0" },
+        { text: " ", start: 0.7, end: 0.75, type: "spacing", speaker_id: "speaker_1" },
+        { text: "(laughter)", start: 0.75, end: 1, type: "audio_event", speaker_id: "speaker_1" },
+      ],
+    };
+    let requests: { method: string; url: string; contentType: string; body: Buffer }[];
+    let scratch: string;
+    let restoreEndpoints: () => void;
+    const stub = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        requests.push({
+          method: request.method ?? "", url: request.url ?? "", contentType: String(request.headers["content-type"] ?? ""),
+          body: Buffer.concat(chunks),
+        });
+        if (request.url !== "/v1/speech-to-text") {
+          response.statusCode = 404;
+          response.end();
+          return;
+        }
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify(speech));
+      });
+    });
+
+    beforeAll(() => new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve)));
+    afterAll(() => new Promise<void>((resolve) => stub.close(() => resolve())));
+    beforeEach(async () => {
+      requests = [];
+      scratch = await mkdtemp(join(tmpdir(), "trending-archive-"));
+      vi.stubEnv("ELEVENLABS_API_KEY", "offline-elevenlabs-key");
+      vi.stubEnv("VIDEOBOOK_ARCHIVE_DIR", join(scratch, "archive"));
+      restoreEndpoints = configureProviderEndpoints({
+        elevenlabsBaseURL: `http://127.0.0.1:${(stub.address() as AddressInfo).port}`,
+      });
+    });
+    afterEach(async () => {
+      restoreEndpoints();
+      vi.unstubAllEnvs();
+      await rm(scratch, { recursive: true, force: true });
+    });
+
+    async function archiveClip(input: string[]) {
       const control = await setup({ archiveTopClips: true });
       const { run, day } = await cutDay(control, "2026-09-26", ["clip"]);
       const [download] = run.downloads;
       const media = join(scratch, "clip.mp4");
-      await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=0.1", "-c:v", "libx264", media]);
+      await runFfmpeg(["-y", ...input, media]);
       const saved = await day.engine.files.writeFromPath(download.artifactId!, "original.mp4", media);
       if (!saved.ok) throw new Error(saved.error.message);
       const job = day.engine.jobs.queue.dequeue(process.pid, testBudget(60_000))!;
@@ -312,20 +360,47 @@ describe("trending day-book retention", () => {
       expect(readHistory(control.engine)[0].downloads[0]).toMatchObject({ status: "completed", archivedAt: expect.any(String) });
       const store = getArchiveStore();
       const bytes = await readFile(media);
-      const index = await store.getJson<ArchiveIndex>(indexKey(store, createHash("sha256").update(bytes).digest("hex")));
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const index = (await store.getJson<ArchiveIndex>(indexKey(store, sha256)))!;
       expect(store.kind).toBe("local");
       expect(index).toMatchObject({
-        title: "TikTok TH 2026-09-26 #1 author", people: [], ingests: [expect.any(String)], transcript: { chunk_count: 0 },
+        title: "TikTok TH 2026-09-26 #1 author", people: [], ingests: [expect.any(String)],
         topics: [{ label: "tiktok-th-trending", source: "manual" }],
         sources: [{ kind: "asset", book_id: day.bookId, asset_id: download.artifactId }],
       });
-      expect(Buffer.from((await store.getBytes(index!.media.key))!)).toEqual(bytes);
-    } finally {
-      if (previous.key === undefined) delete process.env.ELEVENLABS_API_KEY;
-      else process.env.ELEVENLABS_API_KEY = previous.key;
-      if (previous.dir === undefined) delete process.env.VIDEOBOOK_ARCHIVE_DIR;
-      else process.env.VIDEOBOOK_ARCHIVE_DIR = previous.dir;
-      await rm(scratch, { recursive: true, force: true });
+      expect(Buffer.from((await store.getBytes(index.media.key))!)).toEqual(bytes);
+      return { store, sha256, index };
     }
-  }, testBudget(90_000));
+
+    it("archives a completed silent clip into the local archive without transcribing it, then deletes the day book", async () => {
+      const { index } = await archiveClip(["-f", "lavfi", "-i", "color=c=blue:s=64x64:d=0.1", "-c:v", "libx264"]);
+      expect(index.transcript).toMatchObject({ chunk_count: 0 });
+      expect(requests).toEqual([]);
+    }, testBudget(90_000));
+
+    it("transcribes a clip with audio through the ElevenLabs endpoint override with the archiver's settings", async () => {
+      const { store, sha256, index } = await archiveClip([
+        "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+        "-c:v", "libx264", "-c:a", "aac", "-shortest",
+      ]);
+
+      expect(requests.map((request) => `${request.method} ${request.url}`)).toEqual(["POST /v1/speech-to-text"]);
+      const form = await new Response(new Uint8Array(requests[0].body), { headers: { "content-type": requests[0].contentType } }).formData();
+      expect(Object.fromEntries([...form].filter(([, value]) => typeof value === "string"))).toEqual({
+        model_id: "scribe_v2", tag_audio_events: "true", diarize: "true",
+      });
+      const file = form.get("file") as File;
+      expect(file.type).toBe("audio/mpeg");
+      expect(file.size).toBeGreaterThan(0);
+      expect(index.transcript).toEqual({
+        json_key: transcriptJsonKey(store, sha256), text_key: transcriptTextKey(store, sha256), chunk_count: 1, provider: "elevenlabs",
+      });
+      expect(index.duration).toBeGreaterThan(0);
+      expect(await store.getJson(chunkKey(store, sha256, 0))).toEqual(speech);
+      expect(await store.getJson(transcriptJsonKey(store, sha256))).toEqual({
+        ...speech, transcription_id: null, audio_duration_secs: index.duration,
+      });
+      expect(await store.getText(transcriptTextKey(store, sha256))).toBe(speech.text);
+    }, testBudget(90_000));
+  });
 });
