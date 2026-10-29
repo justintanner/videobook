@@ -95,7 +95,7 @@
     "@apicity/x": "^0.21.0",
     "@dolthub/doltlite": "0.51.1",
     "@eslint/js": "^10.0.1",
-    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/node": "2.1.2",
     "@tailwindcss/vite": "^4.2.1",
     "@types/chrome": "^0.1.43",
     "@types/node": "^24.10.1",
