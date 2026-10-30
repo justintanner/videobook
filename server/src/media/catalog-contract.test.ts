@@ -15,6 +15,8 @@ const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
   "kie:grok-imagine/extend": { task_id: "task-1", extend_at: 1, extend_times: "6" },
   "kie:grok-imagine/upscale": { task_id: "task-1" },
   "elevenlabs:text-to-speech": { voice_id: "voice-1" },
+  ...Object.fromEntries(["text-to-video", "image-to-video", "reference-to-video"].map((leaf) =>
+    [`fal:minimax/h3/${leaf}/lora`, { loras: [{ path: "https://example.com/style.safetensors" }] }])),
   ...Object.fromEntries(MACHGEN_TOPAZ_MODELS.map((apiId) => [`machgen:${apiId}`, { source_seconds: 10 }])),
 };
 

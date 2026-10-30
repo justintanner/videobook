@@ -123,9 +123,9 @@ function catalogMedia(provider: Provider, model: string, path: string): Media | 
 
 function activityFor(provider: Provider, model: string, path: string, operation = ""): UsageEntry["activity"] {
   if (/\/(responses|completions)$/u.test(path) && /chat|rewrite_prompt/u.test(operation)) return "chat";
-  if (/transcrib|speech.to.text|analy|describe|tag_|rename|suggest|translate|vision|image.subjects|regions|verify/iu.test(`${operation} ${path}`)) return "analysis";
   const media = catalogMedia(provider, model, path);
   if (media) return MEDIA_ACTIVITY[media];
+  if (/transcrib|speech.to.text|analy|describe|tag_|rename|suggest|translate|vision|image.subjects|regions|verify/iu.test(`${operation} ${path}`)) return "analysis";
   if (/video|veo|wan\/|kling|seedance|happyhorse|lipsync/iu.test(`${model} ${path}`)) return "video";
   if (/audio|speech|music|sound|sfx|suno|vocal/iu.test(`${model} ${path}`)) return "audio";
   if (/image|banana|seedream|qwen|flux|ideogram/iu.test(`${model} ${path}`)) return "images";

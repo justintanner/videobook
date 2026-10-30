@@ -45,6 +45,9 @@ function requiredOptions(model: ResolvedModel): Record<string, unknown> {
     options[option.name] = option.enumValues[0]
       ?? (option.valueType === "number" || option.valueType === "integer" ? option.minimum ?? 1 : "value");
   }
+  if (model.id.startsWith("fal:minimax/h3/") && model.id.endsWith("/lora")) {
+    options.loras = [{ path: "https://example.com/style.safetensors" }];
+  }
   if (model.id === "fal:minimax/h3-max/insert-video") {
     options.start_time = 2;
     options.resume_time = 5;

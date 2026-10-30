@@ -310,6 +310,15 @@ function settingFields(spec: MachGenModelSpec): ZodRawShape {
   };
 }
 
+function videoOperationFields(spec: MachGenModelSpec): ZodRawShape {
+  const [first, ...rest] = spec.grids.R2V?.operations ?? [];
+  if (first === undefined || rest.length === 0) return {};
+  return {
+    reference_video_operation: z.enum([first, ...rest]).optional()
+      .describe("What to do with the reference video: reference it, edit it, or extend it"),
+  };
+}
+
 function shotFields(spec: MachGenModelSpec): ZodRawShape {
   if (!spec.multiShot) return {};
   return {
@@ -409,6 +418,7 @@ function machgenInput(spec: MachGenModelSpec): WireSpec["input"] {
     ...referenceFields(spec),
     ...settingFields(spec),
     ...shotFields(spec),
+    ...videoOperationFields(spec),
   }).superRefine((value, ctx) => {
     const record = value as Record<string, unknown>;
     const task = taskTypeOf(spec, record);
@@ -429,9 +439,13 @@ function frameSources(value: Record<string, unknown>): Record<string, unknown> {
 
 function referenceSources(spec: MachGenModelSpec, value: Record<string, unknown>): Record<string, unknown> {
   const references = referencesOf(spec, value);
-  return Object.fromEntries(ALL_REFERENCES
-    .filter((kind) => references[kind].length > 0)
-    .map((kind) => [SOURCE_FIELDS[kind], references[kind]]));
+  const operation = text(value.reference_video_operation);
+  return {
+    ...Object.fromEntries(ALL_REFERENCES
+      .filter((kind) => references[kind].length > 0)
+      .map((kind) => [SOURCE_FIELDS[kind], references[kind]])),
+    ...(operation && references.video.length > 0 ? { reference_video_operation: operation } : {}),
+  };
 }
 
 function shotConfig(value: Record<string, unknown>): Record<string, unknown> {

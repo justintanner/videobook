@@ -30,40 +30,15 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | fal:bytedance.seedream.v5.pro.edit | This exact endpoint is not in the Videobook catalog. |
 | fal:meta.museImage.edit | This exact endpoint is not in the Videobook catalog. |
 | fal:microsoft.maiImage2p5Pro.edit | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3.textToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p5.textToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3Max.textToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3MaxTurbo.textToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:blackforestlabs.flux3.textToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p0.textToVideo | This exact endpoint is not in the Videobook catalog. |
 | kie:bytedance/seedance-2 | This exact endpoint is not in the Videobook catalog. |
-| fal:geminiOmniFlash.v1p1.textToVideo | This exact endpoint is not in the Videobook catalog. |
 | kie:google/gemini-omni-flash-1-1 | This exact endpoint is not in the Videobook catalog. |
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
-| fal:minimax.h3.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p5.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:geminiOmniFlash.v1p1.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3Max.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3MaxTurbo.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p0.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:blackforestlabs.flux3.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:xai.grokImagineVideo.v1p5.imageToVideo | This exact endpoint is not in the Videobook catalog. |
 | xai:v1.videos.generations.imageToVideo | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
-| fal:alibaba.happyHorse.v1p1.imageToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p5.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:geminiOmniFlash.v1p1.edit | This exact endpoint is not in the Videobook catalog. |
-| fal:wan.v2p7.editVideo | This exact endpoint is not in the Videobook catalog. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:minimax.h3Max.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:bytedance.seedance2p0.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:geminiOmniFlash.v1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| fal:xai.grokImagineVideo.v1p5.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 | xai:grok-imagine-video-1.5 | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
-| fal:alibaba.happyHorse.v1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 
-- Models: 203
+- Models: 292
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -219,6 +194,95 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:pixelcut/looping-video` | Pixelcut Looping Video | video | image_to_video | image 1-1 |  | visible |
 | `fal:creatify/boreal` | Creatify Boreal | video | text_to_video, image_to_video, lip_sync | image 0-1, audio 0-1 |  | visible |
 | `fal:mirelo-ai/sfx2.0/video-to-video` | Mirelo SFX 2.0 | video | edit_video | video 1-1 |  | visible |
+| `fal:alibaba/happy-horse/v1.1/text-to-video` | Happy Horse 1.1 | video | text_to_video | none |  | visible |
+| `fal:alibaba/happy-horse/v1.1/image-to-video` | Happy Horse 1.1 | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:alibaba/happy-horse/v1.1/reference-to-video` | Happy Horse 1.1 | video | reference_to_video | image 1-n |  | visible |
+| `fal:blackforestlabs/flux-3/text-to-video` | FLUX 3 | video | text_to_video | none |  | visible |
+| `fal:blackforestlabs/flux-3/text-to-video/draft` | FLUX 3 Draft | video | text_to_video | none |  | visible |
+| `fal:blackforestlabs/flux-3/image-to-video` | FLUX 3 Image | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/image-to-video/draft` | FLUX 3 Image Draft | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/first-last-frame-to-video` | FLUX 3 First/Last Frame | video | image_to_video | first_frame 1-1, last_frame 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/first-last-frame-to-video/draft` | FLUX 3 First/Last Frame Draft | video | image_to_video | first_frame 1-1, last_frame 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/keyframes-to-video` | FLUX 3 Keyframes | video | image_to_video | image 1-10 |  | visible |
+| `fal:blackforestlabs/flux-3/keyframes-to-video/draft` | FLUX 3 Keyframes Draft | video | image_to_video | image 1-10 |  | visible |
+| `fal:blackforestlabs/flux-3/edit-video` | FLUX 3 Edit Video | video | edit_video | video 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/extend-video` | FLUX 3 Extend | video | extend_video | video 1-1 |  | visible |
+| `fal:blackforestlabs/flux-3/extend-video/draft` | FLUX 3 Extend Draft | video | extend_video | video 1-1 |  | visible |
+| `fal:bytedance/seedance-2.0/text-to-video` | Seedance 2 | video | text_to_video | none |  | visible |
+| `fal:bytedance/seedance-2.0/image-to-video` | Seedance 2 | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:bytedance/seedance-2.0/reference-to-video` | Seedance 2 | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `fal:bytedance/seedance-2.0/fast/text-to-video` | Seedance 2 Fast | video | text_to_video | none |  | visible |
+| `fal:bytedance/seedance-2.0/fast/image-to-video` | Seedance 2 Fast | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:bytedance/seedance-2.0/fast/reference-to-video` | Seedance 2 Fast | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `fal:bytedance/seedance-2.5/text-to-video` | Seedance 2.5 | video | text_to_video | none |  | visible |
+| `fal:bytedance/seedance-2.5/image-to-video` | Seedance 2.5 | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:bytedance/seedance-2.5/reference-to-video` | Seedance 2.5 | video | reference_to_video, edit_video, extend_video | image 0-30, video 0-10, audio 0-10 | r2v, v2v, extend | visible |
+| `fal:fal-ai/heygen/v3/lipsync/precision` | HeyGen Lipsync Precision | video | lip_sync | video 1-1, audio 1-1 |  | visible |
+| `fal:fal-ai/heygen/v3/lipsync/speed` | HeyGen Lipsync Speed | video | lip_sync | video 1-1, audio 1-1 |  | visible |
+| `fal:fal-ai/kling-video/o3/4k/text-to-video` | Kling o3 4K | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/o3/4k/image-to-video` | Kling o3 4K | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:fal-ai/kling-video/o3/4k/reference-to-video` | Kling o3 4K | video | reference_to_video | first_frame 0-1, last_frame 0-1, image 0-n |  | visible |
+| `fal:fal-ai/kling-video/o3/pro/text-to-video` | Kling o3 Pro | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/o3/pro/image-to-video` | Kling o3 Pro | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:fal-ai/kling-video/o3/pro/reference-to-video` | Kling o3 Pro | video | reference_to_video | first_frame 0-1, last_frame 0-1, image 0-n |  | visible |
+| `fal:fal-ai/kling-video/o3/pro/video-to-video/edit` | Kling o3 Pro | video | edit_video | image 0-n, video 1-1 |  | visible |
+| `fal:fal-ai/kling-video/o3/pro/video-to-video/reference` | Kling o3 Pro | video | reference_to_video | image 0-n, video 1-1 |  | visible |
+| `fal:fal-ai/kling-video/v3/pro/text-to-video` | Kling v3 Pro | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/v3/pro/image-to-video` | Kling v3 Pro | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:fal-ai/kling-video/v3/standard/text-to-video` | Kling v3 Standard | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/v3/standard/image-to-video` | Kling v3 Standard | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:fal-ai/kling-video/v3/turbo/pro/text-to-video` | Kling v3 Turbo Pro | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/v3/turbo/pro/image-to-video` | Kling v3 Turbo Pro | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:fal-ai/kling-video/v3/turbo/standard/text-to-video` | Kling v3 Turbo Standard | video | text_to_video | none |  | visible |
+| `fal:fal-ai/kling-video/v3/turbo/standard/image-to-video` | Kling v3 Turbo Standard | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:fal-ai/sora-2/text-to-video` | Sora 2 | video | text_to_video | none |  | visible |
+| `fal:fal-ai/sora-2/image-to-video` | Sora 2 | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:fal-ai/veo3.1/image-to-video` | Veo 3.1 | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:fal-ai/wan/v2.7/text-to-video` | Wan 2.7 | video | text_to_video | audio 0-1 |  | visible |
+| `fal:fal-ai/wan/v2.7/image-to-video` | Wan 2.7 | video | image_to_video | first_frame 1-1, last_frame 0-1, video 0-1, audio 0-1 |  | visible |
+| `fal:fal-ai/wan/v2.7/reference-to-video` | Wan 2.7 | video | reference_to_video | image 0-4, video 0-4 |  | visible |
+| `fal:fal-ai/wan/v2.7/edit-video` | Wan 2.7 Edit | video | edit_video | image 0-1, video 1-1 |  | visible |
+| `fal:google/gemini-omni-flash/image-to-video` | Gemini Omni Flash | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:google/gemini-omni-flash/reference-to-video` | Gemini Omni Flash | video | reference_to_video | image 1-10 |  | visible |
+| `fal:google/gemini-omni-flash/v1.1/text-to-video` | Gemini Omni 1.1 Flash | video | text_to_video | none |  | visible |
+| `fal:google/gemini-omni-flash/v1.1/image-to-video` | Gemini Omni 1.1 Flash | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:google/gemini-omni-flash/v1.1/reference-to-video` | Gemini Omni 1.1 Flash | video | reference_to_video | image 0-10, video 0-3 |  | visible |
+| `fal:lightricks/ltx-2.5/text-to-video/fast` | LTX 2.5 Fast | video | text_to_video | none |  | visible |
+| `fal:lightricks/ltx-2.5/text-to-video/pro` | LTX 2.5 Pro | video | text_to_video | none |  | visible |
+| `fal:lightricks/ltx-2.5/image-to-video/fast` | LTX 2.5 Fast | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:lightricks/ltx-2.5/image-to-video/pro` | LTX 2.5 Pro | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `fal:lightricks/ltx-2.5/audio-to-video/fast` | LTX 2.5 Fast | video | lip_sync | image 0-1, audio 1-1 |  | visible |
+| `fal:lightricks/ltx-2.5/audio-to-video/pro` | LTX 2.5 Pro | video | lip_sync | image 0-1, audio 1-1 |  | visible |
+| `fal:luma/agent/ray/v3.2/text-to-video` | Ray 3.2 Text | video | text_to_video | none |  | visible |
+| `fal:luma/agent/ray/v3.2/image-to-video` | Ray 3.2 Image | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:luma/agent/ray/v3.2/video-to-video` | Ray 3.2 Video | video | edit_video | first_frame 0-1, video 1-1 |  | visible |
+| `fal:luma/agent/ray/v3.2/reframe` | Ray 3.2 Reframe | video | edit_video | video 1-1 |  | visible |
+| `fal:minimax/h3/text-to-video` | MiniMax H3 | video | text_to_video | none |  | visible |
+| `fal:minimax/h3/image-to-video` | MiniMax H3 | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:minimax/h3/reference-to-video` | MiniMax H3 | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `fal:minimax/h3/text-to-video/lora` | MiniMax H3 Text-to-Video LoRA | video | text_to_video | none |  | visible |
+| `fal:minimax/h3/image-to-video/lora` | MiniMax H3 Image-to-Video LoRA | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:minimax/h3/reference-to-video/lora` | MiniMax H3 Reference-to-Video LoRA | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `fal:minimax/h3-max/text-to-video` | H3 Max Text To Video | video | text_to_video | none |  | visible |
+| `fal:minimax/h3-max/image-to-video` | H3 Max Image To Video | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:minimax/h3-max/reference-to-video` | H3 Max Reference To Video | video | reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 |  | visible |
+| `fal:minimax/h3-max/extend-video` | H3 Max Extend | video | extend_video | video 1-1, audio 0-3 |  | visible |
+| `fal:minimax/h3-max/3d-to-video` | H3 Max 3D To Video | video | edit_video | image 0-8, video 1-1 |  | visible |
+| `fal:minimax/h3-max/lip-sync/image-to-video` | H3 Max Lip Sync | video | lip_sync | first_frame 1-1, audio 1-1 |  | visible |
+| `fal:minimax/h3-max-turbo/text-to-video` | H3 Max Turbo Text To Video | video | text_to_video | none |  | visible |
+| `fal:minimax/h3-max-turbo/image-to-video` | H3 Max Turbo Image To Video | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:nvidia/cosmos-3-super/image-to-video` | Cosmos 3 Super | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:xai/grok-imagine-video/v1.5/text-to-video` | Grok Imagine Video 1.5 | video | text_to_video | none |  | visible |
+| `fal:xai/grok-imagine-video/v1.5/image-to-video` | Grok Imagine Video 1.5 | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:xai/grok-imagine-video/v1.5/reference-to-video` | Grok Imagine Video 1.5 | video | reference_to_video | image 1-7 |  | visible |
+| `fal:google/gemini-omni-flash` | Gemini Omni Flash | video | text_to_video | none |  | visible |
+| `fal:google/gemini-omni-flash/edit` | Gemini Omni Flash Edit | video | edit_video | video 1-1 |  | visible |
+| `fal:google/gemini-omni-flash/v1.1/edit` | Gemini Omni 1.1 Flash Edit | video | edit_video | video 1-1 |  | visible |
+| `fal:fal-ai/veo3.1` | Veo 3.1 | video | text_to_video | none |  | visible |
+| `fal:minimax/h3-max/camera-controls` | H3 Max Camera Controls | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:fal-ai/heygen/v2/translate/precision` | HeyGen Translate Precision | video | edit_video | video 1-1 |  | visible |
+| `fal:fal-ai/heygen/v2/translate/speed` | HeyGen Translate Speed | video | edit_video | video 1-1 |  | visible |
+| `fal:fal-ai/heygen/v3/filler-word-removal` | HeyGen Filler Word Removal | video | edit_video | video 1-1 |  | visible |
 | `machgen:MiniMax-H3` | MiniMax H3 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
 | `machgen:Seedance-2.5` | Seedance 2.5 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |
 | `machgen:Seedance-2.0` | Seedance 2.0 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-9, video 0-3, audio 0-3 | t2v, i2v, r2v | visible |

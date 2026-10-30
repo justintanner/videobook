@@ -87,6 +87,23 @@ describe("MachGen catalog", () => {
     }
   });
 
+  it("lets Seedance 2.5 edit or extend its reference video and keeps the option off models that only reference", () => {
+    expect(options("machgen:Seedance-2.5").reference_video_operation?.enumValues).toEqual(["reference", "edit", "extend"]);
+    expect(options("machgen:MiniMax-H3").reference_video_operation).toBeUndefined();
+    expect(request("machgen:Seedance-2.5", {
+      prompt: "keep going down the street",
+      refUrls: { video: [CLIP] },
+      options: { reference_video_operation: "extend", duration: 8 },
+      mode: "r2v",
+    })).toMatchObject({ task_type: "R2V", src_video_urls: [CLIP], reference_video_operation: "extend" });
+    expect(request("machgen:Seedance-2.5", {
+      prompt: "a red boat",
+      refUrls: { image: ["https://example.test/a.png"] },
+      options: { reference_video_operation: "extend" },
+      mode: "r2v",
+    })).not.toHaveProperty("reference_video_operation");
+  });
+
   it("offers each model's resolutions, durations and defaults as options", () => {
     expect(options("machgen:MiniMax-H3")).toMatchObject({
       resolution: { enumValues: ["480p", "768p", "1440p"], defaultValue: "1440p" },
