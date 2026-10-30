@@ -152,9 +152,9 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
     onSubmit={(event) => event.preventDefault()}>
     <div className="workspace-action-heading">
       <button type="button" className="workspace-actions-back" disabled={busy} onClick={onBack}><ArrowLeft size={13} />All actions</button>
+      <p className="workspace-action-description">{action.description}</p>
       <code>{action.command}</code>
     </div>
-    <p className="workspace-action-description">{action.description}</p>
     <WorkspaceActionVariants action={action} variants={variants} values={values} busy={busy} onOpenAction={onOpenAction} />
     <div className="workspace-action-fields">
       {cropMedia && <WorkspaceCropPreview media={cropMedia} values={values} disabled={busy} onChange={onPatch} />}

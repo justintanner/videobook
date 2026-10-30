@@ -30,6 +30,22 @@ function variantLabel(schema: ActionInputSchema): string {
   return schema.title ?? (discriminant ? actionFieldLabel(String(discriminant.const)) : actionFieldLabel(String(schema.type ?? 'value')))
 }
 
+type FieldLayout = 'wide' | 'compact' | 'compact-short'
+
+function fieldLayout(name: string, schema: ActionInputSchema, variantCount: number): FieldLayout {
+  if (variantCount > 1 || !schema.type || schema.type === 'object' || schema.type === 'array') return 'wide'
+  const number = schema.type === 'number' || schema.type === 'integer'
+  if (number) return 'compact-short'
+  if (/prompt|text|description|markdown|content|script/u.test(name)) return 'wide'
+  return 'compact'
+}
+
+const FIELD_LAYOUT_CLASS: Record<FieldLayout, string> = {
+  wide: 'workspace-action-field workspace-action-wide',
+  compact: 'workspace-action-field workspace-action-compact',
+  'compact-short': 'workspace-action-field workspace-action-compact workspace-action-short',
+}
+
 function JsonActionInput({ id, value, disabled, onChange }: {
   id: string
   value: unknown
@@ -80,6 +96,8 @@ export function WorkspaceActionField({
   const structured = resolved.type === 'object' || resolved.type === 'array'
   const selectedVariant = variants.findIndex((variant) => variantLabel(variant) === variantLabel(resolved))
   const enumValues = resolved.enum ?? (resolved.type === 'boolean' ? [true, false] : undefined)
+  const collapsed = structured && !required && value === undefined
+  const layout = (collapsed || (!structured && (enumValues || options))) && variants.length <= 1 ? 'compact' : fieldLayout(name, resolved, variants.length)
   const object = objectValue(value)
   const values = Array.isArray(value) ? value : []
 
@@ -135,7 +153,7 @@ export function WorkspaceActionField({
   }
 
   return (
-    <div className={`workspace-action-field${structured ? ' workspace-action-structure' : ''}`}>
+    <div className={`${FIELD_LAYOUT_CLASS[layout]}${structured ? ' workspace-action-structure' : ''}`}>
       <label htmlFor={id}>{label}{required && <span aria-hidden="true"> *</span>}</label>
       {schema.description && <p className="workspace-action-hint">{schema.description}</p>}
       {variants.length > 1 && (
@@ -148,7 +166,7 @@ export function WorkspaceActionField({
           {variants.map((variant, index) => <option key={index} value={index}>{variantLabel(variant)}</option>)}
         </select>
       )}
-      {structured && !required && value === undefined
+      {collapsed
         ? <button type="button" disabled={disabled} onClick={() => onChange(initialActionInput(resolved, true))}>Add {label.toLowerCase()}</button>
         : resolved.type === 'object'
           ? Object.keys(resolved.properties ?? {}).length

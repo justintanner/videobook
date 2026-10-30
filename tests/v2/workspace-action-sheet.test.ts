@@ -127,6 +127,17 @@ describe('workspace action sheet', () => {
     expect(html).toContain('Close <kbd>Esc</kbd>')
   })
 
+  it('lays short settings out as compact rows and keeps structured settings full width', () => {
+    const trending = catalogAction('tool.trending_research')
+    const html = renderActionSheet(trending, { draft: seedWorkspaceActionDraft(trending, context, { sources: [{ id: 'omkar' }] }) })
+    const fieldClass = (label: string) => new RegExp(`<div class="([^"]+)"><label for="[^"]+">${label}</label>`).exec(html)?.[1]
+    expect(fieldClass('Country')).toBe('workspace-action-field workspace-action-compact')
+    expect(fieldClass('Samples per day')).toBe('workspace-action-field workspace-action-compact workspace-action-short')
+    expect(fieldClass('Window')).toBe('workspace-action-field workspace-action-compact')
+    expect(fieldClass('Downstream')).toBe('workspace-action-field workspace-action-compact workspace-action-structure')
+    expect(fieldClass('Sources')).toBe('workspace-action-field workspace-action-wide workspace-action-structure')
+  })
+
   it('blocks Apply while the action loads and when it needs an open notebook', () => {
     const rename = catalogAction('tool.rename_notebook')
     const loading = renderActionSheet(rename, { draft: null, loading: true })
