@@ -1,5 +1,6 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
+import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
 import type { InputRules, ModeSpec, ModelEntry, Operation, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
@@ -225,6 +226,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:grok-imagine-video-1-5-preview", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 Preview (Kie)", guide: "grok_imagine", dialect: "natural_strip_frames" },
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
   { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
+  { id: "kie:topaz/video-upscale", media: "video", operations: ["upscale_video"], title: "Topaz Video Upscale (Kie)" },
   { id: "kie:kling-3.0-omni/text-to-video", media: "video", operations: ["text_to_video"], guide: "kling30", dialect: "natural", defaults: { customize_multi_shots: false } },
   { id: "kie:kling-3.0-omni/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "natural", defaults: { aspect_ratio: "auto" }, pinnedDefaults: ["aspect_ratio"] },
   { id: "kie:kling-3.0-omni/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "kling30", dialect: "natural", defaults: { audio: false } },
@@ -321,6 +323,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:fal-ai/kandinsky6-lite/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames" },
   { id: "fal:fal-ai/kandinsky6-vsr", media: "video", operations: ["upscale_video"] },
   { id: "fal:fal-ai/kandinsky6-vsr/lite", media: "video", operations: ["upscale_video"] },
+  { id: "fal:topaz/upscale/video/precision", media: "video", operations: ["upscale_video"], title: "Topaz Video Precision Upscale" },
+  { id: "fal:blackforestlabs/flux-video-upscale", media: "video", operations: ["upscale_video"], title: "FLUX Video Upscale" },
   { id: "fal:fal-ai/vidu/q4/image-to-video", media: "video", operations: ["image_to_video"], dialect: "natural_kinds", hidden: true },
   { id: "fal:fal-ai/vidu/q4/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "vidu", hidden: true },
   { id: "fal:pixverse/music-video/vibemv", media: "video", operations: ["reference_to_video"], refs: { image: ["image_url", "style_image_url"] } },
@@ -360,8 +364,13 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     operations: ["upscale_video"],
     title: "MiniMax H3 2K Regeneration (MachGen)",
     description: "Re-render a 5-15 s MiniMax H3 768p video MachGen generated at 1440p from its original prompt and inputs. Connect that video; MachGen bills its length twice, in and out.",
-    hidden: true,
   },
+  ...MACHGEN_TOPAZ_MODELS.map((apiId): ModelEntry => ({
+    id: `machgen:${apiId}`,
+    media: "video",
+    operations: ["upscale_video"],
+    title: `${apiId.replaceAll("-", " ")} (MachGen)`,
+  })),
 
   { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
   { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },

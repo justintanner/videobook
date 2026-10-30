@@ -21,7 +21,7 @@ import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { sourcedGenerationInput } from "./generation-source.js";
-import { MACHGEN_MODELS, machgenTaskUrl } from "./machgen.js";
+import { MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
 import { previewGeneration } from "./preview.js";
 import type { Operation } from "./types.js";
 import { testBudget } from "../test-budget.js";
@@ -67,7 +67,7 @@ describe("MachGen catalog", () => {
       for (const task of tasks) expect(MACHGEN_VIDEO_GRIDS[apiId]?.[task as "T2V" | "I2V" | "R2V"], `${apiId} ${task}`).toBeDefined();
     }
     expect(MODEL_ENTRIES.filter((entry) => entry.id.startsWith("machgen:")).map((entry) => entry.id.slice("machgen:".length)).sort())
-      .toEqual([...Object.keys(MACHGEN_MODELS), "MiniMax-H3/upscale"].sort());
+      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale"].sort());
   });
 
   it("takes the frame and reference inputs each model's MachGen grids accept", () => {
@@ -639,6 +639,36 @@ describe("MachGen provider tasks", () => {
     });
     const other = { model: "machgen:MiniMax-H3", prompt: "x", refs: { first_frame: [sourceId] } };
     expect(await sourcedGenerationInput(engine, other)).toEqual({ ok: true, input: other });
+  });
+
+  it("previews a Topaz upscale of any book video with its length filled in", async () => {
+    const sourceId = await seededVideo(null);
+    await engine.metadata.artifacts.write(sourceId, "original", { duration: 7.2 });
+    const input = { model: "machgen:Topaz-Video-Generative", refs: { video: [sourceId] }, options: { resolution: "1440p", engine: "starlight-sharp" } };
+    const sourced = await sourcedGenerationInput(engine, input);
+    expect(sourced).toEqual({ ok: true, input: { ...input, options: { ...input.options, source_seconds: 8 } } });
+    if (!sourced.ok) return;
+    const preview = previewGeneration(sourced.input);
+    expect(preview.ok && preview.preview.payload).toMatchObject({
+      model: "Topaz-Video-Generative",
+      task_type: "UPSCALE",
+      prompt: "",
+      video_config: { height: 1440, duration_secs: 8 },
+      src_video_urls: [expect.any(String)],
+      upscale_config: { engine: "starlight-sharp" },
+    });
+  });
+
+  it("refuses a Topaz upscale of a URL or a video without a known length before any MachGen call", async () => {
+    const bookId = engine.book.get().bookId;
+    const url = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [CLIP] } } });
+    expect(url.isError).toBe(true);
+    expect(toolText(url)).toContain("needs a video from this book, not a URL");
+    const sourceId = await seededVideo(null);
+    const unknown = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] } } });
+    expect(unknown.isError).toBe(true);
+    expect(toolText(unknown)).toContain("has no known duration yet");
+    expect(recorded).toEqual([]);
   });
 
   it.each([

@@ -97,7 +97,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   if (!source.ok) throw new Error(source.error);
   const uploaded = await uploadRefs(engine, adapter, source.refs);
   const refs = { ...uploaded, sourceVideoIds: [...source.sourceVideoIds, ...uploaded.sourceVideoIds] };
-  const built = buildWireRequest(model, { prompt, refUrls: refs.urls, options: job.options, mode: job.mode });
+  const built = buildWireRequest(model, { prompt, refUrls: refs.urls, options: { ...job.options, ...source.options }, mode: job.mode });
   if (!built.ok) throw new Error(built.error);
   assertProviderPayload(built.request, { toolName: model.id, wire: true });
   await engine.metadata.artifacts.write(job.assetId, "generation-payload", storedPayload(model, built.request));

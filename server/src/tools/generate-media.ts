@@ -86,7 +86,7 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
   const built = buildWireRequest(model, {
     prompt: optionalString(args.prompt),
     refUrls: placeholderRefs(source.refs),
-    options: optionsOf(args.options),
+    options: { ...optionsOf(args.options), ...source.options },
     mode: optionalString(args.mode),
   });
   if (!built.ok) return built.error;

@@ -3,12 +3,13 @@ import type { Engine } from "videobook-engine";
 import { readProviderTaskRecord } from "../provider-task-record.js";
 import { MEDIA_TASK_TYPES } from "./adapters/types.js";
 import { tryResolveModel } from "./descriptor.js";
-import { machgenTaskUrl, machgenUpscale, machgenUpscaleRequirement, type MachGenUpscaleSpec } from "./machgen.js";
+import { referenceVideoDuration } from "../reference-video-duration.js";
+import { machgenTaskUrl, machgenTopaz, machgenUpscale, machgenUpscaleRequirement, type MachGenUpscaleSpec } from "./machgen.js";
 import { normalizeRefs, resolveRefInput } from "./refs.js";
 import type { MediaRefs, ResolvedModel } from "./types.js";
 
 export type GenerationSource =
-  | { ok: true; refs: MediaRefs; sourceVideoIds: string[]; costHints: CostHints }
+  | { ok: true; refs: MediaRefs; sourceVideoIds: string[]; costHints: CostHints; options: Record<string, unknown> }
   | { ok: false; error: string };
 
 interface MachGenOutput {
@@ -72,12 +73,32 @@ async function resolveMachGenUpscale(engine: Engine, model: ResolvedModel, upsca
     refs: { ...refs, video: [machgenTaskUrl(output.taskId, seconds)] },
     sourceVideoIds: [assetId],
     costHints: { inputDurationSeconds: seconds, durationSeconds: seconds },
+    options: {},
+  };
+}
+
+async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
+  const raws = refs.video ?? [];
+  if (raws.length !== 1) return refused(`${model.title} upscales one connected video`);
+  const raw = raws[0]!;
+  if (/^https?:\/\//u.test(raw)) return refused(`${model.title} needs a video from this book, not a URL, so its length is known`);
+  const assetId = await sourceAssetId(engine, raw);
+  if (typeof assetId !== "string") return assetId;
+  const seconds = await referenceVideoDuration(engine, [assetId]);
+  if (seconds === undefined) return refused(`${raw} has no known duration yet; wait for it to finish`);
+  return {
+    ok: true,
+    refs,
+    sourceVideoIds: [],
+    costHints: { inputDurationSeconds: seconds, durationSeconds: seconds },
+    options: { source_seconds: Math.max(1, Math.ceil(seconds)) },
   };
 }
 
 export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
+  if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs);
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
-  if (!upscale) return { ok: true, refs, sourceVideoIds: [], costHints: {} };
+  if (!upscale) return { ok: true, refs, sourceVideoIds: [], costHints: {}, options: {} };
   return resolveMachGenUpscale(engine, model, upscale, refs);
 }
 
@@ -86,7 +107,8 @@ export async function sourcedGenerationInput(
   input: Record<string, unknown>,
 ): Promise<{ ok: true; input: Record<string, unknown> } | { ok: false; error: string }> {
   const model = typeof input.model === "string" ? tryResolveModel(input.model.trim()) : null;
-  if (!model || model.provider !== "machgen" || !machgenUpscale(model.apiId)) return { ok: true, input };
+  if (!model || model.provider !== "machgen" || !(machgenUpscale(model.apiId) || machgenTopaz(model.apiId))) return { ok: true, input };
   const source = await resolveGenerationSource(engine, model, normalizeRefs(input.refs));
-  return source.ok ? { ok: true, input: { ...input, refs: source.refs } } : source;
+  if (!source.ok) return source;
+  return { ok: true, input: { ...input, refs: source.refs, options: { ...record(input.options), ...source.options } } };
 }

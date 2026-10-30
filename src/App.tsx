@@ -359,6 +359,12 @@ import { resolvePlaySlot } from '@/videobook/play-command'
 import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
+import {
+  notebookFollowUpLabels,
+  notebookFollowUps,
+  planNotebookFollowUp,
+  type NotebookFollowUp,
+} from '@/videobook/notebook-follow-up-generation'
 import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
 import {
   changedNotebookGridNodes,
@@ -10379,6 +10385,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       })
     : []
+  const contextMenuFollowUpOptions = contextMenuCell && notebook
+    && contextMenuVisualAsset?.type === 'video'
+    ? notebookFollowUps.filter((followUp) => planNotebookFollowUp({
+        actions: generationActions,
+        cellId: `context-menu-${followUp}`,
+        document: notebook,
+        followUp,
+        lastWorkSlot,
+        sourceCellId: contextMenuCell.id,
+      }) !== null)
+    : []
   const contextMenuActions: NotebookCellContextAction[] = []
   if (contextMenuCell && contextMenuNode) {
     if (contextMenuCell.type === 'post') {
@@ -10451,6 +10468,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy,
       })
     }
+    for (const followUp of contextMenuFollowUpOptions) {
+      contextMenuActions.push({
+        id: followUp,
+        label: notebookFollowUpLabels[followUp],
+        icon: followUp === 'extend_video' ? 'extend-video' : 'upscale-video',
+        disabled: busy,
+      })
+    }
     if (contextMenuDuplicateAssetId) {
       contextMenuActions.push({
         id: 'duplicate',
@@ -10509,6 +10534,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const createContextMenuGeneration = async (
     cellType: ContextMenuGenerationCellType,
+    followUp?: NotebookFollowUp,
   ) => {
     if (!bookId || !notebook || !contextMenuCell) return
     const notebookId = notebook.id
@@ -10522,14 +10548,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      const draft = planContextMenuGeneration({
+      const draftInput = {
         actions: generationActions,
         cellId: uuidv7(),
-        cellType,
         document: currentNotebook,
         lastWorkSlot,
         sourceCellId,
-      })
+      }
+      const draft = followUp
+        ? planNotebookFollowUp({ ...draftInput, followUp })
+        : planContextMenuGeneration({ ...draftInput, cellType })
+      if (!draft) throw new Error(`No available model can ${followUp === 'upscale_video' ? 'upscale' : 'extend'} this video`)
       const materialized = await materializeNotebookChatGeneration({
         bookId,
         callTool: call,
@@ -10545,7 +10574,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       selectGenerationCellPreview(materialized.cellId, undefined, updatedNotebook)
       revealNotebookCanvasCell(materialized.cellId)
       setNotice(
-        `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,
+        followUp
+          ? `Added ${materialized.cellAddress} ${draft.action.title} from ${materialized.sourceAddresses[0]}`
+          : `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -10622,6 +10653,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (actionId === 'generate_video' || actionId === 'generate_image') {
       void createContextMenuGeneration(actionId)
+      return
+    }
+    if (actionId === 'extend_video' || actionId === 'upscale_video') {
+      void createContextMenuGeneration('generate_video', actionId)
       return
     }
     if (actionId === 'split' && contextMenuSplitSource) {

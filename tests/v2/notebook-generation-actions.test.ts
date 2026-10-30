@@ -372,10 +372,15 @@ describe('notebook generation actions', () => {
       'machgen:Alibaba-Wan-3.0',
       'machgen:MiniMax-H3',
       'machgen:MiniMax-H3-Turbo',
+      'machgen:MiniMax-H3/upscale',
       'machgen:Seedance-2.0',
       'machgen:Seedance-2.0-Fast',
       'machgen:Seedance-2.0-Mini',
       'machgen:Seedance-2.5',
+      'machgen:Topaz-Video-Generative',
+      'machgen:Topaz-Video-Generative-Fast',
+      'machgen:Topaz-Video-Precision',
+      'machgen:Topaz-Video-Precision-Animation',
     ])
     expect(machgen([{ kind: 'audio', target: 'audio' }]))
       .toEqual(['machgen:Alibaba-Wan-3.0', 'machgen:MiniMax-H3', 'machgen:MiniMax-H3-Turbo', 'machgen:Seedance-2.5'])

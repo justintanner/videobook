@@ -6,6 +6,7 @@ import {
   Copy,
   Download,
   Ellipsis,
+  FastForward,
   History,
   Image,
   Images,
@@ -15,6 +16,7 @@ import {
   Play,
   Rows3,
   Scissors,
+  Sparkles,
   Trash2,
   Upload,
   Video,
@@ -33,6 +35,7 @@ type NotebookCellContextActionIcon =
   | 'arrange-row'
   | 'duplicate'
   | 'download'
+  | 'extend-video'
   | 'extract-frame'
   | 'generate-image'
   | 'generate-video'
@@ -46,6 +49,7 @@ type NotebookCellContextActionIcon =
   | 'split'
   | 'subtitles'
   | 'upload'
+  | 'upscale-video'
   | 'more'
 
 export type NotebookCellContextAction = {
@@ -77,6 +81,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   'arrange-row': Rows3,
   duplicate: Copy,
   download: Download,
+  'extend-video': FastForward,
   'extract-frame': Camera,
   'generate-image': Image,
   'generate-video': Video,
@@ -90,6 +95,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   split: Scissors,
   subtitles: Captions,
   upload: Upload,
+  'upscale-video': Sparkles,
   more: Ellipsis,
 }
 

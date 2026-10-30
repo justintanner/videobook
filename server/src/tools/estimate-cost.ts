@@ -92,7 +92,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(source.refs),
-    options,
+    options: { ...options, ...source.options },
     mode: text(input.mode),
   }, hints);
   return result.ok ? result.estimate : unavailable(result.error);

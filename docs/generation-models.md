@@ -63,7 +63,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | xai:grok-imagine-video-1.5 | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
 | fal:alibaba.happyHorse.v1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 
-- Models: 196
+- Models: 203
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -131,6 +131,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:grok-imagine-video-1-5-preview` | Grok Imagine Video 1.5 Preview (Kie) | video | image_to_video | first_frame 0-1, last_frame 0-1, image 1-n |  | visible |
 | `kie:grok-imagine/extend` | Grok Extend | video | extend_video | none |  | hidden |
 | `kie:grok-imagine/upscale` | Grok Upscale | video | upscale_video | none |  | hidden |
+| `kie:topaz/video-upscale` | Topaz Video Upscale (Kie) | video | upscale_video | video 1-1 |  | visible |
 | `kie:kling-3.0-omni/text-to-video` | Kling 3.0 Omni Text-to-Video | video | text_to_video | none |  | visible |
 | `kie:kling-3.0-omni/image-to-video` | Kling 3.0 Omni Image-to-Video | video | image_to_video | image 1-2 |  | visible |
 | `kie:kling-3.0-omni/reference-to-video` | Kling 3.0 Omni Reference-to-Video | video | reference_to_video | image 0-7, video 0-1 |  | visible |
@@ -210,6 +211,8 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:fal-ai/kandinsky6-lite/image-to-video` | Kandinsky 6.0 Lite | video | image_to_video | image 1-1 |  | visible |
 | `fal:fal-ai/kandinsky6-vsr` | Kandinsky 6.0 VSR | video | upscale_video | video 1-1 |  | visible |
 | `fal:fal-ai/kandinsky6-vsr/lite` | Kandinsky 6.0 VSR Lite | video | upscale_video | video 1-1 |  | visible |
+| `fal:topaz/upscale/video/precision` | Topaz Video Precision Upscale | video | upscale_video | video 1-1 |  | visible |
+| `fal:blackforestlabs/flux-video-upscale` | FLUX Video Upscale | video | upscale_video | video 1-1 |  | visible |
 | `fal:fal-ai/vidu/q4/image-to-video` | Vidu Q4 | video | image_to_video | image 1-1 |  | hidden |
 | `fal:fal-ai/vidu/q4/reference-to-video` | Vidu Q4 | video | reference_to_video | image 0-12, audio 0-3 |  | hidden |
 | `fal:pixverse/music-video/vibemv` | PixVerse VibeMV | video | reference_to_video | image 0-2, audio 1-1 |  | visible |
@@ -240,7 +243,11 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:Vidu-Q3` | Vidu Q3 (MachGen) | video | reference_to_video | image 0-7 |  | hidden |
 | `machgen:Vidu-Q3-Pro-Fast` | Vidu Q3 Pro Fast (MachGen) | video | image_to_video | first_frame 1-1 |  | hidden |
 | `machgen:Vidu-Q4-Preview` | Vidu Q4 Preview (MachGen) | video | image_to_video, reference_to_video | first_frame 0-1, image 0-9, audio 0-3 | i2v, r2v | hidden |
-| `machgen:MiniMax-H3/upscale` | MiniMax H3 2K Regeneration (MachGen) | video | upscale_video | video 1-1 |  | hidden |
+| `machgen:MiniMax-H3/upscale` | MiniMax H3 2K Regeneration (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `machgen:Topaz-Video-Precision` | Topaz Video Precision (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `machgen:Topaz-Video-Precision-Animation` | Topaz Video Precision Animation (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `machgen:Topaz-Video-Generative` | Topaz Video Generative (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `machgen:Topaz-Video-Generative-Fast` | Topaz Video Generative Fast (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |
