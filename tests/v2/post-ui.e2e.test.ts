@@ -99,7 +99,7 @@ describe('Post cells from clip to publication in the browser', () => {
     await page.getByRole('menuitem', { name: 'Edit cell', exact: true }).click()
     const inspector = page.getByRole('region', { name: 'Post details' })
     await inspector.waitFor({ state: 'visible', timeout: 30_000 })
-    await inspector.getByLabel('Platform', { exact: true }).selectOption('instagram')
+    await inspector.getByLabel('Instagram', { exact: true }).check()
     await inspector.getByLabel('Caption', { exact: true }).fill('A small dog, a big first trick')
     await inspector.getByLabel('Credits', { exact: true }).fill('Video by the studio')
     await inspector.getByRole('button', { name: 'Save draft', exact: true }).click()

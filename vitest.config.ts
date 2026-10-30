@@ -98,6 +98,7 @@ export default defineConfig({
       'src/videobook/watermark-burn.test.ts',
       'src/videobook/watermark-review.test.ts',
       'src/videobook/post-delivery-review.test.ts', 'src/videobook/post-copy-review.test.ts',
+      'src/videobook/post-progress.test.ts',
       'src/videobook/x-post-thread.test.ts',
       'src/videobook/subtitles-model.test.ts',
       'server/src/app-state.test.ts',
