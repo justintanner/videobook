@@ -28,7 +28,7 @@ export function parseRelayUploaded(text: string): Map<string, number> {
   return uploaded;
 }
 
-export function summarizeRelaySync(files: readonly RelayFile[], uploaded: ReadonlyMap<string, number>, error: string | null): ICloudSyncStatus {
+function summarizeRelaySync(files: readonly RelayFile[], uploaded: ReadonlyMap<string, number>, error: string | null): ICloudSyncStatus {
   if (files.every((file) => uploaded.get(file.path) === file.size)) return { phase: "uploaded", error: null };
   return error ? { phase: "error", error } : { phase: "uploading", error: null };
 }
