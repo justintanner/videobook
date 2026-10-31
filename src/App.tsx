@@ -11296,6 +11296,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 onOverlapChange={updatePendingSpliceOverlap}
               />
             ) : null}
+            previewLayout="full"
           />
         </ConfirmSheet>
       )

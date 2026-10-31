@@ -15,12 +15,22 @@ export function RoutedBody({
   settings,
   speedPreview = null,
   preview = null,
+  previewLayout = 'beside',
 }: {
   prompt: string
   settings: readonly RoutedActionSetting[]
   speedPreview?: RoutedSpeedPreview | null
   preview?: ReactNode
+  previewLayout?: 'beside' | 'full'
 }) {
+  if (preview && previewLayout === 'full') {
+    return (
+      <div className="confirm-routed confirm-routed-full-preview">
+        <PromptEcho prompt={prompt} />
+        <div className="confirm-routed-preview">{preview}</div>
+      </div>
+    )
+  }
   const withPreview = Boolean(speedPreview || preview)
   const columns = withPreview ? 2 : Math.min(6, Math.max(1, settings.length))
   return (
