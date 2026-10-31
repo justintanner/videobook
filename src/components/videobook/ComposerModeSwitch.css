@@ -100,6 +100,25 @@
   border-color: rgba(114, 231, 170, 0.32);
 }
 
+/* Off the phone, text is the mode you are in, so its half stays lit even while
+   there is nothing to send yet. */
+.composer-text-line[data-active] > .command-send {
+  z-index: 1;
+  border-color: var(--green);
+  color: #8fffb8;
+  background: #0b3a22;
+}
+
+.composer-text-line[data-active] > .command-send:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.composer-text-line[data-active] > .composer-picker > .composer-mode-picker:not(:disabled) {
+  border-color: var(--green);
+  background: #103421;
+}
+
 /* The phone: a 32px square like the actions button. Off the hook it rings in
    amber; on the line it stays lit green with a ring that breathes with the
    microphone level; hovered on the line it turns over into a red hang-up. */

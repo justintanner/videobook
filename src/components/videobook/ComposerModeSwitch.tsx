@@ -308,7 +308,12 @@ export function ComposerModeSwitch({
       <span id={voiceStatusId} className="sr-only" role="status">{voiceStatus.label}</span>
     </div>}
 
-    <div className="composer-mode-line composer-text-line" role="group" aria-label="Text message">
+    <div
+      className="composer-mode-line composer-text-line"
+      role="group"
+      aria-label="Text message"
+      data-active={!voiceActive || undefined}
+    >
       {sendButton}
       <EnginePicker
         label={context ? 'Composer context' : 'Chat model'}

@@ -307,6 +307,7 @@ describe('CommandComposer controls', () => {
     expect(controlMarkup(html, 'Voice provider')).toContain('aria-haspopup="menu"')
     expect(controlMarkup(html, 'Send command')).toContain('aria-label="Send command"')
     expect(html).toMatch(/composer-text-line[^>]*>\s*<button[^>]*aria-label="Send command"/)
+    expect(html).toMatch(/class="composer-mode-line composer-text-line"[^>]*data-active="true"/)
     expect(html.match(/<select/g)).toBeNull()
     // Nothing in the row is named by its position or its color.
     for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
@@ -620,6 +621,7 @@ describe('message log visibility', () => {
     expect(controlMarkup(html, 'Switch to text')).toContain('type="button"')
     expect(controlMarkup(html, 'Switch to text')).not.toContain('disabled')
     expect(html).not.toContain('aria-label="Send command"')
+    expect(html).not.toMatch(/composer-text-line"[^>]*data-active/)
   })
 
   it('omits connection rows while keeping Waiting for reply in the statusline', () => {
