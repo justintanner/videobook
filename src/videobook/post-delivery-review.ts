@@ -290,3 +290,68 @@ export async function fetchIcloudStatus(call: DeliveryCall): Promise<ICloudStatu
     reason: typeof status.reason === 'string' && status.reason ? status.reason : null,
   }
 }
+
+export type DeliveryStatusPhase = 'idle' | 'saved-before' | 'copying' | 'uploading' | 'on-phone' | 'error'
+
+export type DeliveryStepState = 'done' | 'active' | 'pending' | 'failed'
+
+export type DeliveryStep = { label: string; state: DeliveryStepState }
+
+export type DeliveryStatusView = {
+  phase: DeliveryStatusPhase
+  headline: string
+  detail: string | null
+  steps: DeliveryStep[]
+}
+
+const DELIVERY_STEP_LABELS = ['Copy to iCloud Drive', 'Upload to iCloud', 'Ready on iPhone'] as const
+
+const DELIVERY_STEP_INDEX: Readonly<Record<DeliveryStatusPhase, number>> = {
+  'idle': -1,
+  'saved-before': DELIVERY_STEP_LABELS.length,
+  'copying': 0,
+  'uploading': 1,
+  'on-phone': DELIVERY_STEP_LABELS.length,
+  'error': 1,
+}
+
+export function deliveryStatusPhase(review: PostDeliveryReview, busy: boolean, savedBefore: boolean): DeliveryStatusPhase {
+  if (busy) return 'copying'
+  if (!review.receipt) return savedBefore ? 'saved-before' : 'idle'
+  const phase = review.sync?.phase ?? null
+  if (phase === 'error') return 'error'
+  if (phase === 'uploaded' || phase === 'not-icloud') return 'on-phone'
+  return 'uploading'
+}
+
+function deliveryStepState(index: number, at: number, failed: boolean): DeliveryStepState {
+  if (index < at) return 'done'
+  if (index > at) return 'pending'
+  return failed ? 'failed' : 'active'
+}
+
+function deliveryHeadline(phase: DeliveryStatusPhase, error: string | null): string {
+  if (phase === 'idle') return 'Not on iPhone yet'
+  if (phase === 'saved-before') return 'Already on iPhone'
+  if (phase === 'copying') return 'Copying to iCloud Drive…'
+  if (phase === 'uploading') return 'Uploading to iCloud…'
+  if (phase === 'on-phone') return 'On your iPhone'
+  return error?.trim() || 'iCloud upload failed'
+}
+
+function deliveryDetail(phase: DeliveryStatusPhase, review: PostDeliveryReview): string | null {
+  if (phase === 'saved-before') return 'Saving again checks the files'
+  if (phase === 'idle' || phase === 'copying') return null
+  return review.receipt
+}
+
+export function deliveryStatusView(review: PostDeliveryReview, busy: boolean, savedBefore: boolean): DeliveryStatusView {
+  const phase = deliveryStatusPhase(review, busy, savedBefore)
+  const at = DELIVERY_STEP_INDEX[phase]
+  return {
+    phase,
+    headline: deliveryHeadline(phase, review.sync?.error ?? null),
+    detail: deliveryDetail(phase, review),
+    steps: DELIVERY_STEP_LABELS.map((label, index) => ({ label, state: deliveryStepState(index, at, phase === 'error') })),
+  }
+}

@@ -6,6 +6,7 @@ import {
   defaultIcloudFolder,
   deliveredPostFromTool,
   deliveryDestinationForEntry,
+  deliveryStatusView,
   icloudPhoneReceipt,
   icloudProgressLabel,
   icloudShareHint,
@@ -233,5 +234,24 @@ describe('post delivery review', () => {
     expect(postTileMetrics(measured).map(metric => metric.label)).toEqual(['views', 'likes'])
     const impressionsOnly = postView({ ...posted.runtime, metrics: [{ observedAt: '2026-10-16T00:00:00.000Z', source: 'x', values: { impressions: 50, likes: null } }] })
     expect(postTileMetrics(impressionsOnly).map(metric => metric.label)).toEqual(['impressions'])
+  })
+
+  it('walks the iPhone status from idle through copy and upload to the phone', () => {
+    const states = (view: ReturnType<typeof deliveryStatusView>) => view.steps.map(step => step.state)
+    const idle = deliveryStatusView(review(), false, false)
+    expect(idle).toMatchObject({ phase: 'idle', headline: 'Not on iPhone yet', detail: null })
+    expect(states(idle)).toEqual(['pending', 'pending', 'pending'])
+    expect(deliveryStatusView(review(), false, true)).toMatchObject({ phase: 'saved-before', detail: 'Saving again checks the files' })
+    const copying = deliveryStatusView(review({ receipt: 'Saved @b1 to iCloud' }), true, true)
+    expect(copying.phase).toBe('copying')
+    expect(states(copying)).toEqual(['active', 'pending', 'pending'])
+    const uploading = deliveryStatusView(review({ receipt: 'Saved @b1 to iCloud' }), false, true)
+    expect(uploading).toMatchObject({ phase: 'uploading', headline: 'Uploading to iCloud…', detail: 'Saved @b1 to iCloud' })
+    expect(states(uploading)).toEqual(['done', 'active', 'pending'])
+    expect(states(deliveryStatusView(review({ receipt: 'r', sync: { phase: 'uploaded', error: null } }), false, true))).toEqual(['done', 'done', 'done'])
+    expect(deliveryStatusView(review({ receipt: 'r', sync: { phase: 'not-icloud', error: null } }), false, true).phase).toBe('on-phone')
+    const failed = deliveryStatusView(review({ receipt: 'r', sync: { phase: 'error', error: 'Quota exceeded' } }), false, true)
+    expect(failed.headline).toBe('Quota exceeded')
+    expect(states(failed)).toEqual(['done', 'failed', 'pending'])
   })
 })

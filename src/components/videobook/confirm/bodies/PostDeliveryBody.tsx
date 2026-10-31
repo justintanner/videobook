@@ -5,7 +5,7 @@ import type { AssetRecord } from '@/videobook/workspace-responses'
 import { formatMediaTime } from '@/videobook/notebook-cell-presentation'
 import {
   deliveryCaptionLocked,
-  icloudProgressLabel,
+  deliveryStatusView,
   icloudShareHint,
   POST_CAPTION_LIMIT,
   type DeliveryDestination,
@@ -32,6 +32,7 @@ import {
   type PostCopyState,
 } from '@/videobook/post-copy-review'
 import { PostLinkField, type PostLinkArgs } from '../../PostLinkField'
+import { DeliveryStatus } from './DeliveryStatus'
 import './PostDeliveryBody.css'
 
 const LANGUAGE_LABELS: Readonly<Record<PostCopyLanguage, string>> = { en: 'EN', th: 'TH · ไทย' }
@@ -77,7 +78,6 @@ function PostPreview({ post, asset, onOpenPost }: Pick<PostDeliveryBodyProps, 'p
         {frozen
           ? <span>Clip saved {new Date(post.definition.createdAt).toLocaleString()}</span>
           : <span className="post-delivery-warning"><TriangleAlert size={12} aria-hidden="true" />No saved source clip</span>}
-        {post.runtime.icloud?.completedAt && <span className="post-delivery-done"><Check size={12} aria-hidden="true" />Already on iPhone; saving again checks the files</span>}
         {post.runtime.download?.completedAt && <span className="post-delivery-done"><Check size={12} aria-hidden="true" />Downloaded before; downloading again gives the same files</span>}
         {!frozen && <button type="button" onClick={onOpenPost}>Choose a clip in the Post panel</button>}
       </div>
@@ -286,7 +286,7 @@ function IcloudDestination({ review, busy, onFolderChange }: Pick<PostDeliveryBo
 
 export function PostDeliveryBody(props: PostDeliveryBodyProps) {
   const icloud = props.review.destination === 'icloud'
-  const progress = props.review.receipt && icloud ? icloudProgressLabel(props.review.sync?.phase ?? null, props.review.sync?.error) : null
+  const status = icloud ? deliveryStatusView(props.review, props.busy, Boolean(props.post.runtime.icloud?.completedAt)) : null
   const unavailable = icloud && props.review.icloud && !props.review.icloud.available ? (props.review.icloud.reason ?? "iCloud Drive isn't available on this Mac.") : null
   return (
     <div className="post-delivery-body">
@@ -303,8 +303,8 @@ export function PostDeliveryBody(props: PostDeliveryBodyProps) {
         {icloud
           ? <IcloudDestination review={props.review} busy={props.busy} onFolderChange={props.onFolderChange} />
           : <small>Downloads the clip and caption.txt to this computer for a manual upload.</small>}
-        {props.review.receipt && <p className="post-delivery-receipt">{props.review.receipt}</p>}
-        {progress && <p className="post-delivery-progress">{progress}</p>}
+        {status && <DeliveryStatus view={status} />}
+        {!icloud && props.review.receipt && <p className="post-delivery-receipt">{props.review.receipt}</p>}
         {!icloud && props.review.download && <DownloadLinks download={props.review.download} busy={props.busy} onCopyCaption={props.onCopyCaption} />}
         {!props.post.runtime.url && <PostLinkField post={props.post} disabled={props.busy || Boolean(props.review.copy.drafting)} className="post-delivery-link" onLink={props.onLink} />}
       </div>

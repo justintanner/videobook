@@ -1,14 +1,14 @@
 .post-delivery-body {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(220px, 300px);
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(260px, 320px);
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
   min-height: 0;
 }
 
 .post-delivery-post {
   display: grid;
-  grid-template-columns: 90px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--line);
@@ -22,8 +22,8 @@
 
 .post-delivery-media {
   display: grid;
-  width: 90px;
-  height: 160px;
+  width: 72px;
+  height: 128px;
   place-items: center;
   overflow: hidden;
   background: #0c1f15;
@@ -62,8 +62,7 @@
 
 .post-delivery-warning,
 .post-delivery-done,
-.post-delivery-receipt,
-.post-delivery-progress {
+.post-delivery-receipt {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -79,8 +78,16 @@
   color: var(--green);
 }
 
-.post-delivery-progress {
-  color: #cdeedb;
+.post-delivery-destination > .post-delivery-done,
+.post-delivery-destination > .post-delivery-warning,
+.post-delivery-destination > .post-delivery-receipt {
+  font-size: 11px;
+}
+
+.post-delivery-destination > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .post-delivery-post-copy button,
@@ -147,10 +154,16 @@
 }
 
 .confirm-sheet .post-delivery-caption textarea {
-  flex: 1;
-  min-height: 120px;
+  height: 78px;
+  min-height: 78px;
+  resize: vertical;
+  transition: min-height 0.15s ease;
   border-color: var(--control-border);
   font-size: 12px;
+}
+
+.confirm-sheet .post-delivery-caption textarea:focus {
+  min-height: 160px;
 }
 
 .confirm-sheet .post-delivery-caption textarea:read-only {
@@ -249,8 +262,8 @@
 }
 
 .post-copy-drafting {
-  flex: 1;
-  min-height: 120px;
+  min-height: 78px;
+  box-sizing: border-box;
   padding: 10px;
   border: 1px dashed var(--control-border);
   color: var(--green);
@@ -414,4 +427,186 @@
 
 .post-delivery-link small {
   color: var(--muted);
+}
+
+.delivery-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: rgba(2, 11, 7, 0.78);
+  transition: border-color 0.3s ease;
+}
+
+.delivery-status-copying,
+.delivery-status-uploading {
+  border-color: var(--control-border);
+}
+
+.delivery-status-on-phone {
+  border-color: var(--green);
+}
+
+.delivery-status-error {
+  border-color: rgba(231, 201, 121, 0.55);
+}
+
+.delivery-status-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.delivery-status-head strong {
+  overflow-wrap: anywhere;
+  color: #cdeedb;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.delivery-status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+
+.delivery-status-dot-busy {
+  background: var(--green);
+  animation: delivery-status-pulse 1.1s ease-in-out infinite;
+}
+
+.delivery-status-mark-done {
+  flex: none;
+  color: var(--green);
+  animation: delivery-status-pop 0.45s ease-out both;
+}
+
+.delivery-status-mark-error {
+  flex: none;
+  color: #e7c979;
+}
+
+.delivery-status-track {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  background: #0b2016;
+}
+
+.delivery-status-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background-color: var(--green);
+  transition: width 0.6s ease;
+}
+
+.delivery-status-copying .delivery-status-fill,
+.delivery-status-uploading .delivery-status-fill {
+  background-image: linear-gradient(135deg, rgba(3, 9, 7, 0.4) 25%, transparent 25%, transparent 50%, rgba(3, 9, 7, 0.4) 50%, rgba(3, 9, 7, 0.4) 75%, transparent 75%);
+  background-size: 20px 20px;
+  animation: delivery-status-stripes 0.7s linear infinite;
+}
+
+.delivery-status-copying .delivery-status-fill {
+  width: 33%;
+}
+
+.delivery-status-uploading .delivery-status-fill {
+  width: 66%;
+}
+
+.delivery-status-saved-before .delivery-status-fill,
+.delivery-status-on-phone .delivery-status-fill {
+  width: 100%;
+}
+
+.delivery-status-error .delivery-status-fill {
+  width: 66%;
+  background-color: #e7c979;
+}
+
+.delivery-status-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.delivery-status-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #cdeedb;
+  font-size: 11px;
+}
+
+.delivery-status-step > svg {
+  flex: none;
+  color: var(--green);
+}
+
+.delivery-status-step-pending {
+  color: #86ab95;
+}
+
+.delivery-status-step-failed,
+.delivery-status-step-failed > svg {
+  color: #e7c979;
+}
+
+.delivery-status-step-dot {
+  flex: none;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 50%;
+  transform: scale(0.5);
+}
+
+.delivery-status-spin {
+  animation: delivery-status-spin 0.9s linear infinite;
+}
+
+.delivery-status-detail {
+  overflow-wrap: anywhere;
+  color: var(--green);
+  font-size: 10px;
+}
+
+@keyframes delivery-status-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes delivery-status-stripes {
+  to { background-position: 20px 0; }
+}
+
+@keyframes delivery-status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+@keyframes delivery-status-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delivery-status-dot-busy,
+  .delivery-status-mark-done,
+  .delivery-status-spin,
+  .delivery-status-fill {
+    animation: none;
+    transition: none;
+  }
 }
