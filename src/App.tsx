@@ -197,6 +197,7 @@ import {
   clampWatermarkFadeSeconds,
   clampWatermarkOpacity,
   DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_PADDING_Y,
   DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE_VERTICAL_PERCENT,
   DEFAULT_WATERMARK_FADE_SECONDS,
@@ -5621,7 +5622,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? DEFAULT_HANDLE_PADDING
           : clampHandlePadding(inputs.handlePadding),
         handlePaddingY: inputs.handlePaddingY === undefined
-          ? DEFAULT_HANDLE_PADDING
+          ? DEFAULT_HANDLE_PADDING_Y
           : clampHandlePadding(inputs.handlePaddingY),
         handleRounding: inputs.handleRounding === undefined
           ? DEFAULT_HANDLE_ROUNDING

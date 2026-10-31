@@ -26,6 +26,7 @@ export const QR_ONLY_BADGE_HEIGHT = TILE_SIZE;
 export const QR_ONLY_BADGE_ASPECT = BADGE_WIDTH / QR_ONLY_BADGE_HEIGHT;
 export const HANDLE_ONLY_BADGE_HEIGHT = PILL_HEIGHT;
 export const DEFAULT_HANDLE_PADDING = 32;
+export const DEFAULT_HANDLE_PADDING_Y = 28;
 export const MIN_HANDLE_PADDING = 0;
 export const MAX_HANDLE_PADDING = 96;
 export const DEFAULT_HANDLE_ROUNDING = 100;
@@ -59,7 +60,7 @@ function clampHandlePadding(value: number): number {
   return Math.round(Math.min(MAX_HANDLE_PADDING, Math.max(MIN_HANDLE_PADDING, value)));
 }
 
-export function handlePillHeight(paddingY: number = DEFAULT_HANDLE_PADDING): number {
+export function handlePillHeight(paddingY: number = DEFAULT_HANDLE_PADDING_Y): number {
   const clamped = clampHandlePadding(paddingY);
   return Math.max(
     HANDLE_PILL_CONTENT + 4,
@@ -68,7 +69,7 @@ export function handlePillHeight(paddingY: number = DEFAULT_HANDLE_PADDING): num
 }
 
 function watermarkCombinedBadgeHeight(
-  paddingY: number = DEFAULT_HANDLE_PADDING,
+  paddingY: number = DEFAULT_HANDLE_PADDING_Y,
 ): number {
   return TILE_SIZE + PILL_GAP + handlePillHeight(paddingY);
 }
@@ -89,7 +90,7 @@ function escapeXml(value: string): string {
 
 export function watermarkBadgeAspect(
   includeQr = true,
-  paddingY: number = DEFAULT_HANDLE_PADDING,
+  paddingY: number = DEFAULT_HANDLE_PADDING_Y,
 ): number {
   return BADGE_WIDTH / (
     includeQr ? watermarkCombinedBadgeHeight(paddingY) : handlePillHeight(paddingY)
@@ -127,7 +128,7 @@ export async function buildWatermarkBadgePng(
   const includePlatformIcon = includeHandle && (options.includePlatformIcon ?? options.includeXIcon ?? true);
   const includeHandleBorder = includeHandle && (options.includeHandleBorder ?? true);
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
-  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING_Y);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   const qrBuffer = includeQr
     ? await QRCode.toBuffer(url, {
@@ -221,7 +222,7 @@ export async function createWatermarkAsset(
   const includePlatformIcon = options.includePlatformIcon ?? options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
-  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING_Y);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   let buffer: Buffer;
   try {
@@ -298,7 +299,7 @@ export async function findWatermarkAsset(
   const includePlatformIcon = options.includePlatformIcon ?? options.includeXIcon ?? true;
   const includeHandleBorder = options.includeHandleBorder ?? true;
   const handlePadding = clampHandlePadding(options.handlePadding ?? DEFAULT_HANDLE_PADDING);
-  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
+  const handlePaddingY = clampHandlePadding(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING_Y);
   const handleRounding = clampHandleRounding(options.handleRounding ?? DEFAULT_HANDLE_ROUNDING);
   for (const artifact of engine.artifacts.list()) {
     if (artifact.kind !== "image") continue;

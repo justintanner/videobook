@@ -25,7 +25,7 @@ describe("burn watermark filter", () => {
       handleEndSeconds: 0.8,
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.35[qr];"
-      + "[2:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.7[handle];"
+      + "[2:v]scale=-2:34,format=rgba,colorchannelmixer=aa=0.7[handle];"
       + "[0:v][qr]overlay=(main_w-overlay_w)/2:6:format=auto:enable='between(t,0.1,0.6)'[withqr];"
       + "[withqr][handle]overlay=(main_w-overlay_w)/2:main_h*62/100-overlay_h/2:format=auto"
       + ":enable='between(t,0.2,0.8)'[vout]",
@@ -41,7 +41,7 @@ describe("burn watermark filter", () => {
       includeQr: false,
       includeHandle: true,
     })).toBe(
-      "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[handle];"
+      "[1:v]scale=-2:34,format=rgba,colorchannelmixer=aa=0.5[handle];"
       + "[0:v][handle]overlay=(main_w-overlay_w)/2:main_h*33/100-overlay_h/2:format=auto[vout]",
     );
   });
@@ -83,7 +83,7 @@ describe("burn watermark filter", () => {
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5[qr];"
       + "[2:v]scale=38:-2,format=rgba,colorchannelmixer=aa=0.5[handle];"
       + "[0:v][qr]overlay=main_w-overlay_w-6:main_h-overlay_h-6:format=auto[withqr];"
-      + "[withqr][handle]overlay=276:187:format=auto[vout]",
+      + "[withqr][handle]overlay=276:188:format=auto[vout]",
     );
   });
 
@@ -156,7 +156,7 @@ describe("burn watermark filter", () => {
     })).toBe(
       "[1:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5"
       + ",fade=t=out:st=5.5:d=0.5:alpha=1[qr];"
-      + "[2:v]scale=-2:38,format=rgba,colorchannelmixer=aa=0.5"
+      + "[2:v]scale=-2:34,format=rgba,colorchannelmixer=aa=0.5"
       + ",fade=t=in:st=3:d=0.5:alpha=1[handle];"
       + "[0:v][qr]overlay=main_w-overlay_w-6:main_h-overlay_h-6:format=auto"
       + ":enable='between(t,0,6)'[withqr];"

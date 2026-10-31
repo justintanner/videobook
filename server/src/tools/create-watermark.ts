@@ -8,6 +8,7 @@ import { normalizeHandle, readWatermarkConfig, recordHandle } from "../watermark
 import {
   createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_PADDING_Y,
   DEFAULT_HANDLE_ROUNDING,
   DEFAULT_HANDLE,
   defaultUrl,
@@ -52,7 +53,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         .min(MIN_HANDLE_PADDING)
         .max(MAX_HANDLE_PADDING)
         .optional()
-        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING_Y}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
       handle_rounding: z
         .number()
         .int()
@@ -70,7 +71,7 @@ export function createWatermarkCardDef(engine: Engine): ToolDef {
         include_platform_icon = true,
         include_handle_border = true,
         handle_padding = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingX : DEFAULT_HANDLE_PADDING,
-        handle_padding_y = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingY : DEFAULT_HANDLE_PADDING,
+        handle_padding_y = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handlePaddingY : DEFAULT_HANDLE_PADDING_Y,
         handle_rounding = platform === "tiktok" ? LIGHTNING_WATERMARK_PROFILE.handleRounding : DEFAULT_HANDLE_ROUNDING,
       } = args as {
         book_id: string;

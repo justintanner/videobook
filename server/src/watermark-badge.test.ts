@@ -24,6 +24,8 @@ import {
 import { WATERMARK_MIN_DIM_FRACTION, WATERMARK_OPACITY } from "./remotion/osg-spec.js";
 
 const URL = "https://x.com/someone";
+const DEFAULT_PILL_HEIGHT = handlePillHeight();
+const DEFAULT_BADGE_HEIGHT = BADGE_HEIGHT - HANDLE_ONLY_BADGE_HEIGHT + DEFAULT_PILL_HEIGHT;
 
 async function decodeQr(png: Buffer): Promise<string | null> {
   const { data, info } = await sharp(png)
@@ -58,7 +60,7 @@ describe("buildWatermarkBadgePng", () => {
     const badge = await buildWatermarkBadgePng(URL, "someone");
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
-    expect(metadata.height).toBe(BADGE_HEIGHT);
+    expect(metadata.height).toBe(DEFAULT_BADGE_HEIGHT);
     expect(metadata.hasAlpha).toBe(true);
     expect(BADGE_ASPECT).toBeCloseTo(BADGE_WIDTH / BADGE_HEIGHT, 6);
 
@@ -106,7 +108,7 @@ describe("buildWatermarkBadgePng", () => {
     const badge = await buildWatermarkBadgePng(URL, "a-very-long-handle-name-x");
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
-    expect(metadata.height).toBe(BADGE_HEIGHT);
+    expect(metadata.height).toBe(DEFAULT_BADGE_HEIGHT);
   });
 
   it.each(["someone", "gypq", "ABC"])("centers the visible glyphs of %s", async (handle) => {
@@ -134,11 +136,11 @@ describe("buildWatermarkBadgePng", () => {
     const badge = await buildWatermarkBadgePng(URL, "someone", { includeQr: false });
     const metadata = await sharp(badge).metadata();
     expect(metadata.width).toBe(BADGE_WIDTH);
-    expect(metadata.height).toBe(HANDLE_ONLY_BADGE_HEIGHT);
+    expect(metadata.height).toBe(DEFAULT_PILL_HEIGHT);
     expect(metadata.hasAlpha).toBe(true);
     expect(await decodeQr(badge)).toBeNull();
     expect(watermarkBadgeAspect(false)).toBeCloseTo(
-      BADGE_WIDTH / HANDLE_ONLY_BADGE_HEIGHT,
+      BADGE_WIDTH / DEFAULT_PILL_HEIGHT,
       6,
     );
 
@@ -146,7 +148,7 @@ describe("buildWatermarkBadgePng", () => {
     let iconPixels = 0;
     const iconRows: number[] = [];
     const textRows: number[] = [];
-    for (let y = 8; y < HANDLE_ONLY_BADGE_HEIGHT - 8; y += 1) {
+    for (let y = 8; y < DEFAULT_PILL_HEIGHT - 8; y += 1) {
       for (let x = 20; x < BADGE_WIDTH - 20; x += 1) {
         const offset = (y * raw.info.width + x) * 4;
         const isLight = raw.data[offset] > 200
@@ -167,7 +169,7 @@ describe("buildWatermarkBadgePng", () => {
     const textBottom = Math.max(...textRows);
     const iconTop = Math.min(...iconRows);
     const iconBottom = Math.max(...iconRows);
-    expect(Math.abs((textTop + textBottom) / 2 - HANDLE_ONLY_BADGE_HEIGHT / 2))
+    expect(Math.abs((textTop + textBottom) / 2 - DEFAULT_PILL_HEIGHT / 2))
       .toBeLessThanOrEqual(1);
     expect(Math.abs((iconTop + iconBottom) / 2 - (textTop + textBottom) / 2))
       .toBeLessThanOrEqual(1);

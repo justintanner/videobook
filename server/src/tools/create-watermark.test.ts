@@ -14,7 +14,7 @@ const jsQR = jsQRImport as unknown as (
 ) => { data: string } | null;
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
-import { BADGE_HEIGHT, BADGE_WIDTH, WATERMARK_BADGE_LAYOUT } from "../watermark-badge.js";
+import { BADGE_HEIGHT, BADGE_WIDTH, HANDLE_ONLY_BADGE_HEIGHT, handlePillHeight, WATERMARK_BADGE_LAYOUT } from "../watermark-badge.js";
 import type { Client } from "@modelcontextprotocol/client";
 
 async function decodeQr(png: Buffer): Promise<string | null> {
@@ -141,7 +141,7 @@ describe("create_watermark tool", () => {
     expect(parsed).not.toHaveProperty("include_x_icon");
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
-    expect(parsed.handle_padding_y).toBe(32);
+    expect(parsed.handle_padding_y).toBe(28);
     expect(parsed.handle_rounding).toBe(25);
 
     const manifest = await fs.files.manifest(parsed.asset_id);
@@ -158,9 +158,9 @@ describe("create_watermark tool", () => {
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
     const metadata = await sharp(buffer).metadata();
-    // TILE 480 (QR 384 + 2*TILE_PAD 48) wide; TILE 480 + GAP 12 + PILL 88 tall.
+    // TILE 480 (QR 384 + 2*TILE_PAD 48) wide; TILE 480 + GAP 12 + PILL 80 tall.
     expect(metadata.width).toBe(BADGE_WIDTH);
-    expect(metadata.height).toBe(BADGE_HEIGHT);
+    expect(metadata.height).toBe(BADGE_HEIGHT - HANDLE_ONLY_BADGE_HEIGHT + handlePillHeight());
     // The floating badge sits on a transparent canvas.
     expect(metadata.hasAlpha).toBe(true);
 
@@ -173,7 +173,7 @@ describe("create_watermark tool", () => {
     expect(originalMeta.ok && originalMeta.value.include_x_icon).toBe(false);
     expect(originalMeta.ok && originalMeta.value.include_handle_border).toBe(false);
     expect(originalMeta.ok && originalMeta.value.handle_padding).toBe(64);
-    expect(originalMeta.ok && originalMeta.value.handle_padding_y).toBe(32);
+    expect(originalMeta.ok && originalMeta.value.handle_padding_y).toBe(28);
     expect(originalMeta.ok && originalMeta.value.handle_rounding).toBe(25);
   });
 
@@ -194,7 +194,7 @@ describe("create_watermark tool", () => {
     expect(parsed.handle).toBe("justinwtanner");
     expect(parsed.url).toBe("https://x.com/justinwtanner");
     expect(parsed.handle_padding).toBe(32);
-    expect(parsed.handle_padding_y).toBe(32);
+    expect(parsed.handle_padding_y).toBe(28);
     expect(parsed.handle_rounding).toBe(100);
   });
 

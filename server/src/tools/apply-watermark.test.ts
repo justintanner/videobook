@@ -169,7 +169,7 @@ describe("apply_watermark tool", () => {
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
     expect(parsed.handle_padding).toBe(32);
-    expect(parsed.handle_padding_y).toBe(32);
+    expect(parsed.handle_padding_y).toBe(28);
     expect(parsed.handle_rounding).toBe(100);
 
     const card = fs.artifacts.get(parsed.card_asset_id);
@@ -230,9 +230,9 @@ describe("apply_watermark tool", () => {
     expect(cardMeta.value.include_x_icon).toBe(true);
     expect(cardMeta.value.include_handle_border).toBe(true);
     expect(cardMeta.value.handle_padding).toBe(32);
-    expect(cardMeta.value.handle_padding_y).toBe(32);
+    expect(cardMeta.value.handle_padding_y).toBe(28);
     expect(cardMeta.value.handle_rounding).toBe(100);
-    expect(cardMeta.value.height).toBe(88);
+    expect(cardMeta.value.height).toBe(80);
 
     for (const orient of ORIENTATIONS) {
       const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
@@ -423,7 +423,7 @@ describe("apply_watermark tool", () => {
     expect(parsed.include_platform_icon).toBe(false);
     expect(parsed.include_handle_border).toBe(false);
     expect(parsed.handle_padding).toBe(64);
-    expect(parsed.handle_padding_y).toBe(32);
+    expect(parsed.handle_padding_y).toBe(28);
     expect(parsed.handle_rounding).toBe(25);
     expect(parsed.qr_start_seconds).toBe(0.1);
     expect(parsed.qr_end_seconds).toBe(0.6);
@@ -451,7 +451,7 @@ describe("apply_watermark tool", () => {
     expect(handleMeta.value.include_x_icon).toBe(false);
     expect(handleMeta.value.include_handle_border).toBe(false);
     expect(handleMeta.value.handle_padding).toBe(64);
-    expect(handleMeta.value.handle_padding_y).toBe(32);
+    expect(handleMeta.value.handle_padding_y).toBe(28);
     expect(handleMeta.value.handle_rounding).toBe(25);
 
     const after = await fs.files.manifest(assetId);
@@ -653,7 +653,7 @@ describe("apply_watermark tool", () => {
       includePlatformIcon: true,
       includeHandleBorder: true,
       handlePaddingX: 15,
-      handlePaddingY: 12,
+      handlePaddingY: 28,
       handleRounding: 56,
       scale: 1,
       mode: "burn",

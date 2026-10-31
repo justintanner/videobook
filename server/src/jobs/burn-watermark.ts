@@ -13,7 +13,7 @@ import {
 import type { OsgPosition } from "../remotion/subtitles/types.js";
 import {
   BADGE_WIDTH,
-  DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_PADDING_Y,
   HANDLE_ONLY_BADGE_HEIGHT,
   handlePillHeight,
 } from "../watermark-badge.js";
@@ -240,7 +240,7 @@ export function buildBurnWatermarkFilter(options: {
     ? options.handlePlacement
     : "center";
   const attachedToQr = handlePlacement !== "center";
-  const handleBadgeHeight = handlePillHeight(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING);
+  const handleBadgeHeight = handlePillHeight(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING_Y);
   const independentHandleHeight = Math.max(
     2,
     2 * Math.round((badgeHeight * handleBadgeHeight / HANDLE_ONLY_BADGE_HEIGHT) / 2),
@@ -380,7 +380,7 @@ export function registerBurnWatermarkJob(engine: Engine): void {
     const {
       assetId, assetDir, bookId, videoPath, qrPath, handlePath, opacity, userScale,
       qrOpacity, handleOpacity, handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT,
-      handlePlacement = "center", handlePaddingY = DEFAULT_HANDLE_PADDING,
+      handlePlacement = "center", handlePaddingY = DEFAULT_HANDLE_PADDING_Y,
       fadeSeconds = DEFAULT_WATERMARK_FADE_SECONDS,
       startSeconds, endSeconds, qrStartSeconds, qrEndSeconds,
       handleStartSeconds, handleEndSeconds,

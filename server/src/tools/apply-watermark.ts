@@ -37,6 +37,7 @@ import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import {
   createWatermarkAsset,
   DEFAULT_HANDLE_PADDING,
+  DEFAULT_HANDLE_PADDING_Y,
   DEFAULT_HANDLE_ROUNDING,
   defaultUrl,
   findWatermarkAsset,
@@ -333,7 +334,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         .min(MIN_HANDLE_PADDING)
         .max(MAX_HANDLE_PADDING)
         .optional()
-        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
+        .describe(`Vertical handle padding in reference pixels (default ${DEFAULT_HANDLE_PADDING_Y}; range ${MIN_HANDLE_PADDING}-${MAX_HANDLE_PADDING})`),
       handle_rounding: z
         .number()
         .int()
