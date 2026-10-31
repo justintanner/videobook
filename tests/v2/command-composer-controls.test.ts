@@ -615,6 +615,11 @@ describe('message log visibility', () => {
     expect(controlMarkup(html, 'Voice provider')).toContain('composer-mode-picker')
     expect(html).toContain('>OpenAI</span>')
     expect(controlMarkup(html, 'Chat model')).toContain('composer-mode-picker')
+    // With nothing typed, the text button is the way back to typing: it hangs
+    // up instead of sitting disabled.
+    expect(controlMarkup(html, 'Switch to text')).toContain('type="button"')
+    expect(controlMarkup(html, 'Switch to text')).not.toContain('disabled')
+    expect(html).not.toContain('aria-label="Send command"')
   })
 
   it('omits connection rows while keeping Waiting for reply in the statusline', () => {

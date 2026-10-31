@@ -4188,7 +4188,7 @@ describe('chat composer browser flow', () => {
         const cancel = review.getByRole('button', { name: /Cancel/ })
         expect(await apply.isVisible()).toBe(true)
         expect(await cancel.isVisible()).toBe(true)
-        expect(await page.getByLabel('Send command').isVisible()).toBe(true)
+        expect(await page.getByLabel('Send command').or(page.getByLabel('Switch to text')).isVisible()).toBe(true)
         expect(await page.getByLabel('Start voice conversation').or(page.getByLabel('Stop voice conversation')).isVisible()).toBe(true)
         const applyBox = await apply.boundingBox()
         expect(applyBox).not.toBeNull()

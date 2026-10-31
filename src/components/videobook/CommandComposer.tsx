@@ -465,6 +465,8 @@ export function CommandComposer({
     focusInput()
   }
 
+  const switchToText = Boolean(voice?.active) && !actionDiscovery && !input.trim()
+
   const toggleVoice = () => {
     if (!voice) return
     if (voice.active) {
@@ -1145,10 +1147,13 @@ export function CommandComposer({
           onToggleVoice={toggleVoice}
           sendButton={
             <button
-              type="submit"
+              type={switchToText ? 'button' : 'submit'}
               className="command-send"
-              disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
-              aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
+              data-switch-to-text={switchToText || undefined}
+              disabled={switchToText ? false : actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
+              aria-label={switchToText ? 'Switch to text' : actionDiscovery ? 'Prepare action' : 'Send command'}
+              title={switchToText ? 'Hang up and type instead' : undefined}
+              onClick={switchToText ? toggleVoice : undefined}
             >
               {sending ? <BusyIndicator size={14} /> : <MessageSquareText size={17} />}
             </button>
