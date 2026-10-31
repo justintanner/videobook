@@ -7,6 +7,11 @@ import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo, withQuietFfmpegArgs } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import {
+  spliceCutForOverlap,
+  spliceSearchStartFrame,
+  type SpliceMatchScores,
+} from "../splice-match.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const execFileAsync = promisify(execFile);
@@ -71,18 +76,12 @@ async function extractTargetFrame(videoPath: string): Promise<Buffer> {
   return buf.subarray(0, MATCH_FRAME_BYTES);
 }
 
-interface MatchResult {
-  frameIndex: number;
-  timestamp: number;
-  score: number;
-}
-
-async function findBestMatch(
+async function scoreFrames(
   videoPath: string,
   target: Buffer,
   fps: number,
   startFrame: number,
-): Promise<MatchResult> {
+): Promise<number[]> {
   const startTime = startFrame / fps;
   const proc = spawn(FFMPEG, withQuietFfmpegArgs([
     ...(startFrame > 0 ? ["-ss", String(startTime)] : []),
@@ -95,25 +94,14 @@ async function findBestMatch(
   ]), { stdio: ["ignore", "pipe", "ignore"] });
 
   let buffer: Buffer = Buffer.alloc(0);
-  let frameIndex = 0;
-  let bestScore = Number.POSITIVE_INFINITY;
-  let bestIndex = -1;
+  const scores: number[] = [];
 
   for await (const chunk of proc.stdout!) {
     const incoming = chunk as Buffer;
     buffer = buffer.length === 0 ? incoming : Buffer.concat([buffer, incoming]);
     while (buffer.length >= MATCH_FRAME_BYTES) {
-      let score = 0;
-      for (let i = 0; i < MATCH_FRAME_BYTES; i++) {
-        const d = buffer[i] - target[i];
-        score += d < 0 ? -d : d;
-      }
-      if (score < bestScore) {
-        bestScore = score;
-        bestIndex = frameIndex;
-      }
+      scores.push(frameDifference(buffer, target));
       buffer = buffer.subarray(MATCH_FRAME_BYTES);
-      frameIndex++;
     }
   }
 
@@ -125,13 +113,31 @@ async function findBestMatch(
     proc.on("error", reject);
   });
 
-  if (bestIndex < 0) throw new Error(`No frames decoded from ${videoPath}`);
+  if (scores.length === 0) throw new Error(`No frames decoded from ${videoPath}`);
+  return scores;
+}
 
-  return {
-    frameIndex: startFrame + bestIndex,
-    timestamp: startTime + bestIndex / fps,
-    score: bestScore / MATCH_FRAME_BYTES,
-  };
+function frameDifference(frame: Buffer, target: Buffer): number {
+  let total = 0;
+  for (let i = 0; i < MATCH_FRAME_BYTES; i++) {
+    const d = frame[i] - target[i];
+    total += d < 0 ? -d : d;
+  }
+  return total / MATCH_FRAME_BYTES;
+}
+
+async function spliceMatchScores(options: {
+  firstPath: string;
+  secondPath: string;
+  fps: number;
+  firstDuration: number;
+  window: number;
+}): Promise<SpliceMatchScores> {
+  const { firstPath, secondPath, fps, firstDuration, window } = options;
+  const windowStartFrame = spliceSearchStartFrame(firstDuration, fps, window);
+  const target = await extractTargetFrame(secondPath);
+  const scores = await scoreFrames(firstPath, target, fps, windowStartFrame);
+  return { fps, firstDuration, windowStartFrame, scores };
 }
 
 async function spliceConcat(
@@ -316,11 +322,11 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
     return { timestamp: firstDuration, frameIndex: null, score: null };
   }
 
-  const minimumWindow = 1 / fps;
-  const searchStart = Math.max(0, firstDuration - Math.max(overlap, minimumWindow));
-  const startFrame = Math.floor(searchStart * fps);
-  const target = await extractTargetFrame(secondPath);
-  const match = await findBestMatch(firstPath, target, fps, startFrame);
+  const match = spliceCutForOverlap(
+    await spliceMatchScores({ firstPath, secondPath, fps, firstDuration, window: overlap }),
+    overlap,
+  );
+  if (!match) throw new Error(`No frames decoded from ${firstPath}`);
   await spliceConcat(
     firstPath,
     secondPath,
@@ -359,7 +365,21 @@ function clipPayloads(payload: SpliceVideoPayload): SpliceClipPayload[] {
   ];
 }
 
+type SpliceMatchPayload = {
+  type: "splice_match";
+  bookId: string;
+  firstPath: string;
+  secondPath: string;
+  fps: number;
+  firstDuration: number;
+  window: number;
+};
+
 export function registerSpliceVideoJob(engine: Engine): void {
+  registerJobHandler("splice_match", async (payload) => {
+    const { firstPath, secondPath, fps, firstDuration, window } = payload as SpliceMatchPayload;
+    return spliceMatchScores({ firstPath, secondPath, fps, firstDuration, window });
+  });
   registerJobHandler("splice_video", async (payload, ctx) => {
     const typedPayload = payload as SpliceVideoPayload;
     const {

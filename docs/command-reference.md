@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (220)
+## MCP endpoints (221)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -151,6 +151,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
 - `preview_notebook_generation` — Preview the exact provider payload a generation cell would submit, without running it
+- `preview_splice` — Score how closely each frame near the end of the first video matches the second video's first frame. splice_video cuts at the lowest score inside its overlap window, so callers can preview the cut for any overlap up to window without rendering.
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
 - `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
@@ -231,7 +232,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (294; 143 dedicated command routes)
+## Slash actions (295; 143 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -419,6 +420,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/prepare-search-reference` — Prepare an existing image or video asset for temporary reverse search; MCP: `prepare_search_reference`
 - `/preview-edit-intent` — Preview one CommandPlan edit stage through the canonical engine diff; MCP: `preview_edit_intent`
 - `/preview-notebook-generation` — Preview the exact provider payload a generation cell would submit, without running it; MCP: `preview_notebook_generation`
+- `/preview-splice` — Score how closely each frame near the end of the first video matches the second video's first frame. splice_video cuts at the lowest score inside its overlap window, so callers can preview the cut for any overlap up to window without rendering.; MCP: `preview_splice`
 - `/prompt-new` — Create a reusable prompt entity; MCP: `create_entity`
 - `/provider-key-status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.; MCP: `provider_key_status`
 - `/providers` — Open provider credentials and routing settings; UI: `open_provider_keys`

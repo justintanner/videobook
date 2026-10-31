@@ -5,6 +5,10 @@ import { queue } from "../queue.js";
 import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
+import type { SpliceMatchScores } from "../splice-match.js";
+
+const PREVIEW_WINDOW_SECONDS = 10;
+const PREVIEW_TIMEOUT_MS = 120_000;
 
 type ResolvedSpliceClip = {
   assetId: string;
@@ -173,6 +177,80 @@ export function spliceVideoDef(engine: Engine): ToolDef {
             overlap: resolvedOverlap,
             job_id: jobId,
             status: "enqueued",
+          }),
+        }],
+      };
+    },
+  };
+}
+
+function roundScore(score: number): number {
+  return Math.round(score * 100) / 100;
+}
+
+export function previewSpliceDef(engine: Engine): ToolDef {
+  return {
+    name: "preview_splice",
+    description: "Score how closely each frame near the end of the first video matches the second video's first frame. splice_video cuts at the lowest score inside its overlap window, so callers can preview the cut for any overlap up to window without rendering.",
+    schema: {
+      first_asset_id: z.string().describe("First video artifact id in playback order."),
+      second_asset_id: z.string().describe("Second video artifact id in playback order."),
+      window: z.number().positive().max(60).default(PREVIEW_WINDOW_SECONDS)
+        .describe("Seconds before the end of the first video to score."),
+      book_id: z.string().describe("Book UUID"),
+    },
+    handler: async (args) => {
+      const { first_asset_id, second_asset_id, window, book_id } = args as {
+        first_asset_id: string;
+        second_asset_id: string;
+        window?: number;
+        book_id: string;
+      };
+      const ids = uniqueAssetIds([first_asset_id, second_asset_id]);
+      if (!Array.isArray(ids)) return error(ids.error);
+      const resolved = await Promise.all(
+        ids.map((assetId) => resolveSpliceClip(engine, assetId)),
+      );
+      const failed = resolved.find((result) => !result.ok);
+      if (failed && !failed.ok) return error(failed.error);
+      const [first, second] = resolved.flatMap((result) => result.ok ? [result.clip] : []);
+      if (!first || !second) return error("preview_splice requires two videos");
+
+      const fps = first.probe.fps;
+      const firstDuration = first.probe.videoDuration;
+      const scoredWindow = Math.min(
+        typeof window === "number" ? window : PREVIEW_WINDOW_SECONDS,
+        firstDuration,
+      );
+      const jobId = `splice-match-${first.assetId}-${second.assetId}-${Date.now()}`;
+      let match: SpliceMatchScores;
+      try {
+        match = await queue.enqueueAndWait<SpliceMatchScores>(jobId, {
+          type: "splice_match",
+          bookId: book_id,
+          firstPath: first.path,
+          secondPath: second.path,
+          fps,
+          firstDuration,
+          window: scoredWindow,
+        }, PREVIEW_TIMEOUT_MS);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        return error(`Failed to score splice frames: ${message}`);
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            first_asset_id: first.assetId,
+            second_asset_id: second.assetId,
+            fps,
+            first_duration: firstDuration,
+            second_duration: second.probe.videoDuration,
+            window: scoredWindow,
+            window_start_frame: match.windowStartFrame,
+            scores: match.scores.map(roundScore),
           }),
         }],
       };

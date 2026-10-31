@@ -52,6 +52,7 @@ export default defineConfig({
       'extension/src/mcp.test.ts',
       'extension/src/x-post-target.test.ts',
       'src/videobook/asset-tags.test.ts',
+      'src/videobook/splice-preview.test.ts',
       'src/videobook/asset-tag-editing.test.ts',
       'src/components/ui/autocomplete-dropdown.test.tsx',
       'src/components/ui/autocomplete-position.test.ts',

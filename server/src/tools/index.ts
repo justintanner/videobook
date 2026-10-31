@@ -70,7 +70,7 @@ import { extendAudioDef } from "./extend-audio.js";
 import { removeSoundDef } from "./remove-sound.js";
 import { verifyXMentionsDef } from "./verify-x-mentions.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
-import { spliceVideoDef } from "./splice-video.js";
+import { previewSpliceDef, spliceVideoDef } from "./splice-video.js";
 import { smoothSceneConcatDef } from "./smooth-scene-concat.js";
 import { transcribeDef } from "./transcribe.js";
 import { readTranscriptDef } from "./read-transcript.js";
@@ -176,6 +176,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     removeSoundDef(engine),
     replaceVideoAudioDef(engine),
     spliceVideoDef(engine),
+    previewSpliceDef(engine),
     smoothSceneConcatDef(engine),
     transcribeDef(engine),
     readTranscriptDef(engine),

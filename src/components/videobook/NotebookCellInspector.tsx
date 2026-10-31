@@ -125,6 +125,8 @@ import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
 import { MediaFileActions } from './MediaFileActions'
+import { SplicePreview, type SplicePreviewClip } from './SplicePreview'
+import { useSplicePreview } from '@/videobook/use-splice-preview'
 import { AssetTagEditor } from './AssetTagEditor'
 import { useAssetTags } from '@/videobook/use-asset-tags'
 import type { AssetTags } from '@/videobook/asset-tags'
@@ -3379,16 +3381,17 @@ function ExecutableCellInspector({
           </div>
         )}
         {cell.type === 'splice' && draft.operation === 'splice_video' && (
-          <label>
-            Overlap seconds
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={draft.overlap}
-              onChange={(event) => updateDraft('overlap', event.target.value)}
-            />
-          </label>
+          <SpliceCellPreview
+            bookId={bookId}
+            assetTools={assetTools}
+            cell={cell}
+            cells={cells}
+            edges={edges}
+            cellAssets={cellAssets}
+            overlap={draft.overlap}
+            busy={busy || saving}
+            onOverlapChange={(value) => updateDraft('overlap', value)}
+          />
         )}
         {generationCell && !draft.tool && !draft.model && (
           <span className="workspace-notice">
@@ -3454,6 +3457,91 @@ function ExecutableCellInspector({
         />
       )}
     </div>
+  )
+}
+
+function spliceClip(
+  slot: 'first' | 'second',
+  cell: NotebookCell,
+  cells: NotebookCell[],
+  edges: NotebookEdge[],
+  cellAssets: ReadonlyMap<string, NotebookCellInspectorAsset> | undefined,
+): (SplicePreviewClip & { artifactId: string }) | null {
+  const edge = edges.find((candidate) =>
+    candidate.target === cell.id && candidate.targetInput === slot)
+  const source = edge ? cells.find((candidate) => candidate.id === edge.source) : undefined
+  const asset = source ? cellAssets?.get(source.id) : undefined
+  if (!source || !asset?.mediaUrl || (asset.type !== 'video' && asset.type !== 'final')) return null
+  return {
+    artifactId: asset.artifactId,
+    address: `@${notebookGridAddress(source.slot)}`,
+    mediaUrl: asset.mediaUrl,
+    width: asset.width,
+    height: asset.height,
+    duration: asset.duration,
+  }
+}
+
+function SpliceCellPreview({
+  bookId,
+  assetTools,
+  cell,
+  cells,
+  edges,
+  cellAssets,
+  overlap,
+  busy,
+  onOverlapChange,
+}: {
+  bookId: string
+  assetTools: NotebookCellInspectorProps['assetTools']
+  cell: NotebookCell
+  cells: NotebookCell[]
+  edges: NotebookEdge[]
+  cellAssets: ReadonlyMap<string, NotebookCellInspectorAsset> | undefined
+  overlap: string
+  busy: boolean
+  onOverlapChange: (value: string) => void
+}) {
+  const first = spliceClip('first', cell, cells, edges, cellAssets)
+  const second = spliceClip('second', cell, cells, edges, cellAssets)
+  const preview = useSplicePreview({
+    call: assetTools ?? null,
+    target: first && second
+      ? { bookId, firstAssetId: first.artifactId, secondAssetId: second.artifactId }
+      : null,
+  })
+  if (!first || !second) {
+    return (
+      <label>
+        Overlap seconds
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={overlap}
+          disabled={busy}
+          onChange={(event) => onOverlapChange(event.target.value)}
+        />
+        <span className="workspace-notice">
+          Connect finished videos to first and second to preview the cut.
+        </span>
+      </label>
+    )
+  }
+  return (
+    <SplicePreview
+      key={`${first.artifactId}/${second.artifactId}`}
+      first={first}
+      second={second}
+      overlap={overlap}
+      busy={busy}
+      match={preview.match}
+      loading={preview.loading}
+      error={preview.error}
+      onRetry={preview.retry}
+      onOverlapChange={onOverlapChange}
+    />
   )
 }
 
