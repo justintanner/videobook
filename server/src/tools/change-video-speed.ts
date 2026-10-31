@@ -5,6 +5,7 @@ import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
+import { resolveSpeedSection, sectionSpeedForTarget } from "../speed-section.js";
 
 const SPEED_MIN = 0.25;
 const SPEED_MAX = 4.0;
@@ -18,15 +19,17 @@ function validateSpeed(speed: number): string | null {
 export function changeVideoSpeedDef(engine: Engine): ToolDef {
   return {
     name: "change_video_speed",
-    description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
+    description: "Change video playback speed (speed up or slow down), for the whole clip or only a section (for example 'speed up the last six seconds' sets start_seconds to duration minus 6). Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
       book_id: z.string().describe("Book id"),
       speed: z.number().optional().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
-      target_duration_seconds: z.number().optional().describe("Exact target output duration in seconds"),
+      target_duration_seconds: z.number().optional().describe("Exact target output duration in seconds for the whole result"),
+      start_seconds: z.number().optional().describe("Start of the section to retime; omit with end_seconds to retime the whole clip"),
+      end_seconds: z.number().optional().describe("End of the section to retime; defaults to the end of the clip when start_seconds is set"),
     },
     handler: async (args) => {
-      const { asset_id, book_id, speed: requestedSpeed, target_duration_seconds } = args as { asset_id: string; book_id: string; speed?: number; target_duration_seconds?: number };
+      const { asset_id, book_id, speed: requestedSpeed, target_duration_seconds, start_seconds, end_seconds } = args as { asset_id: string; book_id: string; speed?: number; target_duration_seconds?: number; start_seconds?: number; end_seconds?: number };
       
       if ((requestedSpeed === undefined && target_duration_seconds === undefined) || (requestedSpeed !== undefined && target_duration_seconds !== undefined)) {
         return {
@@ -71,8 +74,18 @@ export function changeVideoSpeedDef(engine: Engine): ToolDef {
       // tail).
       const duration = probe.videoDuration;
       
+      const section = resolveSpeedSection(start_seconds, end_seconds, duration);
+      if (typeof section === "string") {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: section }],
+        };
+      }
+
       let speed: number;
-      if (target_duration_seconds !== undefined) {
+      if (target_duration_seconds !== undefined && section !== null) {
+        speed = sectionSpeedForTarget(section, duration, target_duration_seconds);
+      } else if (target_duration_seconds !== undefined) {
         if (duration <= 0) {
           return {
             isError: true as const,
@@ -100,7 +113,8 @@ export function changeVideoSpeedDef(engine: Engine): ToolDef {
         inputPath: videoPath,
         outputPath: tempPath,
         speed,
-        targetDuration: target_duration_seconds,
+        targetDuration: section === null ? target_duration_seconds : undefined,
+        section: section ?? undefined,
         hasAudio,
         assetId: asset_id,
         assetDir,

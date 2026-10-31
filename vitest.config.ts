@@ -88,6 +88,7 @@ export default defineConfig({
       'src/videobook/confirm-sheet-chrome.test.ts',
       'src/videobook/confirm-sheet-keys.test.ts',
       'src/videobook/confirm-validation.test.ts',
+      'src/videobook/speed-change-draft.test.ts',
       'src/videobook/mcp-client.test.ts',
       'src/videobook/music-video-command.test.ts',
       'src/videobook/clip-audio-command.test.ts',

@@ -56,6 +56,7 @@ const TIMESTAMP_PARAMS: Record<string, string[]> = {
   extract_video_clip: ["start_time", "end_time"],
   extract_frame: ["timestamp"],
   timewarp_video: ["start_seconds", "end_seconds"],
+  change_video_speed: ["start_seconds", "end_seconds"],
 };
 
 const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {

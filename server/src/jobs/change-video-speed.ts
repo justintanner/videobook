@@ -5,6 +5,12 @@ import { promisify } from "node:util";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import {
+  buildSectionSpeedFilter,
+  sectionOutputDuration,
+  type SpeedSection,
+} from "../speed-section.js";
+import {
+  runFfmpeg,
   getFFmpeggy,
   probeVideo,
   FFPROBE,
@@ -142,12 +148,101 @@ function retimeValidationErrors(
   return errors;
 }
 
+function sectionValidationErrors(
+  input: ProbeResult,
+  output: ProbeResult,
+  section: SpeedSection,
+  speed: number,
+): string[] {
+  if (output.videoCodec === null || output.videoDuration <= 0) return ["output has no playable video stream"];
+  const errors: string[] = [];
+  const frameInterval = input.fps > 0 ? 1 / input.fps : 1 / 30;
+  const expected = sectionOutputDuration(section, input.videoDuration, speed);
+  if (Math.abs(output.videoDuration - expected) > 2 * frameInterval + DURATION_SLACK_S) {
+    errors.push(
+      `video duration ${output.videoDuration.toFixed(3)}s does not match expected ${expected.toFixed(3)}s`
+      + ` (${section.startSeconds.toFixed(2)}–${section.endSeconds.toFixed(2)}s at ${speed}x)`,
+    );
+  }
+  if (input.hasAudio && (!output.hasAudio || output.audioDuration === null)) {
+    errors.push("output lost the source audio track");
+  } else if (input.hasAudio && output.audioDuration !== null && Math.abs(output.audioDuration - expected) > AUDIO_TOLERANCE_S) {
+    errors.push(`audio duration ${output.audioDuration.toFixed(3)}s does not match expected ${expected.toFixed(3)}s`);
+  }
+  return errors;
+}
+
+async function renderSectionSpeed(
+  inputPath: string,
+  outputPath: string,
+  input: ProbeResult,
+  section: SpeedSection,
+  speed: number,
+  hasAudio: boolean,
+): Promise<string[]> {
+  const fps = input.fps > 0 ? input.fps : 30;
+  await runFfmpeg([
+    "-y",
+    "-i", inputPath,
+    "-filter_complex", buildSectionSpeedFilter(section, input.videoDuration, speed, hasAudio),
+    "-map", "[vout]",
+    ...(hasAudio ? ["-map", "[aout]"] : ["-an"]),
+    "-fps_mode:v", "cfr", "-r", String(fps),
+    ...H264_MEDIUM,
+    ...(hasAudio ? AUDIO_OPTS : []),
+    "-movflags", "+faststart",
+    outputPath,
+  ]);
+  return sectionValidationErrors(input, await probeVideo(outputPath), section, speed);
+}
+
+async function renderWholeSpeed(
+  inputPath: string,
+  outputPath: string,
+  inputProbe: ProbeResult,
+  speed: number,
+  hasAudio: boolean,
+  targetDuration: number | undefined,
+): Promise<string[]> {
+  const sourceFrameCount = await probeVideoFrameCount(inputPath);
+  const outputFrameRate = sourceFrameCount !== null && inputProbe.videoDuration > 0
+    && await hasConstantFrameSpacing(inputPath)
+    ? sourceFrameCount / (targetDuration ?? inputProbe.videoDuration / speed)
+    : undefined;
+  const outputOptions = buildSpeedOutputOptions(speed, hasAudio, targetDuration, outputFrameRate);
+  const FFmpeggy = await getFFmpeggy();
+  const ff = new FFmpeggy({
+    input: inputPath,
+    output: outputPath,
+    outputOptions,
+    overwriteExisting: true,
+  });
+
+  await ff.run();
+  await ff.done();
+
+  const outputProbe = await probeVideo(outputPath);
+  const errors = retimeValidationErrors(inputProbe, outputProbe, speed, targetDuration);
+  const outputFrameCount = await probeVideoFrameCount(outputPath);
+  if (
+    sourceFrameCount !== null
+    && outputFrameCount !== null
+    && sourceFrameCount !== outputFrameCount
+  ) {
+    errors.push(
+      `video frame count ${outputFrameCount} does not match source ${sourceFrameCount}`,
+    );
+  }
+  return errors;
+}
+
 type ChangeVideoSpeedPayload = {
   type: "change_video_speed";
   inputPath: string;
   outputPath: string;
   speed: number;
   targetDuration?: number;
+  section?: SpeedSection;
   hasAudio: boolean;
   assetId: string;
   assetDir: string;
@@ -157,7 +252,7 @@ type ChangeVideoSpeedPayload = {
 export function registerChangeVideoSpeedJob(engine: Engine): void {
   registerJobHandler("change_video_speed", async (payload, ctx) => {
     const {
-      inputPath, outputPath, speed, targetDuration, hasAudio,
+      inputPath, outputPath, speed, targetDuration, section, hasAudio,
       assetId, assetDir, bookId,
     } = payload as ChangeVideoSpeedPayload;
 
@@ -170,39 +265,12 @@ export function registerChangeVideoSpeedJob(engine: Engine): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "changing-speed" } },
       async () => {
       const inputProbe = await probeVideo(inputPath);
-      const sourceFrameCount = await probeVideoFrameCount(inputPath);
-
-      const outputFrameRate = sourceFrameCount !== null && inputProbe.videoDuration > 0
-        && await hasConstantFrameSpacing(inputPath)
-        ? sourceFrameCount / (targetDuration ?? inputProbe.videoDuration / speed)
-        : undefined;
-      const outputOptions = buildSpeedOutputOptions(speed, hasAudio, targetDuration, outputFrameRate);
-      const FFmpeggy = await getFFmpeggy();
-      const ff = new FFmpeggy({
-        input: inputPath,
-        output: outputPath,
-        outputOptions,
-        overwriteExisting: true,
-      });
-
-      await ff.run();
-      await ff.done();
-
       // Validate before touching canonical media: a retime that dropped
       // frames, drifted from the expected duration, or lost the audio track
       // must fail the job and leave the current version recoverable.
-      const outputProbe = await probeVideo(outputPath);
-      const errors = retimeValidationErrors(inputProbe, outputProbe, speed, targetDuration);
-      const outputFrameCount = await probeVideoFrameCount(outputPath);
-      if (
-        sourceFrameCount !== null
-        && outputFrameCount !== null
-        && sourceFrameCount !== outputFrameCount
-      ) {
-        errors.push(
-          `video frame count ${outputFrameCount} does not match source ${sourceFrameCount}`,
-        );
-      }
+      const errors = section
+        ? await renderSectionSpeed(inputPath, outputPath, inputProbe, section, speed, hasAudio)
+        : await renderWholeSpeed(inputPath, outputPath, inputProbe, speed, hasAudio, targetDuration);
       if (errors.length > 0) {
         await rm(outputPath, { force: true });
         throw new Error(
@@ -235,6 +303,7 @@ export function registerChangeVideoSpeedJob(engine: Engine): void {
         source_asset_id: assetId,
         speed,
         targetDuration,
+        ...(section ? { section_start: section.startSeconds, section_end: section.endSeconds } : {}),
         speed_changed_at: new Date().toISOString(),
       },
       force: true,

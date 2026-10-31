@@ -7193,6 +7193,125 @@ textarea:focus-visible {
   text-align: center;
 }
 
+.confirm-speed .confirm-routed-preview {
+  justify-items: stretch;
+}
+
+.confirm-speed .confirm-routed-preview > small {
+  justify-self: center;
+}
+
+.confirm-speed-source {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.confirm-speed-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.confirm-speed-field > span,
+.confirm-speed-compare > span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.confirm-speed-field > output {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  color: #b9dfcb;
+  font-size: 11px;
+}
+
+.confirm-sheet .confirm-speed-field > input[type='number'],
+.confirm-sheet .confirm-speed-field > select {
+  min-height: 28px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.confirm-speed-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.confirm-speed-timeline {
+  display: grid;
+  gap: 4px;
+}
+
+.confirm-speed-track {
+  position: relative;
+  height: 22px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(90deg, rgba(33, 88, 56, 0.12) 0 15px, rgba(33, 88, 56, 0.28) 15px 16px);
+}
+
+.confirm-speed-track-section {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-inline: 2px solid var(--green);
+  background: rgba(50, 147, 91, 0.25);
+}
+
+.confirm-speed-timeline > input[type='range'],
+.confirm-speed-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--green);
+}
+
+.confirm-speed-output {
+  color: #e7c979;
+}
+
+.confirm-speed-compare {
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: 48px minmax(0, 1fr) 56px;
+  align-items: center;
+}
+
+.confirm-speed-compare > output {
+  color: #b9dfcb;
+  font-size: 10px;
+  text-align: right;
+}
+
+.confirm-speed-compare > .confirm-help {
+  grid-column: 1 / -1;
+}
+
+.confirm-speed-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  background: rgba(33, 88, 56, 0.2);
+}
+
+.confirm-speed-bar > i {
+  display: block;
+  height: 100%;
+  background: rgba(111, 161, 132, 0.35);
+}
+
+.confirm-speed-bar > i.sped {
+  background: rgba(50, 147, 91, 0.45);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.confirm-speed-bar > i.sped.after {
+  background: var(--green);
+}
+
 .x-post-preview {
   display: grid;
   min-width: 0;

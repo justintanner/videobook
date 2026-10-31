@@ -255,6 +255,8 @@ import {
   type XConnectionStatus,
 } from '@/videobook/x-connection'
 import { RoutedBody } from '@/components/videobook/confirm/bodies/RoutedBody'
+import { SpeedChangeBody, type SpeedChangeEdit } from '@/components/videobook/confirm/bodies/SpeedChangeBody'
+import { speedChangeDraftFromParams, speedChangeOutcome, speedChangeParams } from '@/videobook/speed-change-draft'
 import { SpliceReviewPreview } from '@/components/videobook/confirm/bodies/SpliceReviewPreview'
 import { CommandPlanBody } from '@/components/videobook/confirm/bodies/CommandPlanBody'
 import { NotebookActionBody } from '@/components/videobook/confirm/bodies/NotebookActionBody'
@@ -1541,6 +1543,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : null,
       sourceDurationSeconds: sourceDuration && sourceDuration > 0 ? sourceDuration : null,
       effectiveSpeed: effectiveSpeed && effectiveSpeed > 0 ? effectiveSpeed : null,
+      assetId: assetId ?? '',
+      address: mention ? `@${mention.cellAddress}` : null,
+      draft: speedChangeDraftFromParams(plan.params),
+      sources: commandMentionAssets
+        .filter((candidate) => candidate.type === 'video')
+        .map((candidate) => {
+          const duration = asNumber(assetById.get(candidate.artifactId)?.duration) ?? asNumber(candidate.duration)
+          return {
+            assetId: candidate.artifactId,
+            address: `@${candidate.cellAddress}`,
+            durationSeconds: duration && duration > 0 ? duration : null,
+          }
+        }),
     }
   }, [assetById, commandMentionAssets, pendingChatAction])
   const pendingSplicePreview = useMemo(() => {
@@ -2961,6 +2976,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ...current,
         plan: { ...current.plan, params: { ...current.plan.params, overlap } },
       }
+    })
+  }, [])
+  const updatePendingSpeedChange = useCallback((edit: SpeedChangeEdit) => {
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || current.plan.routedTool !== 'change_video_speed') return current
+      const params = speedChangeParams({ ...current.plan.params, asset_id: edit.assetId }, edit.draft)
+      return { ...current, plan: { ...current.plan, params } }
     })
   }, [])
   const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
@@ -11267,6 +11289,36 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           </ConfirmSheet>
         )
       }
+      if (pendingChangeSpeedPreview) {
+        const speedOutcome = speedChangeOutcome(
+          pendingChangeSpeedPreview.draft,
+          pendingChangeSpeedPreview.sourceDurationSeconds,
+        )
+        return (
+          <ConfirmSheet
+            kind="routed"
+            ariaLabel="Chat action review"
+            tag={tag}
+            title={review?.title ?? 'Change video speed'}
+            address={pendingChangeSpeedPreview.address ?? (source?.startsWith('@') ? source : null)}
+            effect={review?.effect ?? null}
+            validation={speedOutcome.error ? { blocking: speedOutcome.error, notice: null } : VALID_CONFIRMATION}
+            busy={busy}
+            applyFormId={COMMAND_COMPOSER_FORM_ID}
+            onCancel={dismissPendingCommandPlan}
+          >
+            <SpeedChangeBody
+              prompt={plan.prompt}
+              assetId={pendingChangeSpeedPreview.assetId}
+              sources={pendingChangeSpeedPreview.sources}
+              durationSeconds={pendingChangeSpeedPreview.sourceDurationSeconds}
+              draft={pendingChangeSpeedPreview.draft}
+              media={pendingChangeSpeedPreview}
+              onChange={updatePendingSpeedChange}
+            />
+          </ConfirmSheet>
+        )
+      }
       return (
         <ConfirmSheet
           kind="routed"
@@ -11283,7 +11335,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <RoutedBody
             prompt={plan.prompt}
             settings={review?.settings ?? []}
-            speedPreview={pendingChangeSpeedPreview}
             preview={pendingSplicePreview ? (
               <SpliceReviewPreview
                 key={`${pendingSplicePreview.first.artifactId}/${pendingSplicePreview.second.artifactId}`}
@@ -11322,7 +11373,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <RoutedBody
             prompt={stepReview.postText ?? ''}
             settings={stepReview.settings}
-            speedPreview={null}
           />
         </ConfirmSheet>
       )

@@ -212,4 +212,35 @@ describe("change_video_speed tool", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("exactly one of speed or target_duration_seconds");
   });
+  it("returns error for a section shorter than 0.1s", async () => {
+    const result = await client.callTool({
+      name: "change_video_speed",
+      arguments: {
+        asset_id: sharedVideoAssetId,
+        book_id: "speed-proj",
+        speed: 2.0,
+        start_seconds: 0.1,
+        end_seconds: 0.15,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("at least 0.1s");
+  });
+
+  it("returns error when a section target duration is shorter than the untouched part", async () => {
+    const result = await client.callTool({
+      name: "change_video_speed",
+      arguments: {
+        asset_id: sharedVideoAssetId,
+        book_id: "speed-proj",
+        start_seconds: 0.1,
+        end_seconds: 0.3,
+        target_duration_seconds: 0.05,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Speed must be between");
+  });
 });

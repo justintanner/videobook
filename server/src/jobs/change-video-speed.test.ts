@@ -417,6 +417,49 @@ describe("change-video-speed job handler", () => {
     expect(await toneFrequency(canonicalPath, ["-sseof", "-0.45"])).toBeLessThanOrEqual(920);
   }, testBudget(120_000));
 
+  it("speeds up only the chosen section and keeps the head and tail cue", async () => {
+    const asset = valueOf(await fs.artifacts.create("vid", "speed section markers"));
+    valueOf(await fs.files.write(asset.artifactId, "original.mp4", await readFile(markerSourcePath)));
+    const source = await probeStreamCounts(join(asset.path, "original.mp4"));
+    const section = { startSeconds: 4, endSeconds: source.video.duration };
+    const outputPath = join(asset.path, ".speed-output.mp4");
+
+    const result = await queue.enqueueAndWait<{ success: boolean }>(
+      `speed-section-${asset.artifactId}`,
+      {
+        type: "change_video_speed",
+        inputPath: join(asset.path, "original.mp4"),
+        outputPath,
+        speed: 2,
+        section,
+        hasAudio: true,
+        assetId: asset.artifactId,
+        assetDir: asset.path,
+        bookId: fs.book.get().bookId,
+      },
+      testBudget(120_000),
+    );
+
+    expect(result).toEqual({ success: true });
+    await waitForProcessVideo(fs, asset.artifactId);
+
+    const canonicalPath = join(asset.path, "original.mp4");
+    const counts = await probeStreamCounts(canonicalPath);
+    const expected = 4 + (source.video.duration - 4) / 2;
+    expect(Math.abs(counts.video.duration - expected)).toBeLessThan(0.2);
+    expect(Math.abs((counts.audio?.duration ?? 0) - expected)).toBeLessThan(0.2);
+    expectBlueTail(await lastFrameColor(canonicalPath, counts.video.duration));
+    expect(await toneFrequency(canonicalPath, ["-ss", "1"])).toBeGreaterThanOrEqual(400);
+    expect(await toneFrequency(canonicalPath, ["-ss", "1"])).toBeLessThanOrEqual(480);
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.3"])).toBeGreaterThanOrEqual(700);
+    expect(await toneFrequency(canonicalPath, ["-sseof", "-0.3"])).toBeLessThanOrEqual(920);
+    const metadata = valueOf(await fs.metadata.artifacts.read<Record<string, unknown>>(
+      asset.artifactId,
+      "original",
+    ));
+    expect(metadata).toMatchObject({ speed: 2, section_start: 4 });
+  }, testBudget(120_000));
+
   it("preserves every frame for silent sources at 1.3x", async () => {
     const silentSourcePath = join(tempDir, "source-markers-silent.mp4");
     await generateSilentMarkerVideo(silentSourcePath);

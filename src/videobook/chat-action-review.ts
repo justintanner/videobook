@@ -1,5 +1,6 @@
 import { formatMediaTime } from './notebook-cell-presentation'
 import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
+import { speedChangeDraftFromParams, speedChangeOutcome } from './speed-change-draft'
 
 type RoutedActionSettingTone = 'default' | 'warning'
 
@@ -172,33 +173,31 @@ export function formatSpeedMultiplier(speed: number): string {
 
 function changeVideoSpeedReview(input: RoutedActionReviewInput): RoutedActionReview {
   const sourceDuration = finiteNumber(input.sourceDurationSeconds)
-  const requestedSpeed = finiteNumber(input.params.speed)
-  const targetDuration = finiteNumber(input.params.target_duration_seconds)
-  const effectiveSpeed = requestedSpeed
-    ?? (sourceDuration !== null && targetDuration !== null && targetDuration > 0
-      ? sourceDuration / targetDuration
-      : null)
-  const expectedDuration = targetDuration
-    ?? (sourceDuration !== null && effectiveSpeed !== null && effectiveSpeed > 0
-      ? sourceDuration / effectiveSpeed
-      : null)
+  const draft = speedChangeDraftFromParams(input.params)
+  const outcome = speedChangeOutcome(draft, sourceDuration && sourceDuration > 0 ? sourceDuration : null)
   const settings = [
     setting('Source', sourceValue(input.input, input.params)),
   ]
   if (sourceDuration !== null && sourceDuration > 0) {
     settings.push(setting('Source duration', formatMediaTime(sourceDuration)))
   }
+  if (draft.section) {
+    const end = outcome.sectionEndSeconds
+    settings.push(setting(
+      'Section',
+      `${formatMediaTime(outcome.sectionStartSeconds)} → ${end === null ? 'end' : formatMediaTime(end)}`,
+    ))
+  }
   settings.push(setting(
     'Speed',
-    effectiveSpeed !== null
-      ? `${formatSpeedMultiplier(effectiveSpeed)}×${requestedSpeed === null ? ' (from target duration)' : ''}`
+    outcome.effectiveSpeed !== null
+      ? `${formatSpeedMultiplier(outcome.effectiveSpeed)}×${draft.speed === null ? ' (from target duration)' : ''}`
       : 'Calculated on apply',
   ))
-  if (targetDuration !== null) {
-    settings.push(setting('Target duration', formatMediaTime(targetDuration)))
-  }
-  if (expectedDuration !== null && expectedDuration > 0 && targetDuration === null) {
-    settings.push(setting('Expected duration', formatMediaTime(expectedDuration)))
+  if (draft.targetSeconds !== null && draft.speed === null) {
+    settings.push(setting('Target duration', formatMediaTime(draft.targetSeconds)))
+  } else if (outcome.outputSeconds !== null && outcome.outputSeconds > 0) {
+    settings.push(setting('Expected duration', formatMediaTime(outcome.outputSeconds)))
   }
   settings.push(
     setting('Output', 'Existing source updated in place', 'warning'),

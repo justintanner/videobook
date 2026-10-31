@@ -33,7 +33,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `cancel_job` — Cancel a queued or running persistent job
 - `caption_video` — Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision in the background into a new subtitled video cell (the source is kept) or into the source video in place.
 - `chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.
-- `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
+- `change_video_speed` — Change video playback speed (speed up or slow down), for the whole clip or only a section (for example 'speed up the last six seconds' sets start_seconds to duration minus 6). Operates in-place with git versioning.
 - `chat` — Route one composer request through the app's chat model: runs reads and returns reviewable plans for edits and generation. Agents should call the specific tools directly instead.
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
