@@ -58,6 +58,7 @@ export default defineConfig({
       'src/components/ui/autocomplete-position.test.ts',
       'src/videobook/mention-menu-rows.test.ts',
       'src/videobook/notebook-draft.test.ts',
+      'src/videobook/notebook-route-tags.test.ts',
       'src/videobook/notebook-grid.test.ts',
       'src/videobook/notebook-review-focus.test.ts',
       'src/videobook/notebook-lane-policy.test.ts',

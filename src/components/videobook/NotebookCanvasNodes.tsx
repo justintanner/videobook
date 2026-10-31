@@ -17,6 +17,7 @@ import {
   Sparkles,
   Ellipsis,
   Flag,
+  ArrowDown,
 } from 'lucide-react'
 import {
   cellTypeLabel,
@@ -86,6 +87,10 @@ import {
   previewMetadataLabel,
 } from '@/videobook/cell-preview'
 import { notebookLaneFamily } from '@/videobook/notebook-lane-policy'
+import {
+  notebookIncomingRouteText,
+  notebookOutgoingRouteText,
+} from '@/videobook/notebook-route-tags'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import { CellMediaFrame } from '@/components/videobook/CellMediaFrame'
 import { PublishedPostTileChrome } from '@/components/videobook/PublishedPostChrome'
@@ -302,6 +307,23 @@ const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
       ? { left: `${offset * 100}%` }
       : { top: `${offset * 100}%` },
   })))
+
+function CellRouteTag({ direction, text }: {
+  direction: 'incoming' | 'outgoing'
+  text: string | null
+}) {
+  if (!text) return null
+  return (
+    <span
+      className={`cell-route-tag cell-route-tag-${direction}`}
+      aria-label={direction === 'outgoing' ? `Feeds ${text}` : `Fed ${text}`}
+      title={direction === 'outgoing' ? `Feeds ${text}` : `Fed ${text}`}
+    >
+      <ArrowDown size={10} strokeWidth={2} aria-hidden="true" />
+      <span>{text}</span>
+    </span>
+  )
+}
 
 function CellStatusBadge({ status }: { status: string | null }) {
   if (!status) return null
@@ -583,6 +605,14 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           style={port.style}
         />
       ))}
+      <CellRouteTag
+        direction="incoming"
+        text={notebookIncomingRouteText(data.incomingRoutes ?? [])}
+      />
+      <CellRouteTag
+        direction="outgoing"
+        text={notebookOutgoingRouteText(data.outgoingRoutes ?? [])}
+      />
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span

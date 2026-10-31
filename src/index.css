@@ -1879,6 +1879,58 @@ textarea:focus-visible {
   opacity: 1;
 }
 
+.notebook-flow-at-rest .cell-route-handle-active {
+  opacity: 0;
+}
+
+.cell-route-tag {
+  position: absolute;
+  z-index: 13;
+  display: none;
+  max-width: 62%;
+  align-items: center;
+  gap: calc(4px * var(--notebook-detail-scale, 1));
+  padding: calc(2px * var(--notebook-detail-scale, 1)) calc(7px * var(--notebook-detail-scale, 1));
+  border: 1px solid var(--cell-accent-line);
+  border-radius: 999px;
+  color: var(--cell-accent-bright);
+  background: #06150d;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: calc(10px * var(--notebook-detail-scale, 1));
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.cell-route-tag > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-route-tag > svg {
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+}
+
+.notebook-flow-at-rest .cell-route-tag {
+  display: flex;
+}
+
+.cell-route-tag-outgoing {
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 50%);
+}
+
+.cell-route-tag-incoming {
+  top: 0;
+  right: var(--cell-gutter-tight);
+  transform: translateY(-50%);
+  border-color: rgba(96, 176, 132, 0.35);
+  color: #a9c9b7;
+}
+
 .cell-connect-handle {
   opacity: 0;
 }

@@ -18,6 +18,10 @@ import {
   notebookSourcePortId,
   type NotebookBusRiverRoute,
 } from './notebook-routing'
+import {
+  notebookCellRouteTags,
+  type NotebookRouteTag,
+} from './notebook-route-tags'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
@@ -42,6 +46,8 @@ export interface NotebookCellData extends Record<string, unknown> {
   targetConnectionCount?: number
   targetInputConnectionCounts?: Record<string, number>
   sourcePorts?: string[]
+  outgoingRoutes?: NotebookRouteTag[]
+  incomingRoutes?: NotebookRouteTag[]
   frameProvenance?: NotebookFrameProvenance
   producerProvider?: string
   producerModel?: string
@@ -157,6 +163,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
   const targetConnectionCounts = new Map<string, number>()
   const targetInputConnectionCounts = new Map<string, Record<string, number>>()
   const sourcePorts = new Map<string, string[]>()
+  const routeTags = notebookCellRouteTags(document)
   for (const edge of document.edges) {
     const inputs = targetInputs.get(edge.target) ?? []
     if (!inputs.includes(edge.targetInput)) inputs.push(edge.targetInput)
@@ -196,6 +203,8 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         targetInputConnectionCounts:
           targetInputConnectionCounts.get(cell.id) ?? {},
         sourcePorts: sourcePorts.get(cell.id) ?? [],
+        outgoingRoutes: routeTags.get(cell.id)?.outgoing ?? [],
+        incomingRoutes: routeTags.get(cell.id)?.incoming ?? [],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
         ...(cell.provider === undefined ? {} : { provider: cell.provider }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
