@@ -254,6 +254,7 @@ import {
   type XConnectionStatus,
 } from '@/videobook/x-connection'
 import { RoutedBody } from '@/components/videobook/confirm/bodies/RoutedBody'
+import { SpliceReviewPreview } from '@/components/videobook/confirm/bodies/SpliceReviewPreview'
 import { CommandPlanBody } from '@/components/videobook/confirm/bodies/CommandPlanBody'
 import { NotebookActionBody } from '@/components/videobook/confirm/bodies/NotebookActionBody'
 import { ConfirmSheet } from '@/components/videobook/confirm/ConfirmSheet'
@@ -1540,6 +1541,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       sourceDurationSeconds: sourceDuration && sourceDuration > 0 ? sourceDuration : null,
       effectiveSpeed: effectiveSpeed && effectiveSpeed > 0 ? effectiveSpeed : null,
     }
+  }, [assetById, commandMentionAssets, pendingChatAction])
+  const pendingSplicePreview = useMemo(() => {
+    if (pendingChatAction?.kind !== 'routed') return null
+    const plan = pendingChatAction.plan
+    if (plan.routedTool !== 'splice_video') return null
+    const additional = plan.params.additional_asset_ids
+    if (Array.isArray(additional) && additional.length > 0) return null
+    const clip = (value: unknown) => {
+      const assetId = asString(value)
+      const asset = assetId ? assetById.get(assetId) : undefined
+      if (!assetId || !asset?.mediaUrl || asset.type !== 'video') return null
+      const mention = commandMentionAssets.find((candidate) => candidate.artifactId === assetId)
+      return {
+        artifactId: assetId,
+        address: mention ? `@${mention.cellAddress}` : asset.label ?? 'clip',
+        mediaUrl: asset.mediaUrl,
+        width: asset.width,
+        height: asset.height,
+        duration: asset.duration,
+      }
+    }
+    const first = clip(plan.params.first_asset_id)
+    const second = clip(plan.params.second_asset_id)
+    if (!first || !second) return null
+    const overlap = asNumber(plan.params.overlap) ?? 0
+    return { first, second, overlap }
   }, [assetById, commandMentionAssets, pendingChatAction])
   const pendingRoutedActionReview = pendingChatAction?.kind === 'routed'
     ? routedActionReview({
@@ -2924,6 +2951,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setPendingWatermarkReview(null)
     focusCommandComposer()
   }, [bookId, call, cancelChatReview, focusCommandComposer, pendingChatAction, subtitles])
+  const updatePendingSpliceOverlap = useCallback((value: string) => {
+    const overlap = Number(value)
+    if (value.trim() === '' || !Number.isFinite(overlap) || overlap < 0) return
+    setPendingChatAction((current) => {
+      if (current?.kind !== 'routed' || current.plan.routedTool !== 'splice_video') return current
+      return {
+        ...current,
+        plan: { ...current.plan, params: { ...current.plan.params, overlap } },
+      }
+    })
+  }, [])
   const updatePendingXPostDraft = useCallback((patch: XPostDraftPatch) => {
     setPendingChatAction((current) => {
       if (current?.kind !== 'routed') return current
@@ -11245,6 +11283,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             prompt={plan.prompt}
             settings={review?.settings ?? []}
             speedPreview={pendingChangeSpeedPreview}
+            preview={pendingSplicePreview ? (
+              <SpliceReviewPreview
+                key={`${pendingSplicePreview.first.artifactId}/${pendingSplicePreview.second.artifactId}`}
+                bookId={bookId}
+                call={mcp.state === 'ready' ? call : null}
+                first={pendingSplicePreview.first}
+                second={pendingSplicePreview.second}
+                overlap={pendingSplicePreview.overlap}
+                busy={busy}
+                onOverlapChange={updatePendingSpliceOverlap}
+              />
+            ) : null}
           />
         </ConfirmSheet>
       )

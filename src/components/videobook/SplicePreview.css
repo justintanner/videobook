@@ -266,3 +266,44 @@
   color: var(--ink);
   font-weight: 500;
 }
+
+.confirm-routed-preview .splice-preview {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.splice-preview .splice-preview-stage video,
+.splice-preview .splice-preview-next video {
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.confirm-routed-preview .splice-preview {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "stage transport"
+    "stage curve"
+    "stage overlap"
+    "stage summary";
+  align-content: start;
+  gap: 8px 12px;
+}
+
+.confirm-routed-preview .splice-preview-stage {
+  grid-area: stage;
+  align-self: start;
+  max-height: none;
+}
+
+.confirm-routed-preview .splice-preview-transport { grid-area: transport; }
+.confirm-routed-preview .splice-preview-curve { grid-area: curve; }
+.confirm-routed-preview .splice-preview-overlap { grid-area: overlap; }
+.confirm-routed-preview .splice-preview-summary { grid-area: summary; }
+
+@media (max-width: 720px) {
+  .confirm-routed-preview .splice-preview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "stage" "transport" "curve" "overlap" "summary";
+  }
+}
