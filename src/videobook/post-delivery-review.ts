@@ -315,7 +315,7 @@ const DELIVERY_STEP_INDEX: Readonly<Record<DeliveryStatusPhase, number>> = {
   'error': 1,
 }
 
-export function deliveryStatusPhase(review: PostDeliveryReview, busy: boolean, savedBefore: boolean): DeliveryStatusPhase {
+function deliveryStatusPhase(review: PostDeliveryReview, busy: boolean, savedBefore: boolean): DeliveryStatusPhase {
   if (busy) return 'copying'
   if (!review.receipt) return savedBefore ? 'saved-before' : 'idle'
   const phase = review.sync?.phase ?? null
