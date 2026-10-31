@@ -6,9 +6,10 @@
 }
 
 .splice-preview-stage {
+  --splice-stage-height: min(220px, 30dvh);
   position: relative;
-  width: 100%;
-  max-height: min(220px, 30dvh);
+  justify-self: center;
+  width: min(100%, calc(var(--splice-stage-height) * var(--splice-aspect, 1.7778)));
   aspect-ratio: var(--splice-aspect, 16 / 9);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -46,8 +47,8 @@
   right: 8px;
   bottom: 8px;
   display: grid;
-  width: 28%;
-  min-width: 72px;
+  width: 32%;
+  min-width: 44px;
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line-bright);
@@ -291,9 +292,9 @@
 }
 
 .confirm-routed-preview .splice-preview-stage {
+  --splice-stage-height: min(240px, 34dvh);
   grid-area: stage;
   align-self: start;
-  max-height: none;
 }
 
 .confirm-routed-preview .splice-preview-transport { grid-area: transport; }
