@@ -18,6 +18,5 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "googleflow:omni-flash": "Google Flow is not a catalog provider.",
   "xai:v1.videos.generations.imageToVideo": "The catalog uses grok-imagine-video, not the ranked 1.5 model id.",
   "kie:wan/2-7-videoedit": "This exact endpoint is not in the Videobook catalog.",
-  "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog.",
-  "xai:grok-imagine-video-1.5": "The catalog uses grok-imagine-video, not the ranked 1.5 model id."
+  "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog."
 };

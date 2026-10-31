@@ -36,9 +36,8 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | xai:v1.videos.generations.imageToVideo | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
-| xai:grok-imagine-video-1.5 | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
 
-- Models: 292
+- Models: 295
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -134,6 +133,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:veo3` | Veo 3 (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `kie:veo3_fast` | Veo 3 Fast (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `xai:grok-imagine-video` | Grok Imagine Video (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, image 0-7, video 0-1 | i2v, r2v, v2v | visible |
+| `xai:grok-imagine-video-1.5` | Grok Imagine Video 1.5 (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, image 0-7, video 0-1 | i2v, r2v, v2v | visible |
 | `fal:xai/grok-imagine-video/image-to-video` | Grok Imagine | video | image_to_video | image 1-1 |  | hidden |
 | `fal:xai/grok-imagine-video/reference-to-video` | Grok Imagine | video | reference_to_video | image 1-7 |  | hidden |
 | `fal:xai/grok-imagine-video/extend-video` | Grok Extend | video | extend_video | video 1-1 |  | hidden |
@@ -194,6 +194,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:pixelcut/looping-video` | Pixelcut Looping Video | video | image_to_video | image 1-1 |  | visible |
 | `fal:creatify/boreal` | Creatify Boreal | video | text_to_video, image_to_video, lip_sync | image 0-1, audio 0-1 |  | visible |
 | `fal:mirelo-ai/sfx2.0/video-to-video` | Mirelo SFX 2.0 | video | edit_video | video 1-1 |  | visible |
+| `fal:topaz/upscale/image/precision` | Topaz Image Precision Upscale | image | edit_image | image 1-1 |  | visible |
 | `fal:alibaba/happy-horse/v1.1/text-to-video` | Happy Horse 1.1 | video | text_to_video | none |  | visible |
 | `fal:alibaba/happy-horse/v1.1/image-to-video` | Happy Horse 1.1 | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:alibaba/happy-horse/v1.1/reference-to-video` | Happy Horse 1.1 | video | reference_to_video | image 1-n |  | visible |
@@ -316,6 +317,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |
 | `elevenlabs:video-to-music` | ElevenLabs Video to Music | audio | video_to_music | video 1-1 |  | visible |
+| `fal:mirelo-ai/sfx2.0/video-to-audio` | Mirelo SFX 2.0 Video to Audio | audio | video_to_music | video 1-1 |  | visible |
 | `kie:elevenlabs/sound-effect-v2` | elevenlabs/sound-effect-v2 | audio | sfx | none |  | visible |
 | `kie:elevenlabs/text-to-speech-multilingual-v2` | ElevenLabs Multilingual v2 (Kie) | audio | speech | none |  | visible |
 | `kie:elevenlabs/text-to-speech-turbo-2-5` | ElevenLabs Turbo 2.5 (Kie) | audio | speech | none |  | visible |
