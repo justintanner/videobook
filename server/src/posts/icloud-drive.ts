@@ -7,6 +7,7 @@ import { freezePostOutbound, getPost, patchPostRuntime, readPostRuntime, savePos
 import type { PostICloudFile, PostPlatform, PostRuntime } from "./post-contract.js";
 import { defaultPostFolderName, icloudFolderError } from "./post-folder.js";
 import { readUbiquitousStates, summarizeUbiquitousSync, type ICloudSyncStatus } from "./icloud-status.js";
+import { readRelaySync } from "./icloud-relay.js";
 
 type ICloudRuntime = NonNullable<PostRuntime["icloud"]>;
 
@@ -43,10 +44,12 @@ function insideIcloudRoot(root: string, relativePath: string): string {
 
 export async function postIcloudSyncStatus(engine: Engine, id: string): Promise<ICloudSyncStatus> {
   const recorded = getPost(engine, id).runtime.icloud;
-  const relative = [recorded?.video?.path, recorded?.caption?.path].filter((path): path is string => Boolean(path));
-  if (relative.length === 0) return { phase: "not-icloud", error: null };
+  const files = [recorded?.video, recorded?.caption].filter((file): file is PostICloudFile => Boolean(file));
+  if (files.length === 0) return { phase: "not-icloud", error: null };
   const root = icloudRoot();
-  return summarizeUbiquitousSync(await readUbiquitousStates(relative.map((path) => insideIcloudRoot(root, path))));
+  const relayed = await readRelaySync(root, files);
+  if (relayed) return relayed;
+  return summarizeUbiquitousSync(await readUbiquitousStates(files.map((file) => insideIcloudRoot(root, file.path))));
 }
 
 export async function icloudStatus() {

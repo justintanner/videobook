@@ -11,6 +11,7 @@ import { createX } from "@apicity/x";
 import { createPost, freezePostOutbound, getPost, linkPost, listPosts, migrateLegacyPosts, patchPostRuntime, readPostRuntime, updatePost } from "../posts/post-store.js";
 import { icloudStatus, postIcloudSyncStatus, savePostToICloud } from "../posts/icloud-drive.js";
 import { parseUbiquitousStates, summarizeUbiquitousSync } from "../posts/icloud-status.js";
+import { parseRelayUploaded, RELAY_ERROR_FILE, RELAY_UPLOADED_FILE } from "../posts/icloud-relay.js";
 import { nextPostMetricAt, recordPostMetrics, refreshPostMetrics } from "../posts/post-metrics.js";
 import { postRecordDefs } from "./post-record.js";
 import { z } from "zod";
@@ -233,6 +234,29 @@ describe("Post publication records", () => {
       expect(saved.runtime.icloud?.completedAt).toBeTruthy();
       expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "not-icloud", error: null });
       expect(await postIcloudSyncStatus(engine, (await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id })).id)).toEqual({ phase: "not-icloud", error: null });
+    });
+
+    it("reports upload progress from the iCloud sync relay's receipts", async () => {
+      const post = await createPost(engine, { notebookId: notebook.id, sourceCellId: source.id, caption: "Caption" });
+      const saved = await savePostToICloud(engine, post.id, { folder: "relayed" });
+      const { video, caption } = saved.runtime.icloud!;
+      const uploaded = join(icloud, RELAY_UPLOADED_FILE);
+      const failure = join(icloud, RELAY_ERROR_FILE);
+      await writeFile(uploaded, `${caption!.size};${caption!.path}\n`);
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "uploading", error: null });
+      await writeFile(failure, "iCloud login expired\n");
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "error", error: "iCloud login expired" });
+      await writeFile(uploaded, `${video!.size + 1};${video!.path}\n${caption!.size};${caption!.path}\n`);
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "error", error: "iCloud login expired" });
+      await writeFile(uploaded, `${video!.size};${video!.path}\n${caption!.size};${caption!.path}\n`);
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "uploaded", error: null });
+      await rm(uploaded);
+      await rm(failure);
+      expect(await postIcloudSyncStatus(engine, post.id)).toEqual({ phase: "not-icloud", error: null });
+    });
+
+    it("parses relay receipts in rclone lsf size;path form", () => {
+      expect([...parseRelayUploaded("13;a/clip.mp4\n7;b/odd;name.txt\n\nbad\nx;c.txt\n")]).toEqual([["a/clip.mp4", 13], ["b/odd;name.txt", 7]]);
     });
   });
 
