@@ -100,7 +100,7 @@ describe('voice activation line in the real browser', () => {
     await page.getByLabel('Start voice conversation').waitFor({ state: 'visible', timeout: 30_000 })
     await waitFor(() => page.getByLabel('Start voice conversation').isEnabled())
     stage('page ready')
-    await page.locator('.composer-mode-switch .composer-mode-cell-live').click()
+    await page.getByLabel('Voice provider', { exact: true }).click()
     await page.getByRole('menuitemradio', { name: 'xAI', exact: true }).click()
     stage('provider pinned')
   }, 120_000)

@@ -60,8 +60,8 @@ describe('voice chat in the real browser', () => {
   const children: ChildProcess[] = []
   const startupOutput: string[] = []
 
-  function liveModeCell() {
-    return page.locator('.composer-mode-switch .composer-mode-cell-live')
+  function voiceProviderPicker() {
+    return page.getByLabel('Voice provider', { exact: true })
   }
 
   async function assistantAfterLastUser(): Promise<boolean> {
@@ -83,14 +83,12 @@ describe('voice chat in the real browser', () => {
   }
 
   async function selectVoiceProvider(mode: string) {
-    await liveModeCell().click()
+    await voiceProviderPicker().click()
     await page.getByRole('menuitemradio', { name: PROVIDER_OPTION[mode], exact: true }).click()
   }
 
-  // Voice off, the bar names the chat model, so the provider that is remembered
-  // is read back from the engine menu rather than off the strip.
   async function checkedVoiceProvider(): Promise<string> {
-    await liveModeCell().click()
+    await voiceProviderPicker().click()
     const checked = await page.getByRole('menuitemradio', { checked: true }).last().getAttribute('aria-label')
     await page.keyboard.press('Escape')
     return checked ?? ''
@@ -194,10 +192,9 @@ describe('voice chat in the real browser', () => {
     await toggle.focus()
     await expect.poll(() => toggle.evaluate(el => el === document.activeElement)).toBe(true)
     expect(await toggle.getAttribute('aria-pressed')).toBe('false')
-    // Voice off: the strip is the lit model cell plus the idle microphone, and
-    // the provider is one click away inside that cell's menu.
-    expect(await page.locator('.composer-mode-switch .composer-mode-cell-live').getAttribute('aria-label')).toBe('Chat model')
-    expect(await page.locator('.composer-mode-switch .composer-mode-cell-idle').getAttribute('aria-label')).toBe('Start voice conversation')
+    expect(await page.locator('.composer-voice-line .composer-phone').getAttribute('aria-label')).toBe('Start voice conversation')
+    expect(await page.locator('.composer-voice-line .composer-mode-picker').getAttribute('aria-label')).toBe('Voice provider')
+    expect(await page.locator('.composer-text-line .composer-mode-picker').getAttribute('aria-label')).toBe('Chat model')
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 640 }, { width: 640, height: 320 }]) {
       await page.setViewportSize(viewport)
       const bounds = await toggle.boundingBox()
@@ -218,7 +215,7 @@ describe('voice chat in the real browser', () => {
       expect(modelBounds!.height).toBe(actions!.height)
       expect(modelBounds!.x).toBeGreaterThanOrEqual(0)
       expect(modelBounds!.x + modelBounds!.width).toBeLessThanOrEqual(viewport.width)
-      const controls = await page.locator('.command-actions-controls, .composer-mode-switch, .command-send').evaluateAll(elements => elements.map(element => {
+      const controls = await page.locator('.command-actions-controls, .composer-voice-line, .composer-text-line').evaluateAll(elements => elements.map(element => {
         const box = element.getBoundingClientRect()
         return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
       }))
@@ -328,8 +325,8 @@ describe('voice chat in the real browser', () => {
         expect(await composer.boundingBox()).toEqual(before)
         expect((await input.boundingBox())?.height).toBe(inputBefore?.height)
         expect(await composer.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
-        const spinner = provider.locator('.composer-mode-connecting')
-        expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('composer-mode-connect-spin')
+        const spinner = page.locator('.composer-phone .composer-phone-handset')
+        expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('composer-phone-ring')
         await page.screenshot({ path: `test-results/voice/connecting-${viewport.width}.png` })
         await page.emulateMedia({ reducedMotion: 'reduce' })
         expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('none')

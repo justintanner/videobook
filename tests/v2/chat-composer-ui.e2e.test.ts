@@ -4114,19 +4114,17 @@ describe('chat composer browser flow', () => {
       await page.getByLabel('Send command').click()
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
-      // Exactly one lit cell, naming the engaged mode's engine, and one glyph
-      // cell that switches mode. Which pair is showing depends on whether the
-      // call survived: without a key the connection errors straight back to
-      // text, and the strip has to say so rather than keep claiming voice.
-      const liveCell = page.locator('.composer-mode-switch .composer-mode-cell-live')
-      const idleCell = page.locator('.composer-mode-switch .composer-mode-cell-idle')
-      expect(await liveCell.count()).toBe(1)
-      expect(await idleCell.count()).toBe(1)
+      // One phone that names whether a call is up. Without a key the
+      // connection errors straight back to text, and the phone has to say so
+      // rather than keep claiming a call.
+      const phone = page.locator('.composer-mode-switch .composer-phone')
+      expect(await phone.count()).toBe(1)
       const talking = await page.getByLabel('Stop voice conversation').count() > 0
-      expect(await liveCell.getAttribute('aria-label'))
-        .toBe(talking ? 'Voice provider' : 'Chat model')
-      expect(await idleCell.getAttribute('aria-label'))
+      expect(await phone.getAttribute('aria-label'))
         .toBe(talking ? 'Stop voice conversation' : 'Start voice conversation')
+      expect(await phone.getAttribute('aria-pressed')).toBe(String(talking))
+      expect(await page.getByLabel('Voice provider', { exact: true }).count()).toBe(1)
+      expect(await page.getByLabel('Chat model', { exact: true }).count()).toBe(1)
       const captions = page.locator('[data-testid="composer-history"]')
       expect(await page.locator('.voice-captions-toggle').count()).toBe(0)
       expect(await captions.isVisible()).toBe(true)

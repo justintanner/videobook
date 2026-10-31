@@ -10,7 +10,7 @@ import {
 } from 'react'
 import {
   ListFilter,
-  Send,
+  MessageSquareText,
 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { ComposerDockClose } from './ComposerDockClose'
@@ -1131,10 +1131,9 @@ export function CommandComposer({
           onKeyDown={handleInputKey}
         />
         {goalStatus}
-        {/* Mode and engine are one strip now: the lit cell names the mode you
-            are in and carries that mode's engine, and the dim cell switches
-            mode. ComposerModeSwitch owns the whole cluster, microphone
-            included, so this row has one control per job. */}
+        {/* The phone and the send button each carry their engine's menu:
+            ComposerModeSwitch owns the whole cluster, so this row has one
+            control per job. */}
         <ComposerModeSwitch
           chatModels={chatModels}
           selectedModel={selectedModel}
@@ -1144,15 +1143,17 @@ export function CommandComposer({
           voice={voice}
           onModelChange={onModelChange}
           onToggleVoice={toggleVoice}
+          sendButton={
+            <button
+              type="submit"
+              className="command-send"
+              disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
+              aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
+            >
+              {sending ? <BusyIndicator size={14} /> : <MessageSquareText size={17} />}
+            </button>
+          }
         />
-        <button
-          type="submit"
-          className="command-send"
-          disabled={actionDiscovery ? actionsDisabled || actionMatches.length === 0 || actionStatus.loading : inputDisabled || sending || !input.trim()}
-          aria-label={actionDiscovery ? 'Prepare action' : 'Send command'}
-        >
-          {sending ? <BusyIndicator size={14} /> : <Send size={14} />}
-        </button>
         {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
     </section>

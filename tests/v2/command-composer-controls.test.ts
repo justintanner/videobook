@@ -16,9 +16,10 @@ import { VoiceActivity } from '../../src/components/videobook/VoiceActivity'
 import { voiceActivityFeedback } from '../../src/videobook/composer-status'
 import { fallbackChatModelCatalog } from '../../src/videobook/chat-models'
 import {
-  composerEngineMenu,
+  chatModelMenu,
   engineMenuInitialIndex,
   engineMenuItems,
+  speechMenu,
 } from '../../src/videobook/composer-engine-menu'
 import { beginMcpCall, emptyMcpCallLog } from '../../src/videobook/mcp-activity'
 import type { VoiceConversation } from '../../src/videobook/use-voice-conversation'
@@ -221,34 +222,28 @@ describe('CommandComposer controls', () => {
     expect(html).not.toContain('gpt-6-astra')
   })
 
-  it('offers the model and the speech provider from the one engine menu', () => {
-    const groups = composerEngineMenu({
+  it('offers the chat model and the speech provider from separate menus', () => {
+    const models = engineMenuItems(chatModelMenu({
       chatModels: fallbackChatModelCatalog.models,
       selectedModel: fallbackChatModelCatalog.defaultModel,
       modelSelectable: true,
-      voiceMode: 'auto',
-    })
+    }))
+    expect(models.map((item) => item.label)).toEqual(['Astra'])
+    expect(models.find((item) => item.label === 'Astra')?.detail).toBe('gpt-6-astra')
+    expect(models.filter((item) => item.checked).map((item) => item.label)).toEqual(['Astra'])
 
-    expect(groups.map((group) => group.id)).toEqual(['model', 'speech'])
-    const items = engineMenuItems(groups)
-    expect(items.map((item) => item.label)).toEqual(['Astra', 'Auto', 'OpenAI', 'xAI'])
-    expect(items.map((item) => item.position)).toEqual([0, 1, 2, 3])
-    expect(items.find((item) => item.label === 'Astra')?.detail).toBe('gpt-6-astra')
-    // The provider stays pickable from text mode, before voice is ever started.
-    expect(engineMenuInitialIndex(items)).toBe(0)
-    expect(items.filter((item) => item.checked).map((item) => item.label)).toEqual(['Astra', 'Auto'])
+    const speech = engineMenuItems(speechMenu('openai'))
+    expect(speech.map((item) => item.label)).toEqual(['Auto', 'OpenAI', 'xAI'])
+    expect(speech.map((item) => item.position)).toEqual([0, 1, 2])
+    expect(engineMenuInitialIndex(speech)).toBe(1)
   })
 
-  it('drops the model group when a context composer owns the request', () => {
-    const groups = composerEngineMenu({
+  it('drops the model menu when a context composer owns the request', () => {
+    expect(chatModelMenu({
       chatModels: fallbackChatModelCatalog.models,
       selectedModel: fallbackChatModelCatalog.defaultModel,
       modelSelectable: false,
-      voiceMode: 'openai',
-    })
-
-    expect(groups.map((group) => group.id)).toEqual(['speech'])
-    expect(engineMenuItems(groups).map((item) => item.position)).toEqual([0, 1, 2])
+    })).toEqual([])
   })
 
   it('keeps model selection available while command execution is busy', () => {
@@ -303,17 +298,16 @@ describe('CommandComposer controls', () => {
 
     expect(html).not.toContain('command-control-kind')
     expect(html).toContain('composer-mode-switch')
-    // Voice is off, so the strip is the lit text cell plus the idle microphone.
-    expect(controlMarkup(html, 'Chat model')).toContain('aria-label="Chat model"')
-    expect(controlMarkup(html, 'Chat model')).toContain('composer-mode-cell-live')
-    expect(html).toContain('>TEXT</span>')
+    // Voice is off: the phone is on the hook beside its provider, and the send
+    // button carries the chat model's menu.
+    expect(controlMarkup(html, 'Chat model')).toContain('composer-mode-picker')
     expect(controlMarkup(html, 'Open actions')).toContain('aria-label="Open actions"')
     expect(controlMarkup(html, 'Start voice conversation')).toContain('aria-pressed="false"')
-    expect(controlMarkup(html, 'Start voice conversation')).toContain('composer-mode-cell-idle')
+    expect(controlMarkup(html, 'Start voice conversation')).toContain('composer-phone')
+    expect(controlMarkup(html, 'Voice provider')).toContain('aria-haspopup="menu"')
     expect(controlMarkup(html, 'Send command')).toContain('aria-label="Send command"')
-    // The old pair of native selects is gone; one menu button carries both.
+    expect(html).toMatch(/composer-text-line[^>]*>\s*<button[^>]*aria-label="Send command"/)
     expect(html.match(/<select/g)).toBeNull()
-    expect(html).not.toContain('aria-label="Voice provider"')
     // Nothing in the row is named by its position or its color.
     for (const tag of html.match(/<button[^>]*>/g) ?? []) expect(tag).toMatch(/aria-label="[^"]+"/)
   })
@@ -614,13 +608,13 @@ describe('message log visibility', () => {
     expect(html).not.toContain('Use Apply or Cancel on screen.')
     expect(html).not.toContain('voice-comms-statusline')
     expect(html).not.toContain('voice-captions-toggle')
-    // Talking, the strip flips: the text cell becomes the way out and the voice
-    // cell is the lit one, naming the provider that is carrying the call.
+    // On the line, the phone is the way out and its provider names the
+    // transport carrying the call; the chat model stays beside send.
     expect(controlMarkup(html, 'Stop voice conversation')).toContain('aria-pressed="true"')
-    expect(controlMarkup(html, 'Stop voice conversation')).toContain('composer-mode-cell-idle')
-    expect(controlMarkup(html, 'Voice provider')).toContain('composer-mode-cell-live')
-    expect(html).toContain('>VOICE</span>')
-    expect(html).not.toContain('aria-label="Chat model"')
+    expect(controlMarkup(html, 'Stop voice conversation')).toContain('data-voice-phase="review"')
+    expect(controlMarkup(html, 'Voice provider')).toContain('composer-mode-picker')
+    expect(html).toContain('>OpenAI</span>')
+    expect(controlMarkup(html, 'Chat model')).toContain('composer-mode-picker')
   })
 
   it('omits connection rows while keeping Waiting for reply in the statusline', () => {

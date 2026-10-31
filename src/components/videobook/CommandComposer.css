@@ -1,6 +1,6 @@
 .command-line-shell {
-  grid-template-areas: 'actions editor mode send';
-  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  grid-template-areas: 'actions editor mode';
+  grid-template-columns: 32px minmax(0, 1fr) auto;
 }
 
 .command-line-shell > .composer-mode-switch { grid-area: mode; }
@@ -50,7 +50,6 @@
 .command-actions-toggle:focus-visible,
 .command-actions-close:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .command-editor-mount { grid-area: editor; }
-.command-send { grid-area: send; }
 
 .command-composer-dock-body > .composer-actions-panel {
   position: static;
@@ -116,8 +115,8 @@
 
 @media (max-width: 600px) {
   .command-line-shell {
-    grid-template-areas: 'editor editor editor' 'actions mode send';
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-areas: 'editor editor' 'actions mode';
+    grid-template-columns: 32px minmax(0, 1fr);
     padding-top: 5px;
     padding-bottom: 6px;
   }
@@ -146,7 +145,8 @@
   .command-line-shell:has(> .composer-mode-switch) { gap: 6px; }
 
   .command-line-shell > .composer-mode-switch { justify-self: stretch; min-width: 0; }
-  .composer-mode-switch > .composer-mode-cell-live { flex: 1 1 auto; }
+  .composer-mode-switch { gap: 6px; }
+  .composer-mode-switch > .composer-mode-line { flex: 1 1 0; }
 }
 
 @media (max-height: 500px) {

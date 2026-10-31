@@ -1,10 +1,10 @@
 import type { ChatModelOption } from './chat-models'
 import type { VoiceMode } from '../../server/src/voice-contract'
 
-// The composer's lit mode cell opens one menu that holds both engines: the chat
-// model that answers, and the speech transport that carries your voice. Keeping
-// both groups in the same menu is what lets either one be changed from either
-// mode, so the speech provider is still pickable before voice is ever started.
+// Each half of the composer's right-hand cluster carries its own engine menu:
+// the phone's names the speech transport that carries your voice, and the text
+// half's names the chat model that answers. The speech menu is there before a
+// call is ever placed, so the provider is pickable without starting voice.
 
 export type EngineMenuChoice =
   | { kind: 'model'; model: string }
@@ -31,13 +31,11 @@ export interface EngineMenuGroup {
   items: readonly EngineMenuItem[]
 }
 
-export interface EngineMenuInput {
+export interface ChatModelMenuInput {
   chatModels: readonly ChatModelOption[]
   selectedModel: string
   /** False while a context composer or a stalled connection owns the model. */
   modelSelectable: boolean
-  /** Absent when this composer has no voice conversation attached. */
-  voiceMode: VoiceMode | null
 }
 
 const VOICE_MODE_ORDER: readonly VoiceMode[] = ['auto', 'openai', 'xai']
@@ -58,7 +56,7 @@ export function voiceModeLabel(mode: VoiceMode): string {
   return VOICE_MODE_LABELS[mode]
 }
 
-function modelItems(input: EngineMenuInput): readonly EngineMenuItem[] {
+function modelItems(input: ChatModelMenuInput): readonly EngineMenuItem[] {
   if (!input.modelSelectable) return []
   return input.chatModels.map((model, position) => ({
     id: `model:${model.id}`,
@@ -71,12 +69,10 @@ function modelItems(input: EngineMenuInput): readonly EngineMenuItem[] {
   }))
 }
 
-function speechItems(input: EngineMenuInput, offset: number): readonly EngineMenuItem[] {
-  const selected = input.voiceMode
-  if (!selected) return []
+function speechItems(selected: VoiceMode): readonly EngineMenuItem[] {
   return VOICE_MODE_ORDER.map((mode, position) => ({
     id: `speech:${mode}`,
-    position: offset + position,
+    position,
     label: VOICE_MODE_LABELS[mode],
     detail: null,
     note: VOICE_MODE_NOTES[mode],
@@ -85,13 +81,13 @@ function speechItems(input: EngineMenuInput, offset: number): readonly EngineMen
   }))
 }
 
-export function composerEngineMenu(input: EngineMenuInput): readonly EngineMenuGroup[] {
-  const groups: EngineMenuGroup[] = []
+export function chatModelMenu(input: ChatModelMenuInput): readonly EngineMenuGroup[] {
   const models = modelItems(input)
-  if (models.length > 0) groups.push({ id: 'model', label: 'Chat model', items: models })
-  const speech = speechItems(input, models.length)
-  if (speech.length > 0) groups.push({ id: 'speech', label: 'Speech', items: speech })
-  return groups
+  return models.length > 0 ? [{ id: 'model', label: 'Chat model', items: models }] : []
+}
+
+export function speechMenu(voiceMode: VoiceMode): readonly EngineMenuGroup[] {
+  return [{ id: 'speech', label: 'Speech', items: speechItems(voiceMode) }]
 }
 
 export function engineMenuItems(groups: readonly EngineMenuGroup[]): readonly EngineMenuItem[] {

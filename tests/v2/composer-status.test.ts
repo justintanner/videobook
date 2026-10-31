@@ -193,7 +193,7 @@ describe('composer activity status', () => {
     expect(waiting).not.toContain('Connecting voice')
     expect(hidden).toContain(' hidden=""')
     expect(hidden).toContain('aria-label="Message log"')
-    expect(connecting).toContain('composer-mode-connecting')
+    expect(connecting).toMatch(/class="composer-mode-cell composer-phone"[^>]*data-voice-phase="connecting"/)
     expect(connecting).toContain('role="status"')
     expect(renderVoiceActivity(voice)).toBe('')
   })

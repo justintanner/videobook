@@ -110,7 +110,7 @@ describe('voice opens a cell fullscreen in the real browser', () => {
     await page.goto(appUrl)
     await page.getByLabel('Start voice conversation').waitFor({ state: 'visible', timeout: 30_000 })
     await until(() => page.getByLabel('Start voice conversation').isEnabled())
-    await page.locator('.composer-mode-switch .composer-mode-cell-live').click()
+    await page.getByLabel('Voice provider', { exact: true }).click()
     await page.getByRole('menuitemradio', { name: 'xAI', exact: true }).click()
   }, 120_000)
 

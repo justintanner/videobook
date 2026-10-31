@@ -110,7 +110,7 @@ describe('voice generation review in the browser', () => {
   ])('keeps voice live after revised generation $surface $decision and retains the inspector preview', async ({ surface, decision }) => {
     await page.reload({ waitUntil: 'commit' })
     await expect.poll(() => page.getByLabel('Start voice conversation').isEnabled(), { timeout }).toBe(true)
-    await page.locator('.composer-mode-switch .composer-mode-cell-live').click()
+    await page.getByLabel('Voice provider', { exact: true }).click()
     await page.getByRole('menuitemradio', { name: 'xAI', exact: true }).click()
     await page.getByLabel('Start voice conversation').click()
     await expect.poll(() => page.locator('.composer-mode-switch [role="status"]').innerText(), { timeout }).toBe('Listening')

@@ -1,12 +1,12 @@
-/* The composer's right-hand cluster. One strip on the actions button's 32px
-   tier, so the whole command row reads as a single height: the lit cell states
-   the mode and carries that mode's engine inline, the dim cell is a glyph-only
-   square that switches mode. Nothing here is named by colour alone — the lit
-   cell keeps its word, and the idle cell keeps its aria-label. */
+/* The composer's right-hand cluster: two split buttons on the actions button's
+   32px tier. The voice half is a phone plus its provider; the text half is the
+   send button plus the chat model. Every button keeps its aria-label, so no
+   state is named by colour or motion alone. */
 .composer-mode-switch {
   position: relative;
   display: flex;
   align-items: stretch;
+  gap: 8px;
   min-width: 0;
   height: 32px;
 }
@@ -14,6 +14,21 @@
 .command-composer .command-line-shell > .composer-mode-switch:has(.composer-engine-menu) {
   z-index: 150;
 }
+
+.composer-mode-line {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.composer-picker {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  margin-left: -1px;
+}
+
+.composer-picker[data-open] { z-index: 3; }
 
 .composer-mode-cell {
   position: relative;
@@ -36,50 +51,12 @@
     background 160ms ease;
 }
 
-.composer-mode-cell:first-child { border-radius: 2px 0 0 2px; }
-.composer-mode-cell:last-of-type { border-radius: 0 2px 2px 0; }
-.composer-mode-cell:only-of-type { border-radius: 2px; }
-.composer-mode-cell + .composer-mode-cell { margin-left: -1px; }
-
-/* The idle half is exactly the actions button: a 32px square holding a glyph. */
-.composer-mode-cell-idle {
-  flex: 0 0 auto;
-  justify-content: center;
-  width: 32px;
-  padding: 0;
-}
-
-.composer-mode-cell-idle:not(:disabled):hover,
-.composer-mode-cell-idle:not(:disabled):focus-visible {
+.composer-mode-cell:not(:disabled):hover,
+.composer-mode-cell:not(:disabled):focus-visible {
+  z-index: 1;
   border-color: var(--control-border-hover);
   color: var(--control-fg);
   background: var(--control-bg-hover);
-}
-
-/* The lit half takes the same "on" treatment every other control in the app
-   uses, so being in a mode looks like every other engaged state. */
-.composer-mode-cell-live {
-  z-index: 1;
-  padding: 0 11px;
-  border-color: var(--green);
-  color: var(--control-fg-hover);
-  background: #103421;
-}
-
-.composer-mode-cell-live[data-voice-phase] {
-  color: #8fffb8;
-  background: #0b2b1b;
-}
-
-.composer-mode-cell-live[data-voice-phase='review'] {
-  border-color: rgba(242, 220, 170, 0.62);
-  color: #f2dcaa;
-  background: rgba(60, 46, 16, 0.55);
-}
-
-.composer-mode-cell-idle[data-voice-phase='error'] {
-  border-color: rgba(240, 126, 126, 0.5);
-  color: #ffae9f;
 }
 
 .composer-mode-cell:focus-visible {
@@ -93,17 +70,18 @@
   cursor: default;
 }
 
-.composer-mode-name {
-  flex: 0 0 auto;
+.composer-mode-picker {
+  flex: 1 1 auto;
+  padding: 0 10px;
+  border-radius: 0 2px 2px 0;
+  color: var(--control-fg-hover);
 }
 
-.composer-mode-divider {
-  flex: 0 0 auto;
-  opacity: 0.45;
+.composer-mode-picker[aria-expanded='true'] {
+  border-color: var(--green);
+  background: #103421;
 }
 
-/* The engine reads as a name, not a shouted label: same colour as the mode word
-   it follows, but larger and unspaced, so the pair scans as "mode · engine". */
 .composer-mode-engine {
   min-width: 0;
   max-width: 132px;
@@ -114,46 +92,114 @@
   white-space: nowrap;
 }
 
-/* The microphone level the connection reports, in the glyph slot. Voice mode is
-   always live, so the meter is what marks the cell rather than a static mic. */
-.composer-mode-meter {
-  display: flex;
+.composer-text-line > .command-send {
+  border-radius: 2px 0 0 2px;
+}
+
+.composer-text-line > .command-send + .composer-picker > .composer-mode-picker {
+  border-color: rgba(114, 231, 170, 0.32);
+}
+
+/* The phone: a 32px square like the actions button. Off the hook it rings in
+   amber; on the line it stays lit green with a ring that breathes with the
+   microphone level; hovered on the line it turns over into a red hang-up. */
+.composer-phone {
   flex: 0 0 auto;
-  align-items: flex-end;
-  gap: 2px;
-  height: 12px;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+  border-radius: 2px 0 0 2px;
 }
 
-.composer-mode-meter > span {
-  width: 2px;
-  border-radius: 1px;
-  background: currentColor;
-  transform: scaleY(calc(0.3 + var(--voice-level, 0) * 0.7));
-  transform-origin: bottom;
-  transition: transform 90ms linear;
+.composer-phone-handset {
+  transition: transform 260ms cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
-.composer-mode-meter > span:nth-child(1) { height: 6px; }
-.composer-mode-meter > span:nth-child(2) { height: 12px; }
-.composer-mode-meter > span:nth-child(3) { height: 9px; }
-
-.composer-mode-connecting {
-  flex: 0 0 auto;
-  animation: composer-mode-connect-spin 1s linear infinite;
+.composer-phone::after {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  content: '';
+  opacity: 0;
+  pointer-events: none;
 }
 
-@keyframes composer-mode-connect-spin {
-  to { transform: rotate(360deg); }
+.composer-phone[data-voice-phase='connecting'],
+.composer-phone[data-voice-phase='connecting']:not(:disabled):hover {
+  z-index: 1;
+  border-color: rgba(232, 176, 74, 0.8);
+  color: #f2c46a;
+  background: rgba(60, 46, 16, 0.55);
+}
+
+.composer-phone[data-voice-phase='connecting'] .composer-phone-handset {
+  animation: composer-phone-ring 380ms ease-in-out infinite;
+}
+
+.composer-phone[data-voice-phase='connecting']::after {
+  opacity: 0.9;
+  animation: composer-phone-pulse 1.2s ease-out infinite;
+}
+
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']) {
+  z-index: 1;
+  border-color: var(--green);
+  color: #8fffb8;
+  background: #0b3a22;
+}
+
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting'])::after {
+  opacity: calc(0.35 + var(--voice-level, 0) * 0.65);
+  animation: composer-phone-pulse 1.6s ease-out infinite;
+}
+
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):hover,
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):focus-visible {
+  border-color: rgba(240, 126, 126, 0.75);
+  color: #ff9b8a;
+  background: rgba(70, 20, 16, 0.6);
+}
+
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):hover .composer-phone-handset,
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):focus-visible .composer-phone-handset {
+  transform: rotate(135deg);
+}
+
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):hover::after,
+.composer-phone[aria-pressed='true']:not([data-voice-phase='connecting']):focus-visible::after {
+  animation: none;
+  opacity: 0;
+}
+
+.composer-phone[data-voice-phase='review'] {
+  border-color: rgba(242, 220, 170, 0.62);
+  color: #f2dcaa;
+  background: rgba(60, 46, 16, 0.55);
+}
+
+.composer-phone[data-voice-phase='error'] {
+  border-color: rgba(240, 126, 126, 0.5);
+  color: #ffae9f;
+}
+
+@keyframes composer-phone-ring {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-16deg); }
+  75% { transform: rotate(16deg); }
+}
+
+@keyframes composer-phone-pulse {
+  0% { transform: scale(0.75); }
+  100% { transform: scale(1.5); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .composer-mode-meter > span { transition: none; }
-  .composer-mode-connecting { animation: none; }
+  .composer-phone-handset { transition: none; }
+  .composer-phone[data-voice-phase] .composer-phone-handset,
+  .composer-phone[data-voice-phase]::after { animation: none; }
 }
 
-/* One menu, both groups, whichever mode opened it: the chat model stays
-   reachable from voice, and the speech provider stays pickable before voice has
-   ever been started. */
 .composer-engine-menu {
   position: absolute;
   right: 0;
@@ -250,10 +296,7 @@
   line-height: 1.55;
 }
 
-/* Out of room, the engine name goes first and the mode word stays: which mode
-   you are in is the thing the strip exists to say. */
 @media (max-width: 600px) {
-  .composer-mode-cell-live { gap: 6px; padding: 0 9px; }
-  .composer-mode-divider,
-  .composer-mode-engine { display: none; }
+  .composer-mode-picker { gap: 6px; padding: 0 8px; }
+  .composer-mode-engine { max-width: 72px; }
 }
