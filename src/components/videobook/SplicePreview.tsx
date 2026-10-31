@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Crosshair, Pause, Play, RefreshCw, Repeat } from 'lucide-react'
+import { Crosshair, Pause, Play, RefreshCw, Repeat, SkipForward } from 'lucide-react'
 import {
   SPLICE_QUALITY_LABELS,
   formatSpliceSeconds,
@@ -11,6 +11,7 @@ import {
   spliceWindowFraction,
   spliceWindowStart,
   type SplicePlan,
+  type SpliceTimeline,
 } from '@/videobook/splice-preview'
 import { useSplicePlayback } from '@/videobook/use-splice-playback'
 import {
@@ -42,6 +43,7 @@ type SplicePreviewProps = {
 const CURVE_WIDTH = 240
 const CURVE_HEIGHT = 40
 const FALLBACK_FPS = 30
+const CUT_LEAD_IN_SECONDS = 2
 
 function stageStyle(clip: SplicePreviewClip): CSSProperties {
   const ratio = clip.width && clip.height ? clip.width / clip.height : 16 / 9
@@ -158,6 +160,52 @@ function SpliceCurve({
   )
 }
 
+function SpliceTimelineBar({
+  timeline,
+  position,
+  first,
+  second,
+  onSeek,
+}: {
+  timeline: SpliceTimeline | null
+  position: number
+  first: SplicePreviewClip
+  second: SplicePreviewClip
+  onSeek: (seconds: number) => void
+}) {
+  const total = timeline?.total ?? 0
+  const cutPercent = timeline && total > 0 ? (timeline.cut / total) * 100 : 50
+  const headPercent = total > 0 ? (position / total) * 100 : 0
+  const segments = { '--splice-cut': `${cutPercent}%`, '--splice-head': `${headPercent}%` } as CSSProperties
+  return (
+    <div className="splice-timeline" style={segments}>
+      <div className="splice-timeline-track" aria-hidden="true">
+        <span className="splice-timeline-segment splice-timeline-first">{first.address}</span>
+        <span className="splice-timeline-segment splice-timeline-second">{second.address}</span>
+        <span className="splice-timeline-cut" />
+        <span className="splice-timeline-head" />
+      </div>
+      <input
+        type="range"
+        className="splice-timeline-scrubber"
+        aria-label="Spliced video position"
+        aria-valuetext={`${formatSpliceSeconds(position)} of ${formatSpliceSeconds(total)}`}
+        min="0"
+        max={total}
+        step={timeline?.frameSeconds ?? 1 / FALLBACK_FPS}
+        value={Math.min(position, total)}
+        disabled={!timeline}
+        onChange={(event) => onSeek(event.target.valueAsNumber)}
+      />
+      <div className="splice-timeline-axis" aria-hidden="true">
+        <span>{formatSpliceSeconds(position)}</span>
+        {timeline && <span>cut {formatSpliceSeconds(timeline.cut)}</span>}
+        <span>{formatSpliceSeconds(total)}</span>
+      </div>
+    </div>
+  )
+}
+
 export function SplicePreview({
   first,
   second,
@@ -170,38 +218,65 @@ export function SplicePreview({
   onOverlapChange,
 }: SplicePreviewProps) {
   const [loop, setLoop] = useState(false)
+  const [loadedSecondDuration, setLoadedSecondDuration] = useState<number | null>(null)
   const frameSeconds = 1 / (match?.fps ?? FALLBACK_FPS)
-  const { firstRef, secondRef, phase, playing, play, stop, showCut } = useSplicePlayback(frameSeconds)
+  const { firstRef, secondRef, phase, position, playing, play, stop, seekTo } = useSplicePlayback()
   const overlapSeconds = parsedOverlap(overlap)
-  const plan = splicePlan(overlapSeconds, match, first.duration, second.duration)
+  const secondDuration = second.duration ?? loadedSecondDuration
+  const plan = splicePlan(overlapSeconds, match, first.duration, secondDuration)
   const maximum = overlapMaximum(match, first)
   const bestOverlap = match ? spliceBestOverlap(match) : null
   const sliderLabelId = useId()
   const cut = plan?.cut ?? null
+  const total = plan?.total ?? (cut !== null && secondDuration !== null ? cut + secondDuration : null)
+  const timeline = useMemo<SpliceTimeline | null>(
+    () => (cut !== null && total !== null ? { cut, total, frameSeconds } : null),
+    [cut, total, frameSeconds],
+  )
+  const shownCut = useRef<number | null>(null)
 
   useEffect(() => {
-    if (cut !== null && !playing) showCut(cut)
-  }, [cut, playing, showCut])
+    if (!timeline || playing || shownCut.current === timeline.cut) return
+    shownCut.current = timeline.cut
+    seekTo(timeline, Math.max(0, timeline.cut - CUT_LEAD_IN_SECONDS))
+  }, [timeline, playing, seekTo])
 
+  const timelineFor = (value: string): SpliceTimeline | null => {
+    const next = splicePlan(parsedOverlap(value), match, first.duration, secondDuration)
+    if (!next || secondDuration === null) return null
+    return { cut: next.cut, total: next.cut + secondDuration, frameSeconds }
+  }
   const changeOverlap = (value: string) => {
     onOverlapChange(value)
-    const next = splicePlan(parsedOverlap(value), match, first.duration, second.duration)
-    if (next && playing) play(next.cut, loop)
+    const next = timelineFor(value)
+    if (!next) return
+    shownCut.current = next.cut
+    const target = Math.max(0, next.cut - CUT_LEAD_IN_SECONDS)
+    if (playing) play(next, target, loop)
+    else seekTo(next, target)
   }
   const togglePlay = () => {
     if (playing) {
       stop()
       return
     }
-    if (plan) play(plan.cut, loop)
+    if (timeline) play(timeline, position, loop)
+  }
+  const playFromCut = () => {
+    if (timeline) play(timeline, Math.max(0, timeline.cut - CUT_LEAD_IN_SECONDS), loop)
   }
   const toggleLoop = () => {
     const next = !loop
     setLoop(next)
-    if (playing && plan) play(plan.cut, next)
+    if (playing && timeline) play(timeline, position, next)
   }
-  const firstLoaded = () => {
-    if (cut !== null && !playing) showCut(cut)
+  const seek = (seconds: number) => {
+    if (!timeline) return
+    if (playing) play(timeline, seconds, loop)
+    else seekTo(timeline, seconds)
+  }
+  const restorePosition = () => {
+    if (timeline && !playing) seekTo(timeline, position)
   }
 
   return (
@@ -213,7 +288,7 @@ export function SplicePreview({
           className={phase === 'first' ? 'is-active' : undefined}
           preload="auto"
           playsInline
-          onLoadedMetadata={firstLoaded}
+          onLoadedMetadata={restorePosition}
         />
         <video
           ref={secondRef}
@@ -221,27 +296,42 @@ export function SplicePreview({
           className={phase === 'second' ? 'is-active' : undefined}
           preload="auto"
           playsInline
+          onLoadedMetadata={(event) => {
+            const duration = event.currentTarget.duration
+            if (Number.isFinite(duration)) setLoadedSecondDuration(duration)
+            restorePosition()
+          }}
         />
         <span className="splice-preview-badge">
           {phase === 'first' ? first.address : second.address}
         </span>
-        {phase === 'first' && !playing && (
-          <figure className="splice-preview-next">
-            <video src={`${second.mediaUrl}#t=0.001`} muted playsInline preload="metadata" aria-hidden="true" />
-            <figcaption>Next · {second.address}</figcaption>
-          </figure>
-        )}
       </div>
+      <SpliceTimelineBar
+        timeline={timeline}
+        position={position}
+        first={first}
+        second={second}
+        onSeek={seek}
+      />
       <div className="splice-preview-transport">
         <button
           type="button"
           className="splice-preview-play"
           onClick={togglePlay}
-          disabled={!plan}
-          aria-label={playing ? 'Pause splice preview' : 'Play splice preview'}
+          disabled={!timeline}
+          aria-label={playing ? 'Pause spliced video' : 'Play spliced video'}
         >
           {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-          <span>{playing ? 'Pause' : 'Play cut'}</span>
+          <span>{playing ? 'Pause' : 'Play'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={playFromCut}
+          disabled={!timeline}
+          title={`Play from ${CUT_LEAD_IN_SECONDS}s before the cut`}
+        >
+          <SkipForward size={14} aria-hidden="true" />
+          <span>From cut</span>
         </button>
         <button
           type="button"

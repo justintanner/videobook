@@ -5,6 +5,7 @@ import {
   spliceMatchQuality,
   splicePlan,
   spliceScorePath,
+  spliceTimelineSource,
   spliceWindowFraction,
 } from './splice-preview'
 import { parseSplicePreview, type SplicePreviewMatch } from './use-splice-preview'
@@ -86,5 +87,24 @@ describe('splice preview plan', () => {
       scores: [1, 2],
     })
     expect(parseSplicePreview({ fps: 10, scores: [] })).toBeNull()
+  })
+})
+
+describe('splice timeline', () => {
+  const timeline = { cut: 2.8, total: 4.8, frameSeconds: 0.1 }
+
+  it('plays the first clip before the cut', () => {
+    expect(spliceTimelineSource(timeline, 1.5)).toEqual({ phase: 'first', time: 1.5 })
+  })
+
+  it('plays the second clip from its start at the cut', () => {
+    expect(spliceTimelineSource(timeline, 2.8)).toEqual({ phase: 'second', time: 0 })
+    expect(spliceTimelineSource(timeline, 3.8).phase).toBe('second')
+    expect(spliceTimelineSource(timeline, 3.8).time).toBeCloseTo(1)
+  })
+
+  it('clamps positions to the spliced length', () => {
+    expect(spliceTimelineSource(timeline, -1)).toEqual({ phase: 'first', time: 0 })
+    expect(spliceTimelineSource(timeline, 9).time).toBeCloseTo(2)
   })
 })

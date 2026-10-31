@@ -108,3 +108,26 @@ export function spliceBestOverlap(match: SplicePreviewMatch): number | null {
   const frame = match.windowStartFrame + index
   return Math.max(1 / match.fps, match.firstDuration - (frame - 0.5) / match.fps)
 }
+
+export type SplicePlaybackPhase = 'first' | 'second'
+
+export type SpliceTimeline = {
+  cut: number
+  total: number
+  frameSeconds: number
+}
+
+export type SpliceTimelineSource = {
+  phase: SplicePlaybackPhase
+  time: number
+}
+
+export function spliceTimelineSource(
+  timeline: SpliceTimeline,
+  position: number,
+): SpliceTimelineSource {
+  const clamped = Math.min(Math.max(0, position), timeline.total)
+  return clamped < timeline.cut
+    ? { phase: 'first', time: clamped }
+    : { phase: 'second', time: clamped - timeline.cut }
+}
