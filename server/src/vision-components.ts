@@ -12,7 +12,7 @@ export const VIDEO_ANALYSIS: SidecarAnalysisSpec = { component: "video-analysis"
 
 export const IMAGE_DESCRIPTION: SidecarAnalysisSpec = { component: "image-description", version: 1, jobType: "describe_image", sidecar: ".original.analysis.json" };
 
-export const SCENE_DETECTION: SidecarAnalysisSpec = { component: "scene-detection", version: 1, jobType: "detect_scenes", sidecar: ".detect-scenes.json" };
+export const SCENE_DETECTION: SidecarAnalysisSpec = { component: "scene-detection", version: 3, jobType: "detect_scenes", sidecar: ".detect-scenes.json" };
 
 export interface VideoAnalysisInputs {
   videoHash: string;

@@ -442,6 +442,8 @@ import {
   type NotebookSplitRun,
 } from '@/videobook/notebook-split-command'
 import { resolveNotebookVideoSourceCell } from '@/videobook/notebook-video-source'
+import { loadSceneData } from '@/videobook/scene-detection-request'
+import { selectSceneCuts, type SceneData } from '../server/src/scene-cuts'
 import {
   durationTargetsToCutPoints,
   splitSegments,
@@ -774,6 +776,7 @@ type PendingChatAction =
       expectations: NotebookAddressExpectation[]
       notebookId: string
       reason: string
+      scenes?: SceneData | null
       sourceDurationSeconds: number
       summary: string
     }
@@ -3481,6 +3484,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cutPointsSeconds: pendingChatAction.command.cutPointsSeconds,
         mediaUrl: asset.mediaUrl,
         outputMode: pendingChatAction.command.outputMode ?? 'all',
+        scenes: pendingChatAction.scenes ?? null,
         selectedIndex: pendingChatAction.command.selectedChunkIndexes?.[0] ?? 0,
         sourceDurationSeconds: duration,
         sourceFps: asset.fps,
@@ -7486,10 +7490,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!asset?.mediaUrl) {
         throw new Error(`${notebookGridTag(source.slot)} does not have playable video yet`)
       }
+      const scenes = command.cutSource === 'scenes' && sourceArtifactId
+        ? await loadSceneData({
+            artifactId: sourceArtifactId,
+            bookId,
+            callTool: (tool, args, options) => call(tool, args, { ...options, chat }),
+            isCurrent,
+          })
+        : null
+      if (isCurrent?.() === false) return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
+      const seedCutPoints = scenes ? selectSceneCuts(scenes) : command.cutPointsSeconds
       const maximumCellCount = notebookGrid.maximumRowCount
         * notebookGrid.columnCount
       const outputMode = command.outputMode ?? 'all'
-      const requestedCutPoints = command.cutPointsSeconds.filter((cutPoint) =>
+      const requestedCutPoints = seedCutPoints.filter((cutPoint) =>
         sourceDurationSeconds === null
         || Math.abs(cutPoint - sourceDurationSeconds) > 0.001)
       const cutPointsSeconds = outputMode === 'all'
@@ -7528,6 +7542,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }],
         notebookId: currentNotebook.id,
         reason: 'This request creates and runs a Split Video workflow',
+        scenes,
         sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
         summary: notebookSplitSummary({
           cutPointsSeconds,
@@ -8306,6 +8321,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await previewNotebookSplitCommand({
         sourceReference,
         cutPointsSeconds: [splitAtSeconds],
+      }, isCurrent, chat)
+    }
+    if (plan.tool === 'split_video_at_scenes') {
+      const sourceReference = routedAssetReference(plan.params.asset_id)
+      if (!sourceReference) {
+        return { ok: false, message: 'The chat model did not select a video to split into scenes.' }
+      }
+      return await previewNotebookSplitCommand({
+        sourceReference,
+        cutPointsSeconds: [],
+        cutSource: 'scenes',
       }, isCurrent, chat)
     }
     if (
@@ -9346,7 +9372,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (commandToken === '/split') {
         const command = parseNotebookSplitCommand(input)
         if (!command) {
-          return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s] | keep 0.03-0.11 | remove 0.03-0.11' }
+          return { ok: false, message: 'Usage: /split @video [at 5s, 12.5s] | at scenes | keep 0.03-0.11 | remove 0.03-0.11' }
         }
         return await previewNotebookSplitCommand(command, undefined, chat)
       }
@@ -11208,8 +11234,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <ConfirmSheet
           kind="split"
           ariaLabel="Video split review"
-          tag="SPLIT VIDEO · CHAT"
-          title={splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
+          tag={split.scenes ? 'SPLIT INTO SCENES' : 'SPLIT VIDEO · CHAT'}
+          title={split.scenes
+            ? `${split.cutPointsSeconds.length} cut${split.cutPointsSeconds.length === 1 ? '' : 's'} to review`
+            : splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
           address={split.sourceLabel}
           effect={{
             label: split.outputMode === 'all'
@@ -11226,17 +11254,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           busy={busy}
           applyLabel="Apply split"
           applyFormId={COMMAND_COMPOSER_FORM_ID}
-          hints={(
-            <span>
-              <kbd>← →</kbd> 0.1s · <kbd>⇧← →</kbd> 1s · <kbd>⌥← →</kbd> 0.01s on the focused bound · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
-            </span>
-          )}
+          hints={split.scenes
+            ? (
+                <span>
+                  <kbd>K</kbd> keep · <kbd>X</kbd> remove · <kbd>J</kbd> previous · <kbd>← →</kbd> frame · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
+                </span>
+              )
+            : (
+                <span>
+                  <kbd>← →</kbd> 0.1s · <kbd>⇧← →</kbd> 1s · <kbd>⌥← →</kbd> 0.01s on the focused bound · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
+                </span>
+              )}
           onCancel={dismissPendingCommandPlan}
         >
           <SplitBody
             cutPointsSeconds={split.cutPointsSeconds}
             mediaUrl={split.mediaUrl}
             outputMode={split.outputMode}
+            scenes={split.scenes}
             selectedIndex={split.selectedIndex}
             sourceDurationSeconds={split.sourceDurationSeconds}
             sourceFps={split.sourceFps}

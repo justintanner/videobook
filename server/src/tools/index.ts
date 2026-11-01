@@ -42,6 +42,7 @@ import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { trimVideoDef } from "./trim-video.js";
 import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
+import { splitVideoAtScenesDef } from "./split-video-at-scenes.js";
 import { extractVideoClipDef } from "./extract-video-clip.js";
 import { splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
@@ -146,6 +147,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     trimVideoDef(engine),
     trimAudioDef(engine),
     splitVideoDef(engine),
+    splitVideoAtScenesDef(engine),
     extractVideoClipDef(engine),
     splitVideoByDurationsDef(engine),
     padVideoDef(engine),

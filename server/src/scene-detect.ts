@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { FFMPEG } from "./ffmpeg-binary.js";
+import type { SceneMarker } from "./scene-cuts.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -223,13 +224,77 @@ export async function refineCameraCandidate(
   return best ? { t: best.t, score: best.score } : candidate;
 }
 
-export async function detectSceneCandidates(
+type SceneCuts = { cuts: SceneMarker[]; settles: SceneMarker[] };
+
+// A cut is one frame that changes far more than the frames around it, so cuts
+// are scored as contrast against the local median frame difference rather
+// than against a fixed scdet score. Dark or low-contrast footage produces
+// small absolute scores even at hard cuts.
+const CONTRAST_WINDOW_S = 0.5;
+const CONTRAST_GUARD_FRAMES = 2;
+const CONTRAST_BASE_FLOOR = 0.5;
+const CONTRAST_MIN_SCORE = 1.5;
+const CONTRAST_CANDIDATE_FLOOR = 3;
+const CUT_CLUSTER_S = 0.4;
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.floor(sorted.length / 2)]!;
+}
+
+function frameSpacing(samples: SceneSample[]): number {
+  const gaps = samples.slice(1).map((sample, index) => sample.t - samples[index]!.t).filter((gap) => gap > 0);
+  return median(gaps) || 1 / 30;
+}
+
+function localBaseline(samples: SceneSample[], index: number, radius: number): number {
+  const neighbours: number[] = [];
+  for (let offset = CONTRAST_GUARD_FRAMES; offset <= radius; offset += 1) {
+    const before = samples[index - offset];
+    const after = samples[index + offset];
+    if (before) neighbours.push(before.score);
+    if (after) neighbours.push(after.score);
+  }
+  return median(neighbours);
+}
+
+export function contrastCuts(samples: SceneSample[]): SceneMarker[] {
+  const radius = Math.max(CONTRAST_GUARD_FRAMES + 2, Math.round(CONTRAST_WINDOW_S / frameSpacing(samples)));
+  const candidates = samples.flatMap((sample, index) => {
+    if (index === 0 || sample.score < CONTRAST_MIN_SCORE) return [];
+    const strength = sample.score / Math.max(CONTRAST_BASE_FLOOR, localBaseline(samples, index, radius));
+    return strength >= CONTRAST_CANDIDATE_FLOOR ? [{ t: sample.t, score: strength }] : [];
+  });
+  const clustered: SceneMarker[] = [];
+  for (const candidate of candidates) {
+    const previous = clustered.at(-1);
+    if (!previous || candidate.t - previous.t > CUT_CLUSTER_S) clustered.push(candidate);
+    else if (candidate.score > previous.score) clustered[clustered.length - 1] = candidate;
+  }
+  return clustered;
+}
+
+function motionBins(samples: SceneSample[]): SceneSample[] {
+  const bins = new Map<number, number>();
+  for (const sample of samples) {
+    const bin = Math.floor(sample.t * SCDET_FPS);
+    bins.set(bin, (bins.get(bin) ?? 0) + sample.score);
+  }
+  return [...bins.entries()].map(([bin, score]) => ({ t: bin / SCDET_FPS, score }));
+}
+
+function roundMarker(marker: SceneMarker): SceneMarker {
+  return { t: Math.round(marker.t * 1000) / 1000, score: Math.round(marker.score * 10) / 10 };
+}
+
+export async function detectSceneCuts(
   videoPath: string,
   signal?: AbortSignal,
-): Promise<Candidate[]> {
-  const samples = await detectSceneSamples(videoPath, {
-    fps: SCDET_FPS,
-    signal,
-  });
-  return deriveCandidates(samples);
+): Promise<SceneCuts> {
+  const samples = await detectSceneSamples(videoPath, { signal });
+  const settles = deriveCandidates(motionBins(samples))
+    .filter((candidate) => candidate.kind === "settle")
+    .map(({ t, score }) => ({ t, score }));
+  return { cuts: contrastCuts(samples).map(roundMarker), settles: settles.map(roundMarker) };
 }

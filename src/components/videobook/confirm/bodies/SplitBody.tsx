@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -15,10 +14,8 @@ import {
   splitFrameStepSeconds,
   type NotebookSplitOutputMode,
 } from '@/videobook/notebook-split-command'
-import {
-  defaultSlowLoopPlayback,
-  nextSegmentLoopAction,
-} from '@/videobook/segment-loop-playback'
+import { defaultSlowLoopPlayback } from '@/videobook/segment-loop-playback'
+import { SegmentLoopTile } from '../SegmentLoopTile'
 import {
   mergeSegmentWithNext,
   moveSegment,
@@ -29,127 +26,10 @@ import {
   splitSegmentInHalf,
   splitSegments,
 } from '@/videobook/video-split-segments'
-
-type LoopTileProps = {
-  label: string
-  mediaUrl: string
-  muted: boolean
-  playbackRate: number
-  windows: Array<{ endSeconds: number; startSeconds: number }>
-}
-
-function SegmentLoopTile({
-  label,
-  mediaUrl,
-  muted,
-  playbackRate,
-  windows,
-}: LoopTileProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const pendingSeekRef = useRef<number | null>(null)
-  const windowIndexRef = useRef(0)
-  const windowsKey = windows
-    .map((window) => `${window.startSeconds}:${window.endSeconds}`)
-    .join('|')
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    const parsedWindows = windowsKey.split('|').flatMap((part) => {
-      const [start, end] = part.split(':').map(Number)
-      return Number.isFinite(start) && Number.isFinite(end) && end! > start!
-        ? [{ startSeconds: start!, endSeconds: end! }]
-        : []
-    })
-    windowIndexRef.current = 0
-    const startSeconds = parsedWindows[0]?.startSeconds ?? 0
-    const startPlayback = () => {
-      video.currentTime = startSeconds
-      pendingSeekRef.current = startSeconds
-      video.playbackRate = playbackRate
-      void video.play().catch(() => undefined)
-    }
-    let raf = 0
-    let vfc: number | undefined
-    let cancelled = false
-    const cancelArm = () => {
-      if (vfc !== undefined && typeof video.cancelVideoFrameCallback === 'function') {
-        video.cancelVideoFrameCallback(vfc)
-        vfc = undefined
-      }
-      if (raf) {
-        cancelAnimationFrame(raf)
-        raf = 0
-      }
-    }
-    const tick = () => {
-      if (cancelled) return
-      const action = nextSegmentLoopAction({
-        activeWindowIndex: windowIndexRef.current,
-        currentTimeSeconds: video.currentTime,
-        pendingSeekSeconds: pendingSeekRef.current,
-        windows: parsedWindows,
-      })
-      if (action.type === 'seek') {
-        video.currentTime = action.timeSeconds
-        pendingSeekRef.current = action.timeSeconds
-        windowIndexRef.current = action.windowIndex
-        void video.play().catch(() => undefined)
-      } else if (
-        pendingSeekRef.current !== null
-        && Math.abs(video.currentTime - pendingSeekRef.current) <= 1 / 30
-      ) {
-        pendingSeekRef.current = null
-      }
-      arm()
-    }
-    const arm = () => {
-      if (cancelled) return
-      if (typeof video.requestVideoFrameCallback === 'function') {
-        vfc = video.requestVideoFrameCallback(() => tick())
-        return
-      }
-      raf = requestAnimationFrame(() => tick())
-    }
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      startPlayback()
-    } else {
-      video.addEventListener('loadedmetadata', startPlayback, { once: true })
-    }
-    arm()
-    return () => {
-      cancelled = true
-      cancelArm()
-      video.removeEventListener('loadedmetadata', startPlayback)
-    }
-  }, [mediaUrl, playbackRate, windowsKey])
-
-  useEffect(() => {
-    const video = videoRef.current
-    if (video) video.playbackRate = playbackRate
-  }, [playbackRate])
-
-  const span = windows[0]
-    ? `${formatSplitTimestamp(windows[0].startSeconds)}–${formatSplitTimestamp(windows[windows.length - 1]!.endSeconds)}`
-    : ''
-
-  return (
-    <section className="confirm-split-loop">
-      <div className="confirm-split-loop-heading">
-        <span>{label}</span>
-        <strong>{span}</strong>
-      </div>
-      <video
-        ref={videoRef}
-        aria-label={label}
-        src={mediaUrl}
-        muted={muted}
-        playsInline
-        preload="auto"
-      />
-    </section>
-  )
-}
+import type { SceneData } from '../../../../../server/src/scene-cuts'
+import { CutInspector } from '../CutInspector'
+import { SceneCutReview } from '../SceneCutReview'
+import { moveSceneCut } from '@/videobook/scene-timeline-edits'
 
 const NUDGE_STEPS = [-1, -0.1, -0.01, 0.01, 0.1, 1] as const
 const MOVE_STEPS = [-1, -0.1, 0.1, 1] as const
@@ -163,6 +43,7 @@ type SplitBodyProps = {
     selectedIndex: number
   }) => void
   outputMode: NotebookSplitOutputMode
+  scenes?: SceneData | null
   selectedIndex: number
   sourceDurationSeconds: number
   sourceFps?: number | null
@@ -173,6 +54,7 @@ export function SplitBody({
   mediaUrl,
   onChange,
   outputMode,
+  scenes,
   selectedIndex,
   sourceDurationSeconds,
   sourceFps,
@@ -183,6 +65,7 @@ export function SplitBody({
   const [inDraft, setInDraft] = useState<string | null>(null)
   const [outDraft, setOutDraft] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [focusedCut, setFocusedCut] = useState<number | null>(null)
   const [slowOverride, setSlowOverride] = useState<{
     key: string
     value: boolean
@@ -296,9 +179,21 @@ export function SplitBody({
     else nudgeIn(direction * step)
   }
   const playbackRate = slowPlayback ? 0.25 : 1
-  const surroundingsLabel = outputMode === 'remove'
-    ? 'JOIN PREVIEW'
-    : 'SURROUNDINGS'
+  const activeCutIndex = Math.min(
+    Math.max(0, focusedCut ?? selectedIndex - 1),
+    Math.max(0, cutPointsSeconds.length - 1),
+  )
+  const activeCut = cutPointsSeconds[activeCutIndex]
+  const acrossCutWindows = activeCut === undefined
+    ? windows.surroundings
+    : [{
+        startSeconds: Math.max(0, activeCut - 1),
+        endSeconds: Math.min(sourceDurationSeconds, activeCut + 1),
+      }]
+  const moveCut = (index: number, seconds: number) => {
+    setFocusedCut(index)
+    applyEdit(moveSceneCut({ cutPointsSeconds, index, seconds, sourceDurationSeconds }))
+  }
   const outputSummary = selected
     ? outputMode === 'all'
       ? `Apply creates ${segments.length} cells`
@@ -355,6 +250,19 @@ export function SplitBody({
     </div>
   )
 
+  if (scenes) {
+    return (
+      <SceneCutReview
+        cutPointsSeconds={cutPointsSeconds}
+        frameStep={frameStep}
+        mediaUrl={mediaUrl}
+        scenes={scenes}
+        sourceDurationSeconds={sourceDurationSeconds}
+        onChange={applyEdit}
+      />
+    )
+  }
+
   return (
     <div className="confirm-split" onKeyDown={handleKeyDown}>
       <div className="confirm-split-column">
@@ -379,6 +287,17 @@ export function SplitBody({
             </button>
           </div>
         </section>
+        {outputMode !== 'remove' && (
+          <CutInspector
+            activeCutIndex={activeCutIndex}
+            cutPointsSeconds={cutPointsSeconds}
+            frameStep={frameStep}
+            mediaUrl={mediaUrl}
+            sourceDurationSeconds={sourceDurationSeconds}
+            onMoveCut={moveCut}
+            onSelectCut={setFocusedCut}
+          />
+        )}
         <section className="confirm-section" aria-label="Pieces">
           <span className="confirm-section-label">Pieces</span>
           <div className="confirm-chips" role="list">
@@ -446,13 +365,25 @@ export function SplitBody({
               playbackRate={playbackRate}
               windows={[windows.segment]}
             />
-            <SegmentLoopTile
-              label={surroundingsLabel}
-              mediaUrl={mediaUrl}
-              muted={!soundEnabled}
-              playbackRate={playbackRate}
-              windows={windows.surroundings}
-            />
+            {outputMode === 'remove'
+              ? (
+                  <SegmentLoopTile
+                    label="JOIN PREVIEW"
+                    mediaUrl={mediaUrl}
+                    muted={!soundEnabled}
+                    playbackRate={playbackRate}
+                    windows={windows.surroundings}
+                  />
+                )
+              : (
+                  <SegmentLoopTile
+                    label="ACROSS CUT"
+                    mediaUrl={mediaUrl}
+                    muted={!soundEnabled}
+                    playbackRate={playbackRate}
+                    windows={acrossCutWindows}
+                  />
+                )}
           </div>
           {selected && (
             <div className="confirm-split-bounds">
