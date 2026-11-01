@@ -65,10 +65,6 @@ export function speedChangeParams(
   }
 }
 
-export function clampSpeed(speed: number): number {
-  return roundHundredths(Math.min(SPEED_MAX, Math.max(SPEED_MIN, speed)))
-}
-
 export function clampSection(
   section: SpeedChangeSection,
   durationSeconds: number,
