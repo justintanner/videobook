@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SECRET_REFERENCE = process.env.VIDEOBOOK_NPM_TOKEN_REFERENCE?.trim() || 'op://apicity/NPM_TOKEN/password'
 const REGISTRY = 'https://registry.npmjs.org/'
 const PACKAGE = 'videobook'
+const STABLE = 'stable'
 const ALLOW_SCRIPTS = 'ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearch,onnxruntime-node,esbuild'
 
 function usage() {
@@ -20,7 +21,10 @@ function usage() {
     '',
     '  <version>   must equal server/package.json and have a ## [<version>] changelog section',
     '  --dry-run   run every gate and npm publish --dry-run, then stop',
-    '  --push      also push main and the tag and create the GitHub release',
+    '  --push      also push stable, main and the tag and create the GitHub release',
+    '',
+    'Work lands on main; a release fast-forwards stable to the tested main commit',
+    'before publishing, and the v<version> tag points at that stable commit.',
     '',
     `The npm token is read from ${SECRET_REFERENCE} with the 1Password CLI into a`,
     'temporary npmrc that is deleted afterwards. It is never written to .env.',
@@ -84,6 +88,29 @@ async function verifyRepository(version) {
   if (manifest.version !== version) fail(`server/package.json is version ${manifest.version}, not ${version}. Run: npm version -w server ${version} --no-git-tag-version`)
   await output(process.execPath, ['scripts/changelog-section.mjs', version])
   return await output('git', ['rev-parse', 'HEAD'])
+}
+
+async function stableCommit() {
+  await run('git', ['fetch', 'origin', STABLE])
+  const remote = await outputOrNull('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${STABLE}^{commit}`])
+  if (!remote) fail(`origin has no ${STABLE} branch; create it from the last release tag first.`)
+  const local = await outputOrNull('git', ['rev-parse', '--verify', '--quiet', `refs/heads/${STABLE}^{commit}`])
+  if (local && local !== remote && await outputOrNull('git', ['merge-base', '--is-ancestor', local, remote]) === null) {
+    fail(`Local ${STABLE} (${local}) has commits that origin/${STABLE} (${remote}) lacks; reconcile ${STABLE} by hand.`)
+  }
+  return remote
+}
+
+async function verifyStableFastForward(commit) {
+  const stable = await stableCommit()
+  if (await outputOrNull('git', ['merge-base', '--is-ancestor', stable, commit]) === null) {
+    fail(`${STABLE} (${stable}) has diverged from ${commit}; ${STABLE} only moves by fast-forward from main.`)
+  }
+}
+
+async function fastForwardStable(commit) {
+  await verifyStableFastForward(commit)
+  await run('git', ['branch', '--force', STABLE, commit])
 }
 
 async function publishedIntegrity(version) {
@@ -186,8 +213,9 @@ async function tagRelease(version, commit) {
 async function pushRelease(version, tarball) {
   const notes = join(await mkdtemp(join(tmpdir(), 'videobook-release-notes-')), 'notes.md')
   await writeFile(notes, `${await output(process.execPath, ['scripts/changelog-section.mjs', version])}\n`)
-  await run('git', ['push', 'origin', 'main'])
+  await run('git', ['push', 'origin', STABLE])
   await run('git', ['push', 'origin', `v${version}`])
+  await run('git', ['push', 'origin', 'main'])
   const assets = tarball && existsSync(tarball) ? [tarball] : []
   await run('gh', ['release', 'create', `v${version}`, ...assets, '--title', `videobook ${version}`, '--notes-file', notes])
 }
@@ -197,7 +225,7 @@ function printNextSteps(version, pushed) {
     log(`done: ${PACKAGE}@${version} is on npm, v${version} is pushed, and the GitHub release exists`)
     return
   }
-  log(`done: ${PACKAGE}@${version} is on npm and tagged v${version} locally`)
+  log(`done: ${PACKAGE}@${version} is on npm, ${STABLE} is fast-forwarded and tagged v${version} locally`)
   log(`to publish the tag and GitHub release: npm run release -- ${version} --push`)
 }
 
@@ -222,6 +250,7 @@ async function finishPublishedRelease(options, head, artifactDir, published) {
   }
   log(`${PACKAGE}@${options.version} is already on npm (${published}); finishing the release`)
   await installFromRegistry(options.version)
+  await fastForwardStable(tagged ?? commit)
   await tagRelease(options.version, tagged ?? commit)
   if (options.push) await pushRelease(options.version, tested === published ? tarball : null)
   printNextSteps(options.version, options.push)
@@ -235,11 +264,13 @@ async function release(options) {
     await finishPublishedRelease(options, commit, artifactDir, published)
     return
   }
+  await verifyStableFastForward(commit)
   await verifyNpmCredential()
   await runGates(artifactDir)
   await writeFile(join(artifactDir, 'release-commit'), `${commit}\n`)
   const tarball = await testedTarball(artifactDir, options.version)
   const integrity = await tarballIntegrity(tarball)
+  if (!options.dryRun) await fastForwardStable(commit)
   await publishTarball(tarball, options.dryRun)
   if (options.dryRun) {
     log(`dry run complete: ${tarball} (${integrity}) passed every gate and was not published`)

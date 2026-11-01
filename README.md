@@ -551,13 +551,19 @@ The pack-and-install gate exports the current commit into a temporary directory,
 
 Releases publish from a machine signed in to the 1Password CLI, with the same
 npm credential Apicity and the engine use, `op://apicity/NPM_TOKEN/password`.
+Work lands on `main`; `stable` is the release branch and always points at the
+last released commit. A release runs the gates on `main`, fast-forwards
+`stable` to that commit, publishes, and tags `v<version>` on `stable`. `stable`
+only moves by fast-forward from `main`, and the release refuses to start if it
+has diverged. A GitHub ruleset keeps `main` and `stable` from being deleted.
+
 Set the version in `server/package.json`, rename the changelog's Unreleased
 section to that version, and commit on `main`. Then:
 
 ```bash
 npm run release -- 0.1.0 --dry-run   # every gate, then npm publish --dry-run
-npm run release -- 0.1.0             # publish the tested tarball, verify it, tag locally
-npm run release -- 0.1.0 --push      # push main and the tag, create the GitHub release
+npm run release -- 0.1.0             # publish the tested tarball, verify it, fast-forward stable, tag locally
+npm run release -- 0.1.0 --push      # push stable, the tag and main, create the GitHub release
 ```
 
 The release script runs lint, the dead-code check, the type checks, the full
