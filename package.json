@@ -80,6 +80,8 @@
     "flatted": ">=3.4.2",
     "picomatch": ">=4.0.4",
     "follow-redirects": ">=1.16.1",
+    "glob": ">=14.0.2",
+    "minimatch": ">=11.0.1",
     "postcss": "^8.5.23",
     "esbuild": "0.28.1",
     "@remotion/studio": {
