@@ -6,12 +6,53 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-01
+
+### Added
+
+- `/split @a1 at scenes` reviews detected camera cuts one at a time, with
+  large before and after frames, three frames on each side to move the cut
+  to, the usual nudges and a ±1s loop across the cut. K keeps a cut, X
+  removes it, J goes back and ← → nudge by a frame. A filmstrip marks each
+  cut's status and adds a cut on double-click, removed cuts can be restored,
+  and weaker candidates can be added for review in one step.
+- `split_video_at_scenes` splits a notebook video into one clip per scene: it
+  detects camera cuts, reusing a cached `detect_scenes` result, then adds a
+  split cell and one output cell per scene below the source and runs it.
+  Pass `cut_points_seconds` to split at reviewed times instead.
+- The Kie Grok Imagine Video 1.5 preview takes a loop image (`@loop`) and up
+  to four timed keyframes (`@keyframe1`-`@keyframe4`) in notebooks and
+  `generate_video`. Keyframes without a time are spaced evenly over the clip.
+- MachGen MiniMax H3 Omni turns image or video references into a 768p clip
+  of 1-15 seconds at 0.02 USD/s. `generate_video` accepts it, and like
+  MachGen's own app the model picker leaves it out.
+
+### Changed
+
+- `detect_scenes` places camera cuts on the exact frame and scores each
+  frame's change against the surrounding half second, so hard cuts in dark
+  or low-contrast footage are no longer dropped. The default minimum score
+  is 5, and `detail: "full"` also returns every cut, motion settle and a
+  filmstrip.
+- The split editor has a cut editor under the source player: large before
+  and after frames, an eight-frame strip where clicking a frame moves the
+  cut, and nudges of one frame, 0.1s and 1s. Its Across cut loop replaces
+  Surroundings.
+- `@apicity` 0.24.0. MachGen image edits take up to 16 images for GPT Image
+  2, GPT Image 2.5 Sunburst and Flare, and up to 14 for Nano Banana 2 and
+  2.1, up from nine.
+- MachGen MiniMax H3 Turbo estimates follow MachGen's current 0.015 USD/s
+  promotion.
+
 ### Fixed
 
 - A Grok Imagine Image 2.0 generation with connected images that fails before
   reaching xAI is captured under `v1.images.edits`, the endpoint it would have
   posted to, instead of `v1.images.generations`, so `apicity har report`
   resolves it.
+- Notebook generation previews for Grok Imagine Image 2.0 name the xAI image
+  endpoint, `v1.images.edits` with connected images and
+  `v1.images.generations` without, instead of the video endpoint.
 
 ## [0.4.1] - 2026-11-01
 
