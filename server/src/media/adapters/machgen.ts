@@ -4,10 +4,12 @@ import { createMachGen } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
 import { uploadAssetFile } from "../../upload.js";
 import { providerEndpoints } from "../endpoints.js";
+import type { Media } from "../types.js";
 import { nonEmpty, record, writePendingTask } from "./pending.js";
 import { MEDIA_TASK_TYPES, type ProviderAdapter, type ProviderOutput, type SubmitContext, type SubmitResult } from "./types.js";
 
 const ASSET_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+const JPEG_SIGNATURE = Buffer.from([0xff, 0xd8, 0xff]);
 
 export function machgenProvider(timeout = 60_000, baseURL = providerEndpoints().machgenBaseURL): ReturnType<typeof createMachGen> {
   return createMachGen({
@@ -39,10 +41,16 @@ async function submit(request: Record<string, unknown>, context: SubmitContext):
   return { kind: "pending", taskId };
 }
 
-export async function downloadMachGenVideo(taskId: string, url?: string): Promise<ProviderOutput> {
+function imageExtension(bytes: Buffer): string {
+  if (bytes.subarray(0, 3).equals(JPEG_SIGNATURE)) return "jpg";
+  if (bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP") return "webp";
+  return "png";
+}
+
+export async function downloadMachGenOutput(taskId: string, media: Media, url?: string): Promise<ProviderOutput> {
   const bytes = Buffer.from(await machgenProvider(ASSET_DOWNLOAD_TIMEOUT_MS).api.v0.assets(taskId));
-  if (bytes.length === 0) throw new Error(`MachGen task ${taskId} returned an empty video`);
-  return { bytes, extension: "mp4", ...(url ? { url } : {}) };
+  if (bytes.length === 0) throw new Error(`MachGen task ${taskId} returned an empty ${media}`);
+  return { bytes, extension: media === "image" ? imageExtension(bytes) : "mp4", ...(url ? { url } : {}) };
 }
 
 export const machgenAdapter: ProviderAdapter = {

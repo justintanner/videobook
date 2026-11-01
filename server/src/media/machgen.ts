@@ -52,12 +52,23 @@ export interface MachGenUpscaleSpec {
   maxSeconds: number;
 }
 
+type ImageConfig = Readonly<Record<string, number | string>>;
+
+interface MachGenImageSpec {
+  resolutions: readonly string[];
+  configs: Readonly<Record<string, Readonly<Record<string, ImageConfig>>>>;
+  quality: boolean;
+  seed: boolean;
+  maxImages: number;
+}
+
 const DEFAULT_DURATION_SECONDS = 5;
 const MAX_SHOTS = 6;
 const MAX_SHOT_PROMPT_CHARS = 512;
 const ALL_TASKS: readonly TaskType[] = ["T2V", "I2V", "R2V"];
 const TEXT_TASK: readonly TaskType[] = ["T2V"];
 const ALL_REFERENCES: readonly ReferenceKind[] = ["image", "video", "audio"];
+const SEED_FIELD = z.number().int().min(0).max(2_147_483_647).optional().describe("Seed for reproducible output");
 
 const H3: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS, maxPromptChars: 65535, privateHeights: [1080] };
 const SEEDANCE_20_TIER: MachGenModelFacts = { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS };
@@ -182,6 +193,47 @@ function machgenSpec(apiId: string, facts: MachGenModelFacts): MachGenModelSpec 
 export const MACHGEN_MODELS: Readonly<Record<string, MachGenModelSpec>> = Object.fromEntries(
   Object.entries(MACHGEN_MODEL_FACTS).map(([apiId, facts]) => [apiId, machgenSpec(apiId, facts)]),
 );
+
+const GPT_IMAGE_TIERS: readonly string[] = ["1024p", "1080p", "2048p", "4096p"];
+
+const GPT_IMAGE_SIZES: Readonly<Record<string, Readonly<Record<string, readonly [number, number]>>>> = {
+  "1:1": { "1024p": [1280, 1280], "2048p": [2048, 2048] },
+  "16:9": { "1024p": [1280, 720], "1080p": [1920, 1088], "2048p": [2048, 1152], "4096p": [3840, 2160] },
+  "21:9": { "1024p": [1280, 544], "1080p": [1920, 816], "2048p": [2048, 880], "4096p": [3840, 1648] },
+  "9:16": { "1024p": [720, 1280], "1080p": [1088, 1920], "2048p": [1152, 2048], "4096p": [2160, 3840] },
+  "4:3": { "1024p": [1280, 960], "2048p": [2048, 1536] },
+  "3:4": { "1024p": [960, 1280], "2048p": [1536, 2048] },
+  "3:2": { "1024p": [1280, 848], "2048p": [2048, 1360] },
+  "2:3": { "1024p": [848, 1280], "2048p": [1360, 2048] },
+};
+
+const NANO_BANANA_HEIGHTS: Readonly<Record<string, number>> = { "1K": 1024, "2K": 2048, "4K": 4096 };
+const NANO_BANANA_ASPECT_RATIOS: readonly string[] = ["16:9", "21:9", "3:2", "4:3", "1:1", "4:5", "3:4", "2:3", "9:16"];
+
+function sizeConfigs(): MachGenImageSpec["configs"] {
+  return Object.fromEntries(Object.entries(GPT_IMAGE_SIZES).map(([aspect, tiers]) => [aspect, Object.fromEntries(
+    Object.entries(tiers).map(([tier, [width, height]]) => [tier, { width, height }]),
+  )]));
+}
+
+function heightConfigs(): MachGenImageSpec["configs"] {
+  return Object.fromEntries(NANO_BANANA_ASPECT_RATIOS.map((aspect) => [aspect, Object.fromEntries(
+    Object.entries(NANO_BANANA_HEIGHTS).map(([tier, height]) => [tier, { height, aspect_ratio: aspect }]),
+  )]));
+}
+
+const GPT_IMAGE: MachGenImageSpec = { resolutions: GPT_IMAGE_TIERS, configs: sizeConfigs(), quality: false, seed: false, maxImages: 16 };
+const NANO_BANANA: MachGenImageSpec = { resolutions: Object.keys(NANO_BANANA_HEIGHTS), configs: heightConfigs(), quality: false, seed: false, maxImages: 14 };
+
+export const MACHGEN_IMAGE_SPECS: Readonly<Record<string, MachGenImageSpec>> = {
+  "GPT-Image-2": { ...GPT_IMAGE, quality: true },
+  "GPT-Image-2.5-Sunburst": GPT_IMAGE,
+  "GPT-Image-2.5-Flare": GPT_IMAGE,
+  "Nano-Banana-2": { ...NANO_BANANA, seed: true },
+  "Nano-Banana-2.1": NANO_BANANA,
+};
+
+const OPTIMIZATION_LEVELS: Readonly<Record<string, string>> = { high: "STANDARD", low: "EXPRESS" };
 
 const MACHGEN_UPSCALES: Readonly<Record<string, MachGenUpscaleSpec>> = {
   "MiniMax-H3/upscale": {
@@ -321,7 +373,7 @@ function settingFields(spec: MachGenModelSpec): ZodRawShape {
       aspect_ratio: z.enum([firstAspect, ...otherAspects]).default(firstAspect).describe("Output aspect ratio"),
     }),
     ...(spec.audioToggle ? { generate_audio: z.boolean().default(true).describe("Generate a soundtrack with the video") } : {}),
-    ...(spec.seed ? { seed: z.number().int().min(0).max(2_147_483_647).optional().describe("Seed for reproducible output") } : {}),
+    ...(spec.seed ? { seed: SEED_FIELD } : {}),
   };
 }
 
@@ -495,6 +547,41 @@ function machgenRequest(apiId: string, spec: MachGenModelSpec, value: Record<str
   };
 }
 
+function imageConfig(spec: MachGenImageSpec, value: Record<string, unknown>): ImageConfig | undefined {
+  return spec.configs[String(value.aspect_ratio)]?.[String(value.resolution)];
+}
+
+function imageInput(spec: MachGenImageSpec): WireSpec["input"] {
+  const [firstAspect, ...otherAspects] = Object.keys(spec.configs) as [string, ...string[]];
+  const [firstResolution, ...otherResolutions] = spec.resolutions as [string, ...string[]];
+  return z.object({
+    prompt: z.string().min(1),
+    image_urls: MachGenGenerateRequestSchema.shape.src_image_urls.unwrap().max(spec.maxImages).optional(),
+    aspect_ratio: z.enum([firstAspect, ...otherAspects]).default("1:1").describe("Output aspect ratio"),
+    resolution: z.enum([firstResolution, ...otherResolutions]).default(firstResolution).describe("Output resolution"),
+    ...(spec.quality ? { quality: z.enum(["high", "low"]).default("high").describe("Image quality: high is MachGen's STANDARD level, low its far cheaper EXPRESS level") } : {}),
+    ...(spec.seed ? { seed: SEED_FIELD } : {}),
+  }).superRefine((value, ctx) => {
+    if (imageConfig(spec, value)) return;
+    const offered = spec.resolutions.filter((resolution) => spec.configs[value.aspect_ratio]?.[resolution]);
+    addIssue(ctx, "resolution", `${value.aspect_ratio} offers ${offered.join(", ")}`);
+  });
+}
+
+function imageRequest(apiId: string, spec: MachGenImageSpec, value: Record<string, unknown>): Record<string, unknown> {
+  const sources = list(value.image_urls);
+  const level = typeof value.quality === "string" ? OPTIMIZATION_LEVELS[value.quality] : undefined;
+  return {
+    model: apiId,
+    task_type: sources.length > 0 ? "I2I" : "T2I",
+    prompt: typeof value.prompt === "string" ? value.prompt : "",
+    image_config: imageConfig(spec, value),
+    ...(level ? { optimization_level: level } : {}),
+    ...(typeof value.seed === "number" ? { seed: value.seed } : {}),
+    ...(sources.length > 0 ? { src_image_urls: sources } : {}),
+  };
+}
+
 export function machgenUpscaleRequirement(upscale: MachGenUpscaleSpec): string {
   const heights = upscale.sourceHeights.map(resolutionLabel).join(" or ");
   return `MachGen ${upscale.action} only its own ${upscale.sourceModel} ${heights} videos of ${upscale.minSeconds}-${upscale.maxSeconds} s`;
@@ -579,6 +666,10 @@ export function machgenWire(apiId: string): WireSpec | null {
   const upscale = MACHGEN_UPSCALES[apiId];
   if (upscale) {
     return { input: upscaleInput(upscale), fixed: {}, wrap: (value) => upscaleRequest(upscale, value), request: MachGenGenerateRequestSchema };
+  }
+  const image = MACHGEN_IMAGE_SPECS[apiId];
+  if (image) {
+    return { input: imageInput(image), fixed: {}, wrap: (value) => imageRequest(apiId, image, value), request: MachGenGenerateRequestSchema };
   }
   const spec = MACHGEN_MODELS[apiId];
   if (!spec) return null;

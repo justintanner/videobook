@@ -905,7 +905,7 @@ async function processMachGenTaskStatus(
   }
   await engine.jobs.pending.markCompleting(task.artifactId);
   const jobId = `complete-machgen-${task.artifactId}-${Date.now()}`;
-  const video = status.task_output?.video;
+  const output = status.task_output?.video ?? status.task_output?.image;
   await queue.enqueue(jobId, {
     type: "complete_kie_task",
     taskId: task.taskId,
@@ -914,7 +914,7 @@ async function processMachGenTaskStatus(
     assetDir: assetDirResult.value,
     bookId,
     meta: task.meta,
-    resultUrls: typeof video === "string" && video ? [video] : [],
+    resultUrls: typeof output === "string" && output ? [output] : [],
   } as unknown as Record<string, unknown>);
   result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
 }

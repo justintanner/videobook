@@ -110,6 +110,11 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
 }
 
 const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
+const MACHGEN_IMAGE_TASKS = new Set(["T2I", "I2I"]);
+
+function machgenActivity(payload: RecordValue): UsageEntry["activity"] {
+  return MACHGEN_IMAGE_TASKS.has(String(payload.task_type)) ? "images" : "video";
+}
 
 function kieSunoApiId(provider: Provider, path: string): string | undefined {
   const match = provider === "kie" ? /\/api\/v1\/generate(\/sounds)?$/u.exec(path) : null;
@@ -246,7 +251,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       let hints: CostHints | undefined;
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
       hints = mergeCostHints(hints, usageCostHints.getStore());
-      const activity = provider === "machgen" ? "video" : activityFor(provider, model, url.pathname, context.operation);
+      const activity = provider === "machgen" ? machgenActivity(payload) : activityFor(provider, model, url.pathname, context.operation);
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",

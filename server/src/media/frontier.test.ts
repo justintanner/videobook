@@ -27,6 +27,10 @@ describe("frontier catalog coverage", () => {
       expect.objectContaining({ type: "t2v", rank: 4 }),
       expect.objectContaining({ type: "i2v", rank: 1 }),
     ]));
+    expect(modelFrontierRankings("machgen:GPT-Image-2")).toEqual([
+      expect.objectContaining({ type: "t2i", rank: 3 }),
+      expect.objectContaining({ type: "i2i", rank: 7 }),
+    ]);
     expect(modelFrontierRankings("xai:grok-imagine-video")).toEqual([]);
     expect(modelFrontierRankings("fal:xai/grok-imagine-video/v1.5/lite/image-to-video")).toEqual([]);
   });

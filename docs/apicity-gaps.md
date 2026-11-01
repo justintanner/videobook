@@ -836,8 +836,19 @@ schema refuses it locally before any spend. `kie-0190.test.ts` and
   URLs, so like the 2K regeneration it takes only a MiniMax-H3 video MachGen
   generated (480p or 768p, 1-30 s) by task id, sends the source's height,
   and is priced on the source's seconds once.
-- MachGen's five image models (GPT Image 2/2.5, Nano Banana 2/2.1) stay
-  frontier gaps: the MachGen adapter and completion path return video only.
+- MachGen's five image models (GPT Image 2, 2.5 Sunburst and 2.5 Flare,
+  Nano Banana 2 and 2.1) are catalog entries since vb-r5ykt: a prompt alone
+  sends T2I, connected images send I2I as `src_image_urls`. Apicity publishes
+  no image grid, so the sizes come from MachGen's capability contract (the
+  www.machgen.ai/generate bundle). GPT Image models take one of 22 fixed
+  `width`×`height` sizes, picked by aspect ratio and a 1024p/1080p/2048p/4096p
+  tier (1080p and 4096p only at 16:9, 9:16 and 21:9); Nano Banana sends
+  `height` 1024/2048/4096 (1K/2K/4K) with one of nine aspect ratios. Only GPT
+  Image 2 offers `quality` (high is `STANDARD`, low is `EXPRESS`) and only
+  Nano Banana 2 a seed. Completion downloads the task asset like a video and
+  names the file from its PNG, JPEG or WebP signature. MachGen takes 16 (GPT)
+  or 14 (Nano Banana) edit images, but apicity caps `src_image_urls` at 9 for
+  every task, so Videobook offers 9.
 - fal GPT Image 2 and 1.5 are hidden twins (GPT Image 2.5 is the default);
   the frontier listing still shows the ranked ones.
 

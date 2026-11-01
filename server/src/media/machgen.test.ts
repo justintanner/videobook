@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import { computeEstimate, type CostHints } from "@apicity/cost";
-import { MACHGEN_VIDEO_GRIDS, MACHGEN_VIDEO_MODEL_TASK_TYPES, MachGenGenerateRequestSchema } from "@apicity/machgen";
+import { MACHGEN_IMAGE_MODELS, MACHGEN_VIDEO_GRIDS, MACHGEN_VIDEO_MODEL_TASK_TYPES, MachGenGenerateRequestSchema } from "@apicity/machgen";
 import type { Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
@@ -21,7 +21,7 @@ import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { sourcedGenerationInput } from "./generation-source.js";
-import { MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
+import { MACHGEN_IMAGE_SPECS, MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
 import { previewGeneration } from "./preview.js";
 import type { Operation } from "./types.js";
 import { testBudget } from "../test-budget.js";
@@ -68,7 +68,7 @@ describe("MachGen catalog", () => {
       for (const task of tasks) expect(MACHGEN_VIDEO_GRIDS[apiId]?.[task as "T2V" | "I2V" | "R2V"], `${apiId} ${task}`).toBeDefined();
     }
     expect(MODEL_ENTRIES.filter((entry) => entry.id.startsWith("machgen:")).map((entry) => entry.id.slice("machgen:".length)).sort())
-      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale", "MiniMax-H3/sharpen"].sort());
+      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_IMAGE_MODELS, ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale", "MiniMax-H3/sharpen"].sort());
   });
 
   it("takes the frame and reference inputs each model's MachGen grids accept", () => {
@@ -392,6 +392,119 @@ function sweepVariants(apiId: string): SweepVariant[] {
   ];
 }
 
+describe("MachGen image catalog", () => {
+  it("catalogs every MachGen image model for text-to-image and edits of up to nine images", () => {
+    expect(Object.keys(MACHGEN_IMAGE_SPECS).sort()).toEqual([...MACHGEN_IMAGE_MODELS].sort());
+    for (const apiId of MACHGEN_IMAGE_MODELS) {
+      const model = resolveModel(`machgen:${apiId}`);
+      expect(model).toMatchObject({ provider: "machgen", apiId, media: "image", promptField: "prompt", promptRequired: true });
+      expect(model.title).toMatch(/\(MachGen\)$/u);
+      expect(model.entry.hidden ?? false, apiId).toBe(false);
+      expect(model.entry.operations).toEqual(["text_to_image", "edit_image"]);
+      expect(model.slots).toEqual([expect.objectContaining({ role: "image", min: 0, max: 9 })]);
+    }
+  });
+
+  it("offers MachGen's aspect ratios, resolution tiers, quality and seed per model", () => {
+    expect(options("machgen:GPT-Image-2")).toMatchObject({
+      aspect_ratio: { enumValues: ["1:1", "16:9", "21:9", "9:16", "4:3", "3:4", "3:2", "2:3"], defaultValue: "9:16" },
+      resolution: { enumValues: ["1024p", "1080p", "2048p", "4096p"], defaultValue: "2048p" },
+      quality: { enumValues: ["high", "low"], defaultValue: "high" },
+    });
+    expect(Object.keys(options("machgen:GPT-Image-2.5-Sunburst")).sort()).toEqual(["aspect_ratio", "resolution"]);
+    expect(options("machgen:Nano-Banana-2")).toMatchObject({
+      aspect_ratio: { enumValues: ["16:9", "21:9", "3:2", "4:3", "1:1", "4:5", "3:4", "2:3", "9:16"], defaultValue: "9:16" },
+      resolution: { enumValues: ["1K", "2K", "4K"], defaultValue: "2K" },
+      seed: { valueType: "integer", minimum: 0, maximum: 2_147_483_647 },
+    });
+    expect(Object.keys(options("machgen:Nano-Banana-2.1")).sort()).toEqual(["aspect_ratio", "resolution"]);
+  });
+
+  it("builds a request MachGen's schema accepts and prices for every offered image combination", () => {
+    const refused: Record<string, number> = {};
+    const failures: string[] = [];
+    let accepted = 0;
+    for (const apiId of Object.keys(MACHGEN_IMAGE_SPECS)) {
+      const model = resolveModel(`machgen:${apiId}`);
+      const settings = options(`machgen:${apiId}`);
+      for (const sources of [[], [FRAME]]) {
+        for (const aspect of settings.aspect_ratio!.enumValues) {
+          for (const resolution of settings.resolution!.enumValues) {
+            for (const quality of settings.quality?.enumValues ?? [undefined]) {
+              const value = { prompt: "a red kite", image_urls: sources, aspect_ratio: aspect, resolution, ...(quality === undefined ? {} : { quality }) };
+              const input = model.wire.input.safeParse(value);
+              if (!input.success) {
+                refused[apiId] = (refused[apiId] ?? 0) + 1;
+                continue;
+              }
+              const parsed = MachGenGenerateRequestSchema.safeParse(model.wire.wrap(input.data as Record<string, unknown>));
+              if (!parsed.success) {
+                failures.push(`${apiId} ${JSON.stringify(value)}: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
+                continue;
+              }
+              accepted += 1;
+              const estimate = computeEstimate({ provider: "machgen", payload: parsed.data as Record<string, unknown> });
+              if (!(estimate.usd > 0) || estimate.warnings.length > 0) failures.push(`${apiId} ${JSON.stringify(value)} priced ${estimate.usd}: ${estimate.warnings.join("; ")}`);
+            }
+          }
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+    expect(accepted).toBe(284);
+    expect(refused).toEqual({ "GPT-Image-2": 40, "GPT-Image-2.5-Sunburst": 20, "GPT-Image-2.5-Flare": 20 });
+  });
+
+  it.each([
+    ["machgen:GPT-Image-2", { prompt: "a red kite" }, {
+      model: "GPT-Image-2", task_type: "T2I", prompt: "a red kite", image_config: { width: 1152, height: 2048 }, optimization_level: "STANDARD",
+    }],
+    ["machgen:GPT-Image-2", { prompt: "A small red circle.", options: { aspect_ratio: "21:9", resolution: "1024p", quality: "low" } }, {
+      model: "GPT-Image-2", task_type: "T2I", prompt: "A small red circle.", image_config: { width: 1280, height: 544 }, optimization_level: "EXPRESS",
+    }],
+    ["machgen:GPT-Image-2.5-Flare", { prompt: "make it night", refUrls: { image: [FRAME, LAST] }, options: { aspect_ratio: "16:9", resolution: "4096p" } }, {
+      model: "GPT-Image-2.5-Flare", task_type: "I2I", prompt: "make it night", image_config: { width: 3840, height: 2160 }, src_image_urls: [FRAME, LAST],
+    }],
+    ["machgen:Nano-Banana-2", { prompt: "a lighthouse", options: { aspect_ratio: "4:5", resolution: "4K", seed: 7 } }, {
+      model: "Nano-Banana-2", task_type: "T2I", prompt: "a lighthouse", image_config: { height: 4096, aspect_ratio: "4:5" }, seed: 7,
+    }],
+    ["machgen:Nano-Banana-2.1", { prompt: "paint the boat blue", refUrls: { image: [FRAME] } }, {
+      model: "Nano-Banana-2.1", task_type: "I2I", prompt: "paint the boat blue", image_config: { height: 2048, aspect_ratio: "9:16" }, src_image_urls: [FRAME],
+    }],
+  ] as const)("%s builds the documented MachGen image request", (id, call, expected) => {
+    expect(request(id, call as WireRequestInput)).toEqual(expected);
+  });
+
+  it.each([
+    ["machgen:GPT-Image-2", { prompt: "x", options: { aspect_ratio: "1:1", resolution: "4096p" } }, /^Resolution: 1:1 offers 1024p, 2048p$/],
+    ["machgen:GPT-Image-2.5-Sunburst", { prompt: "x", options: { aspect_ratio: "3:2", resolution: "1080p" } }, /^Resolution: 3:2 offers 1024p, 2048p$/],
+    ["machgen:GPT-Image-2.5-Flare", { prompt: "x", options: { aspect_ratio: "4:5" } }, /^Aspect ratio: Invalid option/],
+    ["machgen:GPT-Image-2.5-Flare", { prompt: "x", options: { quality: "low" } }, /not an option of machgen:GPT-Image-2.5-Flare/],
+    ["machgen:Nano-Banana-2.1", { prompt: "x", options: { seed: 7 } }, /not an option of machgen:Nano-Banana-2.1/],
+    ["machgen:Nano-Banana-2.1", { refUrls: { image: [FRAME] } }, /requires a prompt/],
+    ["machgen:Nano-Banana-2", { prompt: "x", refUrls: { image: Array.from({ length: 10 }, () => FRAME) } }, /accepts at most 9 image refs/],
+  ] as const)("%s rejects an image request MachGen would refuse", (id, call, error) => {
+    const built = buildWireRequest(resolveModel(id), call as WireRequestInput);
+    expect(built.ok).toBe(false);
+    if (!built.ok) expect(built.error).toMatch(error);
+  });
+
+  it.each([
+    ["machgen:GPT-Image-2", { prompt: "x" }, 0.1],
+    ["machgen:GPT-Image-2", { prompt: "x", options: { aspect_ratio: "21:9", resolution: "1024p", quality: "low" } }, 0.001385],
+    ["machgen:GPT-Image-2.5-Sunburst", { prompt: "x", options: { aspect_ratio: "1:1", resolution: "2048p" } }, 0.353],
+    ["machgen:GPT-Image-2.5-Flare", { prompt: "x", refUrls: { image: [FRAME] }, options: { aspect_ratio: "16:9", resolution: "4096p" } }, 0.33],
+    ["machgen:Nano-Banana-2", { prompt: "x", options: { resolution: "4K" } }, 0.089],
+    ["machgen:Nano-Banana-2.1", { prompt: "x", refUrls: { image: [FRAME] }, options: { resolution: "1K" } }, 0.04],
+  ] as const)("%s is priced per image from the @apicity/cost machgen rows", async (id, call, usd) => {
+    const result = await estimateGeneration(resolveModel(id), call as WireRequestInput);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.estimate.usd).toBeCloseTo(usd, 6);
+    expect(result.estimate.warnings).toEqual([]);
+  });
+});
+
 type Recorded = { method: string; path: string; authorization: string | undefined; body: string };
 
 function readBody(incoming: IncomingMessage): Promise<string> {
@@ -413,6 +526,9 @@ describe("MachGen provider tasks", () => {
   const UPSCALE_TASK_ID = "a7b3c9d1-0000-4000-8000-000000000002";
   let fixtures: string;
   let mp4: Buffer;
+  let png: Buffer;
+  let jpeg: Buffer;
+  let asset: Buffer;
   let server: Server;
   let baseURL: string;
   let recorded: Recorded[];
@@ -430,8 +546,8 @@ describe("MachGen provider tasks", () => {
     }
     if (method === "GET" && path.startsWith("/api/v0/tasks/")) return sendJson(response, taskStatus.code, taskStatus.body);
     if (method === "GET" && path.startsWith("/api/v0/assets/")) {
-      response.writeHead(200, { "content-type": "video/mp4" });
-      response.end(mp4);
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      response.end(asset);
       return;
     }
     sendJson(response, 404, { detail: "Not Found" });
@@ -444,7 +560,11 @@ describe("MachGen provider tasks", () => {
   beforeAll(async () => {
     fixtures = await mkdtemp(join(tmpdir(), "videobook-machgen-fixtures-"));
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", join(fixtures, "clip.mp4")]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-frames:v", "1", join(fixtures, "still.png")]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-frames:v", "1", join(fixtures, "still.jpg")]);
     mp4 = await readFile(join(fixtures, "clip.mp4"));
+    png = await readFile(join(fixtures, "still.png"));
+    jpeg = await readFile(join(fixtures, "still.jpg"));
     server = createServer((incoming, response) => {
       void readBody(incoming).then((body) => {
         const authorization = incoming.headers.authorization;
@@ -466,6 +586,7 @@ describe("MachGen provider tasks", () => {
     recorded = [];
     taskIds = [];
     taskStatus = status("RUNNING");
+    asset = mp4;
     root = await mkdtemp(join(tmpdir(), "videobook-machgen-"));
     engine = createEngineForTest(root);
     client = await createTestClient(root);
@@ -487,9 +608,9 @@ describe("MachGen provider tasks", () => {
     return (result.content as Array<{ text: string }>)[0]!.text;
   }
 
-  async function generated(args: Record<string, unknown>): Promise<string> {
+  async function generated(args: Record<string, unknown>, tool = "generate_video"): Promise<string> {
     const bookId = engine.book.get().bookId;
-    const result = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, ...args } });
+    const result = await client.callTool({ name: tool, arguments: { book_id: bookId, ...args } });
     expect(result.isError, toolText(result)).toBeFalsy();
     const enqueued = JSON.parse(toolText(result)) as { asset_id: string; job_id: string };
     await resumeBookQueueForTests(bookId);
@@ -501,8 +622,8 @@ describe("MachGen provider tasks", () => {
     return generated({ model: "machgen:Seedance-2.5", prompt: "the cat blinks", refs: { first_frame: [FRAME] } });
   }
 
-  async function completeTasks(): Promise<void> {
-    taskStatus = status("COMPLETED", { task_output: { video: `${baseURL}/api/v0/assets/${TASK_ID}` } });
+  async function completeTasks(output: "video" | "image" = "video"): Promise<void> {
+    taskStatus = status("COMPLETED", { task_output: { [output]: `${baseURL}/api/v0/assets/${TASK_ID}` } });
     const done = await pollPendingProviderTasks(engine, engine.book.get().bookId);
     expect(done.failed).toEqual([]);
     for (const completed of done.completed) await waitForJob(completed.jobId, testBudget(30_000));
@@ -567,6 +688,68 @@ describe("MachGen provider tasks", () => {
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.mp4");
     expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: null });
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ status: "completed" });
+  });
+
+  async function storedFile(assetId: string, name: string): Promise<Buffer | null> {
+    const read = await engine.files.read(assetId, name);
+    return read.ok ? Buffer.from(read.value) : null;
+  }
+
+  it("submits, polls and stores a MachGen image as images usage", async () => {
+    asset = png;
+    const assetId = await generated({
+      model: "machgen:GPT-Image-2",
+      prompt: "a red kite",
+      options: { aspect_ratio: "21:9", resolution: "1024p", quality: "low" },
+    }, "generate_image");
+    const generate = recorded.find((entry) => entry.path === "/api/v0/generate")!;
+    expect(generate.authorization).toBe("Bearer local-machgen-key");
+    expect(JSON.parse(generate.body)).toEqual({
+      model: "GPT-Image-2",
+      task_type: "T2I",
+      prompt: "a red kite",
+      image_config: { width: 1280, height: 544 },
+      optimization_level: "EXPRESS",
+    });
+    const pending = engine.jobs.pending.read(assetId);
+    expect(pending.ok && pending.value).toMatchObject({
+      taskId: TASK_ID,
+      taskType: "machgen_media",
+      meta: { model: "machgen:GPT-Image-2", media: "image", machgenModel: "GPT-Image-2" },
+    });
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+      provider: "machgen", model: "GPT-Image-2", activity: "images", status: "pending",
+      externalId: TASK_ID, basis: "estimated", costUsd: expect.closeTo(0.001385, 6), warnings: [],
+    });
+    expect(await readProviderTaskStatus(engine, assetId)).toEqual({ provider: "machgen", model: "GPT-Image-2", taskId: TASK_ID });
+
+    await completeTasks("image");
+    const download = recorded.find((entry) => entry.path === `/api/v0/assets/${TASK_ID}`);
+    expect(download?.authorization).toBe("Bearer local-machgen-key");
+    expect(await storedFile(assetId, "original.png")).toEqual(png);
+    expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: null });
+    await expect.poll(async () => {
+      const original = await engine.metadata.artifacts.read(assetId, "original");
+      return original.ok ? original.value : null;
+    }, { timeout: testBudget(30_000) }).toMatchObject({ model: "machgen:GPT-Image-2", download_url: `${baseURL}/api/v0/assets/${TASK_ID}`, width: 64, height: 64 });
+  });
+
+  it("edits connected images as an I2I task and keeps the JPEG MachGen returns", async () => {
+    asset = jpeg;
+    const assetId = await generated({ model: "machgen:Nano-Banana-2.1", prompt: "paint the boat blue", refs: { image: [FRAME] } }, "generate_image");
+    expect(JSON.parse(recorded.find((entry) => entry.path === "/api/v0/generate")!.body)).toEqual({
+      model: "Nano-Banana-2.1",
+      task_type: "I2I",
+      prompt: "paint the boat blue",
+      image_config: { height: 2048, aspect_ratio: "9:16" },
+      src_image_urls: [FRAME],
+    });
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+      model: "Nano-Banana-2.1", activity: "images", costUsd: expect.closeTo(0.048, 6), warnings: [],
+    });
+    await completeTasks("image");
+    expect(await storedFile(assetId, "original.jpg")).toEqual(jpeg);
+    expect(await storedFile(assetId, "original.png")).toBeNull();
   });
 
   it("fails a MachGen task the provider reports as failed", async () => {

@@ -7,7 +7,7 @@ import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { completeMediaGeneration, providerResultUrls } from "../media/complete.js";
 import { MEDIA_TASK_TYPES, type ProviderOutput } from "../media/adapters/types.js";
-import { downloadMachGenVideo } from "../media/adapters/machgen.js";
+import { downloadMachGenOutput } from "../media/adapters/machgen.js";
 import { legacyMediaForTaskType, legacyMediaMeta } from "../media/legacy-task-types.js";
 
 const LOCK_DURATION_MS = 300_000;
@@ -146,7 +146,7 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
             assetDir,
             bookId,
             meta: legacyMediaMeta(taskType, meta),
-            outputs: await mediaOutputs(taskType, taskId, urls),
+            outputs: await mediaOutputs(taskType, taskId, urls, meta.media),
           });
           break;
         default: {
@@ -164,8 +164,8 @@ export function registerCompleteProviderTaskJob(engine: Engine): void {
   });
 }
 
-async function mediaOutputs(taskType: string, taskId: string, urls: string[]): Promise<ProviderOutput[]> {
-  if (taskType === MEDIA_TASK_TYPES.machgen) return [await downloadMachGenVideo(taskId, urls[0])];
+async function mediaOutputs(taskType: string, taskId: string, urls: string[], media: unknown): Promise<ProviderOutput[]> {
+  if (taskType === MEDIA_TASK_TYPES.machgen) return [await downloadMachGenOutput(taskId, media === "image" ? "image" : "video", urls[0])];
   return urls.map((url) => ({ url }));
 }
 

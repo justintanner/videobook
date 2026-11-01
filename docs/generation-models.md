@@ -35,18 +35,13 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
-| machgen:GPT-Image-2 | MachGen image tasks are not wired; the MachGen adapter returns video. |
-| machgen:GPT-Image-2.5-Flare | MachGen image tasks are not wired; the MachGen adapter returns video. |
-| machgen:GPT-Image-2.5-Sunburst | MachGen image tasks are not wired; the MachGen adapter returns video. |
-| machgen:Nano-Banana-2 | MachGen image tasks are not wired; the MachGen adapter returns video. |
-| machgen:Nano-Banana-2.1 | MachGen image tasks are not wired; the MachGen adapter returns video. |
 | openai:gpt-image-1.5 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 310
+- Models: 315
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -114,6 +109,11 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:bria/guided-remove-background` | Bria Guided Remove Background | image | edit_image | image 1-1 |  | visible |
 | `fal:bria/fibo-edit-1.5/expand` | Bria Fibo Edit 1.5 Expand | image | edit_image | image 1-1 |  | visible |
 | `fal:fal-ai/marigold-v2` | Marigold V2 | image | edit_image | image 1-1 |  | visible |
+| `machgen:GPT-Image-2.5-Sunburst` | GPT Image 2.5 Sunburst (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
+| `machgen:GPT-Image-2.5-Flare` | GPT Image 2.5 Flare (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
+| `machgen:GPT-Image-2` | GPT Image 2 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
+| `machgen:Nano-Banana-2.1` | Nano Banana 2.1 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
+| `machgen:Nano-Banana-2` | Nano Banana 2 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
 | `kie:bytedance/seedance-2-5` | Seedance 2.5 | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-30, video 0-10, audio 0-10 | t2v, i2v, r2v, v2v | visible |
 | `kie:bytedance/seedance-2-5-draft` | Seedance 2.5 Draft Complete | video | upscale_video | none |  | visible |
 | `kie:grok-imagine/image-to-video` | Grok Imagine | video | image_to_video | image 0-7 |  | visible |

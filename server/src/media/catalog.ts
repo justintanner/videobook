@@ -1,7 +1,7 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
-import type { InputRules, ModeSpec, ModelEntry, Operation, RefRole } from "./types.js";
+import type { InputRules, ModeSpec, ModelEntry, Operation, PromptGuide, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
   { id: "t2v", label: "Text to video", roles: [] },
@@ -98,6 +98,17 @@ function machgenModel(apiId: string, title: string, tasks: MachGenTasks, extra: 
     dialect: "natural_strip_frames",
     ...(modes ? { modes } : {}),
     ...extra,
+  };
+}
+
+function machgenImage(apiId: string, title: string, guide: PromptGuide): ModelEntry {
+  return {
+    id: `machgen:${apiId}`,
+    media: "image",
+    operations: ["text_to_image", "edit_image"],
+    title: `${title} (MachGen)`,
+    guide,
+    dialect: "natural",
   };
 }
 
@@ -216,6 +227,11 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:bria/guided-remove-background", media: "image", operations: ["edit_image"] },
   { id: "fal:bria/fibo-edit-1.5/expand", media: "image", operations: ["edit_image"] },
   { id: "fal:fal-ai/marigold-v2", media: "image", operations: ["edit_image"] },
+  machgenImage("GPT-Image-2.5-Sunburst", "GPT Image 2.5 Sunburst", "gpt_image"),
+  machgenImage("GPT-Image-2.5-Flare", "GPT Image 2.5 Flare", "gpt_image"),
+  machgenImage("GPT-Image-2", "GPT Image 2", "gpt_image"),
+  machgenImage("Nano-Banana-2.1", "Nano Banana 2.1", "nano_banana"),
+  machgenImage("Nano-Banana-2", "Nano Banana 2", "nano_banana"),
 
   {
     id: "kie:bytedance/seedance-2-5",
