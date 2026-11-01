@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { FFMPEG } from "./ffmpeg-binary.js";
+import type { SceneMarker } from "./scene-cuts.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -223,13 +224,34 @@ export async function refineCameraCandidate(
   return best ? { t: best.t, score: best.score } : candidate;
 }
 
-export async function detectSceneCandidates(
+type SceneCuts = { cuts: SceneMarker[]; settles: SceneMarker[] };
+
+const CUT_SCORE_FLOOR = 6;
+
+async function refineCuts(
+  videoPath: string,
+  candidates: CameraCandidate[],
+  signal?: AbortSignal,
+): Promise<SceneMarker[]> {
+  const refined: SceneMarker[] = [];
+  for (const candidate of candidates) {
+    refined.push(await refineCameraCandidate(videoPath, candidate, signal));
+  }
+  return refined;
+}
+
+function roundMarker(marker: SceneMarker): SceneMarker {
+  return { t: Math.round(marker.t * 1000) / 1000, score: Math.round(marker.score * 100) / 100 };
+}
+
+export async function detectSceneCuts(
   videoPath: string,
   signal?: AbortSignal,
-): Promise<Candidate[]> {
-  const samples = await detectSceneSamples(videoPath, {
-    fps: SCDET_FPS,
-    signal,
-  });
-  return deriveCandidates(samples);
+): Promise<SceneCuts> {
+  const samples = await detectSceneSamples(videoPath, { fps: SCDET_FPS, signal });
+  const cuts = await refineCuts(videoPath, deriveCameraCandidates(samples, CUT_SCORE_FLOOR), signal);
+  const settles = deriveCandidates(samples)
+    .filter((candidate) => candidate.kind === "settle")
+    .map(({ t, score }) => ({ t, score }));
+  return { cuts: cuts.map(roundMarker), settles: settles.map(roundMarker) };
 }

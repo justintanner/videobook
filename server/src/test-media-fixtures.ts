@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runFfmpeg } from "./ffmpeg.js";
 
-type CachedVideoSource = "testsrc" | "color";
+type CachedVideoSource = "testsrc" | "color" | "cuts";
 
 interface CachedVideoSpec {
   width: number;
@@ -13,6 +13,7 @@ interface CachedVideoSpec {
   fps: number;
   source: CachedVideoSource;
   color?: string;
+  shots?: Array<{ color: string; durationSec: number }>;
   audio: false | { frequency: number };
   keyframeInterval?: number;
 }
@@ -31,6 +32,7 @@ export function videoFixtureKey(spec: CachedVideoSpec): string {
       fps: spec.fps,
       source: spec.source,
       color: spec.color ?? null,
+      shots: spec.shots ?? null,
       audio: spec.audio,
       keyframeInterval: spec.keyframeInterval ?? null,
     }))
@@ -38,10 +40,24 @@ export function videoFixtureKey(spec: CachedVideoSpec): string {
     .slice(0, 24);
 }
 
+function shotsInput(spec: CachedVideoSpec): string {
+  const shots = spec.shots ?? [];
+  const sources = shots.map((shot, index) =>
+    `color=c=${shot.color}:s=${spec.width}x${spec.height}:r=${spec.fps}:d=${shot.durationSec}[s${index}]`);
+  const labels = shots.map((_, index) => `[s${index}]`).join("");
+  return `${sources.join(";")};${labels}concat=n=${shots.length}:v=1:a=0[out0]`;
+}
+
+function videoInputFor(spec: CachedVideoSpec): string {
+  if (spec.source === "cuts") return shotsInput(spec);
+  if (spec.source === "color") {
+    return `color=c=${spec.color ?? "red"}:s=${spec.width}x${spec.height}:r=${spec.fps}:d=${spec.durationSec}`;
+  }
+  return `testsrc=duration=${spec.durationSec}:size=${spec.width}x${spec.height}:rate=${spec.fps}`;
+}
+
 function videoArgs(spec: CachedVideoSpec, outputPath: string): string[] {
-  const videoInput = spec.source === "color"
-    ? `color=c=${spec.color ?? "red"}:s=${spec.width}x${spec.height}:r=${spec.fps}:d=${spec.durationSec}`
-    : `testsrc=duration=${spec.durationSec}:size=${spec.width}x${spec.height}:rate=${spec.fps}`;
+  const videoInput = videoInputFor(spec);
   const args = [
     "-y",
     "-f", "lavfi",
@@ -147,6 +163,19 @@ export const COMMON_VIDEO_FIXTURES = {
     audio: false,
     keyframeInterval: 24,
   }),
+  sceneCuts: {
+    width: 160,
+    height: 120,
+    durationSec: 6,
+    fps: 24,
+    source: "cuts",
+    shots: [
+      { color: "0x202020", durationSec: 2 },
+      { color: "0xe0e0e0", durationSec: 2.5 },
+      { color: "0x2060a0", durationSec: 1.5 },
+    ],
+    audio: { frequency: 440 },
+  } satisfies CachedVideoSpec,
   cropHd: {
     width: 1920,
     height: 1080,

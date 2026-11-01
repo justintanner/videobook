@@ -121,6 +121,13 @@ describe('notebook split commands', () => {
       outputMode: 'keep',
       selectedChunkIndexes: [1],
     })
+    for (const phrase of ['/split @e1 at scenes', 'split @E1 into scenes', '/split @e1 by camera cuts', '/split @e1 scenes']) {
+      expect(parseNotebookSplitCommand(phrase)).toEqual({
+        sourceReference: 'e1',
+        cutPointsSeconds: [],
+        cutSource: 'scenes',
+      })
+    }
     expect(() => parseNotebookSplitCommand('/split @019abcde at later'))
       .toThrow('Use positive split times')
   })

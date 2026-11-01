@@ -1435,7 +1435,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/split",
-    description: "Open the interactive splitter for a notebook video, optionally seeded with cut times",
+    description: "Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts",
     example: "/split @a1 at 15s, 28.5s",
     category: "action",
     icon: "Scissors",
@@ -1444,7 +1444,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "cell", type: "string", required: true, description: "Notebook video cell to split (grid address such as @a1)" },
-      { name: "split_spec", type: "string", required: false, description: "Optional comma-separated cut times; defaults to the midpoint" },
+      { name: "split_spec", type: "string", required: false, description: "Comma-separated cut times, or 'at scenes' to start from detected camera cuts; defaults to the midpoint" },
     ],
     exposure: "composite",
   },

@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (221)
+## MCP endpoints (222)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -63,7 +63,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `delete_notebook` — Delete a notebook and its cells, edges, and runs
 - `delete_notebook_cell` — Delete one notebook cell and incident edges
 - `describe_image` — Write a reproduction-ready prompt for an image asset into a script asset using vision (asynchronous). Returns status cached with the existing script when the current image was already described; a repeated or concurrent request joins the running job.
-- `detect_scenes` — Find natural visual breaks in a video in a background job: shot cuts and motion-settle moments inside steady shots, each with a time and score. Read-only. Returns status cached with the counts when the current video was already scanned.
+- `detect_scenes` — Find natural visual breaks in a video in a background job: camera cuts (frame-accurate) and motion-settle moments inside steady shots, each with a time and score. Read-only. Returns status cached with the counts when the current video was already scanned; detail full also returns every cut, settle and a filmstrip sprite URL.
 - `disconnect_notebook_cells` — Delete a notebook edge
 - `doctor` — Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. gc reclaims catalog storage for this book.
 - `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
@@ -206,6 +206,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `smooth_scene_concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.
 - `splice_video` — Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.
 - `split_video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.
+- `split_video_at_scenes` — Split a notebook video into one clip per scene. Detects camera cuts (reusing a cached detect_scenes result), then adds a split cell and one output cell per scene below the source and runs it. Pass cut_points_seconds to split at reviewed times instead.
 - `split_video_by_durations` — Cut a video into chunks of the target_secs lengths (e.g. [10, 15]) plus a leftover chunk, as new video assets; the source is kept. With destination, the chunks are written as files into an existing asset instead, without the leftover.
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
@@ -232,7 +233,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (295; 143 dedicated command routes)
+## Slash actions (296; 143 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -490,10 +491,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/speak` — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
-- `/split` — Open the interactive splitter for a notebook video, optionally seeded with cut times; preview or workspace operation
+- `/split` — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
 - `/split-clip` — Split a canonical-sequence clip at an exact sequence frame; preview or workspace operation
 - `/split-video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.; MCP: `split_video`
+- `/split-video-at-scenes` — Split a notebook video into one clip per scene. Detects camera cuts (reusing a cached detect_scenes result), then adds a split cell and one output cell per scene below the source and runs it. Pass cut_points_seconds to split at reviewed times instead.; MCP: `split_video_at_scenes`
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`

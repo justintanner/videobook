@@ -28,6 +28,8 @@ import {
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
+import type { NotebookRunAccepted } from "../notebook-run-enqueue.js";
+import { enqueueNotebookRun } from "../notebook-run-enqueue.js";
 import { jobIdForKey, queue, stopBookQueue } from "../queue.js";
 import {
   claimNotebookGenerationPlan,
@@ -2279,40 +2281,20 @@ export function videobookDomainDefs(
             }
           }
         }
-        const runId = uuidv7();
-        const jobId = `run-notebook-${String(args.notebook_id)}-${runId}`;
+        let accepted: NotebookRunAccepted;
         try {
-          if (cellIds) {
-            for (const cellId of cellIds) {
-              await markNotebookCellQueued(
-                engine,
-                String(args.notebook_id),
-                cellId,
-                runId,
-              );
-            }
-          }
-          await queue.enqueue(jobId, {
-            type: "run_notebook",
+          accepted = await enqueueNotebookRun(engine, {
             bookId: String(args.book_id),
             notebookId: String(args.notebook_id),
-            runId,
-            force: cellIds !== undefined,
             ...(cellIds ? { cellIds } : {}),
             ...(typeof args.actor === "string" ? { actor: args.actor } : {}),
           });
         } catch (cause) {
-          const message = cause instanceof Error ? cause.message : String(cause);
-          await failQueuedNotebookCells(engine, String(args.notebook_id), {
-            cellIds: cellIds ?? [],
-            runId,
-            error: message,
-          }).catch(() => undefined);
-          return failure(message);
+          return failure(cause instanceof Error ? cause.message : String(cause));
         }
         return json({
-          job_id: jobId,
-          run_id: runId,
+          job_id: accepted.jobId,
+          run_id: accepted.runId,
           ...(cellIds ? { cell_ids: cellIds } : {}),
         });
       },

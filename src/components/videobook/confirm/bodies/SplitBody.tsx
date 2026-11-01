@@ -29,6 +29,8 @@ import {
   splitSegmentInHalf,
   splitSegments,
 } from '@/videobook/video-split-segments'
+import type { SceneData } from '../../../../../server/src/scene-cuts'
+import { SceneTimeline } from '../SceneTimeline'
 
 type LoopTileProps = {
   label: string
@@ -163,6 +165,7 @@ type SplitBodyProps = {
     selectedIndex: number
   }) => void
   outputMode: NotebookSplitOutputMode
+  scenes?: SceneData | null
   selectedIndex: number
   sourceDurationSeconds: number
   sourceFps?: number | null
@@ -173,6 +176,7 @@ export function SplitBody({
   mediaUrl,
   onChange,
   outputMode,
+  scenes,
   selectedIndex,
   sourceDurationSeconds,
   sourceFps,
@@ -357,6 +361,17 @@ export function SplitBody({
 
   return (
     <div className="confirm-split" onKeyDown={handleKeyDown}>
+      {scenes && (
+        <SceneTimeline
+          cutPointsSeconds={cutPointsSeconds}
+          frameStep={frameStep}
+          scenes={scenes}
+          selectedIndex={selectedIndex}
+          sourceDurationSeconds={sourceDurationSeconds}
+          videoRef={sourceRef}
+          onChange={applyEdit}
+        />
+      )}
       <div className="confirm-split-column">
         <section className="confirm-section" aria-label="Source player">
           <div className="confirm-section-heading">
