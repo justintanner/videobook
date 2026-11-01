@@ -2,6 +2,7 @@ import { z, type RefinementCtx, type ZodRawShape, type ZodType } from "zod";
 import {
   MACHGEN_VIDEO_GRIDS,
   MACHGEN_VIDEO_MODEL_TASK_TYPES,
+  MACHGEN_VIDEO_SHARPEN,
   MACHGEN_VIDEO_UPSCALE,
   MachGenGenerateRequestSchema,
   type MachGenVideoGrid,
@@ -42,6 +43,8 @@ interface MachGenModelSpec extends MachGenModelFacts {
 
 export interface MachGenUpscaleSpec {
   model: string;
+  taskType: "UPSCALE" | "SHARPEN";
+  action: string;
   height: number;
   sourceModel: string;
   sourceHeights: readonly number[];
@@ -183,11 +186,23 @@ export const MACHGEN_MODELS: Readonly<Record<string, MachGenModelSpec>> = Object
 const MACHGEN_UPSCALES: Readonly<Record<string, MachGenUpscaleSpec>> = {
   "MiniMax-H3/upscale": {
     model: "MiniMax-H3",
+    taskType: "UPSCALE",
+    action: "re-renders",
     height: MACHGEN_VIDEO_UPSCALE["MiniMax-H3"]?.heights[0] ?? 1440,
     sourceModel: "MiniMax-H3",
     sourceHeights: [768],
     minSeconds: 5,
     maxSeconds: 15,
+  },
+  "MiniMax-H3/sharpen": {
+    model: "MiniMax-H3",
+    taskType: "SHARPEN",
+    action: "sharpens",
+    height: 0,
+    sourceModel: "MiniMax-H3",
+    sourceHeights: MACHGEN_VIDEO_SHARPEN["MiniMax-H3"]?.heights ?? [480, 768],
+    minSeconds: 1,
+    maxSeconds: 30,
   },
 };
 
@@ -482,12 +497,23 @@ function machgenRequest(apiId: string, spec: MachGenModelSpec, value: Record<str
 
 export function machgenUpscaleRequirement(upscale: MachGenUpscaleSpec): string {
   const heights = upscale.sourceHeights.map(resolutionLabel).join(" or ");
-  return `MachGen re-renders only its own ${upscale.sourceModel} ${heights} videos of ${upscale.minSeconds}-${upscale.maxSeconds} s`;
+  return `MachGen ${upscale.action} only its own ${upscale.sourceModel} ${heights} videos of ${upscale.minSeconds}-${upscale.maxSeconds} s`;
+}
+
+function upscaleVideoField(upscale: MachGenUpscaleSpec): z.ZodString {
+  const target = upscale.taskType === "SHARPEN" ? "sharpen at its own length and height" : `re-render at ${resolutionLabel(upscale.height)}`;
+  return z.string().min(1).describe(`The ${upscale.sourceModel} video to ${target}`);
+}
+
+function sourceHeightField(upscale: MachGenUpscaleSpec): ZodRawShape {
+  if (upscale.taskType !== "SHARPEN") return {};
+  return { source_height: z.number().int().positive().optional().describe("Height of the source video; filled from the connected book video") };
 }
 
 function upscaleInput(upscale: MachGenUpscaleSpec): WireSpec["input"] {
   return z.object({
-    video_url: z.string().min(1).describe(`The ${upscale.sourceModel} video to re-render at ${resolutionLabel(upscale.height)}`),
+    video_url: upscaleVideoField(upscale),
+    ...sourceHeightField(upscale),
   }).superRefine((value, ctx) => {
     const source = parseTaskUrl(value.video_url);
     if (!source) addIssue(ctx, "video_url", `connect a video from this book; ${machgenUpscaleRequirement(upscale)}`);
@@ -497,13 +523,17 @@ function upscaleInput(upscale: MachGenUpscaleSpec): WireSpec["input"] {
   });
 }
 
+function upscaleHeight(upscale: MachGenUpscaleSpec, value: Record<string, unknown>): unknown {
+  return upscale.taskType === "SHARPEN" ? value.source_height : upscale.height;
+}
+
 function upscaleRequest(upscale: MachGenUpscaleSpec, value: Record<string, unknown>): Record<string, unknown> {
   const source = parseTaskUrl(value.video_url);
   return {
     model: upscale.model,
-    task_type: "UPSCALE",
+    task_type: upscale.taskType,
     prompt: "",
-    video_config: { height: upscale.height, duration_secs: source?.seconds },
+    video_config: { height: upscaleHeight(upscale, value), duration_secs: source?.seconds },
     src_task_ids: [source?.taskId ?? String(value.video_url)],
   };
 }

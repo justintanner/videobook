@@ -12,7 +12,7 @@ HeyGen Avatar 3 and 4 digital twins are text-to-video with a stock avatar (Abiga
 
 Kie Kling 4.0 reference-to-video and keyframe-to-video, PixVerse V6 Max text-to-video and image-to-video, and OmniHuman 2.0 are on no top-10 board, so they appear in the unranked group. Kling 4.0 prompts name connected media as Kling 4.0 documents them: `@image_1` and `@video_1` for references, `@first_frame`, `@keyframe_1` and `@last_frame` for frames; with no media connected, both endpoints generate from the prompt alone. PixVerse V6 Max image-to-video follows the image's aspect ratio. OmniHuman 2.0 renders as long as its driving audio. The Kie Grok Imagine Video 1.5 preview takes first and last frames, a loop image (`loop_url`) and up to four timed `keyframes`, and shares the Grok Imagine Video 1.5 image-to-video ranking.
 
-Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Krea 3 (Ultra), Utopai X, Wan 3.0, MiniMax H3 (768p), Dreamina Seedance 2.0, Aleph 2.0. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
+Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Utopai X, Wan 3.0, MiniMax H3 (768p), Dreamina Seedance 2.0, Aleph 2.0. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
 | --- | --- |
@@ -33,11 +33,20 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | kie:bytedance/seedance-2 | This exact endpoint is not in the Videobook catalog. |
 | kie:google/gemini-omni-flash-1-1 | This exact endpoint is not in the Videobook catalog. |
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
-| xai:v1.videos.generations.imageToVideo | The catalog uses grok-imagine-video, not the ranked 1.5 model id. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
+| machgen:GPT-Image-2 | MachGen image tasks are not wired; the MachGen adapter returns video. |
+| machgen:GPT-Image-2.5-Flare | MachGen image tasks are not wired; the MachGen adapter returns video. |
+| machgen:GPT-Image-2.5-Sunburst | MachGen image tasks are not wired; the MachGen adapter returns video. |
+| machgen:Nano-Banana-2 | MachGen image tasks are not wired; the MachGen adapter returns video. |
+| machgen:Nano-Banana-2.1 | MachGen image tasks are not wired; the MachGen adapter returns video. |
+| openai:gpt-image-1.5 | OpenAI is not a catalog provider. |
+| openai:gpt-image-2 | OpenAI is not a catalog provider. |
+| openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
+| openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
+| google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 295
+- Models: 310
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -53,6 +62,13 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:seedream/5-pro-image-to-image` | Seedream 5 Pro Edit | image | edit_image | image 1-10 |  | visible |
 | `kie:grok-imagine/text-to-image` | Grok Imagine | image | text_to_image | none |  | visible |
 | `kie:grok-imagine/image-to-image` | Grok Imagine | image | edit_image | image 1-1 |  | visible |
+| `xai:grok-imagine-image-2.0` | Grok Imagine Image 2.0 (xAI) | image | text_to_image, edit_image | image 0-5 |  | visible |
+| `fal:krea/v3/text-to-image` | Krea 3 | image | text_to_image | none |  | visible |
+| `fal:krea/v3/edit` | Krea 3 Edit | image | edit_image | image 1-8 |  | visible |
+| `fal:openai/gpt-image-2` | GPT Image 2 | image | text_to_image | none |  | visible |
+| `fal:openai/gpt-image-2/edit` | GPT Image 2 Edit | image | edit_image | image 1-16 |  | visible |
+| `fal:fal-ai/gpt-image-1.5` | GPT Image 1.5 | image | text_to_image | none |  | visible |
+| `fal:fal-ai/gpt-image-1.5/edit` | GPT Image 1.5 Edit | image | edit_image | image 1-n |  | hidden |
 | `kie:qwen2/image-edit` | Qwen 2 Edit | image | edit_image | image 1-1 |  | visible |
 | `kie:qwen3/image-to-image` | Qwen 3 Image Edit | image | edit_image | image 1-3 |  | visible |
 | `kie:qwen2-1/text-to-image` | Qwen 2.1 Image | image | text_to_image | none |  | visible |
@@ -133,7 +149,8 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:veo3` | Veo 3 (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `kie:veo3_fast` | Veo 3 Fast (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `xai:grok-imagine-video` | Grok Imagine Video (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, image 0-7, video 0-1 | i2v, r2v, v2v | visible |
-| `xai:grok-imagine-video-1.5` | Grok Imagine Video 1.5 (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, image 0-7, video 0-1 | i2v, r2v, v2v | visible |
+| `xai:grok-imagine-video-1.5` | Grok Imagine Video 1.5 (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-14, video 0-1 | i2v, r2v, v2v | visible |
+| `xai:grok-imagine-video-1.5-lite` | Grok Imagine Video 1.5 Lite (xAI) | video | text_to_video, image_to_video | first_frame 0-1 |  | visible |
 | `fal:xai/grok-imagine-video/image-to-video` | Grok Imagine | video | image_to_video | image 1-1 |  | hidden |
 | `fal:xai/grok-imagine-video/reference-to-video` | Grok Imagine | video | reference_to_video | image 1-7 |  | hidden |
 | `fal:xai/grok-imagine-video/extend-video` | Grok Extend | video | extend_video | video 1-1 |  | hidden |
@@ -176,6 +193,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:bytedance/seedance-2.5/us/image-to-video` | Seedance 2.5 US | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
 | `fal:bytedance/seedance-2.5/us/reference-to-video` | Seedance 2.5 US | video | reference_to_video, edit_video, extend_video | image 0-30, video 0-10, audio 0-10 | r2v, v2v, extend | visible |
 | `fal:bytedance/seedance-2.5/draft/complete` | Seedance 2.5 Draft Complete | video | upscale_video | none |  | hidden |
+| `fal:bytedance/seedance-2.5/us/draft/complete` | Seedance 2.5 US Draft Complete | video | upscale_video | none |  | hidden |
 | `fal:bytedance/seedance-2.0/us/text-to-video` | Seedance 2 US | video | text_to_video | none |  | visible |
 | `fal:bytedance/seedance-2.0/us/image-to-video` | Seedance 2 US | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
 | `fal:bytedance/seedance-2.0/us/reference-to-video` | Seedance 2 US | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
@@ -198,6 +216,10 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:alibaba/happy-horse/v1.1/text-to-video` | Happy Horse 1.1 | video | text_to_video | none |  | visible |
 | `fal:alibaba/happy-horse/v1.1/image-to-video` | Happy Horse 1.1 | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:alibaba/happy-horse/v1.1/reference-to-video` | Happy Horse 1.1 | video | reference_to_video | image 1-n |  | visible |
+| `fal:alibaba/happy-horse/text-to-video` | HappyHorse 1.0 Text to Video | video | text_to_video | none |  | visible |
+| `fal:alibaba/happy-horse/image-to-video` | HappyHorse 1.0 Image to Video | video | image_to_video | first_frame 1-1 |  | visible |
+| `fal:alibaba/happy-horse/reference-to-video` | HappyHorse 1.0 Reference to Video | video | reference_to_video | image 1-9 |  | visible |
+| `fal:alibaba/happy-horse/video-edit` | HappyHorse Video Edit | video | edit_video | image 0-5, video 1-1 |  | visible |
 | `fal:blackforestlabs/flux-3/text-to-video` | FLUX 3 | video | text_to_video | none |  | visible |
 | `fal:blackforestlabs/flux-3/text-to-video/draft` | FLUX 3 Draft | video | text_to_video | none |  | visible |
 | `fal:blackforestlabs/flux-3/image-to-video` | FLUX 3 Image | video | image_to_video | first_frame 1-1 |  | visible |
@@ -272,6 +294,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:minimax/h3-max/lip-sync/image-to-video` | H3 Max Lip Sync | video | lip_sync | first_frame 1-1, audio 1-1 |  | visible |
 | `fal:minimax/h3-max-turbo/text-to-video` | H3 Max Turbo Text To Video | video | text_to_video | none |  | visible |
 | `fal:minimax/h3-max-turbo/image-to-video` | H3 Max Turbo Image To Video | video | image_to_video | first_frame 0-1, last_frame 0-1 |  | visible |
+| `fal:minimax/h3-max-turbo/reference-to-video` | H3 Max Turbo Reference To Video | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
 | `fal:nvidia/cosmos-3-super/image-to-video` | Cosmos 3 Super | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:xai/grok-imagine-video/v1.5/text-to-video` | Grok Imagine Video 1.5 | video | text_to_video | none |  | visible |
 | `fal:xai/grok-imagine-video/v1.5/image-to-video` | Grok Imagine Video 1.5 | video | image_to_video | first_frame 1-1 |  | visible |
@@ -309,6 +332,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:Vidu-Q3-Pro-Fast` | Vidu Q3 Pro Fast (MachGen) | video | image_to_video | first_frame 1-1 |  | hidden |
 | `machgen:Vidu-Q4-Preview` | Vidu Q4 Preview (MachGen) | video | image_to_video, reference_to_video | first_frame 0-1, image 0-9, audio 0-3 | i2v, r2v | hidden |
 | `machgen:MiniMax-H3/upscale` | MiniMax H3 2K Regeneration (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `machgen:MiniMax-H3/sharpen` | MiniMax H3 Sharpen (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `machgen:Topaz-Video-Precision` | Topaz Video Precision (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `machgen:Topaz-Video-Precision-Animation` | Topaz Video Precision Animation (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `machgen:Topaz-Video-Generative` | Topaz Video Generative (MachGen) | video | upscale_video | video 1-1 |  | visible |

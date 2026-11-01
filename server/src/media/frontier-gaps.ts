@@ -16,7 +16,16 @@ export const FRONTIER_CATALOG_GAPS: Readonly<Record<string, string>> = {
   "kie:bytedance/seedance-2": "This exact endpoint is not in the Videobook catalog.",
   "kie:google/gemini-omni-flash-1-1": "This exact endpoint is not in the Videobook catalog.",
   "googleflow:omni-flash": "Google Flow is not a catalog provider.",
-  "xai:v1.videos.generations.imageToVideo": "The catalog uses grok-imagine-video, not the ranked 1.5 model id.",
   "kie:wan/2-7-videoedit": "This exact endpoint is not in the Videobook catalog.",
-  "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog."
+  "alibaba:wan2.7-videoedit": "This exact endpoint is not in the Videobook catalog.",
+  "machgen:GPT-Image-2": "MachGen image tasks are not wired; the MachGen adapter returns video.",
+  "machgen:GPT-Image-2.5-Flare": "MachGen image tasks are not wired; the MachGen adapter returns video.",
+  "machgen:GPT-Image-2.5-Sunburst": "MachGen image tasks are not wired; the MachGen adapter returns video.",
+  "machgen:Nano-Banana-2": "MachGen image tasks are not wired; the MachGen adapter returns video.",
+  "machgen:Nano-Banana-2.1": "MachGen image tasks are not wired; the MachGen adapter returns video.",
+  "openai:gpt-image-1.5": "OpenAI is not a catalog provider.",
+  "openai:gpt-image-2": "OpenAI is not a catalog provider.",
+  "openai:gpt-image-2.5-flare": "OpenAI is not a catalog provider.",
+  "openai:gpt-image-2.5-sunburst": "OpenAI is not a catalog provider.",
+  "google:gemini-3.1-flash-image": "Google is not a catalog provider."
 };

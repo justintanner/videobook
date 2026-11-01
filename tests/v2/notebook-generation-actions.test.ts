@@ -372,6 +372,7 @@ describe('notebook generation actions', () => {
       'machgen:Alibaba-Wan-3.0',
       'machgen:MiniMax-H3',
       'machgen:MiniMax-H3-Turbo',
+      'machgen:MiniMax-H3/sharpen',
       'machgen:MiniMax-H3/upscale',
       'machgen:Seedance-2.0',
       'machgen:Seedance-2.0-Fast',

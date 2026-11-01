@@ -18,11 +18,13 @@ const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
   ...Object.fromEntries(["text-to-video", "image-to-video", "reference-to-video"].map((leaf) =>
     [`fal:minimax/h3/${leaf}/lora`, { loras: [{ path: "https://example.com/style.safetensors" }] }])),
   ...Object.fromEntries(MACHGEN_TOPAZ_MODELS.map((apiId) => [`machgen:${apiId}`, { source_seconds: 10 }])),
+  "machgen:MiniMax-H3/sharpen": { source_height: 768 },
 };
 
 const SAMPLE_REFS: Record<string, MediaRefs> = {
   "kie:grok-imagine/image-to-video": { image: ["https://example.com/image0.png"] },
   "machgen:MiniMax-H3/upscale": { video: [machgenTaskUrl("task-1", 10)] },
+  "machgen:MiniMax-H3/sharpen": { video: [machgenTaskUrl("task-1", 10)] },
 };
 
 function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {

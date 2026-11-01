@@ -1,7 +1,12 @@
 import { z, type ZodObject, type ZodRawShape, type ZodType } from "zod";
 import { MediaGenerationRequestSchema, SunoGenerateRequestSchema, SunoSoundsRequestSchema, VeoGenerateRequestSchema } from "@apicity/kie/zod";
 import { FAL_ENDPOINT_REQUEST_SCHEMAS } from "@apicity/fal/zod";
-import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
+import {
+  isXaiGrokImagineVideoLegacyModel,
+  XaiImageEditRequestSchema,
+  XaiImageGenerateRequestSchema,
+  XaiVideoGenerateRequestSchema,
+} from "@apicity/xai/zod";
 import {
   AlibabaMultimodalGenerationParametersSchema,
   AlibabaQwenImageEditStableModelSchema,
@@ -106,11 +111,49 @@ function falWire(apiId: string): WireSpec | null {
   return { input: request as unknown as AnyObject, fixed: {}, wrap: identity, request };
 }
 
+export function isXaiImageModel(apiId: string): boolean {
+  return apiId.startsWith("grok-imagine-image");
+}
+
+export function hasXaiImageSources(request: Record<string, unknown>): boolean {
+  return Array.isArray(request.images) && request.images.length > 0;
+}
+
+const XAI_IMAGE_INPUT_OMITTED = ["model", "image", "image_file_id", "image_file_ids", "n", "response_format", "deferred", "storage_options", "user"];
+
+const XaiImageRequestSchema = z.record(z.string(), z.unknown()).transform((value, ctx) => {
+  const schema = hasXaiImageSources(value) ? XaiImageEditRequestSchema : XaiImageGenerateRequestSchema;
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data as Record<string, unknown>;
+  for (const issue of parsed.error.issues) ctx.addIssue({ code: "custom", message: issue.message, path: issue.path });
+  return z.NEVER;
+});
+
+function xaiImageWire(apiId: string): WireSpec {
+  const edit = XaiImageEditRequestSchema as unknown as { shape?: ZodRawShape; _def: { schema?: AnyObject } };
+  const shape = edit.shape ?? edit._def.schema!.shape;
+  return {
+    input: omitShape(z.object(shape), XAI_IMAGE_INPUT_OMITTED),
+    fixed: { model: apiId },
+    wrap: (value) => ({ ...value, model: apiId }),
+    request: XaiImageRequestSchema,
+  };
+}
+
+const XAI_LEGACY_REFERENCE_IMAGES = 7;
+
+function xaiVideoInput(apiId: string, input: AnyObject): AnyObject {
+  if (!isXaiGrokImagineVideoLegacyModel(apiId)) return input;
+  const references = input.shape.reference_images as z.ZodOptional<z.ZodArray<ZodType>>;
+  return input.extend({ reference_images: references.unwrap().max(XAI_LEGACY_REFERENCE_IMAGES).optional() });
+}
+
 function xaiWire(apiId: string): WireSpec | null {
+  if (isXaiImageModel(apiId)) return xaiImageWire(apiId);
   if (apiId !== "grok-imagine-video" && !apiId.startsWith("grok-imagine-video-")) return null;
   const request = XaiVideoGenerateRequestSchema as unknown as AnyObject;
   return {
-    input: omitShape(request, ["model", "storage_options"]),
+    input: xaiVideoInput(apiId, omitShape(request, ["model", "storage_options"])),
     fixed: { model: apiId },
     wrap: (value) => ({ ...value, model: apiId }),
     request,

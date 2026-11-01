@@ -17,10 +17,11 @@ type XaiPaidDotPath =
 
 type XaiPaidMethod<TReq, TRes> = (request: TReq, approval?: PayGateApproval) => Promise<TRes>;
 
-export function createXaiPaygatedProvider(apiKey: string, timeout: number): XaiProvider {
+export function createXaiPaygatedProvider(apiKey: string, timeout: number, baseURL?: string): XaiProvider {
   return createXai({
     apiKey,
     timeout,
+    ...(baseURL ? { baseURL } : {}),
     paygate: { secret: ensurePaygateSecret() },
   });
 }

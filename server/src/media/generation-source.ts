@@ -57,7 +57,7 @@ function sourceProblem(upscale: MachGenUpscaleSpec, output: MachGenOutput | null
 
 async function resolveMachGenUpscale(engine: Engine, model: ResolvedModel, upscale: MachGenUpscaleSpec, refs: MediaRefs): Promise<GenerationSource> {
   const raws = refs.video ?? [];
-  if (raws.length !== 1) return refused(`${model.title} re-renders one connected video; ${machgenUpscaleRequirement(upscale)}`);
+  if (raws.length !== 1) return refused(`${model.title} ${upscale.action} one connected video; ${machgenUpscaleRequirement(upscale)}`);
   const raw = raws[0]!;
   if (/^https?:\/\//u.test(raw)) return refused(`${model.title} needs a video from this book, not a URL; ${machgenUpscaleRequirement(upscale)}`);
   const assetId = await sourceAssetId(engine, raw);
@@ -73,7 +73,7 @@ async function resolveMachGenUpscale(engine: Engine, model: ResolvedModel, upsca
     refs: { ...refs, video: [machgenTaskUrl(output.taskId, seconds)] },
     sourceVideoIds: [assetId],
     costHints: { inputDurationSeconds: seconds, durationSeconds: seconds },
-    options: {},
+    options: upscale.taskType === "SHARPEN" ? { source_height: output.height } : {},
   };
 }
 

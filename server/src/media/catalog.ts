@@ -29,9 +29,16 @@ const SEEDANCE_US_REFERENCE_MODES: readonly ModeSpec[] = [
 
 const XAI_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Image to video", roles: ["first_frame"] },
-  { id: "r2v", label: "References", roles: ["image"], defaults: { duration: 10 } },
+  { id: "r2v", label: "References", roles: ["image"], defaults: { duration: 10, resolution: "720p" } },
   { id: "v2v", label: "Edit video", roles: ["video"], requireAny: ["video"] },
 ];
+
+const XAI_15_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
+  ...XAI_MODES.slice(1),
+];
+
+const XAI_LITE_MODES: readonly ModeSpec[] = [XAI_MODES[0]!];
 
 const MACHGEN_FRAMES: ModeSpec = { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"] };
 const MACHGEN_FRAME_OR_LAST: ModeSpec = { ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] };
@@ -157,6 +164,13 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:seedream/5-pro-image-to-image", media: "image", operations: ["edit_image"], dialect: "natural", hidden: true },
   { id: "kie:grok-imagine/text-to-image", media: "image", operations: ["text_to_image"], guide: "grok_image" },
   { id: "kie:grok-imagine/image-to-image", media: "image", operations: ["edit_image"], guide: "grok_image", dialect: "natural" },
+  { id: "xai:grok-imagine-image-2.0", media: "image", operations: ["text_to_image", "edit_image"], guide: "grok_image", title: "Grok Imagine Image 2.0 (xAI)", dialect: "natural" },
+  { id: "fal:krea/v3/text-to-image", media: "image", operations: ["text_to_image"], title: "Krea 3" },
+  { id: "fal:krea/v3/edit", media: "image", operations: ["edit_image"], title: "Krea 3 Edit", dialect: "natural" },
+  { id: "fal:openai/gpt-image-2", media: "image", operations: ["text_to_image"], guide: "gpt_image", title: "GPT Image 2", hidden: true },
+  { id: "fal:openai/gpt-image-2/edit", media: "image", operations: ["edit_image"], guide: "gpt_image", title: "GPT Image 2 Edit", dialect: "natural", hidden: true },
+  { id: "fal:fal-ai/gpt-image-1.5", media: "image", operations: ["text_to_image"], guide: "gpt_image", title: "GPT Image 1.5", hidden: true },
+  { id: "fal:fal-ai/gpt-image-1.5/edit", media: "image", operations: ["edit_image"], guide: "gpt_image", title: "GPT Image 1.5 Edit", dialect: "natural", hidden: true },
   { id: "kie:qwen2/image-edit", media: "image", operations: ["edit_image"], dialect: "natural" },
   { id: "kie:qwen3/image-to-image", media: "image", operations: ["edit_image"], dialect: "natural" },
   { id: "kie:qwen2-1/text-to-image", media: "image", operations: ["text_to_image"], dialect: "natural" },
@@ -263,8 +277,9 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:pixverse-v6-max/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", defaults: { quality: "1080p" } },
   { id: "kie:veo3", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 (Kie)" },
   { id: "kie:veo3_fast", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 Fast (Kie)" },
-  { id: "xai:grok-imagine-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video (xAI)", dialect: "natural", refs: { first_frame: "image", audio: null }, modes: XAI_MODES },
-  { id: "xai:grok-imagine-video-1.5", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 (xAI)", dialect: "natural", refs: { first_frame: "image", audio: null }, modes: XAI_MODES },
+  { id: "xai:grok-imagine-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: null, audio: null }, modes: XAI_MODES, defaults: { resolution: "720p" }, pinnedDefaults: ["resolution"] },
+  { id: "xai:grok-imagine-video-1.5", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: "last_frame", audio: null }, modes: XAI_15_MODES },
+  { id: "xai:grok-imagine-video-1.5-lite", media: "video", operations: ["text_to_video", "image_to_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 Lite (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: null, image: null, video: null, audio: null }, modes: XAI_LITE_MODES },
   { id: "fal:xai/grok-imagine-video/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine", hidden: true },
   { id: "fal:xai/grok-imagine-video/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "grok_imagine", hidden: true },
   { id: "fal:xai/grok-imagine-video/extend-video", media: "video", operations: ["extend_video"], hidden: true },
@@ -314,6 +329,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:bytedance/seedance-2.5/us/image-to-video", media: "video", operations: ["image_to_video"], guide: "seedance25", dialect: "seedance", refs: { first_frame: "image_url" }, modes: FRAME_MODES, hidden: true },
   { id: "fal:bytedance/seedance-2.5/us/reference-to-video", media: "video", operations: ["reference_to_video", "edit_video", "extend_video"], guide: "seedance25", dialect: "seedance", modes: SEEDANCE_US_REFERENCE_MODES, hidden: true },
   { id: "fal:bytedance/seedance-2.5/draft/complete", media: "video", operations: ["upscale_video"], title: "Seedance 2.5 Draft Complete", hidden: true },
+  { id: "fal:bytedance/seedance-2.5/us/draft/complete", media: "video", operations: ["upscale_video"], title: "Seedance 2.5 US Draft Complete", hidden: true },
   { id: "fal:bytedance/seedance-2.0/us/text-to-video", media: "video", operations: ["text_to_video"], guide: "seedance2", dialect: "seedance" },
   { id: "fal:bytedance/seedance-2.0/us/image-to-video", media: "video", operations: ["image_to_video"], guide: "seedance2", dialect: "seedance", refs: { first_frame: "image_url" }, modes: FRAME_MODES },
   { id: "fal:bytedance/seedance-2.0/us/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "seedance2", dialect: "seedance", modes: [{ id: "r2v", label: "References", roles: ["image", "video", "audio"], requireAny: ["image", "video"] }] },
@@ -336,6 +352,10 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:alibaba/happy-horse/v1.1/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:alibaba/happy-horse/v1.1/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },
   { id: "fal:alibaba/happy-horse/v1.1/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural" },
+  { id: "fal:alibaba/happy-horse/text-to-video", media: "video", title: "HappyHorse 1.0 Text to Video", operations: ["text_to_video"] },
+  { id: "fal:alibaba/happy-horse/image-to-video", media: "video", title: "HappyHorse 1.0 Image to Video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },
+  { id: "fal:alibaba/happy-horse/reference-to-video", media: "video", title: "HappyHorse 1.0 Reference to Video", operations: ["reference_to_video"], dialect: "natural" },
+  { id: "fal:alibaba/happy-horse/video-edit", title: "HappyHorse Video Edit", media: "video", operations: ["edit_video"], dialect: "happyhorse_edit", outputLength: "video" },
   { id: "fal:blackforestlabs/flux-3/text-to-video", media: "video", operations: ["text_to_video"], title: "FLUX 3" },
   { id: "fal:blackforestlabs/flux-3/text-to-video/draft", media: "video", operations: ["text_to_video"], title: "FLUX 3 Draft" },
   { id: "fal:blackforestlabs/flux-3/image-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Image", refs: { first_frame: "image_url" } },
@@ -410,6 +430,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:minimax/h3-max/lip-sync/image-to-video", media: "video", operations: ["lip_sync"], refs: { first_frame: "image_url" } },
   { id: "fal:minimax/h3-max-turbo/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:minimax/h3-max-turbo/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" }, modes: FRAME_MODES },
+  { id: "fal:minimax/h3-max-turbo/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural" },
   { id: "fal:nvidia/cosmos-3-super/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },
   { id: "fal:xai/grok-imagine-video/v1.5/text-to-video", media: "video", operations: ["text_to_video"], guide: "grok_imagine" },
   { id: "fal:xai/grok-imagine-video/v1.5/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine", refs: { first_frame: "image_url" } },
@@ -455,6 +476,13 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     operations: ["upscale_video"],
     title: "MiniMax H3 2K Regeneration (MachGen)",
     description: "Re-render a 5-15 s MiniMax H3 768p video MachGen generated at 1440p from its original prompt and inputs. Connect that video; MachGen bills its length twice, in and out.",
+  },
+  {
+    id: "machgen:MiniMax-H3/sharpen",
+    media: "video",
+    operations: ["upscale_video"],
+    title: "MiniMax H3 Sharpen (MachGen)",
+    description: "Sharpen a 1-30 s MiniMax H3 480p or 768p video MachGen generated, keeping its length and height. Connect that video; MachGen bills its length once.",
   },
   ...MACHGEN_TOPAZ_MODELS.map((apiId): ModelEntry => ({
     id: `machgen:${apiId}`,

@@ -4,6 +4,7 @@ export interface ProviderEndpoints {
   falQueueBaseURL?: string;
   elevenlabsBaseURL?: string;
   machgenBaseURL?: string;
+  xaiBaseURL?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
 }

@@ -818,6 +818,29 @@ does. A request with more than one image needs 480p or 720p, and the
 schema refuses it locally before any spend. `kie-0190.test.ts` and
 `generate-media.test.ts` pin these values.
 
+## 47. (decision) Apicity 0.23.1 media additions — DECIDED 2026-11-01
+
+- xAI's shared `v1.videos.generations` schema now offers 1080p, `last_frame`,
+  `keyframes` and 14 reference images for every model id. Videobook keeps
+  `grok-imagine-video` at its documented 720p ceiling (pinned default) and
+  seven references (`isXaiGrokImagineVideoLegacyModel`), and gives it no
+  last-frame slot. `grok-imagine-video-1.5` gains a last-frame slot in its
+  Frames mode, and its References mode defaults to 720p, xAI's limit for
+  reference-to-video. `grok-imagine-video-1.5-lite` takes text or a first
+  frame only, as its model page lists.
+- `xai:grok-imagine-image-2.0` calls xAI directly: no connected image posts
+  to `v1/images/generations`, one to five post to `v1/images/edits`, and the
+  synchronous response is stored like Alibaba's. Tests point the adapter at
+  a local stub through `configureProviderEndpoints({ xaiBaseURL })`.
+- `machgen:MiniMax-H3/sharpen` is a SHARPEN task. MachGen refuses public
+  URLs, so like the 2K regeneration it takes only a MiniMax-H3 video MachGen
+  generated (480p or 768p, 1-30 s) by task id, sends the source's height,
+  and is priced on the source's seconds once.
+- MachGen's five image models (GPT Image 2/2.5, Nano Banana 2/2.1) stay
+  frontier gaps: the MachGen adapter and completion path return video only.
+- fal GPT Image 2 and 1.5 are hidden twins (GPT Image 2.5 is the default);
+  the frontier listing still shows the ranked ones.
+
 ---
 
 | Status       | Sections                                                            | What Videocity still carries                           |

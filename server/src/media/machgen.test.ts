@@ -31,6 +31,7 @@ const LAST = "https://example.test/last.png";
 const CLIP = "https://example.test/clip.mp4";
 const SONG = "https://example.test/song.mp3";
 const UPSCALE = "machgen:MiniMax-H3/upscale";
+const SHARPEN = "machgen:MiniMax-H3/sharpen";
 
 const OPERATION_BY_TASK: Record<string, Operation> = {
   T2V: "text_to_video",
@@ -57,7 +58,7 @@ describe("MachGen catalog", () => {
       "Topaz-Video-Generative", "Topaz-Video-Generative-Fast", "Topaz-Video-Precision", "Topaz-Video-Precision-Animation",
     ]);
     for (const apiId of Object.keys(MACHGEN_MODELS)) {
-      const tasks = (published[apiId] ?? []).filter((task) => task !== "UPSCALE");
+      const tasks = (published[apiId] ?? []).filter((task) => task !== "UPSCALE" && task !== "SHARPEN");
       const model = resolveModel(`machgen:${apiId}`);
       expect(model).toMatchObject({ provider: "machgen", apiId, media: "video" });
       expect(model.title).toMatch(/\(MachGen\)$/u);
@@ -67,7 +68,7 @@ describe("MachGen catalog", () => {
       for (const task of tasks) expect(MACHGEN_VIDEO_GRIDS[apiId]?.[task as "T2V" | "I2V" | "R2V"], `${apiId} ${task}`).toBeDefined();
     }
     expect(MODEL_ENTRIES.filter((entry) => entry.id.startsWith("machgen:")).map((entry) => entry.id.slice("machgen:".length)).sort())
-      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale"].sort());
+      .toEqual([...Object.keys(MACHGEN_MODELS), ...MACHGEN_TOPAZ_MODELS, "MiniMax-H3/upscale", "MiniMax-H3/sharpen"].sort());
   });
 
   it("takes the frame and reference inputs each model's MachGen grids accept", () => {
@@ -303,6 +304,9 @@ describe("MachGen catalog", () => {
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "1080p" } }, /Resolution:/],
     [UPSCALE, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen re-renders only its own MiniMax-H3 768p videos of 5-15 s/],
     [UPSCALE, { refUrls: { video: [machgenTaskUrl("task-1", 20)] } }, /Video url: the source is 20 s/],
+    [SHARPEN, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen sharpens only its own MiniMax-H3 480p or 768p videos of 1-30 s/],
+    [SHARPEN, { refUrls: { video: [machgenTaskUrl("task-1", 31)] } }, /Video url: the source is 31 s/],
+    [SHARPEN, { refUrls: { video: [machgenTaskUrl("task-1", 5)] }, options: { source_height: 1080 } }, /SHARPEN height=1080/],
   ] as const)("%s rejects a request MachGen would refuse", (id, call, error) => {
     const built = buildWireRequest(resolveModel(id), call as WireRequestInput);
     expect(built.ok).toBe(false);
@@ -340,6 +344,8 @@ describe("MachGen catalog", () => {
     ["machgen:Vidu-Q3-Pro-Fast", { refUrls: { first_frame: [FRAME] }, options: { resolution: "1080p", duration: 5 } }, {}, 0.74],
     ["machgen:Vidu-Q4-Preview", { refUrls: { first_frame: [FRAME] }, options: { resolution: "2160p", duration: 5 } }, {}, 1.95],
     [UPSCALE, { refUrls: { video: [machgenTaskUrl("task-1", 10)] } }, { inputDurationSeconds: 10 }, 1],
+    [SHARPEN, { refUrls: { video: [machgenTaskUrl("task-1", 5)] }, options: { source_height: 768 } }, { inputDurationSeconds: 5 }, 0.33],
+    [SHARPEN, { refUrls: { video: [machgenTaskUrl("task-1", 4)] }, options: { source_height: 480 } }, { inputDurationSeconds: 4 }, 0.06],
   ] as const)("%s is priced from the @apicity/cost machgen rows", async (id, call, hints, usd) => {
     const result = await estimateGeneration(resolveModel(id), call as WireRequestInput, hints);
     expect(result.ok).toBe(true);
@@ -645,7 +651,7 @@ describe("MachGen provider tasks", () => {
     });
   });
 
-  it("previews the upscale payload a notebook cell would send", async () => {
+  it("previews the upscale and sharpen payloads a notebook cell would send", async () => {
     const sourceId = await seededVideo(h3Payload(768, 12));
     const sourced = await sourcedGenerationInput(engine, { model: UPSCALE, refs: { video: [sourceId] } });
     expect(sourced.ok).toBe(true);
@@ -653,6 +659,13 @@ describe("MachGen provider tasks", () => {
     const preview = previewGeneration(sourced.input);
     expect(preview.ok && preview.preview.payload).toEqual({
       model: "MiniMax-H3", task_type: "UPSCALE", prompt: "", video_config: { height: 1440, duration_secs: 12 }, src_task_ids: ["seeded-task"],
+    });
+    const sharpen = await sourcedGenerationInput(engine, { model: SHARPEN, refs: { video: [sourceId] } });
+    expect(sharpen.ok).toBe(true);
+    if (!sharpen.ok) return;
+    const sharpenPreview = previewGeneration(sharpen.input);
+    expect(sharpenPreview.ok && sharpenPreview.preview.payload).toEqual({
+      model: "MiniMax-H3", task_type: "SHARPEN", prompt: "", video_config: { height: 768, duration_secs: 12 }, src_task_ids: ["seeded-task"],
     });
     const other = { model: "machgen:MiniMax-H3", prompt: "x", refs: { first_frame: [sourceId] } };
     expect(await sourcedGenerationInput(engine, other)).toEqual({ ok: true, input: other });
