@@ -23,7 +23,7 @@ export type SceneCutOptions = {
   minSceneSeconds?: number;
 };
 
-export const DEFAULT_SCENE_MIN_SCORE = 10;
+export const DEFAULT_SCENE_MIN_SCORE = 5;
 export const DEFAULT_MIN_SCENE_SECONDS = 0.5;
 
 type RankedMarker = SceneMarker & { priority: number };

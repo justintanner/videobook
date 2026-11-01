@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SceneData } from "./scene-cuts.js";
 import { asSceneData, parseSceneDocument, selectSceneCuts } from "./scene-cuts.js";
+import { contrastCuts } from "./scene-detect.js";
 
 const SCENES: SceneData = {
   assetId: "vid",
@@ -18,12 +19,12 @@ const SCENES: SceneData = {
 };
 
 describe("selectSceneCuts", () => {
-  it("keeps strong cuts away from the edges and from each other", () => {
-    expect(selectSceneCuts(SCENES)).toEqual([2]);
+  it("keeps cuts above the default score away from the edges and from each other", () => {
+    expect(selectSceneCuts(SCENES)).toEqual([2, 5]);
   });
 
-  it("lowers the threshold to admit softer cuts", () => {
-    expect(selectSceneCuts(SCENES, { minScore: 6 })).toEqual([2, 5]);
+  it("raises the threshold to keep only the strongest cuts", () => {
+    expect(selectSceneCuts(SCENES, { minScore: 10 })).toEqual([2]);
   });
 
   it("adds settles after cuts without crowding them", () => {
@@ -55,5 +56,22 @@ describe("scene documents", () => {
     });
     expect(asSceneData(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
     expect(parseSceneDocument({ candidates: [] }, (file) => file)).toBeNull();
+  });
+});
+
+describe("contrastCuts", () => {
+  const frames = (scores: number[]) => scores.map((score, index) => ({ t: index / 30, score }));
+
+  it("finds a dim hard cut that stands out from quiet neighbours", () => {
+    const scores = Array.from({ length: 90 }, (_, index) => 0.2 + (index % 3) * 0.1);
+    scores[45] = 3.4;
+    scores[46] = 2.1;
+    expect(contrastCuts(frames(scores))).toEqual([{ t: 1.5, score: 6.8 }]);
+  });
+
+  it("ignores spikes inside sustained camera motion", () => {
+    const scores = Array.from({ length: 90 }, (_, index) => 3 + (index % 4));
+    scores[45] = 7.5;
+    expect(contrastCuts(frames(scores))).toEqual([]);
   });
 });

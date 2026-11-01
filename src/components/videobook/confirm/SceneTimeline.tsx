@@ -28,12 +28,13 @@ import {
 import './SceneTimeline.css'
 
 const TRACK_HEIGHT = 56
-const MIN_SCORE_RANGE = { min: 4, max: 30 } as const
+const MIN_SCORE_RANGE = { min: 3, max: 40 } as const
 
 type SceneTimelineProps = {
   cutPointsSeconds: number[]
   frameStep: number | null
   onChange: (edit: SceneCutEdit) => void
+  onCutFocus: (index: number) => void
   scenes: SceneData
   selectedIndex: number
   sourceDurationSeconds: number
@@ -134,6 +135,7 @@ export function SceneTimeline({
   cutPointsSeconds,
   frameStep,
   onChange,
+  onCutFocus,
   scenes,
   selectedIndex,
   sourceDurationSeconds,
@@ -166,7 +168,9 @@ export function SceneTimeline({
   }
   const addAt = (seconds: number) => {
     const edit = addSceneCut({ cutPointsSeconds, seconds, sourceDurationSeconds: duration })
-    if (edit) onChange(edit)
+    if (!edit) return
+    onChange(edit)
+    onCutFocus(edit.selectedIndex - 1)
   }
   const moveCut = (index: number, seconds: number) => {
     onChange(moveSceneCut({ cutPointsSeconds, index, seconds, sourceDurationSeconds: duration }))
@@ -184,6 +188,7 @@ export function SceneTimeline({
   }
   const handleCutPointerDown = (index: number) => (event: PointerEvent<HTMLButtonElement>) => {
     dragIndex.current = index
+    onCutFocus(index)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const handleCutPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
@@ -306,7 +311,10 @@ export function SceneTimeline({
               onPointerUp={handleCutPointerUp}
               onDoubleClick={() => onChange(removeSceneCut({ cutPointsSeconds, index }))}
               onKeyDown={handleCutKeyDown(index)}
-              onFocus={() => seek(cut)}
+              onFocus={() => {
+                onCutFocus(index)
+                seek(cut)
+              }}
             />
           )
         })}

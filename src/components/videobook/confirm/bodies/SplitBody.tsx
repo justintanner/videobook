@@ -30,7 +30,9 @@ import {
   splitSegments,
 } from '@/videobook/video-split-segments'
 import type { SceneData } from '../../../../../server/src/scene-cuts'
+import { CutInspector } from '../CutInspector'
 import { SceneTimeline } from '../SceneTimeline'
+import { moveSceneCut } from '@/videobook/scene-timeline-edits'
 
 type LoopTileProps = {
   label: string
@@ -187,6 +189,7 @@ export function SplitBody({
   const [inDraft, setInDraft] = useState<string | null>(null)
   const [outDraft, setOutDraft] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [focusedCut, setFocusedCut] = useState<number | null>(null)
   const [slowOverride, setSlowOverride] = useState<{
     key: string
     value: boolean
@@ -300,9 +303,21 @@ export function SplitBody({
     else nudgeIn(direction * step)
   }
   const playbackRate = slowPlayback ? 0.25 : 1
-  const surroundingsLabel = outputMode === 'remove'
-    ? 'JOIN PREVIEW'
-    : 'SURROUNDINGS'
+  const activeCutIndex = Math.min(
+    Math.max(0, focusedCut ?? selectedIndex - 1),
+    Math.max(0, cutPointsSeconds.length - 1),
+  )
+  const activeCut = cutPointsSeconds[activeCutIndex]
+  const acrossCutWindows = activeCut === undefined
+    ? windows.surroundings
+    : [{
+        startSeconds: Math.max(0, activeCut - 1),
+        endSeconds: Math.min(sourceDurationSeconds, activeCut + 1),
+      }]
+  const moveCut = (index: number, seconds: number) => {
+    setFocusedCut(index)
+    applyEdit(moveSceneCut({ cutPointsSeconds, index, seconds, sourceDurationSeconds }))
+  }
   const outputSummary = selected
     ? outputMode === 'all'
       ? `Apply creates ${segments.length} cells`
@@ -370,6 +385,7 @@ export function SplitBody({
           sourceDurationSeconds={sourceDurationSeconds}
           videoRef={sourceRef}
           onChange={applyEdit}
+          onCutFocus={setFocusedCut}
         />
       )}
       <div className="confirm-split-column">
@@ -394,6 +410,17 @@ export function SplitBody({
             </button>
           </div>
         </section>
+        {outputMode !== 'remove' && (
+          <CutInspector
+            activeCutIndex={activeCutIndex}
+            cutPointsSeconds={cutPointsSeconds}
+            frameStep={frameStep}
+            mediaUrl={mediaUrl}
+            sourceDurationSeconds={sourceDurationSeconds}
+            onMoveCut={moveCut}
+            onSelectCut={setFocusedCut}
+          />
+        )}
         <section className="confirm-section" aria-label="Pieces">
           <span className="confirm-section-label">Pieces</span>
           <div className="confirm-chips" role="list">
@@ -461,13 +488,25 @@ export function SplitBody({
               playbackRate={playbackRate}
               windows={[windows.segment]}
             />
-            <SegmentLoopTile
-              label={surroundingsLabel}
-              mediaUrl={mediaUrl}
-              muted={!soundEnabled}
-              playbackRate={playbackRate}
-              windows={windows.surroundings}
-            />
+            {outputMode === 'remove'
+              ? (
+                  <SegmentLoopTile
+                    label="JOIN PREVIEW"
+                    mediaUrl={mediaUrl}
+                    muted={!soundEnabled}
+                    playbackRate={playbackRate}
+                    windows={windows.surroundings}
+                  />
+                )
+              : (
+                  <SegmentLoopTile
+                    label="ACROSS CUT"
+                    mediaUrl={mediaUrl}
+                    muted={!soundEnabled}
+                    playbackRate={playbackRate}
+                    windows={acrossCutWindows}
+                  />
+                )}
           </div>
           {selected && (
             <div className="confirm-split-bounds">

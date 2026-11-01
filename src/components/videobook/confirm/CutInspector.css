@@ -1,0 +1,116 @@
+.cut-inspector {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cut-inspector-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cut-inspector-switch > strong {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-inspector-switch > button {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 3px;
+  background: var(--control-bg);
+  color: var(--control-fg);
+  cursor: pointer;
+}
+
+.cut-inspector-switch > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cut-inspector-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cut-inspector-pair figure {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+}
+
+.cut-inspector-pair img,
+.cut-inspector-pair .cut-inspector-pending {
+  width: 100%;
+  height: clamp(120px, 22vh, 220px);
+  border: 1px solid var(--line);
+  background: #000;
+  object-fit: contain;
+}
+
+.cut-inspector-pair figure:last-child img {
+  border-color: var(--green);
+}
+
+.cut-inspector-pair figcaption {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cut-inspector-pending {
+  display: block;
+  background: linear-gradient(90deg, rgba(114, 231, 170, 0.04), rgba(114, 231, 170, 0.1), rgba(114, 231, 170, 0.04));
+}
+
+.cut-inspector-strip {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.cut-inspector-strip > button {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: #000;
+  cursor: pointer;
+  aspect-ratio: 9 / 16;
+  max-height: 96px;
+  overflow: hidden;
+}
+
+.cut-inspector-strip > button img,
+.cut-inspector-strip > button .cut-inspector-pending {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cut-inspector-strip > button.before {
+  opacity: 0.55;
+}
+
+.cut-inspector-strip > button.first {
+  border-color: var(--green);
+  box-shadow: -3px 0 0 var(--green);
+}
+
+.cut-inspector-strip > button:hover,
+.cut-inspector-strip > button:focus-visible {
+  opacity: 1;
+  border-color: var(--control-border-hover);
+}
+
+.cut-inspector-nudges {
+  flex-wrap: wrap;
+}
