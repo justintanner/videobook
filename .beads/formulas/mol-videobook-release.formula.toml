@@ -283,7 +283,8 @@ installs it back from npm, tags `v{{version}}`, and with `--push` pushes
 
 Before starting, ask the other owner lanes by gc mail to hold full-suite runs
 and pushes to `main` until this release finishes. If `main` moves during the
-run, the final `git push origin main` fails after publishing and tagging.
+run, the final `git push origin main` fails after publishing and tagging;
+recover with a merge as described below.
 
 ```bash
 cd "$HOME/.videobook-release/v{{version}}"
@@ -306,12 +307,54 @@ On a non-zero exit:
   - A gate failed before publishing: nothing is on npm and nothing is pushed.
     File a bug bead with the failing output, `discovered-from` the release
     bead, and STOP.
-  - `git push origin main` failed after publishing (main moved): run
-    `git pull --rebase origin main`, then rerun the same command. It
-    recognizes the published tarball, keeps the tag on the tested commit, and
-    finishes the pushes and the GitHub release.
+  - `git push origin main` failed after publishing (main moved): merge the
+    new `main` and rerun, as described next.
   - The registry wait timed out: rerun the same command once npm shows the
     version.
+
+**When main moved.** The script pushes `stable` and the `v{{version}}` tag
+at the tested release commit before it pushes `main`. Merge the new `main`
+on top of that commit:
+
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+git fetch origin
+git merge --no-edit origin/main
+```
+
+Why a merge: the rerun refuses to finish unless the tested commit recorded in
+`.artifacts/release-{{version}}/release-commit` is an ancestor of `HEAD`, and
+`stable` must stay an ancestor of `main` or the next release cannot
+fast-forward it. `git pull --rebase` rewrites the release commit, so the rerun
+stops with `The tested tarball came from <sha>, which is not an ancestor of
+HEAD`. Never rebase, republish, or move the tag. If a rebase already
+happened, put the clone back on the tested commit and merge:
+
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+git reset --hard "v{{version}}^{commit}"
+git fetch origin
+git merge --no-edit origin/main
+```
+
+If the merge stops on a conflict, resolve it keeping both sides and commit.
+A clean merge can still move changelog entries that the new commits added
+under `## [Unreleased]` into the `{{version}}` section, and the rerun writes
+the GitHub release notes from that section. This must print nothing:
+
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+diff <(git show "v{{version}}:server/CHANGELOG.md" | node scripts/changelog-section.mjs {{version}} /dev/stdin) \
+  <(node scripts/changelog-section.mjs {{version}})
+```
+
+If it prints lines, move those entries under `## [Unreleased]`, then run
+`git add server/CHANGELOG.md` and `git commit --amend --no-edit`. The rerun
+does not gate the merge, so run
+`npm run check:dead-code` and the focused tests for what the new commits
+changed. Then rerun the same `npm run release` command. It recognizes the
+published tarball, keeps `stable` and the tag on the tested commit, pushes
+the merge to `main`, and creates the GitHub release.
 
 When `dry_run` = true, stop after a successful dry run: run
 `gc runtime drain-ack` and leave the release bead open.
