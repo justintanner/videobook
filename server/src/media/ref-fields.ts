@@ -45,6 +45,8 @@ const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
     "audio_url",
     "driving_audio_url",
   ],
+  loop: ["loop_url"],
+  keyframe: ["keyframe_urls"],
 };
 
 function fieldPresent(input: JsonSchema, field: string): boolean {

@@ -8,7 +8,7 @@ import {
   isNotebookGenerationCellType,
   type NotebookGenerationCellType,
 } from './notebook-cell-types'
-import { generationModeInputError, generationModeInputTarget } from '../../server/src/generation-input-policy'
+import { generationInputTarget, generationModeInputError, generationModeInputTarget } from '../../server/src/generation-input-policy'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -430,19 +430,6 @@ export function generationInputKind(
   return null
 }
 
-function normalizedInputTarget(
-  kind: GenerationInputKind,
-  targetInput: string,
-): string {
-  if (targetInput === 'first_frame' || targetInput === 'last_frame') {
-    return targetInput
-  }
-  if (kind === 'audio' && targetInput === 'replace_audio') {
-    return targetInput
-  }
-  return kind
-}
-
 export function generationConnectedInputs(
   cellId: string,
   cells: readonly NotebookCell[],
@@ -454,7 +441,7 @@ export function generationConnectedInputs(
     const source = cellsById.get(edge.source)
     const kind = source ? generationInputKind(source) : null
     return kind
-      ? [{ kind, target: normalizedInputTarget(kind, edge.targetInput) }]
+      ? [{ kind, target: generationInputTarget(kind, edge.targetInput) }]
       : []
   })
 }
@@ -489,7 +476,7 @@ export function generationInputAttachments(
       ? [{
           sourceCellId: edge.source,
           targetInput: edge.targetInput,
-          target: generationModeInputTarget(modeId, kind, normalizedInputTarget(kind, edge.targetInput)),
+          target: generationModeInputTarget(modeId, kind, generationInputTarget(kind, edge.targetInput)),
           kind,
         }]
       : []

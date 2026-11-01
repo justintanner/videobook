@@ -18,6 +18,8 @@ const URL_FIELD_KEYS = new Set([
   "last_frame_url",
   "first_frame",
   "last_frame",
+  "loop",
+  "keyframe",
   "audio_url",
   "audio_urls",
   "character_image_urls",

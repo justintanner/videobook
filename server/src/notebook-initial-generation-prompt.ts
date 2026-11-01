@@ -1,6 +1,7 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { generationInputMentions } from "./generation-input-mentions.js";
+import { generationInputTarget } from "./generation-input-policy.js";
 
 const INITIAL_PROMPT_KEY = "initialGenerationPrompt";
 const INITIAL_PROMPT_VERSION = 1;
@@ -89,10 +90,12 @@ function promptInputs(
   const targetOrder = new Map([
     ["first_frame", 0],
     ["last_frame", 1],
-    ["image", 2],
-    ["video", 3],
-    ["audio", 4],
-    ["replace_audio", 5],
+    ["loop", 2],
+    ["keyframe", 3],
+    ["image", 4],
+    ["video", 5],
+    ["audio", 6],
+    ["replace_audio", 7],
   ]);
   const tokens = new Map(
     generationInputMentions(cell.id, document.cells, document.edges,
@@ -135,6 +138,8 @@ function inputRole(
 ): string {
   if (input.targetInput === "first_frame") return "Start frame";
   if (input.targetInput === "last_frame") return "End frame";
+  if (input.targetInput === "loop") return "Loop frame";
+  if (generationInputTarget(input.kind, input.targetInput) === "keyframe") return "Keyframe";
   if (input.targetInput === "replace_audio") return "Replacement audio";
   if (input.kind === "image") {
     return generation === "video" ? "Subject image" : "Reference image";
@@ -178,10 +183,12 @@ function buildInitialGenerationPrompt(
   const directives: string[] = [];
   const firstFrame = inputs.some((input) => input.targetInput === "first_frame");
   const lastFrame = inputs.some((input) => input.targetInput === "last_frame");
+  const loop = inputs.some((input) => input.targetInput === "loop");
   const hasImage = inputs.some((input) => input.kind === "image");
   const hasVideo = inputs.some((input) => input.kind === "video");
   const hasAudio = inputs.some((input) => input.kind === "audio");
-  if (firstFrame && lastFrame) directives.push("Animate smooth frame transition.");
+  if (loop) directives.push("Animate seamless loop.");
+  else if (firstFrame && lastFrame) directives.push("Animate smooth frame transition.");
   else if (hasImage) directives.push("Animate subject.");
   if (hasVideo) directives.push("Match motion, timing.");
   if (hasAudio) directives.push("Sync action, timing.");

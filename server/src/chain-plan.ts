@@ -69,12 +69,14 @@ export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
   generate_video: {
     outputs: GENERATION_OUTPUTS,
     completion: "generation",
-    gridFields: ["refs.first_frame", "refs.last_frame", "refs.image", "refs.video", "refs.audio", "replace_audio_with"],
+    gridFields: ["refs.first_frame", "refs.last_frame", "refs.loop", "refs.keyframe", "refs.image", "refs.video", "refs.audio", "replace_audio_with"],
     inputTypes: {
       model: "string",
       prompt: "string",
       first_frame: "artifact",
       last_frame: "artifact",
+      loop: "artifact",
+      keyframe: "artifact",
       image: "artifact",
       video: "artifact",
       audio: "artifact",

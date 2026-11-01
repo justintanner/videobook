@@ -1,5 +1,12 @@
 import { z, type ZodObject, type ZodRawShape, type ZodType } from "zod";
-import { MediaGenerationRequestSchema, SunoGenerateRequestSchema, SunoSoundsRequestSchema, VeoGenerateRequestSchema } from "@apicity/kie/zod";
+import {
+  GrokVideo15PreviewInputSchema,
+  GrokVideo15PreviewRequestSchema,
+  MediaGenerationRequestSchema,
+  SunoGenerateRequestSchema,
+  SunoSoundsRequestSchema,
+  VeoGenerateRequestSchema,
+} from "@apicity/kie/zod";
 import { FAL_ENDPOINT_REQUEST_SCHEMAS } from "@apicity/fal/zod";
 import {
   isXaiGrokImagineVideoLegacyModel,
@@ -94,6 +101,72 @@ function kieSunoWire(apiId: string): WireSpec | null {
     wrap: (value) => ({ ...value, callBackUrl: SUNO_CALLBACK_URL }),
     request,
   };
+}
+
+const GROK_PREVIEW_MODEL = "grok-imagine-video-1-5-preview";
+const GROK_PREVIEW_KEYFRAMES = 4;
+const KEYFRAME_SECONDS = Array.from({ length: GROK_PREVIEW_KEYFRAMES }, (_, index) => `keyframe_${index + 1}_seconds`);
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function keyframeSecondsFields(): ZodRawShape {
+  return Object.fromEntries(KEYFRAME_SECONDS.map((name, index) => [name, z.number().positive().optional()
+    .describe(`Seconds into the clip for keyframe ${index + 1}, below the duration; unset keyframes are spaced evenly`)]));
+}
+
+function grokPreviewInput(): AnyObject {
+  const base = GrokVideo15PreviewInputSchema as unknown as AnyObject;
+  return omitShape(base, ["keyframes"]).extend({
+    image_urls: (base.shape.image_urls as ZodType).optional(),
+    keyframe_urls: z.array(z.string()).max(GROK_PREVIEW_KEYFRAMES).optional(),
+    ...keyframeSecondsFields(),
+  }).superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (stringList(record.image_urls).length === 0 && typeof record.loop_url !== "string") {
+      ctx.addIssue({ code: "custom", path: ["image_urls"], message: "connect a reference image or a loop image" });
+    }
+    const keyframes = stringList(record.keyframe_urls).length;
+    KEYFRAME_SECONDS.forEach((name, index) => {
+      if (index >= keyframes && record[name] !== undefined) {
+        ctx.addIssue({ code: "custom", path: [name], message: `connect keyframe ${index + 1} or clear its seconds` });
+      }
+    });
+  });
+}
+
+function evenKeyframeSeconds(duration: number, count: number, index: number): number {
+  return Math.round((duration * (index + 1) / (count + 1)) * 100) / 100;
+}
+
+function grokPreviewKeyframes(value: Record<string, unknown>): Array<{ url: string; timestamp_s: number }> {
+  const urls = stringList(value.keyframe_urls);
+  const duration = typeof value.duration === "number" ? value.duration : 0;
+  return urls.map((url, index) => {
+    const seconds = value[KEYFRAME_SECONDS[index]!];
+    return { url, timestamp_s: typeof seconds === "number" ? seconds : evenKeyframeSeconds(duration, urls.length, index) };
+  });
+}
+
+function grokPreviewRequest(value: Record<string, unknown>): Record<string, unknown> {
+  const input = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "keyframe_urls" && !KEYFRAME_SECONDS.includes(key)));
+  const images = stringList(value.image_urls);
+  const sources = images.length > 0 ? images : typeof value.loop_url === "string" ? [value.loop_url] : [];
+  const keyframes = grokPreviewKeyframes(value);
+  return {
+    model: GROK_PREVIEW_MODEL,
+    input: {
+      ...input,
+      ...(sources.length > 0 ? { image_urls: sources } : {}),
+      ...(keyframes.length > 0 ? { keyframes } : {}),
+    },
+  };
+}
+
+function kieGrokPreviewWire(apiId: string): WireSpec | null {
+  if (apiId !== GROK_PREVIEW_MODEL) return null;
+  return { input: grokPreviewInput(), fixed: {}, wrap: grokPreviewRequest, request: GrokVideo15PreviewRequestSchema };
 }
 
 export function isKieVeoModel(apiId: string): boolean {
@@ -219,7 +292,7 @@ function elevenLabsWire(apiId: string): WireSpec | null {
 export function wireSpec(parsed: ParsedModelId): WireSpec | null {
   switch (parsed.provider) {
     case "kie":
-      return kieCreateTaskWire(parsed.apiId) ?? kieVeoWire(parsed.apiId) ?? kieSunoWire(parsed.apiId);
+      return kieGrokPreviewWire(parsed.apiId) ?? kieCreateTaskWire(parsed.apiId) ?? kieVeoWire(parsed.apiId) ?? kieSunoWire(parsed.apiId);
     case "fal":
       return falWire(parsed.apiId);
     case "xai":

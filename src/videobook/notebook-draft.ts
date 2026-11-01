@@ -22,6 +22,7 @@ import {
   notebookCellRouteTags,
   type NotebookRouteTag,
 } from './notebook-route-tags'
+import { generationInputTarget } from '../../server/src/generation-input-policy'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
@@ -85,7 +86,7 @@ function notebookReferenceKind(
 function nextNotebookReferenceInput(
   document: NotebookDocument,
   targetId: string,
-  kind: NotebookReferenceKind,
+  kind: NotebookReferenceKind | 'keyframe',
 ): string {
   const occupied = new Set(document.edges
     .filter((edge) => edge.target === targetId)
@@ -120,8 +121,11 @@ export function notebookConnectionTargetInput(
   if (!kind) return requestedInput
   if (
     kind === 'image'
-    && (requestedInput === 'first_frame' || requestedInput === 'last_frame')
+    && (requestedInput === 'first_frame' || requestedInput === 'last_frame' || requestedInput === 'loop')
   ) return requestedInput
+  if (kind === 'image' && generationInputTarget(kind, requestedInput) === 'keyframe') {
+    return nextNotebookReferenceInput(document, target.id, 'keyframe')
+  }
   if (
     kind === 'audio'
     && (requestedInput === 'replace_audio' || requestedInput === 'scene_audio')

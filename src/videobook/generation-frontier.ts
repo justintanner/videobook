@@ -1,9 +1,16 @@
 import type { ModelFrontierRanking } from '../../server/src/media/frontier'
+import { generationInputTarget } from '../../server/src/generation-input-policy'
 import type { ActionChoice } from './workspace-actions'
 
 const frontierTypes = ['t2i', 'i2i', 't2v', 'i2v', 'r2v', 'v2v'] as const
 
 type FrontierType = typeof frontierTypes[number]
+
+const frameTargets = new Set(['first_frame', 'last_frame', 'loop', 'keyframe'])
+
+function isFrameTarget(targetInput: string | undefined): boolean {
+  return targetInput !== undefined && frameTargets.has(generationInputTarget('image', targetInput))
+}
 
 export function parseFrontierRankings(value: unknown): ModelFrontierRanking[] {
   if (!Array.isArray(value)) return []
@@ -39,7 +46,7 @@ export function generationFrontierType(
   }
   if (!byOperation[operation]) return null
   if (operation !== 'text_to_video') return byOperation[operation]
-  if (inputs.some(input => input.targetInput === 'first_frame' || input.targetInput === 'last_frame')) return 'i2v'
+  if (inputs.some(input => isFrameTarget(input.targetInput))) return 'i2v'
   if (inputs.some(input => input.type === 'video' || input.type === 'generate_video')) return 'v2v'
   if (inputs.some(input => input.type === 'image' || input.type === 'generate_image')) {
     return 'r2v'
@@ -70,7 +77,7 @@ export function generationModelChoices(
 ): ActionChoice[] {
   const refs = values.refs && typeof values.refs === 'object' ? values.refs : {}
   const inputs = Object.entries(refs).filter(([, value]) => Boolean(value) && (!Array.isArray(value) || value.length > 0))
-    .map(([role]) => ({ type: role === 'first_frame' || role === 'last_frame' ? 'image' : role, targetInput: role }))
+    .map(([role]) => ({ type: isFrameTarget(role) ? 'image' : role, targetInput: role }))
   const operation = typeof values.operation === 'string' ? values.operation : media === 'image' ? 'text_to_image' : 'text_to_video'
   const type = generationFrontierType(`generate_${media}`, typeof values.mode === 'string' ? values.mode : '', operation, inputs)
   return frontierPickerGroups(choices, type).flatMap(group => group.rows.map(({ action, ranking }) => ({

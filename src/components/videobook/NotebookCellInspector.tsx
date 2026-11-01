@@ -960,6 +960,7 @@ function attachmentTargetLabel(target: string): string {
   if (target === 'input') return 'input'
   if (target === 'first_frame') return 'first frame input'
   if (target === 'last_frame') return 'last frame input'
+  if (target === 'loop') return 'loop frame input'
   if (target === 'replace_audio') return 'replacement audio'
   return `${target.replaceAll('_', ' ')} input`
 }

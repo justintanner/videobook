@@ -10,7 +10,7 @@ import {
 } from "../generation-reference-mentions.js";
 import type { MediaRefs, PromptDialect, RefRole } from "./types.js";
 
-const SLOT_TOKEN = /@((image|video|audio)(\d+)|firstframe|lastframe)(?![\w-])/giu;
+const SLOT_TOKEN = /@((image|video|audio|keyframe)(\d+)|firstframe|lastframe|loop)(?![\w-])/giu;
 
 function refsFor(refs: MediaRefs, role: RefRole): string[] {
   return (refs[role] ?? []).filter((ref) => !/^https?:\/\//u.test(ref));
@@ -19,6 +19,7 @@ function refsFor(refs: MediaRefs, role: RefRole): string[] {
 function slotTarget(refs: MediaRefs, token: string, kind: string | undefined, index: string | undefined): string | undefined {
   if (token.toLowerCase() === "firstframe") return refsFor(refs, "first_frame")[0];
   if (token.toLowerCase() === "lastframe") return refsFor(refs, "last_frame")[0];
+  if (token.toLowerCase() === "loop") return refsFor(refs, "loop")[0];
   return refsFor(refs, kind!.toLowerCase() as RefRole)[Number(index) - 1];
 }
 
@@ -30,7 +31,7 @@ function expandSlotTokens(prompt: string, refs: MediaRefs): string {
 }
 
 function frames(refs: MediaRefs): string[] {
-  return [...refsFor(refs, "first_frame"), ...refsFor(refs, "last_frame")];
+  return [...refsFor(refs, "first_frame"), ...refsFor(refs, "last_frame"), ...refsFor(refs, "loop"), ...refsFor(refs, "keyframe")];
 }
 
 function natural(prompt: string, refs: MediaRefs): string {

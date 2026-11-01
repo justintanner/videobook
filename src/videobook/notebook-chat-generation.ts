@@ -8,6 +8,7 @@ import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-a
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
+import { generationInputTarget } from '../../server/src/generation-input-policy'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
 import {
   nextNotebookHorizontalGenerationSlot,
@@ -87,19 +88,6 @@ function mediaInputKind(cell: NotebookCell): GenerationConnectedInput['kind'] | 
     || cell.type === 'generate_audio'
   ) return 'audio'
   return null
-}
-
-function normalizedConnectionTarget(
-  kind: GenerationConnectedInput['kind'],
-  targetInput: string,
-): string {
-  if (targetInput === 'first_frame' || targetInput === 'last_frame') {
-    return targetInput
-  }
-  if (kind === 'audio' && targetInput === 'replace_audio') {
-    return targetInput
-  }
-  return kind
 }
 
 function uniqueConnectionTargets(
@@ -396,7 +384,7 @@ export function notebookChatGenerationConnectedInputs(
     const source = document.cells.find((cell) => cell.id === connection.sourceCellId)
     const kind = source ? mediaInputKind(source) : null
     return kind
-      ? [{ kind, target: normalizedConnectionTarget(kind, connection.targetInput) }]
+      ? [{ kind, target: generationInputTarget(kind, connection.targetInput) }]
       : []
   })
 }

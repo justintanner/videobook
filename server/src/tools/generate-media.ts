@@ -29,6 +29,8 @@ function refsSchema() {
     image: refList.describe("Reference images: artifact ids, @grid addresses resolved to ids, or https URLs"),
     first_frame: refList.describe("First frame image"),
     last_frame: refList.describe("Last frame image"),
+    loop: refList.describe("Loop image the video starts and ends on"),
+    keyframe: refList.describe("Mid-video keyframe images, in order"),
     video: refList.describe("Reference or source videos"),
     audio: refList.describe("Reference or driving audio"),
   }).optional().describe("Media inputs by role; each model accepts the roles list_generation_models reports");

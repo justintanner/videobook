@@ -352,6 +352,45 @@ describe("generic media generation", () => {
     expect(pending.ok && pending.value).toMatchObject({ taskId: "kie-task-1", taskType: "media_kie", meta: { model, media: "video" } });
   });
 
+  it("submits the Grok Imagine 1.5 preview loop frame and timed keyframes to KIE createTask", async () => {
+    const url = (name: string) => `${baseURL}/files/${name}`;
+    const model = "kie:grok-imagine-video-1-5-preview";
+    const enqueued = toolJson(await client.callTool({
+      name: "generate_video",
+      arguments: {
+        book_id: engine.book.get().bookId, model, prompt: "a slow orbit",
+        refs: { loop: url("loop.png"), keyframe: [url("k1.png"), url("k2.png")] },
+        options: { duration: 6, keyframe_2_seconds: 4.5 },
+      },
+    }));
+    const assetId = String(enqueued.asset_id);
+    await runGenerateMedia(engine, queuedJob(assetId), await ownerContext(assetId));
+    const submitted = JSON.parse(requests.find((entry) => entry.path === "/api/v1/jobs/createTask")!.body.toString()) as { model: string; input: Record<string, unknown> };
+    expect(submitted).toMatchObject({
+      model: "grok-imagine-video-1-5-preview",
+      input: {
+        prompt: "a slow orbit",
+        loop_url: url("loop.png"),
+        image_urls: [url("loop.png")],
+        keyframes: [{ url: url("k1.png"), timestamp_s: 2 }, { url: url("k2.png"), timestamp_s: 4.5 }],
+        duration: 6,
+      },
+    });
+    expect(submitted.input).not.toHaveProperty("first_frame_url");
+    expect(submitted.input).not.toHaveProperty("last_frame_url");
+
+    const refused = toolError(await client.callTool({
+      name: "generate_video",
+      arguments: {
+        book_id: engine.book.get().bookId, model, prompt: "a slow orbit",
+        refs: { image: url("a.png"), keyframe: [url("k1.png"), url("k2.png")] },
+        options: { keyframe_1_seconds: 2, keyframe_2_seconds: 2.2 },
+      },
+    }));
+    expect(refused).toContain("keyframes must be at least 1/3 second apart");
+    expect(requests.filter((entry) => entry.path === "/api/v1/jobs/createTask")).toHaveLength(1);
+  });
+
   it("completes a Seedance 2.5 draft on Kie with the draft's billed seconds", async () => {
     const draft = await engine.artifacts.create("video", "seedance draft");
     if (!draft.ok) throw new Error(draft.error.message);

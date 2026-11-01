@@ -40,6 +40,11 @@ const XAI_15_MODES: readonly ModeSpec[] = [
 
 const XAI_LITE_MODES: readonly ModeSpec[] = [XAI_MODES[0]!];
 
+const GROK_PREVIEW_MODES: readonly ModeSpec[] = [
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame", "image", "keyframe"], requireAny: ["image"] },
+  { id: "loop", label: "Loop", roles: ["loop", "image", "keyframe"], requireAny: ["loop"] },
+];
+
 const MACHGEN_FRAMES: ModeSpec = { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"] };
 const MACHGEN_FRAME_OR_LAST: ModeSpec = { ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] };
 const MACHGEN_FIRST_FRAME: ModeSpec = { ...MACHGEN_FRAMES, roles: ["first_frame"] };
@@ -253,7 +258,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   },
   { id: "kie:grok-imagine/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine" },
   { id: "kie:grok-imagine/text-to-video", media: "video", operations: ["text_to_video"], guide: "grok_imagine", defaults: { duration: 6, resolution: "480p" } },
-  { id: "kie:grok-imagine-video-1-5-preview", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 Preview (Kie)", guide: "grok_imagine", dialect: "natural_strip_frames" },
+  { id: "kie:grok-imagine-video-1-5-preview", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 Preview (Kie)", guide: "grok_imagine", dialect: "natural_strip_frames", modes: GROK_PREVIEW_MODES },
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
   { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
   { id: "kie:topaz/video-upscale", media: "video", operations: ["upscale_video"], title: "Topaz Video Upscale (Kie)" },

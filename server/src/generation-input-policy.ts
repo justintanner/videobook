@@ -19,6 +19,16 @@ interface InputMode {
   requiredGroups: string[][];
 }
 
+const FRAME_TARGETS = new Set(["first_frame", "last_frame", "loop"]);
+const KEYFRAME_TARGET = /^keyframe(?:_\d+)?$/u;
+
+export function generationInputTarget(kind: InputKind, targetInput: string): string {
+  if (FRAME_TARGETS.has(targetInput)) return targetInput;
+  if (KEYFRAME_TARGET.test(targetInput)) return "keyframe";
+  if (kind === "audio" && targetInput === "replace_audio") return targetInput;
+  return kind;
+}
+
 export function generationModeInputTarget(
   modeId: string | undefined,
   kind: InputKind,
@@ -53,6 +63,8 @@ function inputLabel(target: string): string {
   if (target === "replace_audio") return "replacement audio";
   if (target === "first_frame") return "first frame";
   if (target === "last_frame") return "last frame";
+  if (target === "loop") return "loop frame";
+  if (target === "keyframe") return "keyframe";
   return `${target} reference`;
 }
 

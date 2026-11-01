@@ -20,10 +20,12 @@ import {
   doltCellDisplayValue,
   doltCellRows,
 } from '../../src/videobook/dolt-cell-source'
-import type {
-  GenerationInputContract,
-  NotebookGenerationAction,
+import {
+  asNotebookGenerationActions,
+  type GenerationInputContract,
+  type NotebookGenerationAction,
 } from '../../src/videobook/notebook-generation-actions'
+import { listNotebookActions } from '../../server/src/notebook-action-catalog'
 import type { ElevenLabsVoicesState } from '../../src/videobook/use-elevenlabs-voices'
 import { asImageSubjectMap } from '../../src/videobook/image-subject-map'
 
@@ -807,6 +809,63 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('<strong>@video1</strong><small>@a1 · video input</small>')
     expect(html).toContain('aria-label="Remove @a1 input"')
+    expect(html).toContain('<span>Add input</span>')
+  })
+
+  it('shows the Grok Imagine 1.5 preview loop frame, numbered keyframes and keyframe timing', () => {
+    const grok = asNotebookGenerationActions({ actions: listNotebookActions() })
+      .filter((action) => action.model === 'kie:grok-imagine-video-1-5-preview')
+    const generationCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000040',
+      type: 'generate_video',
+      slot: { row: 1, column: 0 },
+      prompt: 'Orbit the statue from @loop past @keyframe1',
+      provider: 'kie',
+      model: 'kie:grok-imagine-video-1-5-preview',
+      operation: 'image_to_video',
+      tool: 'generate_video',
+      inputs: { generationMode: 'loop' },
+      outputArtifactId: undefined,
+    }
+    const stills = [1, 2, 3, 4].map((index): NotebookCell => ({
+      ...cell,
+      id: `01900000-0000-7000-8000-00000000004${index}`,
+      type: 'image',
+      slot: { row: 0, column: index - 1 },
+    }))
+    const edges = (['loop', 'keyframe', 'keyframe_2'] as const).map((targetInput, index): NotebookEdge => ({
+      id: `01900000-0000-7000-8000-00000000005${index}`,
+      source: stills[index]!.id,
+      target: generationCell.id,
+      targetInput,
+    }))
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      bookId: '01900000-0000-7000-8000-000000000002',
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell, ...stills],
+      edges,
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions: grok,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<strong>@loop</strong><small>@a1 · loop frame input</small>')
+    expect(html).toContain('<strong>@keyframe1</strong><small>@a2 · keyframe input</small>')
+    expect(html).toContain('<strong>@keyframe2</strong><small>@a3 · keyframe 2 input</small>')
+    expect(html).toMatch(/<option value="loop" selected="">Loop<\/option>/)
+    expect(html).toContain('I2V · Image to video')
+    for (const index of [1, 2, 3, 4]) expect(html).toContain(`aria-label="Keyframe ${index} seconds"`)
     expect(html).toContain('<span>Add input</span>')
   })
 

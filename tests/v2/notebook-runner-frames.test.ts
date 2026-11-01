@@ -517,6 +517,74 @@ describe("notebook runner frames and concat", () => {
     ).rejects.toThrow(/requires confirmation/i);
   });
 
+  it("maps loop and keyframe image cells into the Grok Imagine 1.5 preview's loop and timed keyframes", async () => {
+    const opened = await openEngine("runner-loop");
+    const images = await Promise.all(["Loop", "Pose one", "Pose two"].map(async (label) => {
+      const created = await opened.artifacts.create({ kind: "image", label });
+      if (!created.ok) throw new Error(created.error.message);
+      await opened.files.write(created.value.artifactId, "original.jpg", Buffer.from(label));
+      return created.value.artifactId;
+    }));
+    const [loopId, firstPoseId, secondPoseId] = images as [string, string, string];
+    const notebook = await opened.notebooks.create("Main");
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const [loopCell, firstPose, secondPose] = images.map((artifactId, column) => opened.notebooks.createCell({
+      type: "image",
+      label: `Still ${column + 1}`,
+      slot: { row: 0, column },
+      outputArtifactId: artifactId,
+    })) as [NotebookCell, NotebookCell, NotebookCell];
+    const animate = opened.notebooks.createCell({
+      type: "generate_video",
+      label: "Loop it",
+      slot: { row: 1, column: 0 },
+      prompt: "Orbit the statue @loop",
+      provider: "kie",
+      model: "kie:grok-imagine-video-1-5-preview",
+      operation: "image_to_video",
+      tool: "generate_video",
+      inputs: { generationSettings: { duration: 6, keyframe_2_seconds: 4.5 } },
+    });
+    const document: NotebookDocument = {
+      ...notebook.value,
+      cells: [loopCell, firstPose, secondPose, animate],
+      edges: [
+        opened.notebooks.createEdge({ source: secondPose.id, target: animate.id, targetInput: "keyframe_2" }),
+        opened.notebooks.createEdge({ source: loopCell.id, target: animate.id, targetInput: "loop" }),
+        opened.notebooks.createEdge({ source: firstPose.id, target: animate.id, targetInput: "keyframe" }),
+      ],
+    };
+    await opened.notebooks.write(document);
+
+    const prepared = await prepareNotebookGeneration(opened, document, animate, opened.book.get().bookId);
+    expect(prepared.input).toMatchObject({
+      mode: "loop",
+      refs: { loop: [loopId], keyframe: [firstPoseId, secondPoseId] },
+      options: { duration: 6, keyframe_2_seconds: 4.5 },
+    });
+    expect(prepared.input.refs).not.toHaveProperty("image");
+    const preview = previewGeneration(prepared.input);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const urls = Object.fromEntries(preview.preview.placeholders.map(({ reference, url }) => [reference.slice(1), url]));
+    expect(preview.preview.payload).toMatchObject({
+      model: "grok-imagine-video-1-5-preview",
+      input: {
+        prompt: "Orbit the statue",
+        loop_url: urls[loopId],
+        image_urls: [urls[loopId]],
+        keyframes: [{ url: urls[firstPoseId], timestamp_s: 2 }, { url: urls[secondPoseId], timestamp_s: 4.5 }],
+        duration: 6,
+      },
+    });
+    expect(preview.preview.payload.input).not.toHaveProperty("first_frame_url");
+    expect(preview.preview.payload.input).not.toHaveProperty("last_frame_url");
+
+    const frames = { ...animate, inputs: { ...animate.inputs, generationMode: "i2v" } };
+    await expect(prepareNotebookGeneration(opened, { ...document, cells: [loopCell, firstPose, secondPose, frames] }, frames, opened.book.get().bookId))
+      .rejects.toThrow(/I2V does not accept loop frame inputs/);
+  });
+
   it("propagates split output through a video asset cell before extraction", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-split-video-"));
     engine = createEngine({ durableWrites: false, rootDir, initialBookName: "runner-split-video" });

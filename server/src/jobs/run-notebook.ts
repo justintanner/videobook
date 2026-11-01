@@ -86,6 +86,7 @@ import {
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
 import { sortByKindSlot } from "../generation-input-mentions.js";
+import { generationInputTarget } from "../generation-input-policy.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
 import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
@@ -1000,7 +1001,7 @@ function toolArgsWithMentions(
   }
   const images = sortByKindSlot(
     upstreamOfKind(upstreamValues(document, cell), "image")
-      .filter(({ targetInput }) => targetInput !== "first_frame" && targetInput !== "last_frame"),
+      .filter(({ targetInput }) => generationInputTarget("image", targetInput) === "image"),
     "image",
   );
   if ("image_refs" in definition.schema && images.length > 0) args.image_refs = outputsOf(images);
@@ -1040,9 +1041,16 @@ function mediaRefsFor(
   const modeRoles = new Set(model.modes.find((candidate) => candidate.id === mode)?.roles ?? [...roles]);
   let firstFrame = frameEntry(upstream, "first_frame", mode);
   let lastFrame = frameEntry(upstream, "last_frame", mode);
+  const loop = frameEntry(upstream, "loop", mode);
+  const keyframes = sortByKindSlot(
+    upstreamOfKind(upstream, "image").filter(({ targetInput }) => generationInputTarget("image", targetInput) === "keyframe"),
+    "keyframe",
+  );
   const images = sortByKindSlot(
-    upstreamOfKind(upstream, "image").filter(({ targetInput }) =>
-      mode === "r2v" || (targetInput !== "first_frame" && targetInput !== "last_frame")),
+    upstreamOfKind(upstream, "image").filter(({ targetInput }) => {
+      const target = generationInputTarget("image", targetInput);
+      return target === "image" || (mode === "r2v" && (target === "first_frame" || target === "last_frame"));
+    }),
     "image",
   );
   const frameMode = mode === "i2v" || ((mode === undefined || mode === "default") && Boolean(firstFrame || lastFrame));
@@ -1056,6 +1064,8 @@ function mediaRefsFor(
   const candidates: MediaRefs = {
     first_frame: outputsOf(firstFrame ? [firstFrame] : []),
     last_frame: outputsOf(lastFrame ? [lastFrame] : []),
+    loop: outputsOf(loop ? [loop] : []),
+    keyframe: outputsOf(keyframes),
     image: outputsOf(images),
     video: outputsOf(videos),
     audio: outputsOf(audios),

@@ -9,6 +9,8 @@
 // Pure and dependency-free: the client imports it for the autocomplete menu
 // and the input cards, the server for prompt resolution.
 
+import { generationInputTarget } from "./generation-input-policy.js";
+
 export type GenerationInputMediaKind = "image" | "video" | "audio";
 
 export interface GenerationInputMentionCell {
@@ -34,6 +36,7 @@ export interface GenerationInputMention {
 const FRAME_TOKENS: Readonly<Record<string, string>> = {
   first_frame: "firstframe",
   last_frame: "lastframe",
+  loop: "loop",
 };
 
 // Inputs that feed a dedicated provider param and cannot be named inline.
@@ -62,7 +65,7 @@ function generationInputMediaKind(
 
 function numberedKindSlotIndex(
   targetInput: string,
-  kind: GenerationInputMediaKind,
+  kind: string,
 ): number | null {
   if (targetInput === kind) return 1;
   const prefix = `${kind}_`;
@@ -75,7 +78,7 @@ function numberedKindSlotIndex(
 /** Stable sort by numbered slot ("image", "image_2", …); unnumbered last. */
 export function sortByKindSlot<T extends { targetInput: string }>(
   entries: readonly T[],
-  kind: GenerationInputMediaKind,
+  kind: string,
 ): T[] {
   return [...entries].sort((left, right) => {
     const leftIndex = numberedKindSlotIndex(left.targetInput, kind)
@@ -116,6 +119,17 @@ function frameMentions(inputs: readonly KindedInput[]): GenerationInputMention[]
   });
 }
 
+function isKeyframeInput(input: KindedInput): boolean {
+  return input.kind === "image" && generationInputTarget(input.kind, input.targetInput) === "keyframe";
+}
+
+function keyframeMentions(inputs: readonly KindedInput[]): GenerationInputMention[] {
+  return sortByKindSlot(inputs.filter(isKeyframeInput), "keyframe").map((input, index) => ({
+    ...input,
+    token: `keyframe${index + 1}`,
+  }));
+}
+
 function numberedMentions(
   inputs: readonly KindedInput[],
   kind: GenerationInputMediaKind,
@@ -124,6 +138,7 @@ function numberedMentions(
   const named = inputs.filter((input) =>
     input.kind === kind
     && !(modeId !== "r2v" && kind === "image" && input.targetInput in FRAME_TOKENS)
+    && !isKeyframeInput(input)
     && !UNNAMED_TARGET_INPUTS.has(input.targetInput));
   return sortByKindSlot(named, kind).map((input, index) => ({
     ...input,
@@ -142,7 +157,7 @@ export function generationInputMentions(
   const effectiveMode = modeId ?? configuredMode;
   const inputs = connectedInputs(cellId, cells, edges);
   return [
-    ...(effectiveMode === "r2v" ? [] : frameMentions(inputs)),
+    ...(effectiveMode === "r2v" ? [] : [...frameMentions(inputs), ...keyframeMentions(inputs)]),
     ...KIND_ORDER.flatMap((kind) => numberedMentions(
       inputs, kind, typeof effectiveMode === "string" ? effectiveMode : undefined,
     )),
@@ -161,13 +176,14 @@ export function remapGenerationInputPrompt(
       ?? next.find((candidate) => candidate.targetInput === before.targetInput);
     if (after) return [before.token, after.token];
     if (!next.some((candidate) => candidate.token === before.token)) return [before.token, before.token];
+    const family = /^keyframe\d+$/u.test(before.token) ? "keyframe" : before.kind;
     let index = 1;
-    while (used.has(`${before.kind}${index}`)) index += 1;
-    const missing = `${before.kind}${index}`;
+    while (used.has(`${family}${index}`)) index += 1;
+    const missing = `${family}${index}`;
     used.add(missing);
     return [before.token, missing];
   }));
-  return prompt.replace(/@((?:image|video|audio)\d+|firstframe|lastframe)(?![\w-])/giu,
+  return prompt.replace(/@((?:image|video|audio|keyframe)\d+|firstframe|lastframe|loop)(?![\w-])/giu,
     (match, token: string) => {
       const replacement = replacements.get(token.toLowerCase());
       return replacement && replacement !== token.toLowerCase() ? `@${replacement}` : match;
@@ -176,6 +192,6 @@ export function remapGenerationInputPrompt(
 
 /** "@image1"-style tokens in a prompt, lower-cased and without the "@". */
 export function scanGenerationInputTokens(prompt: string): string[] {
-  return [...prompt.matchAll(/@((?:image|video|audio)\d+|firstframe|lastframe)(?![\w-])/giu)]
+  return [...prompt.matchAll(/@((?:image|video|audio|keyframe)\d+|firstframe|lastframe|loop)(?![\w-])/giu)]
     .map((match) => match[1]!.toLowerCase());
 }

@@ -28,9 +28,9 @@ export const OPERATIONS_BY_MEDIA = {
   audio: ["speech", "dialogue", "music", "sfx", "video_to_music"],
 } as const satisfies Record<Media, readonly [Operation, ...Operation[]]>;
 
-export type RefRole = "image" | "video" | "audio" | "first_frame" | "last_frame";
+export type RefRole = "image" | "video" | "audio" | "first_frame" | "last_frame" | "loop" | "keyframe";
 
-export const REF_ROLES: readonly RefRole[] = ["first_frame", "last_frame", "image", "video", "audio"];
+export const REF_ROLES: readonly RefRole[] = ["first_frame", "last_frame", "image", "video", "audio", "loop", "keyframe"];
 
 export type PromptDialect =
   | "plain"

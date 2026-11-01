@@ -56,6 +56,32 @@ describe("generation input mentions", () => {
     expect(scanGenerationInputTokens(
       "@Image1 meets @video12 and @firstframe; skip @image1x, @a1, image2",
     )).toEqual(["image1", "video12", "firstframe"]);
+    expect(scanGenerationInputTokens("@Loop past @keyframe2, not @loops or @keyframe"))
+      .toEqual(["loop", "keyframe2"]);
+  });
+
+  it("names a loop frame and numbers keyframes by slot apart from reference images", () => {
+    const edges = [
+      edge("still-b", "keyframe_2"),
+      edge("still-a", "image"),
+      edge("start", "loop"),
+      edge("clip", "video"),
+    ];
+    const keyframeCells = [...cells, { id: "pose", type: "image" }];
+    const mentions = generationInputMentions("target", keyframeCells, [...edges, edge("pose", "keyframe")]);
+    expect(mentions.map(({ token, sourceCellId, targetInput }) => [token, sourceCellId, targetInput])).toEqual([
+      ["loop", "start", "loop"],
+      ["keyframe1", "pose", "keyframe"],
+      ["keyframe2", "still-b", "keyframe_2"],
+      ["image1", "still-a", "image"],
+      ["video1", "clip", "video"],
+    ]);
+    const without = generationInputMentions("target", keyframeCells, edges);
+    expect(without.map(({ token, sourceCellId }) => [token, sourceCellId])).toEqual([
+      ["loop", "start"], ["keyframe1", "still-b"], ["image1", "still-a"], ["video1", "clip"],
+    ]);
+    expect(remapGenerationInputPrompt("Hold @keyframe2 after @keyframe1 on @loop", mentions, without))
+      .toBe("Hold @keyframe1 after @keyframe3 on @loop");
   });
 
   it("keeps frame references and prompt tokens aligned while switching modes and adding inputs", () => {

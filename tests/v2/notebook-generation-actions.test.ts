@@ -460,6 +460,35 @@ describe('notebook generation actions', () => {
     )).toEqual([{ kind: 'image', target: 'first_frame' }])
   })
 
+  it('offers the Grok Imagine 1.5 preview loop frame and numbered keyframes by mode', () => {
+    const grok = asNotebookGenerationActions({ actions: listNotebookActions() })
+      .find((action) => action.model === 'kie:grok-imagine-video-1-5-preview')!
+    expect(grok.inputContract.modes.map((mode) => [mode.id, mode.slots.map((slot) => slot.targets[0])])).toEqual([
+      ['i2v', ['first_frame', 'last_frame', 'image', 'keyframe', 'replace_audio']],
+      ['loop', ['image', 'loop', 'keyframe', 'replace_audio']],
+    ])
+    expect(grok.controls.map((control) => control.name)).toEqual(expect.arrayContaining([
+      'keyframe_1_seconds', 'keyframe_2_seconds', 'keyframe_3_seconds', 'keyframe_4_seconds',
+    ]))
+    const target: NotebookCell = { ...emptyImageCell, type: 'generate_video' }
+    const still: NotebookCell = { ...emptyImageCell, id: '01900000-0000-7000-8000-000000000020', type: 'image', slot: { row: 0, column: 1 } }
+    const pose: NotebookCell = { ...emptyImageCell, id: '01900000-0000-7000-8000-000000000021', type: 'image', slot: { row: 0, column: 2 } }
+    const keyframe: NotebookEdge = { id: '01900000-0000-7000-8000-000000000022', source: pose.id, target: target.id, targetInput: 'keyframe' }
+    expect(generationInputAttachments(grok, 'loop', target.id, [target, still, pose], [keyframe])).toEqual([
+      { sourceCellId: still.id, targetInput: 'image', target: 'image', kind: 'image' },
+      { sourceCellId: still.id, targetInput: 'loop', target: 'loop', kind: 'image' },
+      { sourceCellId: still.id, targetInput: 'keyframe_2', target: 'keyframe', kind: 'image' },
+    ])
+    const secondKeyframe: NotebookEdge = { ...keyframe, id: '01900000-0000-7000-8000-000000000023', source: still.id, targetInput: 'keyframe_2' }
+    expect(generationConnectedInputs(target.id, [target, still, pose], [keyframe, secondKeyframe])).toEqual([
+      { kind: 'image', target: 'keyframe' },
+      { kind: 'image', target: 'keyframe' },
+    ])
+    expect(compatibleGenerationModes(grok, [{ kind: 'image', target: 'loop' }]).map((mode) => mode.id)).toEqual(['loop'])
+    expect(compatibleGenerationModes(grok, [{ kind: 'image', target: 'image' }, { kind: 'image', target: 'keyframe' }])
+      .map((mode) => mode.id)).toEqual(['i2v'])
+  })
+
   it('offers unconnected media through an open generation input', () => {
     const target: NotebookCell = {
       ...emptyImageCell,

@@ -36,7 +36,7 @@ function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {
     const count = Math.max(slot.min, 1);
     refs[slot.role] = Array.from({ length: count }, (_, index) => `https://example.com/${slot.role}${index}.png`);
   }
-  if (mode.id === "i2v") delete refs.image;
+  if (mode.id === "i2v" && !mode.requireAny?.includes("image")) delete refs.image;
   return refs;
 }
 

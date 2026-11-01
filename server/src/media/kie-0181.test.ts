@@ -107,33 +107,64 @@ describe("kie 0.18.1 video catalog", () => {
       .toMatchObject({ ok: false, error: expect.stringContaining("requires at least 1 audio ref") });
   });
 
-  it("exposes the Grok Imagine 1.5 preview frame controls with their upstream guards", () => {
+  it("exposes the Grok Imagine 1.5 preview frames, loop and timed keyframes with their upstream guards", () => {
     const model = resolveModel("kie:grok-imagine-video-1-5-preview");
     expect(model.title).toBe("Grok Imagine Video 1.5 Preview (Kie)");
-    expect(model.slots.map((slot) => [slot.role, slot.field])).toEqual([
-      ["first_frame", "first_frame_url"],
-      ["last_frame", "last_frame_url"],
-      ["image", "image_urls"],
+    expect(model.slots.map((slot) => [slot.role, slot.field, slot.min, slot.max])).toEqual([
+      ["first_frame", "first_frame_url", 0, 1],
+      ["last_frame", "last_frame_url", 0, 1],
+      ["image", "image_urls", 0, null],
+      ["loop", "loop_url", 0, 1],
+      ["keyframe", "keyframe_urls", 0, 4],
     ]);
-    expect(model.options.map((option) => option.name)).toEqual(expect.arrayContaining(["loop_url", "keyframes"]));
-    const keyframes = [{ url: "https://example.com/k1.png", timestamp_s: 2 }, { url: "https://example.com/k2.png", timestamp_s: 4.5 }];
-    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image], first_frame: [first], last_frame: [last] }, options: { duration: 6, keyframes } }))
-      .toMatchObject({ ok: true, request: { input: { image_urls: [image], first_frame_url: first, last_frame_url: last, keyframes, duration: 6 } } });
-    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image] }, options: { loop_url: first } }))
-      .toMatchObject({ ok: true, request: { input: { loop_url: first } } });
-    expect(buildWireRequest(model, { prompt: "x", refUrls: { first_frame: [first] } }))
-      .toMatchObject({ ok: false, error: expect.stringContaining("requires at least 1 image ref") });
-    for (const [options, message] of [
-      [{ duration: 6, keyframes: [{ url: image, timestamp_s: 6 }] }, "less than duration (6s)"],
-      [{ keyframes: [{ url: image, timestamp_s: 2 }, { url: image, timestamp_s: 2.2 }] }, "at least 1/3 second apart"],
-      [{ keyframes: [1, 2, 3, 4, 5].map((timestamp_s) => ({ url: image, timestamp_s })) }, "<=4 items"],
-    ] as const) {
-      expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image] }, options }))
+    expect(model.modes.map((mode) => [mode.id, mode.roles, mode.requireAny])).toEqual([
+      ["i2v", ["first_frame", "last_frame", "image", "keyframe"], ["image"]],
+      ["loop", ["loop", "image", "keyframe"], ["loop"]],
+    ]);
+    const names = model.options.map((option) => option.name);
+    expect(names).toEqual(expect.arrayContaining(["keyframe_1_seconds", "keyframe_2_seconds", "keyframe_3_seconds", "keyframe_4_seconds"]));
+    expect(names).not.toContain("loop_url");
+    expect(names).not.toContain("keyframes");
+    const [k1, k2, k3] = ["https://example.com/k1.png", "https://example.com/k2.png", "https://example.com/k3.png"];
+    expect(buildWireRequest(model, {
+      prompt: "x",
+      refUrls: { image: [image], first_frame: [first], last_frame: [last], keyframe: [k1, k2] },
+      options: { duration: 6, keyframe_1_seconds: 2, keyframe_2_seconds: 4.5 },
+      mode: "i2v",
+    })).toMatchObject({ ok: true, request: { input: {
+      image_urls: [image], first_frame_url: first, last_frame_url: last, duration: 6,
+      keyframes: [{ url: k1, timestamp_s: 2 }, { url: k2, timestamp_s: 4.5 }],
+    } } });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image], keyframe: [k1, k2, k3] }, options: { duration: 8 } }))
+      .toMatchObject({ ok: true, request: { input: { keyframes: [{ url: k1, timestamp_s: 2 }, { url: k2, timestamp_s: 4 }, { url: k3, timestamp_s: 6 }] } } });
+    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image], keyframe: [k1, k2] }, options: { duration: 6, keyframe_2_seconds: 5 } }))
+      .toMatchObject({ ok: true, request: { input: { keyframes: [{ url: k1, timestamp_s: 2 }, { url: k2, timestamp_s: 5 }] } } });
+    for (const mode of ["loop", undefined]) {
+      const looped = buildWireRequest(model, { prompt: "x", refUrls: { loop: [first] }, ...(mode ? { mode } : {}) });
+      expect(looped).toMatchObject({ ok: true, request: { input: { loop_url: first, image_urls: [first] } } });
+      if (looped.ok) {
+        expect(looped.request.input).not.toHaveProperty("first_frame_url");
+        expect(looped.request.input).not.toHaveProperty("last_frame_url");
+      }
+    }
+    expect(buildWireRequest(model, { prompt: "x", refUrls: { loop: [first], image: [image], keyframe: [k1] }, options: { duration: 6 }, mode: "loop" }))
+      .toMatchObject({ ok: true, request: { input: { loop_url: first, image_urls: [image], keyframes: [{ url: k1, timestamp_s: 3 }] } } });
+    for (const [call, message] of [
+      [{ refUrls: { first_frame: [first] }, mode: "i2v" }, "mode i2v needs one of: image"],
+      [{ refUrls: { first_frame: [first] } }, "Image urls: connect a reference image or a loop image"],
+      [{ refUrls: { loop: [first], first_frame: [last] }, mode: "loop" }, "mode loop does not accept first_frame refs"],
+      [{ refUrls: { loop: [first], first_frame: [last] } }, "loop_url cannot be combined with a different first_frame_url"],
+      [{ refUrls: { image: [image], keyframe: [k1] }, options: { duration: 6, keyframe_1_seconds: 6 } }, "less than duration (6s)"],
+      [{ refUrls: { image: [image], keyframe: [k1, k2] }, options: { keyframe_1_seconds: 2, keyframe_2_seconds: 2.2 } }, "at least 1/3 second apart"],
+      [{ refUrls: { image: [image], keyframe: [k1] }, options: { keyframe_3_seconds: 4 } }, "Keyframe 3 seconds: connect keyframe 3 or clear its seconds"],
+      [{ refUrls: { image: [image], keyframe: [k1, k2, k3, k1, k2] } }, "accepts at most 4 keyframe refs"],
+    ] satisfies [Omit<WireRequestInput, "prompt">, string][]) {
+      expect(buildWireRequest(model, { prompt: "x", ...call }))
         .toMatchObject({ ok: false, error: expect.stringContaining(message) });
     }
-    expect(buildWireRequest(model, { prompt: "x", refUrls: { image: [image], first_frame: [first] }, options: { loop_url: last } }))
-      .toMatchObject({ ok: false, error: expect.stringContaining("loop_url cannot be combined with a different first_frame_url") });
     expect(applyPromptDialect(model.entry.dialect, "@firstframe becomes @image1", { first_frame: [A], image: [B] })).toBe("becomes reference image 1");
+    expect(applyPromptDialect(model.entry.dialect, "Loop @loop past @keyframe1 with @image1", { loop: [A], keyframe: [C], image: [B] }))
+      .toBe("Loop past with reference image 1");
   });
 
   it("ranks only the Grok preview; Kling 4.0, PixVerse V6 Max and OmniHuman 2.0 are not on a frontier board", () => {

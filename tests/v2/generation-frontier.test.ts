@@ -45,6 +45,11 @@ describe('frontier model picker', () => {
     for (const model of ['kling-4.0/reference-to-video', 'kling-4.0/keyframe-to-video', 'pixverse-v6-max/text-to-video', 'pixverse-v6-max/image-to-video', 'omnihuman-2-0']) {
       expect(other!.rows.some(row => row.action.model === `kie:${model}`), model).toBe(true)
     }
+    const choices = videoActions.map(action => ({ value: action.model, label: action.title, available: true, frontier: action.frontier }))
+    for (const refs of [{ loop: ['@a1'] }, { keyframe: ['@a1', '@a2'] }]) {
+      expect(generationModelChoices(choices, 'video', { refs }).find(choice => choice.value === 'kie:grok-imagine-video-1-5-preview'))
+        .toMatchObject({ group: 'Frontier models', label: expect.stringMatching(/^#9 · /u) })
+    }
   })
 
   it('selects the matching operation board, including explicit video reference/edit modes', () => {
@@ -53,6 +58,9 @@ describe('frontier model picker', () => {
     expect(generationFrontierType('generate_image', 'default', 'text_to_image', [{ type: 'image' }])).toBe('i2i')
     for (const mode of ['t2v', 'i2v', 'r2v', 'v2v']) {
       expect(generationFrontierType('generate_video', mode, 'text_to_video', [])).toBe(mode)
+    }
+    for (const targetInput of ['first_frame', 'last_frame', 'loop', 'keyframe', 'keyframe_2']) {
+      expect(generationFrontierType('generate_video', 'default', 'text_to_video', [{ type: 'image', targetInput }]), targetInput).toBe('i2v')
     }
     expect(generationFrontierType('generate_video', 'default', 'edit_video', [])).toBe('v2v')
     expect(generationFrontierType('generate_video', 'default', 'reference_to_video', [{ type: 'video' }])).toBe('r2v')

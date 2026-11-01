@@ -1,5 +1,5 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
-import { generationModeInputError } from "./generation-input-policy.js";
+import { generationInputTarget, generationModeInputError } from "./generation-input-policy.js";
 import type { RefRole, ResolvedModel } from "./media/types.js";
 
 type NotebookGenerationInputKind = "image" | "video" | "audio";
@@ -72,19 +72,6 @@ function cellInputKind(cell: NotebookCell): NotebookGenerationInputKind | null {
   return null;
 }
 
-function connectedInputTarget(
-  kind: NotebookGenerationInputKind,
-  targetInput: string,
-): string {
-  if (targetInput === "first_frame" || targetInput === "last_frame") {
-    return targetInput;
-  }
-  if (kind === "audio" && targetInput === "replace_audio") {
-    return targetInput;
-  }
-  return kind;
-}
-
 function connectedInputs(
   document: NotebookDocument,
   cell: NotebookCell,
@@ -95,7 +82,7 @@ function connectedInputs(
     const source = cells.get(edge.source);
     const kind = source ? cellInputKind(source) : null;
     return kind
-      ? [{ kind, target: connectedInputTarget(kind, edge.targetInput) }]
+      ? [{ kind, target: generationInputTarget(kind, edge.targetInput) }]
       : [];
   });
 }
