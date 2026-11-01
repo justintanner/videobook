@@ -55,7 +55,7 @@ default = ""
 
 [vars.run_target]
 description = "Gas City run target for release step execution."
-default = "videobook/gc.run-operator"
+default = "videobook/videobook.owner"
 
 [[steps]]
 id = "release"
