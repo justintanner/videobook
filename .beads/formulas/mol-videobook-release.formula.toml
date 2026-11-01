@@ -1,0 +1,348 @@
+description = """
+Videobook npm release formula — cut a release of the `videobook` package from
+the `stable` branch to the npm registry.
+
+Branch model:
+  - main   = agents work here (feature work lands here first)
+  - stable = release branch; always the last released commit; v<version> tags
+             point at it; it only moves by fast-forward from main
+
+`npm run release` (scripts/release.mjs) owns the gates, the stable
+fast-forward, the publish, the tag and the pushes. This formula prepares the
+release commit in a fresh clone, proves main is green on GitHub, runs that
+script, and records the result.
+
+The publish uses the `NPM_TOKEN` item in the `apicity` 1Password vault
+(`op://apicity/NPM_TOKEN/password`) through a temporary npm user config that
+the release script deletes afterwards.
+
+## Variables
+
+| Variable     | Source | Default | Description                                    |
+|--------------|--------|---------|------------------------------------------------|
+| version      | caller | —       | Three-part semver to publish, e.g. 0.4.1       |
+| dry_run      | caller | false   | If "true", stop after npm publish --dry-run    |
+| release_bead | caller | auto    | Tracking bead this release closes; auto-created if blank |
+"""
+formula = "mol-videobook-release"
+version = 1
+target_required = false
+
+[requires]
+formula_compiler = ">=2.0.0"
+
+[catalog]
+name = "mol-videobook-release"
+description = "Cut a Videobook npm release: changelog and version commit, gates, stable fast-forward, publish, tag, GitHub release, main sync, and release tracking."
+
+[metadata.gc]
+workflow = "videobook-release"
+run_target = "{{run_target}}"
+control_path = "videobook/core.control-dispatcher"
+
+[vars]
+[vars.version]
+description = "Three-part semver string to publish, e.g. 0.4.1."
+required = true
+
+[vars.dry_run]
+description = 'If "true", stop after npm publish --dry-run; do not publish, tag, or push.'
+default = "false"
+
+[vars.release_bead]
+description = "Tracking bead this release closes. Optional: leave blank and the formula reuses (or creates) a deterministic 'Release Videobook vX.Y.Z' bead, then closes it in the final step."
+default = ""
+
+[vars.run_target]
+description = "Gas City run target for release step execution."
+default = "videobook/gc.run-operator"
+
+[[steps]]
+id = "release"
+title = "Release Videobook: changelog, gates, publish, tag, sync, close"
+metadata = { "gc.run_target" = "{{run_target}}" }
+description = '''
+Run the full release in one executable formula step so the dispatcher cannot
+strand it between phases. The first half is local and reversible: load
+context, prove main is green, and write the version and changelog commit in a
+fresh clone. The second half is `npm run release -- {{version}} --push`, which
+is irreversible and outward-facing: it gates, fast-forwards `stable`,
+publishes to npm, tags, pushes `stable`, the tag and `main`, and creates the
+GitHub release. When `dry_run` = true the script stops at
+`npm publish --dry-run` and nothing is pushed.
+
+Work the sub-steps in order. Each sub-step's STOP conditions and exit
+criteria still apply.
+
+
+# Sub-step 0: Singleton guard — refuse a duplicate concurrent release
+
+Prove this is the only in-progress `mol-videobook-release` run for this rig.
+If it isn't, STOP without touching npm or the remote.
+
+```bash
+self_root=""
+if [ -n "${GC_TRIGGER_BEAD_ID:-}" ]; then
+  self_root=$(bd show "$GC_TRIGGER_BEAD_ID" --json 2>/dev/null \
+    | jq -r '(if type == "array" then .[0] else . end)
+      | select(.metadata."gc.step_ref" == "mol-videobook-release.release")
+      | .metadata."gc.root_bead_id" // empty')
+fi
+if [ -z "$self_root" ]; then
+  self_root=$(bd list --status in_progress --metadata-field gc.step_ref=mol-videobook-release.release --limit 0 --json 2>/dev/null \
+    | jq -r --arg id "${GC_SESSION_ID:-}" --arg name "${GC_SESSION_NAME:-}" '
+      [.[] | select(.metadata."gc.step_ref" == "mol-videobook-release.release")] as $steps
+      | [($steps[] | select($id != "" and .metadata."gc.session_id" == $id)),
+         ($steps[] | select($name != "" and .metadata."gc.session_name" == $name))]
+      | .[0].metadata."gc.root_bead_id" // empty')
+fi
+
+if ! runs_json=$(set -o pipefail; bd list --status in_progress --title-contains "mol-videobook-release" --limit 0 --json 2>/dev/null \
+  | jq -ce '[.[]
+      | select(.metadata."gc.kind" == "workflow")
+      | select((.metadata."gc.root_store_ref" // "") == "rig:videobook")
+      | {id, created_at, version: (.metadata."gc.var.version" // "")}]'); then
+  echo "STOP: could not verify concurrent release workflows." >&2
+  exit 1
+fi
+
+conflict=""
+if [ -n "$self_root" ]; then
+  conflict=$(printf '%s' "$runs_json" | jq -r --arg self "$self_root" '
+    ([.[] | select(.id == $self) | .created_at][0]) as $selfTs
+    | if $selfTs == null then "own workflow root missing from active runs" else
+        [ .[] | select(.id != $self) | select(.created_at < $selfTs or (.created_at == $selfTs and .id < $self)) ]
+        | (.[0] // empty)
+        | if . == "" or . == null then empty else "\(.id) (version \(.version))" end
+      end')
+else
+  dup=$(printf '%s' "$runs_json" | jq -r 'length')
+  [ "${dup:-0}" -gt 0 ] && conflict="$dup active release runs (self-id unavailable)"
+fi
+
+if [ -n "$conflict" ]; then
+  echo "ABORT: another mol-videobook-release run is already in progress: $conflict"
+  [ -n "$self_root" ] && bd update "$self_root" --set-metadata superseded=true \
+    --notes "Superseded: a prior mol-videobook-release run ($conflict) is already in progress; this duplicate aborted by the release singleton guard." >/dev/null 2>&1 || true
+  gc runtime drain-ack
+  exit 1
+fi
+echo "Singleton guard: this is the only in-progress mol-videobook-release run (root=${self_root:-unknown}). Proceeding."
+```
+
+**If the block prints `ABORT`: STOP the entire release here.**
+
+
+# Sub-step 1: Load context
+
+**1. Prime your environment:**
+```bash
+bd prime
+```
+
+**2. Resolve (or create) the release tracking bead, then read it:**
+```bash
+release_bead="{{release_bead}}"
+if [ -z "$release_bead" ]; then
+  release_bead=$(bd list --status open --title-contains "Release Videobook v{{version}}" --limit 0 --json 2>/dev/null | jq -r '.[0].id // empty')
+  if [ -z "$release_bead" ]; then
+    if ! release_bead=$(set -o pipefail; bd create "Release Videobook v{{version}}" --type task --priority 1 --description "Tracking bead for the videobook v{{version}} npm release (auto-created by mol-videobook-release)." --json | jq -er '(if type == "array" then .[0].id else .id end) | select(type == "string" and length > 0)'); then
+      echo "STOP: could not create or resolve the release tracking bead." >&2
+      exit 1
+    fi
+  fi
+fi
+bd update "$release_bead" --claim
+bd show "$release_bead"
+```
+
+**3. Validate the version and confirm intent:**
+
+You are about to publish `videobook@{{version}}` to the public npm registry
+under `latest`. It cannot be unpublished after 72h.
+
+  - version = {{version}}
+  - dry_run = {{dry_run}}
+
+```bash
+printf '%s' "{{version}}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "STOP: version must be X.Y.Z" >&2; exit 1; }
+```
+
+**4. Make a fresh release clone:**
+
+The rig checkout carries gc-managed files (`.agents/`, `.gc/`,
+`.codex/hooks.json`) that fail the release script's clean-tree check, so
+release from a fresh clone of GitHub `main`. Keep it outside `/tmp` scratch
+that a session restart can wipe.
+
+```bash
+work="$HOME/.videobook-release/v{{version}}"
+rm -rf "$work"
+mkdir -p "$(dirname "$work")"
+git clone --branch main https://github.com/justintanner/videobook.git "$work"
+cd "$work"
+git fetch origin stable --tags
+npm ci
+```
+
+**5. Verify the publish credential and GitHub auth:**
+```bash
+op read 'op://apicity/NPM_TOKEN/password' >/dev/null
+gh auth status
+```
+
+If either fails, STOP. Everything after this is wasted if the publish or the
+push cannot authenticate.
+
+**Exit criteria:** Release bead claimed, version valid, fresh clone on
+`origin/main`, credentials verified.
+
+
+# Sub-step 2: Verify main and stable
+
+**1. GitHub CI is green for the `origin/main` commit being released:**
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+main_sha=$(git rev-parse origin/main)
+run_id=$(gh run list --branch main --workflow CI --commit "$main_sha" --limit 1 --json databaseId --jq '.[0].databaseId')
+[ -n "$run_id" ] || { echo "STOP: no GitHub CI run for $main_sha" >&2; exit 1; }
+gh run watch "$run_id" --exit-status
+```
+
+If the run is missing, cancelled, or failed, STOP. Do not release until CI on
+`main` is green.
+
+**2. `stable` can fast-forward to `main`:**
+```bash
+git merge-base --is-ancestor origin/stable origin/main
+```
+
+If this fails, `stable` has diverged from `main`. STOP and mail the mayor with
+`git log --oneline origin/main..origin/stable`. Do not rebase or force-push
+`stable` without an explicit decision.
+
+**3. The version is not published yet:**
+```bash
+npm view "videobook@{{version}}" version 2>/dev/null && echo "already published" || echo "not published"
+```
+
+If it is already published, skip sub-step 3 and run sub-step 4 with the same
+command: the release script recognizes the published tarball and finishes the
+tag, `stable`, push, and GitHub release.
+
+**Exit criteria:** CI green on `origin/main`, `stable` is an ancestor of
+`main`.
+
+
+# Sub-step 3: Write the version and changelog commit
+
+**1. Bump the package version:**
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+npm version {{version}} -w server --no-git-tag-version
+```
+
+**2. Write the changelog section.** Edit `server/CHANGELOG.md`:
+
+- Read every commit since the previous release:
+  `git log --no-merges --format='%h %s%n%b' "$(git describe --tags --abbrev=0 origin/stable)"..HEAD`
+- Fold anything user-facing that `## [Unreleased]` lacks into its
+  `### Added`, `### Changed`, `### Fixed`, `### Removed` or `### Security`
+  lists, in the existing voice: short, plain sentences about what a user of
+  the npm package or the app sees. Leave out internal refactors, test-only,
+  dead-code, and release-tooling commits. No bead IDs, no commit hashes.
+- Rename `## [Unreleased]` to `## [{{version}}] - <today, YYYY-MM-DD UTC>` and
+  add an empty `## [Unreleased]` heading above it.
+
+```bash
+node scripts/changelog-section.mjs {{version}}
+```
+
+It must print a non-empty section.
+
+**3. Commit:**
+```bash
+git add server/package.json package-lock.json server/CHANGELOG.md
+git commit -m "Release videobook {{version}}"
+git status --porcelain   # MUST be empty
+```
+
+Do not push. The release script pushes `main` only after the publish.
+
+**Exit criteria:** One local commit on `main` with the version and a non-empty
+changelog section.
+
+
+# Sub-step 4: Run the release script
+
+`npm run release` runs lint, the dead-code check, the test type check, the
+full suite, and the pack-and-install gate, then fast-forwards `stable` to the
+release commit, publishes exactly the tested tarball, waits for the registry,
+installs it back from npm, tags `v{{version}}`, and with `--push` pushes
+`stable`, the tag and `main` and creates the GitHub release.
+
+Before starting, ask the other owner lanes by gc mail to hold full-suite runs
+and pushes to `main` until this release finishes. If `main` moves during the
+run, the final `git push origin main` fails after publishing and tagging.
+
+```bash
+cd "$HOME/.videobook-release/v{{version}}"
+if [ "{{dry_run}}" = "true" ]; then
+  flags="--dry-run"
+else
+  flags="--push"
+fi
+VIDEOBOOK_TEST_WORKERS=2 npm run release -- {{version}} $flags 2>&1 | tee "$HOME/.videobook-release/v{{version}}.log"
+```
+
+The run takes about an hour on the shared gc box. The controller kills
+sessions that end their turn holding a claim, and that also kills background
+gates. Start the command with `run_in_background` through a wrapper that
+heartbeats the claim (`gc bd` heartbeat, lease 5 min) and writes the exit code
+to `$HOME/.videobook-release/v{{version}}.exit`, then keep the turn alive with
+foreground waits of at most 9 minutes until that file exists.
+
+On a non-zero exit:
+  - A gate failed before publishing: nothing is on npm and nothing is pushed.
+    File a bug bead with the failing output, `discovered-from` the release
+    bead, and STOP.
+  - `git push origin main` failed after publishing (main moved): run
+    `git pull --rebase origin main`, then rerun the same command. It
+    recognizes the published tarball, keeps the tag on the tested commit, and
+    finishes the pushes and the GitHub release.
+  - The registry wait timed out: rerun the same command once npm shows the
+    version.
+
+When `dry_run` = true, stop after a successful dry run: run
+`gc runtime drain-ack` and leave the release bead open.
+
+**Exit criteria:** The script printed `done: videobook@{{version}} is on npm,
+v{{version}} is pushed, and the GitHub release exists`.
+
+
+# Sub-step 5: Verify and close
+
+```bash
+git -C "$HOME/.videobook-release/v{{version}}" fetch origin
+test "$(git -C "$HOME/.videobook-release/v{{version}}" rev-parse origin/stable)" = "$(git -C "$HOME/.videobook-release/v{{version}}" rev-parse 'v{{version}}^{commit}')"
+git -C "$HOME/.videobook-release/v{{version}}" merge-base --is-ancestor origin/stable origin/main
+npm view videobook dist-tags.latest   # expect {{version}}
+gh release view "v{{version}}" --repo justintanner/videobook
+```
+
+If `origin/stable` is not at the tag, STOP and mail the mayor.
+
+```bash
+release_bead="{{release_bead}}"
+if [ -z "$release_bead" ]; then
+  release_bead=$(bd list --title-contains "Release Videobook v{{version}}" --limit 0 --json 2>/dev/null | jq -r '.[0].id // empty')
+fi
+bd close "$release_bead" --reason "Published videobook {{version}} on npm latest; v{{version}} tagged on stable; stable and main pushed; GitHub release created"
+bd remember --key videobook-last-release "version={{version}} tag=v{{version}} release_bead=$release_bead released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+rm -rf "$HOME/.videobook-release/v{{version}}"
+gc runtime drain-ack
+```
+
+**Exit criteria:** npm `latest` is {{version}}, `origin/stable` is at
+`v{{version}}`, `main` contains it, the GitHub release exists, the release bead
+is closed, and the drain is acknowledged.'''

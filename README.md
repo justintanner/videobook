@@ -566,6 +566,16 @@ npm run release -- 0.1.0             # publish the tested tarball, verify it, fa
 npm run release -- 0.1.0 --push      # push stable, the tag and main, create the GitHub release
 ```
 
+On the Gas City box, the `mol-videobook-release` formula
+(`.beads/formulas/`, served through this repository's `pack.toml` as the
+`videobook-release` import) runs the whole release: it writes the version and
+changelog commit in a fresh clone, waits for green CI on `main`, then runs
+`npm run release -- <version> --push`:
+
+```bash
+gc sling videobook/core.control-dispatcher mol-videobook-release --formula --var version=0.4.1
+```
+
 The release script runs lint, the dead-code check, the type checks, the full
 suite, and the pack-and-install gate, then publishes exactly the tarball that
 gate tested. It reads the token into a temporary npmrc and deletes it
