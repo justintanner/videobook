@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/client";
-import type { Engine } from "videobook-engine";
+import { createEngine, type Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, waitForJob } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
+import { getAllToolDefs } from "../tools/index.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { testBudget } from "../test-budget.js";
 
@@ -139,5 +140,71 @@ describe("xAI image generation", () => {
       model: "grok-imagine-image-2.0",
       images: [{ url: SOURCE }],
     });
+  });
+});
+
+describe("xAI notebook generation previews", () => {
+  let rootDir: string;
+  let engine: Engine;
+  let notebookId: string;
+  let imageCellId: string;
+
+  interface Draft {
+    type: "generate_image" | "generate_video";
+    model: string;
+    operation: string;
+    prompt: string;
+  }
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "videobook-xai-preview-"));
+    engine = createEngine({ rootDir, initialBookName: "xai-previews", durableWrites: false });
+    await engine.ready;
+    const notebook = await engine.notebooks.create("Main");
+    if (!notebook.ok) throw new Error(notebook.error.message);
+    const artifact = await engine.artifacts.create("image", "source");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const image = engine.notebooks.createCell({ type: "image", slot: { row: 0, column: 0 }, outputArtifactId: artifact.value.artifactId });
+    const written = await engine.notebooks.write({ ...notebook.value, cells: [image] });
+    if (!written.ok) throw new Error(written.error.message);
+    notebookId = notebook.value.id;
+    imageCellId = image.id;
+  });
+
+  afterEach(async () => {
+    engine.close();
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function preview(draft: Draft, connectImage = false): Promise<{ provider_path?: string; payload: Record<string, unknown> }> {
+    const tool = getAllToolDefs(engine).find((definition) => definition.name === "preview_notebook_generation")!;
+    const slot = { row: 1, column: 0 };
+    const result = await tool.handler({
+      book_id: engine.book.get().bookId,
+      notebook_id: notebookId,
+      cell_id: engine.notebooks.createCell({ type: draft.type, slot }).id,
+      draft: { ...draft, slot, provider: "xai", tool: draft.type },
+      connections: connectImage ? [{ source_cell_id: imageCellId, target_input: "image" }] : [],
+    });
+    const text = result.content[0]!.text!;
+    expect(result.isError, text).not.toBe(true);
+    return JSON.parse(text) as { provider_path?: string; payload: Record<string, unknown> };
+  }
+
+  it("names v1/images/generations for Grok Imagine Image 2.0 without connected images", async () => {
+    const generation = await preview({ type: "generate_image", model: MODEL, operation: "text_to_image", prompt: "a red kite over the sea" });
+    expect(generation.provider_path).toBe("xai.post.v1.images.generations(request, { otp })");
+    expect(generation.payload).not.toHaveProperty("images");
+  });
+
+  it("names v1/images/edits for Grok Imagine Image 2.0 with a connected image", async () => {
+    const edit = await preview({ type: "generate_image", model: MODEL, operation: "edit_image", prompt: "make @image1 blue" }, true);
+    expect(edit.provider_path).toBe("xai.post.v1.images.edits(request, { otp })");
+    expect(edit.payload).toMatchObject({ model: "grok-imagine-image-2.0", images: [{ url: expect.any(String) }] });
+  });
+
+  it("keeps v1/videos/generations for Grok Imagine Video", async () => {
+    const video = await preview({ type: "generate_video", model: "xai:grok-imagine-video-1.5", operation: "text_to_video", prompt: "a kite drifting over the sea" });
+    expect(video.provider_path).toBe("xai.post.v1.videos.generations(request, { otp })");
   });
 });

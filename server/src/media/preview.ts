@@ -3,7 +3,7 @@ import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
 import { normalizeRefs } from "./refs.js";
-import { isKieSunoModel, isKieVeoModel } from "./wire.js";
+import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "./types.js";
 
 export interface PreviewPlaceholder {
@@ -26,7 +26,7 @@ const ELEVENLABS_PATHS: Record<string, string> = {
   "video-to-music": "elevenlabs.v1.music.videoToMusic(request)",
 };
 
-function providerPath(model: ResolvedModel): string {
+function providerPath(model: ResolvedModel, request: Record<string, unknown>): string {
   switch (model.provider) {
     case "kie":
       if (isKieVeoModel(model.apiId)) return "kie.veo.post.api.v1.veo.generate(request, { otp })";
@@ -35,7 +35,9 @@ function providerPath(model: ResolvedModel): string {
     case "fal":
       return "fal.post.v1.queue.submit()";
     case "xai":
-      return "xai.post.v1.videos.generations(request, { otp })";
+      if (!isXaiImageModel(model.apiId)) return "xai.post.v1.videos.generations(request, { otp })";
+      if (hasXaiImageSources(request)) return "xai.post.v1.images.edits(request, { otp })";
+      return "xai.post.v1.images.generations(request, { otp })";
     case "alibaba":
       return "alibaba.post.api.v1.services.aigc.multimodalGeneration.generation(request)";
     case "elevenlabs":
@@ -97,5 +99,5 @@ export function previewGeneration(args: Record<string, unknown>): { ok: true; pr
   const payload = model.provider === "fal" ? { endpoint_id: model.apiId, input: built.request } : built.request;
   const placeholders: PreviewPlaceholder[] = [];
   collectPlaceholders(payload, "", placeholders);
-  return { ok: true, preview: { model, providerPath: providerPath(model), payload, placeholders } };
+  return { ok: true, preview: { model, providerPath: providerPath(model, built.request), payload, placeholders } };
 }
