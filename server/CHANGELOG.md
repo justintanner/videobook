@@ -6,6 +6,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- A Grok Imagine Image 2.0 generation with connected images that fails before
+  reaching xAI is captured under `v1.images.edits`, the endpoint it would have
+  posted to, instead of `v1.images.generations`, so `apicity har report`
+  resolves it.
+
 ## [0.4.1] - 2026-11-01
 
 ### Added

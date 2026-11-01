@@ -24,7 +24,7 @@ import { testBudget } from "../test-budget.js";
 
 type RecordedRequest = { method: string; path: string; body: Buffer };
 
-const ENV_KEYS = ["KIE_API_KEY", "FAL_API_KEY", "ELEVENLABS_API_KEY", "APICITY_PAYGATE_SECRET"] as const;
+const ENV_KEYS = ["KIE_API_KEY", "FAL_API_KEY", "ELEVENLABS_API_KEY", "XAI_API_KEY", "APICITY_PAYGATE_SECRET"] as const;
 
 function readBody(request: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -140,7 +140,7 @@ describe("generic media generation", () => {
       originalEnv.set(key, process.env[key]);
       process.env[key] = `local-media-${key.toLowerCase()}`;
     }
-    restoreEndpoints = configureProviderEndpoints({ kieBaseURL: baseURL, kieUploadBaseURL: baseURL, falQueueBaseURL: baseURL, elevenlabsBaseURL: baseURL });
+    restoreEndpoints = configureProviderEndpoints({ kieBaseURL: baseURL, kieUploadBaseURL: baseURL, falQueueBaseURL: baseURL, elevenlabsBaseURL: baseURL, xaiBaseURL: baseURL });
   });
 
   afterEach(async () => {
@@ -278,6 +278,37 @@ describe("generic media generation", () => {
       const success = JSON.parse(await readFile(join(harDirectory(), successRow.file), "utf8")) as Har;
       expect(success.log.entries).toHaveLength(1);
       expect(success.log.entries[0]?.request.method).toBe("POST");
+    } finally {
+      await flushHarCaptures();
+      if (previousHome === undefined) delete process.env.VIDEOBOOK_HOME; else process.env.VIDEOBOOK_HOME = previousHome;
+      if (previousMode === undefined) delete process.env.VIDEOBOOK_HAR_CAPTURE; else process.env.VIDEOBOOK_HAR_CAPTURE = previousMode;
+    }
+  });
+
+  it.each([
+    ["xai:grok-imagine-image-2.0", "v1.images.edits", "generate_image", { image: ["https://example.test/source.png"] }],
+    ["xai:grok-imagine-image-2.0", "v1.images.generations", "generate_image", {}],
+    ["xai:grok-imagine-video-1.5", "v1.videos.generations", "generate_video", { image: ["https://example.test/source.png"] }],
+  ] as const)("records %s local failures under %s, the endpoint its xAI request posts to", async (model, endpoint, tool, refs) => {
+    const previousHome = process.env.VIDEOBOOK_HOME;
+    const previousMode = process.env.VIDEOBOOK_HAR_CAPTURE;
+    process.env.VIDEOBOOK_HOME = root;
+    process.env.VIDEOBOOK_HAR_CAPTURE = "all";
+    try {
+      const enqueued = toolJson(await client.callTool({ name: tool, arguments: {
+        book_id: engine.book.get().bookId, model, prompt: "a lighthouse", refs,
+      } }));
+      const assetId = String(enqueued.asset_id);
+      const job = queuedJob(assetId);
+      const invalid = { ...job, options: { ...job.options, aspect_ratio: { invalid: true } } };
+      await expect(runGenerateMedia(engine, invalid, await ownerContext(assetId))).rejects.toThrow(/Aspect ratio/);
+      await flushHarCaptures();
+      const index = await readFile(join(harDirectory(), "index.jsonl"), "utf8");
+      const rows = index.trim().split("\n").map(line => JSON.parse(line) as { file: string });
+      expect(rows).toHaveLength(1);
+      const capture = JSON.parse(await readFile(join(harDirectory(), rows[0]!.file), "utf8")) as Har;
+      expect(capture.log._apicity).toMatchObject({ provider: "xai", endpoint, outcome: "local_error" });
+      expect(requests).toHaveLength(0);
     } finally {
       await flushHarCaptures();
       if (previousHome === undefined) delete process.env.VIDEOBOOK_HOME; else process.env.VIDEOBOOK_HOME = previousHome;

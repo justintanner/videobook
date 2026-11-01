@@ -1,7 +1,7 @@
 import { isKieVeoModel, isXaiImageModel } from "./wire.js";
-import type { ParsedModelId } from "./types.js";
+import type { MediaRefs, ParsedModelId } from "./types.js";
 
-export function generationHarEndpoint(model: ParsedModelId): string {
+export function generationHarEndpoint(model: ParsedModelId, refs: MediaRefs): string {
   switch (model.provider) {
     case "kie":
       if (isKieVeoModel(model.apiId)) return "api.v1.veo.generate";
@@ -9,7 +9,9 @@ export function generationHarEndpoint(model: ParsedModelId): string {
       if (model.apiId === "suno/sounds-generate") return "api.v1.generate.sounds";
       return "api.v1.jobs.createTask";
     case "fal": return "v1.queue.submit";
-    case "xai": return isXaiImageModel(model.apiId) ? "v1.images.generations" : "v1.videos.generations";
+    case "xai":
+      if (!isXaiImageModel(model.apiId)) return "v1.videos.generations";
+      return refs.image?.length ? "v1.images.edits" : "v1.images.generations";
     case "alibaba": return "api.v1.services.aigc.multimodalGeneration.generation";
     case "machgen": return "api.v0.generate";
     case "elevenlabs":

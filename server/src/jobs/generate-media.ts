@@ -121,7 +121,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
 export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
   return withBookContext({ bookId: job.bookId, engine, operation: "generate_media", artifactId: job.assetId,
     attemptId: job.generationId ?? job.assetId, runId: job.runId, model: job.model }, () =>
-    withHarLocalFailure({ provider: resolveModel(job.model).provider, endpoint: generationHarEndpoint(resolveModel(job.model)), input: job }, () => generateMedia(engine, job, ctx)));
+    withHarLocalFailure({ provider: resolveModel(job.model).provider, endpoint: generationHarEndpoint(resolveModel(job.model), job.refs), input: job }, () => generateMedia(engine, job, ctx)));
 }
 
 export function registerGenerateMediaJob(engine: Engine): void {
