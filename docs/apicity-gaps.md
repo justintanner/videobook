@@ -702,11 +702,15 @@ to 512 characters) with `shot_durations`, which must add up to `duration`
 need ids from a Kling elements library, so they are not offered either. Neither
 is Seedance 2.0's `bitrate_mode`.
 
-`@apicity/cost` 0.19.0 prices MiniMax H3 Turbo at its promotional 0.01 USD/s,
-which ends 2026-11-01T06:59Z (list price 0.02 USD/s). After that, its estimates
-come out at half the bill until apicity updates the rate. Vidu Q4 Preview
-takes MP3 audio references of 3-12 s only; Videobook checks the lengths but
-does not convert other formats.
+`@apicity/cost` 0.19.0 priced MiniMax H3 Turbo at its first promotional rate,
+0.01 USD/s, which ended 2026-11-01T06:59Z. MachGen then started a second
+promotion, 0.015 USD/s (25% off the 0.02 USD/s list price) until
+2027-01-01T07:59Z, and `@apicity/cost` 0.24.0 prices Turbo at that rate (§48).
+MachGen's public pricebook names the model `MiniMax-H3-MultiMax`. Its four
+Turbo rows still read 0.015 USD/s at 17:04Z on 2026-11-01, and Videobook's
+Turbo estimates match them (vb-8wxx). Apicity `ac-2atk8i` tracks the move back
+to the list price. Vidu Q4 Preview takes MP3 audio references of 3-12 s only;
+Videobook checks the lengths but does not convert other formats.
 
 **MiniMax H3 2K regeneration (2026-10-27, vb-s91f).** `machgen:MiniMax-H3/upscale`
 is the H3 UPSCALE task as an `upscale_video` entry. It takes one connected book
