@@ -6,20 +6,70 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-01
+
 ### Added
 
 - Optional Omkar trending source for research schedules when `OMKAR_API_KEY`
-  is set, through `@apicity/omkar` 0.21.0. Status reports omkar as not
-  configured when the key is unset. The default Thailand schedule makes one
-  trending request per sample and does not retry it.
-- `@apicity` 0.21.0, including the ElevenLabs `scribe_v2` cost rate.
+  is set, through `@apicity/omkar`. Status reports omkar as not configured
+  when the key is unset. The default Thailand schedule makes one trending
+  request per sample and does not retry it.
+- `@apicity` 0.23.1, including the ElevenLabs `scribe_v2` cost rate.
   MachGen Seedance 2.5 and 2.0 estimates follow that package's public pricebook.
+- Every fal video endpoint in Apicity, including Seedance 2.0 and 2.5, the
+  MiniMax H3 family (LoRA, extend, 3D, lip-sync, camera controls and Max
+  Turbo reference-to-video), Kling O3 Pro and v3, FLUX 3, Wan 2.7, Gemini
+  Omni Flash, LTX 2.5, Luma Ray 3.2, HappyHorse 1.0 and 1.1, Grok Imagine 1.5,
+  Cosmos 3, Sora 2, Veo 3.1 and HeyGen video tools. fal also adds Krea 3
+  text-to-image and edit, Mirelo video-to-audio and Topaz image upscale.
+- xAI Grok Imagine Video 1.5 with first and last frames, Grok Imagine Video
+  1.5 Lite, and Grok Imagine Image 2.0 for text-to-image and edits.
+- MachGen GPT Image 2, GPT Image 2.5 Sunburst and Flare, and Nano Banana 2
+  and 2.1 for text-to-image and edits of up to nine images; MiniMax H3
+  Sharpen for MachGen's own H3 videos; and reference-video edit and extend
+  on MachGen models that support them.
+- Extend video and Upscale video actions on video cells. Upscale uses
+  MachGen's 2K regeneration for MachGen MiniMax H3 videos and otherwise the
+  first configured Topaz upscaler from MachGen, fal or Kie.
+- Live splice preview in the splice inspector and the chat splice review: it
+  plays the first clip into the second at the predicted cut, and a
+  frame-match curve sets the overlap, with a best-match jump and a quality
+  grade. The read-only `preview_splice` tool scores the cuts, and
+  `splice_video` cuts where the preview shows.
+- `change_video_speed` retimes a section with `start_seconds` and
+  `end_seconds`, and its review sheet edits the range, speed and target
+  duration in place with a live preview.
 
 ### Changed
 
 - ElevenLabs `scribe_v2` speech-to-text usage is estimated from the audio
   duration already known to the transcribe, caption, sync, render, archive,
   extend and sound-removal paths. A request with no duration stays unpriced.
+- `trending_research` without arguments creates or addresses the Thailand
+  schedule (Asia/Bangkok, 00:30 cutoff, four samples, top 10), and
+  `/trending schedule` and `/trending TH` both work.
+- The Post inspector shows a live preview, Clip, Caption, Deliver, Link and
+  Results progress, a platform picker, a caption counter against the
+  platform limit and a delivery rail for iPhone, download and X.
+- Save to iPhone has a compact caption and an animated iCloud upload status,
+  including progress a sync relay reports for servers without iCloud Drive.
+- The composer's voice control is a phone button that rings while a call
+  connects and hangs up on hover; the text button ends a call and returns to
+  typing, and send sits beside the chat model menu.
+- Notebook cells show tags naming where their wires go instead of bare port
+  dots.
+- Workspace action settings use a compact grid, so actions such as
+  `/trending` fit on screen.
+- Watermark handles default to 28px of vertical padding.
+
+### Fixed
+
+- Research runs that earlier builds left with stale download errors settle
+  on the next scheduler tick, and their rank cells, summary and status
+  recover without new downloads.
+- Research archive spend stays visible after retention deletes a day book:
+  archive usage moves to the control book, and `trending_research` status
+  reports it.
 
 ### Security
 
