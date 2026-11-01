@@ -56,16 +56,6 @@ export function moveSceneCut(input: {
   return { cutPointsSeconds, selectedIndex: input.index + 1 }
 }
 
-export function adjacentCut(
-  cutPointsSeconds: readonly number[],
-  seconds: number,
-  direction: -1 | 1,
-): number | null {
-  const epsilon = 0.0005
-  if (direction > 0) return cutPointsSeconds.find((cut) => cut > seconds + epsilon) ?? null
-  return [...cutPointsSeconds].reverse().find((cut) => cut < seconds - epsilon) ?? null
-}
-
 export function filmstripTileFrames(input: {
   frames: number
   tiles: number

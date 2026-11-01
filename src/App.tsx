@@ -11234,8 +11234,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <ConfirmSheet
           kind="split"
           ariaLabel="Video split review"
-          tag="SPLIT VIDEO · CHAT"
-          title={splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
+          tag={split.scenes ? 'SPLIT INTO SCENES' : 'SPLIT VIDEO · CHAT'}
+          title={split.scenes
+            ? `${split.cutPointsSeconds.length} cut${split.cutPointsSeconds.length === 1 ? '' : 's'} to review`
+            : splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
           address={split.sourceLabel}
           effect={{
             label: split.outputMode === 'all'
@@ -11252,11 +11254,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           busy={busy}
           applyLabel="Apply split"
           applyFormId={COMMAND_COMPOSER_FORM_ID}
-          hints={(
-            <span>
-              <kbd>← →</kbd> 0.1s · <kbd>⇧← →</kbd> 1s · <kbd>⌥← →</kbd> 0.01s on the focused bound · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
-            </span>
-          )}
+          hints={split.scenes
+            ? (
+                <span>
+                  <kbd>K</kbd> keep · <kbd>X</kbd> remove · <kbd>J</kbd> previous · <kbd>← →</kbd> frame · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
+                </span>
+              )
+            : (
+                <span>
+                  <kbd>← →</kbd> 0.1s · <kbd>⇧← →</kbd> 1s · <kbd>⌥← →</kbd> 0.01s on the focused bound · <kbd>↵</kbd> apply · <kbd>Esc</kbd> cancel
+                </span>
+              )}
           onCancel={dismissPendingCommandPlan}
         >
           <SplitBody

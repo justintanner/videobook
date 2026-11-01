@@ -54,6 +54,7 @@ export default defineConfig({
       'src/videobook/asset-tags.test.ts',
       'src/videobook/splice-preview.test.ts',
       'src/videobook/scene-timeline-edits.test.ts',
+      'src/videobook/cut-review.test.ts',
       'src/videobook/asset-tag-editing.test.ts',
       'src/components/ui/autocomplete-dropdown.test.tsx',
       'src/components/ui/autocomplete-position.test.ts',

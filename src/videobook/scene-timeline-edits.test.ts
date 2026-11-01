@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   addSceneCut,
-  adjacentCut,
   filmstripTileFrames,
   moveSceneCut,
   removeSceneCut,
@@ -28,12 +27,9 @@ describe('scene timeline edits', () => {
       .toEqual({ cutPointsSeconds: [2, 4.5], selectedIndex: 2 })
   })
 
-  it('removes a cut and finds neighbouring cuts', () => {
+  it('removes a cut', () => {
     expect(removeSceneCut({ cutPointsSeconds: [2, 4, 6], index: 1 }))
       .toEqual({ cutPointsSeconds: [2, 6], selectedIndex: 1 })
-    expect(adjacentCut([2, 4, 6], 4, 1)).toBe(6)
-    expect(adjacentCut([2, 4, 6], 4, -1)).toBe(2)
-    expect(adjacentCut([2, 4, 6], 6, 1)).toBeNull()
   })
 
   it('samples filmstrip frames evenly across visible tiles', () => {
