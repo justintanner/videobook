@@ -41,7 +41,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 315
+- Models: 316
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -109,11 +109,11 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:bria/guided-remove-background` | Bria Guided Remove Background | image | edit_image | image 1-1 |  | visible |
 | `fal:bria/fibo-edit-1.5/expand` | Bria Fibo Edit 1.5 Expand | image | edit_image | image 1-1 |  | visible |
 | `fal:fal-ai/marigold-v2` | Marigold V2 | image | edit_image | image 1-1 |  | visible |
-| `machgen:GPT-Image-2.5-Sunburst` | GPT Image 2.5 Sunburst (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
-| `machgen:GPT-Image-2.5-Flare` | GPT Image 2.5 Flare (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
-| `machgen:GPT-Image-2` | GPT Image 2 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
-| `machgen:Nano-Banana-2.1` | Nano Banana 2.1 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
-| `machgen:Nano-Banana-2` | Nano Banana 2 (MachGen) | image | text_to_image, edit_image | image 0-9 |  | visible |
+| `machgen:GPT-Image-2.5-Sunburst` | GPT Image 2.5 Sunburst (MachGen) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `machgen:GPT-Image-2.5-Flare` | GPT Image 2.5 Flare (MachGen) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `machgen:GPT-Image-2` | GPT Image 2 (MachGen) | image | text_to_image, edit_image | image 0-16 |  | visible |
+| `machgen:Nano-Banana-2.1` | Nano Banana 2.1 (MachGen) | image | text_to_image, edit_image | image 0-14 |  | visible |
+| `machgen:Nano-Banana-2` | Nano Banana 2 (MachGen) | image | text_to_image, edit_image | image 0-14 |  | visible |
 | `kie:bytedance/seedance-2-5` | Seedance 2.5 | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-30, video 0-10, audio 0-10 | t2v, i2v, r2v, v2v | visible |
 | `kie:bytedance/seedance-2-5-draft` | Seedance 2.5 Draft Complete | video | upscale_video | none |  | visible |
 | `kie:grok-imagine/image-to-video` | Grok Imagine | video | image_to_video | image 0-7 |  | visible |
@@ -325,6 +325,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:Pixverse-C1` | Pixverse C1 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-3 | t2v, i2v, r2v | visible |
 | `machgen:HappyHorse-1.0` | HappyHorse 1.0 (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, image 0-9 | t2v, i2v, r2v | visible |
 | `machgen:Grok-Imagine-Video` | Grok Imagine Video (MachGen) | video | text_to_video | none |  | visible |
+| `machgen:MiniMax-H3-Omni` | MiniMax H3 Omni (MachGen) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | hidden |
 | `machgen:Wan2.2-A14B` | Wan 2.2 A14B (MachGen) | video | text_to_video, image_to_video | first_frame 0-1 | t2v, i2v | hidden |
 | `machgen:Vidu-Q3-Turbo` | Vidu Q3 Turbo (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |
 | `machgen:Vidu-Q3-Pro` | Vidu Q3 Pro (MachGen) | video | text_to_video, image_to_video, reference_to_video | first_frame 0-1, last_frame 0-1, image 0-7 | t2v, i2v, r2v | hidden |

@@ -482,6 +482,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   machgenModel("Pixverse-C1", "Pixverse C1", MACHGEN_IMAGE_REFERENCES),
   machgenModel("HappyHorse-1.0", "HappyHorse 1.0", MACHGEN_IMAGE_REFERENCES),
   machgenModel("Grok-Imagine-Video", "Grok Imagine Video", {}, { guide: "grok_imagine" }),
+  machgenModel("MiniMax-H3-Omni", "MiniMax H3 Omni", { text: false, references: MACHGEN_MEDIA, requireAny: ["image", "video"] }, { hidden: true, rules: machgenClips(15) }),
   machgenModel("Wan2.2-A14B", "Wan 2.2 A14B", { frames: MACHGEN_FIRST_FRAME }, { hidden: true }),
   machgenModel("Vidu-Q3-Turbo", "Vidu Q3 Turbo", MACHGEN_VIDU_Q3, { hidden: true }),
   machgenModel("Vidu-Q3-Pro", "Vidu Q3 Pro", { ...MACHGEN_VIDU_Q3, referenceDefaults: { resolution: "720p" } }, { hidden: true }),

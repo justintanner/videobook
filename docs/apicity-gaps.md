@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.19.0 (2026-10-26). Image, video and audio
+Videobook now uses Apicity 0.24.0 (2026-11-01). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -852,6 +852,37 @@ schema refuses it locally before any spend. `kie-0190.test.ts` and
 - fal GPT Image 2 and 1.5 are hidden twins (GPT Image 2.5 is the default);
   the frontier listing still shows the ranked ones.
 
+## 48. (decision) Apicity 0.24.0 MachGen edit caps and MiniMax H3 Omni — DECIDED 2026-11-01
+
+Only `@apicity/machgen` and `@apicity/cost` changed in 0.24.0; the other
+packages moved version only.
+
+- `MachGenGenerateRequestSchema` no longer caps `src_image_urls` at 9 for
+  every task (apicity `ac-b9b7kw`). The new `MACHGEN_I2I_MAX_IMAGES` export
+  holds MachGen's edit limits, 16 for GPT Image 2, 2.5 Sunburst and 2.5 Flare
+  and 14 for Nano Banana 2 and 2.1, and the refinement checks I2I against it.
+  Videobook's image slots read those caps, so they take 16 or 14 edit images
+  (vb-5rgsx). This replaces the 9-image note in §47.
+- The refinement still refuses more than 9 images on a video task, but that
+  ceiling is not exported and the field itself no longer carries it. So
+  `server/src/media/machgen.ts` caps reference images at 9 itself wherever a
+  model's R2V grid publishes no image cap (Seedance 2.5, Wan 3.0, Vidu Q4
+  Preview, HappyHorse 1.0 and 1.1). Without it those slots would accept any
+  number of images and fail only when the request is built.
+- `MiniMax-H3-Omni` is a new reference-to-video model. MachGen keeps it out
+  of its own picker (`hideInGeneratePicker`), so it is a `hidden` entry. Its
+  grid allows 768p, 1-15 seconds, `adaptive` plus six aspect ratios, and up
+  to 9 images, 3 videos and 3 audio clips (12 in all). It needs an image or
+  a video. The contract adds audio, a seed and a required prompt of up to
+  65,535 characters. Video and audio clips get the H3 window (2-15 s, 15 s in
+  all). It is priced at 0.02 USD/s, with reference-video seconds billed on
+  top. The combination sweep now builds 36,687 requests. The 34,903 the guards
+  allow pass the schema and price without warnings. These include all 630
+  Omni requests.
+- `@apicity/cost` prices MiniMax H3 Turbo at 0.015 USD/s, the 25% promotion
+  that runs until 2027-01-01T07:59Z (list 0.02). This ends the half-price
+  estimates §44 warned about.
+
 ---
 
 | Status       | Sections                                                            | What Videocity still carries                           |
@@ -867,6 +898,7 @@ schema refuses it locally before any spend. `kie-0190.test.ts` and
 | **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | grid-derived specs plus a capability table in `server/src/media/machgen.ts`; Topaz upscalers uncatalogued; H3 2K regeneration from a connected source (vb-tutc, vb-s91f) |
 | **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871); strict matching in 0.19.0 |
 | **DECIDED**  | §46 KIE 0.19.0 default changes                                      | Seedance 2.5 audio on through the catalog defaults     |
+| **DECIDED**  | §48 MachGen 0.24.0 edit caps and MiniMax H3 Omni                    | 9-image reference ceiling where an R2V grid has none; hidden H3 Omni entry |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |

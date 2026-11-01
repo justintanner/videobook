@@ -39,7 +39,7 @@ const OPERATION_BY_TASK: Record<string, Operation> = {
   R2V: "reference_to_video",
 };
 
-const HIDDEN = ["Vidu-Q3", "Vidu-Q3-Pro", "Vidu-Q3-Pro-Fast", "Vidu-Q3-Turbo", "Vidu-Q4-Preview", "Wan2.2-A14B"];
+const HIDDEN = ["MiniMax-H3-Omni", "Vidu-Q3", "Vidu-Q3-Pro", "Vidu-Q3-Pro-Fast", "Vidu-Q3-Turbo", "Vidu-Q4-Preview", "Wan2.2-A14B"];
 
 function request(id: string, call: WireRequestInput): Record<string, unknown> {
   const built = buildWireRequest(resolveModel(id), call);
@@ -49,6 +49,10 @@ function request(id: string, call: WireRequestInput): Record<string, unknown> {
 
 function options(id: string): Record<string, { enumValues: Array<string | number>; minimum?: number; maximum?: number; defaultValue?: unknown; valueType: string }> {
   return Object.fromEntries(resolveModel(id).options.map((option) => [option.name, option]));
+}
+
+function images(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `https://example.test/source-${index + 1}.png`);
 }
 
 describe("MachGen catalog", () => {
@@ -116,6 +120,13 @@ describe("MachGen catalog", () => {
     expect(options("machgen:MiniMax-H3-Turbo")).toMatchObject({
       resolution: { enumValues: ["480p", "768p"], defaultValue: "768p" },
       duration: { minimum: 4, maximum: 15, defaultValue: 12 },
+    });
+    expect(options("machgen:MiniMax-H3-Omni")).toMatchObject({
+      resolution: { enumValues: ["768p"], defaultValue: "768p" },
+      duration: { minimum: 1, maximum: 15, defaultValue: 12 },
+      aspect_ratio: { enumValues: ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"], defaultValue: "9:16" },
+      generate_audio: { valueType: "boolean", defaultValue: true },
+      seed: { valueType: "integer" },
     });
     expect(options("machgen:Seedance-2.5").aspect_ratio).toMatchObject({ defaultValue: "9:16" });
     expect(options("machgen:Seedance-2.5").seed).toBeUndefined();
@@ -187,7 +198,7 @@ describe("MachGen catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(34_273);
+    expect(accepted).toBe(34_903);
     expect(refused).toEqual(EXPECTED_REFUSALS);
   });
 
@@ -221,6 +232,10 @@ describe("MachGen catalog", () => {
     }],
     ["machgen:MiniMax-H3-Turbo", { prompt: "a fast car", refUrls: { first_frame: [FRAME], last_frame: [LAST] } }, {
       model: "MiniMax-H3-Turbo", task_type: "I2V", src_image_urls: [FRAME, LAST],
+      video_config: { height: 768, duration_secs: 12, aspect_ratio: "9:16", audio: true },
+    }],
+    ["machgen:MiniMax-H3-Omni", { prompt: "the cat walks in", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] } }, {
+      model: "MiniMax-H3-Omni", task_type: "R2V", src_image_urls: [FRAME], src_video_urls: [CLIP], src_audio_urls: [SONG],
       video_config: { height: 768, duration_secs: 12, aspect_ratio: "9:16", audio: true },
     }],
     ["machgen:Seedance-2.0-Fast", { prompt: "rally", refUrls: { first_frame: [FRAME] }, options: { aspect_ratio: "16:9" } }, {
@@ -302,6 +317,13 @@ describe("MachGen catalog", () => {
     ["machgen:Veo-3.1", { prompt: "x", options: { duration: 5 } }, /Duration:/],
     ["machgen:Veo-3.1", { prompt: "x", options: { generate_audio: false } }, /not an option of machgen:Veo-3.1/],
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "1080p" } }, /Resolution:/],
+    ["machgen:Seedance-2.5", { prompt: "x", refUrls: { image: images(10) } }, /accepts at most 9 image refs/],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x" }, /needs one of: image, video/],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { audio: [SONG] } }, /needs one of: image, video/],
+    ["machgen:MiniMax-H3-Omni", { refUrls: { image: [FRAME] } }, /requires a prompt/],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: images(10) } }, /accepts at most 9 image refs/],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: images(9), video: [CLIP, CLIP, CLIP], audio: [SONG] } }, /at most 12 references in all/],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: [FRAME] }, options: { resolution: "1080p" } }, /Resolution:/],
     [UPSCALE, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen re-renders only its own MiniMax-H3 768p videos of 5-15 s/],
     [UPSCALE, { refUrls: { video: [machgenTaskUrl("task-1", 20)] } }, /Video url: the source is 20 s/],
     [SHARPEN, { refUrls: { video: [CLIP] } }, /Video url: connect a video from this book; MachGen sharpens only its own MiniMax-H3 480p or 768p videos of 1-30 s/],
@@ -323,7 +345,9 @@ describe("MachGen catalog", () => {
     ["machgen:Alibaba-Wan-3.0", { prompt: "x", options: { resolution: "1080p", duration: 10 } }, {}, 1.91],
     ["machgen:HappyHorse-1.1", { prompt: "x", options: { resolution: "1080p", duration: 5 } }, {}, 0.85],
     ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p", duration: 5 } }, {}, 0.475],
-    ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "768p", duration: 10 } }, {}, 0.1],
+    ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "768p", duration: 10 } }, {}, 0.15],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: [FRAME] }, options: { duration: 5 } }, {}, 0.1],
+    ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { video: [CLIP] }, options: { duration: 5 } }, { inputDurationSeconds: 4 }, 0.18],
     ["machgen:Seedance-2.0-Fast", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 0.6],
     ["machgen:Seedance-2.0-Fast", { prompt: "x", refUrls: { video: [CLIP] }, options: { resolution: "720p", duration: 5 } }, { inputDurationSeconds: 4 }, 0.63],
     ["machgen:Seedance-2.0-Mini", { prompt: "x", options: { resolution: "480p", duration: 5 } }, {}, 0.165],
@@ -393,7 +417,10 @@ function sweepVariants(apiId: string): SweepVariant[] {
 }
 
 describe("MachGen image catalog", () => {
-  it("catalogs every MachGen image model for text-to-image and edits of up to nine images", () => {
+  it("catalogs every MachGen image model for text-to-image and edits of up to 16 GPT Image or 14 Nano Banana images", () => {
+    const maxImages: Record<string, number> = {
+      "GPT-Image-2": 16, "GPT-Image-2.5-Sunburst": 16, "GPT-Image-2.5-Flare": 16, "Nano-Banana-2": 14, "Nano-Banana-2.1": 14,
+    };
     expect(Object.keys(MACHGEN_IMAGE_SPECS).sort()).toEqual([...MACHGEN_IMAGE_MODELS].sort());
     for (const apiId of MACHGEN_IMAGE_MODELS) {
       const model = resolveModel(`machgen:${apiId}`);
@@ -401,7 +428,7 @@ describe("MachGen image catalog", () => {
       expect(model.title).toMatch(/\(MachGen\)$/u);
       expect(model.entry.hidden ?? false, apiId).toBe(false);
       expect(model.entry.operations).toEqual(["text_to_image", "edit_image"]);
-      expect(model.slots).toEqual([expect.objectContaining({ role: "image", min: 0, max: 9 })]);
+      expect(model.slots, apiId).toEqual([expect.objectContaining({ role: "image", min: 0, max: maxImages[apiId] })]);
     }
   });
 
@@ -471,6 +498,12 @@ describe("MachGen image catalog", () => {
     ["machgen:Nano-Banana-2.1", { prompt: "paint the boat blue", refUrls: { image: [FRAME] } }, {
       model: "Nano-Banana-2.1", task_type: "I2I", prompt: "paint the boat blue", image_config: { height: 2048, aspect_ratio: "9:16" }, src_image_urls: [FRAME],
     }],
+    ["machgen:GPT-Image-2.5-Sunburst", { prompt: "one collage", refUrls: { image: images(16) } }, {
+      model: "GPT-Image-2.5-Sunburst", task_type: "I2I", prompt: "one collage", image_config: { width: 1152, height: 2048 }, src_image_urls: images(16),
+    }],
+    ["machgen:Nano-Banana-2", { prompt: "one collage", refUrls: { image: images(14) } }, {
+      model: "Nano-Banana-2", task_type: "I2I", prompt: "one collage", image_config: { height: 2048, aspect_ratio: "9:16" }, src_image_urls: images(14),
+    }],
   ] as const)("%s builds the documented MachGen image request", (id, call, expected) => {
     expect(request(id, call as WireRequestInput)).toEqual(expected);
   });
@@ -482,7 +515,8 @@ describe("MachGen image catalog", () => {
     ["machgen:GPT-Image-2.5-Flare", { prompt: "x", options: { quality: "low" } }, /not an option of machgen:GPT-Image-2.5-Flare/],
     ["machgen:Nano-Banana-2.1", { prompt: "x", options: { seed: 7 } }, /not an option of machgen:Nano-Banana-2.1/],
     ["machgen:Nano-Banana-2.1", { refUrls: { image: [FRAME] } }, /requires a prompt/],
-    ["machgen:Nano-Banana-2", { prompt: "x", refUrls: { image: Array.from({ length: 10 }, () => FRAME) } }, /accepts at most 9 image refs/],
+    ["machgen:Nano-Banana-2", { prompt: "x", refUrls: { image: images(15) } }, /accepts at most 14 image refs/],
+    ["machgen:GPT-Image-2", { prompt: "x", refUrls: { image: images(17) } }, /accepts at most 16 image refs/],
   ] as const)("%s rejects an image request MachGen would refuse", (id, call, error) => {
     const built = buildWireRequest(resolveModel(id), call as WireRequestInput);
     expect(built.ok).toBe(false);

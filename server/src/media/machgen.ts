@@ -1,5 +1,6 @@
 import { z, type RefinementCtx, type ZodRawShape, type ZodType } from "zod";
 import {
+  MACHGEN_I2I_MAX_IMAGES,
   MACHGEN_VIDEO_GRIDS,
   MACHGEN_VIDEO_MODEL_TASK_TYPES,
   MACHGEN_VIDEO_SHARPEN,
@@ -59,10 +60,10 @@ interface MachGenImageSpec {
   configs: Readonly<Record<string, Readonly<Record<string, ImageConfig>>>>;
   quality: boolean;
   seed: boolean;
-  maxImages: number;
 }
 
 const DEFAULT_DURATION_SECONDS = 5;
+const MAX_REFERENCE_IMAGES = 9;
 const MAX_SHOTS = 6;
 const MAX_SHOT_PROMPT_CHARS = 512;
 const ALL_TASKS: readonly TaskType[] = ["T2V", "I2V", "R2V"];
@@ -84,6 +85,7 @@ const MACHGEN_MODEL_FACTS: Readonly<Record<string, MachGenModelFacts>> = {
   "Vidu-Q3-Pro": VIDU_Q3,
   "MiniMax-H3": { ...H3, maxSecondsWithBothFrames: 15, maxSecondsAtHeight: { 1440: 15 } },
   "MiniMax-H3-Turbo": H3,
+  "MiniMax-H3-Omni": { audioToggle: true, seed: true, promptRequiredFor: ALL_TASKS, maxPromptChars: 65535 },
   "Seedance-2.5": { audioToggle: true, seed: false, promptRequiredFor: ["T2V", "R2V"], maxPromptChars: 25000, smartEditNeedsAdaptive: true },
   "Seedance-2.0": { audioToggle: true, seed: true, promptRequiredFor: TEXT_TASK },
   "Seedance-2.0-Fast": SEEDANCE_20_TIER,
@@ -222,8 +224,8 @@ function heightConfigs(): MachGenImageSpec["configs"] {
   )]));
 }
 
-const GPT_IMAGE: MachGenImageSpec = { resolutions: GPT_IMAGE_TIERS, configs: sizeConfigs(), quality: false, seed: false, maxImages: 16 };
-const NANO_BANANA: MachGenImageSpec = { resolutions: Object.keys(NANO_BANANA_HEIGHTS), configs: heightConfigs(), quality: false, seed: false, maxImages: 14 };
+const GPT_IMAGE: MachGenImageSpec = { resolutions: GPT_IMAGE_TIERS, configs: sizeConfigs(), quality: false, seed: false };
+const NANO_BANANA: MachGenImageSpec = { resolutions: Object.keys(NANO_BANANA_HEIGHTS), configs: heightConfigs(), quality: false, seed: false };
 
 export const MACHGEN_IMAGE_SPECS: Readonly<Record<string, MachGenImageSpec>> = {
   "GPT-Image-2": { ...GPT_IMAGE, quality: true },
@@ -355,7 +357,7 @@ function frameFields(spec: MachGenModelSpec): ZodRawShape {
 }
 
 function referenceField(spec: MachGenModelSpec, kind: ReferenceKind): ZodType {
-  const cap = spec.referenceCaps[kind];
+  const cap = spec.referenceCaps[kind] ?? (kind === "image" ? MAX_REFERENCE_IMAGES : undefined);
   return cap === undefined ? MachGenGenerateRequestSchema.shape[SOURCE_FIELDS[kind]] : z.array(z.string()).max(cap).optional();
 }
 
@@ -551,12 +553,12 @@ function imageConfig(spec: MachGenImageSpec, value: Record<string, unknown>): Im
   return spec.configs[String(value.aspect_ratio)]?.[String(value.resolution)];
 }
 
-function imageInput(spec: MachGenImageSpec): WireSpec["input"] {
+function imageInput(apiId: string, spec: MachGenImageSpec): WireSpec["input"] {
   const [firstAspect, ...otherAspects] = Object.keys(spec.configs) as [string, ...string[]];
   const [firstResolution, ...otherResolutions] = spec.resolutions as [string, ...string[]];
   return z.object({
     prompt: z.string().min(1),
-    image_urls: MachGenGenerateRequestSchema.shape.src_image_urls.unwrap().max(spec.maxImages).optional(),
+    image_urls: MachGenGenerateRequestSchema.shape.src_image_urls.unwrap().max(MACHGEN_I2I_MAX_IMAGES[apiId]!).optional(),
     aspect_ratio: z.enum([firstAspect, ...otherAspects]).default("1:1").describe("Output aspect ratio"),
     resolution: z.enum([firstResolution, ...otherResolutions]).default(firstResolution).describe("Output resolution"),
     ...(spec.quality ? { quality: z.enum(["high", "low"]).default("high").describe("Image quality: high is MachGen's STANDARD level, low its far cheaper EXPRESS level") } : {}),
@@ -669,7 +671,7 @@ export function machgenWire(apiId: string): WireSpec | null {
   }
   const image = MACHGEN_IMAGE_SPECS[apiId];
   if (image) {
-    return { input: imageInput(image), fixed: {}, wrap: (value) => imageRequest(apiId, image, value), request: MachGenGenerateRequestSchema };
+    return { input: imageInput(apiId, image), fixed: {}, wrap: (value) => imageRequest(apiId, image, value), request: MachGenGenerateRequestSchema };
   }
   const spec = MACHGEN_MODELS[apiId];
   if (!spec) return null;
