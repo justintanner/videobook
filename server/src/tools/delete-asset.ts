@@ -60,6 +60,7 @@ async function deleteArtifact(engine: Engine, artifact: Artifact): Promise<ToolR
   if (blockers.length > 0) {
     return timelineFailure(`Artifact is still referenced: ${assetId} (${blockers.map((reference) => reference.kind).join(", ")}); delete it with forget and clear_references to clear them`);
   }
+  const restoreRevision = engine.history.revisions(1)[0]?.hash;
   const timeline = await removeArtifactFromTimeline(engine, assetId);
   if (timeline.error) return timelineFailure(timeline.error);
   const result = await engine.artifacts.delete(assetId, { deleteOwnedMedia: true });
@@ -67,6 +68,7 @@ async function deleteArtifact(engine: Engine, artifact: Artifact): Promise<ToolR
   return jsonResult({
     status: "deleted",
     artifact_id: assetId,
+    ...(restoreRevision ? { restore_revision: restoreRevision } : {}),
     ...(artifact.label ? { label: artifact.label } : {}),
     deleted_at: new Date().toISOString(),
     timeline,

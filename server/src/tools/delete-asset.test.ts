@@ -54,6 +54,32 @@ describe("delete_asset tool", () => {
     expect(manifestResult.isError).toBe(true);
   });
 
+  it("returns the revision that undoes the delete", async () => {
+    const data = Buffer.from("fake-png-data").toString("base64");
+    const uploadResult = await client.callTool({
+      name: "upload_file",
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
+    });
+    const uploaded = JSON.parse((uploadResult.content as Array<{ type: string; text: string }>)[0].text);
+    const result = await client.callTool({
+      name: "delete_asset",
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
+    });
+    const deleted = JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text);
+    expect(deleted.restore_revision).toEqual(expect.any(String));
+
+    const restored = await client.callTool({
+      name: "restore_asset_version",
+      arguments: { book_id: "test-proj", asset_id: deleted.artifact_id, commit_hash: deleted.restore_revision },
+    });
+    expect(restored.isError).toBeFalsy();
+    const manifest = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: deleted.artifact_id, book_id: "test-proj" },
+    });
+    expect(manifest.isError).toBeFalsy();
+  });
+
   it("clears timeline slots referencing the deleted asset", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({

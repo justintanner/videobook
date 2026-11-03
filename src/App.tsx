@@ -228,7 +228,7 @@ import {
   type WorkspaceActionResult,
   type WorkspaceActionReview,
 } from '@/videobook/workspace-action-draft'
-import { actionUnavailableReason, asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands } from '@/videobook/workspace-actions'
+import { actionUnavailableReason, asWorkspaceActionCatalog, initialActionValues, pendingWorkspaceCommands, workspaceActionCommands, workspaceActionLoadsOnOpen } from '@/videobook/workspace-actions'
 import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
@@ -815,27 +815,22 @@ type PendingChatAction =
     }
 
 type WorkspaceNoticeTone = 'info' | 'error'
-type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone }
+type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone; action?: { label: string; onRun: () => void } }
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
 
-function acceptCloudGenerationConsent(stage: {
+function noteCloudGenerationDisclosure(stage: {
   provider?: string | null
   model?: string | null
   tool: string
-}): boolean {
-  if (window.localStorage.getItem(CLOUD_GENERATION_CONSENT_KEY) === 'accepted') {
-    return true
+}, notify: (text: string) => void): void {
+  try {
+    if (window.localStorage.getItem(CLOUD_GENERATION_CONSENT_KEY) === 'accepted') return
+    window.localStorage.setItem(CLOUD_GENERATION_CONSENT_KEY, 'accepted')
+  } catch {
+    return
   }
-  const accepted = window.confirm(
-    `Cloud generation disclosure\n\nProvider/model: ${stage.provider ?? 'unknown'} · ${stage.model ?? stage.tool}\n`
-    + 'Payload class: prompt text and connected media references.\n'
-    + 'Your local source files are sent only when required by the selected model.\n\n'
-    + 'Continue and remember this choice on this device?',
-  )
-  if (!accepted) return false
-  window.localStorage.setItem(CLOUD_GENERATION_CONSENT_KEY, 'accepted')
-  return true
+  notify(`Cloud generation with ${stage.provider ?? 'the provider'} · ${stage.model ?? stage.tool}: prompt text and connected media references are sent to the provider; local source files only when the model needs them.`)
 }
 
 type CellContextMenuTarget =
@@ -2691,9 +2686,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (plannedNotebookId !== currentNotebook.id) {
             throw new Error('The generation plan belongs to another notebook')
           }
-          if (!acceptCloudGenerationConsent(stage)) {
-            throw new Error('Cloud generation cancelled before sending data')
-          }
+          noteCloudGenerationDisclosure(stage, setNotice)
           reviewChat(chat, false, () => setPendingChatAction(null))
           reviewChat(chat, false, () => setPendingCommandPlan(null))
           const accepted = await startNotebookCellRun({
@@ -3948,11 +3941,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!session.asset.objectHash) {
       throw new Error('This image does not expose an immutable object hash')
     }
-    if (!acceptCloudGenerationConsent({
+    noteCloudGenerationDisclosure({
       provider: 'kie',
       model: 'seedream/5-pro-layer-decomposition',
       tool: 'analyze_image_subjects',
-    })) return
+    }, setNotice)
     const requestId = imageSubjectMapRequestRef.current + 1
     imageSubjectMapRequestRef.current = requestId
     updateFullscreenSubjectMap(session.key, {
@@ -3989,7 +3982,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       throw error
     }
-  }, [call, updateFullscreenSubjectMap, watchImageSubjectMap])
+  }, [call, setNotice, updateFullscreenSubjectMap, watchImageSubjectMap])
 
   const editFullscreenSubjects = useCallback(async (
     session: MediaFullscreenSession,
@@ -4011,13 +4004,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? 'fal'
       : 'kie'
     if (
-      (input.operation !== 'remove' || (input.editRegions?.length ?? 0) > 0)
-      && !acceptCloudGenerationConsent({
+      input.operation !== 'remove' || (input.editRegions?.length ?? 0) > 0
+    ) {
+      noteCloudGenerationDisclosure({
         provider: editModelProvider,
         model: editModelId,
         tool: 'edit_image_subjects',
-      })
-    ) return false
+      }, setNotice)
+    }
     const requestId = imageSubjectMapRequestRef.current
     const isCurrent = () => {
       const scope = watchScopeRef.current
@@ -4298,7 +4292,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         const resources = await loadWorkspaceActionResources(action, seededValues, (name, args) => call(name, { book_id: seededValues.book_id ?? bookId, ...args }, { chat }))
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
-        const browse = action.handler.kind === 'tool' && ['list_notebooks', 'list_entities', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
+        const browse = workspaceActionLoadsOnOpen(action, { ...seededValues, book_id: seededValues.book_id ?? bookId })
         const result = browse && action.handler.kind === 'tool' ? {
           message: `${action.title} loaded`, value: await call(action.handler.tool, seededValues, { chat }),
         } : undefined
@@ -5560,9 +5554,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (plannedNotebookId !== currentNotebook.id) {
         throw new Error('The generation plan belongs to another notebook')
       }
-      if (!acceptCloudGenerationConsent(stage)) {
-        throw new Error('Cloud generation cancelled before sending data')
-      }
+      noteCloudGenerationDisclosure(stage, setNotice)
       reviewChat(chat, false, () => setPendingChatAction(null))
       reviewChat(chat, false, () => setPendingCommandPlan(null))
       const accepted = await startNotebookCellRun({
@@ -5899,18 +5891,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? duplicateValue.matches
           : []
         if (matches.length > 0) {
-          const first = recordValue(matches[0])
-          const existing = asString(first?.label)
-            ?? asString(first?.artifact_id)
-            ?? 'existing source'
-          const importAgain = window.confirm(
-            `${file.name} has the same bytes as ${existing}.\n\n`
-            + 'Choose OK to import another copy, or Cancel to reuse the existing source.',
-          )
-          if (!importAgain) {
-            reused += 1
-            continue
-          }
+          reused += 1
+          continue
         }
         const response = await fetch(
           `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
@@ -6350,22 +6332,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (hasCloudStages && !online) {
           throw new Error('Offline: cloud generation is unavailable. The workbook plan remains preserved.')
         }
-        const consentKey = 'videobook.cloud-generation-consent'
-        if (
-          hasCloudStages
-          && window.localStorage.getItem(consentKey) !== 'accepted'
-        ) {
-          const accepted = window.confirm(
-            'Cloud generation disclosure\n\n'
-            + 'Payload class: rewritten prompts, extracted first and last frames, and connected media references.\n'
-            + 'The four scene audio assets remain local and replace generated sound after animation.\n\n'
-            + 'Continue and remember this choice on this device?',
-          )
-          if (!accepted) {
-            throw new Error('Workbook generation cancelled before sending data')
-          }
-          window.localStorage.setItem(consentKey, 'accepted')
-        }
+        if (hasCloudStages) noteCloudGenerationDisclosure({ tool: 'workbook generation' }, setNotice)
         const notebookId = asString(workbookStage.input.notebook_id)
           ?? notebook?.id
         if (!notebookId) {
@@ -6437,17 +6404,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!online) {
             throw new Error('Offline: cloud generation is unavailable. The plan remains preserved.')
           }
-          const consentKey = 'videobook.cloud-generation-consent'
-          if (window.localStorage.getItem(consentKey) !== 'accepted') {
-            const accepted = window.confirm(
-              `Cloud generation disclosure\n\nProvider/model: ${stage.provider ?? 'unknown'} · ${stage.model ?? stage.tool}\n`
-              + 'Payload class: prompt text and connected media references.\n'
-              + 'Your local source files are sent only when required by the selected model.\n\n'
-              + 'Continue and remember this choice on this device?',
-            )
-            if (!accepted) throw new Error('Cloud generation cancelled before sending data')
-            window.localStorage.setItem(consentKey, 'accepted')
-          }
+          noteCloudGenerationDisclosure(stage, setNotice)
           const notebookId = asString(stage.input.notebook_id)
           const cellId = asString(stage.input.cell_id)
           if (!notebookId || !cellId) {
@@ -6558,11 +6515,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const restoreLastCommandPlan = async () => {
     if (!bookId || !lastEditActionId) return
-    const confirmed = window.confirm(
-      'Restore the sequence state before the last applied plan?\n\n'
-      + 'This creates a new forward revision.',
-    )
-    if (!confirmed) return
     setBusy(true)
     try {
       const action = recordValue(await call('get_edit_action', {
@@ -8508,24 +8460,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         selectInput: false,
       }
     }
-    const consentKey = 'videobook.cloud-generation-consent'
-    if (window.localStorage.getItem(consentKey) !== 'accepted') {
-      const accepted = window.confirm(
-        `Cloud generation disclosure\n\nProvider/model: ${preparedAction.draft.action.provider} · ${preparedAction.draft.action.model}\n`
-        + 'Payload class: prompt text and connected media references.\n'
-        + 'Your local source files are sent only when required by the selected model.\n\n'
-        + 'Continue and remember this choice on this device?',
-      )
-      if (!accepted) {
-        return {
-          ok: false,
-          message: 'Cloud generation cancelled before sending data',
-          nextInput: retryInput,
-          selectInput: false,
-        }
-      }
-      window.localStorage.setItem(consentKey, 'accepted')
-    }
+    noteCloudGenerationDisclosure({ provider: preparedAction.draft.action.provider, model: preparedAction.draft.action.model, tool: 'generation' }, setNotice)
     const cellId = preparedAction.draft.cell.id
     const cellAddress = notebookGridTag(preparedAction.draft.cell.slot)
     let materialized = false
@@ -9017,6 +8952,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return await executeRoutedChatActionNow(pendingChatAction.plan, undefined, chat)
   }
 
+  const undoAssetDelete = async (targetBookId: string, artifactId: string, revision: string) => {
+    try {
+      await call('restore_asset_version', { book_id: targetBookId, asset_id: artifactId, commit_hash: revision })
+      if (watchScopeRef.current.bookId === targetBookId) await refreshBookData(targetBookId, notebook?.id)
+      setNotice('Delete undone')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }
+
   const completeWorkspaceToolResult = async (tool: string, result: unknown, args: Record<string, unknown>, title: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
     if (tool === 'download_video' && notebook) {
       return await completeVideoDownload(result, asString(args.url) ?? '', undefined, chat)
@@ -9052,6 +8997,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (watchScopeRef.current.bookId === bookId) {
       const refreshed = await refreshBookData(bookId, notebook?.id, undefined, chat)
       if (notebookActionCreatedCells(notebook, refreshed)) collapseComposerAfterCellCreation(chat)
+    }
+    if (tool === 'delete_asset') {
+      const deleted = recordValue(result)
+      const artifactId = asString(deleted?.artifact_id)
+      const revision = asString(deleted?.restore_revision)
+      const message = `Deleted ${asString(deleted?.label) ?? 'asset'}`
+      if (artifactId && revision) {
+        const restoreBookId = bookId
+        presentChat(chat, () => setNoticeState({ text: message, tone: 'info', action: { label: 'Undo', onRun: () => void undoAssetDelete(restoreBookId, artifactId, revision) } }))
+      }
+      return { ok: true, message }
     }
     if (tool === 'rename_asset') {
       const renamed = recordValue(result)
@@ -12412,7 +12368,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               : undefined}
         replacePendingInput={pendingChatAction?.kind === 'transcribe'}
         notice={notice
-          ? { message: notice.text, tone: notice.tone }
+          ? { message: notice.text, tone: notice.tone, action: notice.action }
           : null}
         outcomeSlot={confirmSheet || actionSheetElement || clipSheetElement ? 'sheet' : 'composer'}
         onEnsureCatalog={refreshComposerCatalog}

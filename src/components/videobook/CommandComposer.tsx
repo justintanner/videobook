@@ -20,7 +20,7 @@ import {
   ComposerHistoryChromeContext,
   type ComposerHistoryChromeValue,
 } from './composer-history-chrome'
-import { ComposerStatusLine } from './ComposerStatusLine'
+import { ComposerStatusLine, type ComposerStatusAction } from './ComposerStatusLine'
 import type { ServerCommand } from '@/lib/command-registry'
 import type { AssetMentionCandidate } from '@/videobook/mention-suggestions'
 import { composerReferenceDescription, composerReferenceSuggestions, replaceComposerMention, type ComposerReference } from '@/videobook/composer-references'
@@ -102,6 +102,7 @@ export interface ComposerOutcome {
 interface ComposerNotice {
   message: string
   tone: 'error' | 'info'
+  action?: ComposerStatusAction
 }
 
 export const COMMAND_COMPOSER_FORM_ID = 'videobook-command-composer-form'
@@ -949,6 +950,7 @@ export function CommandComposer({
     <>
       {noticeForLog && (
         <ComposerStatusLine
+          action={noticeForLog.action}
           message={noticeForLog.message}
           tone={noticeForLog.tone}
           dismissLabel="Dismiss notice"

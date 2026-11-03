@@ -17,6 +17,14 @@ export function workspaceCropPreset(ratio: string, sourceWidth: number | null, s
   return { ratio, x: (1 - w) / 2, y: (1 - h) / 2, w, h }
 }
 
+const LOAD_ON_OPEN_TOOLS = new Set(['list_notebooks', 'list_entities', 'list_book_actions', 'search_archive', 'storage_status', 'doctor', 'read_asset_metadata', 'list_assets', 'asset_history'])
+
+export function workspaceActionLoadsOnOpen(action: WorkspaceAction, values: Record<string, unknown>): boolean {
+  if (action.handler.kind !== 'tool' || !LOAD_ON_OPEN_TOOLS.has(action.handler.tool)) return false
+  if (values.fix === true || values.clean === true) return false
+  return (action.inputSchema.required ?? []).every((name) => values[name] !== undefined && values[name] !== '')
+}
+
 export function hasWorkspaceActionResultLinks(action: WorkspaceAction): boolean {
   return action.handler.kind === 'tool' && ['list_entities', 'list_notebooks', 'asset_history', 'list_book_actions', 'search_archive'].includes(action.handler.tool)
 }
