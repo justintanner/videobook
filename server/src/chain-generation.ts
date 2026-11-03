@@ -47,9 +47,11 @@ function producerLabel(
 
 function producerSettings(params: Record<string, unknown>): Record<string, unknown> {
   const options = params.options;
-  return options !== null && typeof options === "object" && !Array.isArray(options)
-    ? { generationSettings: options }
-    : {};
+  const mode = typeof params.mode === "string" && params.mode.trim() !== "" ? params.mode.trim() : null;
+  return {
+    ...(options !== null && typeof options === "object" && !Array.isArray(options) ? { generationSettings: options } : {}),
+    ...(mode ? { generationMode: mode } : {}),
+  };
 }
 
 function pinTargetInput(pin: PinnedChainTarget): string {
