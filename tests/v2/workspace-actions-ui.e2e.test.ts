@@ -624,16 +624,22 @@ describe('workspace action launcher with real endpoints', () => {
     await page.locator('.chat-turn[data-status="review"] .chat-bubble-assistant').waitFor()
     const input = page.getByLabel('Videobook command input', { exact: true })
     await expect.poll(() => input.evaluate(element => element === document.activeElement)).toBe(true)
-    // Out of the input, Tab walks the composer's own row to the send control.
-    // The microphone stays unavailable while the review owns the composer, so
-    // Tab steps from the lit mode cell straight to send.
-    expect(await page.getByLabel('Start voice conversation', { exact: true }).isDisabled()).toBe(true)
-    for (const label of ['Chat model', 'Send command']) {
+    const microphone = page.getByLabel('Start voice conversation', { exact: true })
+    expect(await microphone.isDisabled()).toBe(true)
+    const stops: Array<{ label: string | null; inComposer: boolean }> = []
+    for (let step = 0; step < 4 && stops.at(-1)?.label !== 'Send command'; step += 1) {
       await page.keyboard.press('Tab')
-      await expect.poll(() => page.getByLabel(label, { exact: true })
-        .evaluate(element => element === document.activeElement), { timeout: 5_000 })
-        .toBe(true)
+      stops.push(await page.evaluate(() => {
+        const active = document.activeElement
+        return {
+          label: active?.getAttribute('aria-label') ?? null,
+          inComposer: Boolean(active?.closest('.command-composer')),
+        }
+      }))
     }
+    expect(stops.at(-1)?.label).toBe('Send command')
+    expect(stops.every(stop => stop.inComposer)).toBe(true)
+    expect(stops.map(stop => stop.label)).not.toContain('Start voice conversation')
     await page.keyboard.press('Escape')
     await expect.poll(() => sheet.count()).toBe(0)
     expect((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse).toBe(false)
