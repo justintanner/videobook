@@ -9,7 +9,7 @@ import { previewPlaceholderUrl } from "../preview-payload.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-models.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
-import { checkSeedanceEditSource, normalizeRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, normalizeRefParams, normalizeRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
@@ -92,6 +92,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   const result = await estimateGeneration(model, {
     prompt: text(input.prompt),
     refUrls: placeholderRefs(source.refs),
+    refParams: normalizeRefParams(input.ref_params),
     options: { ...options, ...source.options },
     mode: text(input.mode),
   }, hints);

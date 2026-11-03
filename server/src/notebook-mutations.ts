@@ -1,5 +1,6 @@
 import type { Engine, NotebookDocument } from "videobook-engine";
 import { normalizeLegacyExtractCells } from "./notebook-cell-outputs.js";
+import { pruneInputParams } from "./generation-input-params.js";
 
 type NotebookMutationResult = Awaited<ReturnType<Engine["notebooks"]["write"]>>;
 
@@ -27,9 +28,9 @@ export async function mutateNotebook(
     const read = engine.notebooks.read(notebookId);
     if (!read.ok) return read;
     return await engine.notebooks.write(
-      mutate(
+      pruneInputParams(mutate(
         normalizeLegacyExtractCells(read.value),
-      ),
+      )),
       {
       operation,
       details,

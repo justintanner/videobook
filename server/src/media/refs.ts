@@ -4,6 +4,7 @@ import { referenceVideoDuration } from "../reference-video-duration.js";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
+import type { RefParams } from "./request.js";
 import { REF_ROLES, type MediaRefs, type RefDurationWindowMs, type RefRole, type ResolvedModel } from "./types.js";
 
 export interface ResolvedRefs {
@@ -90,6 +91,25 @@ export function normalizeRefs(raw: unknown): MediaRefs {
     if (strings.length > 0) refs[role] = strings;
   }
   return refs;
+}
+
+function itemParamValues(raw: unknown): Record<string, number> | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const values = Object.entries(raw as Record<string, unknown>)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]));
+  return values.length > 0 ? Object.fromEntries(values) : null;
+}
+
+export function normalizeRefParams(raw: unknown): RefParams {
+  if (raw === null || typeof raw !== "object") return {};
+  const params: Partial<Record<RefRole, Array<Record<string, number> | null>>> = {};
+  for (const role of REF_ROLES) {
+    const value = (raw as Record<string, unknown>)[role];
+    if (!Array.isArray(value)) continue;
+    const list = value.map(itemParamValues);
+    if (list.some((entry) => entry !== null)) params[role] = list;
+  }
+  return params;
 }
 
 type TimedRole = "video" | "audio";

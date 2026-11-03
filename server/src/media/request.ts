@@ -3,9 +3,12 @@ import type { ZodError } from "zod";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
+export type RefParams = Partial<Record<RefRole, ReadonlyArray<Readonly<Record<string, number>> | null>>>;
+
 export interface WireRequestInput {
   prompt?: string;
   refUrls?: MediaRefs;
+  refParams?: RefParams;
   options?: Record<string, unknown>;
   mode?: string;
 }
@@ -86,8 +89,35 @@ function checkRefs(model: ResolvedModel, refs: MediaRefs, mode: string | undefin
   return null;
 }
 
-function refValue(field: SlotField, url: string, item: Record<string, unknown> | undefined): unknown {
-  return field.urlObject ? { ...item, url } : url;
+type SlotParams = ReadonlyArray<Readonly<Record<string, number>> | null> | undefined;
+
+type ExplicitFrames = Map<string, Set<number>>;
+
+function refValue(field: SlotField, url: string, item: Record<string, unknown> | undefined, params: Record<string, number>): unknown {
+  return field.urlObject ? { ...item, ...params, url } : url;
+}
+
+function itemParams(slot: SlotSpec, params: SlotParams, index: number): Record<string, number> {
+  const values = params?.[index];
+  if (!values) return {};
+  return Object.fromEntries(slot.itemParams.flatMap((spec) => {
+    const value = values[spec.name];
+    return typeof value === "number" && Number.isFinite(value) && !spec.legacyOptions?.[index] ? [[spec.name, value]] : [];
+  }));
+}
+
+function legacyParamOptions(model: ResolvedModel, refParams: RefParams): Record<string, number> {
+  const options: Record<string, number> = {};
+  for (const slot of model.slots) {
+    (refParams[slot.role] ?? []).forEach((values, index) => {
+      for (const spec of slot.itemParams) {
+        const value = values?.[spec.name];
+        const option = spec.legacyOptions?.[index];
+        if (option && typeof value === "number" && Number.isFinite(value)) options[option] = value;
+      }
+    });
+  }
+  return options;
 }
 
 function keyframeIndexes(count: number, lastFrame: number): number[] {
@@ -95,7 +125,7 @@ function keyframeIndexes(count: number, lastFrame: number): number[] {
   return Array.from({ length: count }, (_, index) => Math.round((index * lastFrame) / (count - 1)));
 }
 
-function retimeKeyframeField(model: ResolvedModel, value: Record<string, unknown>, field: SlotField): void {
+function retimeKeyframeField(model: ResolvedModel, value: Record<string, unknown>, field: SlotField, explicit: ReadonlySet<number>): void {
   const fps = model.entry.keyframeFps;
   if (!fps) return;
   const current = getPath(value, field.path);
@@ -108,46 +138,63 @@ function retimeKeyframeField(model: ResolvedModel, value: Record<string, unknown
     const imageUrl = typeof frame === "object" && frame !== null && "image_url" in frame
       ? (frame as { image_url: unknown }).image_url
       : frame;
-    return { image_url: imageUrl, frame_index: indexes[index] };
+    const kept = explicit.has(index) && typeof frame === "object" && frame !== null
+      ? (frame as { frame_index?: unknown }).frame_index
+      : undefined;
+    return { image_url: imageUrl, frame_index: typeof kept === "number" ? kept : indexes[index] };
   }));
 }
 
-function retimeKeyframes(model: ResolvedModel, value: Record<string, unknown>): void {
+function retimeKeyframes(model: ResolvedModel, value: Record<string, unknown>, explicit: ExplicitFrames): void {
   if (!model.entry.keyframeFps) return;
   for (const slot of model.slots) {
     for (const field of slot.fields) {
-      if (field.keyframe) retimeKeyframeField(model, value, field);
+      if (field.keyframe) retimeKeyframeField(model, value, field, explicit.get(field.path) ?? new Set());
     }
   }
 }
 
-function placeSlot(model: ResolvedModel, slot: SlotSpec, value: Record<string, unknown>, urls: readonly string[]): void {
+function placeKeyframes(slot: SlotSpec, field: SlotField, urls: readonly string[], params: SlotParams, cursor: number, explicit: ExplicitFrames): unknown[] {
+  const positions = new Set<number>();
+  const frames = urls.map((url, offset) => {
+    const index = itemParams(slot, params, cursor + offset).frame_index;
+    if (index !== undefined) positions.add(offset);
+    return { image_url: url, frame_index: index ?? 0 };
+  });
+  if (positions.size > 0) explicit.set(field.path, positions);
+  return frames;
+}
+
+function placeSlot(model: ResolvedModel, slot: SlotSpec, value: Record<string, unknown>, urls: readonly string[], params: SlotParams, explicit: ExplicitFrames): void {
   const item = model.entry.refItem?.[slot.role];
   let cursor = 0;
   for (const field of slot.fields) {
     if (cursor >= urls.length) return;
     if (field.keyframe) {
       const taken = field.max === null ? urls.slice(cursor) : urls.slice(cursor, cursor + field.max);
-      setPath(value, field.path, taken.map((url) => ({ image_url: url, frame_index: 0 })));
+      setPath(value, field.path, placeKeyframes(slot, field, taken, params, cursor, explicit));
       cursor += taken.length;
       continue;
     }
     if (!field.multi) {
-      setPath(value, field.path, refValue(field, urls[cursor]!, item));
+      setPath(value, field.path, refValue(field, urls[cursor]!, item, itemParams(slot, params, cursor)));
       cursor += 1;
       continue;
     }
     const take = field.max === null ? urls.length - cursor : Math.min(field.max, urls.length - cursor);
-    setPath(value, field.path, urls.slice(cursor, cursor + take).map((url) => refValue(field, url, item)));
+    const start = cursor;
+    setPath(value, field.path, urls.slice(start, start + take).map((url, offset) => refValue(field, url, item, itemParams(slot, params, start + offset))));
     cursor += take;
   }
 }
 
-function placeRefs(model: ResolvedModel, value: Record<string, unknown>, refs: MediaRefs): void {
+function placeRefs(model: ResolvedModel, value: Record<string, unknown>, refs: MediaRefs, refParams: RefParams): ExplicitFrames {
+  const explicit: ExplicitFrames = new Map();
   for (const slot of model.slots) {
     const urls = refs[slot.role] ?? [];
-    if (urls.length > 0) placeSlot(model, slot, value, urls);
+    if (urls.length > 0) placeSlot(model, slot, value, urls, refParams[slot.role], explicit);
   }
+  return explicit;
 }
 
 function applyOptions(model: ResolvedModel, value: Record<string, unknown>, options: Record<string, unknown>): string | null {
@@ -224,13 +271,14 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   if (isSeedanceEdit(model.id, call.mode) && refs.video?.length !== 1) return { ok: false, error: "Seedance Edit video requires exactly one source video (4–30 seconds)." };
   const promptError = checkPrompt(model, call.prompt);
   if (promptError) return { ok: false, error: promptError };
+  const refParams = call.refParams ?? {};
   const value: Record<string, unknown> = clone(model.entry.defaults) ?? {};
   applyModeDefaults(model, value, refs, call.mode);
-  placeRefs(model, value, refs);
-  const optionError = applyOptions(model, value, call.options ?? {});
+  const explicitFrames = placeRefs(model, value, refs, refParams);
+  const optionError = applyOptions(model, value, { ...call.options, ...legacyParamOptions(model, refParams) });
   if (optionError) return { ok: false, error: optionError };
   applyFrameOptions(model, value, refs, call.mode);
-  retimeKeyframes(model, value);
+  retimeKeyframes(model, value, explicitFrames);
   if (isSeedanceEdit(model.id, call.mode)) {
     value.aspect_ratio = "adaptive";
     value.duration = -1;

@@ -29,6 +29,7 @@ import {
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
+import { cellInputParams, withInputParams } from "../generation-input-params.js";
 import type { NotebookRunAccepted } from "../notebook-run-enqueue.js";
 import { enqueueNotebookRun } from "../notebook-run-enqueue.js";
 import { jobIdForKey, queue, stopBookQueue } from "../queue.js";
@@ -663,7 +664,7 @@ function cellFromInput(
     ...(input.model === undefined ? {} : { model: input.model }),
     ...(input.operation === undefined ? {} : { operation: input.operation }),
     ...(input.tool === undefined ? {} : { tool: input.tool }),
-    ...(input.inputs === undefined ? {} : { inputs: input.inputs }),
+    ...(input.inputs === undefined ? {} : { inputs: withInputParams(input.inputs, {}) }),
     ...(input.output_artifact_id ? { outputArtifactId: input.output_artifact_id } : {}),
     ...(input.references === undefined
       ? {}
@@ -1584,7 +1585,7 @@ export function videobookDomainDefs(
                   ...(patch.model === undefined ? {} : { model: patch.model }),
                   ...(patch.operation === undefined ? {} : { operation: patch.operation }),
                   ...(patch.tool === undefined ? {} : { tool: patch.tool }),
-                  ...(patch.inputs === undefined ? {} : { inputs: patch.inputs }),
+                  ...(patch.inputs === undefined ? {} : { inputs: withInputParams(patch.inputs, cellInputParams(cell)) }),
                   ...(patch.output_artifact_id === undefined ? {} : { outputArtifactId: patch.output_artifact_id }),
                   ...(patch.references === undefined
                     ? {}

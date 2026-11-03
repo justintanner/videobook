@@ -6,7 +6,7 @@ import { generationLabel } from "../artifact-label.js";
 import { previewPlaceholderUrl } from "../preview-payload.js";
 import { resolveModel, UnknownModelError } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
-import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeRefParams, normalizeRefs } from "../media/refs.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { PROVIDER_ENV_KEYS } from "../media/adapters/index.js";
 import { listModels, modelListing } from "../media/listing.js";
@@ -34,6 +34,20 @@ function refsSchema() {
     video: refList.describe("Reference or source videos"),
     audio: refList.describe("Reference or driving audio"),
   }).optional().describe("Media inputs by role; each model accepts the roles list_generation_models reports");
+}
+
+const itemParamList = z.array(z.record(z.string(), z.number()).nullable()).optional();
+
+function refParamsSchema() {
+  return z.object({
+    image: itemParamList,
+    first_frame: itemParamList,
+    last_frame: itemParamList,
+    loop: itemParamList,
+    keyframe: itemParamList,
+    video: itemParamList,
+    audio: itemParamList,
+  }).optional().describe("Per-item values aligned with refs, such as keyframe times: {keyframe: [{timestamp_s: 2}, {timestamp_s: 5}]}. Each model lists its item params under inputs in list_generation_models");
 }
 
 function toolError(text: string): ToolResult {
@@ -88,6 +102,7 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
   const built = buildWireRequest(model, {
     prompt: optionalString(args.prompt),
     refUrls: placeholderRefs(source.refs),
+    refParams: normalizeRefParams(args.ref_params),
     options: { ...optionsOf(args.options), ...source.options },
     mode: optionalString(args.mode),
   });
@@ -104,6 +119,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
   if (!created.ok) return toolError(`Failed to create ${model.media} asset: ${created.error.message}`);
   const { artifactId, path } = created.value;
   const jobId = `generate-${model.media}-${artifactId}-${Date.now()}`;
+  const refParams = normalizeRefParams(args.ref_params);
   const job: GenerateMediaJob = {
     type: "generate_media",
     runId: currentBookContext()?.runId,
@@ -114,6 +130,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     assetDir: path,
     ...(prompt !== undefined ? { prompt } : {}),
     refs,
+    ...(Object.keys(refParams).length > 0 ? { refParams } : {}),
     options: optionsOf(args.options),
     ...(optionalString(args.mode) ? { mode: optionalString(args.mode)! } : {}),
     ...(optionalString(args.replace_audio_with) ? { replaceAudioWith: optionalString(args.replace_audio_with)! } : {}),
@@ -132,6 +149,7 @@ function generateDef(engine: Engine, media: Media): ToolDef {
       model: z.string().describe("Model id such as kie:nano-banana-2-1 or fal:fal-ai/nano-banana-pro; see list_generation_models"),
       prompt: z.string().optional().describe("Prompt; name inputs as @image1, @video1, @audio1, @firstframe or @lastframe"),
       refs: refsSchema(),
+      ref_params: refParamsSchema(),
       mode: z.string().optional().describe("Input mode id for models with several (for example i2v or r2v)"),
       operation: z.enum(OPERATIONS_BY_MEDIA[media]).optional().describe("Optional check that the model supports this operation"),
       options: z.record(z.string(), z.unknown()).optional().describe("Model options from list_generation_models"),

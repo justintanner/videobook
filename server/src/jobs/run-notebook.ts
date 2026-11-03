@@ -51,7 +51,9 @@ import { tryResolveModel } from "../media/descriptor.js";
 import { previewGeneration } from "../media/preview.js";
 import { sourcedGenerationInput } from "../media/generation-source.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, normalizeRefs } from "../media/refs.js";
-import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
+import { REF_ROLES, type MediaRefs, type RefRole, type ResolvedModel } from "../media/types.js";
+import type { RefParams } from "../media/request.js";
+import { cellInputParams } from "../generation-input-params.js";
 import {
   captureFrame,
   concatSourceRanges,
@@ -998,6 +1000,7 @@ function toolArgsWithMentions(
   };
   delete args.generationMode;
   delete args.generationSettings;
+  delete args.inputParams;
   if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
     args.model = typeof cell.inputs?.targetModel === "string" ? cell.inputs.targetModel : "seedance25";
   }
@@ -1034,11 +1037,13 @@ function frameEntry(upstream: readonly UpstreamEntry[], target: string, mode: st
     : upstream.find((entry) => entry.targetInput === target && typeof entry.output === "string" && isImageLikeCell(entry.cell));
 }
 
-function mediaRefsFor(
+type MediaInputPorts = Partial<Record<RefRole, string[]>>;
+
+function mediaInputsFor(
   model: ResolvedModel,
   upstream: readonly UpstreamEntry[],
   mode: string | undefined,
-): MediaRefs {
+): { refs: MediaRefs; ports: MediaInputPorts } {
   const roles = new Set(model.slots.map((slot) => slot.role));
   const modeRoles = new Set(model.modes.find((candidate) => candidate.id === mode)?.roles ?? [...roles]);
   let firstFrame = frameEntry(upstream, "first_frame", mode);
@@ -1063,21 +1068,38 @@ function mediaRefsFor(
     upstreamOfKind(upstream, "audio").filter(({ targetInput }) => targetInput !== "replace_audio"),
     "audio",
   );
-  const candidates: MediaRefs = {
-    first_frame: outputsOf(firstFrame ? [firstFrame] : []),
-    last_frame: outputsOf(lastFrame ? [lastFrame] : []),
-    loop: outputsOf(loop ? [loop] : []),
-    keyframe: outputsOf(keyframes),
-    image: outputsOf(images),
-    video: outputsOf(videos),
-    audio: outputsOf(audios),
+  const candidates: Partial<Record<RefRole, UpstreamEntry[]>> = {
+    first_frame: firstFrame ? [firstFrame] : [],
+    last_frame: lastFrame ? [lastFrame] : [],
+    loop: loop ? [loop] : [],
+    keyframe: keyframes,
+    image: images,
+    video: videos,
+    audio: audios,
   };
   const refs: MediaRefs = {};
+  const ports: MediaInputPorts = {};
   for (const role of REF_ROLES) {
-    const list = candidates[role] ?? [];
-    if (list.length > 0 && modeRoles.has(role)) refs[role] = list;
+    const entries = (candidates[role] ?? []).filter((entry) => typeof entry.output === "string");
+    if (entries.length === 0 || !modeRoles.has(role)) continue;
+    refs[role] = outputsOf(entries);
+    ports[role] = entries.map((entry) => entry.targetInput);
   }
-  return refs;
+  return { refs, ports };
+}
+
+function refParamsFor(model: ResolvedModel, cell: NotebookCell, ports: MediaInputPorts): RefParams {
+  const stored = cellInputParams(cell);
+  const params: Partial<Record<RefRole, Array<Record<string, number> | null>>> = {};
+  for (const slot of model.slots) {
+    const names = new Set(slot.itemParams.map((spec) => spec.name));
+    const list = (ports[slot.role] ?? []).map((port) => {
+      const values = Object.fromEntries(Object.entries(stored[port] ?? {}).filter(([name]) => names.has(name)));
+      return Object.keys(values).length > 0 ? values : null;
+    });
+    if (list.some((values) => values !== null)) params[slot.role] = list;
+  }
+  return params;
 }
 
 function mediaOptions(model: ResolvedModel, cell: NotebookCell): Record<string, unknown> {
@@ -1105,11 +1127,14 @@ export function mediaGenerationArgs(
   });
   const replacementAudio = upstream.find((entry) =>
     entry.targetInput === "replace_audio" && typeof entry.output === "string");
+  const { refs, ports } = mediaInputsFor(model, upstream, mode);
+  const refParams = refParamsFor(model, cell, ports);
   const input: Record<string, unknown> = {
     book_id: bookId,
     model: model.id,
     ...(mentions.prompt ? { prompt: mentions.prompt } : {}),
-    refs: mediaRefsFor(model, upstream, mode),
+    refs,
+    ...(Object.keys(refParams).length > 0 ? { ref_params: refParams } : {}),
     options: mediaOptions(model, cell),
     ...(mode && mode !== "default" ? { mode } : {}),
     ...(replacementAudio?.output && model.media === "video" ? { replace_audio_with: replacementAudio.output } : {}),

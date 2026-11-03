@@ -2,7 +2,7 @@ import { isPreviewPlaceholderUrl, previewPlaceholderUrl } from "../preview-paylo
 import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
-import { normalizeRefs } from "./refs.js";
+import { normalizeRefParams, normalizeRefs } from "./refs.js";
 import { wavespeedDotPath } from "./wavespeed.js";
 import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "./types.js";
@@ -95,6 +95,7 @@ export function previewGeneration(args: Record<string, unknown>): { ok: true; pr
   const built = buildWireRequest(model, {
     prompt: rawPrompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, rawPrompt, refs),
     refUrls: placeholderRefs(refs),
+    refParams: normalizeRefParams(args.ref_params),
     options: optionsOf(args.options),
     mode: stringOrUndefined(args.mode),
   });

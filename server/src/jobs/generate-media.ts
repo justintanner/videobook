@@ -9,7 +9,7 @@ import { assertProviderPayload } from "../provider-prompt-transform.js";
 import { requireApiKey } from "../api-key.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
-import { buildWireRequest } from "../media/request.js";
+import { buildWireRequest, type RefParams } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
 import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
@@ -28,6 +28,7 @@ export type GenerateMediaJob = {
   assetDir: string;
   prompt?: string;
   refs: MediaRefs;
+  refParams?: RefParams;
   options: Record<string, unknown>;
   mode?: string;
   replaceAudioWith?: string;
@@ -97,7 +98,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   if (!source.ok) throw new Error(source.error);
   const uploaded = await uploadRefs(engine, adapter, source.refs);
   const refs = { ...uploaded, sourceVideoIds: [...source.sourceVideoIds, ...uploaded.sourceVideoIds] };
-  const built = buildWireRequest(model, { prompt, refUrls: refs.urls, options: { ...job.options, ...source.options }, mode: job.mode });
+  const built = buildWireRequest(model, { prompt, refUrls: refs.urls, ...(job.refParams ? { refParams: job.refParams } : {}), options: { ...job.options, ...source.options }, mode: job.mode });
   if (!built.ok) throw new Error(built.error);
   assertProviderPayload(built.request, { toolName: model.id, wire: true });
   await engine.metadata.artifacts.write(job.assetId, "generation-payload", storedPayload(model, built.request));
