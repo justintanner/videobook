@@ -10,6 +10,8 @@ import { getAllToolDefs } from "./index.js";
 import { WORKSPACE_ACTION_SURFACES } from "../workspace-action-surfaces.js";
 import { WORKSPACE_UI_ROUTES } from "../../../src/videobook/workspace-ui-routes.js";
 import { renderWorkspaceActionCoverage } from "../command-reference.js";
+import { toolSpendsMoney } from "../paid-tools.js";
+import { FULLSCREEN_COMMANDS, PREVIEW_COMMANDS } from "./command-interaction.js";
 
 describe("workspace action exposure contract", () => {
   const tools = getAllToolDefs(scopedEngine);
@@ -43,6 +45,21 @@ describe("workspace action exposure contract", () => {
     }
     expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).toMatchObject({ group: "Generation" });
     expect(catalog.actions.find((action) => action.id === "tool.list_generation_models")).not.toHaveProperty("generation");
+  });
+
+  it("gives every slash command exactly one interaction mode and keeps fullscreen rare", () => {
+    const catalog = buildWorkspaceActionCatalog(tools, commands);
+    const names = new Set(commands.map((command) => command.command));
+    for (const name of [...PREVIEW_COMMANDS, ...FULLSCREEN_COMMANDS]) expect(names, name).toContain(name);
+    for (const command of commands) {
+      expect(["direct", "preview", "fullscreen"], command.command).toContain(command.interaction);
+      if (command.mcpTool && toolSpendsMoney(command.mcpTool.tool)) expect(command.interaction, command.command).toBe("preview");
+      if (command.interaction === "fullscreen") expect(FULLSCREEN_COMMANDS, command.command).toContain(command.command);
+    }
+    for (const action of catalog.actions) {
+      const command = commands.find((entry) => entry.command === action.command);
+      if (command) expect(action.interaction, action.command).toBe(command.interaction);
+    }
   });
 
   it("preserves real nested schemas and distinct command presets across repeated reads", () => {

@@ -14,6 +14,7 @@ import type {
 import type { Command } from "./tools/video-editing-command-contract.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { toolInputJsonSchema } from "./tools/tool-json-schema.js";
+import { commandInteraction } from "./tools/command-interaction.js";
 
 const GENERATION_MEDIA: Readonly<Record<string, string>> = {
   generate_image: "image",
@@ -125,6 +126,10 @@ function confirmationForTool(tool: ToolDef): WorkspaceAction["confirmation"] {
   return "none";
 }
 
+function interactionFor(command: Command): WorkspaceAction["interaction"] {
+  return command.interaction ?? commandInteraction(command.command, command.uiAction);
+}
+
 function commandSchema(command: Command): ActionInputSchema {
   const schema: ActionInputSchema = {
     type: "object",
@@ -187,6 +192,7 @@ function uiCommandAction(command: Command): WorkspaceAction {
     surfaces: ["slash", "launcher"],
     focus: /^(?:open_|show_|viewer_|settings_|speak_preview)/u.test(action) ? "dialog" : "composer",
     confirmation: "none",
+    interaction: interactionFor(command),
   };
 }
 
@@ -199,7 +205,7 @@ function applicationCommandAction(command: Command): WorkspaceAction {
     group, command: command.command, aliases: [...(command.aliases ?? [])], keywords: [group],
     scope: group === "Notebook" ? "notebook" : "sequence", target: targetForSchema(schema, group),
     handler: { kind: "command", command: command.command as ApplicationCommandId }, inputSchema: schema,
-    surfaces: ["slash", "launcher"], focus: "composer", confirmation: "none",
+    surfaces: ["slash", "launcher"], focus: "composer", confirmation: "none", interaction: interactionFor(command),
   };
 }
 
@@ -230,6 +236,7 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
       : target.kind === "cell" ? ["slash", "launcher", "cell-menu", "selection-menu"] : ["slash", "launcher"],
     focus: tool.name === "transcribe" ? "composer" : "dialog",
     confirmation: confirmationForTool(tool),
+    interaction: command ? interactionFor(command) : "preview",
   };
 }
 
@@ -253,7 +260,7 @@ export function buildWorkspaceActionCatalog(
       group: "Workspace", command: "/actions", aliases: [], keywords: ["commands", "tools", "help"],
       scope: "global", target: { kind: "none" }, handler: { kind: "ui", action: "open_actions" },
       inputSchema: { type: "object", properties: {} }, surfaces: ["slash", "launcher", "button"],
-      focus: "dialog", confirmation: "none",
+      focus: "dialog", confirmation: "none", interaction: "direct",
     });
     reserved.add("/actions");
   }

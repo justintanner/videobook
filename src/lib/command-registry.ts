@@ -62,6 +62,7 @@ export interface ServerCommand {
   canonical?: string;
   aliases?: string[];
   deprecated?: boolean;
+  interaction?: 'direct' | 'preview' | 'fullscreen';
 }
 
 interface QrOutroCommandArgs {

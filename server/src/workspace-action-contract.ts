@@ -104,6 +104,7 @@ export type WorkspaceAction = {
   surfaces: ActionSurface[];
   focus: ActionFocusPolicy;
   confirmation: "none" | "destructive" | "generation" | "external";
+  interaction: "direct" | "preview" | "fullscreen";
 };
 
 type ActionToolCoverage = {

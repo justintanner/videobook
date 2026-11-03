@@ -1,3 +1,5 @@
+import { commandInteraction, type CommandInteraction } from "./command-interaction.js";
+
 type CommandParam = {
   name: string;
   type: "string" | "number" | "boolean" | "string[]";
@@ -45,6 +47,7 @@ export type Command = {
   canonical?: string;
   aliases?: string[];
   deprecated?: boolean;
+  interaction?: CommandInteraction;
 };
 
 type VideoEditingToolContract = {
@@ -284,6 +287,7 @@ export function canonicalizeCommands(commands: readonly Command[]): Command[] {
       aliases,
       deprecated: false,
       exposure: inferredExposure(command),
+      interaction: commandInteraction(command.command, command.uiAction),
     };
     for (const name of [canonical.command, ...aliases]) {
       if (!name.startsWith("/")) throw new Error(`Invalid slash command name: ${name}`);

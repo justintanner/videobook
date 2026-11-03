@@ -231,6 +231,7 @@ import { actionUnavailableReason, asWorkspaceActionCatalog, initialActionValues,
 import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
+import { commandOpensPreviewForm, commandRunsAsPreview, fillDirectTarget } from '@/videobook/command-interaction'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -9173,6 +9174,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: 'Sequence preview opened' }
     }
     if (!asset) {
+      if (action.interaction === 'direct') return { ok: false, message: `${action.command}: select a cell or name one, such as @a1.` }
       await openWorkspaceActions(action.id, values, undefined, undefined, chat)
       return { ok: true, message: 'Choose media for this action' }
     }
@@ -9305,7 +9307,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
       const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))
-      if (advertisedCommand?.workspaceActionId || (advertisedAction && !rest && (advertisedAction.inputSchema.required ?? []).some((name) => !['book_id', 'notebook_id', 'sequence_id'].includes(name)))) {
+      if (advertisedCommand?.workspaceActionId || commandOpensPreviewForm(advertisedAction, rest)) {
         const values = advertisedCommand ? parseSlashCommandArgs(advertisedCommand, resolvedRest) : {}
         await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values, undefined, undefined, chat)
         return { ok: true, message: 'Action options opened' }
@@ -9550,9 +9552,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.autoInject?.includes('notebook_id') && notebook) {
         args.notebook_id = notebook.id
       }
-      if (advertisedAction && advertisedAction.confirmation !== 'none') {
-        await openWorkspaceActions(advertisedAction.id, args, undefined, undefined, chat)
-        return { ok: true, message: 'Review the action before running it' }
+      if (commandRunsAsPreview(advertisedAction)) {
+        await openWorkspaceActions(advertisedAction!.id, args, undefined, undefined, chat)
+        return { ok: true, message: `${advertisedAction!.title} preview ready` }
+      }
+      if (advertisedAction) {
+        const direct = fillDirectTarget(advertisedAction, args, selectedNotebookCell?.outputArtifactId ?? workspacePreview?.media?.assetId ?? mediaFullscreen?.asset.artifactId ?? undefined)
+        if (!direct.ok) return { ok: false, message: direct.message, nextInput: input, selectInput: false }
+        Object.assign(args, direct.args)
       }
       const result = await call(command.mcpTool.tool, args, { chat })
       return await completeWorkspaceToolResult(command.mcpTool.tool, result, args, command.command, chat)
