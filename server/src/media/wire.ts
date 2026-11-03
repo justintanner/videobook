@@ -175,11 +175,43 @@ export function isKieSunoModel(apiId: string): boolean {
   return apiId === "suno/generate" || apiId === "suno/sounds-generate";
 }
 
+const LUMA_RAY_32 = new Set(["luma/agent/ray/v3.2/image-to-video", "luma/agent/ray/v3.2/video-to-video"]);
+
+function present(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0);
+}
+
+function lumaKeyframeIssue(record: Record<string, unknown>): string | null {
+  const keyframes = Array.isArray(record.keyframes) ? record.keyframes : null;
+  const indexes = Array.isArray(record.keyframe_indexes) ? record.keyframe_indexes : null;
+  if (!keyframes && !indexes) return null;
+  if (!keyframes || !indexes || keyframes.length !== indexes.length) return "give one keyframe index per keyframe";
+  const valid = indexes.every((index) => typeof index === "number" && Number.isInteger(index) && index >= 0);
+  return valid && new Set(indexes).size === indexes.length ? null : "keyframe indexes must be unique and non-negative";
+}
+
+function lumaRayInput(request: AnyObject): AnyObject {
+  return request.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    const keyframeIssue = lumaKeyframeIssue(record);
+    if (keyframeIssue) ctx.addIssue({ code: "custom", path: ["keyframe_indexes"], message: keyframeIssue });
+    if (present(record.keyframes)) {
+      for (const field of ["image_url", "end_image_url", "start_image_url"]) {
+        if (present(record[field])) ctx.addIssue({ code: "custom", path: [field], message: "can't be combined with keyframes" });
+      }
+      if (record.loop === true) ctx.addIssue({ code: "custom", path: ["loop"], message: "can't be combined with keyframes" });
+    }
+    if (record.loop === true && present(record.end_image_url)) ctx.addIssue({ code: "custom", path: ["loop"], message: "can't loop with an end frame" });
+    if (record.loop === true && record.hdr === true) ctx.addIssue({ code: "custom", path: ["loop"], message: "can't loop an HDR generation" });
+  }) as unknown as AnyObject;
+}
+
 function falWire(apiId: string): WireSpec | null {
   const schemas = FAL_ENDPOINT_REQUEST_SCHEMAS as unknown as Record<string, ZodType | undefined>;
   const request = schemas[apiId];
   if (!request || !objectShape(request)) return null;
-  return { input: request as unknown as AnyObject, fixed: {}, wrap: identity, request };
+  const input = LUMA_RAY_32.has(apiId) ? lumaRayInput(request as unknown as AnyObject) : request as unknown as AnyObject;
+  return { input, fixed: {}, wrap: identity, request };
 }
 
 export function isXaiImageModel(apiId: string): boolean {
