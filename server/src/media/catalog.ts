@@ -35,7 +35,7 @@ const XAI_MODES: readonly ModeSpec[] = [
 ];
 
 const XAI_15_MODES: readonly ModeSpec[] = [
-  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"] },
+  { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame", "keyframe"] },
   ...XAI_MODES.slice(1),
 ];
 
@@ -52,6 +52,16 @@ const GROK_1080P_ONE_IMAGE: InputLimit = {
   max: 1,
   when: { option: "resolution", equals: "1080p" },
   message: "1080p takes one reference image",
+};
+
+const XAI_KEYFRAME_TIME: ItemParamSpec = {
+  name: "timestamp_s",
+  label: "Time",
+  valueType: "number",
+  minimum: 0,
+  exclusiveMinimum: true,
+  unit: "s",
+  computedDefault: "even_seconds",
 };
 
 const GROK_KEYFRAME_TIME: ItemParamSpec = {
@@ -320,7 +330,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "kie:veo3", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 (Kie)" },
   { id: "kie:veo3_fast", media: "video", operations: ["text_to_video", "image_to_video"], title: "Veo 3 Fast (Kie)" },
   { id: "xai:grok-imagine-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: null, audio: null }, modes: XAI_MODES, defaults: { resolution: "720p" }, pinnedDefaults: ["resolution"] },
-  { id: "xai:grok-imagine-video-1.5", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: "last_frame", audio: null }, modes: XAI_15_MODES },
+  { id: "xai:grok-imagine-video-1.5", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video", "edit_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: "last_frame", audio: null, keyframe: "keyframes" }, itemParams: { keyframe: [XAI_KEYFRAME_TIME] }, modes: XAI_15_MODES },
   { id: "xai:grok-imagine-video-1.5-lite", media: "video", operations: ["text_to_video", "image_to_video"], guide: "grok_imagine", title: "Grok Imagine Video 1.5 Lite (xAI)", dialect: "natural", refs: { first_frame: "image", last_frame: null, image: null, video: null, audio: null }, modes: XAI_LITE_MODES },
   { id: "fal:xai/grok-imagine-video/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine", hidden: true },
   { id: "fal:xai/grok-imagine-video/reference-to-video", media: "video", operations: ["reference_to_video"], guide: "grok_imagine", hidden: true },

@@ -61,6 +61,16 @@ export function isUrlObject(schema: JsonSchema | undefined): boolean {
   return branches(schema).some((branch) => branch.type === "object" && branch.properties?.url !== undefined);
 }
 
+export function nestedUrlObjectProperty(schema: JsonSchema | undefined): string | null {
+  if (!schema || isUrlObject(schema)) return null;
+  for (const branch of branches(schema)) {
+    if (branch.type !== "object") continue;
+    const match = Object.entries(branch.properties ?? {}).find(([, property]) => isUrlObject(property));
+    if (match) return match[0];
+  }
+  return null;
+}
+
 export function isKeyframeItem(schema: JsonSchema | undefined): boolean {
   if (!schema) return false;
   return branches(schema).some((branch) => branch.type === "object"

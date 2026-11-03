@@ -4,6 +4,7 @@ import {
   isArraySchema,
   isKeyframeItem,
   isUrlObject,
+  nestedUrlObjectProperty,
   numberBounds,
   objectProperties,
   propertyAt,
@@ -101,7 +102,13 @@ function fieldLabel(path: string, plural: boolean): string {
 
 function urlPathFor(schema: JsonSchema | undefined): string | undefined {
   if (isKeyframeItem(schema)) return "image_url";
-  return isUrlObject(schema) ? "url" : undefined;
+  if (isUrlObject(schema)) return "url";
+  const nested = nestedUrlObjectProperty(schema);
+  return nested ? `${nested}.url` : undefined;
+}
+
+function urlObjectItem(schema: JsonSchema | undefined): boolean {
+  return isUrlObject(schema) || nestedUrlObjectProperty(schema) !== null;
 }
 
 function expandField(input: JsonSchema, field: string): ExpandedField[] {
@@ -117,7 +124,7 @@ function expandField(input: JsonSchema, field: string): ExpandedField[] {
       multi: true,
       max: bounds.max,
       min: required ? Math.max(1, bounds.min) : 0,
-      urlObject: isUrlObject(items),
+      urlObject: urlObjectItem(items),
       ...(urlPath ? { urlPath } : {}),
       ...(isKeyframeItem(items) ? { keyframe: true } : {}),
     }];
@@ -129,7 +136,7 @@ function expandField(input: JsonSchema, field: string): ExpandedField[] {
     multi: false,
     max: 1,
     min: required ? 1 : 0,
-    urlObject: isUrlObject(schema),
+    urlObject: urlObjectItem(schema),
     ...(urlPath ? { urlPath } : {}),
   }];
 }

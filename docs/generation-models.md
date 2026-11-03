@@ -149,7 +149,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `kie:veo3` | Veo 3 (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `kie:veo3_fast` | Veo 3 Fast (Kie) | video | text_to_video, image_to_video | image 0-n |  | visible |
 | `xai:grok-imagine-video` | Grok Imagine Video (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, image 0-7, video 0-1 | i2v, r2v, v2v | visible |
-| `xai:grok-imagine-video-1.5` | Grok Imagine Video 1.5 (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-14, video 0-1 | i2v, r2v, v2v | visible |
+| `xai:grok-imagine-video-1.5` | Grok Imagine Video 1.5 (xAI) | video | text_to_video, image_to_video, reference_to_video, edit_video | first_frame 0-1, last_frame 0-1, image 0-14, video 0-1, keyframe 0-4 | i2v, r2v, v2v | visible |
 | `xai:grok-imagine-video-1.5-lite` | Grok Imagine Video 1.5 Lite (xAI) | video | text_to_video, image_to_video | first_frame 0-1 |  | visible |
 | `fal:xai/grok-imagine-video/image-to-video` | Grok Imagine | video | image_to_video | image 1-1 |  | hidden |
 | `fal:xai/grok-imagine-video/reference-to-video` | Grok Imagine | video | reference_to_video | image 1-7 |  | hidden |

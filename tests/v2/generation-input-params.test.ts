@@ -100,6 +100,25 @@ describe('per-item input params', () => {
     expect(stored.payload).toEqual(legacy.payload)
   })
 
+  it('places xAI keyframes as image objects, keeping set times and spacing the rest over the duration', () => {
+    const result = previewGeneration({
+      model: 'xai:grok-imagine-video-1.5',
+      prompt: 'Walk through @keyframe1 and @keyframe2',
+      mode: 'i2v',
+      refs: { keyframe: ['art-k1', 'art-k2', 'art-k3'] },
+      ref_params: { keyframe: [null, { timestamp_s: 7.5 }, null] },
+      options: { duration: 12 },
+    })
+    if (!result.ok) throw new Error(result.error)
+    const url = (id: string) => `http://url.resolved.later.for/${id}`
+    expect((result.preview.payload as { keyframes: unknown }).keyframes).toEqual([
+      { image: { url: url('art-k1') }, timestamp_s: 3 },
+      { image: { url: url('art-k2') }, timestamp_s: 7.5 },
+      { image: { url: url('art-k3') }, timestamp_s: 9 },
+    ])
+    expect((result.preview.payload as { prompt: string }).prompt).toBe('Walk through keyframe 1 and keyframe 2')
+  })
+
   it('keeps explicit FLUX keyframe frame indexes and spaces the rest', () => {
     const ports: Array<[string, 'image']> = [['image', 'image'], ['image_2', 'image'], ['image_3', 'image']]
     const spaced = payloadFor('fal:blackforestlabs/flux-3/keyframes-to-video', ports, {})

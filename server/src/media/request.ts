@@ -1,6 +1,7 @@
 import { isSeedanceEdit } from "./seedance-edit.js";
 import type { ZodError } from "zod";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
+import { evenKeyframeSeconds } from "./item-param-defaults.js";
 import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
 export type RefParams = Partial<Record<RefRole, ReadonlyArray<Readonly<Record<string, number>> | null>>>;
@@ -94,7 +95,34 @@ type SlotParams = ReadonlyArray<Readonly<Record<string, number>> | null> | undef
 type ExplicitFrames = Map<string, Set<number>>;
 
 function refValue(field: SlotField, url: string, item: Record<string, unknown> | undefined, params: Record<string, number>): unknown {
-  return field.urlObject ? { ...item, ...params, url } : url;
+  if (!field.urlObject) return url;
+  const value: Record<string, unknown> = clone({ ...item, ...params });
+  setPath(value, field.urlPath ?? "url", url);
+  return value;
+}
+
+function requestDuration(value: Record<string, unknown>): number {
+  const duration = Number(value.duration);
+  return Number.isFinite(duration) && duration > 0 ? duration : 0;
+}
+
+function fillComputedItemParams(model: ResolvedModel, value: Record<string, unknown>): void {
+  for (const slot of model.slots) {
+    const computed = slot.itemParams.filter((spec) => spec.computedDefault === "even_seconds");
+    if (computed.length === 0) continue;
+    for (const field of slot.fields) {
+      const items = field.urlObject && !field.keyframe ? getPath(value, field.path) : undefined;
+      if (!Array.isArray(items)) continue;
+      setPath(value, field.path, items.map((item, index) => {
+        if (item === null || typeof item !== "object") return item;
+        const missing = computed.filter((spec) => typeof (item as Record<string, unknown>)[spec.name] !== "number");
+        return missing.length === 0 ? item : {
+          ...item,
+          ...Object.fromEntries(missing.map((spec) => [spec.name, evenKeyframeSeconds(requestDuration(value), items.length, index)])),
+        };
+      }));
+    }
+  }
 }
 
 function itemParams(slot: SlotSpec, params: SlotParams, index: number): Record<string, number> {
@@ -279,6 +307,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   if (optionError) return { ok: false, error: optionError };
   applyFrameOptions(model, value, refs, call.mode);
   retimeKeyframes(model, value, explicitFrames);
+  fillComputedItemParams(model, value);
   if (isSeedanceEdit(model.id, call.mode)) {
     value.aspect_ratio = "adaptive";
     value.duration = -1;
