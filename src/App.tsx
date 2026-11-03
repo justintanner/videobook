@@ -373,6 +373,12 @@ import {
   planNotebookFollowUp,
   type NotebookFollowUp,
 } from '@/videobook/notebook-follow-up-generation'
+import {
+  contextMenuGenerationLabel,
+  planContextMenuGeneration,
+  selectionGenerationSourceIds,
+  type ContextMenuGenerationCellType,
+} from '@/videobook/notebook-selection-generation'
 import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
 import {
   changedNotebookGridNodes,
@@ -914,34 +920,6 @@ function generationMediaKind(
   if (cellType === 'generate_audio') return 'audio'
   if (cellType === 'generate_image') return 'image'
   return 'video'
-}
-
-type ContextMenuGenerationCellType = Extract<
-  NotebookChatGenerationCommand['cellType'],
-  'generate_image' | 'generate_video'
->
-
-function planContextMenuGeneration(input: {
-  actions: readonly NotebookGenerationAction[]
-  cellId: string
-  cellType: ContextMenuGenerationCellType
-  document: NotebookDocument
-  sourceCellId: string
-}): NotebookChatGenerationDraft {
-  const source = input.document.cells.find((cell) =>
-    cell.id === input.sourceCellId)
-  if (!source) throw new Error('The source asset cell is no longer available')
-  return planNotebookChatGeneration({
-    actions: input.actions,
-    cellId: input.cellId,
-    command: {
-      cellType: input.cellType,
-      mediaKind: generationMediaKind(input.cellType),
-      prompt: '',
-      sourceReferences: [notebookGridTag(source.slot)],
-    },
-    document: input.document,
-  })
 }
 
 function applyReadyOutcome(message: string): ComposerOutcome {
@@ -2115,7 +2093,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     position: { x: number; y: number },
     returnFocus: HTMLElement | null,
   ) => {
-    selectCanvasCell(cellId)
+    const selection = selectedCellIdsRef.current
+    if (selection.size < 2 || !selection.has(cellId)) selectCanvasCell(cellId)
     setCellContextMenu({ target: { kind: 'cell', cellId }, position, returnFocus })
   }, [selectCanvasCell])
 
@@ -10496,7 +10475,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const contextMenuSplitSource = selectedCellId === openContextMenuCellId
     ? selectedSplitSource
     : null
-  const contextMenuGenerationTypes = contextMenuCell && notebook && contextMenuCell.type !== 'goal'
+  const contextMenuGenerationTypesFor = (
+    sourceCellIds: readonly string[],
+  ): ContextMenuGenerationCellType[] => notebook && contextMenuCell && contextMenuCell.type !== 'goal'
     ? (['generate_video', 'generate_image'] as const).filter((cellType) => {
         try {
           planContextMenuGeneration({
@@ -10504,7 +10485,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             cellId: `context-menu-${cellType}`,
             cellType,
             document: notebook,
-            sourceCellId: contextMenuCell.id,
+            sourceCellIds,
           })
           return true
         } catch {
@@ -10512,6 +10493,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       })
     : []
+  const contextMenuSelectionCellIds = contextMenuCell && notebook
+    ? selectionGenerationSourceIds(contextMenuCell.id, selectedCellIds, notebook.cells)
+    : []
+  const contextMenuSelectionGenerationTypes = contextMenuSelectionCellIds.length > 1
+    ? contextMenuGenerationTypesFor(contextMenuSelectionCellIds)
+    : []
+  const contextMenuSelectionGeneration = contextMenuSelectionGenerationTypes.length > 0
+  const contextMenuSourceCellIds = contextMenuSelectionGeneration
+    ? contextMenuSelectionCellIds
+    : contextMenuCell ? [contextMenuCell.id] : []
+  const contextMenuGenerationTypes = contextMenuSelectionGeneration
+    ? contextMenuSelectionGenerationTypes
+    : contextMenuGenerationTypesFor(contextMenuSourceCellIds)
+  const contextMenuGenerationSources = notebook?.cells.filter((cell) =>
+    contextMenuSourceCellIds.includes(cell.id)) ?? []
+  const contextMenuGenerationActions = contextMenuGenerationTypes.map((cellType): NotebookCellContextAction => ({
+    id: cellType,
+    label: contextMenuGenerationLabel(cellType, contextMenuGenerationSources),
+    icon: cellType === 'generate_video' ? 'generate-video' : 'generate-image',
+    disabled: busy,
+  }))
   const contextMenuFollowUpOptions = contextMenuCell && notebook
     && contextMenuVisualAsset?.type === 'video'
     ? notebookFollowUps.filter((followUp) => planNotebookFollowUp({
@@ -10523,7 +10525,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }) !== null)
     : []
   const contextMenuActions: NotebookCellContextAction[] = []
-  if (contextMenuCell && contextMenuNode) {
+  if (contextMenuSelectionGeneration) {
+    contextMenuActions.push(...contextMenuGenerationActions)
+  } else if (contextMenuCell && contextMenuNode) {
     if (contextMenuCell.type === 'post') {
       const deliveryDisabled = busy || mcp.state !== 'ready'
       contextMenuActions.push(
@@ -10585,15 +10589,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled: busy,
       })
     }
-    for (const cellType of contextMenuGenerationTypes) {
-      const video = cellType === 'generate_video'
-      contextMenuActions.push({
-        id: cellType,
-        label: video ? 'Generate video' : 'Generate image',
-        icon: video ? 'generate-video' : 'generate-image',
-        disabled: busy,
-      })
-    }
+    contextMenuActions.push(...contextMenuGenerationActions)
     for (const followUp of contextMenuFollowUpOptions) {
       contextMenuActions.push({
         id: followUp,
@@ -10665,6 +10661,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook || !contextMenuCell) return
     const notebookId = notebook.id
     const sourceCellId = contextMenuCell.id
+    const sourceCellIds = followUp ? [sourceCellId] : contextMenuSourceCellIds
     setBusy(true)
     try {
       const currentNotebook = asNotebook(await call('get_notebook', {
@@ -10678,11 +10675,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actions: generationActions,
         cellId: uuidv7(),
         document: currentNotebook,
-        sourceCellId,
       }
       const draft = followUp
-        ? planNotebookFollowUp({ ...draftInput, followUp })
-        : planContextMenuGeneration({ ...draftInput, cellType })
+        ? planNotebookFollowUp({ ...draftInput, followUp, sourceCellId })
+        : planContextMenuGeneration({ ...draftInput, cellType, sourceCellIds })
       if (!draft) throw new Error(`No available model can ${followUp === 'upscale_video' ? 'upscale' : 'extend'} this video`)
       const materialized = await materializeNotebookChatGeneration({
         bookId,
@@ -10698,12 +10694,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       openCellInspector(materialized.cellId)
       selectGenerationCellPreview(materialized.cellId, undefined, updatedNotebook)
       revealNotebookCanvasCell(materialized.cellId)
-      const movedSource = updatedNotebook?.cells.find((cell) => cell.id === sourceCellId)
-      const sourceAddress = movedSource ? notebookGridTag(movedSource.slot) : materialized.sourceAddresses[0]
+      const sourceAddresses = sourceCellIds.map((cellId, index) => {
+        const movedSource = updatedNotebook?.cells.find((cell) => cell.id === cellId)
+        return movedSource ? notebookGridTag(movedSource.slot) : materialized.sourceAddresses[index]
+      }).join(', ')
       setNotice(
         followUp
-          ? `Added ${materialized.cellAddress} ${draft.action.title} from ${sourceAddress}`
-          : `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${sourceAddress}`,
+          ? `Added ${materialized.cellAddress} ${draft.action.title} from ${sourceAddresses}`
+          : `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${sourceAddresses}`,
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -12284,15 +12282,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {cellContextMenu && contextMenuCell && (
         <NotebookCellContextMenu
           actions={contextMenuActions}
-          address={notebookGridTag(contextMenuCell.slot)}
-          cellType={cellTypeLabel(contextMenuCell.type)}
+          address={contextMenuSelectionGeneration
+            ? `${contextMenuSourceCellIds.length} cells`
+            : notebookGridTag(contextMenuCell.slot)}
+          cellType={contextMenuSelectionGeneration ? 'SELECTION' : cellTypeLabel(contextMenuCell.type)}
           deleteDisabled={busy || deletingCellIds.has(contextMenuCell.id)}
           menuId={cellContextMenuId(contextMenuCell.id)}
+          {...(contextMenuSelectionGeneration
+            ? { menuLabel: `Actions for ${contextMenuSourceCellIds.length} selected cells` }
+            : { onDelete: deleteContextMenuCell })}
           position={cellContextMenu.position}
           returnFocus={cellContextMenu.returnFocus}
           onAction={handleCellContextAction}
           onClose={closeCellContextMenu}
-          onDelete={deleteContextMenuCell}
         />
       )}
 
