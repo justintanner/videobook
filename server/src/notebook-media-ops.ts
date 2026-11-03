@@ -144,15 +144,65 @@ function validateSplitRange(
   return Math.min(range.endSeconds, sourceDuration) - range.startSeconds;
 }
 
+type SourceVideoTiming = {
+  durationSeconds: number;
+  fps: number;
+  hasAudio: boolean;
+};
+
+const FRAME_EPSILON = 1e-6;
+
+function microseconds(seconds: number): number {
+  return Math.round(seconds * 1_000_000) / 1_000_000;
+}
+
+export function frameAlignedRange(
+  range: MediaRange,
+  timing: Pick<SourceVideoTiming, "durationSeconds" | "fps">,
+): MediaRange {
+  const endSeconds = Math.min(range.endSeconds, timing.durationSeconds);
+  if (!(timing.fps > 0)) return { startSeconds: range.startSeconds, endSeconds };
+  const startFrame = Math.max(0, Math.ceil(range.startSeconds * timing.fps - FRAME_EPSILON));
+  const endFrame = Math.floor(endSeconds * timing.fps + FRAME_EPSILON);
+  return {
+    startSeconds: microseconds(startFrame / timing.fps),
+    endSeconds: microseconds(endFrame / timing.fps),
+  };
+}
+
+function alignedSplitRange(
+  sourceArtifactId: string,
+  timing: SourceVideoTiming,
+  range: MediaRange,
+): MediaRange {
+  validateSplitRange(sourceArtifactId, timing.durationSeconds, range);
+  const aligned = frameAlignedRange(range, timing);
+  if (!(aligned.endSeconds > aligned.startSeconds)) {
+    throw new Error(
+      `Cannot split artifact ${sourceArtifactId}: requested range ${range.startSeconds}-${range.endSeconds}s is shorter than one frame`,
+    );
+  }
+  return aligned;
+}
+
+function sourceVideoTiming(probe: ProbeResult): SourceVideoTiming {
+  return {
+    durationSeconds: probe.videoDuration || probe.duration,
+    fps: probe.fps,
+    hasAudio: probe.hasAudio,
+  };
+}
+
 async function splitMaterializedRange(
   engine: Engine,
   sourceArtifactId: string,
   sourcePath: string,
-  sourceDuration: number,
-  range: MediaRange,
+  timing: SourceVideoTiming,
+  requestedRange: MediaRange,
   title: string,
 ): Promise<{ artifactId: string; durationSeconds: number }> {
-  const duration = validateSplitRange(sourceArtifactId, sourceDuration, range);
+  const range = alignedSplitRange(sourceArtifactId, timing, requestedRange);
+  const duration = microseconds(range.endSeconds - range.startSeconds);
   const outDir = await mkdtemp(join(tmpdir(), "vb-split-"));
   const outPath = join(outDir, "split.mp4");
   try {
@@ -169,6 +219,7 @@ async function splitMaterializedRange(
       "-map",
       "0:a:0?",
       ...H264_MEDIUM,
+      ...(timing.hasAudio ? ["-af", `atrim=end=${duration},asetpts=PTS-STARTPTS`] : []),
       ...AUDIO_OPTS,
       "-movflags",
       "+faststart",
@@ -221,14 +272,14 @@ export async function splitSourceRanges(
         `Cannot split artifact ${sourceArtifactId}: source has no video stream`,
       );
     }
-    const sourceDuration = sourceProbe.videoDuration || sourceProbe.duration;
-    if (!(sourceDuration > 0)) {
+    const timing = sourceVideoTiming(sourceProbe);
+    if (!(timing.durationSeconds > 0)) {
       throw new Error(
         `Cannot split artifact ${sourceArtifactId}: source video duration is unavailable`,
       );
     }
     for (const request of requests) {
-      validateSplitRange(sourceArtifactId, sourceDuration, request.range);
+      alignedSplitRange(sourceArtifactId, timing, request.range);
     }
     const results = new Array<{ artifactId: string; durationSeconds: number }>(
       requests.length,
@@ -246,7 +297,7 @@ export async function splitSourceRanges(
             engine,
             sourceArtifactId,
             source.path,
-            sourceDuration,
+            timing,
             request.range,
             request.title,
           );
@@ -327,12 +378,11 @@ export async function concatSourceRanges(
         `Cannot concat artifact ${sourceArtifactId}: source has no video stream`,
       );
     }
-    const sourceDuration = probe.videoDuration || probe.duration;
-    for (const range of ranges) {
-      validateSplitRange(sourceArtifactId, sourceDuration, range);
-    }
+    const timing = sourceVideoTiming(probe);
+    const alignedRanges = ranges.map((range) =>
+      alignedSplitRange(sourceArtifactId, timing, range));
     const hasAudio = probe.hasAudio;
-    const filter = buildConcatFilterGraph(ranges, hasAudio);
+    const filter = buildConcatFilterGraph(alignedRanges, hasAudio);
     await runFfmpeg([
       "-y",
       "-i",
@@ -365,7 +415,7 @@ export async function concatSourceRanges(
     return {
       artifactId,
       durationSeconds: outputProbe.duration
-        || ranges.reduce(
+        || alignedRanges.reduce(
           (total, range) => total + (range.endSeconds - range.startSeconds),
           0,
         ),

@@ -8,7 +8,9 @@ import { createEngine, type Engine } from "videobook-engine";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
   captureFrame,
+  concatSourceRanges,
   extractSourceAudio,
+  frameAlignedRange,
   splitSourceRange,
 } from "../../server/src/notebook-media-ops.js";
 import { applyAnalysisResults } from "../../server/src/notebook-workflow.js";
@@ -59,6 +61,29 @@ async function makeLowRateMp4(path: string): Promise<void> {
     "-c:a",
     "aac",
     "-shortest",
+    path,
+  ]);
+}
+
+async function makeLongAudioMp4(path: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=size=160x120:rate=30:duration=2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2.07",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
     path,
   ]);
 }
@@ -171,6 +196,58 @@ describe("notebook local media and analysis fan-out", () => {
     if (!manifest.ok) return;
     expect(manifest.value.files.some((file) =>
       file.name.endsWith(".jpg"))).toBe(true);
+  }, testBudget(60_000));
+
+  it("snaps split ranges inward to whole frames inside the video", () => {
+    const timing = { durationSeconds: 2, fps: 30 };
+    expect(frameAlignedRange({ startSeconds: 0, endSeconds: 15.01 }, { durationSeconds: 18.333, fps: 30 }))
+      .toEqual({ startSeconds: 0, endSeconds: 15 });
+    expect(frameAlignedRange({ startSeconds: 0.02, endSeconds: 1 }, timing))
+      .toEqual({ startSeconds: 0.033333, endSeconds: 1 });
+    expect(frameAlignedRange({ startSeconds: 1, endSeconds: 2.07 }, timing))
+      .toEqual({ startSeconds: 1, endSeconds: 2 });
+    expect(frameAlignedRange({ startSeconds: 0.5, endSeconds: 1.5 }, { durationSeconds: 2, fps: 0 }))
+      .toEqual({ startSeconds: 0.5, endSeconds: 1.5 });
+  });
+
+  it("never outputs a clip longer than the requested range when the source audio runs past the video", async () => {
+    if (!engine || !rootDir) throw new Error("engine missing");
+    const sourcePath = join(rootDir, "long-audio.mp4");
+    await makeLongAudioMp4(sourcePath);
+    const source = await engine.artifacts.create({ kind: "video", label: "long audio" });
+    expect(source.ok).toBe(true);
+    if (!source.ok) return;
+    const ingested = await engine.files.writeFromPath(
+      source.value.artifactId,
+      "original.mp4",
+      sourcePath,
+    );
+    expect(ingested.ok).toBe(true);
+
+    const head = await splitSourceRange(
+      engine,
+      source.value.artifactId,
+      { startSeconds: 0, endSeconds: 1.01 },
+      "head",
+    );
+    const tail = await splitSourceRange(
+      engine,
+      source.value.artifactId,
+      { startSeconds: 1, endSeconds: 2.07 },
+      "tail",
+    );
+    const joined = await concatSourceRanges(
+      engine,
+      source.value.artifactId,
+      [{ startSeconds: 0, endSeconds: 0.5 }, { startSeconds: 1.5, endSeconds: 2.07 }],
+      "joined",
+    );
+    expect(head.durationSeconds).toBeLessThanOrEqual(1);
+    expect(head.durationSeconds).toBeGreaterThan(0.98);
+    expect(tail.durationSeconds).toBeLessThanOrEqual(1);
+    expect(tail.durationSeconds).toBeGreaterThan(0.98);
+    expect(joined.durationSeconds).toBeLessThanOrEqual(1);
+    expect(joined.durationSeconds).toBeGreaterThan(0.98);
   }, testBudget(60_000));
 
   it("rejects split ranges that start at the end of the source video", async () => {
