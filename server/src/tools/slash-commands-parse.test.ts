@@ -776,10 +776,10 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(cmd.uiAction).toBe("open_inbox");
     });
 
-    it("/copy has uiAction=copy_clipboard and parses @asset_id", () => {
-      const cmd = findCommand("/copy");
+    it("/copy-name has uiAction=copy_clipboard and parses @asset_id", () => {
+      const cmd = findCommand("/copy-name");
       expect(cmd.uiAction).toBe("copy_clipboard");
-      const args = simulateParse("/copy", "@hero-intro");
+      const args = simulateParse("/copy-name", "@hero-intro");
       expect(args.asset_id).toBe("hero-intro");
     });
 

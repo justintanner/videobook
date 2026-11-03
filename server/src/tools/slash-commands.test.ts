@@ -108,7 +108,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/scene-new");
     expect(commandNames).toContain("/entities");
     expect(commandNames).toContain("/jobs");
-    expect(commandNames).toContain("/sync");
+    expect(commandNames).toContain("/storage-sync");
     expect(commandNames).toContain("/providers");
     expect(commandNames).toContain("/diagnostics");
     expect(commandNames).not.toContain("/plan");
@@ -148,8 +148,8 @@ describe("slash_commands tool", () => {
     expect(commands.find((c) => c.command === "/activity")?.aliases).toEqual(expect.arrayContaining(["/status", "/revisions"]));
     expect(commandNames).not.toContain("/grok-upscale");
     expect(commandNames).toContain("/play");
-    expect(commandNames).toContain("/qart");
-    expect(commandNames).toContain("/inject-first-frame");
+    expect(commandNames).toContain("/qr-art");
+    expect(commandNames).toContain("/replace-first-frame");
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
@@ -166,21 +166,21 @@ describe("slash_commands tool", () => {
     expect(syncAudio.mcpTool?.autoInject).toContain("book_id");
     expect(syncAudio.params.map((p) => p.name)).toEqual(["asset_id", "mappings"]);
 
-    const qart = commands.find((c) => c.command === "/qart")!;
+    const qart = commands.find((c) => c.command === "/qr-art")!;
     expect(qart.mcpTool?.tool).toBe("create_qart");
     expect(qart.mcpTool?.autoInject).toContain("book_id");
     expect(qart.params.map((p) => p.name)).toEqual(["image_ref", "value"]);
 
-    expect(commandNames).toContain("/qrbtf");
+    expect(commandNames).toContain("/qr-style");
 
-    const qrbtf = commands.find((c) => c.command === "/qrbtf")!;
+    const qrbtf = commands.find((c) => c.command === "/qr-style")!;
     expect(qrbtf.mcpTool?.tool).toBe("create_qrbtf");
     expect(qrbtf.mcpTool?.autoInject).toContain("book_id");
     expect(qrbtf.params.map((p) => p.name)).toEqual(["value", "style"]);
 
-    expect(commandNames).not.toContain("/qr-outro");
-    expect(commandNames).toContain("/outroqr");
-    const qrOutro = commands.find((c) => c.command === "/outroqr")!;
+    expect(commandNames).not.toContain("/outroqr");
+    expect(commandNames).toContain("/qr-outro");
+    const qrOutro = commands.find((c) => c.command === "/qr-outro")!;
     expect(qrOutro.mcpTool?.tool).toBe("create_qr_outro");
     expect(qrOutro.mcpTool?.autoInject).toContain("book_id");
     expect(qrOutro.mcpTool?.injectParams).toEqual({
@@ -253,7 +253,7 @@ describe("slash_commands tool", () => {
       "sound",
     ]);
 
-    const injectFirstFrame = commands.find((c) => c.command === "/inject-first-frame")!;
+    const injectFirstFrame = commands.find((c) => c.command === "/replace-first-frame")!;
     expect(injectFirstFrame.mcpTool?.tool).toBe("inject_first_frame");
     expect(injectFirstFrame.mcpTool?.autoInject).toContain("book_id");
     expect(injectFirstFrame.params.map((p) => p.name)).toEqual([
@@ -300,7 +300,7 @@ describe("slash_commands tool", () => {
     expect(commands.find((c) => c.command === "/trim")?.aliases).toContain("/trim-video");
     expect(commands.find((c) => c.command === "/render-video")?.aliases).toContain("/render");
     expect(commands.find((c) => c.command === "/activity")?.aliases).toContain("/status");
-    expect(commands.find((c) => c.command === "/copy-media")?.aliases).toContain("/copy-video");
+    expect(commands.find((c) => c.command === "/copy")?.aliases).toContain("/copy-video");
   });
 
   it("lists a compact summary unless detail is full", async () => {

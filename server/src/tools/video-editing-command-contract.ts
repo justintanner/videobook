@@ -182,7 +182,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "analyze_jokes", exposure: "direct", command: "/analyze-jokes", purpose: "Analyze edit points around jokes" },
   { tool: "suggest_sfx", exposure: "direct", command: "/sfx", purpose: "Suggest sound-effect placements" },
   { tool: "apply_sfx", exposure: "internal", purpose: "Generate and mix sound effects" },
-  { tool: "inject_first_frame", exposure: "direct", command: "/inject-first-frame", purpose: "Replace frame zero with an image" },
+  { tool: "inject_first_frame", exposure: "direct", command: "/replace-first-frame", purpose: "Replace frame zero with an image" },
   { tool: "extract_frame", exposure: "direct", command: "/extract-frame", purpose: "Extract the first, last or a timed video frame" },
   { tool: "extract_notebook_frame", exposure: "internal", purpose: "Extract a frame from a video cell into a new image cell" },
   { tool: "extract_notebook_audio", exposure: "internal", purpose: "Extract audio from a video cell into a new audio cell" },

@@ -268,14 +268,13 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/collapse` — Close the project selector (left), chat controls (right), or both; UI: `sidebar_collapse`
 - `/commit-edit-intent` — Commit an unchanged previewed CommandPlan edit stage atomically; MCP: `commit_edit_intent`
 - `/commit-music-video` — Apply a reviewed music-video draft once, checking its timeline, source and beat-map revisions. Returns the previous action on a retry.; MCP: `commit_music_video`
-- `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
 - `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
 - `/connect-service` — Start connecting an X account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.; MCP: `connect_service`
 - `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
 - `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
-- `/copy` — Copy asset name; UI: `copy_clipboard`
-- `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `export_asset_file`
+- `/copy` (aliases: `/copy-media`, `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `export_asset_file`
+- `/copy-name` — Copy an asset's name to the clipboard; UI: `copy_clipboard`
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
 - `/create-character` — Create a new character artifact, optionally seeded from existing image artifacts; MCP: `create_character`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
@@ -343,10 +342,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/goal` — Build a portrait video in Cinematic or IG Influencer style; choose format, delivery, camera and light before the frame, then review each stage; UI: `start_goal`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
+- `/image-sheet` (aliases: `/concat`) — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
 - `/import` — Import a video from a URL (YouTube, X, Instagram, TikTok and more); MCP: `download_video`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
-- `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/insert` (aliases: `/assign`, `/audio-add`) — Preview inserting media into the sequence; preview or workspace operation
 - `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
@@ -381,7 +380,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
 - `/open` — Open asset in viewer; UI: `open_asset`
 - `/original` — Show original uncropped image; UI: `viewer_set_original`
-- `/outroqr` — Generate a 10-second animated QR outro with bundled impact sound; MCP: `create_qr_outro`
 - `/overlay` (aliases: `/osg`) — Place an on-screen graphic overlay on a video; UI: `open_osg`
 - `/overwrite` — Preview overwriting sequence content with media; preview or workspace operation
 - `/pad` — Add a whole-second video tail with black frames and silence; MCP: `pad_video`
@@ -406,8 +404,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/prompt-new` — Create a reusable prompt entity; MCP: `create_entity`
 - `/provider-key-status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.; MCP: `provider_key_status`
 - `/providers` (aliases: `/keys`, `/connect-x`) — Open provider credentials and routing settings; UI: `open_provider_keys`
-- `/qart` — Create scan-safe color and monochrome QR mosaics from an image source; MCP: `create_qart`
-- `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
+- `/qr-art` (aliases: `/qart`) — Create scan-safe color and monochrome QR mosaics from an image source; MCP: `create_qart`
+- `/qr-outro` (aliases: `/outroqr`) — Generate a 10-second animated QR outro with bundled impact sound; MCP: `create_qr_outro`
+- `/qr-style` (aliases: `/qrbtf`) — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
 - `/read-asset-metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.; MCP: `read_asset_metadata`
 - `/read-file-at-commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.; MCP: `read_file_at_commit`
 - `/read-transcript` — Read a video or audio asset's transcript: timed per-word cues when available, otherwise plain text; kind reports timed, plain, silence or missing. raw returns the stored file unparsed.; MCP: `read_transcript`
@@ -430,6 +429,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
 - `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
 - `/replace-audio` — Replace the audio track of a video asset with an audio asset's audio; MCP: `replace_video_audio`
+- `/replace-first-frame` (aliases: `/inject-first-frame`) — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/replace-sequence-clip-with-search-moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment; MCP: `replace_sequence_clip_with_search_moment`
 - `/restore-asset-version` — Restore an asset from an immutable revision as a new revision; MCP: `restore_asset_version`
 - `/restore-edit-action` — Create a forward revision restoring a prior edit action or revision; MCP: `restore_edit_action`
@@ -470,11 +470,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/split` (aliases: `/split-clip`) — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
 - `/split-video` — Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.; MCP: `split_video`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
+- `/storage-sync` (aliases: `/sync`) — Publish pending content-addressed objects; MCP: `storage_sync`
 - `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`
 - `/suggest-asset-tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.; MCP: `suggest_asset_tags`
 - `/suggest-cuts` — Suggest video trims for pacing and transitions, using dialogue when available; MCP: `suggest_cuts`
 - `/suggest-sequence-coverage` — Rank existing visual moments for a sequence range before offering generation; MCP: `suggest_sequence_coverage`
-- `/sync` — Publish pending content-addressed objects; MCP: `storage_sync`
 - `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
 - `/tool-apply-sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.; MCP: `apply_sfx`

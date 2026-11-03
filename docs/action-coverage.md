@@ -28,8 +28,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.clip-audio` | `/clip-audio` | /volume, /audio-set | sequence | clip: clip_id | `/clip-audio` | slash, launcher | composer | none |
 | `command.close` | `/close` |  | book | none | `close_viewer` | slash, launcher | composer | none |
 | `command.collapse` | `/collapse` |  | book | none | `sidebar_collapse` | slash, launcher | composer | none |
-| `command.copy` | `/copy` |  | book | asset: asset_id | `copy_clipboard` | slash, launcher | composer | none |
-| `command.copy-media` | `/copy-media` | /copy-video | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
+| `command.copy` | `/copy` | /copy-media, /copy-video | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
+| `command.copy-name` | `/copy-name` |  | book | asset: asset_id | `copy_clipboard` | slash, launcher | composer | none |
 | `command.crop` | `/crop` | /reframe | book | asset: asset_id | `open_crop` | slash, launcher | dialog | none |
 | `command.diagnostics` | `/diagnostics` | /storage | book | none | `open_diagnostics` | slash, launcher | dialog | none |
 | `command.download` | `/download` |  | book | asset: asset_id | `export_asset_file` | slash, launcher, cell-menu | dialog | none |
@@ -107,7 +107,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.clean_video_audio` | `/clean-audio` |  | book | asset: asset_id | `clean_video_audio` | slash, launcher, cell-menu | dialog | generation |
 | `tool.commit_edit_intent` | `/commit-edit-intent` |  | book | none | `commit_edit_intent` | slash, launcher | dialog | none |
 | `tool.commit_music_video` | `/commit-music-video` |  | book | none | `commit_music_video` | slash, launcher | dialog | none |
-| `tool.concat_images` | `/concat` |  | book | asset selection: image_refs | `concat_images` | slash, launcher, cell-menu | dialog | none |
+| `tool.concat_images` | `/image-sheet` | /concat | book | asset selection: image_refs | `concat_images` | slash, launcher, cell-menu | dialog | none |
 | `tool.configure_asset_tagging` | `/configure-asset-tagging` |  | book | none | `configure_asset_tagging` | slash, launcher | dialog | none |
 | `tool.connect_notebook_cells` | `/connect-notebook-cells` |  | notebook | cell: source_cell_id | `connect_notebook_cells` | slash, launcher, cell-menu, selection-menu | dialog | none |
 | `tool.connect_service` | `/connect-service` |  | global | none | `connect_service` | slash, launcher | dialog | none |
@@ -118,9 +118,9 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.create_entity` | `/character` | /character-new | book | none | `create_entity` | slash, launcher | dialog | none |
 | `tool.create_notebook` | `/create-notebook` |  | book | none | `create_notebook` | slash, launcher | dialog | none |
 | `tool.create_notebook_cell` | `/create-notebook-cell` |  | notebook | notebook: notebook_id | `create_notebook_cell` | slash, launcher | dialog | none |
-| `tool.create_qart` | `/qart` |  | book | asset: image_ref | `create_qart` | slash, launcher, cell-menu | dialog | none |
-| `tool.create_qr_outro` | `/outroqr` |  | book | asset selection: qr_image_refs | `create_qr_outro` | slash, launcher, cell-menu | dialog | none |
-| `tool.create_qrbtf` | `/qrbtf` |  | book | none | `create_qrbtf` | slash, launcher | dialog | none |
+| `tool.create_qart` | `/qr-art` | /qart | book | asset: image_ref | `create_qart` | slash, launcher, cell-menu | dialog | none |
+| `tool.create_qr_outro` | `/qr-outro` | /outroqr | book | asset selection: qr_image_refs | `create_qr_outro` | slash, launcher, cell-menu | dialog | none |
+| `tool.create_qrbtf` | `/qr-style` | /qrbtf | book | none | `create_qrbtf` | slash, launcher | dialog | none |
 | `tool.create_watermark_card` | `/create-watermark-card` |  | book | none | `create_watermark_card` | slash, launcher | dialog | none |
 | `tool.crop_asset` | `/crop-asset` |  | book | asset: asset_id | `crop_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.delete_asset` | `/delete` | /clip-delete, /remove-slot, /unassign, /audio-remove | book | asset: asset_id | `delete_asset` | slash, launcher, cell-menu | dialog | destructive |
@@ -169,7 +169,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.get_sequence_rhythm` | `/get-sequence-rhythm` |  | sequence | none | `get_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.get_timeline` | `/get-timeline` |  | book | none | `get_timeline` | slash, launcher | dialog | none |
 | `tool.get_watermark_config` | `/get-watermark-config` |  | book | none | `get_watermark_config` | slash, launcher | dialog | none |
-| `tool.inject_first_frame` | `/inject-first-frame` |  | book | none | `inject_first_frame` | slash, launcher | dialog | none |
+| `tool.inject_first_frame` | `/replace-first-frame` | /inject-first-frame | book | none | `inject_first_frame` | slash, launcher | dialog | none |
 | `tool.inspect_generation_request` | `/inspect-generation-request` |  | book | asset: asset_id | `inspect_generation_request` | slash, launcher, cell-menu | dialog | none |
 | `tool.invert_image` | `/invert` |  | book | asset: asset_id | `invert_image` | slash, launcher, cell-menu | dialog | none |
 | `tool.isolate_vocals` | `/vocals` |  | book | asset: asset_id | `isolate_vocals` | slash, launcher, cell-menu | dialog | generation |
@@ -266,7 +266,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.splice_video` | `/splice` | /scene-concat | book | none | `splice_video` | slash, launcher | dialog | none |
 | `tool.split_video` | `/split-video` |  | book | asset: asset_id | `split_video` | slash, launcher, cell-menu | dialog | none |
 | `tool.storage_status` | `/storage-status` |  | book | none | `storage_status` | slash, launcher | dialog | none |
-| `tool.storage_sync` | `/sync` |  | book | none | `storage_sync` | slash, launcher | dialog | external |
+| `tool.storage_sync` | `/storage-sync` | /sync | book | none | `storage_sync` | slash, launcher | dialog | external |
 | `tool.suggest_asset_tags` | `/suggest-asset-tags` |  | book | asset: asset_id | `suggest_asset_tags` | slash, launcher, cell-menu | dialog | none |
 | `tool.suggest_cuts` | `/suggest-cuts` |  | book | asset: asset_id | `suggest_cuts` | slash, launcher, cell-menu | dialog | generation |
 | `tool.suggest_sequence_coverage` | `/suggest-sequence-coverage` |  | book | none | `suggest_sequence_coverage` | slash, launcher | dialog | none |

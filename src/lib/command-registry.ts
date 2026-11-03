@@ -162,21 +162,21 @@ function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandA
   for (const token of inputs) {
     const ratio = outroAspectRatio(token);
     if (ratio) {
-      if (aspectRatio) throw new Error('/outroqr accepts only one aspect ratio');
+      if (aspectRatio) throw new Error('/qr-outro accepts only one aspect ratio');
       aspectRatio = ratio;
       continue;
     }
     if (!ASSET_REF_PATTERN.test(token)) {
-      throw new Error(`Unrecognized /outroqr input: ${token}`);
+      throw new Error(`Unrecognized /qr-outro input: ${token}`);
     }
     qrImages.push(token);
     if (qrImages.length > 4) {
-      throw new Error('/outroqr accepts at most 4 QR images');
+      throw new Error('/qr-outro accepts at most 4 QR images');
     }
   }
 
   if (qrImages.length === 0) {
-    throw new Error('/outroqr requires at least one QR image cell or asset');
+    throw new Error('/qr-outro requires at least one QR image cell or asset');
   }
 
   return {
@@ -537,7 +537,7 @@ export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {
     const inputs = args.inputs;
     if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
-      throw new Error('/outroqr inputs are required');
+      throw new Error('/qr-outro inputs are required');
     }
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
     delete result.inputs;
