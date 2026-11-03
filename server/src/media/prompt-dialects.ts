@@ -9,7 +9,18 @@ import {
   stripRefMentions,
 } from "../generation-reference-mentions.js";
 import { generationInputTokenPattern } from "../generation-input-targets.js";
+import { normalizeNotebookReference, replaceNotebookMentions } from "videobook-engine/notebook-mentions";
 import type { MediaRefs, PromptDialect, RefRole } from "./types.js";
+
+const ROLE_PHRASES: ReadonlyArray<readonly [RefRole, (index: number, count: number) => string]> = [
+  ["first_frame", () => "the first frame"],
+  ["last_frame", () => "the last frame"],
+  ["loop", () => "the loop frame"],
+  ["keyframe", (index) => `keyframe ${index + 1}`],
+  ["image", (index) => `reference image ${index + 1}`],
+  ["video", (index, count) => count === 1 ? "the source video" : `reference video ${index + 1}`],
+  ["audio", (index) => `reference audio ${index + 1}`],
+];
 
 function refsFor(refs: MediaRefs, role: RefRole): string[] {
   return (refs[role] ?? []).filter((ref) => !/^https?:\/\//u.test(ref));
@@ -88,6 +99,15 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
   }
 }
 
+function renderRefMentions(prompt: string, refs: MediaRefs): string {
+  const replacements = ROLE_PHRASES.flatMap(([role, phrase]) => {
+    const list = refsFor(refs, role);
+    return list.map((ref, index) => ({ reference: normalizeNotebookReference(ref), replacement: phrase(index, list.length) }));
+  }).filter((entry) => entry.reference !== "").sort((left, right) => right.reference.length - left.reference.length);
+  return replaceNotebookMentions(prompt, replacements);
+}
+
 export function applyPromptDialect(dialect: PromptDialect | undefined, prompt: string, refs: MediaRefs): string {
-  return rewrite(dialect ?? "natural", expandSlotTokens(prompt, refs), refs).replace(/[ \t]{2,}/gu, " ").trim();
+  const rewritten = rewrite(dialect ?? "natural", expandSlotTokens(prompt, refs), refs);
+  return renderRefMentions(rewritten, refs).replace(/[ \t]{2,}/gu, " ").trim();
 }

@@ -7,6 +7,7 @@ const IMG_ID = "01890f1c-0000-7000-8000-0000000000aa";
 const VID_ID = "01890f1c-0000-7000-8000-0000000000bb";
 const VID_ID_2 = "01890f1c-0000-7000-8000-0000000000cc";
 const AUD_ID = "01890f1c-0000-7000-8000-0000000000dd";
+const IMG_ID_2 = "01890f1c-0000-7000-8000-0000000000ee";
 
 function forModel(model: string, prompt: string, refs: MediaRefs): string {
   const entry = modelEntry(model);
@@ -68,7 +69,16 @@ describe("prompt dialects", () => {
       { image: [IMG_ID], first_frame: [VID_ID], last_frame: [VID_ID_2] },
     )).toBe("to with @Image1");
     expect(applyPromptDialect("plain", "hero @image1 waves", { image: [IMG_ID] }))
-      .toBe(`hero @${IMG_ID} waves`);
+      .toBe("hero reference image 1 waves");
+  });
+
+  it("never lets a connected artifact id reach the provider prompt", () => {
+    const refs = { first_frame: [IMG_ID], last_frame: [VID_ID], loop: [VID_ID_2], keyframe: [AUD_ID, IMG_ID_2] };
+    const prompt = "open on @firstframe, hold @keyframe1 then @keyframe2, close on @lastframe and return to @loop";
+    for (const dialect of ["natural", "natural_numbered", "natural_kinds", "natural_source_video", "brackets", "vidu", "kling4", "happyhorse_edit", "plain"] as const) {
+      expect(applyPromptDialect(dialect, prompt, refs), dialect)
+        .toBe("open on the first frame, hold keyframe 1 then keyframe 2, close on the last frame and return to the loop frame");
+    }
   });
 
   it("leaves unmatched slots and URL refs untouched", () => {
