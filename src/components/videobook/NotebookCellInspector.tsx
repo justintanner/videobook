@@ -102,6 +102,8 @@ import {
   type SlotLayoutContext,
 } from '@/videobook/generation-slot-layout'
 import type { GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
+import { PromptTokenLayer, PromptTokenStrip } from '@/components/videobook/PromptTokens'
+import { promptTokenSources, syncPromptTokenLayer } from '@/videobook/prompt-tokens'
 import { generationModeInputError } from '../../../server/src/generation-input-policy'
 import { generationModeInputTarget } from '../../../server/src/generation-input-targets'
 import { stickySettingsFor, stickySettingsFrom, type StickySettings } from '../../../server/src/media/preferred-defaults'
@@ -2575,6 +2577,7 @@ function ExecutableCellInspector({
   >('idle')
   const promptFieldRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const promptLayerRef = useRef<HTMLDivElement | null>(null)
   const promptPreviewRequestRef = useRef(0)
   const [promptCaret, setPromptCaret] = useState(draft.prompt.length)
   const [promptSuggestionIndex, setPromptSuggestionIndex] = useState(0)
@@ -3182,7 +3185,11 @@ function ExecutableCellInspector({
           <span aria-live="polite">{promptCopyLabel}</span>
         </button>
       </header>
+      {generationCell && <PromptTokenStrip prompt={draft.prompt} sources={promptTokenSources(slotEditor)} />}
       <div className="inspector-prompt-editor" ref={promptFieldRef}>
+        {generationCell && (
+          <PromptTokenLayer layerRef={promptLayerRef} prompt={draft.prompt} sources={promptTokenSources(slotEditor)} />
+        )}
         {showPromptSuggestions && (
           <AutocompleteDropdown
             items={promptSuggestionItems}
@@ -3207,6 +3214,7 @@ function ExecutableCellInspector({
           )}
           onClick={(event) => setPromptCaret(event.currentTarget.selectionStart)}
           onSelect={(event) => setPromptCaret(event.currentTarget.selectionStart)}
+          onScroll={(event) => syncPromptTokenLayer(promptLayerRef.current, event)}
           onBlur={() => setPromptMentionOpen(false)}
           onKeyDown={(event) => {
             if (!showPromptSuggestions) {

@@ -8710,7 +8710,15 @@ textarea:focus-visible {
   width: 52px;
   height: 24px;
   padding: 0 4px;
+  border: 1px solid var(--line);
+  color: #bee5d0;
+  background: rgba(1, 9, 5, 0.9);
   font-size: 11px;
+}
+
+.generation-slot-param input:focus {
+  border-color: var(--green);
+  outline: 0;
 }
 
 .generation-slot-remove {
@@ -8779,7 +8787,105 @@ textarea:focus-visible {
   padding: 9px 10px;
   resize: none;
   font: inherit;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 28px;
+}
+
+.prompt-token-field {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  height: 100%;
+}
+
+.prompt-token-layer {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  color: transparent;
+  background: rgba(1, 9, 5, 0.9);
+  font: inherit;
+  font-size: 13px;
+  line-height: 28px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+.prompt-token {
+  border-radius: 3px;
+  color: transparent;
+  background: rgba(114, 231, 170, 0.2);
+  box-shadow: 0 0 0 1px rgba(114, 231, 170, 0.42);
+}
+
+.prompt-token:not([data-known]) {
+  background: rgba(240, 126, 126, 0.16);
+  box-shadow: 0 0 0 1px rgba(240, 126, 126, 0.5);
+}
+
+.generation-review-prompt-section .prompt-token-layer ~ textarea {
+  position: relative;
+  background: transparent;
+}
+
+.prompt-token-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.prompt-token-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px 0 3px;
+  border: 1px solid rgba(114, 231, 170, 0.42);
+  background: rgba(114, 231, 170, 0.08);
+  font-size: 11px;
+}
+
+.prompt-token-pill:not([data-known]) {
+  border-color: rgba(240, 126, 126, 0.5);
+  background: rgba(240, 126, 126, 0.08);
+}
+
+.prompt-token-pill strong {
+  color: #bce5cf;
+  font-weight: 500;
+}
+
+.prompt-token-pill small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.prompt-token-thumb {
+  display: grid;
+  width: 18px;
+  height: 22px;
+  place-items: center;
+  overflow: hidden;
+  background: #020a06;
+}
+
+.prompt-token-thumb img,
+.prompt-token-thumb video,
+.prompt-token-thumb .media-library-asset-preview,
+.prompt-token-thumb .media-library-asset-placeholder {
+  width: 18px;
+  height: 22px;
+  object-fit: cover;
+}
+
+.prompt-token-thumb svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* Shorter rows, bigger text: the sheet reads at one size and six fields give
@@ -8955,7 +9061,17 @@ textarea:focus-visible {
 
 .generation-review-json .inspector-source-json {
   padding: 10px;
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 28px;
+}
+
+.generation-review-json .json-media-preview {
+  margin: 0 6px;
+}
+
+.generation-review-json .json-media-trigger .inspector-source-thumb {
+  width: 32px;
+  height: 22px;
 }
 
 .json-media-preview {

@@ -1,6 +1,6 @@
 import { frontierPickerGroups, generationFrontierType } from '@/videobook/generation-frontier'
 import { isSeedanceEdit, SEEDANCE_EDIT_DESCRIPTION } from '../../../../../server/src/media/seedance-edit'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
 import {
@@ -17,6 +17,8 @@ import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
 import { RichJson } from '@/components/videobook/RichJson'
 import { GenerationInputSlots, type GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
+import { PromptTokenLayer, PromptTokenStrip } from '@/components/videobook/PromptTokens'
+import { promptTokenSources, syncPromptTokenLayer } from '@/videobook/prompt-tokens'
 import {
   DoltCellSource,
   type DoltArtifactAssets,
@@ -270,6 +272,8 @@ export function GenerationBody({
   onSelectSource,
   onSettingChange,
 }: GenerationBodyProps) {
+  const promptLayerRef = useRef<HTMLDivElement>(null)
+  const tokenSources = promptTokenSources(slotEditor)
   const frontierType = generationFrontierType(draft.cell.type, generationMode(draft), draft.action.operation, sources)
   const modelGroups = frontierPickerGroups(actions, frontierType)
   const settings = notebookChatGenerationSettings(draft)
@@ -404,24 +408,20 @@ export function GenerationBody({
                 onChange={(value) => onSettingChange(control.name, value)}
               />
             ))}
+            {toggleControls.map((control) => (
+              <GenerationControlField
+                key={control.name}
+                control={control}
+                settings={settings}
+                busy={busy}
+                toggleClassName="generation-review-toggle"
+                onChange={(value) => onSettingChange(control.name, value)}
+              />
+            ))}
             {generalControls.length === 0 && (
               <span className="generation-review-defaults">Provider defaults</span>
             )}
           </div>
-          {toggleControls.length > 0 && (
-            <div className="generation-review-toggles">
-              {toggleControls.map((control) => (
-                <GenerationControlField
-                  key={control.name}
-                  control={control}
-                  settings={settings}
-                  busy={busy}
-                  toggleClassName="generation-review-toggle"
-                  onChange={(value) => onSettingChange(control.name, value)}
-                />
-              ))}
-            </div>
-          )}
         </section>
 
         {voiceControl && voiceCatalog && (
@@ -474,17 +474,22 @@ export function GenerationBody({
               <span>Prompt</span>
               {promptHistory && <PromptHistoryControls history={promptHistory} disabled={busy} />}
             </div>
-            <textarea
-              rows={3}
-              aria-label="Prompt"
-              value={draft.cell.prompt ?? ''}
-              aria-invalid={promptLeaks.length > 0}
-              disabled={busy}
-              onChange={(event) => onPromptChange(event.target.value)}
-              onKeyDown={(event) => {
-                promptHistory?.handlePromptKeyDown(event)
-              }}
-            />
+            <PromptTokenStrip prompt={draft.cell.prompt ?? ''} sources={tokenSources} />
+            <div className="prompt-token-field">
+              <PromptTokenLayer layerRef={promptLayerRef} prompt={draft.cell.prompt ?? ''} sources={tokenSources} />
+              <textarea
+                rows={3}
+                aria-label="Prompt"
+                value={draft.cell.prompt ?? ''}
+                aria-invalid={promptLeaks.length > 0}
+                disabled={busy}
+                onChange={(event) => onPromptChange(event.target.value)}
+                onScroll={(event) => syncPromptTokenLayer(promptLayerRef.current, event)}
+                onKeyDown={(event) => {
+                  promptHistory?.handlePromptKeyDown(event)
+                }}
+              />
+            </div>
           </div>}
           {promptLeaks.length > 0 && (
             <div className="generation-review-reference-errors" role="alert">
