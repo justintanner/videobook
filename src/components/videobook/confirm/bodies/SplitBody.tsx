@@ -298,219 +298,8 @@ export function SplitBody({
   }
 
   return (
-    <div className="confirm-split" onKeyDown={handleKeyDown}>
-      <div className="confirm-split-column">
-        <section className="confirm-section" aria-label="Source player">
-          <div className="confirm-section-heading">
-            <span>Source</span>
-            <strong>{formatSplitTimestamp(sourceDurationSeconds)} total</strong>
-          </div>
-          <video
-            ref={sourceRef}
-            src={mediaUrl}
-            controls
-            playsInline
-            preload="metadata"
-          />
-          <div className="confirm-actions-row">
-            <button type="button" onClick={() => setFromPlayer('in')}>
-              SET IN HERE
-            </button>
-            <button type="button" onClick={() => setFromPlayer('out')}>
-              SET OUT HERE
-            </button>
-          </div>
-        </section>
-        {outputMode !== 'remove' && (
-          <CutInspector
-            activeCutIndex={activeCutIndex}
-            cutPointsSeconds={cutPointsSeconds}
-            frameStep={frameStep}
-            mediaUrl={mediaUrl}
-            sourceDurationSeconds={sourceDurationSeconds}
-            onMoveCut={moveCut}
-            onSelectCut={setFocusedCut}
-          />
-        )}
-        <section className="confirm-section" aria-label="Pieces">
-          <span className="confirm-section-label">Pieces</span>
-          <div className="confirm-chips" role="list">
-            {segments.map((segment) => (
-              <button
-                key={`${segment.startSeconds}:${segment.endSeconds}`}
-                type="button"
-                role="listitem"
-                className={segment.index === selectedIndex ? 'active' : undefined}
-                aria-pressed={segment.index === selectedIndex}
-                onClick={() => emit({
-                  cutPointsSeconds,
-                  selectedIndex: segment.index,
-                })}
-              >
-                {String(segment.index + 1).padStart(2, '0')}{' '}
-                {formatSplitTimestamp(segment.startSeconds)}-{formatSplitTimestamp(segment.endSeconds)}
-              </button>
-            ))}
-          </div>
-          <div className="confirm-actions-row">
-            <button
-              type="button"
-              disabled={!selected || selected.durationSeconds < 0.04}
-              onClick={() => applyEdit(splitSegmentInHalf({
-                cutPointsSeconds,
-                index: selectedIndex,
-                sourceDurationSeconds,
-              }))}
-            >
-              <Scissors size={12} aria-hidden="true" />Split piece in half
-            </button>
-            <button
-              type="button"
-              disabled={selectedIndex >= segments.length - 1}
-              onClick={() => applyEdit(mergeSegmentWithNext({
-                cutPointsSeconds,
-                index: selectedIndex,
-                sourceDurationSeconds,
-              }))}
-            >
-              Merge with next
-            </button>
-          </div>
-        </section>
-      </div>
-      <div className="confirm-split-column">
-        <section className="confirm-section" aria-label="Loops">
-          <div className="confirm-section-heading">
-            <span>Loops</span>
-            <button
-              type="button"
-              aria-pressed={soundEnabled}
-              onClick={() => setSoundEnabled((current) => !current)}
-            >
-              {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-              {soundEnabled ? 'Sound on' : 'Sound off'}
-            </button>
-          </div>
-          <div className="confirm-split-loops">
-            <SegmentLoopTile
-              label="SEGMENT"
-              mediaUrl={mediaUrl}
-              muted={!soundEnabled}
-              playbackRate={playbackRate}
-              windows={[windows.segment]}
-            />
-            {outputMode === 'remove'
-              ? (
-                  <SegmentLoopTile
-                    label="JOIN PREVIEW"
-                    mediaUrl={mediaUrl}
-                    muted={!soundEnabled}
-                    playbackRate={playbackRate}
-                    windows={windows.surroundings}
-                  />
-                )
-              : (
-                  <SegmentLoopTile
-                    label="ACROSS CUT"
-                    mediaUrl={mediaUrl}
-                    muted={!soundEnabled}
-                    playbackRate={playbackRate}
-                    windows={acrossCutWindows}
-                  />
-                )}
-          </div>
-          {selected && (
-            <div className="confirm-split-bounds">
-              <div className="confirm-split-bound">
-                <span>IN</span>
-                <input
-                  type="number"
-                  aria-label="IN seconds"
-                  step="0.001"
-                  value={inInput}
-                  onFocus={() => setFocusedBound('in')}
-                  onChange={(event) => setInDraft(event.target.value)}
-                  onBlur={() => commitBounds(inInput, outInput)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      commitBounds(inInput, outInput)
-                    }
-                  }}
-                />
-                {nudgeButtons('in', nudgeIn, (deltaSeconds) => moveSegmentStart({
-                  cutPointsSeconds,
-                  deltaSeconds,
-                  index: selectedIndex,
-                  sourceDurationSeconds,
-                }))}
-              </div>
-              <div className="confirm-split-bound">
-                <span>OUT</span>
-                <input
-                  type="number"
-                  aria-label="OUT seconds"
-                  step="0.001"
-                  value={outInput}
-                  onFocus={() => setFocusedBound('out')}
-                  onChange={(event) => setOutDraft(event.target.value)}
-                  onBlur={() => commitBounds(inInput, outInput)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      commitBounds(inInput, outInput)
-                    }
-                  }}
-                />
-                {nudgeButtons('out', nudgeOut, (deltaSeconds) => moveSegmentEnd({
-                  cutPointsSeconds,
-                  deltaSeconds,
-                  index: selectedIndex,
-                  sourceDurationSeconds,
-                }))}
-              </div>
-              <div className="confirm-split-bound">
-                <span>MOVE</span>
-                <output aria-label="Piece duration">{selected.durationSeconds.toFixed(3)}s</output>
-                <div className="confirm-split-nudges">
-                  {MOVE_STEPS.map((delta) => {
-                    const next = moveSegment({
-                      cutPointsSeconds,
-                      deltaSeconds: delta,
-                      index: selectedIndex,
-                      sourceDurationSeconds,
-                    })
-                    const disabled = next.cutPointsSeconds.every((value, index) =>
-                      value === cutPointsSeconds[index])
-                    return (
-                      <button
-                        key={`move:${delta}`}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => applyEdit(next)}
-                      >
-                        {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
-                      </button>
-                    )
-                  })}
-                  <button
-                    type="button"
-                    aria-pressed={slowPlayback}
-                    onClick={() => setSlowOverride({
-                      key: pieceKey,
-                      value: !slowPlayback,
-                    })}
-                  >
-                    Slow ×0.25
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {validationError && (
-            <p className="confirm-field-error" role="alert">{validationError}</p>
-          )}
-        </section>
+    <div className="confirm-split-layout" onKeyDown={handleKeyDown}>
+      <div className="confirm-split-decision">
         <section className="confirm-section" aria-label="Output mode">
           <span className="confirm-section-label">Output</span>
           <div className="confirm-chips">
@@ -559,6 +348,221 @@ export function SplitBody({
             timeline={resultTimeline}
           />
         )}
+      </div>
+      <div className="confirm-split">
+        <div className="confirm-split-column">
+          <section className="confirm-section" aria-label="Source player">
+            <div className="confirm-section-heading">
+              <span>Source</span>
+              <strong>{formatSplitTimestamp(sourceDurationSeconds)} total</strong>
+            </div>
+            <video
+              ref={sourceRef}
+              src={mediaUrl}
+              controls
+              playsInline
+              preload="metadata"
+            />
+            <div className="confirm-actions-row">
+              <button type="button" onClick={() => setFromPlayer('in')}>
+                SET IN HERE
+              </button>
+              <button type="button" onClick={() => setFromPlayer('out')}>
+                SET OUT HERE
+              </button>
+            </div>
+          </section>
+          {outputMode !== 'remove' && (
+            <CutInspector
+              activeCutIndex={activeCutIndex}
+              cutPointsSeconds={cutPointsSeconds}
+              frameStep={frameStep}
+              mediaUrl={mediaUrl}
+              sourceDurationSeconds={sourceDurationSeconds}
+              onMoveCut={moveCut}
+              onSelectCut={setFocusedCut}
+            />
+          )}
+          <section className="confirm-section" aria-label="Pieces">
+            <span className="confirm-section-label">Pieces</span>
+            <div className="confirm-chips" role="list">
+              {segments.map((segment) => (
+                <button
+                  key={`${segment.startSeconds}:${segment.endSeconds}`}
+                  type="button"
+                  role="listitem"
+                  className={segment.index === selectedIndex ? 'active' : undefined}
+                  aria-pressed={segment.index === selectedIndex}
+                  onClick={() => emit({
+                    cutPointsSeconds,
+                    selectedIndex: segment.index,
+                  })}
+                >
+                  {String(segment.index + 1).padStart(2, '0')}{' '}
+                  {formatSplitTimestamp(segment.startSeconds)}-{formatSplitTimestamp(segment.endSeconds)}
+                </button>
+              ))}
+            </div>
+            <div className="confirm-actions-row">
+              <button
+                type="button"
+                disabled={!selected || selected.durationSeconds < 0.04}
+                onClick={() => applyEdit(splitSegmentInHalf({
+                  cutPointsSeconds,
+                  index: selectedIndex,
+                  sourceDurationSeconds,
+                }))}
+              >
+                <Scissors size={12} aria-hidden="true" />Split piece in half
+              </button>
+              <button
+                type="button"
+                disabled={selectedIndex >= segments.length - 1}
+                onClick={() => applyEdit(mergeSegmentWithNext({
+                  cutPointsSeconds,
+                  index: selectedIndex,
+                  sourceDurationSeconds,
+                }))}
+              >
+                Merge with next
+              </button>
+            </div>
+          </section>
+        </div>
+        <div className="confirm-split-column">
+          <section className="confirm-section" aria-label="Loops">
+            <div className="confirm-section-heading">
+              <span>Loops</span>
+              <button
+                type="button"
+                aria-pressed={soundEnabled}
+                onClick={() => setSoundEnabled((current) => !current)}
+              >
+                {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+                {soundEnabled ? 'Sound on' : 'Sound off'}
+              </button>
+            </div>
+            <div className="confirm-split-loops">
+              <SegmentLoopTile
+                label="SEGMENT"
+                mediaUrl={mediaUrl}
+                muted={!soundEnabled}
+                playbackRate={playbackRate}
+                windows={[windows.segment]}
+              />
+              {outputMode === 'remove'
+                ? (
+                    <SegmentLoopTile
+                      label="JOIN PREVIEW"
+                      mediaUrl={mediaUrl}
+                      muted={!soundEnabled}
+                      playbackRate={playbackRate}
+                      windows={windows.surroundings}
+                    />
+                  )
+                : (
+                    <SegmentLoopTile
+                      label="ACROSS CUT"
+                      mediaUrl={mediaUrl}
+                      muted={!soundEnabled}
+                      playbackRate={playbackRate}
+                      windows={acrossCutWindows}
+                    />
+                  )}
+            </div>
+            {selected && (
+              <div className="confirm-split-bounds">
+                <div className="confirm-split-bound">
+                  <span>IN</span>
+                  <input
+                    type="number"
+                    aria-label="IN seconds"
+                    step="0.001"
+                    value={inInput}
+                    onFocus={() => setFocusedBound('in')}
+                    onChange={(event) => setInDraft(event.target.value)}
+                    onBlur={() => commitBounds(inInput, outInput)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        commitBounds(inInput, outInput)
+                      }
+                    }}
+                  />
+                  {nudgeButtons('in', nudgeIn, (deltaSeconds) => moveSegmentStart({
+                    cutPointsSeconds,
+                    deltaSeconds,
+                    index: selectedIndex,
+                    sourceDurationSeconds,
+                  }))}
+                </div>
+                <div className="confirm-split-bound">
+                  <span>OUT</span>
+                  <input
+                    type="number"
+                    aria-label="OUT seconds"
+                    step="0.001"
+                    value={outInput}
+                    onFocus={() => setFocusedBound('out')}
+                    onChange={(event) => setOutDraft(event.target.value)}
+                    onBlur={() => commitBounds(inInput, outInput)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        commitBounds(inInput, outInput)
+                      }
+                    }}
+                  />
+                  {nudgeButtons('out', nudgeOut, (deltaSeconds) => moveSegmentEnd({
+                    cutPointsSeconds,
+                    deltaSeconds,
+                    index: selectedIndex,
+                    sourceDurationSeconds,
+                  }))}
+                </div>
+                <div className="confirm-split-bound">
+                  <span>MOVE</span>
+                  <output aria-label="Piece duration">{selected.durationSeconds.toFixed(3)}s</output>
+                  <div className="confirm-split-nudges">
+                    {MOVE_STEPS.map((delta) => {
+                      const next = moveSegment({
+                        cutPointsSeconds,
+                        deltaSeconds: delta,
+                        index: selectedIndex,
+                        sourceDurationSeconds,
+                      })
+                      const disabled = next.cutPointsSeconds.every((value, index) =>
+                        value === cutPointsSeconds[index])
+                      return (
+                        <button
+                          key={`move:${delta}`}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => applyEdit(next)}
+                        >
+                          {delta > 0 ? '+' : '−'}{Math.abs(delta)}s
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      aria-pressed={slowPlayback}
+                      onClick={() => setSlowOverride({
+                        key: pieceKey,
+                        value: !slowPlayback,
+                      })}
+                    >
+                      Slow ×0.25
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {validationError && (
+              <p className="confirm-field-error" role="alert">{validationError}</p>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   )

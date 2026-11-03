@@ -7911,6 +7911,19 @@ textarea:focus-visible {
 
 /* ---- split ---- */
 
+.confirm-split-layout {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.confirm-split-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: start;
+}
+
 .confirm-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7927,7 +7940,7 @@ textarea:focus-visible {
 
 .confirm-split video {
   width: 100%;
-  height: clamp(140px, 24vh, 262px);
+  height: clamp(120px, 18vh, 220px);
   border: 1px solid rgba(84, 126, 101, 0.18);
   background: #000;
   object-fit: contain;
@@ -7956,19 +7969,19 @@ textarea:focus-visible {
 }
 
 .confirm-split-loop-heading > span {
-  color: var(--muted);
-  font-size: 8px;
+  color: #6fa184;
+  font-size: 10px;
   letter-spacing: 0.1em;
 }
 
 .confirm-split-loop-heading > strong {
   color: #b5d8c3;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
 }
 
 .confirm-split-loop video {
-  height: clamp(100px, 14vh, 124px);
+  height: clamp(80px, 11vh, 124px);
 }
 
 .confirm-split-bounds {
@@ -7985,8 +7998,8 @@ textarea:focus-visible {
 }
 
 .confirm-split-bound > span {
-  color: var(--muted);
-  font-size: 9px;
+  color: #6fa184;
+  font-size: 10px;
   letter-spacing: 0.08em;
 }
 
@@ -7997,13 +8010,13 @@ textarea:focus-visible {
   padding: 0 7px;
   border: 1px solid transparent;
   color: #b5d8c3;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .confirm-sheet .confirm-split-bound > input[type='number'] {
   min-height: 28px;
   padding: 0 7px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .confirm-split-nudges {
@@ -8011,6 +8024,23 @@ textarea:focus-visible {
   flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
+}
+
+.confirm-split-layout .confirm-section-label,
+.confirm-split-layout .confirm-section-heading > span {
+  font-size: 10px;
+}
+
+.confirm-split-layout .confirm-section-heading > strong,
+.confirm-split-layout .confirm-help {
+  font-size: 11px;
+}
+
+.confirm-split-layout .confirm-actions-row > button,
+.confirm-split-layout .confirm-section-heading > button,
+.confirm-split-layout .confirm-split-nudges > button {
+  min-height: 28px;
+  font-size: 10px;
 }
 
 .confirm-split-result-row {
@@ -8150,6 +8180,7 @@ textarea:focus-visible {
 
   .confirm-watermark-controls,
   .confirm-split,
+  .confirm-split-decision,
   .confirm-plan,
   .confirm-routed-with-preview,
   .confirm-post {
