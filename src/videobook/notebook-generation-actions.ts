@@ -98,6 +98,20 @@ export function effectiveGenerationControlValue(
   return settings[control.name] ?? control.defaultValue
 }
 
+const KEYFRAME_SECONDS_CONTROL = /^keyframe_(\d+)_seconds$/u
+
+export function generationControlVisible(
+  control: GenerationControl,
+  settings: Record<string, GenerationControlValue>,
+  targetInputs: readonly string[],
+): boolean {
+  const keyframe = KEYFRAME_SECONDS_CONTROL.exec(control.name)?.[1]
+  if (!keyframe || settings[control.name] !== undefined) return true
+  const keyframes = targetInputs.filter((targetInput) =>
+    generationInputTarget('image', targetInput) === 'keyframe').length
+  return Number(keyframe) <= keyframes
+}
+
 export function effectiveGenerationSettings(
   controls: readonly GenerationControl[],
   settings: Record<string, GenerationControlValue>,

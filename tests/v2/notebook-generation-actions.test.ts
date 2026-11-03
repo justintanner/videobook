@@ -10,6 +10,7 @@ import {
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationControlVisible,
   generationInputKind,
   generationInputAttachments,
   generationModeLabel,
@@ -487,6 +488,23 @@ describe('notebook generation actions', () => {
     expect(compatibleGenerationModes(grok, [{ kind: 'image', target: 'loop' }]).map((mode) => mode.id)).toEqual(['loop'])
     expect(compatibleGenerationModes(grok, [{ kind: 'image', target: 'image' }, { kind: 'image', target: 'keyframe' }])
       .map((mode) => mode.id)).toEqual(['i2v'])
+  })
+
+  it('shows Grok keyframe seconds only for connected keyframes or values to clear', () => {
+    const grok = asNotebookGenerationActions({ actions: listNotebookActions() })
+      .find((action) => action.model === 'kie:grok-imagine-video-1-5-preview')!
+    const visible = (settings: Record<string, number>, targetInputs: string[]) => grok.controls
+      .filter((control) => generationControlVisible(control, settings, targetInputs))
+      .map((control) => control.name)
+    const keyframeSeconds = (names: string[]) => names.filter((name) => name.startsWith('keyframe_'))
+
+    expect(keyframeSeconds(visible({}, ['image', 'image_2', 'image_3', 'replace_audio']))).toEqual([])
+    expect(visible({}, ['image'])).toEqual(expect.arrayContaining(['aspect_ratio', 'resolution', 'duration']))
+    expect(keyframeSeconds(visible({}, ['image', 'keyframe']))).toEqual(['keyframe_1_seconds'])
+    expect(keyframeSeconds(visible({}, ['image', 'keyframe', 'keyframe_2'])))
+      .toEqual(['keyframe_1_seconds', 'keyframe_2_seconds'])
+    expect(keyframeSeconds(visible({ keyframe_3_seconds: 4 }, ['image', 'keyframe'])))
+      .toEqual(['keyframe_1_seconds', 'keyframe_3_seconds'])
   })
 
   it('offers unconnected media through an open generation input', () => {

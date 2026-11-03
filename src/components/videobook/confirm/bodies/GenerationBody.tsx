@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
 import {
+  generationControlVisible,
   generationModeLabel,
   type GenerationControlValue,
   type GenerationInputMode,
@@ -214,11 +215,13 @@ export function GenerationBody({
     : ''
   const insertVideo = isInsertVideoModel(draft.action.model)
   const seedanceEdit = isSeedanceEdit(draft.action.model, draft.cell.inputs?.generationMode ?? draft.cell.inputs?.mode)
-  const visibleControls = seedanceEdit
+  const sourceTargets = sources.flatMap((source) => source.targetInput ? [source.targetInput] : [])
+  const visibleControls = (seedanceEdit
     ? draft.action.controls.filter((control) => !['duration', 'aspect_ratio'].includes(control.name))
     : insertVideo
     ? draft.action.controls.filter((control) => !['start_time', 'resume_time', 'duration'].includes(control.name))
-    : draft.action.controls
+    : draft.action.controls)
+    .filter((control) => generationControlVisible(control, settings, sourceTargets))
   const generalControls = showVoicePicker
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
     : visibleControls

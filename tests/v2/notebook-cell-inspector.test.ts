@@ -865,7 +865,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<strong>@keyframe2</strong><small>@a3 · keyframe 2 input</small>')
     expect(html).toMatch(/<option value="loop" selected="">Loop<\/option>/)
     expect(html).toContain('I2V · Image to video')
-    for (const index of [1, 2, 3, 4]) expect(html).toContain(`aria-label="Keyframe ${index} seconds"`)
+    for (const index of [1, 2]) expect(html).toContain(`aria-label="Keyframe ${index} seconds"`)
+    for (const index of [3, 4]) expect(html).not.toContain(`aria-label="Keyframe ${index} seconds"`)
     expect(html).toContain('<span>Add input</span>')
   })
 
