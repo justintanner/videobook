@@ -477,6 +477,10 @@ import {
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
   reviseNotebookChatGenerationSources,
+  reviseNotebookChatGenerationInputs,
+  notebookChatGenerationSavedInputs,
+  notebookChatGenerationSlotContext,
+  writeNotebookChatGenerationInputs,
   validateNotebookChatGenerationPromptSources,
   existingNotebookCellGenerationDraft,
   type NotebookChatGenerationCommand,
@@ -587,6 +591,15 @@ import {
   type ImageEditSelection,
 } from '@/videobook/image-edit-regions'
 import { recordValue, asString, asNumber } from '@/videobook/value-decoders'
+import {
+  slotInputsArgument,
+  slotItemTokens,
+  slotLayout,
+  type SlotConnection,
+  type SlotEdit,
+} from '@/videobook/generation-slot-layout'
+import type { GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
+import { isCellRefDragEvent } from '@/videobook/cell-ref-drag'
 import {
   asImageSubjectMap,
   type ImageSubjectMap,
@@ -1644,13 +1657,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const pendingGenerationSources = useMemo<GenerationReviewSource[]>(
     () => pendingGenerationDraft && notebook
-      ? pendingGenerationDraft.sourceCellIds.flatMap((cellId) => {
-          const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+      ? pendingGenerationDraft.connections.flatMap((connection) => {
+          const cell = notebook.cells.find((candidate) => candidate.id === connection.sourceCellId)
           if (!cell) return []
           return [{
-            cellId,
+            cellId: cell.id,
             address: notebookGridAddress(cell.slot),
             type: cell.type,
+            targetInput: connection.targetInput,
             asset: cell.outputArtifactId
               ? assetById.get(cell.outputArtifactId) ?? null
               : null,
@@ -3292,20 +3306,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     selectCanvasCell(cellId)
     if (composerDockShouldOpen('selection')) setComposerDockOpen(true)
   }, [selectCanvasCell])
-  const updatePendingGenerationSources = useCallback((sourceCellIds: string[]) => {
-    if (!pendingGenerationDraft || !notebook) return
-    let next: NotebookChatGenerationDraft
-    try {
-      next = reviseNotebookChatGenerationSources({
-        actions: generationActions,
-        draft: pendingGenerationDraft,
-        document: notebook,
-        sourceCellIds,
-      })
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error), 'error')
-      return
-    }
+  const applyPendingGenerationDraft = useCallback((next: NotebookChatGenerationDraft) => {
+    if (!notebook) return
     const expectations: NotebookAddressExpectation[] = [
       ...next.sourceCellIds.flatMap((cellId) => {
         const cell = notebook.cells.find((candidate) => candidate.id === cellId)
@@ -3333,13 +3335,74 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     pendingGenerationRefresh.cancel()
     requestPendingGenerationPreview(next, notebook)
   }, [
+    notebook,
+    pendingGenerationRefresh,
+    requestPendingGenerationPreview,
+  ])
+  const updatePendingGenerationSources = useCallback((sourceCellIds: string[]) => {
+    if (!pendingGenerationDraft || !notebook) return
+    try {
+      applyPendingGenerationDraft(reviseNotebookChatGenerationSources({
+        actions: generationActions,
+        draft: pendingGenerationDraft,
+        document: notebook,
+        sourceCellIds,
+      }))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
+    }
+  }, [
+    applyPendingGenerationDraft,
     generationActions,
     notebook,
     pendingGenerationDraft,
-    pendingGenerationRefresh,
-    requestPendingGenerationPreview,
     setNotice,
   ])
+  const pendingGenerationSlotContext = useMemo(
+    () => pendingGenerationDraft && notebook
+      ? notebookChatGenerationSlotContext(pendingGenerationDraft, notebook)
+      : null,
+    [notebook, pendingGenerationDraft],
+  )
+  const editPendingGenerationInputs = useCallback((edit: SlotEdit) => {
+    if (!pendingGenerationDraft || !notebook || !pendingGenerationSlotContext) return
+    applyPendingGenerationDraft(reviseNotebookChatGenerationInputs({
+      draft: pendingGenerationDraft,
+      document: notebook,
+      context: pendingGenerationSlotContext,
+      edit,
+    }))
+  }, [applyPendingGenerationDraft, notebook, pendingGenerationDraft, pendingGenerationSlotContext])
+  const pendingGenerationSlotEditor = useMemo<GenerationSlotEditor | undefined>(
+    () => pendingGenerationDraft && notebook && pendingGenerationSlotContext
+      ? {
+          layout: slotLayout(pendingGenerationDraft.connections, pendingGenerationSlotContext),
+          context: pendingGenerationSlotContext,
+          cells: new Map(notebook.cells.map((cell) => [cell.id, {
+            cellId: cell.id,
+            address: notebookGridAddress(cell.slot),
+            type: cell.type,
+            asset: cell.outputArtifactId ? assetById.get(cell.outputArtifactId) ?? null : null,
+          }])),
+          tokens: slotItemTokens(
+            pendingGenerationDraft.cell.id,
+            [pendingGenerationDraft.cell, ...notebook.cells],
+            pendingGenerationDraft.connections,
+            pendingGenerationSlotContext.modeId,
+          ),
+          board: pendingGenerationSourceOptions.map((option) => option.cellId),
+          onEdit: editPendingGenerationInputs,
+        }
+      : undefined,
+    [
+      assetById,
+      editPendingGenerationInputs,
+      notebook,
+      pendingGenerationDraft,
+      pendingGenerationSlotContext,
+      pendingGenerationSourceOptions,
+    ],
+  )
   const addPendingGenerationSource = useCallback((cellId: string) => {
     if (!pendingGenerationDraft) return
     updatePendingGenerationSources([...pendingGenerationDraft.sourceCellIds, cellId])
@@ -4713,6 +4776,32 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         error instanceof Error ? error.message : String(error),
         'error',
       )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const setSelectedCellInputs = async (
+    connections: readonly SlotConnection[],
+  ): Promise<string | null> => {
+    if (!bookId || !notebook || !selectedNotebookCell) return null
+    setBusy(true)
+    try {
+      const result = recordValue(await call('set_notebook_cell_inputs', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: selectedNotebookCell.id,
+        inputs: slotInputsArgument(connections),
+      }))
+      await refreshNotebook(bookId, notebook.id)
+      if (result?.changed !== false) setNotice('Inputs updated')
+      return typeof result?.prompt === 'string' ? result.prompt : null
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : String(error),
+        'error',
+      )
+      return null
     } finally {
       setBusy(false)
     }
@@ -8365,30 +8454,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const updateExistingGenerationCell = async (draft: NotebookChatGenerationDraft, document: NotebookSnapshot, chat?: ChatExecution) => {
+    await writeNotebookChatGenerationInputs({
+      bookId,
+      document,
+      draft,
+      callTool: (name, args) => call(name, {
+        ...args,
+        ...(name === 'set_notebook_cell_inputs' && document.revision ? { expected_revision: document.revision } : {}),
+      }, { chat }),
+    })
     await call('update_notebook_cell', {
       book_id: bookId,
       notebook_id: document.id,
       cell_id: draft.cell.id,
-      ...(document.revision ? { expected_revision: document.revision } : {}),
       cell: {
         prompt: notebookChatGenerationCellPrompt(draft, document),
         provider: draft.cell.provider,
         model: draft.cell.model,
         operation: draft.cell.operation,
         tool: draft.cell.tool,
-        inputs: draft.cell.inputs,
+        inputs: notebookChatGenerationSavedInputs(draft, document),
       },
     }, { chat })
-    const connected = new Set(document.edges.filter((edge) => edge.target === draft.cell.id).map((edge) => edge.source))
-    for (const connection of draft.connections.filter((entry) => !connected.has(entry.sourceCellId))) {
-      await call('connect_notebook_cells', {
-        book_id: bookId,
-        notebook_id: document.id,
-        source_cell_id: connection.sourceCellId,
-        target_cell_id: draft.cell.id,
-        target_input: connection.targetInput,
-      }, { chat })
-    }
   }
 
   const previewExistingCellGeneration = async (cellId: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
@@ -10023,6 +10110,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const handleNotebookFlowDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (isCellRefDragEvent(event)) return
     event.preventDefault()
     if (dataTransferHasFiles(event.dataTransfer)) {
       setPreviewSlot(null)
@@ -10043,6 +10131,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const handleNotebookFlowDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (isCellRefDragEvent(event)) return
     event.preventDefault()
     if (dataTransferHasFiles(event.dataTransfer)) {
       event.stopPropagation()
@@ -11191,6 +11280,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             previewStale={action.previewStale}
             sources={pendingGenerationSources}
             sourceOptions={pendingGenerationSourceOptions}
+            slotEditor={pendingGenerationSlotEditor}
             voiceCatalog={elevenLabsVoices}
             promptHistory={pendingGenerationPromptHistory}
             onActionChange={updatePendingGenerationAction}
@@ -11880,6 +11970,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
           onUpdate={updateCell}
           onSetInput={setSelectedCellInput}
+          onSetInputs={setSelectedCellInputs}
           onRun={runCell}
           onDelete={deleteSelectedCell}
           onOpenFullscreen={(asset, mode) => {

@@ -88,6 +88,20 @@ import {
   type AssetMentionCandidate,
 } from '@/videobook/mention-suggestions'
 import { generationInputMentions, remapGenerationInputPrompt } from '../../../server/src/generation-input-mentions'
+import { cellInputParams } from '../../../server/src/generation-input-params'
+import {
+  applySlotEdit,
+  remapSlotPrompt,
+  slotConnectionsEqual,
+  slotLayout,
+  slotLayoutConnections,
+  slotLegacySettingNames,
+  slotSourceKinds,
+  type SlotConnection,
+  type SlotEdit,
+  type SlotLayoutContext,
+} from '@/videobook/generation-slot-layout'
+import type { GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
 import { generationModeInputError } from '../../../server/src/generation-input-policy'
 import { generationModeInputTarget } from '../../../server/src/generation-input-targets'
 import { stickySettingsFor, stickySettingsFrom, type StickySettings } from '../../../server/src/media/preferred-defaults'
@@ -99,6 +113,7 @@ import {
   compatibleGenerationActions,
   compatibleGenerationModes,
   effectiveGenerationSettings,
+  generationSettingsWithDefaults,
   generationSettingsError,
   generationActionForSelection,
   generationActionIsCompatible,
@@ -479,6 +494,7 @@ type NotebookCellInspectorProps = {
   mediaInsightWork?: Readonly<Record<string, MediaInsightWork>>
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
+  onSetInputs?: (connections: readonly SlotConnection[]) => Promise<string | null>
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
@@ -2486,6 +2502,7 @@ function ExecutableCellInspector({
   deleting,
   onUpdate,
   onSetInput,
+  onSetInputs,
   onRun,
   onDelete,
   onOpenFullscreen,
@@ -2514,6 +2531,7 @@ function ExecutableCellInspector({
   | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
+  | 'onSetInputs'
   | 'onRun'
   | 'onDelete'
   | 'onOpenFullscreen'
@@ -3059,6 +3077,63 @@ function ExecutableCellInspector({
     sourceCellIds: generationSources.map((source) => source.cellId),
     sourceAddresses: generationSources.map((source) => source.address),
   }
+  const slotKinds = slotSourceKinds(cells)
+  const storedInputParams = cellInputParams(cell)
+  const currentSlotConnections: SlotConnection[] = incomingEdges
+    .filter((edge) => slotKinds.has(edge.source))
+    .map((edge) => {
+      const params = storedInputParams[edge.targetInput]
+      return params
+        ? { sourceCellId: edge.source, targetInput: edge.targetInput, params }
+        : { sourceCellId: edge.source, targetInput: edge.targetInput }
+    })
+  const slotContext: SlotLayoutContext | null = onSetInputs && selectedInputMode?.inputs
+    ? {
+        mode: { inputs: selectedInputMode.inputs, limits: selectedInputMode.limits ?? [] },
+        modeId: effectiveGenerationMode || undefined,
+        kinds: slotKinds,
+        settings: generationSettingsWithDefaults(selectedGenerationAction?.controls ?? [], draft.generationSettings),
+      }
+    : null
+  const editGenerationInputs = async (edit: SlotEdit) => {
+    if (!slotContext || !onSetInputs) return
+    const layout = slotLayout(currentSlotConnections, slotContext)
+    const change = slotLayoutConnections(applySlotEdit(layout, edit, slotKinds), layout)
+    if (slotConnectionsEqual(currentSlotConnections, change.connections)) return
+    const nextEdges = [
+      ...edges.filter((edge) => edge.target !== cell.id || !slotKinds.has(edge.source)),
+      ...change.connections.map((connection) => ({
+        id: `${connection.sourceCellId}:${connection.targetInput}`,
+        source: connection.sourceCellId,
+        target: cell.id,
+        targetInput: connection.targetInput,
+      })),
+    ]
+    const remapped = remapSlotPrompt(draft.prompt, cell.id, cells, currentSlotConnections, change)
+    const savedPrompt = await onSetInputs(change.connections)
+    const legacySettings = slotLegacySettingNames(slotContext.mode)
+    const next = {
+      ...draft,
+      prompt: savedPrompt !== null && draft.prompt === (cell.prompt ?? '') ? savedPrompt : remapped,
+      generationSettings: Object.fromEntries(Object.entries(draft.generationSettings)
+        .filter(([name]) => !legacySettings.has(name))),
+    }
+    setDraft(next)
+    refreshGenerationPreview(next, nextEdges)
+  }
+  const slotEditor: GenerationSlotEditor | undefined = slotContext
+    ? {
+        layout: slotLayout(currentSlotConnections, slotContext),
+        context: slotContext,
+        cells: new Map(cells.flatMap((candidate) =>
+          sourceFor(candidate.id, '').map((source) => [candidate.id, source] as const))),
+        tokens: inputMentionTokens,
+        board: [...new Set(generationSourceOptions.map((option) => option.cellId))],
+        onEdit: (edit) => {
+          void editGenerationInputs(edit)
+        },
+      }
+    : undefined
   const changeGenerationSource = async (
     targetInput: string,
     sourceCellId: string | null,
@@ -3293,6 +3368,7 @@ function ExecutableCellInspector({
             previewStale={generationPreviewStale}
             sources={generationSources}
             sourceOptions={generationSourceOptions}
+            slotEditor={slotEditor}
             voiceCatalog={voiceCatalog}
             promptEditor={promptEditor}
             inputFooter={asset ? (
@@ -3891,6 +3967,7 @@ export function NotebookCellInspector({
   mediaInsightWork,
   onUpdate,
   onSetInput,
+  onSetInputs,
   onRun,
   onDelete,
   onOpenFullscreen,
@@ -4050,6 +4127,7 @@ export function NotebookCellInspector({
       deleting={deleting}
       onUpdate={onUpdate}
       onSetInput={onSetInput}
+      onSetInputs={onSetInputs}
       onRun={onRun}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}

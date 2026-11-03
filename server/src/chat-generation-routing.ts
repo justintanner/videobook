@@ -17,6 +17,8 @@ const FLAT_REF_FIELDS: Readonly<Record<string, string>> = {
   audio_ref: "audio",
   first_frame_ref: "first_frame",
   last_frame_ref: "last_frame",
+  loop_ref: "loop",
+  keyframe_refs: "keyframe",
 };
 
 function record(value: unknown): Record<string, unknown> {

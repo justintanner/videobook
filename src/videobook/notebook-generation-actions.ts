@@ -12,6 +12,9 @@ import { generationModeInputError } from '../../server/src/generation-input-poli
 import { generationInputTarget, generationModeInputTarget, nextGenerationInputPort } from '../../server/src/generation-input-targets'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
+import { generationInputLimits, generationInputSpecs } from './generation-input-contract'
+import type { InputLimit } from '../../server/src/media/types'
+import type { NotebookGenerationInputSpec } from '../../server/src/notebook-generation-contract'
 
 export type GenerationSelection = {
   provider: string
@@ -39,6 +42,9 @@ export type GenerationInputMode = {
   id: string
   slots: GenerationInputSlot[]
   requiredGroups: string[][]
+  label?: string
+  inputs?: NotebookGenerationInputSpec[]
+  limits?: InputLimit[]
 }
 
 export type GenerationInputContract = {
@@ -72,6 +78,7 @@ export type GenerationControl = {
   exclusiveMinimum?: boolean
   exclusiveMaximum?: boolean
   description: string
+  hidden?: boolean
 }
 
 export type NotebookGenerationAction = {
@@ -99,18 +106,15 @@ export function effectiveGenerationControlValue(
   return settings[control.name] ?? control.defaultValue
 }
 
-const KEYFRAME_SECONDS_CONTROL = /^keyframe_(\d+)_seconds$/u
-
-export function generationControlVisible(
-  control: GenerationControl,
+export function generationSettingsWithDefaults(
+  controls: readonly GenerationControl[],
   settings: Record<string, GenerationControlValue>,
-  targetInputs: readonly string[],
-): boolean {
-  const keyframe = KEYFRAME_SECONDS_CONTROL.exec(control.name)?.[1]
-  if (!keyframe || settings[control.name] !== undefined) return true
-  const keyframes = targetInputs.filter((targetInput) =>
-    generationInputTarget('image', targetInput) === 'keyframe').length
-  return Number(keyframe) <= keyframes
+): Record<string, GenerationControlValue> {
+  return {
+    ...Object.fromEntries(controls.flatMap((control) =>
+      control.defaultValue === undefined ? [] : [[control.name, control.defaultValue] as const])),
+    ...settings,
+  }
 }
 
 export function effectiveGenerationSettings(
@@ -248,6 +252,7 @@ function generationControl(value: unknown): GenerationControl | null {
     ...(control?.exclusiveMinimum === true ? { exclusiveMinimum: true } : {}),
     ...(control?.exclusiveMaximum === true ? { exclusiveMaximum: true } : {}),
     description,
+    ...(control?.hidden === true ? { hidden: true } : {}),
   }
 }
 
@@ -274,7 +279,17 @@ function inputMode(value: unknown): GenerationInputMode | null {
   const requiredGroups = Array.isArray(candidate.requiredGroups)
     ? candidate.requiredGroups.map(stringList).filter((group) => group.length > 0)
     : []
-  return { id, slots, requiredGroups }
+  const label = nonBlankStringValue(candidate.label)
+  const inputs = generationInputSpecs(candidate.inputs)
+  const limits = generationInputLimits(candidate.limits)
+  return {
+    id,
+    slots,
+    requiredGroups,
+    ...(label ? { label } : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(limits ? { limits } : {}),
+  }
 }
 
 function inputContract(value: unknown): GenerationInputContract | null {

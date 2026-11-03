@@ -812,7 +812,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<span>Add input</span>')
   })
 
-  it('shows the Grok Imagine 1.5 preview loop frame, numbered keyframes and keyframe timing', () => {
+  it('shows the Grok Imagine 1.5 preview loop frame and numbered keyframes in slots with a time on each keyframe', () => {
     const grok = asNotebookGenerationActions({ actions: listNotebookActions() })
       .filter((action) => action.model === 'kie:grok-imagine-video-1-5-preview')
     const generationCell: NotebookCell = {
@@ -825,7 +825,7 @@ describe('NotebookCellInspector', () => {
       model: 'kie:grok-imagine-video-1-5-preview',
       operation: 'image_to_video',
       tool: 'generate_video',
-      inputs: { generationMode: 'loop' },
+      inputs: { generationMode: 'loop', generationSettings: { duration: 10, keyframe_2_seconds: 7 }, inputParams: { keyframe: { timestamp_s: 2.5 } } },
       outputArtifactId: undefined,
     }
     const stills = [1, 2, 3, 4].map((index): NotebookCell => ({
@@ -855,19 +855,27 @@ describe('NotebookCellInspector', () => {
       generationActions: grok,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
+      onSetInputs: async () => null,
       onRun: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<strong>@loop</strong><small>@a1 · loop frame input</small>')
-    expect(html).toContain('<strong>@keyframe1</strong><small>@a2 · keyframe input</small>')
-    expect(html).toContain('<strong>@keyframe2</strong><small>@a3 · keyframe 2 input</small>')
+    expect(html).toContain('data-inputs="slots"')
+    expect(html.match(/<section class="generation-slot" aria-label="([^"]+)"/g)?.map((match) => match.split('"')[3]))
+      .toEqual(['Reference images', 'Loop frame', 'Keyframes', 'Replacement audio'])
+    expect(html).toContain('<code class="generation-slot-field">keyframe_urls</code><span class="generation-slot-count">2/4</span>')
+    expect(html).toContain('<code class="generation-slot-field">image_urls</code><span class="generation-slot-count">0/1</span>')
+    expect(html).toContain('<strong>@loop</strong><span class="generation-slot-chip-meta"><small>@a1</small>')
+    expect(html).toContain('<strong>@keyframe1</strong><span class="generation-slot-chip-meta"><small>@a2</small>')
+    expect(html).toContain('<strong>@keyframe2</strong><span class="generation-slot-chip-meta"><small>@a3</small>')
+    expect(html).toMatch(/aria-label="Time for @a2"[^>]*value="2.5"|value="2.5"[^>]*aria-label="Time for @a2"/)
+    expect(html).toMatch(/aria-label="Time for @a3"[^>]*value="7"|value="7"[^>]*aria-label="Time for @a3"/)
     expect(html).toMatch(/<option value="loop" selected="">Loop<\/option>/)
     expect(html).toContain('I2V · Image to video')
-    for (const index of [1, 2]) expect(html).toContain(`aria-label="Keyframe ${index} seconds"`)
-    for (const index of [3, 4]) expect(html).not.toContain(`aria-label="Keyframe ${index} seconds"`)
-    expect(html).toContain('<span>Add input</span>')
+    expect(html).not.toContain('Keyframe 1 seconds')
+    expect(html).toContain('aria-label="Board cells"')
+    expect(html).toContain('title="Add @a4 to Reference images"')
   })
 
   it('omits input sources that would make the notebook cyclic', () => {

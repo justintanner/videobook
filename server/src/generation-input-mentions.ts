@@ -168,6 +168,21 @@ export function remapGenerationInputPrompt(
     });
 }
 
+export function remapGenerationInputLayoutPrompt(
+  prompt: string,
+  cellId: string,
+  cells: readonly GenerationInputMentionCell[],
+  previousEdges: readonly GenerationInputMentionEdge[],
+  nextEdges: readonly GenerationInputMentionEdge[],
+  identity: ReadonlyMap<string, string>,
+): string {
+  const before = generationInputMentions(cellId, cells, previousEdges).map((mention) => ({
+    ...mention,
+    targetInput: identity.get(`${mention.sourceCellId}:${mention.targetInput}`) ?? `${mention.targetInput}:removed`,
+  }));
+  return remapGenerationInputPrompt(prompt, before, generationInputMentions(cellId, cells, nextEdges));
+}
+
 /** "@image1"-style tokens in a prompt, lower-cased and without the "@". */
 export function scanGenerationInputTokens(prompt: string): string[] {
   return [...prompt.matchAll(generationInputTokenPattern())]

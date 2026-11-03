@@ -30,6 +30,7 @@ import {
 } from "../notebook-cell-outputs.js";
 import { mutateNotebook, mutateNotebookIfChanged, withNotebookMutation } from "../notebook-mutations.js";
 import {
+  adoptUnplacedLegacyParams,
   cellInputItemsError,
   cellInputLayoutChanged,
   cellMediaEdges,
@@ -917,9 +918,10 @@ function nextCellInputs(engine: Engine, notebook: NotebookDocument, cellId: stri
     next = { ...next, edges: [...next.edges, edge] };
   }
   next = { ...next, edges: [...next.edges].sort((left, right) => left.id.localeCompare(right.id)) };
-  next = refreshPromptForLayout(notebook, withCellInputLayout(next, cellId, layout), cellId, layout.identity);
+  const placed = adoptUnplacedLegacyParams(layout, items, model ? notebookCellInputPorts(model, next, cell) : {});
+  next = refreshPromptForLayout(notebook, withCellInputLayout(next, cellId, placed), cellId, placed.identity);
   next = markCellAndDescendantsStale(next, cellId);
-  return { document: next, cell: next.cells.find((candidate) => candidate.id === cellId)!, layout };
+  return { document: next, cell: next.cells.find((candidate) => candidate.id === cellId)!, layout: placed };
 }
 
 export function videobookDomainDefs(

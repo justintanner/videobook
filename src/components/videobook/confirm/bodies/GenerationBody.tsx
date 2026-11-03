@@ -4,7 +4,6 @@ import { useState, type ReactNode } from 'react'
 import { frameAspectRatio as modelFrameAspectRatio, FRAME_ASPECT_DESCRIPTION } from '../../../../../server/src/media/frame-options'
 import { CircleAlert, Plus, RefreshCw, X } from 'lucide-react'
 import {
-  generationControlVisible,
   generationModeLabel,
   type GenerationControlValue,
   type GenerationInputMode,
@@ -17,6 +16,7 @@ import { PromptHistoryControls } from '@/components/videobook/PromptHistoryContr
 import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
 import { RichJson } from '@/components/videobook/RichJson'
+import { GenerationInputSlots, type GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
 import {
   DoltCellSource,
   type DoltArtifactAssets,
@@ -74,6 +74,7 @@ type GenerationBodyProps = {
   sourceVisible?: boolean
   notebookId?: string
   doltArtifactAssets?: DoltArtifactAssets
+  slotEditor?: GenerationSlotEditor
   onActionChange: (actionId: string) => void
   onAddSource: (cellId: string, targetInput?: string) => void
   onModeChange: (modeId: string) => void
@@ -163,6 +164,83 @@ function SourceCard({
   )
 }
 
+function GenerationSourceList({
+  busy,
+  sources,
+  sourceOptions,
+  onAddSource,
+  onRemoveSource,
+  onSelectSource,
+}: Pick<GenerationBodyProps, 'busy' | 'sources' | 'sourceOptions' | 'onAddSource' | 'onRemoveSource' | 'onSelectSource'>) {
+  const [showSourcePicker, setShowSourcePicker] = useState(false)
+  return (
+    <>
+      <div className="generation-review-sources">
+        {sources.map((source) => (
+          <div className="generation-review-source-wrap" key={`${source.cellId}:${source.targetInput ?? ''}`}>
+            <SourceCard
+              badge="Input"
+              busy={busy}
+              source={source}
+              title={`Select @${source.address} on the board`}
+              onClick={() => onSelectSource(source.cellId)}
+            />
+            <button
+              type="button"
+              className="generation-review-source-remove"
+              disabled={busy}
+              aria-label={`Remove @${source.address} input`}
+              title={`Remove @${source.address} input`}
+              onClick={() => onRemoveSource(source.cellId, source.targetInput)}
+            >
+              <X size={11} aria-hidden="true" />
+            </button>
+          </div>
+        ))}
+        {sources.length === 0 && (
+          <div className="generation-review-text-input">
+            <span>Input</span>
+            <strong>Prompt only</strong>
+            <small>No source media attached</small>
+          </div>
+        )}
+        {sourceOptions.length > 0 && (
+          <button
+            type="button"
+            className="generation-review-source-add"
+            disabled={busy}
+            aria-expanded={showSourcePicker}
+            onClick={() => setShowSourcePicker((current) => !current)}
+          >
+            <Plus size={14} aria-hidden="true" />
+            <span>Add input</span>
+          </button>
+        )}
+      </div>
+      {showSourcePicker && sourceOptions.length > 0 && (
+        <div
+          className="generation-review-sources generation-review-source-options"
+          aria-label="Available input cells"
+        >
+          {sourceOptions.map((option) => (
+            <SourceCard
+              key={`${option.cellId}:${option.targetInput ?? ''}`}
+              badge="Add"
+              busy={busy}
+              source={option}
+              title={`Add @${option.address} as ${option.targetLabel ?? 'input'}`}
+              onClick={() => {
+                onAddSource(option.cellId, option.targetInput)
+                setShowSourcePicker(false)
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 export function GenerationBody({
   actions,
   busy,
@@ -182,6 +260,7 @@ export function GenerationBody({
   sourceVisible = false,
   notebookId = '',
   doltArtifactAssets,
+  slotEditor,
   onActionChange,
   onAddSource,
   onModeChange,
@@ -191,7 +270,6 @@ export function GenerationBody({
   onSelectSource,
   onSettingChange,
 }: GenerationBodyProps) {
-  const [showSourcePicker, setShowSourcePicker] = useState(false)
   const frontierType = generationFrontierType(draft.cell.type, generationMode(draft), draft.action.operation, sources)
   const modelGroups = frontierPickerGroups(actions, frontierType)
   const settings = notebookChatGenerationSettings(draft)
@@ -215,13 +293,12 @@ export function GenerationBody({
     : ''
   const insertVideo = isInsertVideoModel(draft.action.model)
   const seedanceEdit = isSeedanceEdit(draft.action.model, draft.cell.inputs?.generationMode ?? draft.cell.inputs?.mode)
-  const sourceTargets = sources.flatMap((source) => source.targetInput ? [source.targetInput] : [])
   const visibleControls = (seedanceEdit
     ? draft.action.controls.filter((control) => !['duration', 'aspect_ratio'].includes(control.name))
     : insertVideo
     ? draft.action.controls.filter((control) => !['start_time', 'resume_time', 'duration'].includes(control.name))
     : draft.action.controls)
-    .filter((control) => generationControlVisible(control, settings, sourceTargets))
+    .filter((control) => !control.hidden)
   const generalControls = showVoicePicker
     ? draft.action.controls.filter((control) => control.name !== 'voice_id')
     : visibleControls
@@ -247,70 +324,20 @@ export function GenerationBody({
     ? doltCellRows(notebookId, draft.cell).length
     : 0
   return (
-    <div className="confirm-generation" data-view={sourceVisible ? 'source' : 'form'}>
+    <div className="confirm-generation" data-view={sourceVisible ? 'source' : 'form'} data-inputs={slotEditor ? 'slots' : undefined}>
       <section className="confirm-section generation-review-input-section" aria-label="Inputs">
         <span className="confirm-section-label">Inputs</span>
-        <div className="generation-review-sources">
-          {sources.map((source) => (
-            <div className="generation-review-source-wrap" key={`${source.cellId}:${source.targetInput ?? ''}`}>
-              <SourceCard
-                badge="Input"
-                busy={busy}
-                source={source}
-                title={`Select @${source.address} on the board`}
-                onClick={() => onSelectSource(source.cellId)}
-              />
-              <button
-                type="button"
-                className="generation-review-source-remove"
-                disabled={busy}
-                aria-label={`Remove @${source.address} input`}
-                title={`Remove @${source.address} input`}
-                onClick={() => onRemoveSource(source.cellId, source.targetInput)}
-              >
-                <X size={11} aria-hidden="true" />
-              </button>
-            </div>
-          ))}
-          {sources.length === 0 && (
-            <div className="generation-review-text-input">
-              <span>Input</span>
-              <strong>Prompt only</strong>
-              <small>No source media attached</small>
-            </div>
-          )}
-          {sourceOptions.length > 0 && (
-            <button
-              type="button"
-              className="generation-review-source-add"
-              disabled={busy}
-              aria-expanded={showSourcePicker}
-              onClick={() => setShowSourcePicker((current) => !current)}
-            >
-              <Plus size={14} aria-hidden="true" />
-              <span>Add input</span>
-            </button>
-          )}
-        </div>
-        {showSourcePicker && sourceOptions.length > 0 && (
-          <div
-            className="generation-review-sources generation-review-source-options"
-            aria-label="Available input cells"
-          >
-            {sourceOptions.map((option) => (
-              <SourceCard
-                key={`${option.cellId}:${option.targetInput ?? ''}`}
-                badge="Add"
-                busy={busy}
-                source={option}
-                title={`Add @${option.address} as ${option.targetLabel ?? 'input'}`}
-                onClick={() => {
-                  onAddSource(option.cellId, option.targetInput)
-                  setShowSourcePicker(false)
-                }}
-              />
-            ))}
-          </div>
+        {slotEditor ? (
+          <GenerationInputSlots busy={busy} editor={slotEditor} onSelectSource={onSelectSource} />
+        ) : (
+          <GenerationSourceList
+            busy={busy}
+            sources={sources}
+            sourceOptions={sourceOptions}
+            onAddSource={onAddSource}
+            onRemoveSource={onRemoveSource}
+            onSelectSource={onSelectSource}
+          />
         )}
         {inputFooter}
       </section>

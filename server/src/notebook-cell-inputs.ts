@@ -1,7 +1,7 @@
 import type { NotebookCell, NotebookDocument, NotebookEdge } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cellInputParams, type InputParams } from "./generation-input-params.js";
-import { generationInputMentions, remapGenerationInputPrompt } from "./generation-input-mentions.js";
+import { remapGenerationInputLayoutPrompt } from "./generation-input-mentions.js";
 import { generationInputTarget, type GenerationInputKind } from "./generation-input-targets.js";
 import type { RefRole, ResolvedModel } from "./media/types.js";
 import { notebookGenerationInputKind } from "./notebook-generation-contract.js";
@@ -12,11 +12,19 @@ export interface CellInputItem {
   params?: Readonly<Record<string, number>>;
 }
 
+interface UnplacedLegacyParam {
+  role: RefRole;
+  index: number;
+  name: string;
+  value: number;
+}
+
 export interface CellInputLayout {
   edges: NotebookEdge[];
   identity: ReadonlyMap<string, string>;
   inputParams: InputParams;
   convertedSettings: readonly string[];
+  unplacedLegacy: readonly UnplacedLegacyParam[];
 }
 
 type PortsByRole = Partial<Record<RefRole, readonly string[]>>;
@@ -90,11 +98,16 @@ function numeric(raw: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function legacyItemParams(model: ResolvedModel | null, cell: NotebookCell, ports: PortsByRole): { params: InputParams; converted: string[] } {
+function legacyItemParams(
+  model: ResolvedModel | null,
+  cell: NotebookCell,
+  ports: PortsByRole,
+): { params: InputParams; converted: string[]; unplaced: UnplacedLegacyParam[] } {
   const raw = cell.inputs?.generationSettings;
   const settings = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
   const params: InputParams = {};
   const converted: string[] = [];
+  const unplaced: UnplacedLegacyParam[] = [];
   for (const slot of model?.slots ?? []) {
     for (const spec of slot.itemParams) {
       for (const [index, option] of (spec.legacyOptions ?? []).entries()) {
@@ -102,11 +115,13 @@ function legacyItemParams(model: ResolvedModel | null, cell: NotebookCell, ports
         converted.push(option);
         const port = ports[slot.role]?.[index];
         const value = numeric(settings[option]);
-        if (port && value !== null) params[port] = { ...params[port], [spec.name]: value };
+        if (value === null) continue;
+        if (port) params[port] = { ...params[port], [spec.name]: value };
+        else unplaced.push({ role: slot.role, index, name: spec.name, value });
       }
     }
   }
-  return { params, converted };
+  return { params, converted, unplaced };
 }
 
 function explicitParams(raw: Readonly<Record<string, number>>): Record<string, number> {
@@ -144,7 +159,28 @@ export function planCellInputLayout(input: {
       ? match
       : input.createEdge({ source: item.sourceCellId, target: input.cell.id, targetInput: item.targetInput });
   });
-  return { edges, identity, inputParams: canonicalParams(inputParams), convertedSettings: legacy.converted };
+  return {
+    edges,
+    identity,
+    inputParams: canonicalParams(inputParams),
+    convertedSettings: legacy.converted,
+    unplacedLegacy: legacy.unplaced,
+  };
+}
+
+export function adoptUnplacedLegacyParams(
+  layout: CellInputLayout,
+  items: readonly CellInputItem[],
+  ports: PortsByRole,
+): CellInputLayout {
+  const explicit = new Set(items.filter((item) => item.params).map((item) => item.targetInput));
+  const inputParams: InputParams = { ...layout.inputParams };
+  for (const entry of layout.unplacedLegacy) {
+    const port = ports[entry.role]?.[entry.index];
+    if (!port || explicit.has(port) || inputParams[port]?.[entry.name] !== undefined) continue;
+    inputParams[port] = { ...inputParams[port], [entry.name]: entry.value };
+  }
+  return { ...layout, inputParams: canonicalParams(inputParams) };
 }
 
 export function cellInputLayoutChanged(cell: NotebookCell, oldEdges: readonly NotebookEdge[], layout: CellInputLayout): boolean {
@@ -162,9 +198,5 @@ export function remapPromptForLayout(
   cellId: string,
   identity: ReadonlyMap<string, string>,
 ): string {
-  const before = generationInputMentions(cellId, previous.cells, previous.edges).map((mention) => ({
-    ...mention,
-    targetInput: identity.get(edgeKey(mention.sourceCellId, mention.targetInput)) ?? `${mention.targetInput}:removed`,
-  }));
-  return remapGenerationInputPrompt(prompt, before, generationInputMentions(cellId, next.cells, next.edges));
+  return remapGenerationInputLayoutPrompt(prompt, cellId, next.cells, previous.edges, next.edges, identity);
 }

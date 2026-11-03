@@ -16,11 +16,27 @@ import {
   generationActionIsCompatible,
   generationActionsForCell,
   generationSelectionForAction,
+  generationSettingsWithDefaults,
   initialGenerationSelection,
   type GenerationConnectedInput,
   type GenerationControlValue,
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
+import {
+  applySlotEdit,
+  remapSlotPrompt,
+  slotEffectiveConnections,
+  slotInputParams,
+  slotInputsArgument,
+  slotLayout,
+  slotLayoutConnections,
+  slotLegacySettingNames,
+  slotSourceKinds,
+  type SlotConnection,
+  type SlotEdit,
+  type SlotLayoutContext,
+} from './generation-slot-layout'
+import { withInputParams } from '../../server/src/generation-input-params'
 import { isNotebookGenerationCellType, type NotebookGenerationCellType } from './notebook-cell-types'
 import {
   notebookCellTag,
@@ -40,10 +56,7 @@ export type NotebookChatGenerationCommand = {
 export type NotebookChatGenerationDraft = {
   action: NotebookGenerationAction
   cell: NotebookCell
-  connections: Array<{
-    sourceCellId: string
-    targetInput: string
-  }>
+  connections: SlotConnection[]
   makeRoom?: boolean
   sourceCellIds: string[]
   sourceAddresses: string[]
@@ -114,6 +127,42 @@ function connectedInputCandidates(
 type GenerationChoice = {
   action: NotebookGenerationAction
   connectedInputs: GenerationConnectedInput[]
+}
+
+function slotDerivedInputs(
+  action: NotebookGenerationAction,
+  sources: readonly NotebookChatGenerationSource[],
+): GenerationConnectedInput[][] {
+  return action.inputContract.modes.flatMap((mode) => {
+    const counts = new Map<string, number>()
+    const layout = sources.map((source) => {
+      const spec = mode.inputs?.find((candidate) => candidate.kind === source.kind
+        && (candidate.max === null || (counts.get(candidate.target) ?? 0) < candidate.max))
+      if (!spec) return null
+      counts.set(spec.target, (counts.get(spec.target) ?? 0) + 1)
+      return { kind: source.kind, target: spec.target }
+    })
+    return layout.every((entry) => entry !== null) ? [layout as GenerationConnectedInput[]] : []
+  })
+}
+
+function uniqueLayouts(layouts: readonly GenerationConnectedInput[][]): GenerationConnectedInput[][] {
+  const keys = layouts.map((layout) => JSON.stringify(layout))
+  return layouts.filter((_, index) => keys.indexOf(keys[index]!) === index)
+}
+
+function generationChoiceForSources(input: {
+  action: NotebookGenerationAction | undefined
+  actions: readonly NotebookGenerationAction[]
+  cellType: NotebookGenerationCellType
+  sources: readonly NotebookChatGenerationSource[]
+}): GenerationChoice | null {
+  const candidates = connectedInputCandidates(input.sources)
+  const derived = input.action ? slotDerivedInputs(input.action, input.sources) : []
+  return generationChoiceFor(input.action, uniqueLayouts([...candidates, ...derived]))
+    ?? defaultGenerationChoice(input.actions, input.cellType, candidates)
+    ?? defaultGenerationChoice(input.actions, input.cellType, uniqueLayouts(
+      generationActionsForCell(input.actions, input.cellType).flatMap((action) => slotDerivedInputs(action, input.sources))))
 }
 
 function generationChoiceFor(
@@ -273,13 +322,16 @@ export function planNotebookChatGeneration(input: {
       `Connecting ${notebookCellTag(cyclicSource.cell)} would create a cycle`,
     )
   }
-  const candidates = connectedInputCandidates(sources)
   const preferred = input.preferredModel
     ? generationActionsForCell(input.actions, input.command.cellType).find((action) =>
         action.model === input.preferredModel)
     : undefined
-  const choice = generationChoiceFor(preferred, candidates)
-    ?? defaultGenerationChoice(input.actions, input.command.cellType, candidates)
+  const choice = generationChoiceForSources({
+    action: preferred,
+    actions: input.actions,
+    cellType: input.command.cellType,
+    sources,
+  })
   if (!choice) {
     throw new Error(
       `No available ${input.command.mediaKind} generation action accepts these references`,
@@ -400,6 +452,115 @@ export function notebookChatGenerationConnectedInputs(
       ? [{ kind, target: generationInputTarget(kind, connection.targetInput) }]
       : []
   })
+}
+
+export function notebookChatGenerationSlotContext(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): SlotLayoutContext | null {
+  const configured = draft.cell.inputs?.generationMode
+  const modes = draft.action.inputContract.modes
+  const mode = modes.find((candidate) => candidate.id === configured)
+    ?? compatibleGenerationModes(draft.action, notebookChatGenerationConnectedInputs(draft, document))[0]
+    ?? modes[0]
+  if (!mode?.inputs) return null
+  return {
+    mode: { inputs: mode.inputs, limits: mode.limits ?? [] },
+    modeId: mode.id,
+    kinds: slotSourceKinds(document.cells),
+    settings: generationSettingsWithDefaults(draft.action.controls, notebookChatGenerationSettings(draft)),
+  }
+}
+
+function notebookChatGenerationMediaInputs(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): SlotConnection[] {
+  const kinds = slotSourceKinds(document.cells)
+  const media = draft.connections.filter((connection) => kinds.has(connection.sourceCellId))
+  const context = notebookChatGenerationSlotContext(draft, document)
+  return context ? slotEffectiveConnections(media, context) : media
+}
+
+function notebookChatGenerationOtherInputs(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): SlotConnection[] {
+  const kinds = slotSourceKinds(document.cells)
+  return draft.connections.filter((connection) => !kinds.has(connection.sourceCellId))
+}
+
+function withoutLegacyItemSettings(
+  inputs: Record<string, unknown> | undefined,
+  context: SlotLayoutContext,
+): Record<string, unknown> {
+  const legacy = slotLegacySettingNames(context.mode)
+  const settings = recordValue(inputs?.generationSettings)
+  return settings
+    ? { ...inputs, generationSettings: Object.fromEntries(Object.entries(settings).filter(([name]) => !legacy.has(name))) }
+    : { ...inputs }
+}
+
+export function notebookChatGenerationSavedInputs(
+  draft: NotebookChatGenerationDraft,
+  document: NotebookDocument,
+): Record<string, unknown> {
+  const context = notebookChatGenerationSlotContext(draft, document)
+  const inputs = withInputParams(draft.cell.inputs, {})
+  return context ? withoutLegacyItemSettings(inputs, context) : inputs
+}
+
+export function reviseNotebookChatGenerationInputs(input: {
+  draft: NotebookChatGenerationDraft
+  document: NotebookDocument
+  context: SlotLayoutContext
+  edit: SlotEdit
+}): NotebookChatGenerationDraft {
+  const { draft, document, context } = input
+  const media = draft.connections.filter((connection) => context.kinds.has(connection.sourceCellId))
+  const layout = slotLayout(media, context)
+  const change = slotLayoutConnections(applySlotEdit(layout, input.edit, context.kinds), layout)
+  const connections = [...change.connections, ...notebookChatGenerationOtherInputs(draft, document)]
+  const sourceCellIds = [...new Set(connections.map((connection) => connection.sourceCellId))]
+  const sources = sourceCellIds.flatMap((cellId) => document.cells.filter((cell) => cell.id === cellId))
+  return {
+    ...draft,
+    connections,
+    sourceCellIds: sources.map((cell) => cell.id),
+    sourceAddresses: sources.map((cell) => notebookCellTag(cell)),
+    cell: {
+      ...draft.cell,
+      prompt: remapSlotPrompt(draft.cell.prompt ?? '', draft.cell.id, [draft.cell, ...document.cells], media, change),
+      inputs: withInputParams(withoutLegacyItemSettings(draft.cell.inputs, context), slotInputParams(change.connections)),
+    },
+  }
+}
+
+export async function writeNotebookChatGenerationInputs(input: {
+  bookId: string
+  callTool: NotebookToolCall
+  document: NotebookDocument
+  draft: NotebookChatGenerationDraft
+}): Promise<void> {
+  await input.callTool('set_notebook_cell_inputs', {
+    book_id: input.bookId,
+    notebook_id: input.document.id,
+    cell_id: input.draft.cell.id,
+    inputs: slotInputsArgument(notebookChatGenerationMediaInputs(input.draft, input.document)),
+  })
+  const connected = new Set(input.document.edges
+    .filter((edge) => edge.target === input.draft.cell.id)
+    .map((edge) => `${edge.source}:${edge.targetInput}`))
+  for (const connection of notebookChatGenerationOtherInputs(input.draft, input.document)) {
+    if (connected.has(`${connection.sourceCellId}:${connection.targetInput}`)) continue
+    await input.callTool('connect_notebook_cells', {
+      book_id: input.bookId,
+      notebook_id: input.document.id,
+      source_cell_id: connection.sourceCellId,
+      target_cell_id: input.draft.cell.id,
+      target_input: connection.targetInput,
+    })
+  }
 }
 
 export function notebookChatGenerationSettings(
@@ -532,9 +693,12 @@ export function reviseNotebookChatGenerationSources(input: {
     }
     return notebookChatGenerationSource(input.document, cell)
   })
-  const candidates = connectedInputCandidates(sources)
-  const choice = generationChoiceFor(input.draft.action, candidates)
-    ?? defaultGenerationChoice(input.actions, cellType, candidates)
+  const choice = generationChoiceForSources({
+    action: input.draft.action,
+    actions: input.actions,
+    cellType,
+    sources,
+  })
   if (!choice) {
     const mediaKind = cellType === 'generate_audio' ? 'audio'
       : cellType === 'generate_image' ? 'image'
@@ -612,15 +776,7 @@ export async function materializeNotebookChatGeneration(input: {
       throw new Error('The server did not preserve the planned generation cell')
     }
     created = true
-    for (const connection of input.draft.connections) {
-      await input.callTool('connect_notebook_cells', {
-        book_id: input.bookId,
-        notebook_id: input.document.id,
-        source_cell_id: connection.sourceCellId,
-        target_cell_id: cellId,
-        target_input: connection.targetInput,
-      })
-    }
+    await writeNotebookChatGenerationInputs(input)
     return {
       cellId,
       cellAddress: nonBlankStringValue(value?.address)

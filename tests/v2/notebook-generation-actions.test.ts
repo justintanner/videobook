@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { listNotebookActions } from '../../server/src/notebook-action-catalog'
+import { resolveModel } from '../../server/src/media/descriptor'
+import { notebookGenerationInputContract } from '../../server/src/notebook-generation-contract'
 import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
@@ -10,7 +12,6 @@ import {
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
-  generationControlVisible,
   generationInputKind,
   generationInputAttachments,
   generationModeLabel,
@@ -490,21 +491,21 @@ describe('notebook generation actions', () => {
       .map((mode) => mode.id)).toEqual(['i2v'])
   })
 
-  it('shows Grok keyframe seconds only for connected keyframes or values to clear', () => {
+  it('keeps per-item keyframe times out of the settings and parses the slot contract', () => {
     const grok = asNotebookGenerationActions({ actions: listNotebookActions() })
       .find((action) => action.model === 'kie:grok-imagine-video-1-5-preview')!
-    const visible = (settings: Record<string, number>, targetInputs: string[]) => grok.controls
-      .filter((control) => generationControlVisible(control, settings, targetInputs))
-      .map((control) => control.name)
-    const keyframeSeconds = (names: string[]) => names.filter((name) => name.startsWith('keyframe_'))
-
-    expect(keyframeSeconds(visible({}, ['image', 'image_2', 'image_3', 'replace_audio']))).toEqual([])
-    expect(visible({}, ['image'])).toEqual(expect.arrayContaining(['aspect_ratio', 'resolution', 'duration']))
-    expect(keyframeSeconds(visible({}, ['image', 'keyframe']))).toEqual(['keyframe_1_seconds'])
-    expect(keyframeSeconds(visible({}, ['image', 'keyframe', 'keyframe_2'])))
-      .toEqual(['keyframe_1_seconds', 'keyframe_2_seconds'])
-    expect(keyframeSeconds(visible({ keyframe_3_seconds: 4 }, ['image', 'keyframe'])))
-      .toEqual(['keyframe_1_seconds', 'keyframe_3_seconds'])
+    expect(grok.controls.filter((control) => control.hidden).map((control) => control.name))
+      .toEqual(['keyframe_1_seconds', 'keyframe_2_seconds', 'keyframe_3_seconds', 'keyframe_4_seconds'])
+    expect(grok.controls.filter((control) => !control.hidden).map((control) => control.name))
+      .toEqual(expect.arrayContaining(['aspect_ratio', 'resolution', 'duration']))
+    const served = notebookGenerationInputContract(resolveModel(grok.model)).modes
+    for (const mode of grok.inputContract.modes) {
+      const source = JSON.parse(JSON.stringify(served.find((candidate) => candidate.id === mode.id))) as typeof served[number]
+      expect({ label: mode.label, inputs: mode.inputs, limits: mode.limits })
+        .toEqual({ label: source.label, inputs: source.inputs, limits: source.limits })
+    }
+    expect(grok.inputContract.modes.find((mode) => mode.id === 'i2v')!.limits!.map((limit) => limit.message))
+      .toEqual(['1080p takes one reference image'])
   })
 
   it('offers unconnected media through an open generation input', () => {

@@ -13,13 +13,13 @@ interface NotebookGenerationInputSlot {
   max: number | null;
 }
 
-interface NotebookGenerationInputField {
+export interface NotebookGenerationInputField {
   path: string;
   label: string;
   max: number | null;
 }
 
-interface NotebookGenerationInputSpec {
+export interface NotebookGenerationInputSpec {
   target: string;
   kind: NotebookGenerationInputKind;
   label: string;
@@ -31,7 +31,7 @@ interface NotebookGenerationInputSpec {
   sent: boolean;
 }
 
-interface NotebookGenerationInputMode {
+export interface NotebookGenerationInputMode {
   id: string;
   slots: NotebookGenerationInputSlot[];
   requiredGroups: string[][];

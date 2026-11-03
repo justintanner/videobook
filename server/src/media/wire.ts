@@ -28,6 +28,7 @@ import {
 import { machgenWire } from "./machgen.js";
 import { wavespeedWire } from "./wavespeed.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
+import { evenKeyframeSeconds } from "./item-param-defaults.js";
 
 type AnyObject = ZodObject<ZodRawShape>;
 
@@ -135,10 +136,6 @@ function grokPreviewInput(): AnyObject {
       }
     });
   });
-}
-
-function evenKeyframeSeconds(duration: number, count: number, index: number): number {
-  return Math.round((duration * (index + 1) / (count + 1)) * 100) / 100;
 }
 
 function grokPreviewKeyframes(value: Record<string, unknown>): Array<{ url: string; timestamp_s: number }> {

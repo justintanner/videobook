@@ -906,13 +906,12 @@ describe('chat composer browser flow', () => {
       await notebookCellNode(page, generatorId).click()
       const editor = page.locator('.generation-cell-inspector .confirm-generation')
       for (const tag of ['@a4', '@a5']) {
-        await editor.getByRole('button', { name: 'Add input', exact: true }).click()
-        await editor.getByTitle(`Add ${tag} as image input`, { exact: true }).click()
-        await expect.poll(() => editor.getByLabel(`Remove ${tag} input`).count(), {
+        await editor.getByTitle(`Add ${tag} to Reference images`, { exact: true }).click()
+        await expect.poll(() => editor.getByLabel(`Remove ${tag} from Reference images`).count(), {
           timeout: MCP_ROUNDTRIP_MS,
         }).toBe(1)
       }
-      expect(await editor.locator('.generation-review-source strong').allTextContents()).toEqual(['@image1', '@image2'])
+      expect(await editor.locator('.generation-slot-chip .generation-slot-chip-copy strong').allTextContents()).toEqual(['@image1', '@image2'])
       await editor.getByRole('textbox', { name: 'Prompt', exact: true }).fill('Animate @image1 and @image2')
       const source = editor.locator('.generation-review-json pre')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
@@ -974,7 +973,7 @@ describe('chat composer browser flow', () => {
       const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate' })
       await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('Use @Image1 and @Image2')
       expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
-      expect(await editor.locator('.generation-review-source strong').allTextContents()).toEqual(['@image1', '@image2'])
+      expect(await editor.locator('.generation-slot-chip .generation-slot-chip-copy strong').allTextContents()).toEqual(['@image1', '@image2'])
       expect(await payload.textContent()).toContain('"reference_image_urls"')
       expect(await payload.textContent()).not.toContain('"first_frame_url"')
       await expect.poll(() => generate.isEnabled()).toBe(true)
@@ -987,9 +986,8 @@ describe('chat composer browser flow', () => {
       await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"reference_image_urls"')
       expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
 
-      for (const [tag, kind] of [['@a1', 'video'], ['@a2', 'audio']]) {
-        await editor.getByRole('button', { name: 'Add input', exact: true }).click()
-        await editor.getByTitle(`Add ${tag} as ${kind} input`, { exact: true }).click()
+      for (const [tag, kind, slot] of [['@a1', 'video', 'Reference videos'], ['@a2', 'audio', 'Reference audio']]) {
+        await editor.getByTitle(`Add ${tag} to ${slot}`, { exact: true }).click()
         await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS })
           .toContain(`"reference_${kind}_urls"`)
       }
@@ -4295,12 +4293,11 @@ describe('chat composer browser flow', () => {
       timeout: MCP_ROUNDTRIP_MS,
     }).toContain('"aspect_ratio": "9:16"')
 
-    await editor.getByRole('button', { name: 'Add input', exact: true }).click()
-    await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
-    await expect.poll(async () => await editor.getByLabel('Remove @c3 input').count(), {
+    await editor.getByTitle(/^Add @c3 to /).click()
+    await expect.poll(async () => await editor.getByLabel(/^Remove @c3 from /).count(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(1)
-    expect(await editor.getByLabel('Available input cells').count()).toBe(0)
+    expect(await editor.getByTitle(/^Add @c3 to /).count()).toBe(0)
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     expect(await source.textContent()).toContain('"provider_path"')
     expect(await editor.getByLabel('Generation model').isVisible()).toBe(false)
@@ -4313,7 +4310,7 @@ describe('chat composer browser flow', () => {
 
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
     const prompt = editor.getByRole('textbox', { name: 'Prompt', exact: true })
-    expect(await editor.locator('.generation-review-source strong').first().textContent()).toBe('@image1')
+    expect(await editor.locator('.generation-slot-chip .generation-slot-chip-copy strong').first().textContent()).toBe('@image1')
     await prompt.fill('Use @image1 in a moonlit garden')
     await page.getByRole('button', { name: 'View source', exact: true }).click()
     await expect.poll(async () => await source.textContent(), {
@@ -4420,8 +4417,8 @@ describe('chat composer browser flow', () => {
     await page.getByRole('button', { name: 'View cell', exact: true }).click()
     expect(await prompt.inputValue()).toBe('A revised moonlit garden')
 
-    await editor.getByLabel('Remove @c3 input').click()
-    await expect.poll(async () => await editor.getByLabel('Remove @c3 input').count(), {
+    await editor.getByLabel(/^Remove @c3 from /).click()
+    await expect.poll(async () => await editor.getByLabel(/^Remove @c3 from /).count(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(0)
     await expect.poll(async () => await source.locator('.json-media-preview img').count(), {
@@ -4473,8 +4470,7 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     try {
       await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
-      await editor.getByRole('button', { name: 'Add input', exact: true }).click()
-      await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
+      await editor.getByTitle(/^Add @c3 to /).click()
       await model.selectOption('generation.kie:vidu-q4/image-to-video')
       await prompt.fill('')
       await editor.getByLabel('Duration', { exact: true }).fill('3')
@@ -4505,7 +4501,7 @@ describe('chat composer browser flow', () => {
       expect(observedCalls.some(call => call.name === 'run_notebook'
         || call.name === 'generate_video')).toBe(false)
     } finally {
-      const addedInput = editor.getByLabel('Remove @c3 input')
+      const addedInput = editor.getByLabel(/^Remove @c3 from /)
       if (await addedInput.count()) await addedInput.click()
       await expect.poll(() => addedInput.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       notebookDirty = true
@@ -4523,8 +4519,7 @@ describe('chat composer browser flow', () => {
     observedCalls.length = 0
     try {
       await editor.getByLabel('Generation type', { exact: true }).selectOption('r2v')
-      await editor.getByRole('button', { name: 'Add input', exact: true }).click()
-      await editor.getByTitle('Add @c3 as image input', { exact: true }).click()
+      await editor.getByTitle(/^Add @c3 to /).click()
       await model.selectOption('generation.fal:bytedance/seedance-2.0/us/image-to-video')
       await prompt.fill('Drift toward the moon from @image1')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
@@ -4545,7 +4540,7 @@ describe('chat composer browser flow', () => {
       expect(observedCalls.some(call => call.name === 'run_notebook'
         || call.name === 'generate_video')).toBe(false)
     } finally {
-      const addedInput = editor.getByLabel('Remove @c3 input')
+      const addedInput = editor.getByLabel(/^Remove @c3 from /)
       if (await addedInput.count()) await addedInput.click()
       await expect.poll(() => addedInput.count(), { timeout: MCP_ROUNDTRIP_MS }).toBe(0)
       notebookDirty = true

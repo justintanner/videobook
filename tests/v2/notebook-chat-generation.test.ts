@@ -766,6 +766,27 @@ describe('notebook chat generation', () => {
     const unrequested = plan()
     expect(unrequested.action.model).not.toBe('kie:grok-imagine-video-1-5-preview')
     expect(unrequested.connections.at(-1)?.targetInput).toBe('audio')
+
+    const veo = planNotebookChatGeneration({
+      actions,
+      cellId: '01900000-0000-7000-8000-000000000069',
+      command: { cellType: 'generate_video', mediaKind: 'video', prompt: 'Animate it to the voice', sourceReferences: ['@c1', '@e1'] },
+      document,
+      preferredModel: 'fal:fal-ai/veo3.1/image-to-video',
+    })
+    expect(veo.action.model).toBe('fal:fal-ai/veo3.1/image-to-video')
+    expect(veo.connections.map((connection) => connection.targetInput)).toEqual(['first_frame', 'replace_audio'])
+  })
+})
+
+describe('chat generation routing defaults', () => {
+  it('folds loop and keyframe reference fields into their roles', async () => {
+    const params = await applyGenerationRoutingDefaults('generate_video', {
+      prompt: 'Loop it', model: 'kie:grok-imagine-video-1-5-preview', loop_ref: 'art-loop', keyframe_refs: ['art-k1', 'art-k2'], image_refs: ['art-ref'],
+    })
+    expect(params.refs).toEqual({ image: ['art-ref'], loop: ['art-loop'], keyframe: ['art-k1', 'art-k2'] })
+    expect(params).not.toHaveProperty('loop_ref')
+    expect(params).not.toHaveProperty('keyframe_refs')
   })
 })
 

@@ -631,7 +631,7 @@ describe('voice chat in the real browser', () => {
       return marks.some(entry => entry.detail.stage === 'first-audio' && review && entry.startTime > review.startTime)
     }), { timeout: 15_000 }).toBe(true)
     expect(await page.locator('.confirm-sheet').innerText()).toContain('@a1')
-    expect(await page.locator('.confirm-sheet .generation-review-source').allTextContents()).toEqual([expect.stringContaining('@a1')])
+    expect(await page.locator('.confirm-sheet .generation-slot-chip').allTextContents()).toEqual([expect.stringContaining('@a1')])
     expect(await page.locator('.confirm-sheet').innerText()).toMatch(/seedance/i)
     expect(result(await client.callTool({ name: 'list_jobs', arguments: { book_id: bookId } }))).toEqual(before)
     await page.screenshot({ path: 'test-results/voice/video-request-review.png' })

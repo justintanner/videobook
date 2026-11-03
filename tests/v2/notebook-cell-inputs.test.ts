@@ -213,6 +213,17 @@ describe('set_notebook_cell_inputs', () => {
     expect(generation().inputs?.generationSettings).toEqual({ duration: 10 })
   })
 
+  it('gives a legacy time with no earlier keyframe to the keyframe that takes its place, unless params are explicit', async () => {
+    await invoke('update_notebook_cell', { cell_id: cells.generation.id, cell: { inputs: { generationMode: 'i2v', generationSettings: { duration: 10, keyframe_1_seconds: 2, keyframe_2_seconds: 6 } } } })
+    const fresh = await setInputs([
+      { source_cell_id: cells.a.id, target_input: 'image' },
+      { source_cell_id: cells.b.id, target_input: 'keyframe' },
+      { source_cell_id: cells.c.id, target_input: 'keyframe_2', params: { timestamp_s: 8 } },
+    ])
+    expect(fresh.input_params).toEqual({ keyframe: { timestamp_s: 2 }, keyframe_2: { timestamp_s: 8 } })
+    expect(generation().inputs?.generationSettings).toEqual({ duration: 10 })
+  })
+
   it('refuses invalid layouts and cycles without writing', async () => {
     await setInputs(layout())
     const downstream = await invoke<NotebookCell>('create_notebook_cell', { cell: { type: 'generate_video', slot: { row: 2, column: 0 }, provider: 'kie', model: GROK, operation: 'image_to_video', tool: 'generate_video' } })
