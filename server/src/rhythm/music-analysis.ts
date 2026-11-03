@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { findAudioFile, findPrimaryMediaFile, type Engine } from "videobook-engine";
+import { findAudioFile, type Engine } from "videobook-engine";
+import { findCanonicalMediaFile } from "../original-media-file.js";
 import { musicAnalysisSchema, type MusicAnalysis, type SectionLabels, type SectionLabelsState, sectionLabelsSchema } from "./model.js";
 import { candidateSections } from "./energy.js";
 import { extractWaveform, FFMPEG } from "../ffmpeg.js";
@@ -25,7 +26,7 @@ export async function musicSource(engine: Engine, artifactId: string, streamId?:
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = artifact.value.kind === "audio"
     ? findAudioFile(manifest.value.files, artifact.value.kind)
-    : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+    : findCanonicalMediaFile(manifest.value.files, artifact.value.kind);
   const streams = engine.streams.list(artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
   const stream = streams.value.find((item) => item.kind === "audio" && item.sourcePath === file?.name

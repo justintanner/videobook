@@ -1,10 +1,11 @@
-import { findVideoFile, MVP_CONTRACT_VERSION, sourceTicksToSequenceFrames } from "videobook-engine";
+import { MVP_CONTRACT_VERSION, sourceTicksToSequenceFrames } from "videobook-engine";
 import type { Engine, EditIntent, EditOperation } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { registerJobHandler } from "../queue.js";
 import { readGoal, saveGoal, type GoalRecord } from "../goal-store.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { fittedTransform } from "../rhythm/visual-fit.js";
+import { findCanonicalMediaFile } from "../original-media-file.js";
 
 export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifactIds: string[]) {
   if (artifactIds.length === 0 || goal.clipIds.length !== artifactIds.length) {
@@ -39,7 +40,7 @@ export async function appendGoalClips(engine: Engine, goal: GoalRecord, artifact
     if (!status.ok || status.value !== "ready") throw new Error(`Shot ${index + 1} is still processing`);
     const manifest = await engine.files.manifest(artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
-    const file = findVideoFile(manifest.value.files);
+    const file = findCanonicalMediaFile(manifest.value.files, "video");
     const streams = engine.streams.list(artifactId);
     if (!streams.ok) throw new Error(streams.error.message);
     const stream = streams.value.find((candidate) => candidate.kind === "video"

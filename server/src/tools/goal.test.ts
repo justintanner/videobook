@@ -781,6 +781,7 @@ describe("staged video goals through MCP", () => {
     expect(engine.sequences.getPrimary().clips).toHaveLength(0);
     const multi = await advance(await advance(await create(), "frame"), "storyboards");
     await seedGoalStage(engine, multi.goalId, "videos", { videoIds: ids });
+    expect((await engine.files.write(ids[1]!, "original.mov", Buffer.from("archival upload"))).ok).toBe(true);
     const assembled = await invoke({ action: "assemble", goal_id: multi.goalId });
     expect(assembled.status).toBe("completed");
     const clips = engine.sequences.getPrimary().clips;

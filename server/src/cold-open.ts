@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { findPrimaryMediaFile } from "videobook-engine";
+import { findCanonicalMediaFile } from "./original-media-file.js";
 import type { Engine, NotebookDocument, NotebookGridSlot } from "videobook-engine";
 import { z } from "zod";
 import { INTELLIGENCE_MODEL } from "./openai-intelligence.js";
@@ -24,7 +24,7 @@ export async function coldOpenSource(engine: Engine, artifactId: string, expecte
   if (!["video", "final"].includes(artifact.value.kind)) throw new Error("Choose a video for the cold open.");
   const manifest = await engine.files.manifest(artifactId, { includeDotfiles: true });
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+  const file = findCanonicalMediaFile(manifest.value.files, artifact.value.kind);
   if (!file) throw new Error("The source video is missing.");
   if (expectedHash && file.objectHash !== expectedHash) throw new Error("The source video changed. Open a new cold-open review.");
   const streams = engine.streams.list(artifactId);

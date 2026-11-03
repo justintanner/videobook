@@ -14,3 +14,11 @@ export function findOriginalMediaFile(
   }
   return findPrimaryMediaFile(files, kind);
 }
+
+export function findCanonicalMediaFile(
+  files: ArtifactManifestFile[],
+  kind: ArtifactKind,
+): ArtifactManifestFile | null {
+  return (kind === "video" ? files.find((file) => file.name === "original.mp4") : undefined)
+    ?? findPrimaryMediaFile(files, kind);
+}

@@ -657,4 +657,13 @@ describe('music-video canonical sequence plans', () => {
     await expect(planMusicVideo(engine, options, engine.head, latest.revision, 'test', 'ui')).rejects.toThrow('unlocked video track')
   })
 
+  it('drafts from a processed .mov upload whose streams live on original.mp4', async () => {
+    const { engine, video, make } = await draftFixture()
+    expect((await engine.files.write(video.artifactId, 'original.mov', Buffer.from('archival upload'))).ok).toBe(true)
+    const draft = await make({ sources: [{ artifact_id: video.artifactId }], reuse_sources: true })
+    const placed = draft.sequence.clips.filter((clip) => clip.source.artifactId === video.artifactId)
+    expect(placed.length).toBeGreaterThan(0)
+    expect(placed.every((clip) => clip.source.kind === 'timed' && clip.source.range.streamId === video.stream.streamId)).toBe(true)
+  })
+
 })

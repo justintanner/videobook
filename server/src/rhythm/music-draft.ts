@@ -1,8 +1,9 @@
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { v5 as uuidv5 } from "uuid";
-import { findPrimaryMediaFile, MVP_CONTRACT_VERSION, type Engine, type EditOperation, type SequenceClip, type SourceSurface, type TimedSequenceClip } from "videobook-engine";
+import { MVP_CONTRACT_VERSION, type Engine, type EditOperation, type SequenceClip, type SourceSurface, type TimedSequenceClip } from "videobook-engine";
 import { sequenceContinuationRevision } from "../tools/command-plan.js";
 import { MOMENTS_MAX_RANKED, readEditingMoments, type EditingMoments } from "../editing-moments.js";
+import { findCanonicalMediaFile } from "../original-media-file.js";
 import { cachedMusicAnalysis, musicSource } from "./music-analysis.js";
 import { readSequenceRhythm } from "./sequence-rhythm.js";
 import { effectiveMarkers, frameAtSourceTime, soundtrackClip, timelineMarkers } from "./timing.js";
@@ -55,7 +56,7 @@ export async function planMusicVideo(engine: Engine, input: MusicDraftOptionsInp
     const manifest = await engine.files.manifest(selection.artifact_id);
     const streams = engine.streams.list(selection.artifact_id);
     if (!manifest.ok || !streams.ok) throw new Error("A source is unavailable. Refresh media.");
-    const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+    const file = findCanonicalMediaFile(manifest.value.files, artifact.value.kind);
     const stream = streams.value.find((item) => item.kind === "video" && item.objectHash === file?.objectHash && item.sourcePath === file.name);
     if (!stream) throw new Error(`Wait for ${artifact.value.label} to finish processing.`);
     const tickSeconds = stream.timeBase.numerator / stream.timeBase.denominator;

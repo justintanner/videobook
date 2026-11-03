@@ -1,7 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
-import { findPrimaryMediaFile } from "videobook-engine";
+import { findCanonicalMediaFile } from "../original-media-file.js";
 import {
   MOMENTS_MAX_SCAN_SECONDS,
   MOMENTS_MIN_MOMENT_SECONDS,
@@ -78,7 +78,7 @@ async function momentsSource(engine: Engine, artifactId: string, args: { startSe
   if (!["video", "final"].includes(artifact.value.kind)) throw new Error("Choose a video source to analyze");
   const manifest = await engine.files.manifest(artifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
-  const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+  const file = findCanonicalMediaFile(manifest.value.files, artifact.value.kind);
   const streams = engine.streams.list(artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
   const stream = streams.value.find((item) => item.kind === "video" && item.sourcePath === file?.name

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import type { Engine } from "videobook-engine";
-import { findPrimaryMediaFile } from "videobook-engine";
+import { findCanonicalMediaFile } from "../original-media-file.js";
 import { registerJobHandler } from "../queue.js";
 import { FFMPEG } from "../ffmpeg.js";
 import {
@@ -38,7 +38,7 @@ export function registerEditingMomentsJob(engine: Engine): void {
       if (!["video", "final"].includes(artifact.value.kind)) throw new Error("Choose a video source to analyze");
       const manifest = await engine.files.manifest(assetId);
       if (!manifest.ok) throw new Error(manifest.error.message);
-      const file = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
+      const file = findCanonicalMediaFile(manifest.value.files, artifact.value.kind);
       const streams = engine.streams.list(assetId);
       if (!streams.ok) throw new Error(streams.error.message);
       const stream = streams.value.find((item) => item.kind === "video" && item.sourcePath === file?.name
