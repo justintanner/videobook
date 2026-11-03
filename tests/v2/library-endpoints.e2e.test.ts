@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { seedMixedStatusCatalog } from './library-browse-fixture.js'
-import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -90,11 +90,14 @@ describe('library endpoints over HTTP MCP', () => {
     await writeFile(path, original)
     const probe = await probeVideo(path)
     expect(probe.duration).toBeCloseTo(2, 1)
-    if (kind === 'video') await call(targetBook, 'set_timeline', { render: 'landscape', slots: [{ artifact_id: copied.target_artifact_id }] })
-    else await call(targetBook, 'add_timeline_audio', { asset_id: copied.target_artifact_id, start_frame: 0 })
     const duration = kind === 'video' ? probe.videoDuration : probe.audioDuration
     if (duration === null) throw new Error('Copied media has no timed stream')
-    expect((await call<Sequence>(targetBook, 'get_primary_sequence')).clips[0]!.durationFrames).toBe(Math.round(duration * 30))
+    if (kind === 'video') {
+      await call(targetBook, 'set_timeline', { render: 'landscape', slots: [{ artifact_id: copied.target_artifact_id }] })
+      expect((await call<Sequence>(targetBook, 'get_primary_sequence')).clips[0]!.durationFrames).toBe(Math.round(duration * 30))
+    } else {
+      expect((await appendAudioClip(client, targetBook, copied.target_artifact_id)).durationFrames).toBe(Math.round(duration * 30))
+    }
   })
 
   it('attaches and clears local media with revision checks while preserving source bytes', async () => {

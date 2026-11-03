@@ -66,7 +66,6 @@ import { registerDetectScenesJob } from "./detect-scenes.js";
 import { registerDescribeImageJob } from "./describe-image.js";
 
 import { registerRewriteScriptJob } from "./rewrite-script.js";
-import { registerRenderTimelineJob } from "./render-timeline.js";
 import { registerExportSequenceJob } from "./export-sequence.js";
 import { registerProcessImageJob } from "./process-image.js";
 import { registerIsolateVocalsJob } from "./isolate-vocals.js";
@@ -154,7 +153,6 @@ export function registerAllJobHandlers(
   registerDescribeImageJob(engine);
 
   registerRewriteScriptJob(engine);
-  registerRenderTimelineJob(engine);
   registerExportSequenceJob(engine);
   registerProcessImageJob(engine);
   registerIsolateVocalsJob(engine);

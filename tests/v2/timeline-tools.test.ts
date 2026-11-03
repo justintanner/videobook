@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
-import { assignSlotDef } from '../../server/src/tools/assign-slot.js'
 import { setTimelineDef } from '../../server/src/tools/edit-timeline.js'
 import { getTimelineDef } from '../../server/src/tools/get-timeline.js'
-import { removeTimelineSlotDef } from '../../server/src/tools/remove-timeline-slot.js'
 
 function json(result: { content: Array<{ text: string }>; isError?: true }): unknown {
   expect(result.isError).toBeUndefined()
@@ -28,7 +26,7 @@ describe('v2 typed timeline tools', () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('stores only stable artifact UUID references and keeps slots dense', async () => {
+  it('stores only stable artifact UUID references', async () => {
     const created = await books.create('timeline')
     expect(created.ok).toBe(true)
     if (!created.ok) return
@@ -61,26 +59,24 @@ describe('v2 typed timeline tools', () => {
     expect(initial.slots[0]?.artifact_id).toBe(image.value.artifactId)
     expect(initial.slots[0]?.id).toMatch(/^[0-9a-f-]{36}$/)
 
-    const assigned = json(await assignSlotDef(engine).handler({
+    const appended = json(await set.handler({
       book_id: created.value.bookId,
-      asset_id: video.value.artifactId,
-      slot: 's02',
-    })) as { slots: Array<{ artifact_id: string }> }
-    expect(assigned.slots.map((slot) => slot.artifact_id)).toEqual([
+      render: 'square',
+      slots: [
+        { id: initial.slots[0]!.id, artifact_id: image.value.artifactId },
+        { artifact_id: video.value.artifactId },
+      ],
+    })) as { slots: Array<{ artifact_id: string; id: string }> }
+    expect(appended.slots.map((slot) => slot.artifact_id)).toEqual([
       image.value.artifactId,
       video.value.artifactId,
     ])
+    expect(appended.slots[0]?.id).toBe(initial.slots[0]?.id)
 
-    const gap = await assignSlotDef(engine).handler({
+    const removed = json(await set.handler({
       book_id: created.value.bookId,
-      asset_id: image.value.artifactId,
-      slot: 's04',
-    })
-    expect(gap.isError).toBe(true)
-
-    const removed = json(await removeTimelineSlotDef(engine).handler({
-      book_id: created.value.bookId,
-      slot: 's01',
+      render: 'square',
+      slots: [{ id: appended.slots[1]!.id, artifact_id: video.value.artifactId }],
     })) as { slots: Array<{ artifact_id: string }> }
     expect(removed.slots).toEqual([{ artifact_id: video.value.artifactId, id: expect.any(String) }])
 

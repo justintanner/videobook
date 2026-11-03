@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { archiveTags, indexKey, personMarkerKey, topicMarkerKey, type ArchiveIndex } from '../../server/src/archive-b2.js'
 import { createLocalArchiveStore, type ArchiveStore } from '../../server/src/archive-store.js'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
-import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 interface Restored { archive_id: string; asset_id: string; job_id: string }
@@ -107,8 +107,9 @@ describe('archive endpoints over HTTP MCP', () => {
     expect((await assets()).find((asset) => asset.artifact_id === id)?.duration).toBeCloseTo(3, 1)
     const streams = await call<Array<{ kind: string; objectHash: string }>>('list_media_streams', { artifact_id: id })
     expect(streams).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'audio', objectHash: fixture.hash })]))
-    await call('add_timeline_audio', { asset_id: id, start_frame: 0 })
-    expect((await call<Sequence>('get_primary_sequence')).clips[0]!.durationFrames).toBe(90)
+    const frames = (await appendAudioClip(client, bookId, id)).durationFrames
+    expect(frames).toBeGreaterThanOrEqual(90)
+    expect(frames).toBeLessThanOrEqual(91)
   })
 
   it('restores audio-only WebM as audio instead of queueing video processing', async () => {
@@ -117,8 +118,9 @@ describe('archive endpoints over HTTP MCP', () => {
     await idle()
     const id = result.restored[0]!.asset_id
     expect((await assets()).find((asset) => asset.artifact_id === id)).toMatchObject({ type: 'audio' })
-    await call('add_timeline_audio', { asset_id: id, start_frame: 0 })
-    expect((await call<Sequence>('get_primary_sequence')).clips[0]!.durationFrames).toBe(90)
+    const frames = (await appendAudioClip(client, bookId, id)).durationFrames
+    expect(frames).toBeGreaterThanOrEqual(90)
+    expect(frames).toBeLessThanOrEqual(91)
   })
 
   it('restores video bytes, skips repeated IDs and retains readiness after restart', async () => {

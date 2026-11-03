@@ -1,5 +1,5 @@
-import { adaptCommandArgs, parseCommandArgs, type CommandToolArgs } from '../lib/command-registry'
-import type { UiActionId } from '../../server/src/workspace-action-contract'
+import { adaptCommandArgs, parseCommandArgs, type CommandToolArgs } from '../lib/command-registry.js'
+import type { UiActionId } from '../../server/src/workspace-action-contract.js'
 
 type Params = Parameters<typeof parseCommandArgs>[1]
 

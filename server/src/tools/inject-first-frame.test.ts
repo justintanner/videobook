@@ -269,13 +269,6 @@ describe("inject_first_frame tool", () => {
     const image = await upload(client, bookId, "red.png", imageFixture);
     const original = await fs.files.read(video.assetId, "original.mp4");
     if (!original.ok) throw new Error(original.error.message);
-    const writes = await Promise.all([
-      fs.files.write(video.assetId, "landscape.mp4", original.value),
-      fs.files.write(video.assetId, "portrait.mp4", original.value),
-    ]);
-    for (const write of writes) {
-      if (!write.ok) throw new Error(write.error.message);
-    }
     const timeline = await client.callTool({
       name: "set_timeline",
       arguments: {
@@ -286,20 +279,16 @@ describe("inject_first_frame tool", () => {
     });
     if (timeline.isError) throw new Error((timeline.content as TextContent)[0].text);
 
-    for (const orientation of ["landscape", "portrait"] as const) {
-      const render = await client.callTool({
-        name: "render_timeline",
-        arguments: { book_id: bookId, orientation },
-      });
-      if (render.isError) throw new Error((render.content as TextContent)[0].text);
-      const renderResult = JSON.parse((render.content as TextContent)[0].text) as Record<string, unknown>;
-      await waitForJob(String(renderResult.job_id));
+    const created = await fs.artifacts.create({ kind: "final", label: "timeline final" });
+    if (!created.ok) throw new Error(created.error.message);
+    const finalArtifact = created.value;
+    const writes = await Promise.all([
+      fs.files.write(finalArtifact.artifactId, "timeline_landscape.mp4", original.value),
+      fs.files.write(finalArtifact.artifactId, "timeline_portrait.mp4", original.value),
+    ]);
+    for (const write of writes) {
+      if (!write.ok) throw new Error(write.error.message);
     }
-
-    // render_timeline writes into a `final`-kind artifact addressed by its
-    // artifact id — there is no reserved "final" slug any more.
-    const finalArtifact = fs.artifacts.list().find((artifact) => artifact.kind === "final");
-    if (!finalArtifact) throw new Error("render_timeline did not create a final artifact");
     const finalManifest = await fs.files.manifest(finalArtifact.artifactId);
     if (!finalManifest.ok) throw new Error(finalManifest.error.message);
     const portraitPath = join(finalManifest.value.path, "timeline_portrait.mp4");

@@ -257,7 +257,7 @@ describe("freeform chat commands", () => {
   describe("slot ref expansion in freeform prompts", () => {
     let assetId: string;
 
-    // beforeEach (not All) — assign_slot mutates project state and the
+    // beforeEach (not All) — set_timeline mutates project state and the
     // "@s02 unassigned" test wants a clean baseline.
     beforeEach(async () => {
       const data = Buffer.from("fake-png-data").toString("base64");
@@ -268,8 +268,8 @@ describe("freeform chat commands", () => {
       assetId = JSON.parse(resultText(upload)).assetId;
 
       await client.callTool({
-        name: "assign_slot",
-        arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
+        name: "set_timeline",
+        arguments: { book_id: "test-proj", render: "landscape", slots: [{ artifact_id: assetId }] },
       });
     });
 

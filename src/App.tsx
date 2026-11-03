@@ -365,7 +365,6 @@ import { parseSequenceSlashCommand } from '@/videobook/sequence-slash-command'
 import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
-import { resolveTimelineAudioTarget } from '@/videobook/timeline-audio-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
@@ -9097,19 +9096,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.kind === 'form') {
       const tool = route.tool
-      const frameRate = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
-      const formValues = workspaceUiFormValues(uiAction, values, frameRate)
+      const formValues = workspaceUiFormValues(uiAction, values)
       if (asset) formValues.asset_id = asset.artifactId
-      if (uiAction.startsWith('timeline_audio_') && uiAction !== 'timeline_audio_add' && values.audio_ref) {
-        const audioTarget = resolveTimelineAudioTarget(
-          String(values.audio_ref),
-          sequence,
-          assets,
-          commandMentionAssets,
-        )
-        if (!audioTarget.ok) return audioTarget
-        formValues.audio_id = audioTarget.clipId
-      }
       if (uiAction === 'viewer_focus_file' && asset) {
         await openWorkspaceMedia(asset, undefined, parseFilePosition(values.position), chat)
       } else {

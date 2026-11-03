@@ -630,40 +630,6 @@ describe("MCP tools e2e", () => {
     await abortActiveBookJobsForTests("e2e enqueue-only render");
   });
 
-  // ── Section 10: Render timeline (error — no rendered files) ────
-
-  it("render_timeline errors when slots lack rendered files", async () => {
-    const uploaded = await client.callTool({
-      name: "upload_file",
-      arguments: {
-        book_id: PROJECT,
-        filename: "timeline-unrendered.mp4",
-        data: (await readFile(videoPath)).toString("base64"),
-      },
-    });
-    expect(uploaded.isError).toBeFalsy();
-    const missingArtifactId = parse(uploaded).assetId as string;
-    const timeline = await client.callTool({
-      name: "set_timeline",
-      arguments: {
-        book_id: PROJECT,
-        render: "landscape",
-        slots: [{ artifact_id: missingArtifactId }],
-      },
-    });
-    expect(timeline.isError).toBeFalsy();
-    const result = await client.callTool({
-      name: "render_timeline",
-      arguments: { book_id: PROJECT },
-    });
-    expect(result.isError).toBe(true);
-    // The single slot points at the uploaded video, which has no rendered
-    // orientation file yet, so the tool reports it by stable artifact id.
-    const parsed = parse(result);
-    expect(parsed.status).toBe("missing_renders");
-    expect(parsed.missing_artifact_ids).toEqual([missingArtifactId]);
-  });
-
   // ── Section 11: Download video (validation) ────────────────────
 
   it("download_video rejects start >= end", async () => {

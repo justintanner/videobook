@@ -5,10 +5,9 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import sharp from 'sharp'
-import type { Sequence } from 'videobook-engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
-import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -110,8 +109,7 @@ describe('notebook extraction endpoints over HTTP MCP', () => {
     expect(await duration(rerun.output_artifact_id!)).toBeCloseTo(expected, 1)
     expect(await duration(first.output_artifact_id!)).toBeCloseTo(expected, 1)
     expect(await bytes(input.assetId, 'original.mp4')).toEqual(sourceBytes)
-    await call('add_timeline_audio', { asset_id: rerun.output_artifact_id, start_frame: 0 })
-    expect((await call<Sequence>('get_primary_sequence')).clips[0]!.durationFrames).toBe(Math.round(expected * 30))
+    expect((await appendAudioClip(client, bookId, rerun.output_artifact_id!)).durationFrames).toBe(Math.round(expected * 30))
   })
 
   it.each([

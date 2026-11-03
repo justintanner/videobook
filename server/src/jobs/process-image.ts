@@ -76,8 +76,7 @@ export function registerProcessImageJob(engine: Engine): void {
           } as unknown as Record<string, unknown>);
         }
 
-        // Vision analysis for the reproduction prompt is still gated to slot
-        // drop in tools/assign-slot.ts. Tagging is not: an image that never
+        // Tagging is not gated on timeline placement: an image that never
         // reaches a timeline still has to be findable in the Library, and the
         // tag job asks for the analysis it needs once per content hash.
         if (process.env.NODE_ENV !== "test") {

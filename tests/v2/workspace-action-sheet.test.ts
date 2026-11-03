@@ -62,7 +62,6 @@ function renderActionSheet(action: WorkspaceAction, overrides: {
     applyFormId: 'command-composer-form',
     onChange: () => undefined,
     onPatch: () => undefined,
-    onCancelReview: () => undefined,
     onBack: () => undefined,
     onOpenAction: () => undefined,
     onCancel: () => undefined,

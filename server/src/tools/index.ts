@@ -90,7 +90,6 @@ import { chainDef } from "./chain.js";
 import { goalDefs } from "./goal.js";
 import { getTimelineDef } from "./get-timeline.js";
 import { setTimelineDef } from "./edit-timeline.js";
-import { renderTimelineDef } from "./render-timeline.js";
 import { exportAssetFileDef } from "./export-asset-file.js";
 import { exportTranscriptSrtDef } from "./export-transcript-srt.js";
 import { recordPromptDef, listPromptHistoryDef } from "./prompt-history.js";
@@ -99,12 +98,6 @@ import { describeImageDef } from "./describe-image.js";
 import { rewriteScriptDef } from "./rewrite-script.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
 import { cleanVideoAudioDef } from "./clean-video-audio.js";
-import { assignSlotDef } from "./assign-slot.js";
-import { removeTimelineSlotDef } from "./remove-timeline-slot.js";
-import { addTimelineAudioDef } from "./add-timeline-audio.js";
-import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
-import { moveTimelineAudioDef } from "./move-timeline-audio.js";
-import { updateTimelineAudioDef } from "./update-timeline-audio.js";
 import { commandsDef, getCanonicalCommands } from "./commands.js";
 import { buildWorkspaceActionCatalog } from "../workspace-action-catalog.js";
 import { workspaceActionsDef } from "./workspace-actions.js";
@@ -181,13 +174,6 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     renderVideoDef(engine),
     getTimelineDef(engine),
     setTimelineDef(engine),
-    renderTimelineDef(engine),
-    assignSlotDef(engine),
-    removeTimelineSlotDef(engine),
-    addTimelineAudioDef(engine),
-    removeTimelineAudioDef(engine),
-    moveTimelineAudioDef(engine),
-    updateTimelineAudioDef(engine),
     getRenderSettingsDef(engine),
     createWatermarkCardDef(engine),
     applyWatermarkDef(engine),

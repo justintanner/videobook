@@ -3,7 +3,6 @@ const JOB_CANCELLATION_GRACE_MS = 10_000;
 const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["repair_search_indexes", 15 * 60_000],
   ["render_project", 30 * 60_000],
-  ["render_timeline", 30 * 60_000],
   ["render_qr_outro", 15 * 60_000],
   ["analyze_keyword_placement", 5 * 60_000],
   ["analyze_alive_captions", 10 * 60_000],

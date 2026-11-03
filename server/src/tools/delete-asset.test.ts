@@ -91,8 +91,8 @@ describe("delete_asset tool", () => {
     ) as { assetId: string };
 
     const assignResult = await client.callTool({
-      name: "assign_slot",
-      arguments: { asset_id: uploaded.assetId, slot: "s01", book_id: "test-proj" },
+      name: "set_timeline",
+      arguments: { book_id: "test-proj", render: "landscape", slots: [{ artifact_id: uploaded.assetId }] },
     });
     expect(assignResult.isError).toBeFalsy();
 

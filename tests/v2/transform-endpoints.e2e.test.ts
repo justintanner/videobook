@@ -8,7 +8,7 @@ import { chromium } from 'playwright'
 import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG, FFPROBE, probeVideo } from '../../server/src/ffmpeg.js'
-import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -233,8 +233,7 @@ describe('transformation endpoints over HTTP MCP', () => {
     await idle()
     expect((await probe(id, 'original.wav')).audioCodec).toBe('pcm_s16le')
     expect((await rms(id, 'original.wav')) / level).toBeCloseTo(2, 1)
-    const timeline = await call<{ clip: { durationFrames: number } }>('add_timeline_audio', { asset_id: id, start_frame: 0 })
-    expect(timeline.clip.durationFrames).toBe(30)
+    expect((await appendAudioClip(client, bookId, id)).durationFrames).toBe(30)
   })
 
   it('rejects empty or out-of-range audio trims before affecting the artifact', async () => {
@@ -267,8 +266,7 @@ describe('transformation endpoints over HTTP MCP', () => {
     await idle()
     expect(await probe(target, 'original.wav')).toMatchObject({ audioCodec: 'pcm_s16le', duration: 3 })
     expect(await file(layer, 'original.wav')).toEqual(originalLayer)
-    const timeline = await call<{ clip: { durationFrames: number } }>('add_timeline_audio', { asset_id: target, start_frame: 0 })
-    expect(timeline.clip.durationFrames).toBe(90)
+    expect((await appendAudioClip(client, bookId, target)).durationFrames).toBe(90)
   })
 
   it('retimes a selected range while preserving full duration and audio', async () => {

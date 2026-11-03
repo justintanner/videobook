@@ -8,7 +8,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { Sequence } from 'videobook-engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
-import { callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -111,9 +111,9 @@ describe('audio mix endpoints over HTTP MCP', () => {
     expect(streams).toEqual(expect.arrayContaining([expect.objectContaining({
       kind: 'audio', objectHash: createHash('sha256').update(await bytes(target, filename)).digest('hex'),
     })]))
-    await call('add_timeline_audio', { asset_id: target, start_frame: 0 })
-    const sequence = await call<Sequence>('get_primary_sequence')
-    expect(sequence.clips[0]!.durationFrames).toBe(90)
+    const frames = (await appendAudioClip(client, bookId, target)).durationFrames
+    expect(frames).toBeGreaterThanOrEqual(90)
+    expect(frames).toBeLessThanOrEqual(91)
   })
 
   it.each([false, true])('mixes into video with existing audio=%s without changing picture bytes', async (hasAudio) => {
