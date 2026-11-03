@@ -191,6 +191,25 @@ describe('generation slot editor in the browser', () => {
     expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(4)
   }, testBudget(90_000))
 
+  it('commits a setting on Enter without starting a run', async () => {
+    const runs: string[] = []
+    const watch = (request: { url: () => string; postData: () => string | null }) => {
+      const body = request.postData() ?? ''
+      if (request.url().endsWith('/mcp') && /"name":"run_notebook/u.test(body)) runs.push(body)
+    }
+    page.on('request', watch)
+    try {
+      const duration = page.locator('.inspector').getByLabel('Duration', { exact: true })
+      await duration.fill('8')
+      await duration.press('Enter')
+      await wait(2_500)
+      expect(runs).toEqual([])
+      expect(await duration.inputValue()).toBe('8')
+    } finally {
+      page.off('request', watch)
+    }
+  }, testBudget(60_000))
+
   it('stores a keyframe time typed on the item and moves it with the keyboard', async () => {
     const time = chip('Keyframes', 1).getByLabel('Time for @a3')
     expect(await time.getAttribute('placeholder')).toBe('6.67')

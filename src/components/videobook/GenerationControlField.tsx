@@ -101,6 +101,9 @@ export function GenerationControlField({
         value={value === undefined ? '' : String(value)}
         disabled={busy}
         onFocus={onFocus}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey) event.preventDefault()
+        }}
         onChange={(event) => {
           const next = event.target.value
           if (!next) {
