@@ -89,6 +89,7 @@ import {
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
 import { generationInputTarget, sortByGenerationInputPort } from "../generation-input-targets.js";
+import { generationInputRoles } from "../generation-input-roles.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
 import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
@@ -962,10 +963,6 @@ function promptFor(document: NotebookDocument, cell: NotebookCell): string {
     .trim();
 }
 
-function isImageLikeCell(source: NotebookCell): boolean {
-  return notebookCellMediaType(source) === "image";
-}
-
 function cellGenerationSettings(cell: NotebookCell): Record<string, unknown> {
   const settings = cell.inputs?.generationSettings;
   return settings && typeof settings === "object" && !Array.isArray(settings)
@@ -1031,12 +1028,6 @@ function generationModeFor(
     ?? configured;
 }
 
-function frameEntry(upstream: readonly UpstreamEntry[], target: string, mode: string | undefined): UpstreamEntry | undefined {
-  return mode === "r2v"
-    ? undefined
-    : upstream.find((entry) => entry.targetInput === target && typeof entry.output === "string" && isImageLikeCell(entry.cell));
-}
-
 type MediaInputPorts = Partial<Record<RefRole, string[]>>;
 
 function mediaInputsFor(
@@ -1046,44 +1037,18 @@ function mediaInputsFor(
 ): { refs: MediaRefs; ports: MediaInputPorts } {
   const roles = new Set(model.slots.map((slot) => slot.role));
   const modeRoles = new Set(model.modes.find((candidate) => candidate.id === mode)?.roles ?? [...roles]);
-  let firstFrame = frameEntry(upstream, "first_frame", mode);
-  let lastFrame = frameEntry(upstream, "last_frame", mode);
-  const loop = frameEntry(upstream, "loop", mode);
-  const keyframes = sortByGenerationInputPort(
-    upstreamOfKind(upstream, "image").filter(({ targetInput }) => generationInputTarget("image", targetInput) === "keyframe"),
-    "keyframe",
-  );
-  const images = sortByGenerationInputPort(
-    upstreamOfKind(upstream, "image").filter(({ targetInput }) => {
-      const target = generationInputTarget("image", targetInput);
-      return target === "image" || (mode === "r2v" && (target === "first_frame" || target === "last_frame"));
-    }),
-    "image",
-  );
-  const frameMode = mode === "i2v" || ((mode === undefined || mode === "default") && Boolean(firstFrame || lastFrame));
-  if (frameMode && !firstFrame && modeRoles.has("first_frame") && !modeRoles.has("image")) firstFrame = images.shift();
-  if (frameMode && !lastFrame && modeRoles.has("last_frame") && !modeRoles.has("image")) lastFrame = images.shift();
-  const videos = sortByGenerationInputPort(upstreamOfKind(upstream, "video"), "video");
-  const audios = sortByGenerationInputPort(
-    upstreamOfKind(upstream, "audio").filter(({ targetInput }) => targetInput !== "replace_audio"),
-    "audio",
-  );
-  const candidates: Partial<Record<RefRole, UpstreamEntry[]>> = {
-    first_frame: firstFrame ? [firstFrame] : [],
-    last_frame: lastFrame ? [lastFrame] : [],
-    loop: loop ? [loop] : [],
-    keyframe: keyframes,
-    image: images,
-    video: videos,
-    audio: audios,
-  };
+  const entries = upstream.flatMap((entry) => {
+    const kind = notebookCellMediaType(entry.cell);
+    return kind && typeof entry.output === "string" ? [{ ...entry, kind }] : [];
+  });
+  const assigned = generationInputRoles(entries, modeRoles, mode);
   const refs: MediaRefs = {};
   const ports: MediaInputPorts = {};
   for (const role of REF_ROLES) {
-    const entries = (candidates[role] ?? []).filter((entry) => typeof entry.output === "string");
-    if (entries.length === 0 || !modeRoles.has(role)) continue;
-    refs[role] = outputsOf(entries);
-    ports[role] = entries.map((entry) => entry.targetInput);
+    const list = assigned[role];
+    if (!list) continue;
+    refs[role] = outputsOf(list);
+    ports[role] = list.map((entry) => entry.targetInput);
   }
   return { refs, ports };
 }
