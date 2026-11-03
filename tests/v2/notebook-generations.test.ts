@@ -98,6 +98,53 @@ describe("notebook generation rows", () => {
       }));
   }
 
+  it("keeps the provider video as the output when replacement audio is connected", async () => {
+    registerJobHandler(VIDEO_JOB_TYPE, async (payload) => {
+      const assetId = (payload as { assetId: string }).assetId;
+      await engine.files.write(assetId, "original.mp4", Buffer.from("stub provider video bytes"));
+      await engine.metadata.artifacts.write(assetId, "original", { name: "original.mp4" });
+      return { success: true, taskId: "stub-provider-task" };
+    });
+    const { notebookId, cell, document } = await seedVideoCell();
+    const audio = await engine.artifacts.create("audio", "voice over");
+    if (!audio.ok) throw new Error(audio.error.message);
+    await engine.files.write(audio.value.artifactId, "original.mp3", Buffer.from("stub voice bytes"));
+    const audioCell = engine.notebooks.createCell({
+      type: "audio",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: audio.value.artifactId,
+    });
+    const written = await engine.notebooks.write({
+      ...document,
+      cells: [...document.cells, audioCell],
+      edges: [engine.notebooks.createEdge({ source: audioCell.id, target: cell.id, targetInput: "replace_audio" })],
+    });
+    if (!written.ok) throw new Error(written.error.message);
+    const seeded = engine.notebooks.read(notebookId);
+    if (!seeded.ok) throw new Error(seeded.error.message);
+    const runId = uuidv7();
+    const result = await runNotebookCell(engine, bookId, notebookId, seeded.value, cell, { confirmPaid: true, runId });
+    expect(result.status).toBe("awaiting-output");
+    const awaitJobId = `await-notebook-${runId}-${cell.id}-${result.outputArtifactId}`;
+    await queue.enqueue(awaitJobId, {
+      type: "await_notebook_output",
+      bookId,
+      notebookId,
+      cellId: cell.id,
+      providerArtifactId: result.outputArtifactId,
+      runId,
+    });
+    await waitForJob(awaitJobId, testBudget(30_000));
+    const completed = engine.generations.listForCell(notebookId, cell.id);
+    if (!completed.ok) throw new Error(completed.error.message);
+    expect(completed.value[0]).toMatchObject({ status: "completed", outputArtifactId: result.outputArtifactId });
+    const finished = engine.notebooks.read(notebookId);
+    if (!finished.ok) throw new Error(finished.error.message);
+    const output = finished.value.cells.find((candidate) => candidate.id === completed.value[0]!.outputCellId);
+    expect(output?.outputArtifactId).toBe(result.outputArtifactId);
+    expect(finished.value.cells.some((candidate) => candidate.inputs?.normalizedFromArtifactId !== undefined)).toBe(false);
+  });
+
   it("tracks one row through dispatched → awaiting_provider → completed with the provider model", async () => {
     registerJobHandler(VIDEO_JOB_TYPE, async (payload) => {
       const assetId = (payload as { assetId: string }).assetId;

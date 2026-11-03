@@ -60,7 +60,6 @@ import {
   exportSequenceMaster,
   extractSourceAudio,
   MINIMUM_SPLIT_PIECE_SECONDS,
-  normalizeSceneVideo,
   splitSourceRange,
   splitSourceRanges,
   type BurnInCaption,
@@ -3346,7 +3345,7 @@ async function finishAwaitingNotebookCell(
       document: read.value,
     };
   }
-  let outputArtifactId = input.providerArtifactId;
+  const outputArtifactId = input.providerArtifactId;
   const payloadResult = await engine.metadata.artifacts.read<
     Record<string, unknown>
   >(input.providerArtifactId, "generation-payload");
@@ -3358,29 +3357,6 @@ async function finishAwaitingNotebookCell(
     ...(resolvedPrompt ? { resolvedPrompt } : {}),
     state: "completed",
   };
-  if (notebookCellMediaType(cell) === "video") {
-    const audioArtifactId = firstUpstreamArtifact(
-      read.value,
-      cell,
-      "replace_audio",
-    );
-    if (audioArtifactId) {
-      const durationSeconds = Math.max(
-        1,
-        Number(cell.inputs?.duration ?? 15),
-      );
-      const normalized = await normalizeSceneVideo(
-        engine,
-        input.providerArtifactId,
-        audioArtifactId,
-        `${notebookGridTag(cell.slot)} normalized`,
-        durationSeconds,
-      );
-      outputArtifactId = normalized.artifactId;
-      cellInputs.normalizedFromArtifactId = input.providerArtifactId;
-      cellInputs.normalizedDurationSeconds = normalized.durationSeconds;
-    }
-  }
   const completedAt = new Date().toISOString();
   const state: CellExecution = {
     fingerprint: current?.fingerprint
