@@ -122,19 +122,38 @@ function connectedInputCandidates(
       === index)
 }
 
+type GenerationChoice = {
+  action: NotebookGenerationAction
+  connectedInputs: GenerationConnectedInput[]
+}
+
+function generationChoiceFor(
+  action: NotebookGenerationAction | undefined,
+  candidates: readonly GenerationConnectedInput[][],
+): GenerationChoice | null {
+  if (!action) return null
+  const connectedInputs = candidates.find((candidate) =>
+    generationActionIsCompatible(action, candidate))
+  return connectedInputs ? { action, connectedInputs } : null
+}
+
+function defaultGenerationChoice(
+  actions: readonly NotebookGenerationAction[],
+  cellType: NotebookGenerationCellType,
+  candidates: readonly GenerationConnectedInput[][],
+): GenerationChoice | null {
+  for (const connectedInputs of candidates) {
+    const action = selectGenerationAction({ actions, cellType, connectedInputs })
+    if (action) return { action, connectedInputs }
+  }
+  return null
+}
+
 function selectGenerationAction(input: {
   actions: readonly NotebookGenerationAction[]
   cellType: NotebookGenerationCellType
   connectedInputs: readonly GenerationConnectedInput[]
-  preferredModel?: string
 }): NotebookGenerationAction | null {
-  const preferred = input.preferredModel
-    ? generationActionsForCell(input.actions, input.cellType).find((action) =>
-        action.model === input.preferredModel)
-    : undefined
-  if (preferred && generationActionIsCompatible(preferred, input.connectedInputs)) {
-    return preferred
-  }
   const selection = initialGenerationSelection(
     { type: input.cellType },
     input.actions,
@@ -265,25 +284,19 @@ export function planNotebookChatGeneration(input: {
       `Connecting ${notebookCellTag(cyclicSource.cell)} would create a cycle`,
     )
   }
-  let action: NotebookGenerationAction | null = null
-  let connectedInputs: GenerationConnectedInput[] = []
-  for (const candidate of connectedInputCandidates(sources)) {
-    const selected = selectGenerationAction({
-      actions: input.actions,
-      cellType: input.command.cellType,
-      connectedInputs: candidate,
-      ...(input.preferredModel ? { preferredModel: input.preferredModel } : {}),
-    })
-    if (!selected) continue
-    action = selected
-    connectedInputs = candidate
-    break
-  }
-  if (!action) {
+  const candidates = connectedInputCandidates(sources)
+  const preferred = input.preferredModel
+    ? generationActionsForCell(input.actions, input.command.cellType).find((action) =>
+        action.model === input.preferredModel)
+    : undefined
+  const choice = generationChoiceFor(preferred, candidates)
+    ?? defaultGenerationChoice(input.actions, input.command.cellType, candidates)
+  if (!choice) {
     throw new Error(
       `No available ${input.command.mediaKind} generation action accepts these references`,
     )
   }
+  const { action, connectedInputs } = choice
   const selection = generationSelectionForAction(action)
   const mode = compatibleGenerationModes(action, connectedInputs)[0]
   const settings = generationSettings(action, input.routedParams)
@@ -531,28 +544,9 @@ export function reviseNotebookChatGenerationSources(input: {
     return notebookChatGenerationSource(input.document, cell)
   })
   const candidates = connectedInputCandidates(sources)
-  let action: NotebookGenerationAction | null = null
-  let connectedInputs: GenerationConnectedInput[] = []
-  for (const candidate of candidates) {
-    if (!generationActionIsCompatible(input.draft.action, candidate)) continue
-    action = input.draft.action
-    connectedInputs = candidate
-    break
-  }
-  if (!action) {
-    for (const candidate of candidates) {
-      const selected = selectGenerationAction({
-        actions: input.actions,
-        cellType,
-        connectedInputs: candidate,
-      })
-      if (!selected) continue
-      action = selected
-      connectedInputs = candidate
-      break
-    }
-  }
-  if (!action) {
+  const choice = generationChoiceFor(input.draft.action, candidates)
+    ?? defaultGenerationChoice(input.actions, cellType, candidates)
+  if (!choice) {
     const mediaKind = cellType === 'generate_audio' ? 'audio'
       : cellType === 'generate_image' ? 'image'
       : 'video'
@@ -560,6 +554,7 @@ export function reviseNotebookChatGenerationSources(input: {
       `No available ${mediaKind} generation action accepts these references`,
     )
   }
+  const { action, connectedInputs } = choice
   const compatibleModes = compatibleGenerationModes(action, connectedInputs)
   const currentInputs = recordValue(input.draft.cell.inputs) ?? {}
   const currentMode = nonBlankStringValue(currentInputs.generationMode)

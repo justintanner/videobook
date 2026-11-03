@@ -715,6 +715,58 @@ describe('notebook chat generation', () => {
       sourceCellIds: [firstSource.id],
     })).toThrow('No available image generation action accepts these references')
   })
+
+  it('keeps a requested model by wiring the inputs the way that model accepts them', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'preferred-model-layout',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const actions = asNotebookGenerationActions(resultJson(await withBookContext(
+      { bookId: created.bookId, engine: managed.value.engine },
+      () => byName.get('list_notebook_actions')!.handler({
+        book_id: created.bookId,
+        cell_type: 'generate_video',
+      }),
+    )))
+    const cell = (index: number, type: 'image' | 'audio', row: number, column: number) => ({
+      id: `01900000-0000-7000-8000-00000000006${index}`,
+      type,
+      slot: { row, column },
+      outputArtifactId: `01900000-0000-7000-8000-00000000007${index}`,
+    })
+    const document = {
+      id: '01900000-0000-7000-8000-000000000060',
+      name: 'preferred-model-layout',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      cells: [cell(1, 'image', 2, 0), cell(2, 'image', 2, 1), cell(3, 'image', 2, 2), cell(4, 'audio', 4, 0)],
+      edges: [],
+    }
+    const plan = (preferredModel?: string) => planNotebookChatGeneration({
+      actions,
+      cellId: '01900000-0000-7000-8000-000000000069',
+      command: {
+        cellType: 'generate_video',
+        mediaKind: 'video',
+        prompt: 'Make a looping video',
+        sourceReferences: ['@c1', '@c2', '@c3', '@e1'],
+      },
+      document,
+      ...(preferredModel ? { preferredModel } : {}),
+    })
+
+    const grok = plan('kie:grok-imagine-video-1-5-preview')
+    expect(grok.action.model).toBe('kie:grok-imagine-video-1-5-preview')
+    expect(grok.connections.map((connection) => connection.targetInput))
+      .toEqual(['image', 'image_2', 'image_3', 'replace_audio'])
+
+    const unrequested = plan()
+    expect(unrequested.action.model).not.toBe('kie:grok-imagine-video-1-5-preview')
+    expect(unrequested.connections.at(-1)?.targetInput).toBe('audio')
+  })
 })
 
 describe('notebook chat generation cycle guards', () => {
