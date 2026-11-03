@@ -26,9 +26,9 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "list_media_streams",
   ],
   Video: [
-    "prepare_cold_open", "edit_cold_open", "trim_video", "split_video", "split_video_at_scenes", "extract_video_clip", "split_video_by_durations",
+    "prepare_cold_open", "edit_cold_open", "trim_video", "split_video",
     "pad_video", "set_video_overlay", "animate_keywords", "caption_video",
-    "detect_scenes", "suggest_cuts", "analyze_jokes", "apply_cuts",
+    "detect_scenes", "suggest_cuts", "analyze_jokes",
     "change_video_speed", "timewarp_video", "reverse_video", "inject_first_frame",
     "extract_frame",
     "extract_notebook_frame", "splice_video", "preview_splice", "smooth_scene_concat",

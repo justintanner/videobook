@@ -12,6 +12,7 @@ import {
 import {
   formatSplitTimestamp,
   splitFrameStepSeconds,
+  type NotebookSplitDestination,
   type NotebookSplitOutputMode,
 } from '@/videobook/notebook-split-command'
 import { defaultSlowLoopPlayback } from '@/videobook/segment-loop-playback'
@@ -36,7 +37,9 @@ const MOVE_STEPS = [-1, -0.1, 0.1, 1] as const
 
 type SplitBodyProps = {
   cutPointsSeconds: number[]
+  destination: NotebookSplitDestination
   mediaUrl: string
+  onDestinationChange: (destination: NotebookSplitDestination) => void
   onChange: (next: {
     cutPointsSeconds: number[]
     outputMode: NotebookSplitOutputMode
@@ -49,10 +52,37 @@ type SplitBodyProps = {
   sourceFps?: number | null
 }
 
+const DESTINATIONS = [
+  ['new', 'NEW CELL'],
+  ['in_place', 'IN PLACE'],
+] as const
+
+function outputSummaryText(input: {
+  destination: NotebookSplitDestination
+  outputMode: NotebookSplitOutputMode
+  pieceCount: number
+  selected: { startSeconds: number; endSeconds: number } | undefined
+}): string {
+  const { selected } = input
+  if (!selected) return ''
+  if (input.outputMode === 'all') return `Apply creates ${input.pieceCount} cells`
+  const range = `${formatSplitTimestamp(selected.startSeconds)}-${formatSplitTimestamp(selected.endSeconds)}`
+  if (input.destination === 'in_place') {
+    return input.outputMode === 'keep'
+      ? `Apply trims the source in place to ${range}`
+      : `Apply removes ${range} from the source in place`
+  }
+  return input.outputMode === 'keep'
+    ? `Apply creates 1 cell: ${range}`
+    : `Apply creates 1 cell without ${range}`
+}
+
 export function SplitBody({
   cutPointsSeconds,
+  destination,
   mediaUrl,
   onChange,
+  onDestinationChange,
   outputMode,
   scenes,
   selectedIndex,
@@ -194,13 +224,12 @@ export function SplitBody({
     setFocusedCut(index)
     applyEdit(moveSceneCut({ cutPointsSeconds, index, seconds, sourceDurationSeconds }))
   }
-  const outputSummary = selected
-    ? outputMode === 'all'
-      ? `Apply creates ${segments.length} cells`
-      : outputMode === 'keep'
-        ? `Apply creates 1 cell: ${formatSplitTimestamp(selected.startSeconds)}-${formatSplitTimestamp(selected.endSeconds)}`
-        : `Apply creates 1 cell without ${formatSplitTimestamp(selected.startSeconds)}-${formatSplitTimestamp(selected.endSeconds)}`
-    : ''
+  const outputSummary = outputSummaryText({
+    destination,
+    outputMode,
+    pieceCount: segments.length,
+    selected,
+  })
 
   const nudgeButtons = (
     bound: 'in' | 'out',
@@ -501,6 +530,22 @@ export function SplitBody({
               </button>
             ))}
           </div>
+          {outputMode !== 'all' && (
+            <div className="confirm-chips" role="radiogroup" aria-label="Destination">
+              {DESTINATIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  className={destination === value ? 'active' : undefined}
+                  aria-checked={destination === value}
+                  onClick={() => onDestinationChange(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="confirm-help">{outputSummary}</p>
         </section>
       </div>

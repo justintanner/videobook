@@ -9,7 +9,7 @@ export function suggestCutsDef(engine: Engine): ToolDef {
   return {
     name: "suggest_cuts",
     description:
-      "Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts. Returns status cached with the earlier trims when the same video, transcript and instructions were already reviewed; pass force for fresh suggestions.",
+      "Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before trim_video with cuts. Returns status cached with the earlier trims when the same video, transcript and instructions were already reviewed; pass force for fresh suggestions.",
     schema: {
       asset_id: z.string().describe("Video artifact ID"),
       book_id: z.string().describe("Book id"),

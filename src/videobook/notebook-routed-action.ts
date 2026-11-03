@@ -38,65 +38,6 @@ function requiredString(
   return result
 }
 
-function extractOutput(value: Record<string, unknown>): RoutedMediaOutput {
-  return {
-    type: 'video',
-    artifactId: requiredString(
-      value,
-      'output_artifact_id',
-      'The extracted clip did not return an artifact for the notebook',
-    ),
-    inputs: {
-      sourceOperation: 'extract_video_clip',
-      ...selectedValues(value, [
-        'source_asset_id',
-        'start_time',
-        'end_time',
-        'duration',
-        'job_id',
-      ]),
-    },
-  }
-}
-
-function splitOutputs(value: Record<string, unknown>): RoutedMediaOutput[] {
-  const shared = selectedValues(value, [
-    'source_asset_id',
-    'chunk_a_end',
-    'chunk_b_start',
-    'overlap_sec',
-    'job_id',
-  ])
-  return [
-    {
-      type: 'video',
-      artifactId: requiredString(
-        value,
-        'chunk_a_artifact_id',
-        'The first split clip did not return an artifact for the notebook',
-      ),
-      inputs: {
-        sourceOperation: 'split_video',
-        splitOutput: 'first',
-        ...shared,
-      },
-    },
-    {
-      type: 'video',
-      artifactId: requiredString(
-        value,
-        'chunk_b_artifact_id',
-        'The remaining split clip did not return an artifact for the notebook',
-      ),
-      inputs: {
-        sourceOperation: 'split_video',
-        splitOutput: 'remaining',
-        ...shared,
-      },
-    },
-  ]
-}
-
 function coverSongOutput(value: Record<string, unknown>): RoutedMediaOutput {
   return {
     type: 'audio',
@@ -217,21 +158,15 @@ export function routedMediaCellInputs(
   lastWorkSlot: NotebookGridSlot | null = null,
 ): RoutedMediaCellInput[] {
   if (
-    tool !== 'extract_video_clip'
-    && tool !== 'split_video'
-    && tool !== 'make_cover_song'
+    tool !== 'make_cover_song'
     && tool !== 'splice_video'
     && tool !== 'smooth_scene_concat'
   ) return []
   const value = recordValue(result)
   if (!value) throw new Error(`${tool} returned an invalid result`)
-  const outputs = tool === 'extract_video_clip'
-    ? [extractOutput(value)]
-    : tool === 'split_video'
-      ? splitOutputs(value)
-      : tool === 'make_cover_song'
-        ? [coverSongOutput(value)]
-        : [spliceOutput(tool, value)]
+  const outputs = tool === 'make_cover_song'
+    ? [coverSongOutput(value)]
+    : [spliceOutput(tool, value)]
   const unplaced = outputs.filter((output) => !cells.some((cell) =>
     !isPublishedPostCell(cell) && cell.outputArtifactId === output.artifactId))
   if (unplaced.length === 0) return []

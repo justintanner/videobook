@@ -14,7 +14,7 @@ describe('notebook cell add menu', () => {
   })
 
   it('returns every option for a blank search and none for an unknown search', () => {
-    expect(filterNotebookCellAddItems('')).toHaveLength(15)
+    expect(filterNotebookCellAddItems('')).toHaveLength(14)
     expect(filterNotebookCellAddItems('missing cell type')).toEqual([])
   })
 

@@ -1,4 +1,4 @@
-import type { Engine, NotebookDocument } from "videobook-engine";
+import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { normalizeNotebookReference } from "videobook-engine/notebook-mentions";
 import { resolveNotebookArtifactReference } from "../notebook-reference-resolver.js";
 
@@ -33,4 +33,38 @@ export function resolveVideoAssetReference(
     throw new Error(`Video source @${normalized} has no media output yet`);
   }
   throw new Error(`Video source @${normalized} was not found`);
+}
+
+export type VideoCutSource = {
+  artifactId: string;
+  notebook: { document: NotebookDocument; cell: NotebookCell } | null;
+};
+
+function sourceCell(
+  documents: readonly NotebookDocument[],
+  artifactId: string,
+  cellId: string | undefined,
+): { document: NotebookDocument; cell: NotebookCell } | null {
+  for (const document of documents) {
+    const cell = document.cells.find((candidate) =>
+      cellId ? candidate.id === cellId : candidate.outputArtifactId === artifactId);
+    if (cell) return { document, cell };
+  }
+  return null;
+}
+
+export function resolveVideoCutSource(
+  engine: Engine,
+  reference: string,
+  notebookId?: string,
+): VideoCutSource {
+  const artifactId = resolveVideoAssetReference(engine, reference, notebookId);
+  const documents = notebookCandidates(engine, notebookId);
+  const resolved = resolveNotebookArtifactReference({
+    engine,
+    documents,
+    reference: normalizeNotebookReference(reference),
+  });
+  const cellId = "code" in resolved ? undefined : resolved.cellId;
+  return { artifactId, notebook: sourceCell(documents, artifactId, cellId) };
 }

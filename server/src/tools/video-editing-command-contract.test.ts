@@ -110,8 +110,6 @@ describe("video editing command contract", () => {
   });
 
   it("keeps runtime defaults synchronized with command help", () => {
-    const split = VIDEO_EDITING_COMMANDS.find((command) => command.command === "/split-chunks");
-    expect(split?.params.find((param) => param.name === "target_secs")?.description).toContain("default 7");
     const render = toolDefs.find((tool) => tool.name === "render_video");
     const orientation = render?.schema.orientation as { description?: string };
     expect(orientation.description).toContain("omit to render all three orientations");

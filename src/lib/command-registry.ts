@@ -425,60 +425,6 @@ function normalizeTrimCommandArgs(
   };
 }
 
-function normalizeApplyCutsCommandArgs(
-  args: Readonly<Record<string, unknown>>,
-): { asset_id: string; cuts: Array<{ cut_start: number; cut_end: number }> } {
-  const assetValue = args.asset_id;
-  if (typeof assetValue !== 'string' || !assetValue.trim()) {
-    throw new Error('/apply-cuts requires a video cell or asset');
-  }
-  const assetId = stripAt(assetValue.trim());
-
-  const cutsRaw = args.cuts;
-  if (!cutsRaw) throw new Error('/apply-cuts requires at least one cut range');
-
-  const cutsArray: unknown[] = Array.isArray(cutsRaw) ? cutsRaw : [cutsRaw];
-  if (cutsArray.length === 0) throw new Error('/apply-cuts requires at least one cut range');
-
-  const cuts: Array<{ cut_start: number; cut_end: number }> = [];
-
-  for (const raw of cutsArray) {
-    if (typeof raw === 'object' && raw !== null && 'cut_start' in raw && 'cut_end' in raw) {
-      const cStart = Number((raw as Record<string, unknown>).cut_start);
-      const cEnd = Number((raw as Record<string, unknown>).cut_end);
-      if (!Number.isFinite(cStart) || !Number.isFinite(cEnd) || cStart >= cEnd || cStart < 0) {
-        throw new Error(`Invalid cut range object: ${JSON.stringify(raw)}`);
-      }
-      cuts.push({ cut_start: cStart, cut_end: cEnd });
-      continue;
-    }
-
-    if (typeof raw !== 'string') {
-      throw new Error(`/apply-cuts range must be string or object, got: ${typeof raw}`);
-    }
-
-    const token = raw.trim();
-    const dashIdx = token.indexOf('-');
-    if (dashIdx <= 0 || dashIdx === token.length - 1) {
-      throw new Error(`Invalid /apply-cuts range format: ${token}. Expected <start>-<end>`);
-    }
-
-    const startStr = token.slice(0, dashIdx);
-    const endStr = token.slice(dashIdx + 1);
-
-    const cStart = parseCommandTimestamp(startStr, '/apply-cuts');
-    const cEnd = parseCommandTimestamp(endStr, '/apply-cuts');
-
-    if (cStart >= cEnd) {
-      throw new Error(`/apply-cuts start (${startStr}) must be before end (${endStr})`);
-    }
-
-    cuts.push({ cut_start: cStart, cut_end: cEnd });
-  }
-
-  return { asset_id: assetId, cuts };
-}
-
 function normalizeTranslateSubtitlesCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): { asset_id: string; language: string } {
@@ -679,12 +625,6 @@ export const COMMAND_ADAPTERS = {
     delete result.start;
     delete result.end;
     return { ...result, ...(normalized as CommandToolArgs) };
-  },
-  apply_cuts: (args) => {
-    const normalized = normalizeApplyCutsCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.cuts;
-    return { ...result, ...normalized };
   },
   translate_subtitles: (args) => {
     const normalized = normalizeTranslateSubtitlesCommandArgs(args);

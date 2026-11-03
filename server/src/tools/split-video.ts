@@ -1,56 +1,140 @@
-import { findVideoFile, type Artifact, type Engine } from "videobook-engine";
-import { z } from "zod";
+import type { Engine } from "videobook-engine";
+import { findVideoFile } from "videobook-engine";
 import { join } from "node:path";
-import { queue } from "../queue.js";
+import { z } from "zod";
 import { probeVideo } from "../ffmpeg.js";
-import type { ToolDef } from "./tool-def.js";
-import { resolveVideoAssetReference } from "./video-source-reference.js";
+import type { CutVideoRangesResult } from "../jobs/cut-video-ranges.js";
+import { addClipCells } from "../notebook-clip-cells.js";
+import { queue, waitForBookJob } from "../queue.js";
+import type { SceneCutOptions, SceneData } from "../scene-cuts.js";
+import { DEFAULT_MIN_SCENE_SECONDS, DEFAULT_SCENE_MIN_SCORE, selectSceneCuts } from "../scene-cuts.js";
+import type { VideoRange } from "../video-cut-ranges.js";
+import { cutPointPieces, durationCutPoints } from "../video-cut-ranges.js";
+import { requestScenes } from "./detect-scenes.js";
+import type { ToolDef, ToolResult } from "./tool-def.js";
+import { toolError } from "./_shared.js";
+import type { VideoCutSource } from "./video-source-reference.js";
+import { resolveVideoCutSource } from "./video-source-reference.js";
 import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js";
 
-// Each chunk must be at least this long, otherwise downstream process_video
-// can't extract frames / probe meaningfully and the asset gets stuck.
-const MIN_CHUNK_SEC = 0.5;
+const SCENE_WAIT_MS = 600_000;
 
-type ValidatedSplit =
-  | { chunkAEnd: number; chunkBStart: number }
-  | { error: string };
+type SplitArgs = {
+  asset_id: string;
+  book_id: string;
+  notebook_id?: string;
+  cut_points?: Array<string | number>;
+  durations?: number[];
+  scenes?: boolean;
+  min_score?: number;
+  include_settles?: boolean;
+  min_scene_seconds?: number;
+  actor?: string;
+};
 
-function validateSplitParams(
-  chunkAEnd: number,
-  chunkBStart: number,
-): ValidatedSplit {
-  if (!Number.isFinite(chunkAEnd) || !Number.isFinite(chunkBStart)) {
-    return { error: "chunk_a_end and chunk_b_start must be finite numbers." };
-  }
-  if (chunkAEnd <= 0) {
-    return { error: "chunk_a_end must be > 0." };
-  }
-  if (chunkBStart < 0) {
-    return { error: "chunk_b_start must be >= 0." };
-  }
-  // Overlap is allowed (chunkBStart <= chunkAEnd) but not fully reversed.
-  if (chunkBStart > chunkAEnd) {
-    return {
-      error: `chunk_b_start (${chunkBStart}) must be <= chunk_a_end (${chunkAEnd}). Gaps are not supported; use trim_video instead.`,
-    };
-  }
-  return { chunkAEnd, chunkBStart };
+async function probedDuration(engine: Engine, artifactId: string): Promise<number> {
+  const manifest = await engine.files.manifest(artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const video = findVideoFile(manifest.value.files);
+  if (!video) throw new Error(`No video file found in asset ${artifactId}`);
+  const probe = await probeVideo(join(manifest.value.path, video.name));
+  return probe.videoDuration || probe.duration;
 }
 
-// Numeric suffixes 1/2 mark chunk order; trim the source label to its last
-// 2 words so labels stay short. Mirrors even-split.ts.
-function deriveChunkName(source: Artifact, suffix: "1" | "2"): string {
-  const base = source.label ?? source.artifactId;
-  const words = base.split(/[\s-]+/u).filter((w) => w.length > 0);
-  const tail = words.slice(-2).join("-") || base;
-  return `${tail}-${suffix}`;
+async function detectedScenes(engine: Engine, artifactId: string, bookId: string): Promise<SceneData> {
+  const first = await requestScenes(engine, { reference: artifactId, bookId, force: false });
+  if (!first.ok) throw new Error(first.error);
+  if (first.scenes) return first.scenes;
+  if (first.jobId !== null) await waitForBookJob(bookId, first.jobId, SCENE_WAIT_MS);
+  const second = await requestScenes(engine, { reference: artifactId, bookId, force: false });
+  if (!second.ok) throw new Error(second.error);
+  if (!second.scenes) throw new Error(`Scene detection for ${artifactId} did not finish`);
+  return second.scenes;
+}
+
+function requestedModes(args: SplitArgs): number {
+  return [(args.cut_points?.length ?? 0) > 0, (args.durations?.length ?? 0) > 0, args.scenes === true]
+    .filter(Boolean).length;
+}
+
+async function splitPieces(engine: Engine, args: SplitArgs, artifactId: string): Promise<VideoRange[]> {
+  if (requestedModes(args) !== 1) throw new Error("Pass exactly one of cut_points, durations, or scenes: true");
+  if (args.scenes) {
+    const scenes = await detectedScenes(engine, artifactId, args.book_id);
+    const options: SceneCutOptions = {
+      minScore: args.min_score,
+      includeSettles: args.include_settles,
+      minSceneSeconds: args.min_scene_seconds,
+    };
+    const cuts = selectSceneCuts(scenes, options);
+    if (cuts.length === 0) throw new Error("No scene cuts found; lower min_score or include settles");
+    return cutPointPieces(cuts, scenes.durationSeconds);
+  }
+  const points = args.durations
+    ? durationCutPoints(args.durations)
+    : args.cut_points!.map((point, index) => parseVideoTimestamp(point, `cut_points[${index}]`)!);
+  return cutPointPieces(points, await probedDuration(engine, artifactId));
+}
+
+function pieceLabel(index: number): string {
+  return `Part ${String(index + 1).padStart(2, "0")}`;
+}
+
+async function splitToCells(engine: Engine, args: SplitArgs, source: VideoCutSource, pieces: VideoRange[]): Promise<ToolResult> {
+  const placed = await addClipCells(engine, {
+    bookId: args.book_id,
+    document: source.notebook!.document,
+    source: source.notebook!.cell,
+    requests: pieces.map((piece, index) => ({ label: pieceLabel(index), keepRanges: [piece] })),
+    actor: args.actor,
+  });
+  return jsonResult({
+    source_asset_id: source.artifactId,
+    source_address: placed.sourceAddress,
+    pieces,
+    cells: placed.cells.map((cell) => ({ cell_id: cell.cellId, address: cell.address })),
+    job_id: placed.jobId,
+    run_id: placed.runId,
+    status: "queued",
+  });
+}
+
+async function splitToAssets(engine: Engine, args: SplitArgs, artifactId: string, pieces: VideoRange[]): Promise<ToolResult> {
+  const artifact = engine.artifacts.get(artifactId);
+  const base = artifact.ok ? artifact.value.label ?? artifactId : artifactId;
+  const jobId = `cut-video-ranges-${artifactId}-${Date.now()}`;
+  const results = await queue.enqueueAndWait<CutVideoRangesResult>(jobId, {
+    type: "cut_video_ranges",
+    sourceAssetId: artifactId,
+    outputs: pieces.map((piece, index) => ({ title: `${base} ${pieceLabel(index).toLowerCase()}`, keepRanges: [piece] })),
+    bookId: args.book_id,
+  });
+  return jsonResult({
+    source_asset_id: artifactId,
+    pieces,
+    output_asset_ids: results.map((result) => result.artifactId),
+    job_id: jobId,
+    status: "completed",
+  });
+}
+
+function jsonResult(value: Record<string, unknown>): ToolResult {
+  return { content: [{ type: "text" as const, text: JSON.stringify(value) }] };
+}
+
+async function splitVideo(engine: Engine, args: SplitArgs): Promise<ToolResult> {
+  const source = resolveVideoCutSource(engine, args.asset_id, args.notebook_id);
+  const pieces = await splitPieces(engine, args, source.artifactId);
+  return source.notebook
+    ? await splitToCells(engine, args, source, pieces)
+    : await splitToAssets(engine, args, source.artifactId, pieces);
 }
 
 export function splitVideoDef(engine: Engine): ToolDef {
   return {
     name: "split_video",
     description:
-      "Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.",
+      "Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.",
     annotations: {
       title: "Split video into clips",
       readOnlyHint: false,
@@ -62,169 +146,20 @@ export function splitVideoDef(engine: Engine): ToolDef {
       asset_id: z.string().describe("Source video artifact id or notebook reference such as @a1"),
       book_id: z.string().describe("Book UUID"),
       notebook_id: z.string().uuid().optional().describe("Notebook UUID when asset_id is a grid reference and the book has multiple matching notebooks"),
-      chunk_a_end: videoTimestampSchema.describe("End of the first clip in seconds or a timestamp such as 15s or 1:30"),
-      chunk_b_start: videoTimestampSchema.optional().describe("Start of the remaining clip; defaults to chunk_a_end for a clean split"),
+      cut_points: z.array(videoTimestampSchema).min(1).max(200).optional().describe("Times to cut at, in seconds or timestamps such as 15s or 1:30"),
+      durations: z.array(z.number().positive()).min(1).max(200).optional().describe("Chunk lengths in seconds; whatever remains becomes the last clip"),
+      scenes: z.boolean().optional().describe("Cut at detected camera cuts (reuses a cached detect_scenes result)"),
+      min_score: z.number().min(0).max(100).optional().describe(`With scenes: minimum camera-cut score (default ${DEFAULT_SCENE_MIN_SCORE})`),
+      include_settles: z.boolean().optional().describe("With scenes: also split where motion settles inside a shot"),
+      min_scene_seconds: z.number().min(0.02).optional().describe(`With scenes: shortest scene to keep (default ${DEFAULT_MIN_SCENE_SECONDS}s)`),
+      actor: z.string().min(1).optional(),
     },
     handler: async (args) => {
-      const { asset_id, book_id, notebook_id, chunk_a_end, chunk_b_start } = args as {
-        asset_id: string;
-        book_id: string;
-        notebook_id?: string;
-        chunk_a_end: string | number;
-        chunk_b_start?: string | number;
-      };
-
-      let assetId: string;
-      let chunkAEnd: number;
-      let chunkBStart: number;
       try {
-        assetId = resolveVideoAssetReference(engine, asset_id, notebook_id);
-        chunkAEnd = parseVideoTimestamp(chunk_a_end, "chunk_a_end")!;
-        chunkBStart = parseVideoTimestamp(chunk_b_start, "chunk_b_start") ?? chunkAEnd;
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
-        };
+        return await splitVideo(engine, args as SplitArgs);
+      } catch (cause) {
+        return toolError(cause instanceof Error ? cause.message : String(cause));
       }
-
-      const validated = validateSplitParams(chunkAEnd, chunkBStart);
-      if ("error" in validated) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: validated.error }],
-        };
-      }
-
-      const sourceArtifact = engine.artifacts.get(assetId);
-      if (!sourceArtifact.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: sourceArtifact.error.message }],
-        };
-      }
-
-      const manifestResult = await engine.files.manifest(assetId);
-      if (!manifestResult.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: manifestResult.error.message }],
-        };
-      }
-
-      const manifest = manifestResult.value;
-      const videoFile = findVideoFile(manifest.files);
-      if (!videoFile) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }],
-        };
-      }
-
-      const sourcePath = join(manifest.path, videoFile.name);
-
-      let sourceDurationSec: number;
-      try {
-        const probe = await probeVideo(sourcePath);
-        sourceDurationSec = probe.videoDuration || probe.duration;
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Failed to probe source duration: ${err instanceof Error ? err.message : String(err)}`,
-          }],
-        };
-      }
-      if (validated.chunkAEnd > sourceDurationSec + 0.05) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `chunk_a_end (${validated.chunkAEnd.toFixed(2)}s) exceeds source duration (${sourceDurationSec.toFixed(2)}s).`,
-          }],
-        };
-      }
-      const chunkADur = validated.chunkAEnd;
-      const chunkBDur = sourceDurationSec - validated.chunkBStart;
-      if (chunkADur < MIN_CHUNK_SEC || chunkBDur < MIN_CHUNK_SEC) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Chunks would be too short: A=${chunkADur.toFixed(2)}s, B=${chunkBDur.toFixed(2)}s (min ${MIN_CHUNK_SEC}s each). Source is ${sourceDurationSec.toFixed(2)}s — pick a split point further from the ends.`,
-          }],
-        };
-      }
-
-      const nameA = deriveChunkName(sourceArtifact.value, "1");
-      const nameB = deriveChunkName(sourceArtifact.value, "2");
-
-      const createA = await engine.artifacts.create(sourceArtifact.value.kind, nameA);
-      if (!createA.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create chunk A asset: ${createA.error.message}` }],
-        };
-      }
-      const createB = await engine.artifacts.create(sourceArtifact.value.kind, nameB);
-      if (!createB.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to create chunk B asset: ${createB.error.message}` }],
-        };
-      }
-
-      const assetIdA = createA.value.artifactId;
-      const assetIdB = createB.value.artifactId;
-      const assetDirA = createA.value.path;
-      const assetDirB = createB.value.path;
-      const outputPathA = join(assetDirA, "original.mp4");
-      const outputPathB = join(assetDirB, "original.mp4");
-
-      const jobId = `split-${assetId}-${Date.now()}`;
-      try {
-        await queue.enqueueAndWait(jobId, {
-          type: "split_video",
-          sourcePath,
-          sourceAssetId: assetId,
-          chunkAEnd: validated.chunkAEnd,
-          chunkBStart: validated.chunkBStart,
-          assetIdA,
-          assetDirA,
-          outputPathA,
-          assetIdB,
-          assetDirB,
-          outputPathB,
-          bookId: book_id,
-        });
-      } catch (err) {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Split failed: ${err instanceof Error ? err.message : String(err)}`,
-          }],
-        };
-      }
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            source_asset_id: assetId,
-            chunk_a_asset_id: assetIdA,
-            chunk_a_artifact_id: createA.value.artifactId,
-            chunk_b_asset_id: assetIdB,
-            chunk_b_artifact_id: createB.value.artifactId,
-            chunk_a_end: validated.chunkAEnd,
-            chunk_b_start: validated.chunkBStart,
-            overlap_sec: Math.max(0, validated.chunkAEnd - validated.chunkBStart),
-            job_id: jobId,
-            status: "completed",
-          }),
-        }],
-      };
     },
   };
 }

@@ -6,6 +6,7 @@ import type { Engine } from "videobook-engine";
 import { BookManager } from "../book-manager.js";
 import { scopedBookEngine, withBookContext } from "../book-context.js";
 import { registerDetectScenesJob } from "../jobs/detect-scenes.js";
+import { registerCutVideoRangesJob } from "../jobs/cut-video-ranges.js";
 import { registerRunNotebookJob } from "../jobs/run-notebook.js";
 import { queue, setEngineRoot, stopBookQueue } from "../queue.js";
 import { asSceneData } from "../scene-cuts.js";
@@ -42,7 +43,7 @@ async function waitForQueueJob(jobId: string): Promise<void> {
   throw new Error(`Job ${jobId} did not complete`);
 }
 
-describe("split_video_at_scenes", () => {
+describe("split_video scenes", () => {
   let rootDir: string | undefined;
   let books: BookManager | undefined;
   let bookId: string | undefined;
@@ -68,6 +69,7 @@ describe("split_video_at_scenes", () => {
     const engine = managed.value.engine;
     await setEngineRoot(rootDir, engine);
     registerRunNotebookJob(engine);
+    registerCutVideoRangesJob(engine);
     registerDetectScenesJob(engine);
     const defs = new Map([
       ...videobookDomainDefs(scopedBookEngine, books),
@@ -136,11 +138,10 @@ describe("split_video_at_scenes", () => {
   it("splits a notebook video into one cell per scene", async () => {
     const h = await harness();
     await placeFixture(h);
-    const result = await h.call("split_video_at_scenes", { book_id: h.bookId, asset_id: "@a1" });
-    expect(result).toMatchObject({ source_cell: "@a1" });
-    const cuts = result.cut_points_seconds as number[];
-    expect(cuts).toHaveLength(2);
-    const outputIds = result.output_cell_ids as string[];
+    const result = await h.call("split_video", { book_id: h.bookId, asset_id: "@a1", scenes: true });
+    expect(result).toMatchObject({ source_address: "@a1" });
+    expect(result.pieces).toHaveLength(3);
+    const outputIds = (result.cells as Array<{ cell_id: string }>).map((cell) => cell.cell_id);
     expect(outputIds).toHaveLength(3);
 
     await waitForQueueJob(String(result.job_id));
@@ -159,13 +160,13 @@ describe("split_video_at_scenes", () => {
   it("splits at reviewed cut points without running detection", async () => {
     const h = await harness();
     await placeFixture(h);
-    const result = await h.call("split_video_at_scenes", {
+    const result = await h.call("split_video", {
       book_id: h.bookId,
       asset_id: "@a1",
-      cut_points_seconds: [3],
+      cut_points: [3],
     });
-    expect(result.cut_points_seconds).toEqual([3]);
-    expect(result.output_cell_ids).toHaveLength(2);
+    expect(result.pieces).toEqual([{ startSeconds: 0, endSeconds: 3 }, { startSeconds: 3, endSeconds: FIXTURE_DURATION }]);
+    expect(result.cells).toHaveLength(2);
     await waitForQueueJob(String(result.job_id));
     const detection = await h.call("detect_scenes", { book_id: h.bookId, source_asset_id: "@a1" });
     expect(detection.status).toBe("queued");

@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (222)
+## MCP endpoints (218)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -18,7 +18,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `analyze_music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.
 - `analyze_video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.
 - `animate_keywords` — Turn transcript-timed keyword titles on or off for a video's renders, placed by vision away from faces, subtitles and on-screen text. Pass keywords for exact transcript words, or omit them for automatic picks.
-- `apply_cuts` — Remove one or more time ranges from a video in place, then reprocess its frames, transcript and analysis. Take ranges from suggest_cuts or choose them.
 - `apply_sfx` — Generate ElevenLabs sound effects and mix them into a video's audio in place, one cue per entry at its timestamp and duration. Get entries from suggest_sfx.
 - `apply_watermark` — Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.
 - `archive_clip` — Save a URL or a video or audio asset to the global clip archive (B2 when configured, otherwise local), deduplicated by content and transcribed; restore it with restore_archive_clips.
@@ -84,7 +83,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `extract_frame` — Save one video frame as a new image asset (JPEG): the first frame, the last frame, or the frame at timestamp seconds.
 - `extract_notebook_audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range
 - `extract_notebook_frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp
-- `extract_video_clip` — Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.
 - `generate_audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
 - `generate_video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.
@@ -205,13 +203,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `slash_commands` — List the UI slash commands as command, description, aliases and the tool or UI action each runs; detail full returns the complete records the app renders (params, examples, icons).
 - `smooth_scene_concat` — Join two video scenes into a new video, aligning overlapping boundary audio to avoid repeated speech and dissolving across it, otherwise crossfading briefly.
 - `splice_video` — Join two or more videos in playback order into a new video. overlap 0 concatenates whole clips; a positive overlap cuts each boundary at the best-matching frame within that many seconds.
-- `split_video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.
-- `split_video_at_scenes` — Split a notebook video into one clip per scene. Detects camera cuts (reusing a cached detect_scenes result), then adds a split cell and one output cell per scene below the source and runs it. Pass cut_points_seconds to split at reviewed times instead.
-- `split_video_by_durations` — Cut a video into chunks of the target_secs lengths (e.g. [10, 15]) plus a leftover chunk, as new video assets; the source is kept. With destination, the chunks are written as files into an existing asset instead, without the leftover.
+- `split_video` — Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
 - `suggest_asset_tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.
-- `suggest_cuts` — Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before apply_cuts. Returns status cached with the earlier trims when the same video, transcript and instructions were already reviewed; pass force for fresh suggestions.
+- `suggest_cuts` — Suggest trims for visual pacing and awkward transitions from a video's frames in a background job. Uses a transcript when available for dialogue, dead air and fillers; no transcript is required. Pass the editing goal in instructions; review the result before trim_video with cuts. Returns status cached with the earlier trims when the same video, transcript and instructions were already reviewed; pass force for fresh suggestions.
 - `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
 - `suggest_sfx` — Suggest timed sound effects for a video from its frames and transcript in a background job. Needs a transcript; mix the result in with apply_sfx. Returns status cached with the earlier sound effects when the same video and transcript were already reviewed; pass force for fresh suggestions.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
@@ -220,7 +216,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `translate_subtitles` — Translate an asset's transcript subtitles into another language for renders with that subtitle_language. Returns status cached when the current transcript already has that translation; a repeated or concurrent request joins the running job.
 - `trending_research` — Schedule, unschedule, list, run or inspect country TikTok research. The run operation samples now, or cuts a day book for date using the existing ledger. Unschedule disables future automatic runs and preserves research history. After each cutoff, day books older than retention_days are deleted once their rank list, sources and download outcomes are copied into the control book; archive_top_clips archives their completed clips first, and the archiving's provider usage is copied into the control book too. Sighting ledgers older than both retention_days and the cut's 8-day read window are pruned. Omitted arguments default to Thailand: platform tiktok, country TH, timezone Asia/Bangkok, cutoff 00:30, four samples a day, top 10, a trending window, promoted videos excluded, 30-day retention, Endless and TikTok Creative Center, and transcription off. Omkar is an optional source included only when OMKAR_API_KEY is set and @apicity/omkar is installed. Status reports omkar as not configured when that key is unset. Each sample makes one Omkar trending request and does not retry it; set the omkar source option explore to true to add one Explore request for category all. list, run, and status use the only existing schedule when there is exactly one; otherwise they use TH. Other countries require a timezone when first scheduled.
 - `trim_audio` — Trim an audio asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for video assets so picture and sound remain synchronized. Operates in-place with git versioning.
-- `trim_video` — Change an existing video in place by keeping a range or removing a middle section. Use extract_video_clip for a new clip that keeps the source. Times accept seconds, 15s or 1:30.
+- `trim_video` — Trim a video: keep a range (trim_start/trim_end), remove ranges (cut_start/cut_end or cuts), or shave seconds off the ends (head_seconds/tail_seconds, e.g. 'remove the last 2s' is tail_seconds 2). output in_place rewrites the source; output new keeps the source and writes the result to a new cell below a notebook source (or a new asset). Times accept seconds, 15s or 1:30.
 - `update_entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity
 - `update_notebook_cell` — Update one notebook cell
 - `update_post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.
@@ -233,7 +229,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (296; 143 dedicated command routes)
+## Slash actions (292; 141 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
@@ -244,7 +240,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
 - `/analyze-music` — Analyze an audio source's beats and waveform locally in a background job, reusing results for unchanged audio. sections adds an energy curve and suggested section boundaries and labels, which may use a paid model.; MCP: `analyze_music`
 - `/analyze-video` — Analyze a video with vision and its transcript in a background job: summary, scenes, tags, subjects, and burned-in subtitles or watermarks. The analysis appears on the asset when the job finishes. Returns status cached when the current video and transcript were already analysed; a repeated or concurrent request joins the running job.; MCP: `analyze_video`
-- `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
 - `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
 - `/apply-watermark` — Burn a positioned QR code and/or an X or TikTok handle onto a video in place, each with its own opacity, padding and visibility window. wait=false returns once the burn is queued. mode=overlay stores a legacy render-time overlay instead.; MCP: `apply_watermark`
 - `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
@@ -332,7 +327,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_frame`
 - `/extract-notebook-audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range; MCP: `extract_notebook_audio`
 - `/extract-notebook-frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp; MCP: `extract_notebook_frame`
-- `/extract-video-clip` — Cut a new video clip from a source time range, keeping the original (for example 'a new clip from @a1 from 15s to 44s'). Times accept seconds, 15s, 1:30 or 2m20s.; MCP: `extract_video_clip`
 - `/files` — Focus file by position; UI: `viewer_focus_file`
 - `/final` — Finalize and export the project timeline; MCP: `render_timeline`
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
@@ -492,10 +486,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
 - `/split` — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
-- `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
 - `/split-clip` — Split a canonical-sequence clip at an exact sequence frame; preview or workspace operation
-- `/split-video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.; MCP: `split_video`
-- `/split-video-at-scenes` — Split a notebook video into one clip per scene. Detects camera cuts (reusing a cached detect_scenes result), then adds a split cell and one output cell per scene below the source and runs it. Pass cut_points_seconds to split at reviewed times instead.; MCP: `split_video_at_scenes`
+- `/split-video` — Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.; MCP: `split_video`
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`

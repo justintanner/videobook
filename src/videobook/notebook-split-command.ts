@@ -1,13 +1,16 @@
-import type { NotebookCell, NotebookDocument } from 'videobook-engine'
 import {
+  compileNotebookSplitOutputs,
   formatSplitTimestamp,
-  planNotebookSplit,
+  notebookSplitPieces,
   roundedSplitSeconds,
-  type NotebookSplitDraft,
   type NotebookSplitOutputMode,
 } from '../../server/src/notebook-split-plan'
-import { notebookCellTag } from './notebook-addressing'
-import { resolveNotebookVideoSourceCell } from './notebook-video-source'
+import {
+  cutRangesOutside,
+  trimKeepRanges,
+  type TrimRequest,
+  type VideoRange,
+} from '../../server/src/video-cut-ranges'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 export {
@@ -23,12 +26,22 @@ export {
   type NotebookSplitRange,
 } from '../../server/src/notebook-split-plan'
 
+export type NotebookSplitDestination = 'new' | 'in_place'
+
 export type NotebookSplitCommand = {
   sourceReference: string
   cutPointsSeconds: number[]
   outputMode?: NotebookSplitOutputMode
   selectedChunkIndexes?: number[]
   cutSource?: 'scenes'
+  trim?: TrimRequest
+  destination?: NotebookSplitDestination
+}
+
+export type NotebookSplitSelection = {
+  cutPointsSeconds: number[]
+  outputMode: Exclude<NotebookSplitOutputMode, 'all'>
+  selectedChunkIndexes: number[]
 }
 
 const NOTEBOOK_SPLIT_SCENES_PATTERN =
@@ -40,21 +53,6 @@ const NOTEBOOK_SPLIT_COMMAND_PATTERN = new RegExp(
   `^(?:please\\s+)?(?:/split|split)\\s+@(${NOTEBOOK_SPLIT_REFERENCE_SOURCE})(?:\\s+([\\s\\S]+?))?(?:\\s+please)?[.!]?$`,
   'iu',
 )
-
-export type NotebookSplitRun = {
-  actionCellId: string
-  actionAddress: string
-  outputs: Array<{
-    chunkIndex: number
-    outputCellId: string
-    outputAddress: string
-  }>
-  cutPointsSeconds: number[]
-  jobId: string
-  runId: string
-  sourceCellId: string
-  sourceAddress: string
-}
 
 type NotebookToolCall = (
   tool: string,
@@ -81,8 +79,7 @@ export function notebookSplitCellBudget(
   outputMode: NotebookSplitOutputMode,
   pieceCount: number,
 ): number {
-  const outputs = outputMode === 'all' ? Math.max(1, pieceCount) : 1
-  return outputs + 1
+  return outputMode === 'all' ? Math.max(1, pieceCount) : 1
 }
 
 function timestampSeconds(value: string): number | null {
@@ -126,19 +123,6 @@ function splitBoundaryValues(value: string): string[] {
     .split(/\s*(?:,|;|\band\b|\bthen\b)\s*/iu)
     .map((part) => part.trim())
     .filter(Boolean)
-}
-
-function cellCreateInput(cell: NotebookCell): Record<string, unknown> {
-  return {
-    id: cell.id,
-    type: cell.type,
-    ...(cell.label === undefined ? {} : { label: cell.label }),
-    slot: cell.slot,
-    ...(cell.provider === undefined ? {} : { provider: cell.provider }),
-    ...(cell.operation === undefined ? {} : { operation: cell.operation }),
-    ...(cell.tool === undefined ? {} : { tool: cell.tool }),
-    ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
-  }
 }
 
 function parseKeepRemoveRange(phrase: string): {
@@ -216,106 +200,176 @@ export function parseNotebookSplitCommand(
   }
 }
 
-export function planNotebookSplitCommand(input: {
+function pieceIndexes(pieces: readonly VideoRange[], ranges: readonly VideoRange[]): number[] {
+  return ranges.flatMap((range) => pieces.flatMap((piece, index) =>
+    piece.startSeconds >= range.startSeconds && piece.endSeconds <= range.endSeconds ? [index] : []))
+}
+
+export function trimSplitSelection(
+  trim: TrimRequest,
+  sourceDurationSeconds: number,
+): NotebookSplitSelection {
+  const keeps = trimKeepRanges(trim, sourceDurationSeconds)
+  const cuts = cutRangesOutside(keeps, sourceDurationSeconds)
+  const duration = roundedSplitSeconds(sourceDurationSeconds)
+  const cutPointsSeconds = [...new Set(cuts.flatMap((cut) => [cut.startSeconds, cut.endSeconds]))]
+    .filter((point) => point > 0 && point < duration)
+    .sort((left, right) => left - right)
+  const pieces = notebookSplitPieces({ cutPointsSeconds, sourceDurationSeconds })
+  const removing = cuts.length === 1 || keeps.length > 1
+  return {
+    cutPointsSeconds,
+    outputMode: removing ? 'remove' : 'keep',
+    selectedChunkIndexes: pieceIndexes(pieces, removing ? cuts : keeps),
+  }
+}
+
+function cutArgs(cuts: readonly VideoRange[]): Array<{ start: number; end: number }> {
+  return cuts.map((cut) => ({ start: cut.startSeconds, end: cut.endSeconds }))
+}
+
+type NotebookSplitApplyCall = {
+  tool: 'split_video' | 'trim_video'
+  args: Record<string, unknown>
+}
+
+function notebookSplitApplyCalls(input: {
+  bookId: string
   command: NotebookSplitCommand
-  document: NotebookDocument
+  notebookId: string
   sourceDurationSeconds: number
-}): NotebookSplitDraft {
-  return planNotebookSplit({
-    cutPointsSeconds: input.command.cutPointsSeconds,
-    document: input.document,
-    outputMode: input.command.outputMode,
-    selectedChunkIndexes: input.command.selectedChunkIndexes,
-    source: resolveNotebookVideoSourceCell(input.document, input.command.sourceReference),
+}): NotebookSplitApplyCall[] {
+  const { command } = input
+  const base = {
+    book_id: input.bookId,
+    notebook_id: input.notebookId,
+    asset_id: command.sourceReference,
+  }
+  const outputMode = command.outputMode ?? 'all'
+  if (outputMode === 'all') {
+    return [{ tool: 'split_video', args: { ...base, cut_points: command.cutPointsSeconds } }]
+  }
+  const groups = compileNotebookSplitOutputs({
+    cutPointsSeconds: command.cutPointsSeconds,
+    outputMode,
+    selectedChunkIndexes: command.selectedChunkIndexes,
     sourceDurationSeconds: input.sourceDurationSeconds,
+  })
+  const destination = command.destination ?? 'new'
+  const applied = destination === 'in_place' ? groups.slice(0, 1) : groups
+  return applied.map((keeps) => ({
+    tool: 'trim_video',
+    args: {
+      ...base,
+      cuts: cutArgs(cutRangesOutside(keeps, input.sourceDurationSeconds)),
+      output: destination,
+    },
+  }))
+}
+
+export async function applyNotebookSplitCommand(input: {
+  bookId: string
+  callTool: NotebookToolCall
+  command: NotebookSplitCommand
+  notebookId: string
+  sourceDurationSeconds: number
+}): Promise<unknown[]> {
+  const results: unknown[] = []
+  for (const call of notebookSplitApplyCalls(input)) {
+    results.push(await input.callTool(call.tool, call.args))
+  }
+  return results
+}
+
+export type NotebookClipOutput = {
+  cellId: string
+  address: string
+}
+
+export type NotebookClipRun = {
+  jobId: string
+  runId: string
+  outputs: NotebookClipOutput[]
+}
+
+function clipOutput(value: unknown): NotebookClipOutput | null {
+  const record = recordValue(value)
+  const cellId = nonBlankStringValue(record?.cell_id)
+  const address = nonBlankStringValue(record?.address)
+  return cellId && address ? { cellId, address } : null
+}
+
+export function notebookClipRun(value: unknown): NotebookClipRun | null {
+  const record = recordValue(value)
+  const jobId = nonBlankStringValue(record?.job_id)
+  const runId = nonBlankStringValue(record?.run_id)
+  if (!record || !jobId || !runId) return null
+  const listed = Array.isArray(record.cells) ? record.cells : [record]
+  const outputs = listed.map(clipOutput).filter((output) => output !== null)
+  return outputs.length > 0 ? { jobId, runId, outputs } : null
+}
+
+function secondsValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return undefined
+  return timestampSeconds(value) ?? undefined
+}
+
+function routedCuts(value: unknown): VideoRange[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const record = recordValue(entry)
+    const startSeconds = secondsValue(record?.start)
+    const endSeconds = secondsValue(record?.end)
+    return startSeconds === undefined || endSeconds === undefined ? [] : [{ startSeconds, endSeconds }]
   })
 }
 
-export async function enqueueNotebookSplitCommand(input: {
-  actor: string
-  bookId: string
-  callTool: NotebookToolCall
-  draft: NotebookSplitDraft
-  expectedRevision?: string
-}): Promise<NotebookSplitRun> {
-  const createdCellIds: string[] = []
-  let runRequested = false
-  try {
-    const cells = [
-      input.draft.actionCell,
-      ...input.draft.outputs.map((output) => output.outputCell),
-    ]
-    for (const [index, cell] of cells.entries()) {
-      createdCellIds.push(cell.id)
-      const createdValue = await input.callTool('create_notebook_cell', {
-        book_id: input.bookId,
-        notebook_id: input.draft.document.id,
-        ...(index === 0 && input.expectedRevision
-          ? { expected_revision: input.expectedRevision }
-          : {}),
-        cell: cellCreateInput(cell),
-      })
-      const created = recordValue(createdValue)
-      const createdId = nonBlankStringValue(created?.id)
-      if (createdId !== cell.id) {
-        throw new Error('The server did not preserve the planned split cell')
-      }
-    }
-
-    await input.callTool('connect_notebook_cells', {
-      book_id: input.bookId,
-      notebook_id: input.draft.document.id,
-      source_cell_id: input.draft.sourceCellId,
-      target_cell_id: input.draft.actionCell.id,
-      target_input: 'video',
-    })
-    for (const output of input.draft.outputs) {
-      await input.callTool('connect_notebook_cells', {
-        book_id: input.bookId,
-        notebook_id: input.draft.document.id,
-        source_cell_id: input.draft.actionCell.id,
-        target_cell_id: output.outputCell.id,
-        target_input: 'media',
-      })
-    }
-
-    runRequested = true
-    const acceptedValue = await input.callTool('run_notebook', {
-      actor: input.actor,
-      book_id: input.bookId,
-      notebook_id: input.draft.document.id,
-      cell_ids: [input.draft.actionCell.id],
-    })
-    const accepted = recordValue(acceptedValue)
-    const jobId = nonBlankStringValue(accepted?.job_id)
-    const runId = nonBlankStringValue(accepted?.run_id)
-    if (!jobId || !runId) {
-      throw new Error('The server did not return a notebook split run')
-    }
-    return {
-      actionCellId: input.draft.actionCell.id,
-      actionAddress: notebookCellTag(input.draft.actionCell),
-      outputs: input.draft.outputs.map((output) => ({
-        chunkIndex: output.chunkIndex,
-        outputCellId: output.outputCell.id,
-        outputAddress: notebookCellTag(output.outputCell),
-      })),
-      cutPointsSeconds: input.draft.cutPointsSeconds,
-      jobId,
-      runId,
-      sourceCellId: input.draft.sourceCellId,
-      sourceAddress: input.draft.sourceAddress,
-    }
-  } catch (error) {
-    if (!runRequested) {
-      for (const cellId of createdCellIds.reverse()) {
-        await input.callTool('delete_notebook_cell', {
-          book_id: input.bookId,
-          notebook_id: input.draft.document.id,
-          cell_id: cellId,
-        }).catch(() => undefined)
-      }
-    }
-    throw error
+function routedTrimRequest(params: Readonly<Record<string, unknown>>): TrimRequest {
+  const cutStart = secondsValue(params.cut_start)
+  const cutEnd = secondsValue(params.cut_end)
+  const cuts = [
+    ...(cutStart === undefined || cutEnd === undefined ? [] : [{ startSeconds: cutStart, endSeconds: cutEnd }]),
+    ...routedCuts(params.cuts),
+  ]
+  return {
+    keepStart: secondsValue(params.trim_start),
+    keepEnd: secondsValue(params.trim_end),
+    ...(cuts.length === 0 ? {} : { cuts }),
+    headSeconds: secondsValue(params.head_seconds),
+    tailSeconds: secondsValue(params.tail_seconds),
   }
+}
+
+function routedSplitPoints(params: Readonly<Record<string, unknown>>): number[] | null {
+  const durations = Array.isArray(params.durations) ? params.durations.map(secondsValue) : null
+  if (durations) {
+    if (durations.some((value) => value === undefined || !(value > 0))) return null
+    return durations.reduce<number[]>((points, length) =>
+      [...points, roundedSplitSeconds((points.at(-1) ?? 0) + length!)], [])
+  }
+  const points = Array.isArray(params.cut_points) ? params.cut_points.map(secondsValue) : []
+  if (points.length === 0 || points.some((value) => value === undefined || !(value > 0))) return null
+  return points.map((value) => roundedSplitSeconds(value!)).sort((left, right) => left - right)
+}
+
+export function routedNotebookSplitCommand(input: {
+  tool: string
+  params: Readonly<Record<string, unknown>>
+  sourceReference: string
+}): NotebookSplitCommand | { error: string } {
+  const { params, sourceReference } = input
+  if (input.tool === 'trim_video') {
+    return {
+      sourceReference,
+      cutPointsSeconds: [],
+      trim: routedTrimRequest(params),
+      destination: params.output === 'in_place' ? 'in_place' : 'new',
+    }
+  }
+  if (params.scenes === true) return { sourceReference, cutPointsSeconds: [], cutSource: 'scenes' }
+  const cutPointsSeconds = routedSplitPoints(params)
+  return cutPointsSeconds
+    ? { sourceReference, cutPointsSeconds }
+    : { error: 'The chat model did not select valid split times.' }
 }

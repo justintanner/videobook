@@ -270,7 +270,7 @@ function jobTypeToAssetWorkKind(
     case "transcribe_video_audio":
       return { kind: "transcribe" };
     case "trim_video":
-    case "split_video":
+    case "cut_video_ranges":
       return { kind: "trim" };
     case "crop_video":
     case "crop_image":

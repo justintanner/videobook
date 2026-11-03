@@ -42,9 +42,6 @@ import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { trimVideoDef } from "./trim-video.js";
 import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
-import { splitVideoAtScenesDef } from "./split-video-at-scenes.js";
-import { extractVideoClipDef } from "./extract-video-clip.js";
-import { splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropAssetDef } from "./crop-asset.js";
 import { invertImageDef } from "./invert-image.js";
@@ -122,7 +119,6 @@ import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { analyzeJokesDef } from "./analyze-jokes.js";
-import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
 
 import { generateMediaDefs } from "./generate-media.js";
@@ -147,9 +143,6 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     trimVideoDef(engine),
     trimAudioDef(engine),
     splitVideoDef(engine),
-    splitVideoAtScenesDef(engine),
-    extractVideoClipDef(engine),
-    splitVideoByDurationsDef(engine),
     padVideoDef(engine),
     cropAssetDef(engine),
     invertImageDef(engine),
@@ -160,7 +153,6 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     suggestCutsDef(engine),
     suggestSfxDef(engine),
     analyzeJokesDef(engine),
-    applyCutsDef(engine),
     applySfxDef(engine),
     changeVideoSpeedDef(engine),
     timewarpVideoDef(engine),

@@ -429,17 +429,20 @@ import {
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
 import {
-  enqueueNotebookSplitCommand,
+  applyNotebookSplitCommand,
   notebookSplitCellBudget,
   notebookSplitCutPoints,
   notebookSplitPieces,
   notebookSplitSummary,
   parseNotebookSplitCommand,
-  planNotebookSplitCommand,
   splitSelectionTitle,
   type NotebookSplitCommand,
   type NotebookSplitOutputMode,
-  type NotebookSplitRun,
+  notebookClipRun,
+  routedNotebookSplitCommand,
+  trimSplitSelection,
+  type NotebookClipOutput,
+  type NotebookSplitDestination,
 } from '@/videobook/notebook-split-command'
 import { resolveNotebookVideoSourceCell } from '@/videobook/notebook-video-source'
 import { loadSceneData } from '@/videobook/scene-detection-request'
@@ -3115,6 +3118,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
   }, [])
+  const updatePendingSplitDestination = useCallback((destination: NotebookSplitDestination) => {
+    setPendingChatAction((current) => current?.kind === 'split'
+      ? { ...current, command: { ...current.command, destination } }
+      : current)
+  }, [])
   const loadPendingGenerationPreview = useCallback(async (
     draft: NotebookChatGenerationDraft,
     document: NotebookDocument,
@@ -3482,6 +3490,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return {
         availableEmptyCells: Math.max(0, maximumCellCount - notebook.cells.length),
         cutPointsSeconds: pendingChatAction.command.cutPointsSeconds,
+        destination: pendingChatAction.command.destination ?? 'new',
         mediaUrl: asset.mediaUrl,
         outputMode: pendingChatAction.command.outputMode ?? 'all',
         scenes: pendingChatAction.scenes ?? null,
@@ -7070,129 +7079,96 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const watchNotebookSplitRun = async (input: {
-    actionAddress: string
+  const watchNotebookClipRun = async (input: {
     bookId: string
     notebookId: string
-    outputAddresses: string[]
-    run: NotebookSplitRun
+    outputs: NotebookClipOutput[]
+    runId: string
+    jobId: string
     sourceAddress: string
   }, chat?: ChatExecution) => {
+    const last = input.outputs.at(-1)
+    if (!last) return
     let outcome: Awaited<ReturnType<typeof watchNotebookRun>>
     try {
       outcome = await watchNotebookRun({
         bookId: input.bookId,
         notebookId: input.notebookId,
-        cellId: input.run.actionCellId,
-        address: input.actionAddress.slice(1),
-        runId: input.run.runId,
-        jobOperationId: input.run.jobId,
+        cellId: last.cellId,
+        address: last.address.slice(1),
+        runId: input.runId,
+        jobOperationId: input.jobId,
         intervalMs: notebookRunPollIntervalMs,
         timeoutMs: notebookRunPollTimeoutMs,
         maxPollFailures: 10,
       })
-      if (outcome.kind === 'failed') {
-        setCellRunError(
-          input.run.actionCellId,
-          outcome.message ?? `${input.actionAddress} failed`,
-        )
-      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setCellRunError(input.run.actionCellId, message)
-      outcome = { kind: 'failed', message }
+      outcome = { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
     } finally {
-      setCellQueued(input.run.actionCellId, false)
+      for (const output of input.outputs) setCellQueued(output.cellId, false)
     }
     if (outcome.kind === 'failed') {
-      presentChat(chat, () => setNotice(outcome.message ?? `${input.actionAddress} failed`, 'error'))
+      setCellRunError(last.cellId, outcome.message ?? `${last.address} failed`)
+      presentChat(chat, () => setNotice(outcome.message ?? `${last.address} failed`, 'error'))
       return
     }
     if (outcome.kind === 'timeout') {
-      presentChat(chat, () => setNotice(
-        `${input.sourceAddress} is still splitting — check the Jobs screen`,
-      ))
+      presentChat(chat, () => setNotice(`${input.sourceAddress} is still cutting — check the Jobs screen`))
       return
     }
     if (outcome.kind === 'superseded') return
-    selectCanvasCell(input.run.outputs.at(-1)?.outputCellId ?? null, chat)
+    selectCanvasCell(last.cellId, chat)
     presentChat(chat, () => setNotice(
-      `Split ${input.sourceAddress} into ${input.outputAddresses.join(' and ')}`,
+      `Cut ${input.sourceAddress} into ${input.outputs.map((output) => output.address).join(', ')}`,
     ))
   }
 
   const executeNotebookSplitCommand = async (
     command: NotebookSplitCommand,
     currentNotebook: NotebookSnapshot,
+    sourceDurationSeconds: number,
     chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
-      return { ok: false, message: 'Open a notebook before splitting a video.' }
+      return { ok: false, message: 'Open a notebook before cutting a video.' }
     }
-    let actionCellId: string | null = null
     setBusy(true)
     try {
-      const assetValue = await call('list_assets', {
-        book_id: bookId,
-        sort: 'newest',
-        limit: 200,
-        include_referenced: true,
-      }, { chat })
-      const currentAssets = asAssets(assetValue)
-      const source = resolveNotebookVideoSourceCell(
-        currentNotebook,
-        command.sourceReference,
-      )
+      const source = resolveNotebookVideoSourceCell(currentNotebook, command.sourceReference)
       const sourceAddress = notebookGridTag(source.slot)
-      const sourceArtifactId = resolveGeneratedVideoArtifact(
-        currentNotebook,
-        source,
-      )
-      const sourceDuration = currentAssets.find((asset) =>
-        asset.artifactId === sourceArtifactId)?.duration
-        ?? asNumber(source.inputs?.durationSeconds)
-      const draft = planNotebookSplitCommand({
-        command,
-        document: currentNotebook,
-        sourceDurationSeconds: sourceDuration ?? Number.NaN,
-      })
-      const actionAddress = notebookGridTag(draft.actionCell.slot)
-      const outputAddresses = draft.outputs.map((output) =>
-        notebookGridTag(output.outputCell.slot))
-      actionCellId = draft.actionCell.id
-      setAssets(currentAssets)
-      applyNotebook(draft.document, currentAssets, jobs)
-      presentChat(chat, () => revealCells(draft.createdCellIds))
-      setCellRunError(actionCellId, null)
-      setCellQueued(actionCellId, true)
-      selectCanvasCell(draft.outputs[0].outputCell.id, chat)
-      presentChat(chat, () => setNotice(`Splitting ${sourceAddress} into ${draft.outputs.length} chunks`))
-      const run = await enqueueNotebookSplitCommand({
-        actor: 'videobook-user',
+      const results = await applyNotebookSplitCommand({
         bookId,
         callTool: (tool, args) => call(tool, args, { chat }),
-        draft,
-        ...(currentNotebook.revision
-          ? { expectedRevision: currentNotebook.revision }
-          : {}),
+        command,
+        notebookId: currentNotebook.id,
+        sourceDurationSeconds,
       })
+      const clipRuns = results.map(notebookClipRun).filter((run) => run !== null)
+      const outputs = clipRuns.flatMap((run) => run.outputs)
+      for (const output of outputs) setCellQueued(output.cellId, true)
       collapseComposerAfterCellCreation(chat)
       await refreshBookData(bookId, currentNotebook.id, undefined, chat).catch(() => undefined)
-      void watchNotebookSplitRun({
-        actionAddress,
-        bookId,
-        notebookId: currentNotebook.id,
-        outputAddresses,
-        run,
-        sourceAddress,
-      }, chat)
-      return {
-        ok: true,
-        message: `Splitting ${sourceAddress} into ${outputAddresses.join(', ')}`,
+      if (outputs.length === 0) {
+        presentChat(chat, () => setNotice(`Trimmed ${sourceAddress} in place`))
+        return { ok: true, message: `Trimmed ${sourceAddress} in place` }
       }
+      presentChat(chat, () => revealCells(outputs.map((output) => output.cellId)))
+      selectCanvasCell(outputs[0]!.cellId, chat)
+      for (const run of clipRuns) {
+        void watchNotebookClipRun({
+          bookId,
+          notebookId: currentNotebook.id,
+          outputs: run.outputs,
+          runId: run.runId,
+          jobId: run.jobId,
+          sourceAddress,
+        }, chat)
+      }
+      const message = `Cutting ${sourceAddress} into ${outputs.map((output) => output.address).join(', ')}`
+      presentChat(chat, () => setNotice(message))
+      return { ok: true, message }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (actionCellId) setCellQueued(actionCellId, false)
       await refreshBookData(bookId, notebook.id, undefined, chat).catch(() => undefined)
       presentChat(chat, () => setNotice(message, 'error'))
       return { ok: false, message }
@@ -7460,7 +7436,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const previewNotebookSplitCommand = async (
-    command: NotebookSplitCommand,
+    requestedCommand: NotebookSplitCommand,
     isCurrent?: () => boolean,
     chat?: ChatExecution,
   ): Promise<ComposerOutcome> => {
@@ -7478,7 +7454,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const source = resolveNotebookVideoSourceCell(
         currentNotebook,
-        command.sourceReference,
+        requestedCommand.sourceReference,
       )
       const sourceArtifactId = resolveGeneratedVideoArtifact(
         currentNotebook,
@@ -7490,6 +7466,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!asset?.mediaUrl) {
         throw new Error(`${notebookGridTag(source.slot)} does not have playable video yet`)
       }
+      const command: NotebookSplitCommand = requestedCommand.trim && sourceDurationSeconds
+        ? { ...requestedCommand, ...trimSplitSelection(requestedCommand.trim, sourceDurationSeconds) }
+        : requestedCommand
       const scenes = command.cutSource === 'scenes' && sourceArtifactId
         ? await loadSceneData({
             artifactId: sourceArtifactId,
@@ -7541,7 +7520,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           cellId: source.id,
         }],
         notebookId: currentNotebook.id,
-        reason: 'This request creates and runs a Split Video workflow',
+        reason: preparedCommand.outputMode === 'all' ? 'This request splits the video into new cells' : 'This request trims the video',
         scenes,
         sourceDurationSeconds: sourceDurationSeconds ?? Number.NaN,
         summary: notebookSplitSummary({
@@ -8312,46 +8291,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       return await previewNotebookFrameCommand(command, isCurrent, chat)
     }
-    if (plan.tool === 'split_video') {
-      const sourceReference = routedAssetReference(plan.params.asset_id)
-      const splitAtSeconds = asNumber(plan.params.chunk_a_end)
-      if (!sourceReference || !splitAtSeconds || splitAtSeconds <= 0) {
-        return { ok: false, message: 'The chat model did not select a valid split source and time.' }
-      }
-      return await previewNotebookSplitCommand({
-        sourceReference,
-        cutPointsSeconds: [splitAtSeconds],
-      }, isCurrent, chat)
-    }
-    if (plan.tool === 'split_video_at_scenes') {
+    if (plan.tool === 'split_video' || plan.tool === 'trim_video') {
       const sourceReference = routedAssetReference(plan.params.asset_id)
       if (!sourceReference) {
-        return { ok: false, message: 'The chat model did not select a video to split into scenes.' }
+        return { ok: false, message: 'The chat model did not select a video to cut.' }
       }
-      return await previewNotebookSplitCommand({
-        sourceReference,
-        cutPointsSeconds: [],
-        cutSource: 'scenes',
-      }, isCurrent, chat)
-    }
-    if (
-      plan.tool === 'split_video_by_durations'
-      && plan.params.destination === undefined
-    ) {
-      const sourceReference = routedAssetReference(plan.params.asset_id)
-      const rawTargets = Array.isArray(plan.params.target_secs)
-        ? plan.params.target_secs
-        : [7]
-      const targets = rawTargets.map(asNumber)
-      if (targets.some((target) => target === null || target <= 0)) {
-        return { ok: false, message: 'The chat model did not select valid split durations.' }
-      }
-      if (sourceReference) {
-        return await previewNotebookSplitCommand({
-          sourceReference,
-          cutPointsSeconds: durationTargetsToCutPoints(targets as number[]),
-        }, isCurrent, chat)
-      }
+      const command = routedNotebookSplitCommand({ tool: plan.tool, params: plan.params, sourceReference })
+      if ('error' in command) return { ok: false, message: command.error }
+      return await previewNotebookSplitCommand(command, isCurrent, chat)
     }
     if (plan.effect === 'generation') {
       const cellType = generationCellTypeForRoutedTool(
@@ -8927,7 +8874,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (pendingChatAction.kind === 'split') {
         const outcome = await executeNotebookSplitCommand(
           pendingChatAction.command,
-          currentNotebook, chat,
+          currentNotebook,
+          pendingChatAction.sourceDurationSeconds,
+          chat,
         )
         if (outcome.ok) {
           reviewChat(chat, false, () => setPendingChatAction(null))
@@ -11234,17 +11183,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         <ConfirmSheet
           kind="split"
           ariaLabel="Video split review"
-          tag={split.scenes ? 'SPLIT INTO SCENES' : 'SPLIT VIDEO · CHAT'}
+          tag={split.scenes ? 'SPLIT INTO SCENES' : split.outputMode === 'all' ? 'SPLIT VIDEO · CHAT' : 'TRIM VIDEO · CHAT'}
           title={split.scenes
             ? `${split.cutPointsSeconds.length} cut${split.cutPointsSeconds.length === 1 ? '' : 's'} to review`
             : splitSelectionTitle({ pieces, selectedIndex: split.selectedIndex })}
           address={split.sourceLabel}
-          effect={{
-            label: split.outputMode === 'all'
-              ? `${pieces.length} new clip${pieces.length === 1 ? '' : 's'} · source preserved`
-              : 'New clip · source preserved',
-            tone: 'default',
-          }}
+          effect={split.outputMode !== 'all' && split.destination === 'in_place'
+            ? { label: 'Edits the source in place', tone: 'warning' as const }
+            : {
+                label: split.outputMode === 'all'
+                  ? `${pieces.length} new clip${pieces.length === 1 ? '' : 's'} · source preserved`
+                  : 'New clip · source preserved',
+                tone: 'default',
+              }}
           validation={splitValidation({
             availableEmptyCells: split.availableEmptyCells,
             cutPointsSeconds: split.cutPointsSeconds,
@@ -11252,7 +11203,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             sourceDurationSeconds: split.sourceDurationSeconds,
           })}
           busy={busy}
-          applyLabel="Apply split"
+          applyLabel={split.outputMode === 'all' ? 'Apply split' : split.destination === 'in_place' ? 'Trim in place' : 'Create clip'}
           applyFormId={COMMAND_COMPOSER_FORM_ID}
           hints={split.scenes
             ? (
@@ -11269,7 +11220,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         >
           <SplitBody
             cutPointsSeconds={split.cutPointsSeconds}
+            destination={split.destination}
             mediaUrl={split.mediaUrl}
+            onDestinationChange={updatePendingSplitDestination}
             outputMode={split.outputMode}
             scenes={split.scenes}
             selectedIndex={split.selectedIndex}

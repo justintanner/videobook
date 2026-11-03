@@ -109,17 +109,17 @@ describe('generation validation', () => {
 describe('split validation', () => {
   it('counts the notebook cells a split needs', () => {
     expect(splitValidation({
-      availableEmptyCells: 4,
+      availableEmptyCells: 3,
       cutPointsSeconds: [2, 5.5],
       outputMode: 'all',
       sourceDurationSeconds: 26,
     })).toEqual(VALID_CONFIRMATION)
     expect(splitValidation({
-      availableEmptyCells: 3,
+      availableEmptyCells: 2,
       cutPointsSeconds: [2, 5.5],
       outputMode: 'all',
       sourceDurationSeconds: 26,
-    }).blocking).toBe('This split needs 4 empty notebook cells; 3 available.')
+    }).blocking).toBe('This split needs 3 empty notebook cells; 2 available.')
   })
 
   it('refuses to remove the only piece', () => {

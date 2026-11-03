@@ -41,6 +41,7 @@ import {
   isImageVideoGenerationResult,
   migrateStackedGenerationResults,
   normalizeLegacyExtractCells,
+  CUT_CLIP_OUTPUT_ROLE,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
@@ -272,6 +273,7 @@ export function notebookCellIsPaid(cell: NotebookCell): boolean {
 
 export function notebookCellIsRunnable(cell: NotebookCell): boolean {
   if (cell.inputs?.mediaRole === "extract-audio-output") return true;
+  if (cell.inputs?.mediaRole === CUT_CLIP_OUTPUT_ROLE) return true;
   return (
     cell.type !== "timeline"
     && cell.type !== "audio"
@@ -2100,6 +2102,24 @@ async function executeLocalOrGeneration(
         durationSeconds: result.durationSeconds,
         firstFrameArtifactId: firstFrame.artifactId,
         lastFrameArtifactId: lastFrame.artifactId,
+      },
+    };
+  }
+
+  if (cell.inputs?.mediaRole === CUT_CLIP_OUTPUT_ROLE) {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const ranges = parseSplitOutputGroups([cell.inputs.keepRanges])[0]!;
+    const title = notebookGridTag(cell.slot);
+    const result = ranges.length === 1
+      ? await splitSourceRange(engine, sourceId, ranges[0]!, title)
+      : await concatSourceRanges(engine, sourceId, ranges, title);
+    return {
+      artifactId: result.artifactId,
+      tool: "ffmpeg",
+      cellInputs: {
+        durationSeconds: result.durationSeconds,
+        outputVersionArtifactIds: withOutputVersionIds(cell, result.artifactId),
+        state: "completed",
       },
     };
   }

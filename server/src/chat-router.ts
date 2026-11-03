@@ -52,14 +52,15 @@ type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
 const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
   download_video: ["start_time", "end_time"],
-  split_video: ["chunk_a_end", "chunk_b_start"],
-  extract_video_clip: ["start_time", "end_time"],
   extract_frame: ["timestamp"],
   timewarp_video: ["start_seconds", "end_seconds"],
   change_video_speed: ["start_seconds", "end_seconds"],
 };
 
 const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
+  trim_video: {
+    cuts: ["start", "end"],
+  },
   sync_video_to_audio: {
     anchors: ["video_seconds", "audio_seconds"],
   },
@@ -606,7 +607,7 @@ function applyStackedChainRoute(input: VideoJoinRouteInput): BytedanceRouteResul
 }
 
 function applyVideoJoinRoute(input: VideoJoinRouteInput): BytedanceRouteResult {
-  if (input.tool === "apply_cuts" || input.tool === "smooth_scene_concat") {
+  if (input.tool === "trim_video" || input.tool === "smooth_scene_concat") {
     return {
       tool: input.tool,
       params: input.params,
@@ -691,12 +692,12 @@ Parameter guidelines:
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - Use the current notebook ID for notebook_id. Resolve notebook addresses through the supplied notebook context and use cell UUIDs for cell ID parameters
 - For duplicate_asset, use asset_id for the source, pass an explicit empty grid address as destination without @, and omit destination when the copy should go directly below the source
-- When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with chunk_a_end set to that length and omit chunk_b_start
+- When the user wants a first clip of a stated length plus the remaining/rest/remainder, use split_video with cut_points set to that length. Use split_video with durations for chunks of stated lengths and scenes true for one clip per scene
 - When the user asks for a cold open or an exciting highlight before the full clip, use prepare_cold_open. The user reviews its range before edit_cold_open creates the copy. Never invent source hashes or request IDs.
 - When the user wants to post, send, deliver, or save a clip or Post to the phone or iPhone, or deliver it without naming a service, use post with to icloud. Use to download for a download link or a manual upload, and to x only when the user names X or Twitter
-- When the user asks to cut, extract, or create a new clip from a start time to an end time, use extract_video_clip; use trim_video only when the existing source should be changed in place
+- Use trim_video for every request that removes part of one video or keeps one range of it: "remove the last 2s" is tail_seconds 2, "drop the first 3s" is head_seconds 3, "cut 10s to 12s" is cut_start/cut_end, "a clip from 15s to 44s" is trim_start/trim_end. Omit output; the user picks in place or a new cell in the review
 - When the user asks to trim or tighten a video for better pacing, timing or transitions without specifying cut ranges, use suggest_cuts and preserve the editing goal in instructions. It can assess visual pacing without a transcript. Never invent trim timestamps
-- For timestamps (trim_start, trim_end, cut_start, cut_end, chunk_a_end, chunk_b_start, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
+- For timestamps (trim_start, trim_end, cut_start, cut_end, cut_points, start_time, end_time, start_seconds, end_seconds, timestamp): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
 - For every image or video generation tool, build the initial prompt from the user's requested result plus every consumed notebook cell and referenced media input

@@ -16,6 +16,7 @@ import { isPublishedPostCell } from "./notebook-published-post.js";
 
 export const EXTRACT_FRAME_OUTPUT_ROLE = "extract-frame-output";
 export const EXTRACT_AUDIO_OUTPUT_ROLE = "extract-audio-output";
+export const CUT_CLIP_OUTPUT_ROLE = "cut-clip-output";
 
 function extractPairOutputType(
   extract: NotebookCell,

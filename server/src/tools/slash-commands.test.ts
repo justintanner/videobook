@@ -69,9 +69,9 @@ describe("slash_commands tool", () => {
     expect(commandNames).not.toContain("/trim");
     expect(commandNames).toContain("/trim-video");
     expect(commandNames).toContain("/trim-audio");
-    expect(commandNames).toContain("/split-chunks");
+    expect(commandNames).not.toContain("/split-chunks");
     expect(commandNames).toContain("/overlay");
-    expect(commandNames).toContain("/apply-cuts");
+    expect(commandNames).not.toContain("/apply-cuts");
     expect(commandNames).toContain("/extract-frame");
     expect(commandNames).toContain("/transcript");
     expect(commandNames).toContain("/translate-subs");

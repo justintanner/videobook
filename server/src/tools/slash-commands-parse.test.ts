@@ -699,12 +699,6 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(cmd.mcpTool?.adapter).toBe("trim");
     });
 
-    it("/apply-cuts maps to apply_cuts with apply_cuts adapter", () => {
-      const cmd = findCommand("/apply-cuts");
-      expect(cmd.mcpTool?.tool).toBe("apply_cuts");
-      expect(cmd.mcpTool?.adapter).toBe("apply_cuts");
-    });
-
     it("/translate-subs maps to translate_subtitles with translate_subtitles adapter", () => {
       const cmd = findCommand("/translate-subs");
       expect(cmd.mcpTool?.tool).toBe("translate_subtitles");

@@ -161,19 +161,20 @@ describe('media endpoints over HTTP MCP', () => {
 
   it('extracts and splits clips, concatenates them and plays a queued sequence export', async () => {
     const source = await uploadVideo()
-    const clip = await call<{ output_asset_id: string; duration: number }>('extract_video_clip', {
-      asset_id: source.assetId, start_time: '0.5s', end_time: '2s',
+    const clip = await call<{ output_asset_id: string; duration: number }>('trim_video', {
+      asset_id: source.assetId, trim_start: '0.5s', trim_end: '2s', output: 'new',
     })
     expect(clip.duration).toBeCloseTo(1.5, 1)
     expect((await probeFile(clip.output_asset_id, 'original.mp4')).duration).toBeCloseTo(1.5, 1)
-    const split = await call<{ chunk_a_asset_id: string; chunk_b_asset_id: string }>('split_video', {
-      asset_id: source.assetId, chunk_a_end: '1.5s',
+    const split = await call<{ output_asset_ids: [string, string] }>('split_video', {
+      asset_id: source.assetId, cut_points: ['1.5s'],
     })
-    for (const id of [split.chunk_a_asset_id, split.chunk_b_asset_id]) {
+    const [chunkA, chunkB] = split.output_asset_ids
+    for (const id of [chunkA, chunkB]) {
       expect((await probeFile(id, 'original.mp4')).duration).toBeCloseTo(1.5, 1)
     }
     const concat = await call<{ asset_id: string; job_id: string }>('smooth_scene_concat', {
-      first_asset_id: split.chunk_a_asset_id, second_asset_id: split.chunk_b_asset_id, transition_seconds: 0.25,
+      first_asset_id: chunkA, second_asset_id: chunkB, transition_seconds: 0.25,
     })
     await waitForJob('smooth_scene_concat', concat.asset_id)
     expect((await probeFile(concat.asset_id, 'original.mp4')).duration).toBeCloseTo(2.75, 1)
@@ -204,37 +205,6 @@ describe('media endpoints over HTTP MCP', () => {
       await expect.poll(() => video.evaluate((media) => (media as HTMLVideoElement).currentTime)).toBeGreaterThan(0)
     } finally { await browser.close() }
     expect(await file(source.assetId, 'original.mp4')).toEqual(source.bytes)
-  })
-
-  it('rejects conflicting split destinations and persists valid nested chunks', async () => {
-    const source = await uploadVideo(3, false)
-    const destination = await call<{ asset_id: string }>('create_character', { args: ['Split destination'] })
-    const uploaded = await fetch(`${base}/api/books/${bookId}/upload?${new URLSearchParams({
-      filename: 'Taken.MP4', targetAssetId: destination.asset_id,
-    })}`, { method: 'POST', body: 'Preserved destination bytes' })
-    expect(uploaded.status).toBe(200)
-    const beforeJobs = await jobs()
-    for (const filenames of [
-      ['same.mp4', './same.mp4'], ['taken.mp4', 'fresh.mp4'],
-      ['../escape.mp4', 'fine.mp4'], ['nested.mp4', 'nested.mp4/part.mp4'],
-      ['wrong.jpg', 'fine.mp4'],
-    ]) {
-      const result = await client.callTool({ name: 'split_video_by_durations', arguments: {
-        book_id: bookId, asset_id: source.assetId, target_secs: [1.5, 1.5],
-        destination: { asset_id: destination.asset_id, filenames },
-      } })
-      expect(result.isError, filenames.join(', ')).toBe(true)
-      expect(await jobs()).toEqual(beforeJobs)
-      expect((await file(destination.asset_id, 'Taken.MP4')).toString()).toBe('Preserved destination bytes')
-    }
-    await call('split_video_by_durations', {
-      asset_id: source.assetId, target_secs: [1.5, 1.5],
-      destination: { asset_id: destination.asset_id, filenames: ['parts/a.mp4', 'parts/b.mp4'] },
-    })
-    await waitForJob('even_split')
-    for (const filename of ['parts/a.mp4', 'parts/b.mp4']) {
-      expect((await probeFile(destination.asset_id, filename)).videoDuration).toBeCloseTo(1.5, 1)
-    }
   })
 
   it('prevents concurrent audio extractions from overwriting the same destination', async () => {

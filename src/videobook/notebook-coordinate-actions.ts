@@ -51,7 +51,6 @@ const cellTypes = new Map<string, NotebookCellType>([
   ['image', 'image'],
   ['video', 'video'],
   ['extract audio', 'extract_audio'],
-  ['split video', 'split_video'],
   ['prompt', 'prompt'],
   ['character', 'character'],
   ['analyze', 'analyze'],

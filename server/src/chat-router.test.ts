@@ -105,24 +105,22 @@ describe("chat routing catalog", () => {
     expect(startTime?.safeParse?.(30).success).toBe(true);
   });
 
-  it("publishes permissive source-preserving clip tools", () => {
+  it("publishes one trim tool and one split tool with permissive timestamps", () => {
     const tools = buildRoutableTools(definitions);
-    const split = getRoutableTool(tools, "split_video");
-    const extract = getRoutableTool(tools, "extract_video_clip");
-    const splitDefinition = definitions.find((definition) =>
-      definition.name === "split_video");
-    const extractDefinition = definitions.find((definition) =>
-      definition.name === "extract_video_clip");
-    expect(split?.requiredParams).toEqual(["asset_id", "chunk_a_end"]);
-    expect(extract?.requiredParams).toEqual(["asset_id", "end_time"]);
-    const chunkEnd = splitDefinition?.schema.chunk_a_end as
+    expect(getRoutableTool(tools, "trim_video")?.requiredParams).toEqual(["asset_id"]);
+    expect(getRoutableTool(tools, "split_video")?.requiredParams).toEqual(["asset_id"]);
+    for (const removed of ["apply_cuts", "extract_video_clip", "split_video_by_durations", "split_video_at_scenes"]) {
+      expect(getRoutableTool(tools, removed)).toBeUndefined();
+    }
+    const trimDefinition = definitions.find((definition) => definition.name === "trim_video");
+    const tail = trimDefinition?.schema.tail_seconds as
       { safeParse?: (value: unknown) => { success: boolean } } | undefined;
-    const endTime = extractDefinition?.schema.end_time as
+    const trimStart = trimDefinition?.schema.trim_start as
       { safeParse?: (value: unknown) => { success: boolean } } | undefined;
-    expect(chunkEnd?.safeParse?.("15s").success).toBe(true);
-    expect(endTime?.safeParse?.("0:44").success).toBe(true);
+    expect(tail?.safeParse?.(2).success).toBe(true);
+    expect(trimStart?.safeParse?.("0:44").success).toBe(true);
+    const splitDefinition = definitions.find((definition) => definition.name === "split_video");
     expect(splitDefinition?.annotations?.destructiveHint).toBe(false);
-    expect(extractDefinition?.annotations?.destructiveHint).toBe(false);
   });
 
   it("publishes required parameters and enum domains to the router", () => {
@@ -254,11 +252,11 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("- delete_notebook:");
     expect(prompt).toContain("Recent conversation:");
     expect(prompt).toContain("remaining/rest/remainder");
-    expect(prompt).toContain("use extract_video_clip");
+    expect(prompt).toContain('"remove the last 2s" is tail_seconds 2');
     expect(prompt).toContain("use prepare_cold_open");
     expect(prompt).toContain("use post with to icloud");
     expect(prompt).toContain("Use to download for a download link or a manual upload");
-    expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
+    expect(prompt).toContain("the user picks in place or a new cell in the review");
     expect(prompt).toContain("use suggest_cuts and preserve the editing goal in instructions");
     expect(prompt).toContain("For splice_video:");
     expect(prompt).toContain('{"id","tool","params"}');
@@ -406,16 +404,16 @@ describe("video join routing", () => {
     expect(routed.message).toBe("Splicing videos.");
   });
 
-  it("does not steal apply_cuts or splice-out requests", () => {
+  it("does not steal trim or splice-out requests", () => {
     const routed = applyVideoJoinRoute({
       query: "splice out the silence from @a1 and @a2",
-      tool: "apply_cuts",
+      tool: "trim_video",
       params: { asset_id: clipIds[0] },
       message: "Applying cuts.",
       assetContext: [],
       notebookContext,
     });
-    expect(routed.tool).toBe("apply_cuts");
+    expect(routed.tool).toBe("trim_video");
     expect(routed.substituted).toBe(false);
   });
 });
@@ -496,8 +494,6 @@ describe("chat timestamp parameters", () => {
       "cut_end",
     ]);
     expect(TIMESTAMP_PARAMS.download_video).toEqual(["start_time", "end_time"]);
-    expect(TIMESTAMP_PARAMS.split_video).toEqual(["chunk_a_end", "chunk_b_start"]);
-    expect(TIMESTAMP_PARAMS.extract_video_clip).toEqual(["start_time", "end_time"]);
     expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
   });
 
