@@ -39,10 +39,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   settings_square: { kind: 'form', tool: 'render_video' },
   viewer_focus_file: { kind: 'form', tool: 'asset_manifest' },
   open_post_composer: { kind: 'existing' },
-  timeline_audio_add: { kind: 'form', tool: 'add_timeline_audio' },
-  timeline_audio_move: { kind: 'form', tool: 'move_timeline_audio' },
-  timeline_audio_remove: { kind: 'form', tool: 'remove_timeline_audio' },
-  timeline_audio_update: { kind: 'form', tool: 'update_timeline_audio' },
   rewind_activity: { kind: 'form', tool: 'restore_edit_action' },
   sidebar_sort: { kind: 'form', tool: 'list_assets' },
   run_notebook: { kind: 'form', tool: 'plan_notebook_run' },
@@ -63,7 +59,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   extract_skeleton: { kind: 'special', action: 'skeleton' },
 }
 
-export function workspaceUiFormValues(action: UiActionId, values: Record<string, unknown>, frameRate: number): Record<string, unknown> {
+export function workspaceUiFormValues(action: UiActionId, values: Record<string, unknown>): Record<string, unknown> {
   const result = { ...values }
   if (action === 'open_osg' && values.image) result.osg_asset_id = values.image
   if (action === 'open_crop' && values.ratio !== undefined && values.ratio !== null && String(values.ratio).trim() !== '') {
@@ -76,24 +72,15 @@ export function workspaceUiFormValues(action: UiActionId, values: Record<string,
     if (mode) result.background_mode = mode
   }
   if (['settings_landscape', 'settings_portrait', 'settings_square'].includes(action)) result.orientation = action.slice('settings_'.length)
-  if (action.startsWith('timeline_audio_')) {
-    if (action === 'timeline_audio_add' || values.start !== undefined) result.start_frame = Math.round(Number(values.start ?? 0) * frameRate)
-    if (values.duration !== undefined) result.duration_frames = Math.round(Number(values.duration) * frameRate)
-  }
   if (action === 'rewind_activity' && values.commit_hash) result.target_revision = values.commit_hash
   const field = String(values.field ?? '').trim().toLowerCase()
   if (action === 'settings_subs' && ['on', 'off'].includes(field)) result.subtitles_enabled = field === 'on'
-  if (['settings_audio', 'settings_subs', 'timeline_audio_update'].includes(action) && field && values.value !== undefined) {
-    const key = action === 'timeline_audio_update'
-      ? timelineAudioField(field)
-      : action === 'settings_audio'
-        ? audioSettingsField(field)
-        : FIELD_ALIASES[field] ?? field
+  if (['settings_audio', 'settings_subs'].includes(action) && field && values.value !== undefined) {
+    const key = action === 'settings_audio'
+      ? audioSettingsField(field)
+      : FIELD_ALIASES[field] ?? field
     const value = String(values.value)
     const numeric = Number(value)
-    if (action === 'timeline_audio_update' && !Number.isFinite(numeric)) {
-      throw new Error('Usage: /audio-set @clip volume|fade-in|fade-out <value>')
-    }
     result[key] = ['on', 'off', 'true', 'false'].includes(value.toLowerCase())
       ? ['on', 'true'].includes(value.toLowerCase())
       : value.trim() && Number.isFinite(numeric) ? numeric : subtitleSetting(field, key, value)
@@ -155,12 +142,6 @@ function cropRatio(value: unknown): '16:9' | '9:16' | '1:1' {
   if (token === '9:16' || token === 'portrait') return '9:16'
   if (token === '1:1' || token === 'square') return '1:1'
   throw new Error('Usage: /crop @asset [16:9|9:16|1:1]')
-}
-
-function timelineAudioField(field: string): string {
-  const key = field.replaceAll('-', '_')
-  if (key === 'volume' || key === 'fade_in' || key === 'fade_out') return key
-  throw new Error('Usage: /audio-set @clip volume|fade-in|fade-out <value>')
 }
 
 function audioSettingsField(field: string): string {

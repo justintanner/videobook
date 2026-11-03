@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import type { Client } from '@modelcontextprotocol/client'
+import type { Sequence, SequenceClip } from 'videobook-engine'
 import { testBudget } from '../../server/src/test-budget.js'
 
 export interface StartedServer {
@@ -105,4 +106,27 @@ export async function callTool<T>(
     throw new Error(`${name} did not return text content`)
   }
   return JSON.parse(content.text) as T
+}
+
+interface PlannedEdit { stages: Array<{ intent: Record<string, unknown> }> }
+interface EditPreview { valid: boolean; previewHash: string }
+
+export async function appendAudioClip(client: Client, bookId: string, artifactId: string): Promise<SequenceClip> {
+  const current = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+  const track = current.tracks.find((entry) => entry.kind === 'audio')
+  if (!track) throw new Error('The primary sequence has no audio track')
+  const planned = await callTool<PlannedEdit>(client, 'plan_sequence_edit', {
+    book_id: bookId, source_surface: 'ui', actor: 'e2e', expected_revision: current.revision,
+    edits: [{ kind: 'append', track_id: track.trackId, artifact_id: artifactId }],
+  })
+  const intent = planned.stages[0]?.intent
+  if (!intent) throw new Error('plan_sequence_edit returned no stage')
+  const preview = await callTool<EditPreview>(client, 'preview_edit_intent', { book_id: bookId, intent })
+  if (!preview.valid) throw new Error(`Append preview is invalid: ${JSON.stringify(preview)}`)
+  await callTool(client, 'commit_edit_intent', { book_id: bookId, intent, preview_hash: preview.previewHash })
+  const updated = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+  const clip = updated.clips.find((entry) => entry.trackId === track.trackId
+    && entry.source.kind === 'timed' && entry.source.artifactId === artifactId)
+  if (!clip) throw new Error('The appended audio clip is missing from the sequence')
+  return clip
 }

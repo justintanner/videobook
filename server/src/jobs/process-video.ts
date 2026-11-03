@@ -553,9 +553,9 @@ async function processVideoSnapshot(
 
     // Speech-to-text stays eager: cheap and useful as
     // a standalone artifact even if the asset never lands in a slot. Vision
-    // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
-    // the slot-gated revival below for re-processed (trimmed/re-downloaded)
-    // videos, whose analysis sidecar was just invalidated.
+    // analysis (Gemini) is limited to the slot-gated revival below for
+    // re-processed (trimmed/re-downloaded) videos, whose analysis sidecar was
+    // just invalidated.
     const research = provenance.research as { downstream?: { transcribe?: boolean } } | undefined;
     const allowTranscription = research?.downstream?.transcribe !== false;
     const transcriptJobs = planVideoTranscriptJobs({

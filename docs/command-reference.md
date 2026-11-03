@@ -8,10 +8,9 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (218)
+## MCP endpoints (211)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
-- `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
 - `analyze_image_subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro
 - `analyze_jokes` — Find and classify the jokes in a clip from its ElevenLabs transcript (verbatim text, start and end times, why each works) in a background job. Run transcribe first when there is no transcript. Returns status cached with the earlier jokes when the current transcript was already analysed; pass force to analyse again.
@@ -24,7 +23,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `assemble_goal` — Append a reviewed goal's completed video-stage clips in order to the sequence. Used by Goal mode for multi-clip plans; single-clip goals need no assembly.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
-- `assign_slot` — Assign an artifact to a typed timeline slot
 - `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.
@@ -131,7 +129,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `make_cover_song` — Make a new drums-and-strings instrumental cover of 10-240 seconds of a video or audio asset's sound, generated locally with ACE-Step. The duration matches exactly; style matching is best-effort.
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `move_notebook_cells` — Persist notebook cell grid slots
-- `move_timeline_audio` — Move an audio overlay to a frame offset
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
 - `pin_search_moment` — Pin a revision-stable search moment into a notebook media selection cell
 - `plan_chat_command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools
@@ -163,13 +160,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `release_search_reference` — Release a temporary reverse-search reference
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
-- `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
-- `remove_timeline_slot` — Remove a typed timeline slot and shift later slots left
 - `rename_all` — Relabel video and image assets in bulk. dry_run proposes descriptive labels from their analysis, transcript and prompts; pass edited renames with dry_run false to apply. Labels are display-only.
 - `rename_asset` — Set an asset's display label. Labels are display-only — the artifact id and all references stay unchanged.
 - `rename_book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.
 - `rename_notebook` — Rename a notebook
-- `render_timeline` — Render the selected book's typed v2 timeline
 - `render_video` — Render a video artifact into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.
 - `reorder_character_images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).
 - `repair_library_search_indexes` — Index ready visual media that is missing Similar-search coverage across books
@@ -222,19 +216,17 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `update_post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.
 - `update_script` — Update a script asset's markdown content (original.md).
 - `update_sequence_rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio
-- `update_timeline_audio` — Update an audio overlay's volume or fades
 - `upload_file` — Upload a media or markdown file into a Videobook project as an asset
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (269; 106 dedicated command routes)
+## Slash actions (262; 106 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
-- `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/analyze-editing-moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.; MCP: `analyze_editing_moments`
 - `/analyze-image-subjects` — Automatically decompose an image into cached subjects using Seedream 5 Pro; MCP: `analyze_image_subjects`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -248,7 +240,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/arrange-videos-row` — Line up all video cells across the current row starting at the selected cell; cells in the way move to free slots; preview or workspace operation
 - `/asset-history` — Get immutable Dolt revision history for an asset; MCP: `asset_history`
 - `/asset-manifest` — List all files in an asset directory; MCP: `asset_manifest`
-- `/assign-slot` — Assign an artifact to a typed timeline slot; MCP: `assign_slot`
 - `/attach-library-asset` — Copy a foreign Library asset into a book and attach it to a media slot; MCP: `attach_library_asset`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
 - `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
@@ -374,7 +365,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/mark-asset-seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.; MCP: `mark_asset_seen`
 - `/move` (aliases: `/audio-move`) — Preview moving a sequence clip to a track and frame; preview or workspace operation
 - `/move-notebook-cells` — Persist notebook cell grid slots; MCP: `move_notebook_cells`
-- `/move-timeline-audio` — Move an audio overlay to a frame offset; MCP: `move_timeline_audio`
 - `/music-video` — Open the full-screen music-video editor with a required master soundtrack; UI: `open_music_video`
 - `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
@@ -418,13 +408,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
-- `/remove-timeline-audio` — Remove an audio overlay by its UUIDv7 id; MCP: `remove_timeline_audio`
-- `/remove-timeline-slot` — Remove a typed timeline slot and shift later slots left; MCP: `remove_timeline_slot`
 - `/rename` — Rename an asset; MCP: `rename_asset`
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
 - `/rename-book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.; MCP: `rename_book`
 - `/rename-notebook` — Rename a notebook; MCP: `rename_notebook`
-- `/render-timeline` — Render the selected book's typed v2 timeline; MCP: `render_timeline`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
 - `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
 - `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
@@ -493,7 +480,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/update-post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.; MCP: `update_post`
 - `/update-script` — Update a script asset's markdown content (original.md).; MCP: `update_script`
 - `/update-sequence-rhythm` — Save or undo a soundtrack choice or corrected source-timed beat map without changing the audio; MCP: `update_sequence_rhythm`
-- `/update-timeline-audio` — Update an audio overlay's volume or fades; MCP: `update_timeline_audio`
 - `/upload` — Upload a file; UI: `open_upload`
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
 - `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`

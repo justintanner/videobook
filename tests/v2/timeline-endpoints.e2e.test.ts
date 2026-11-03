@@ -13,7 +13,6 @@ import { callTool, startServer, stopServer, type StartedServer } from './mcp-htt
 const execFileAsync = promisify(execFile)
 
 interface Job { type: string; state: string; result?: { artifactId: string } }
-interface AudioResult { clip: { id: string; artifactId: string; startFrame: number; durationFrames: number } }
 interface TimelineResult {
   render: string
   slots: Array<{ id: string; artifact_id: string }>
@@ -77,9 +76,10 @@ describe('timeline endpoints over HTTP MCP', () => {
   const setup = async (slots = 1) => {
     const video = await upload('video')
     const audio = await upload('audio')
-    await call('set_timeline', { render: 'landscape', slots: Array.from({ length: slots }, () => ({ artifact_id: video })) })
-    const added = await call<AudioResult>('add_timeline_audio', { asset_id: audio, start_frame: 0, duration_frames: 60 })
-    return { video, audio, audioId: added.clip.id }
+    const timeline = await call<TimelineResult>('set_timeline', { render: 'landscape',
+      slots: Array.from({ length: slots }, () => ({ artifact_id: video })),
+      audio: [{ artifact_id: audio, startFrame: 0, durationFrames: 60 }] })
+    return { video, audio, audioId: timeline.audio[0]!.id }
   }
   const primaryClips = (current: Sequence) => current.clips.filter((clip) => clip.trackId === current.tracks.find((track) => track.kind === 'video')!.trackId)
   const trim = (clip: SequenceClip, startFrame = clip.timelineStartFrame): Extract<EditOperation, { kind: 'trim-clip' }> => {
@@ -87,74 +87,6 @@ describe('timeline endpoints over HTTP MCP', () => {
     return { kind: 'trim-clip', clipId: clip.clipId, timelineStartFrame: startFrame, durationFrames: 60,
       sourceRange: { ...clip.source.range, startTick: clip.source.range.durationTicks / 4, durationTicks: clip.source.range.durationTicks / 2 } }
   }
-
-  it('returns the new audio clip when inserting before an existing clip', async () => {
-    const audio = await upload('audio')
-    const later = await call<AudioResult>('add_timeline_audio', { asset_id: audio, start_frame: 120 })
-    const earlier = await call<AudioResult>('add_timeline_audio', { asset_id: audio, start_frame: 0 })
-    expect(earlier.clip.startFrame).toBe(0)
-    expect(earlier.clip.id).not.toBe(later.clip.id)
-    expect((await sequence()).clips.find((clip) => clip.clipId === earlier.clip.id)?.timelineStartFrame).toBe(0)
-  })
-
-  it('updates audio without losing canonical trims, transforms, gaps or extra video tracks', async () => {
-    const { audioId } = await setup()
-    const addedTrack = await call<Sequence>('add_sequence_track', { kind: 'video', name: 'Overlay' })
-    const video = primaryClips(addedTrack)[0]!
-    const overlayTrack = addedTrack.tracks.filter((track) => track.kind === 'video').at(-1)!
-    const before = await edit([
-      { ...trim(video, 15), durationFrames: 30 },
-      { kind: 'set-clip-speed', clipId: video.clipId, speed: { numerator: 2, denominator: 1 }, reverse: true, audioPolicy: 'mute' },
-      { kind: 'set-clip-transform', clipId: video.clipId, transform: {
-        fit: 'fit', positionX: 0.2, positionY: 0.1, scaleX: 0.5, scaleY: 0.5, anchorX: 0.5, anchorY: 0.5,
-        rotationDegrees: 15, cropTop: 0, cropRight: 0, cropBottom: 0, cropLeft: 0, opacity: 0.8, blendMode: 'normal',
-      } },
-      { kind: 'insert-clip', clipId: uuidv7(), mode: 'overwrite', placement: {
-        trackId: overlayTrack.trackId, timelineStartFrame: 0, durationFrames: video.durationFrames, source: video.source, audioPolicy: 'mute',
-      } },
-    ])
-    await call('update_timeline_audio', { audio_id: audioId, volume: 25, fade_in: 200, fade_out: 300 })
-    const after = await sequence()
-    expect(after.clips.filter((clip) => clip.clipId !== audioId)).toEqual(before.clips.filter((clip) => clip.clipId !== audioId))
-    expect(after.clips.find((clip) => clip.clipId === audioId)?.audio).toMatchObject({ gainDb: 20 * Math.log10(0.25), muted: false, fadeInFrames: 6, fadeOutFrames: 9 })
-  })
-
-  it('moves trimmed reverse audio without changing its source range or unrelated clips', async () => {
-    const { audioId } = await setup()
-    const audio = (await sequence()).clips.find((clip) => clip.clipId === audioId)!
-    const before = await edit([
-      trim(audio),
-      { kind: 'set-clip-speed', clipId: audioId, speed: { numerator: 1, denominator: 1 }, reverse: true, audioPolicy: 'resample' },
-      { kind: 'set-clip-audio', clipId: audioId, audio: { gainDb: -6, muted: true, fadeInFrames: 3, fadeOutFrames: 6 } },
-    ])
-    await call('move_timeline_audio', { audio_id: audioId, start_frame: 30 })
-    expect((await sequence()).clips).toEqual(before.clips.map((clip) => clip.clipId === audioId ? { ...clip, timelineStartFrame: 30 } : clip))
-  })
-
-  it('removes only the requested audio clip and preserves edited video', async () => {
-    const { audioId } = await setup()
-    const before = await edit([trim(primaryClips(await sequence())[0]!)])
-    await call('remove_timeline_audio', { audio_id: audioId })
-    expect((await sequence()).clips).toEqual(before.clips.filter((clip) => clip.clipId !== audioId))
-  })
-
-  it('removes a slot using its edited duration and preserves later trimmed sources', async () => {
-    await setup(2)
-    const clips = primaryClips(await sequence())
-    const before = await edit([trim(clips[0]!), trim(clips[1]!, 60)])
-    await call('remove_timeline_slot', { slot: 's01' })
-    const after = await sequence()
-    expect(primaryClips(after)).toEqual([{ ...primaryClips(before)[1], timelineStartFrame: 0 }])
-    expect(after.clips.filter((clip) => !primaryClips(after).includes(clip))).toEqual(before.clips.filter((clip) => !primaryClips(before).includes(clip)))
-  })
-
-  it('retains canonical gaps when removing an earlier slot', async () => {
-    await setup(2)
-    const clips = primaryClips(await sequence())
-    const before = await edit([trim(clips[0]!, 15), trim(clips[1]!, 105)])
-    await call('remove_timeline_slot', { slot: 's01' })
-    expect(primaryClips(await sequence())).toEqual([{ ...primaryClips(before)[1], timelineStartFrame: 45 }])
-  })
 
   it('rejects missing source assets without changing the sequence canvas or revision', async () => {
     await setup()
@@ -164,35 +96,19 @@ describe('timeline endpoints over HTTP MCP', () => {
     expect(await sequence()).toEqual(before)
   })
 
-  it('preserves canonical transitions and makes repeated audio updates a no-op', async () => {
+  it('preserves canonical transitions when the same timeline is written back', async () => {
     const { audioId } = await setup(2)
     const [first, second] = primaryClips(await sequence())
     await edit([{ kind: 'set-transition', outgoingClipId: first!.clipId, incomingClipId: second!.clipId,
       transition: { transitionId: uuidv7(), trackId: first!.trackId, outgoingClipId: first!.clipId, incomingClipId: second!.clipId,
         kind: 'dissolve', durationFrames: 10, alignment: 'center' } }])
-    await call('update_timeline_audio', { audio_id: audioId, volume: 35, fade_in: 100 })
     const before = await sequence()
     expect(before.transitions).toHaveLength(1)
-    await call('update_timeline_audio', { audio_id: audioId, volume: 35, fade_in: 100 })
-    expect(await sequence()).toEqual(before)
+    expect(before.clips.some((clip) => clip.clipId === audioId)).toBe(true)
     const timeline = await call<TimelineResult>('get_timeline')
     await call('set_timeline', { render: timeline.render, slots: timeline.slots,
       audio: timeline.audio.map(({ start_frame, duration_frames, ...clip }) => ({ ...clip, startFrame: start_frame, durationFrames: duration_frames })) })
     expect(await sequence()).toEqual(before)
-  })
-
-  it('moves audio into an overlap using another lane without changing either source', async () => {
-    const { audio, audioId } = await setup()
-    const later = await call<AudioResult>('add_timeline_audio', { asset_id: audio, start_frame: 120, duration_frames: 60 })
-    const before = await sequence()
-    const earlier = before.clips.find((clip) => clip.clipId === audioId)!
-    const moving = before.clips.find((clip) => clip.clipId === later.clip.id)!
-    await call('move_timeline_audio', { audio_id: moving.clipId, start_frame: 30 })
-    const after = await sequence()
-    const moved = after.clips.find((clip) => clip.clipId === moving.clipId)!
-    expect(moved.trackId).not.toBe(earlier.trackId)
-    expect(moved).toEqual({ ...moving, trackId: moved.trackId, timelineStartFrame: 30 })
-    expect(after.clips.filter((clip) => clip.clipId !== moved.clipId)).toEqual(before.clips.filter((clip) => clip.clipId !== moved.clipId))
   })
 
   it('reorders existing slots without losing their canonical source ranges', async () => {
@@ -298,7 +214,7 @@ describe('timeline endpoints over HTTP MCP', () => {
   it('exports the trimmed duration after editing audio fades', async () => {
     const { audioId } = await setup()
     await edit([trim(primaryClips(await sequence())[0]!)])
-    await call('update_timeline_audio', { audio_id: audioId, volume: 40, fade_in: 200, fade_out: 200 })
+    await edit([{ kind: 'set-clip-audio', clipId: audioId, audio: { gainDb: 20 * Math.log10(0.4), muted: false, fadeInFrames: 6, fadeOutFrames: 6 } }])
     const settings = { sequence_revision: 'current', orientation: 'landscape', captions: 'omit' }
     const validation = await call<{ revision: string }>('validate_sequence_export', settings)
     await call('enqueue_sequence_export', { ...settings, sequence_revision: validation.revision, confirm: true })

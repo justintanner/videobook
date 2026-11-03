@@ -198,8 +198,8 @@ describe("delete_asset with forget", () => {
   it("clears a timeline clip before forgetting", async () => {
     const uploaded = await upload("clip.png", "timeline-bytes");
     const assigned = await client.callTool({
-      name: "assign_slot",
-      arguments: { book_id: "test-proj", slot: "s01", asset_id: uploaded.assetId },
+      name: "set_timeline",
+      arguments: { book_id: "test-proj", render: "landscape", slots: [{ artifact_id: uploaded.assetId }] },
     });
     expect(assigned.isError).toBeFalsy();
     const refused = await forget(uploaded.assetId);

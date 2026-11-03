@@ -182,7 +182,7 @@ export function readTimeline(engine: Engine): Timeline {
   };
 }
 
-export function timelinePayload(timeline: Timeline): Record<string, unknown> {
+function timelinePayload(timeline: Timeline): Record<string, unknown> {
   return {
     book_id: timeline.bookId,
     render: timeline.render,
@@ -670,21 +670,6 @@ export function timelineFailure(message: string): ToolResult {
     isError: true,
     content: [{ type: "text", text: message }],
   };
-}
-
-export function slotIndex(value: string): number | null {
-  const match = /^@?s(\d+)$/i.exec(value.trim());
-  if (!match) return null;
-  const index = Number.parseInt(match[1]!, 10) - 1;
-  return index >= 0 ? index : null;
-}
-
-export function resolveArtifact(
-  engine: Engine,
-  reference: string,
-): Artifact | null {
-  const result = engine.artifacts.get(reference);
-  return result.ok ? result.value : null;
 }
 
 const SLOT_REF_PATTERN = /@s(\d{1,3})\b/giu;

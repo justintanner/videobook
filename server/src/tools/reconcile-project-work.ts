@@ -1513,9 +1513,7 @@ export async function reconcileProjectWork(
   }
 
   // Auto-render and auto-analyze are intentionally NOT performed here.
-  // Renders fire from explicit /render or assign_slot (lazy on slot drop).
-  // Gemini analysis fires from assign_slot (lazy on slot drop) and
-  // OpenAI plain speech-to-text fires eagerly from process_video on upload,
+  // Renders fire from explicit /render. OpenAI plain speech-to-text fires eagerly from process_video on upload,
   // with a revision-scoped backfill here for processed videos that missed
   // .analysis.gpt4otrans.json. Reconciliation still retries ElevenLabs
   // (auto_transcribe) only after .original.analysis.json exists.

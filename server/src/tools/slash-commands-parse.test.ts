@@ -578,26 +578,22 @@ describe("slash command parse/normalize/dispatch", () => {
     });
 
     it("folds /bg, /subs, /sort, and panel sides", () => {
-      expect(workspaceUiFormValues("settings_bg", { mode: "Blur" }, 30).background_mode).toBe("blur");
-      expect(() => workspaceUiFormValues("settings_bg", { mode: "white" }, 30)).toThrow("Usage: /bg blur|black");
-      expect(workspaceUiFormValues("settings_subs", { field: "On" }, 30).subtitles_enabled).toBe(true);
-      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "Top" }, 30).position).toBe("top");
-      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "mid" }, 30).position).toBe("middle");
-      expect(workspaceUiFormValues("settings_subs", { field: "size", value: "l" }, 30).font_size).toBe("large");
-      expect(workspaceUiFormValues("settings_subs", { field: "style", value: "Highlight" }, 30).highlight_style).toBe("highlight");
-      expect(() => workspaceUiFormValues("settings_subs", { field: "position", value: "sideways" }, 30))
+      expect(workspaceUiFormValues("settings_bg", { mode: "Blur" }).background_mode).toBe("blur");
+      expect(() => workspaceUiFormValues("settings_bg", { mode: "white" })).toThrow("Usage: /bg blur|black");
+      expect(workspaceUiFormValues("settings_subs", { field: "On" }).subtitles_enabled).toBe(true);
+      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "Top" }).position).toBe("top");
+      expect(workspaceUiFormValues("settings_subs", { field: "position", value: "mid" }).position).toBe("middle");
+      expect(workspaceUiFormValues("settings_subs", { field: "size", value: "l" }).font_size).toBe("large");
+      expect(workspaceUiFormValues("settings_subs", { field: "style", value: "Highlight" }).highlight_style).toBe("highlight");
+      expect(() => workspaceUiFormValues("settings_subs", { field: "position", value: "sideways" }))
         .toThrow("Usage: /subs position top|middle|bottom");
-      expect(workspaceUiFormValues("sidebar_sort", { order: "Oldest" }, 30).sort).toBe("oldest");
-      expect(() => workspaceUiFormValues("sidebar_sort", { order: "random" }, 30)).toThrow("Usage: /sort newest|oldest");
-      expect(workspaceUiFormValues("timeline_audio_update", { field: "Volume", value: 80 }, 30).volume).toBe(80);
-      expect(workspaceUiFormValues("timeline_audio_update", { field: "Fade-In", value: "200" }, 30).fade_in).toBe(200);
-      expect(() => workspaceUiFormValues("timeline_audio_update", { field: "loudness", value: 1 }, 30))
-        .toThrow("Usage: /audio-set @clip volume|fade-in|fade-out <value>");
-      expect(workspaceUiFormValues("settings_audio", { field: "Volume", value: "80" }, 30).audio_volume).toBe(80);
-      expect(workspaceUiFormValues("settings_subs", { field: "FontSize", value: "Large" }, 30).font_size).toBe("large");
-      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "Portrait" }, 30).ratio).toBe("9:16");
-      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "square" }, 30).ratio).toBe("1:1");
-      expect(() => workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "4:3" }, 30))
+      expect(workspaceUiFormValues("sidebar_sort", { order: "Oldest" }).sort).toBe("oldest");
+      expect(() => workspaceUiFormValues("sidebar_sort", { order: "random" })).toThrow("Usage: /sort newest|oldest");
+      expect(workspaceUiFormValues("settings_audio", { field: "Volume", value: "80" }).audio_volume).toBe(80);
+      expect(workspaceUiFormValues("settings_subs", { field: "FontSize", value: "Large" }).font_size).toBe("large");
+      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "Portrait" }).ratio).toBe("9:16");
+      expect(workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "square" }).ratio).toBe("1:1");
+      expect(() => workspaceUiFormValues("open_crop", { asset_id: "a1", ratio: "4:3" }))
         .toThrow("Usage: /crop @asset [16:9|9:16|1:1]");
       expect(parseFilePosition(simulateParse("/files", "3").position)).toBe(3);
       expect(parseFilePosition(undefined)).toBe(1);

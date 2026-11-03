@@ -33,10 +33,6 @@ type UiActionCallbacks = {
   sidebar_sort: (order: string) => void
   open_provider_keys: () => void
   open_archive: (query: string) => void
-  timeline_audio_add: (assetId: string, startSec: string, durationSec: string) => void
-  timeline_audio_move: (audioRef: string, startSec: string) => void
-  timeline_audio_remove: (audioRef: string) => void
-  timeline_audio_update: (audioRef: string, field: string, value: string) => void
   extract_skeleton: (assetId: string) => void
   rewind_activity: (commitHash: string) => void
   open_slot_player: (slot: string) => void
@@ -126,18 +122,6 @@ export function executeUiAction(
       break
     case 'open_archive':
       (callback as UiActionCallbacks['open_archive'])(args.query ?? raw)
-      break
-    case 'timeline_audio_add':
-      (callback as UiActionCallbacks['timeline_audio_add'])(args.asset_id ?? '', args.start ?? '', args.duration ?? '')
-      break
-    case 'timeline_audio_move':
-      (callback as UiActionCallbacks['timeline_audio_move'])(args.audio_ref ?? '', args.start ?? '')
-      break
-    case 'timeline_audio_remove':
-      (callback as UiActionCallbacks['timeline_audio_remove'])(args.audio_ref ?? raw)
-      break
-    case 'timeline_audio_update':
-      (callback as UiActionCallbacks['timeline_audio_update'])(args.audio_ref ?? '', args.field ?? '', args.value ?? '')
       break
     case 'extract_skeleton':
       (callback as UiActionCallbacks['extract_skeleton'])(args.asset_id ?? raw)

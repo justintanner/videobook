@@ -66,20 +66,18 @@ function stringArrayOrNull(value: unknown): string[] | null {
 }
 
 /**
- * Revive the slot-drop vision analysis for a timeline-assigned video whose
+ * Revive the vision analysis for a timeline-assigned video whose
  * .original.analysis.json is missing — the state a force re-process (trim,
  * re-download) leaves behind after it invalidates the analysis sidecars.
- * assign_slot only fires on slot drop, so without this revival the auto
- * pipeline (analyze_video → ElevenLabs transcribe → lazy render) stays wedged
- * and render_timeline reports missing_renders until a manual /render.
+ * Without this revival the auto pipeline (analyze_video → ElevenLabs
+ * transcribe → lazy render) stays wedged until a manual /render.
  */
 export async function enqueueLazyAnalysisIfSlotted(
   engine: Engine,
   bookId: string,
   assetId: string,
 ): Promise<LazyAnalysisResult | null> {
-  // Same provider gate as assign_slot's lazy analysis: truthy env check (not
-  // getApiKey) so placeholder keys used in tests pass; the real placeholder
+  // Truthy env check (not getApiKey) so placeholder keys used in tests pass; the real placeholder
   // defense lives at the API call inside analyze-video.
   if (!process.env.OPENAI_API_KEY) return null;
 

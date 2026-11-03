@@ -242,15 +242,13 @@ function jobTypeToAssetWorkKind(
 ): ClassifiedJob | null {
   if (
     jobType === "render_project"
-    || jobType === "render_timeline"
     || jobType === "render_qr_outro"
   ) {
     const orientation = payload.orientation;
     const normalized = orientation === "portrait" || orientation === "landscape" || orientation === "square"
       ? orientation
       : undefined;
-    const kind: ArtifactWorkKind = jobType === "render_timeline" ? "final" : "render";
-    return normalized ? { kind, orientation: normalized } : { kind };
+    return normalized ? { kind: "render", orientation: normalized } : { kind: "render" };
   }
   switch (jobType) {
     case "process_video":

@@ -354,8 +354,8 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
 
     const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
 
-    // Exact stable id shared with assign_slot's trigger: it doubles as the
-    // queue dedupe key, so racing triggers collapse onto one analyze job.
+    // Exact stable id: it doubles as the queue dedupe key, so racing
+    // triggers collapse onto one analyze job.
     expect(result?.jobId).toBe(`auto-analyze-${assetId}`);
     expect(enqueue).toHaveBeenCalledTimes(1);
     const payload = enqueue.mock.calls[0][1];
