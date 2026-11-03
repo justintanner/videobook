@@ -75,6 +75,33 @@ export interface InputRules {
   refDurationMs?: Partial<Record<"video" | "audio", RefDurationWindowMs>>;
 }
 
+export type SlotKind = "image" | "video" | "audio";
+
+export interface ItemParamSpec {
+  name: string;
+  label: string;
+  valueType: "number" | "integer";
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: boolean;
+  unit?: string;
+  defaultValue?: number;
+  computedDefault?: "even_seconds";
+  legacyOptions?: readonly string[];
+}
+
+export type InputLimitBound = number | { option: string; offset: number; cap: number };
+
+export type InputLimit =
+  | {
+      kind: "max";
+      roles: readonly { role: RefRole; weight?: number }[];
+      max: InputLimitBound;
+      when?: { option: string; equals: string | number | boolean };
+      message: string;
+    }
+  | { kind: "requires"; role: RefRole; requires: RefRole; message: string };
+
 export interface ModelEntry {
   id: string;
   media: Media;
@@ -88,6 +115,8 @@ export interface ModelEntry {
   pinnedDefaults?: readonly string[];
   keyframeFps?: number;
   refItem?: Partial<Record<RefRole, Record<string, unknown>>>;
+  itemParams?: Partial<Record<RefRole, readonly ItemParamSpec[]>>;
+  inputLimits?: readonly InputLimit[];
   dialect?: PromptDialect;
   guide?: PromptGuide;
   modes?: readonly ModeSpec[];
@@ -112,19 +141,24 @@ export interface WireSpec {
 
 export interface SlotField {
   path: string;
+  label: string;
   multi: boolean;
   max: number | null;
   urlObject: boolean;
+  urlPath?: string;
   keyframe?: boolean;
 }
 
 export interface SlotSpec {
   role: RefRole;
+  kind: SlotKind;
+  label: string;
   field: string;
   fields: SlotField[];
   multi: boolean;
   min: number;
   max: number | null;
+  itemParams: readonly ItemParamSpec[];
 }
 
 export type OptionValueType = "string" | "number" | "integer" | "boolean" | "json";

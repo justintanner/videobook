@@ -68,6 +68,10 @@ export function isKeyframeItem(schema: JsonSchema | undefined): boolean {
     && branch.properties?.frame_index !== undefined);
 }
 
+export function objectProperties(schema: JsonSchema): Record<string, JsonSchema> {
+  return branches(schema).find((branch) => branch.type === "object" && branch.properties)?.properties ?? {};
+}
+
 export function acceptsNoValue(schema: JsonSchema): boolean {
   return schema.not !== undefined && Object.keys(schema.not).length === 0;
 }

@@ -1,7 +1,7 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { generationModeInputError } from "./generation-input-policy.js";
 import { generationInputTarget } from "./generation-input-targets.js";
-import type { RefRole, ResolvedModel } from "./media/types.js";
+import type { InputLimit, ItemParamSpec, RefRole, ResolvedModel } from "./media/types.js";
 
 type NotebookGenerationInputKind = "image" | "video" | "audio";
 
@@ -13,10 +13,31 @@ interface NotebookGenerationInputSlot {
   max: number | null;
 }
 
+interface NotebookGenerationInputField {
+  path: string;
+  label: string;
+  max: number | null;
+}
+
+interface NotebookGenerationInputSpec {
+  target: string;
+  kind: NotebookGenerationInputKind;
+  label: string;
+  fields: NotebookGenerationInputField[];
+  min: number;
+  max: number | null;
+  token: string | null;
+  itemParams: readonly ItemParamSpec[];
+  sent: boolean;
+}
+
 interface NotebookGenerationInputMode {
   id: string;
   slots: NotebookGenerationInputSlot[];
   requiredGroups: string[][];
+  label: string;
+  inputs: NotebookGenerationInputSpec[];
+  limits: readonly InputLimit[];
 }
 
 export interface NotebookGenerationInputContract {
@@ -43,12 +64,65 @@ function modeSlots(model: ResolvedModel, roles: readonly RefRole[]): NotebookGen
     : slots;
 }
 
+const INPUT_ORDER: readonly RefRole[] = ["image", "first_frame", "last_frame", "loop", "keyframe", "video", "audio"];
+
+const TOKEN_FAMILY: Readonly<Record<RefRole, string>> = {
+  image: "image",
+  video: "video",
+  audio: "audio",
+  first_frame: "firstframe",
+  last_frame: "lastframe",
+  loop: "loop",
+  keyframe: "keyframe",
+};
+
+const REPLACE_AUDIO_INPUT: NotebookGenerationInputSpec = {
+  target: "replace_audio",
+  kind: "audio",
+  label: "Replacement audio",
+  fields: [],
+  min: 0,
+  max: 1,
+  token: null,
+  itemParams: [],
+  sent: false,
+};
+
+function modeInputSpecs(model: ResolvedModel, roles: readonly RefRole[]): NotebookGenerationInputSpec[] {
+  const inputs = INPUT_ORDER.flatMap((role) => {
+    const slot = roles.includes(role) ? model.slots.find((candidate) => candidate.role === role) : undefined;
+    return slot
+      ? [{
+          target: slot.role,
+          kind: slot.kind,
+          label: slot.label,
+          fields: slot.fields.map(({ path, label, max }) => ({ path, label, max })),
+          min: slot.min,
+          max: slot.max,
+          token: TOKEN_FAMILY[slot.role],
+          itemParams: slot.itemParams,
+          sent: true,
+        }]
+      : [];
+  });
+  return model.media === "video" ? [...inputs, REPLACE_AUDIO_INPUT] : inputs;
+}
+
+function modeLimits(model: ResolvedModel, roles: readonly RefRole[]): readonly InputLimit[] {
+  return (model.entry.inputLimits ?? []).filter((limit) => limit.kind === "requires"
+    ? roles.includes(limit.role)
+    : limit.roles.some((entry) => roles.includes(entry.role)));
+}
+
 export function notebookGenerationInputContract(model: ResolvedModel): NotebookGenerationInputContract {
   return {
     modes: model.modes.map((mode) => ({
       id: mode.id,
       slots: modeSlots(model, mode.roles),
       requiredGroups: mode.requireAny && mode.requireAny.length > 0 ? [[...mode.requireAny]] : [],
+      label: mode.label,
+      inputs: modeInputSpecs(model, mode.roles),
+      limits: modeLimits(model, mode.roles),
     })),
   };
 }

@@ -1,5 +1,16 @@
-import { arrayBounds, arrayItems, isArraySchema, isKeyframeItem, isUrlObject, propertyAt, type JsonSchema } from "./json-schema.js";
-import type { ModelEntry, RefRole, SlotField, SlotSpec } from "./types.js";
+import {
+  arrayBounds,
+  arrayItems,
+  isArraySchema,
+  isKeyframeItem,
+  isUrlObject,
+  numberBounds,
+  objectProperties,
+  propertyAt,
+  schemaTypes,
+  type JsonSchema,
+} from "./json-schema.js";
+import type { ItemParamSpec, ModelEntry, RefRole, SlotField, SlotKind, SlotSpec } from "./types.js";
 
 const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
   first_frame: [
@@ -57,8 +68,40 @@ function isRequired(input: JsonSchema, field: string): boolean {
   return !field.includes(".") && (input.required ?? []).includes(field);
 }
 
+const ROLE_KIND: Readonly<Record<RefRole, SlotKind>> = {
+  first_frame: "image",
+  last_frame: "image",
+  image: "image",
+  video: "video",
+  audio: "audio",
+  loop: "image",
+  keyframe: "image",
+};
+
+const ROLE_LABELS: Partial<Record<RefRole, string>> = {
+  first_frame: "First frame",
+  last_frame: "Last frame",
+  loop: "Loop frame",
+  keyframe: "Keyframes",
+};
+
+const GENERIC_IMAGE_LABELS = new Set(["Image", "Images", "Input", "Inputs", "Image input", "Image inputs"]);
+
 interface ExpandedField extends SlotField {
   min: number;
+}
+
+function fieldLabel(path: string, plural: boolean): string {
+  const leaf = path.split(".").filter((segment) => !/^\d+$/u.test(segment)).pop() ?? path;
+  const words = leaf.replace(/([a-z])([A-Z])/gu, "$1_$2").toLowerCase().replace(/_(urls?|list)$/u, "").split("_").filter(Boolean);
+  const text = words.join(" ").replace(/\baudios\b/u, "audio");
+  const counted = plural && !/s$/u.test(text) && !/audio$/u.test(text) ? `${text}s` : text;
+  return counted ? counted.charAt(0).toUpperCase() + counted.slice(1) : path;
+}
+
+function urlPathFor(schema: JsonSchema | undefined): string | undefined {
+  if (isKeyframeItem(schema)) return "image_url";
+  return isUrlObject(schema) ? "url" : undefined;
 }
 
 function expandField(input: JsonSchema, field: string): ExpandedField[] {
@@ -67,16 +110,77 @@ function expandField(input: JsonSchema, field: string): ExpandedField[] {
   if (isArraySchema(schema)) {
     const bounds = arrayBounds(schema);
     const items = arrayItems(schema);
+    const urlPath = urlPathFor(items);
     return [{
       path: field,
+      label: fieldLabel(field, bounds.max !== 1),
       multi: true,
       max: bounds.max,
       min: required ? Math.max(1, bounds.min) : 0,
       urlObject: isUrlObject(items),
+      ...(urlPath ? { urlPath } : {}),
       ...(isKeyframeItem(items) ? { keyframe: true } : {}),
     }];
   }
-  return [{ path: field, multi: false, max: 1, min: required ? 1 : 0, urlObject: isUrlObject(schema) }];
+  const urlPath = urlPathFor(schema);
+  return [{
+    path: field,
+    label: fieldLabel(field, false),
+    multi: false,
+    max: 1,
+    min: required ? 1 : 0,
+    urlObject: isUrlObject(schema),
+    ...(urlPath ? { urlPath } : {}),
+  }];
+}
+
+function slotLabel(role: RefRole, fields: readonly SlotField[]): string {
+  const fixed = ROLE_LABELS[role];
+  if (fixed) return fixed;
+  const label = fields.map((field) => field.label).join(" + ");
+  if (role !== "image" || !GENERIC_IMAGE_LABELS.has(label)) return label;
+  return fields.some((field) => field.max !== 1) ? "Reference images" : "Reference image";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function aliasOptions(entry: ModelEntry, fieldPath: string, name: string): string[] {
+  const pattern = new RegExp(`^${escapeRegExp(fieldPath)}\\.(\\d+)\\.${escapeRegExp(name)}$`, "u");
+  const options: string[] = [];
+  for (const [option, path] of Object.entries(entry.aliases ?? {})) {
+    const position = pattern.exec(path)?.[1];
+    if (position !== undefined) options[Number(position)] = option;
+  }
+  return options;
+}
+
+function derivedItemParam(entry: ModelEntry, role: RefRole, field: ExpandedField, name: string, schema: JsonSchema): ItemParamSpec[] {
+  const types = schemaTypes(schema);
+  const valueType = types.includes("integer") ? "integer" : types.includes("number") ? "number" : null;
+  if (!valueType) return [];
+  const fallback = entry.refItem?.[role]?.[name];
+  const legacyOptions = aliasOptions(entry, field.path, name);
+  return [{
+    name,
+    label: fieldLabel(name, false),
+    valueType,
+    ...numberBounds(schema),
+    ...(typeof fallback === "number" ? { defaultValue: fallback } : {}),
+    ...(legacyOptions.length > 0 ? { legacyOptions } : {}),
+  }];
+}
+
+function itemParamsFor(input: JsonSchema, entry: ModelEntry, role: RefRole, fields: readonly ExpandedField[]): readonly ItemParamSpec[] {
+  const declared = entry.itemParams?.[role];
+  if (declared) return declared;
+  const field = fields.find((candidate) => candidate.multi && candidate.urlPath);
+  const items = field ? arrayItems(propertyAt(input, field.path)!) : undefined;
+  if (!field || !items) return [];
+  return Object.entries(objectProperties(items))
+    .filter(([name]) => name !== field.urlPath)
+    .flatMap(([name, schema]) => derivedItemParam(entry, role, field, name, schema));
 }
 
 function overrideFields(entry: ModelEntry, role: RefRole): readonly string[] | null | undefined {
@@ -94,11 +198,13 @@ export function resolveSlot(role: RefRole, input: JsonSchema, entry: ModelEntry)
     if (!fieldPresent(input, name)) throw new Error(`${entry.id}: ref field ${name} for ${role} is not in the apicity schema`);
   }
   const expanded = names.flatMap((name) => expandField(input, name));
-  const fields: SlotField[] = expanded.map(({ path, multi, max, urlObject, keyframe }) => ({
+  const fields: SlotField[] = expanded.map(({ path, label, multi, max, urlObject, urlPath, keyframe }) => ({
     path,
+    label,
     multi,
     max,
     urlObject,
+    ...(urlPath ? { urlPath } : {}),
     ...(keyframe ? { keyframe: true } : {}),
   }));
   const max = expanded.some((field) => field.max === null)
@@ -106,11 +212,14 @@ export function resolveSlot(role: RefRole, input: JsonSchema, entry: ModelEntry)
     : expanded.reduce((sum, field) => sum + (field.max ?? 0), 0);
   return {
     role,
+    kind: ROLE_KIND[role],
+    label: slotLabel(role, fields),
     field: names.join("+"),
     fields,
     multi: max === null || max > 1,
     min: expanded.reduce((sum, field) => sum + field.min, 0),
     max,
+    itemParams: itemParamsFor(input, entry, role, expanded),
   };
 }
 

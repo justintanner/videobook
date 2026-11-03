@@ -2,7 +2,7 @@ import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
 import { WAVESPEED_MODEL_ENTRIES } from "./wavespeed.js";
-import type { InputRules, ModeSpec, ModelEntry, Operation, PromptGuide, RefRole } from "./types.js";
+import type { InputLimit, InputRules, ItemParamSpec, ModeSpec, ModelEntry, Operation, PromptGuide, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
   { id: "t2v", label: "Text to video", roles: [] },
@@ -45,6 +45,25 @@ const GROK_PREVIEW_MODES: readonly ModeSpec[] = [
   { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame", "image", "keyframe"], requireAny: ["image"] },
   { id: "loop", label: "Loop", roles: ["loop", "image", "keyframe"], requireAny: ["loop"] },
 ];
+
+const GROK_1080P_ONE_IMAGE: InputLimit = {
+  kind: "max",
+  roles: [{ role: "image" }],
+  max: 1,
+  when: { option: "resolution", equals: "1080p" },
+  message: "1080p takes one reference image",
+};
+
+const GROK_KEYFRAME_TIME: ItemParamSpec = {
+  name: "timestamp_s",
+  label: "Time",
+  valueType: "number",
+  minimum: 0,
+  exclusiveMinimum: true,
+  unit: "s",
+  computedDefault: "even_seconds",
+  legacyOptions: ["keyframe_1_seconds", "keyframe_2_seconds", "keyframe_3_seconds", "keyframe_4_seconds"],
+};
 
 const MACHGEN_FRAMES: ModeSpec = { id: "i2v", label: "Frames", roles: ["first_frame", "last_frame"], requireAny: ["first_frame"] };
 const MACHGEN_FRAME_OR_LAST: ModeSpec = { ...MACHGEN_FRAMES, requireAny: ["first_frame", "last_frame"] };
@@ -248,6 +267,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     modes: [...SEEDANCE_MODES, { id: "v2v", label: "Edit video", roles: ["video", "image", "audio"], requireAny: ["video"] }],
     defaults: { ...LIGHTNING_VIDEO_OPTIONS },
     frameOptions: { aspect_ratio: "adaptive" },
+    inputLimits: [{ kind: "requires", role: "last_frame", requires: "first_frame", message: "A last frame needs a first frame" }],
   },
   {
     id: "kie:bytedance/seedance-2-5-draft",
@@ -257,9 +277,9 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     description: "Render the 1080p final of a Seedance 2.5 draft: a 480p kie:bytedance/seedance-2-5 run with draft on. Pass that run's Kie task id as draft_task_id.",
     defaults: { resolution: "1080p" },
   },
-  { id: "kie:grok-imagine/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine" },
+  { id: "kie:grok-imagine/image-to-video", media: "video", operations: ["image_to_video"], guide: "grok_imagine", inputLimits: [GROK_1080P_ONE_IMAGE] },
   { id: "kie:grok-imagine/text-to-video", media: "video", operations: ["text_to_video"], guide: "grok_imagine", defaults: { duration: 6, resolution: "480p" } },
-  { id: "kie:grok-imagine-video-1-5-preview", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 Preview (Kie)", guide: "grok_imagine", dialect: "natural_strip_frames", modes: GROK_PREVIEW_MODES },
+  { id: "kie:grok-imagine-video-1-5-preview", media: "video", operations: ["image_to_video"], title: "Grok Imagine Video 1.5 Preview (Kie)", guide: "grok_imagine", dialect: "natural_strip_frames", modes: GROK_PREVIEW_MODES, itemParams: { keyframe: [GROK_KEYFRAME_TIME] }, inputLimits: [GROK_1080P_ONE_IMAGE] },
   { id: "kie:grok-imagine/extend", media: "video", operations: ["extend_video"], hidden: true },
   { id: "kie:grok-imagine/upscale", media: "video", operations: ["upscale_video"], hidden: true },
   { id: "kie:topaz/video-upscale", media: "video", operations: ["upscale_video"], title: "Topaz Video Upscale (Kie)" },
@@ -279,8 +299,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   },
   { id: "kie:kling-3.0/motion-control", media: "video", operations: ["motion_control"], guide: "kling30", dialect: "natural", defaults: { mode: "720p" }, outputLength: "video" },
   { id: "kie:kling-4.0/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "kling4" },
-  { id: "kie:kling-4.0/keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes", refs: { image: "keyframe_urls" } },
-  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
+  { id: "kie:kling-4.0/keyframe-to-video", media: "video", operations: ["image_to_video"], dialect: "kling4_keyframes", refs: { image: "keyframe_urls" }, inputLimits: [{ kind: "max", roles: [{ role: "first_frame" }, { role: "image" }, { role: "last_frame" }], max: { option: "duration", offset: 1, cap: 10 }, message: "Frames and keyframes together can't exceed the duration plus one, 10 at most" }] },
+  { id: "kie:gemini-omni-video", media: "video", operations: ["image_to_video", "edit_video"], dialect: "natural_source_video", defaults: { duration: "8" }, modes: [{ id: "i2v", label: "Image to video", roles: ["image"] }, { id: "v2v", label: "Edit video", roles: ["video", "image"], requireAny: ["video"] }], refItem: { video: { start: 0, ends: 8 } }, inputLimits: [{ kind: "max", roles: [{ role: "image" }, { role: "video", weight: 2 }], max: 7, message: "Images plus two per video can't exceed 7" }], aliases: { clip_start: "video_list.0.start", clip_end: "video_list.0.ends" } },
   { id: "kie:wan/3-0-video", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:wan/3-0-video-prime", media: "video", operations: ["text_to_video", "image_to_video", "reference_to_video"], dialect: "seedance", modes: SEEDANCE_MODES },
   { id: "kie:happyhorse-1-1/text-to-video", media: "video", operations: ["text_to_video"] },

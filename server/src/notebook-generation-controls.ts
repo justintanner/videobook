@@ -14,6 +14,7 @@ export interface NotebookGenerationControl {
   maximum?: number;
   exclusiveMinimum?: boolean;
   exclusiveMaximum?: boolean;
+  hidden?: boolean;
   description: string;
 }
 
@@ -183,9 +184,15 @@ function optionControl(option: OptionSpec): NotebookGenerationControl | null {
   };
 }
 
+function itemParamOptionNames(model: ResolvedModel): Set<string> {
+  return new Set(model.slots.flatMap((slot) => slot.itemParams.flatMap((param) => param.legacyOptions ?? [])));
+}
+
 export function controlsForModel(model: ResolvedModel): NotebookGenerationControl[] {
+  const itemOptions = itemParamOptionNames(model);
   return model.options.flatMap((option) => {
     const control = optionControl(option);
-    return control ? [control] : [];
+    if (!control) return [];
+    return [itemOptions.has(option.name) ? { ...control, hidden: true } : control];
   });
 }

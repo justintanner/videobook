@@ -193,7 +193,9 @@ function modelRecord(model: ResolvedModel): Record<string, unknown> {
   const listing = modelListing(model);
   return {
     model: model.id,
-    contract: notebookGenerationInputContract(model),
+    contract: {
+      modes: notebookGenerationInputContract(model).modes.map(({ id, slots, requiredGroups }) => ({ id, slots, requiredGroups })),
+    },
     refs: listing.refs,
     options: listing.options.map((option) => option.name),
     controls: controlsForModel(model).map((control) => control.name),

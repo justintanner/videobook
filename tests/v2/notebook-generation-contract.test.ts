@@ -7,7 +7,8 @@ import {
 } from "../../server/src/notebook-generation-contract.js";
 
 function contractFor(model: string) {
-  return notebookGenerationInputContract(resolveModel(model));
+  const contract = notebookGenerationInputContract(resolveModel(model));
+  return { modes: contract.modes.map(({ id, slots, requiredGroups }) => ({ id, slots, requiredGroups })) };
 }
 
 const REPLACE_AUDIO_SLOT = {
@@ -133,7 +134,7 @@ describe("notebook generation input contracts", () => {
     "kie:wan/3-0-video",
     "kie:wan/3-0-video-prime",
   ])("keeps %s frame and reference modes exclusive", (model) => {
-    const contract = contractFor(model);
+    const contract = notebookGenerationInputContract(resolveModel(model));
     expect(contract.modes.map((mode) => ({
       id: mode.id,
       fields: mode.slots.map((slot) => slot.field),

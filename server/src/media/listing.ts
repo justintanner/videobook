@@ -4,7 +4,7 @@ import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveEntry } from "./descriptor.js";
 import { registerDiagnosticName } from "../diagnostics.js";
 import { logger } from "../logger.js";
-import type { Media, ModelEntry, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotSpec } from "./types.js";
+import type { InputLimit, ItemParamSpec, Media, ModelEntry, ModeSpec, Operation, OptionSpec, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
 export interface ModelListing {
   id: string;
@@ -15,6 +15,11 @@ export interface ModelListing {
   description?: string;
   prompt: { field: string; required: boolean } | null;
   refs: Array<Pick<SlotSpec, "role" | "min" | "max">>;
+  inputs: Array<Pick<SlotSpec, "role" | "kind" | "label" | "min" | "max"> & {
+    fields: Array<Pick<SlotField, "path" | "label" | "max">>;
+    itemParams: readonly ItemParamSpec[];
+  }>;
+  limits: readonly InputLimit[];
   modes: ModeSpec[];
   options: OptionSpec[];
   hidden: boolean;
@@ -42,6 +47,16 @@ export function modelListing(model: ResolvedModel): ModelListing {
     ...(model.entry.description ? { description: model.entry.description } : {}),
     prompt: model.promptField ? { field: model.promptField, required: model.promptRequired } : null,
     refs: model.slots.map(({ role, min, max }) => ({ role, min, max })),
+    inputs: model.slots.map(({ role, kind, label, fields, min, max, itemParams }) => ({
+      role,
+      kind,
+      label,
+      fields: fields.map(({ path, label: fieldLabel, max: fieldMax }) => ({ path, label: fieldLabel, max: fieldMax })),
+      min,
+      max,
+      itemParams,
+    })),
+    limits: model.entry.inputLimits ?? [],
     modes: model.modes,
     options: model.options,
     hidden: modelIsHidden(model.entry),
