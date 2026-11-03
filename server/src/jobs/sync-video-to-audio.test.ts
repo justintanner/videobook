@@ -1,13 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { createAudioSyncPlan } from "../audio-sync.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
+import { configureProviderEndpoints } from "../media/endpoints.js";
 import { queue, setEngineRoot } from "../queue.js";
+import { registerMediaStreams } from "./process-video.js";
 import {
   prepareAudioSyncTranscript,
   registerSyncVideoToAudioJob,
@@ -370,4 +374,82 @@ describe("audio sync transcript preparation and rollback", () => {
       await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
     }
   });
+
+  it("imports a replacement cue transcript against the synced file's audio stream", async () => {
+    const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-replacement-"));
+    const sourcePath = join(projectsDir, "source.mp4");
+    await generateMarkedVideo(sourcePath);
+    const speech = {
+      language_code: "eng", language_probability: 0.98, text: "England", channel_index: 0,
+      transcription_id: "stub-sync", audio_duration_secs: 4,
+      words: [{ text: "England", start: 1.2, end: 1.6, type: "word" }],
+    };
+    const stub = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify(speech));
+      });
+    });
+    await new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve));
+    const restoreEndpoints = configureProviderEndpoints({
+      elevenlabsBaseURL: `http://127.0.0.1:${(stub.address() as AddressInfo).port}`,
+    });
+    const savedApiKey = process.env.ELEVENLABS_API_KEY;
+    process.env.ELEVENLABS_API_KEY = "offline-elevenlabs-key";
+    const fs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, fs);
+    try {
+      const bookId = fs.book.get().bookId;
+      const created = await fs.artifacts.create("video", "replacement transcript");
+      if (!created.ok) throw new Error(created.error.message);
+      const assetId = created.value.artifactId;
+      const video = await fs.files.write(assetId, "original.mp4", await readFile(sourcePath));
+      if (!video.ok) throw new Error(video.error.message);
+      await registerMediaStreams(fs, assetId, "original.mp4", await probeVideo(sourcePath));
+      const metadata = await fs.metadata.artifacts.write(assetId, "original", {});
+      if (!metadata.ok) throw new Error(metadata.error.message);
+      registerSyncVideoToAudioJob(fs);
+
+      await queue.enqueueAndWait(
+        `sync-audio-replacement-${assetId}`,
+        {
+          type: "sync_video_to_audio",
+          inputPath: join(created.value.path, "original.mp4"),
+          outputPath: join(created.value.path, ".sync-audio-replacement.mp4"),
+          anchors: [{ videoSeconds: 1, audioCue: "england" }],
+          assetId,
+          assetDir: created.value.path,
+          bookId,
+        },
+        testBudget(60_000),
+      );
+
+      const manifest = await fs.files.manifest(assetId);
+      if (!manifest.ok) throw new Error(manifest.error.message);
+      const synced = manifest.value.files.find((file) => file.name === "original.mp4");
+      if (!synced) throw new Error("synced video is missing");
+      const streams = fs.streams.list(assetId);
+      if (!streams.ok) throw new Error(streams.error.message);
+      const current = streams.value.find((stream) =>
+        stream.kind === "audio" && stream.objectHash === synced.objectHash);
+      if (!current) throw new Error("synced audio stream is not registered");
+      const transcripts = await fs.transcripts.list(assetId);
+      if (!transcripts.ok) throw new Error(transcripts.error.message);
+      expect(transcripts.value).toEqual([
+        expect.objectContaining({ streamId: current.streamId, objectHash: synced.objectHash }),
+      ]);
+    } finally {
+      restoreEndpoints();
+      if (savedApiKey === undefined) {
+        delete process.env.ELEVENLABS_API_KEY;
+      } else {
+        process.env.ELEVENLABS_API_KEY = savedApiKey;
+      }
+      await queue.stop();
+      closeEngineForTest(projectsDir, fs);
+      await new Promise<void>((resolve) => stub.close(() => resolve()));
+      await rm(projectsDir, { recursive: true, force: true, maxRetries: 3 });
+    }
+  }, testBudget(120_000));
 });

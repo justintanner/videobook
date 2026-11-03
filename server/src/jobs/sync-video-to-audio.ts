@@ -19,6 +19,7 @@ import {
 } from "./_transcribe.js";
 import { claimLockedLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import { registerMediaStreams } from "./process-video.js";
 import { PICTURE_SIDECARS } from "../stale-sidecars.js";
 
 const LOCK_DURATION_MS = 900_000;
@@ -385,13 +386,19 @@ export function registerSyncVideoToAudioJob(engine: Engine): void {
           await validateAudioSyncOutput(inputPath, outputPath, plan, ctx.signal);
 
           const inputFilename = basename(inputPath);
-          await replaceArtifactFileFromPath(
+          const installedPath = await replaceArtifactFileFromPath(
             engine,
             assetId,
             inputFilename,
             outputPath,
           );
           if (preparedTranscript?.replacement) {
+            await registerMediaStreams(
+              engine,
+              assetId,
+              inputFilename,
+              await probeVideo(installedPath, { signal: ctx.signal }),
+            );
             await writeElevenLabsTranscript(
               engine,
               assetId,

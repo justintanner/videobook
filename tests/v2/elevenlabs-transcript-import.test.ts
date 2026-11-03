@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElevenLabsSpeechToTextResponse } from '@apicity/elevenlabs'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createEngine } from 'videobook-engine'
+import { createEngine, type Engine } from 'videobook-engine'
 import { importElevenLabsTranscript } from '../../server/src/jobs/_transcribe.js'
 
 describe('ElevenLabs transcript import', () => {
@@ -12,6 +12,45 @@ describe('ElevenLabs transcript import', () => {
   afterEach(async () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
+
+  const greeting: ElevenLabsSpeechToTextResponse = {
+    language_code: 'en',
+    language_probability: 0.99,
+    text: 'Hello',
+    channel_index: 0,
+    transcription_id: 'scribe-edited',
+    audio_duration_secs: 2,
+    words: [{ text: 'Hello', start: 0.25, end: 0.75, type: 'word', speaker_id: 'speaker-1' }],
+  }
+
+  async function registerAudioStream(engine: Engine, artifactId: string, durationTicks: number) {
+    const manifest = await engine.files.manifest(artifactId)
+    if (!manifest.ok) throw new Error(manifest.error.message)
+    const objectHash = manifest.value.files.find((file) => file.name === 'original.wav')?.objectHash
+    if (!objectHash) throw new Error('missing audio file')
+    const stream = await engine.streams.register({
+      artifactId,
+      sourcePath: 'original.wav',
+      objectHash,
+      streamIndex: 0,
+      kind: 'audio',
+      timeBase: { numerator: 1, denominator: 48_000 },
+      durationTicks,
+      codec: 'pcm_s16le',
+      audio: {
+        sampleRateHz: 48_000,
+        channels: 2,
+        channelLayout: 'stereo',
+      },
+    })
+    if (!stream.ok) throw new Error(stream.error.message)
+    return stream.value
+  }
+
+  async function editAudioInPlace(engine: Engine, artifactId: string) {
+    const written = await engine.files.write(artifactId, 'original.wav', Buffer.from('trimmed audio'))
+    if (!written.ok) throw new Error(written.error.message)
+  }
 
   async function audioArtifact() {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-transcript-import-'))
@@ -22,28 +61,34 @@ describe('ElevenLabs transcript import', () => {
     if (!artifact.ok) throw new Error(artifact.error.message)
     const written = await engine.files.write(artifact.value.artifactId, 'original.wav', Buffer.from('audio'))
     if (!written.ok) throw new Error(written.error.message)
-    const manifest = await engine.files.manifest(artifact.value.artifactId)
-    if (!manifest.ok) throw new Error(manifest.error.message)
-    const objectHash = manifest.value.files.find((file) => file.name === 'original.wav')?.objectHash
-    if (!objectHash) throw new Error('missing audio file')
-    const stream = await engine.streams.register({
-      artifactId: artifact.value.artifactId,
-      sourcePath: 'original.wav',
-      objectHash,
-      streamIndex: 0,
-      kind: 'audio',
-      timeBase: { numerator: 1, denominator: 48_000 },
-      durationTicks: 240_000,
-      codec: 'pcm_s16le',
-      audio: {
-        sampleRateHz: 48_000,
-        channels: 2,
-        channelLayout: 'stereo',
-      },
-    })
-    if (!stream.ok) throw new Error(stream.error.message)
+    await registerAudioStream(engine, artifact.value.artifactId, 240_000)
     return { engine, artifactId: artifact.value.artifactId }
   }
+
+  it('links the stream of the current audio file after an in-place edit', async () => {
+    const { engine, artifactId } = await audioArtifact()
+    await editAudioInPlace(engine, artifactId)
+    const current = await registerAudioStream(engine, artifactId, 96_000)
+
+    const transcript = await importElevenLabsTranscript(engine, artifactId, greeting, { tagAudioEvents: true, diarize: true })
+
+    expect(transcript.streamId).toBe(current.streamId)
+    expect(transcript.objectHash).toBe(current.objectHash)
+    expect(transcript.segments.map((segment) => segment.range.streamId)).toEqual([current.streamId])
+    engine.close()
+  })
+
+  it('refuses to import while the current audio file has no registered stream', async () => {
+    const { engine, artifactId } = await audioArtifact()
+    await editAudioInPlace(engine, artifactId)
+
+    await expect(importElevenLabsTranscript(engine, artifactId, greeting, { tagAudioEvents: true, diarize: true }))
+      .rejects.toThrow('No audio stream is registered for the current media')
+    const transcripts = await engine.transcripts.list(artifactId)
+    if (!transcripts.ok) throw new Error(transcripts.error.message)
+    expect(transcripts.value).toEqual([])
+    engine.close()
+  })
 
   it('imports exact timed speech, speakers, confidence, and audio events', async () => {
     const { engine, artifactId } = await audioArtifact()

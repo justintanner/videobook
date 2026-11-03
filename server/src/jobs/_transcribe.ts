@@ -17,6 +17,7 @@ import type {
 } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { joinsWithoutSpace } from "../captions/script.js";
+import { currentStream } from "../current-media-streams.js";
 import { fileObjectHash, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
 import { audioObjectHash, hasCurrentElevenLabsTranscript, recordElevenLabsTranscript } from "../transcript-components.js";
 import { joinUnspacedLetters } from "../transcript-words.js";
@@ -173,12 +174,8 @@ export async function importElevenLabsTranscript(
   if (source.length === 0) {
     throw new Error("ElevenLabs returned an acknowledgement without transcript content");
   }
-  const streams = engine.streams.list(assetId);
-  if (!streams.ok) {
-    throw new Error(`Failed to read media streams for ${assetId}: ${streams.error.message}`);
-  }
-  const stream = streams.value.find((candidate) => candidate.kind === "audio");
-  if (!stream) throw new Error(`No audio stream is registered for ${assetId}`);
+  const stream = await currentStream(engine, assetId, "audio");
+  if (!stream) throw new Error(`No audio stream is registered for the current media of ${assetId}`);
   const segments = transcriptSegments(source, stream);
   const language = options.languageCode
     ?? [...source].sort((left, right) =>
