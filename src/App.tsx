@@ -9103,7 +9103,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: 'Actions opened' }
     }
     if (route.kind === 'form') {
-      const tool = action.command === '/storage' ? 'storage_status' : route.tool
+      const tool = route.tool
       const frameRate = sequence ? sequence.frameRate.numerator / sequence.frameRate.denominator : 30
       const formValues = workspaceUiFormValues(uiAction, values, frameRate)
       if (asset) formValues.asset_id = asset.artifactId
@@ -9457,19 +9457,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           ? { ok: true, message: 'Project selector opened' }
           : { ok: false, message: result.error }
       }
-      if (command.uiAction === 'open_notebook') {
-        showScreen('notebook')
-        return { ok: true, message: 'Notebook opened' }
-      }
-      if (command.uiAction === 'x_connect') {
-        showScreen('settings')
-        return await connectX()
-      }
-      if (command.uiAction === 'open_provider_keys') {
-        showScreen('settings')
-        await refreshSettings()
-        return { ok: true, message: 'Settings opened' }
-      }
       if (command.uiAction === 'open_music_video') {
         if (!sequence) {
           return { ok: false, message: 'Load the primary sequence first.' }
@@ -9503,7 +9490,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.uiAction === 'speak_preview') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
         const action = resolveSpeakPreviewAction({
-          command: command.command,
           text: asString(parsed.text) ?? '',
           voiceId: context?.speakVoiceId,
           hasNotebook: Boolean(notebook),

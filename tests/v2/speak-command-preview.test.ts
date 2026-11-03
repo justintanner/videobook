@@ -58,12 +58,12 @@ describe('speak preview helpers', () => {
     expect(speakExecuteContext('/speak welcome back', 'voice-b')).toEqual({
       speakVoiceId: 'voice-b',
     })
-    expect(speakExecuteContext('/say hello', 'voice-b')).toBeUndefined()
+    expect(speakExecuteContext('/say hello', 'voice-b')).toEqual({ speakVoiceId: 'voice-b' })
+    expect(speakExecuteContext('/trim @a1', 'voice-b')).toBeUndefined()
   })
 
-  it('prefills /speak from /voices and keeps other commands out of generation', () => {
+  it('prefills /speak when no text is given and keeps other commands out of generation', () => {
     expect(resolveSpeakPreviewAction({
-      command: '/voices',
       text: '',
       hasNotebook: false,
     })).toEqual({
@@ -72,7 +72,6 @@ describe('speak preview helpers', () => {
       message: 'Choose a voice, then type the speech text.',
     })
     expect(resolveSpeakPreviewAction({
-      command: '/speak',
       text: 'welcome back',
       voiceId: 'voice-b',
       hasNotebook: true,
@@ -82,7 +81,6 @@ describe('speak preview helpers', () => {
       voiceId: 'voice-b',
     })
     expect(resolveSpeakPreviewAction({
-      command: '/speak',
       text: 'welcome back',
       voiceId: 'voice-b',
       hasNotebook: false,
@@ -193,8 +191,7 @@ describe('CommandComposer /voices prefill', () => {
   it('renders the speak preview when input is prefilled to /speak ', () => {
     const html = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [{
-        command: '/speak',
-        description: 'Generate ElevenLabs speech into the notebook from the inline voice preview',
+          description: 'Generate ElevenLabs speech into the notebook from the inline voice preview',
         category: 'action',
         icon: 'Mic',
         size: 'default',

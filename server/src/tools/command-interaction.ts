@@ -8,7 +8,7 @@ export const PREVIEW_COMMANDS: readonly string[] = [
   "/edit-cold-open", "/watermark", "/rewrite", "/rewrite-script", "/tldr", "/make-cover-song", "/archive",
   "/extend-audio", "/remove-sound", "/clean-audio", "/vocals", "/transcribe", "/subs", "/settings",
   "/settings-landscape", "/settings-portrait", "/settings-square", "/bg", "/audio-settings", "/speed", "/timewarp",
-  "/sync-audio", "/splice", "/scene-concat", "/split", "/skeleton", "/speak", "/say", "/caption", "/duck", "/fit",
+  "/sync-audio", "/splice", "/scene-concat", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",
   "/gap", "/insert", "/move", "/overwrite", "/clip-audio", "/volume", "/rough-cut", "/export-sequence", "/final",
   "/reframe", "/clip-trim", "/split-clip", "/audio-add", "/audio-move", "/audio-set",
 ];

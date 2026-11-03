@@ -13,11 +13,11 @@ type SpeakPreviewAction =
   | { kind: 'error'; message: string }
 
 export function isSpeakCommandPreview(input: string): boolean {
-  return /^\/speak(\s|$)/.test(input)
+  return /^\/(?:speak|say|voices)(\s|$)/.test(input)
 }
 
 export function speakCommandText(input: string): string {
-  const match = input.match(/^\/speak(?:\s+([\s\S]*))?$/)
+  const match = input.match(/^\/(?:speak|say|voices)(?:\s+([\s\S]*))?$/)
   return match?.[1]?.trim() ?? ''
 }
 
@@ -91,12 +91,12 @@ export function speakExecuteContext(
 }
 
 export function resolveSpeakPreviewAction(input: {
-  command: string
   text: string
   voiceId?: string
   hasNotebook: boolean
 }): SpeakPreviewAction {
-  if (input.command === '/voices') {
+  const text = input.text.trim()
+  if (!text) {
     return {
       kind: 'prefill',
       nextInput: SPEAK_PREVIEW_PREFILL,
@@ -106,11 +106,7 @@ export function resolveSpeakPreviewAction(input: {
   if (!input.hasNotebook) {
     return { kind: 'error', message: 'Open a notebook before speaking.' }
   }
-  const text = input.text.trim()
   const voiceId = input.voiceId?.trim() ?? ''
-  if (!text) {
-    return { kind: 'error', message: 'Type the text to speak after /speak.' }
-  }
   if (!voiceId) {
     return { kind: 'error', message: 'Select a voice before speaking.' }
   }

@@ -51,8 +51,9 @@ describe('command suggestions', () => {
   it('does not treat neighboring commands as the speak preview', () => {
     expect(isSpeakCommandPreview('/spe')).toBe(false)
     expect(isSpeakCommandPreview('/speaking')).toBe(false)
-    expect(isSpeakCommandPreview('/say hello')).toBe(false)
-    expect(isSpeakCommandPreview('/voices')).toBe(false)
+    expect(isSpeakCommandPreview('/say hello')).toBe(true)
+    expect(isSpeakCommandPreview('/voices')).toBe(true)
+    expect(isSpeakCommandPreview('/sayings')).toBe(false)
     expect(isSpeakCommandPreview('speak now')).toBe(false)
   })
 })

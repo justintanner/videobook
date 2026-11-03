@@ -115,8 +115,6 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/scene-new");
     expect(commandNames).toContain("/entities");
     expect(commandNames).toContain("/jobs");
-    expect(commandNames).toContain("/revisions");
-    expect(commandNames).toContain("/storage");
     expect(commandNames).toContain("/sync");
     expect(commandNames).toContain("/providers");
     expect(commandNames).toContain("/diagnostics");
@@ -134,7 +132,6 @@ describe("slash_commands tool", () => {
     expect(commands.find((command) => command.command === "/collapse")?.description)
       .toMatch(/chat controls \(right\)/u);
     expect(commandNames).toContain("/sort");
-    expect(commandNames).toContain("/keys");
     expect(commandNames).toContain("/archive-browse");
     expect(commandNames).toContain("/audio-add");
     expect(commandNames).toContain("/audio-mix");
@@ -155,21 +152,15 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/archive-restore");
     expect(commandNames).toContain("/rewind");
     expect(commandNames).toContain("/clear-failed");
-    expect(commandNames).toContain("/voices");
-    expect(commandNames).toContain("/say");
     expect(commandNames).toContain("/speak");
     const speak = commands.find((c) => c.command === "/speak")!;
     expect(speak.uiAction).toBe("speak_preview");
     expect(speak.category).toBe("action");
-    const voices = commands.find((c) => c.command === "/voices")!;
-    expect(voices.uiAction).toBe("speak_preview");
-    expect(voices.description).toMatch(/speak preview/i);
-    const say = commands.find((c) => c.command === "/say")!;
-    expect(say.mcpTool?.tool).toBe("generate_audio");
-    expect(say.mcpTool?.injectParams).toEqual({ model: "kie:elevenlabs/text-to-speech-turbo-2-5" });
-    expect(say.params.map((p) => p.name)).toEqual(["prompt"]);
+    expect(speak.aliases).toEqual(expect.arrayContaining(["/voices", "/say"]));
+    expect(commands.find((c) => c.command === "/providers")?.aliases).toEqual(expect.arrayContaining(["/keys", "/connect-x"]));
+    expect(commands.find((c) => c.command === "/diagnostics")?.aliases).toEqual(["/storage"]);
+    expect(commands.find((c) => c.command === "/activity")?.aliases).toEqual(expect.arrayContaining(["/status", "/revisions"]));
     expect(commandNames).not.toContain("/grok-upscale");
-    expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");
     expect(commandNames).toContain("/apply-sfx");

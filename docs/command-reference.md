@@ -229,10 +229,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (292; 141 dedicated command routes)
+## Slash actions (287; 135 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
-- `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
+- `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
 - `/add-sequence-track` — Append a canonical video, audio, or caption track; MCP: `add_sequence_track`
 - `/add-timeline-audio` — Add a typed audio overlay to the selected book timeline; MCP: `add_timeline_audio`
 - `/analyze-editing-moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.; MCP: `analyze_editing_moments`
@@ -283,7 +283,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/configure-asset-tagging` — Read or change how new assets are tagged in a book. Manual tagging, filtering and search keep working whatever this is set to.; MCP: `configure_asset_tagging`
 - `/connect-notebook-cells` — Create a UUIDv7 notebook edge; MCP: `connect_notebook_cells`
 - `/connect-service` — Start connecting an X account and return the authorize_url to open; poll service_status until connected. Credentials stay in application state, outside books.; MCP: `connect_service`
-- `/connect-x` — Connect your X (Twitter) account via browser OAuth; UI: `x_connect`
 - `/continue-notebook-generation` — Create a reviewable insertion plan for a completed generation or report a stale destination; MCP: `continue_notebook_generation`
 - `/continue-queued-insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current; MCP: `continue_queued_insert`
 - `/copy` — Copy asset name; UI: `copy_clipboard`
@@ -301,7 +300,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/delete-notebook-cell` — Delete one notebook cell and incident edges; MCP: `delete_notebook_cell`
 - `/describe` — Describe image into a reproduction-ready prompt; MCP: `describe_image`
 - `/detect-scenes` — Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points).; MCP: `detect_scenes`
-- `/diagnostics` — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
+- `/diagnostics` (aliases: `/storage`) — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
 - `/download` — Download video from URL; MCP: `download_video`
@@ -332,6 +331,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
 - `/folder` — Show asset folder; MCP: `export_asset_file`
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
+- `/generate-audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_audio`
 - `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
 - `/generate-video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
@@ -363,7 +363,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
-- `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
 - `/list-assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook and sequence-referenced assets outside the page.; MCP: `list_assets`
@@ -418,7 +417,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/preview-splice` — Score how closely each frame near the end of the first video matches the second video's first frame. splice_video cuts at the lowest score inside its overlap window, so callers can preview the cut for any overlap up to window without rendering.; MCP: `preview_splice`
 - `/prompt-new` — Create a reusable prompt entity; MCP: `create_entity`
 - `/provider-key-status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.; MCP: `provider_key_status`
-- `/providers` — Open provider credentials and routing settings; UI: `open_provider_keys`
+- `/providers` (aliases: `/keys`, `/connect-x`) — Open provider credentials and routing settings; UI: `open_provider_keys`
 - `/qart` — Create scan-safe color and monochrome QR mosaics from an image source; MCP: `create_qart`
 - `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
 - `/read-asset-metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.; MCP: `read_asset_metadata`
@@ -451,7 +450,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/retry-job` — Re-enqueue a failed or cancelled persistent job with the same durable payload; MCP: `retry_job`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
 - `/revise-notebook-generation-plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan; MCP: `revise_notebook_generation_plan`
-- `/revisions` — Open forward-only project revision history; UI: `open_revisions`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`
 - `/rewrite` — Optimize a prompt; MCP: `rewrite_prompt`
 - `/rewrite-script` — Rewrite a script asset in place with the full describe model; MCP: `rewrite_script`
@@ -460,7 +458,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
 - `/run-notebook-cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
-- `/say` — Generate speech audio from text with ElevenLabs; MCP: `generate_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
 - `/scene-new` — Create a reusable scene entity; MCP: `create_entity`
 - `/search-archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.; MCP: `search_archive`
@@ -482,13 +479,12 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/skeleton` — Review an AI pose skeleton guide generated from a reference image; UI: `extract_skeleton`
 - `/sort` — Browse project media by creation date; UI: `sidebar_sort`
 - `/sound-effects` — Review suggested sound effects for the sequence; preview or workspace operation
-- `/speak` — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
+- `/speak` (aliases: `/voices`, `/say`) — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
 - `/split` — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
 - `/split-clip` — Split a canonical-sequence clip at an exact sequence frame; preview or workspace operation
 - `/split-video` — Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.; MCP: `split_video`
-- `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`
 - `/suggest-asset-tags` — List the tags in use in a book with the number of assets carrying each, optionally narrowed by prefix or facet. Use it for autocomplete and to discover the groups available for filtering.; MCP: `suggest_asset_tags`
@@ -519,7 +515,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
 - `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
-- `/voices` — Browse ElevenLabs voices in the speak preview; UI: `speak_preview`
 - `/volume` — Preview a sequence clip's audio gain; preview or workspace operation
 - `/wait-for-asset-ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.; MCP: `wait_for_asset_ready`
 - `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`

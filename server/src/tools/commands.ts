@@ -168,7 +168,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_status",
-    aliases: ["/status"],
+    aliases: ["/status", "/revisions"],
   },
   {
     command: "/copy",
@@ -448,30 +448,6 @@ const CANONICAL_COMMANDS: Command[] = [
     uiAction: "open_jobs",
   },
   {
-    command: "/revisions",
-    description: "Open forward-only project revision history",
-    example: "/revisions",
-    category: "action",
-    icon: "History",
-    size: "default",
-    variant: "zinc",
-    chevron: "down",
-    params: [],
-    uiAction: "open_revisions",
-  },
-  {
-    command: "/storage",
-    description: "Open DoltLite and content-store diagnostics",
-    example: "/storage",
-    category: "action",
-    icon: "Database",
-    size: "default",
-    variant: "zinc",
-    chevron: "down",
-    params: [],
-    uiAction: "open_diagnostics",
-  },
-  {
     command: "/sync",
     description: "Publish pending content-addressed objects",
     example: "/sync",
@@ -494,6 +470,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_provider_keys",
+    aliases: ["/keys", "/connect-x"],
   },
   {
     command: "/diagnostics",
@@ -506,6 +483,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_diagnostics",
+    aliases: ["/storage"],
   },
   {
     command: "/detect-scenes",
@@ -1285,18 +1263,6 @@ const CANONICAL_COMMANDS: Command[] = [
     uiAction: "sidebar_sort",
   },
   {
-    command: "/keys",
-    description: "Open the provider API keys / settings screen",
-    example: "/keys",
-    category: "action",
-    icon: "KeyRound",
-    size: "default",
-    variant: "zinc",
-    chevron: "down",
-    params: [],
-    uiAction: "open_provider_keys",
-  },
-  {
     command: "/archive-browse",
     description: "Open the clip archive browser, optionally with an initial search",
     example: "/archive-browse interview",
@@ -1536,33 +1502,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   // ── Character / voice commands ──
 
-  {
-    command: "/voices",
-    description: "Browse ElevenLabs voices in the speak preview",
-    example: "/voices",
-    category: "action",
-    icon: "Mic",
-    size: "default",
-    variant: "pink",
-    chevron: "down",
-    params: [],
-    uiAction: "speak_preview",
-  },
 
-  {
-    command: "/say",
-    description: "Generate speech audio from text with ElevenLabs",
-    example: "/say welcome back everyone",
-    category: "context_menu",
-    icon: "Mic",
-    size: "default",
-    variant: "pink",
-    chevron: "right",
-    params: [
-      { name: "prompt", type: "string", required: true, description: "Text to speak" },
-    ],
-    mcpTool: { tool: "generate_audio", autoInject: ["book_id"], injectParams: { model: "kie:elevenlabs/text-to-speech-turbo-2-5" } },
-  },
   {
     command: "/speak",
     description: "Generate ElevenLabs speech into the notebook from the inline voice preview",
@@ -1574,20 +1514,9 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "right",
     params: [{ name: "text", type: "string", required: false, description: "Text to synthesize" }],
     uiAction: "speak_preview",
+    aliases: ["/voices", "/say"],
   },
   // ── X connect command ──
-  {
-    command: "/connect-x",
-    description: "Connect your X (Twitter) account via browser OAuth",
-    example: "/connect-x",
-    category: "action",
-    icon: "Share2",
-    size: "default",
-    variant: "blue",
-    chevron: "right",
-    params: [],
-    uiAction: "x_connect",
-  },
   // ── Timeline player command ──
   {
     command: "/play",
