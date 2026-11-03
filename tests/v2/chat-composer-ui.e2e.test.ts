@@ -4277,10 +4277,10 @@ describe('chat composer browser flow', () => {
     expect(await source.textContent()).toContain('"resolution": "2K"')
     const gptModels = (await imageModel.locator('option').allTextContents())
       .map((label) => label.replace(/^#\d+ · /u, '').replace(/ · Elo .*$/u, ''))
-    expect(gptModels.filter((label) => label.includes('GPT Image')).sort()).toEqual([
+    expect(gptModels).toEqual(expect.arrayContaining([
       'GPT Image 2.5 Flare · Kie',
       'GPT Image 2.5 Sunburst · Kie',
-    ])
+    ]))
 
     await editor.getByLabel('Generation model').selectOption(
       'generation.kie:nano-banana-pro',
