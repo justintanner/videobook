@@ -347,12 +347,13 @@ describe("make_cover_song tool", () => {
     );
 
     expect(placements).toHaveLength(1);
+    expect(placements[0]?.makeRoom).toBe(false);
     await client.callTool({
       name: "create_notebook_cell",
       arguments: {
         book_id: BOOK_ID,
         notebook_id: notebookId,
-        cell: placements[0],
+        cell: placements[0]!.cell,
       },
     });
     const updated = fs.notebooks.read(notebookId);

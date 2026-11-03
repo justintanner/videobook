@@ -5552,7 +5552,7 @@ describe('chat composer browser flow', () => {
         timeout: MCP_ROUNDTRIP_MS,
       }).toBe(cells.length)
       const mixed = page.locator('.notebook-lane[data-lane-kind="mixed"]')
-      expect(await mixed.getAttribute('data-lane-caption')).toBe('Images · Gen · Videos · Audio · Work')
+      expect(await mixed.getAttribute('data-lane-caption')).toBe('Source videos · Gen · Images · Audio · Work')
       await expectGridWithoutSidebar(page)
       const imageLane = page.locator('.notebook-lane[data-lane-start-row="0"]')
       const fullRowPosition = await imageLane.boundingBox()
@@ -5596,7 +5596,7 @@ describe('chat composer browser flow', () => {
     }
   }, 90_000)
 
-  it('auto-arranges images on the top row and videos on the third row', async () => {
+  it('auto-arranges source videos on the top row, generators next and images on the third row', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -5631,6 +5631,7 @@ describe('chat composer browser flow', () => {
     const generationSlot = slotsById.get(fullscreenImageGenerationCellId)
     const imageSlot = slotsById.get(fullscreenImageCellId)
     const sourceImageSlot = slotsById.get(imageCellId)
+    const sourceVideoSlot = slotsById.get(videoCellId)
     const outputVideoSlot = slotsById.get(outputVideoCellId)
 
     expect(moveCall?.arguments.book_id).toBe(bookId)
@@ -5642,12 +5643,13 @@ describe('chat composer browser flow', () => {
       Number(slot!.column) >= 0 && Number(slot!.column) <= 7)).toBe(true)
     expect(slots.every((slot) =>
       Number(slot!.row) >= 0 && Number(slot!.row) <= 63)).toBe(true)
-    expect(Number(imageSlot?.row)).toBe(0)
-    expect(Number(sourceImageSlot?.row)).toBe(0)
+    expect(Number(sourceVideoSlot?.row)).toBe(0)
     expect(Number(generationSlot?.row)).toBe(1)
-    expect(Number(outputVideoSlot?.row)).toBe(2)
-    expect(Number(imageSlot?.row)).toBeLessThan(Number(generationSlot?.row))
-    expect(Number(generationSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
+    expect(Number(imageSlot?.row)).toBe(2)
+    expect(Number(sourceImageSlot?.row)).toBe(2)
+    expect(Number(outputVideoSlot?.row)).toBe(3)
+    expect(Number(generationSlot?.row)).toBeLessThan(Number(imageSlot?.row))
+    expect(Number(imageSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
       timeout: 30_000,
@@ -5672,6 +5674,7 @@ describe('chat composer browser flow', () => {
       })))
     const laneForRow = (row: number) => lanes.find((lane) =>
       row >= lane.startRow && row < lane.startRow + lane.rowCount)
+    expect(laneForRow(Number(sourceVideoSlot?.row))?.caption).toBe('Source videos')
     expect(laneForRow(Number(imageSlot?.row))?.caption).toBe('Images')
     expect(laneForRow(Number(sourceImageSlot?.row))?.caption).toBe('Images')
     expect(laneForRow(Number(generationSlot?.row))?.caption).toBe('Gen')

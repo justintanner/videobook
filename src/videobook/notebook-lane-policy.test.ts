@@ -2,58 +2,115 @@ import type { NotebookCellType } from 'videobook-engine'
 import { describe, expect, it } from 'vitest'
 import {
   groupNotebookLaneSections,
-  notebookLaneFamily,
-  notebookLaneFamilyLabel,
-  NOTEBOOK_LANE_FAMILY_LABELS,
-  NOTEBOOK_LANE_FAMILY_ORDER,
   summarizeNotebookLaneRows,
-  type NotebookLaneCell,
 } from './notebook-lane-policy'
+import {
+  NOTEBOOK_LANE_LABELS,
+  NOTEBOOK_LANE_ORDER,
+  notebookCellLane,
+  notebookLaneLabel,
+  notebookTypeLane,
+  type NotebookLaneCell,
+} from '../../server/src/notebook-lanes'
+
+let nextId = 0
 
 function cell(
   type: NotebookCellType,
   row: number,
   column = 0,
+  inputs?: Record<string, unknown>,
 ): NotebookLaneCell {
-  return { type, slot: { row, column } }
+  nextId += 1
+  return {
+    id: `cell-${String(nextId).padStart(3, '0')}`,
+    type,
+    slot: { row, column },
+    ...(inputs ? { inputs } : {}),
+  }
 }
 
 describe('notebook lane family policy', () => {
-  it('maps every catalog type onto the Arrange family names', () => {
-    expect(NOTEBOOK_LANE_FAMILY_ORDER.map(notebookLaneFamilyLabel)).toEqual([
-      'Images',
+  it('orders Source videos, Gen, Images, Videos, Audio and Work', () => {
+    expect(NOTEBOOK_LANE_ORDER.map(notebookLaneLabel)).toEqual([
+      'Source videos',
       'Gen',
+      'Images',
       'Videos',
       'Audio',
       'Work',
     ])
-    expect(notebookLaneFamily('image')).toBe('image')
-    expect(notebookLaneFamily('prompt')).toBe('gen')
-    expect(notebookLaneFamily('generate_audio')).toBe('gen')
-    expect(notebookLaneFamily('generate_image')).toBe('gen')
-    expect(notebookLaneFamily('generate_video')).toBe('gen')
-    expect(notebookLaneFamily('video')).toBe('video')
-    expect(notebookLaneFamily('concat')).toBe('video')
-    expect(notebookLaneFamily('splice')).toBe('video')
-    expect(notebookLaneFamily('split_video')).toBe('video')
-    expect(notebookLaneFamily('audio')).toBe('audio')
-    expect(notebookLaneFamily('extract_audio')).toBe('audio')
-    expect(notebookLaneFamily('analyze')).toBe('work')
-    expect(notebookLaneFamily('analysis')).toBe('work')
-    expect(notebookLaneFamily('character')).toBe('work')
-    expect(NOTEBOOK_LANE_FAMILY_LABELS[notebookLaneFamily('image')]).toBe('Images')
-    expect(NOTEBOOK_LANE_FAMILY_LABELS[notebookLaneFamily('prompt')]).toBe('Gen')
-    expect(NOTEBOOK_LANE_FAMILY_LABELS[notebookLaneFamily('video')]).toBe('Videos')
-    expect(NOTEBOOK_LANE_FAMILY_LABELS[notebookLaneFamily('audio')]).toBe('Audio')
-    expect(NOTEBOOK_LANE_FAMILY_LABELS[notebookLaneFamily('analyze')]).toBe('Work')
+    expect(notebookTypeLane('video')).toBe('source')
+    expect(notebookTypeLane('image')).toBe('image')
+    expect(notebookTypeLane('prompt')).toBe('gen')
+    expect(notebookTypeLane('generate_audio')).toBe('gen')
+    expect(notebookTypeLane('generate_image')).toBe('gen')
+    expect(notebookTypeLane('generate_video')).toBe('gen')
+    expect(notebookTypeLane('goal')).toBe('gen')
+    expect(notebookTypeLane('concat')).toBe('video')
+    expect(notebookTypeLane('splice')).toBe('video')
+    expect(notebookTypeLane('split_video')).toBe('video')
+    expect(notebookTypeLane('audio')).toBe('audio')
+    expect(notebookTypeLane('extract_audio')).toBe('audio')
+    expect(notebookTypeLane('analyze')).toBe('work')
+    expect(notebookTypeLane('analysis')).toBe('work')
+    expect(notebookTypeLane('character')).toBe('work')
+    expect(notebookTypeLane('post')).toBe('work')
+    expect(NOTEBOOK_LANE_LABELS[notebookTypeLane('video')]).toBe('Source videos')
+    expect(NOTEBOOK_LANE_LABELS[notebookTypeLane('prompt')]).toBe('Gen')
+    expect(NOTEBOOK_LANE_LABELS[notebookTypeLane('image')]).toBe('Images')
   })
 
-  it('labels one Images/Gen/Videos row each as a/b/c without moving slots', () => {
+  it('keeps imported videos and their clips as sources and generated or edited videos as Videos', () => {
+    const upload = cell('video', 0, 0)
+    const download = cell('video', 0, 1, { sourceOperation: 'download_video' })
+    const clip = cell('video', 0, 2, { mediaRole: 'cut-clip-output', sourceCellId: upload.id })
+    const extracted = cell('video', 0, 3, { sourceOperation: 'extract_video_clip' })
+    const generator = cell('generate_video', 1, 0)
+    const generated = cell('video', 3, 0, { mediaRole: 'generate-video-output', producerCellId: generator.id })
+    const generatedClip = cell('video', 3, 1, { mediaRole: 'cut-clip-output', sourceCellId: generated.id })
+    const splice = cell('video', 3, 2, { sourceOperation: 'splice_video' })
+    const captioned = cell('video', 3, 3, { sourceOperation: 'caption_video' })
+    const coldOpen = cell('video', 3, 4, { sourceOperation: 'edit_cold_open' })
+    const sourceCopy = cell('video', 0, 4, { sourceOperation: 'duplicate_asset', sourceArtifactId: 'download-art' })
+    const orphanCopy = cell('video', 3, 5, { sourceOperation: 'duplicate_asset', sourceArtifactId: 'gone' })
     const cells = [
-      cell('image', 0, 1),
+      upload,
+      { ...download, outputArtifactId: 'download-art' },
+      clip,
+      extracted,
+      generator,
+      generated,
+      generatedClip,
+      splice,
+      captioned,
+      coldOpen,
+      sourceCopy,
+      orphanCopy,
+    ]
+    const lanes = Object.fromEntries(cells.map((item) => [item.slot.row * 8 + item.slot.column, notebookCellLane(item, cells)]))
+    expect(lanes).toEqual({
+      0: 'source',
+      1: 'source',
+      2: 'source',
+      3: 'source',
+      4: 'source',
+      8: 'gen',
+      24: 'video',
+      25: 'video',
+      26: 'video',
+      27: 'video',
+      28: 'video',
+      29: 'video',
+    })
+  })
+
+  it('labels one Source videos/Gen/Images row each as a/b/c without moving slots', () => {
+    const cells = [
+      cell('video', 0, 1),
       cell('generate_video', 1, 0),
       cell('prompt', 1, 2),
-      cell('video', 2, 0),
+      cell('image', 2, 0),
     ]
     const rows = summarizeNotebookLaneRows(cells, 3)
     expect(rows.map((row) => ({
@@ -64,9 +121,9 @@ describe('notebook lane family policy', () => {
       row: row.row,
     }))).toEqual([
       {
-        caption: 'Images',
+        caption: 'Source videos',
         continuation: false,
-        family: 'image',
+        family: 'source',
         kind: 'homogeneous',
         row: 0,
       },
@@ -78,9 +135,9 @@ describe('notebook lane family policy', () => {
         row: 1,
       },
       {
-        caption: 'Videos',
+        caption: 'Images',
         continuation: false,
-        family: 'video',
+        family: 'image',
         kind: 'homogeneous',
         row: 2,
       },
@@ -105,9 +162,9 @@ describe('notebook lane family policy', () => {
       cell('video', 0, 7),
     ], 3)
     expect(rows[0]).toMatchObject({
-      caption: 'Images · Videos',
+      caption: 'Source videos · Images',
       continuation: false,
-      families: ['image', 'video'],
+      families: ['source', 'image'],
       family: null,
       kind: 'mixed',
       row: 0,
@@ -117,16 +174,16 @@ describe('notebook lane family policy', () => {
     expect(rows[2]?.kind).toBe('empty')
   })
 
-  it('shows Images/Gen/Videos starter guides only on an entirely empty book', () => {
+  it('shows Source videos/Gen/Images starter guides only on an entirely empty book', () => {
     const empty = summarizeNotebookLaneRows([], 4)
     expect(empty.map((row) => ({
       caption: row.caption,
       kind: row.kind,
       row: row.row,
     }))).toEqual([
-      { caption: 'Images', kind: 'starter', row: 0 },
+      { caption: 'Source videos', kind: 'starter', row: 0 },
       { caption: 'Gen', kind: 'starter', row: 1 },
-      { caption: 'Videos', kind: 'starter', row: 2 },
+      { caption: 'Images', kind: 'starter', row: 2 },
       { caption: '', kind: 'empty', row: 3 },
     ])
 

@@ -19,12 +19,12 @@ import {
   planNotebookArrangement,
   revealNotebookArrangement,
 } from '../../src/videobook/notebook-auto-arrange.js'
+import { summarizeNotebookLaneRows } from '../../src/videobook/notebook-lane-policy.js'
 import {
-  notebookLaneFamily,
-  notebookLaneFamilyLabel,
-  NOTEBOOK_LANE_FAMILY_ORDER,
-  summarizeNotebookLaneRows,
-} from '../../src/videobook/notebook-lane-policy.js'
+  notebookLaneLabel,
+  NOTEBOOK_LANE_ORDER,
+  notebookTypeLane,
+} from '../../server/src/notebook-lanes.js'
 import { arrangeGoalNotebook } from '../../server/src/notebook-goal-layout.js'
 
 function cell(
@@ -95,7 +95,7 @@ function value<T>(
 }
 
 function familyOf(type: NotebookCellType) {
-  return notebookLaneFamily(type)
+  return notebookTypeLane(type)
 }
 
 describe('notebook family-lane auto-arrange', () => {
@@ -155,13 +155,15 @@ describe('notebook family-lane auto-arrange', () => {
     const slots = assignmentMap(planNotebookArrangement(source))
     expect(slots.get('timeline')).toEqual({ row: 1, column: 0 })
     expect([...slots].filter(([id]) => id !== 'timeline').every(([, slot]) => slot.row !== 1)).toBe(true)
-    expect(slots.get('image-8')).toEqual({ row: 2, column: 0 })
-    expect(slots.get('video')).toEqual({ row: 3, column: 0 })
+    expect(slots.get('video')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('image-0')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('image-8')).toEqual({ row: 3, column: 0 })
+    expect(slots.get('audio')).toEqual({ row: 4, column: 0 })
     const arranged = applyAssignments(source, slots)
     expect(planNotebookArrangement(arranged)).toEqual(planNotebookArrangement(source))
   })
 
-  it('packs Images, Gen, and Videos into contiguous a/b/c rows', () => {
+  it('packs Source videos, Gen, and Images into contiguous a/b/c rows', () => {
     const source = document([
       cell('vid-b', 8, 11, 'video'),
       cell('img-b', 4, 10, 'image'),
@@ -174,15 +176,37 @@ describe('notebook family-lane auto-arrange', () => {
     const slots = assignmentMap(planned)
 
     expect(planned.ok && planned.rowCount).toBe(3)
-    expect(slots.get('img-a')).toEqual({ row: 0, column: 0 })
-    expect(slots.get('img-b')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('vid-a')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('vid-b')).toEqual({ row: 0, column: 1 })
     expect(slots.get('prompt')).toEqual({ row: 1, column: 0 })
     expect(slots.get('gen')).toEqual({ row: 1, column: 1 })
-    expect(slots.get('vid-a')).toEqual({ row: 2, column: 0 })
-    expect(slots.get('vid-b')).toEqual({ row: 2, column: 1 })
+    expect(slots.get('img-a')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('img-b')).toEqual({ row: 2, column: 1 })
     const arranged = applyAssignments(source, slots)
     expect(summarizeNotebookLaneRows(arranged.cells, 3).map((row) => row.caption))
-      .toEqual(['Images', 'Gen', 'Videos'])
+      .toEqual(['Source videos', 'Gen', 'Images'])
+  })
+
+  it('puts generated and edited videos after Images while source videos keep the top row', () => {
+    const source = document([
+      { ...cell('generated', 0, 0, 'video'), inputs: { mediaRole: 'generate-video-output', producerCellId: 'gen' } },
+      cell('gen', 0, 1, 'generate_video'),
+      { ...cell('download', 2, 4, 'video'), inputs: { sourceOperation: 'download_video' } },
+      { ...cell('splice', 0, 2, 'video'), inputs: { sourceOperation: 'splice_video' } },
+      cell('frame', 1, 0, 'image'),
+      { ...cell('clip', 3, 0, 'video'), inputs: { mediaRole: 'cut-clip-output', sourceCellId: 'download' } },
+      cell('post', 4, 0, 'post'),
+    ])
+    const slots = assignmentMap(planNotebookArrangement(source))
+    expect(slots.get('download')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('clip')).toEqual({ row: 0, column: 1 })
+    expect(slots.get('gen')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('frame')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('generated')).toEqual({ row: 3, column: 0 })
+    expect(slots.get('splice')).toEqual({ row: 3, column: 1 })
+    expect(slots.get('post')).toEqual({ row: 4, column: 0 })
+    expect(summarizeNotebookLaneRows(applyAssignments(source, slots).cells, 5).map((row) => row.caption))
+      .toEqual(['Source videos', 'Gen', 'Images', 'Videos', 'Work'])
   })
 
   it('classifies every generate_* type plus prompt, media, edit, audio, and work', () => {
@@ -207,27 +231,28 @@ describe('notebook family-lane auto-arrange', () => {
     expect(familyOf('generate_audio')).toBe('gen')
     expect(familyOf('generate_image')).toBe('gen')
     expect(familyOf('generate_video')).toBe('gen')
-    expect(NOTEBOOK_LANE_FAMILY_ORDER.map(notebookLaneFamilyLabel)).toEqual([
-      'Images',
+    expect(NOTEBOOK_LANE_ORDER.map(notebookLaneLabel)).toEqual([
+      'Source videos',
       'Gen',
+      'Images',
       'Videos',
       'Audio',
       'Work',
     ])
-    expect(slots.get('image')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('video')).toEqual({ row: 0, column: 0 })
     expect(slots.get('generate_video')).toEqual({ row: 1, column: 0 })
     expect(slots.get('generate_image')).toEqual({ row: 1, column: 1 })
     expect(slots.get('generate_audio')).toEqual({ row: 1, column: 2 })
     expect(slots.get('prompt')).toEqual({ row: 1, column: 3 })
-    expect(slots.get('split_video')).toEqual({ row: 2, column: 0 })
-    expect(slots.get('splice')).toEqual({ row: 2, column: 1 })
-    expect(slots.get('concat')).toEqual({ row: 2, column: 2 })
-    expect(slots.get('video')).toEqual({ row: 2, column: 3 })
-    expect(slots.get('audio')).toEqual({ row: 3, column: 0 })
-    expect(slots.get('extract_audio')).toEqual({ row: 3, column: 1 })
-    expect(slots.get('analyze')).toEqual({ row: 4, column: 0 })
-    expect(slots.get('analysis')).toEqual({ row: 4, column: 1 })
-    expect(slots.get('character')).toEqual({ row: 4, column: 2 })
+    expect(slots.get('image')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('split_video')).toEqual({ row: 3, column: 0 })
+    expect(slots.get('splice')).toEqual({ row: 3, column: 1 })
+    expect(slots.get('concat')).toEqual({ row: 3, column: 2 })
+    expect(slots.get('audio')).toEqual({ row: 4, column: 0 })
+    expect(slots.get('extract_audio')).toEqual({ row: 4, column: 1 })
+    expect(slots.get('analyze')).toEqual({ row: 5, column: 0 })
+    expect(slots.get('analysis')).toEqual({ row: 5, column: 1 })
+    expect(slots.get('character')).toEqual({ row: 5, column: 2 })
   })
 
   it('keeps leftover family columns empty so the next family starts on a new row', () => {
@@ -238,9 +263,9 @@ describe('notebook family-lane auto-arrange', () => {
     ])
     const slots = assignmentMap(planNotebookArrangement(source))
 
-    expect(slots.get('img')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('vid')).toEqual({ row: 0, column: 0 })
     expect(slots.get('prompt')).toEqual({ row: 1, column: 0 })
-    expect(slots.get('vid')).toEqual({ row: 2, column: 0 })
+    expect(slots.get('img')).toEqual({ row: 2, column: 0 })
     expect([...slots.values()].some((slot) =>
       slot.row === 0 && slot.column > 0)).toBe(false)
   })
@@ -286,15 +311,15 @@ describe('notebook family-lane auto-arrange', () => {
 
     expect(planned.ok && planned.rowCount).toBe(5)
     for (let index = 0; index < 8; index += 1) {
-      expect(slots.get(images[index]!.id)).toEqual({ row: 0, column: index })
+      expect(slots.get(videos[index]!.id)).toEqual({ row: 0, column: index })
     }
-    expect(slots.get('img-08')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('vid-08')).toEqual({ row: 1, column: 0 })
     expect(slots.get('prompt')).toEqual({ row: 2, column: 0 })
     expect(slots.get('gen')).toEqual({ row: 2, column: 1 })
     for (let index = 0; index < 8; index += 1) {
-      expect(slots.get(videos[index]!.id)).toEqual({ row: 3, column: index })
+      expect(slots.get(images[index]!.id)).toEqual({ row: 3, column: index })
     }
-    expect(slots.get('vid-08')).toEqual({ row: 4, column: 0 })
+    expect(slots.get('img-08')).toEqual({ row: 4, column: 0 })
     const arranged = applyAssignments(document([
       ...images,
       ...gens,
@@ -304,11 +329,11 @@ describe('notebook family-lane auto-arrange', () => {
       caption: row.caption,
       continuation: row.continuation,
     }))).toEqual([
+      { caption: 'Source videos', continuation: false },
+      { caption: 'Source videos', continuation: true },
+      { caption: 'Gen', continuation: false },
       { caption: 'Images', continuation: false },
       { caption: 'Images', continuation: true },
-      { caption: 'Gen', continuation: false },
-      { caption: 'Videos', continuation: false },
-      { caption: 'Videos', continuation: true },
     ])
   })
 
@@ -357,8 +382,8 @@ describe('notebook family-lane auto-arrange', () => {
       [edge('img', 'vid'), edge('vid', 'img')],
     ))
     const slots = assignmentMap(cyclic)
-    expect(slots.get('img')).toEqual({ row: 0, column: 0 })
-    expect(slots.get('vid')).toEqual({ row: 1, column: 0 })
+    expect(slots.get('vid')).toEqual({ row: 0, column: 0 })
+    expect(slots.get('img')).toEqual({ row: 1, column: 0 })
 
     const missing = planNotebookArrangement(document(
       [cell('a', 0, 0, 'image')],
@@ -502,9 +527,9 @@ describe('notebook family-lane auto-arrange', () => {
       expect(planned.ok).toBe(true)
       if (!planned.ok) return
       expect(assignmentMap(planned)).toEqual(new Map([
-        [image.id, { row: 0, column: 0 }],
+        [video.id, { row: 0, column: 0 }],
         [generateImage.id, { row: 1, column: 0 }],
-        [video.id, { row: 2, column: 0 }],
+        [image.id, { row: 2, column: 0 }],
       ]))
       expect(before.cells.find((item) => item.id === generateImage.id)?.prompt)
         .toBe(seededPrompt)

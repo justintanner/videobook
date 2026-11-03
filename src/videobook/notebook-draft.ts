@@ -23,11 +23,13 @@ import {
   type NotebookRouteTag,
 } from './notebook-route-tags'
 import { generationInputTarget } from '../../server/src/generation-input-policy'
+import { notebookCellLane, type NotebookLane } from '../../server/src/notebook-lanes'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
+  lane?: NotebookLane
   label?: string
   subtitle: string
   slot: NotebookCell['slot']
@@ -196,6 +198,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
       position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
+        lane: notebookCellLane(cell, document.cells),
         ...(cell.label === undefined ? {} : { label: cell.label }),
         subtitle: isPublishedPostCell(cell)
           ? publishedPostSubtitle()

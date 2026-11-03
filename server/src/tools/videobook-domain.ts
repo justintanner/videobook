@@ -20,6 +20,7 @@ import {
   notebookGridTag,
 } from "videobook-engine";
 import { slotRight } from "../notebook-placement.js";
+import { openNotebookRow } from "../notebook-lanes.js";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
@@ -631,6 +632,19 @@ async function notebookGenerationPlan(
     updatedAt: now,
   });
   return enriched;
+}
+
+function withRoomForCell(
+  notebook: NotebookDocument,
+  cell: NotebookCell,
+): NotebookDocument {
+  const footprint = new Set(notebookCellOccupiedSlots(cell).map((slot) => `${slot.row}:${slot.column}`));
+  const taken = notebookOccupiedSlots(notebook.cells).some((slot) => footprint.has(`${slot.row}:${slot.column}`));
+  if (!taken) return notebook;
+  if (notebook.cells.some((existing) => existing.type === "timeline" && existing.slot.row === cell.slot.row)) {
+    throw new Error(`${notebookGridTag(cell.slot)} is in a Timeline row; choose another row`);
+  }
+  return { ...notebook, cells: openNotebookRow(notebook.cells, cell.slot.row) };
 }
 
 function cellFromInput(
@@ -1398,13 +1412,14 @@ export function videobookDomainDefs(
     },
     {
       name: "create_notebook_cell",
-      description: "Create a UUIDv7 notebook cell",
+      description: "Create a UUIDv7 notebook cell; make_room first moves a taken slot's row and the rows below it down one",
       scope: "book",
       schema: {
         ...bookSchema,
         notebook_id: z.string().uuid(),
         cell: cellInputSchema,
         expected_revision: z.string().min(1).optional(),
+        make_room: z.boolean().optional(),
       },
       handler: async (args) => {
         if ((args.cell as CellInput).type === "post") return failure("Use post to freeze source media and create a Post cell");
@@ -1418,7 +1433,7 @@ export function videobookDomainDefs(
             engine,
             String(args.notebook_id),
             "create_notebook_cell",
-            (notebook) => {
+            (current) => {
               if (
                 typeof args.expected_revision === "string"
                 && args.expected_revision !== engine.head
@@ -1427,6 +1442,7 @@ export function videobookDomainDefs(
                   `Stale notebook revision: expected ${args.expected_revision}`,
                 );
               }
+            const notebook = args.make_room === true ? withRoomForCell(current, cell) : current;
             cell = normalizeCellActionFields(cell, notebook);
             requestedCell = cell;
             cell = seedNotebookStickySettings(cell, readNotebookStickySettings(engine, String(args.notebook_id)));
@@ -1608,7 +1624,7 @@ export function videobookDomainDefs(
     {
       name: "relayout_notebook",
       description:
-        "Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.",
+        "Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.",
       scope: "book",
       recordsOwnActivity: true,
       schema: {

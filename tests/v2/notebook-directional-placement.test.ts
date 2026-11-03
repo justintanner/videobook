@@ -43,11 +43,7 @@ import {
 } from '../../server/src/queue.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
-import {
-  allocateNotebookVideoGenerationSlots,
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-} from '../../src/videobook/notebook-grid.js'
+import { planNotebookArrangement } from '../../src/videobook/notebook-auto-arrange.js'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined()
@@ -61,7 +57,7 @@ function value<T>(
   return result.value
 }
 
-describe('directional canvas placement', () => {
+describe('lane canvas placement', () => {
   let rootDir: string
   let books: BookManager
 
@@ -79,47 +75,78 @@ describe('directional canvas placement', () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
-  it('packs generation waves under the image band and frame work beside sources', () => {
-    const images = [
-      { type: 'image', slot: { row: 0, column: 0 } },
-      { type: 'image', slot: { row: 0, column: 1 } },
-      { type: 'image', slot: { row: 0, column: 2 } },
-      { type: 'image', slot: { row: 0, column: 3 } },
-    ]
-    const first = allocateNotebookVideoGenerationSlots(images)
-    expect(first).toEqual({
-      tile: { row: 1, column: 0 },
-      output: { row: 2, column: 0 },
+  it('opens the generator lane between source videos and images with make_room', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'lane-make-room',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const invoke = async (name: string, args: Record<string, unknown>) =>
+      await withBookContext(
+        { bookId: created.bookId, engine },
+        () => byName.get(name)!.handler({ book_id: created.bookId, ...args }),
+      )
+    const notebookId = engine.notebooks.list()[0]!.id
+    const source = engine.notebooks.createCell({ type: 'video', label: 'source', slot: { row: 0, column: 0 } })
+    const frames = [0, 1].map((column) => engine.notebooks.createCell({
+      type: 'image',
+      label: `frame-${column}`,
+      slot: { row: 1, column },
+    }))
+    const timeline = engine.notebooks.createCell({ type: 'timeline', label: 'timeline', slot: { row: 2, column: 0 } })
+    const generated = engine.notebooks.createCell({
+      type: 'video',
+      label: 'generated',
+      slot: { row: 3, column: 0 },
+      inputs: { mediaRole: 'generate-video-output', producerCellId: source.id },
     })
-    // Sibling generation joins the wave row beside the first tile, its
-    // output directly beneath — never drifting right of the sources band.
-    const second = allocateNotebookVideoGenerationSlots([
-      ...images,
-      { type: 'generate_video', slot: first.tile },
-      { type: 'video', slot: first.output },
-    ])
-    expect(second).toEqual({
-      tile: { row: 1, column: 1 },
-      output: { row: 2, column: 1 },
+    const before = value(engine.notebooks.read(notebookId))
+    value(await engine.notebooks.write({ ...before, cells: [source, ...frames, timeline, generated], edges: [] }))
+
+    const occupied = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: { type: 'generate_video', slot: { row: 1, column: 0 }, prompt: '' },
     })
+    expect(occupied.isError).toBe(true)
 
-    expect(nextNotebookHorizontalGenerationSlot(
-      [{ type: 'video', slot: { row: 2, column: 0 } }],
-      [{ row: 2, column: 0 }],
-    )).toEqual({ row: 2, column: 1 })
+    const tile = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      make_room: true,
+      cell: { type: 'generate_video', slot: { row: 1, column: 0 }, prompt: '' },
+    })) as { id: string, address: string }
+    expect(tile.address).toBe('@b1')
+    const after = value(engine.notebooks.read(notebookId))
+    const slotOf = (id: string) => after.cells.find((cell) => cell.id === id)?.slot
+    expect(slotOf(tile.id)).toEqual({ row: 1, column: 0 })
+    expect(slotOf(source.id)).toEqual({ row: 0, column: 0 })
+    expect(frames.map((frame) => slotOf(frame.id))).toEqual([{ row: 3, column: 0 }, { row: 3, column: 1 }])
+    expect(slotOf(timeline.id)).toEqual({ row: 2, column: 0 })
+    expect(slotOf(generated.id)).toEqual({ row: 4, column: 0 })
 
-    // A derived image source starts a lane straight down its own column.
-    expect(nextNotebookVideoGenerationSlot(
-      [
-        { type: 'image', slot: { row: 3, column: 2 } },
-        { type: 'generate_video', slot: { row: 1, column: 0 } },
-        { type: 'video', slot: { row: 2, column: 0 } },
-      ],
-      [{ row: 3, column: 2 }],
-    )).toEqual({ row: 4, column: 2 })
+    const free = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      make_room: true,
+      cell: { type: 'generate_image', slot: { row: 1, column: 1 }, prompt: '' },
+    })) as { address: string }
+    expect(free.address).toBe('@b2')
+    const unmoved = value(engine.notebooks.read(notebookId))
+    expect(frames.map((frame) => unmoved.cells.find((cell) => cell.id === frame.id)?.slot))
+      .toEqual([{ row: 3, column: 0 }, { row: 3, column: 1 }])
+
+    const timelineRow = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      make_room: true,
+      cell: { type: 'image', slot: { row: 2, column: 3 } },
+    })
+    expect(timelineRow.isError).toBe(true)
+    expect(timelineRow.content[0]?.text).toContain('Timeline row')
   })
 
-  it('creates generate_video with a video output cell directly below', async () => {
+  it('allocates generate_video outputs in the Videos lane after the Images lane', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -143,27 +170,24 @@ describe('directional canvas placement', () => {
       id: string
     }>
     const notebookId = notebooks[0]!.id
+    for (const cell of [
+      { type: 'video', slot: { row: 0, column: 0 } },
+      { type: 'image', slot: { row: 2, column: 0 } },
+    ]) {
+      resultJson(await invoke('create_notebook_cell', { notebook_id: notebookId, cell }))
+    }
     const generated = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
         type: 'generate_video',
         label: 'gen-video',
-        slot: { row: 0, column: 0 },
+        slot: { row: 1, column: 3 },
         prompt: 'a cat walks',
       },
     })) as {
       id: string
-      output_cell?: {
-        id: string
-        type: string
-        slot: { row: number; column: number }
-        inputs?: Record<string, unknown>
-      }
-      output_edge?: {
-        source: string
-        target: string
-        targetInput: string
-      }
+      output_cell?: unknown
+      output_edge?: unknown
     }
 
     expect(generated.output_cell).toBeUndefined()
@@ -177,7 +201,7 @@ describe('directional canvas placement', () => {
     )
     expect(allocated.outputCell).toMatchObject({
       type: 'video',
-      slot: { row: 1, column: 0 },
+      slot: { row: 3, column: 0 },
       inputs: {
         mediaRole: 'generate-video-output',
         producerCellId: generated.id,
@@ -188,10 +212,17 @@ describe('directional canvas placement', () => {
       target: allocated.outputCell.id,
       targetInput: 'media',
     })
+    const second = allocateGenerateVideoResult(
+      engine,
+      allocated.document,
+      generated.id,
+      { runId: 'run-video-2', acceptedAt: '2026-08-22T00:00:01.000Z' },
+    )
+    expect(second.outputCell.slot).toEqual({ row: 3, column: 1 })
 
     const tile = createdNotebook.cells.find((cell) => cell.id === generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(allocated.outputCell.slot).toEqual({ row: 1, column: 0 })
+    expect(tile.slot).toEqual({ row: 1, column: 3 })
   })
 
   it('resolves generated video from output cell and legacy inline artifact', async () => {
@@ -259,7 +290,7 @@ describe('directional canvas placement', () => {
     expect(modern.outputArtifactId).toBeUndefined()
   })
 
-  it('relayouts a bam-shaped notebook into directional compact form idempotently', async () => {
+  it('relayouts a bam-shaped notebook into the Clean lanes idempotently', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -310,6 +341,12 @@ describe('directional canvas placement', () => {
       slot: { row: 2, column: 2 },
       inputs: { mediaRole: 'extract-frame-output', frameMode: 'first' },
     })
+    const source = engine.notebooks.createCell({
+      type: 'video',
+      label: 'source',
+      slot: { row: 5, column: 6 },
+      inputs: { sourceOperation: 'download_video' },
+    })
 
     const edges = [
       ...generateVideos.flatMap((tile, index) =>
@@ -341,6 +378,7 @@ describe('directional canvas placement', () => {
         ...generateVideos,
         extractA,
         extractB,
+        source,
       ],
       edges,
     }))
@@ -353,47 +391,22 @@ describe('directional canvas placement', () => {
     expect(first.changed).toBe(true)
 
     const after = value(engine.notebooks.read(notebook.id))
-    const generateTiles = after.cells
-      .filter((cell) => cell.type === 'generate_video')
-      .sort((left, right) => left.slot.row - right.slot.row
-        || left.slot.column - right.slot.column)
-    expect(generateTiles).toHaveLength(5)
-    for (const tile of generateTiles) {
+    expect(after.cells.find((cell) => cell.id === source.id)?.slot).toEqual({ row: 0, column: 0 })
+    expect(generateVideos.map((tile) => after.cells.find((cell) => cell.id === tile.id)?.slot))
+      .toEqual([0, 1, 2, 3, 4].map((column) => ({ row: 1, column })))
+    for (const tile of generateVideos) {
       const output = findGenerateVideoOutput(after, tile.id)
       expect(output).not.toBeNull()
-      expect(output!.outputCell.slot.column).toBe(tile.slot.column)
-      expect(output!.outputCell.slot.row).toBe(tile.slot.row + 1)
+      expect(output!.outputCell.slot.row).toBe(3)
       expect(output!.outputCell.outputArtifactId).toBeTruthy()
-      expect(tile.outputArtifactId).toBeUndefined()
-      expect(tile.slot.column).toBeLessThan(9)
+      expect(after.cells.find((cell) => cell.id === tile.id)?.outputArtifactId).toBeUndefined()
     }
-    expect(Math.max(...after.cells.map((cell) => cell.slot.column)))
-      .toBeLessThan(9)
+    expect([...images, extractA, extractB].map((cell) => after.cells.find((candidate) => candidate.id === cell.id)?.slot))
+      .toEqual([0, 1, 2, 3, 4, 5].map((column) => ({ row: 2, column })))
     expect(after.edges.length).toBe(originalEdgeCount + 5)
-
-    const sourceImages = after.cells
-      .filter((cell) => cell.type === 'image'
-        && cell.inputs?.mediaRole !== 'extract-frame-output')
-      .sort((left, right) => left.slot.column - right.slot.column)
-    expect(sourceImages.map((cell) => cell.slot)).toEqual([
-      { row: 0, column: 0 },
-      { row: 0, column: 1 },
-      { row: 0, column: 2 },
-      { row: 0, column: 3 },
-    ])
-
-    for (const extract of after.cells.filter((cell) =>
-      cell.inputs?.mediaRole === 'extract-frame-output')) {
-      const sourceEdge = after.edges.find((edge) =>
-        edge.target === extract.id && edge.targetInput === 'segment')
-      expect(sourceEdge).toBeTruthy()
-      const sourceCell = after.cells.find((cell) => cell.id === sourceEdge!.source)!
-      const videoAnchor = sourceCell.type === 'generate_video'
-        ? findGenerateVideoOutput(after, sourceCell.id)!.outputCell
-        : sourceCell
-      expect(extract.slot.row).toBe(videoAnchor.slot.row)
-      expect(extract.slot.column).toBeGreaterThan(videoAnchor.slot.column)
-    }
+    const clean = planNotebookArrangement(after)
+    expect(clean.ok && new Map(clean.slots.map(({ id, row, column }) => [id, { row, column }])))
+      .toEqual(new Map(after.cells.map((cell) => [cell.id, cell.slot])))
 
     const secondDoc = relayoutNotebookDocument(engine, after)
     expect(notebookDocumentsEqual(after, secondDoc)).toBe(true)
@@ -408,7 +421,7 @@ describe('directional canvas placement', () => {
     expect(second.edge_count).toBe(after.edges.length)
   })
 
-  it('matches the hand-tuned bam default layout (golden fixture)', async () => {
+  it('relays the hand-tuned bam notebook out exactly as Clean arranges it', async () => {
     const fixture = JSON.parse(readFileSync(
       join(
         dirname(fileURLToPath(import.meta.url)),
@@ -442,34 +455,21 @@ describe('directional canvas placement', () => {
       engine,
       migrateLegacyExtractFrameCells(collapseLegacyExtractPairs(document)),
     )
-    const slotByUserAddress = new Map(fixture.cells.map((cell) => [
-      `@${String.fromCharCode(97 + cell.slot.row)}${cell.slot.column + 1}`,
-      cell.id,
-    ]))
-    const relaidAddress = (userAddress: string): string => {
-      const cellId = slotByUserAddress.get(userAddress)!
-      const cell = relaid.cells.find((candidate) => candidate.id === cellId)!
-      return `@${String.fromCharCode(97 + cell.slot.row)}${cell.slot.column + 1}`
-    }
-
     expect(relaid.cells.some((cell) =>
       cell.operation === 'extract_frame')).toBe(false)
     expect(relaid.cells.filter((cell) =>
       cell.inputs?.mediaRole === 'extract-frame-output')).toHaveLength(2)
-    for (const stable of [
-      '@a1', '@a2', '@a3', '@a4',
-      '@b1', '@b2', '@b3',
-      '@c1', '@c2', '@c3',
-    ]) {
-      expect(relaidAddress(stable), `cell placed at ${stable} by hand`)
-        .toBe(stable)
-    }
-    expect(relaidAddress('@d3')).toBe('@c4')
-    expect(relaidAddress('@e3')).toBe('@d4')
-    expect(relaidAddress('@f3')).toBe('@e4')
-    expect(relaidAddress('@e5')).toBe('@e5')
-    expect(relaidAddress('@f5')).toBe('@f5')
-    expect(relaidAddress('@g5')).toBe('@g5')
+    const rowsByType = (type: string) => [...new Set(relaid.cells
+      .filter((cell) => cell.type === type)
+      .map((cell) => cell.slot.row))]
+    expect(rowsByType('generate_video')).toEqual([0])
+    expect(rowsByType('image')).toEqual([1])
+    expect(rowsByType('video')).toEqual([2])
+    expect(relaid.cells.filter((cell) => cell.type === 'image')).toHaveLength(6)
+    expect(planNotebookArrangement(relaid)).toMatchObject({ ok: true, rowCount: 3 })
+    const clean = planNotebookArrangement(relaid)
+    expect(clean.ok && new Map(clean.slots.map(({ id, row, column }) => [id, { row, column }])))
+      .toEqual(new Map(relaid.cells.map((cell) => [cell.id, cell.slot])))
 
     const again = relayoutNotebookDocument(engine, relaid)
     expect(notebookDocumentsEqual(relaid, again)).toBe(true)
@@ -600,7 +600,7 @@ describe('directional canvas placement', () => {
     expect(second.outputCell.id).toBe(first.outputCell.id)
   })
 
-  it('creates generate_image with an image output cell to the right', async () => {
+  it('allocates a generate_image output in the Images lane', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -634,17 +634,8 @@ describe('directional canvas placement', () => {
       },
     })) as {
       id: string
-      output_cell?: {
-        id: string
-        type: string
-        slot: { row: number; column: number }
-        inputs?: Record<string, unknown>
-      }
-      output_edge?: {
-        source: string
-        target: string
-        targetInput: string
-      }
+      output_cell?: unknown
+      output_edge?: unknown
     }
 
     expect(generated.output_cell).toBeUndefined()
@@ -658,7 +649,7 @@ describe('directional canvas placement', () => {
     )
     expect(allocated.outputCell).toMatchObject({
       type: 'image',
-      slot: { row: 0, column: 1 },
+      slot: { row: 1, column: 0 },
       inputs: {
         mediaRole: 'generate-image-output',
         producerCellId: generated.id,
@@ -671,7 +662,12 @@ describe('directional canvas placement', () => {
     })
     const tile = createdNotebook.cells.find((cell) => cell.id === generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(allocated.outputCell.slot).toEqual({ row: 0, column: 1 })
+    expect(allocateGenerateImageResult(
+      engine,
+      allocated.document,
+      generated.id,
+      { runId: 'run-image-2', acceptedAt: '2026-08-22T00:00:01.000Z' },
+    ).outputCell.slot).toEqual({ row: 1, column: 1 })
   })
 
   it('resolves generated image from output cell and legacy inline artifact', async () => {
@@ -927,7 +923,7 @@ describe('directional canvas placement', () => {
     expect(await reconcileGenerationMediaOutputs(engine)).toBe(0)
   })
 
-  it('relayouts a legacy inline generate_image into a pair and stacks video beneath it', async () => {
+  it('relayouts legacy inline generate_image and generate_video tiles into their lanes', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -975,8 +971,8 @@ describe('directional canvas placement', () => {
     expect(imageOutput!.outputCell.inputs?.mediaRole).toBe('generate-image-output')
     expect(imageOutput!.outputCell.inputs?.producerCellId).toBe(genImage.id)
     expect(imageOutput!.outputEdge.targetInput).toBe('media')
-    expect(imageOutput!.outputCell.slot.row).toBe(tile.slot.row)
-    expect(imageOutput!.outputCell.slot.column).toBe(tile.slot.column + 1)
+    expect(tile.slot).toEqual({ row: 0, column: 0 })
+    expect(imageOutput!.outputCell.slot).toEqual({ row: 1, column: 0 })
 
     const genVideo = engine.notebooks.createCell({
       type: 'generate_video',
@@ -1011,10 +1007,10 @@ describe('directional canvas placement', () => {
     const videoOutput = findGenerateVideoOutput(after, genVideo.id)!
     expect(videoTile.outputArtifactId).toBeUndefined()
     expect(videoOutput.outputCell.outputArtifactId).toBe(videoArtifact.artifactId)
-    expect(videoTile.slot.column).toBe(liveImageOutput.outputCell.slot.column)
-    expect(videoTile.slot.row).toBeGreaterThan(liveImageOutput.outputCell.slot.row)
-    expect(videoOutput.outputCell.slot.column).toBe(videoTile.slot.column)
-    expect(videoOutput.outputCell.slot.row).toBe(videoTile.slot.row + 1)
+    expect(after.cells.find((cell) => cell.id === genImage.id)?.slot).toEqual({ row: 0, column: 0 })
+    expect(videoTile.slot).toEqual({ row: 0, column: 1 })
+    expect(liveImageOutput.outputCell.slot).toEqual({ row: 1, column: 0 })
+    expect(videoOutput.outputCell.slot).toEqual({ row: 2, column: 0 })
 
     const again = relayoutNotebookDocument(engine, after)
     expect(notebookDocumentsEqual(after, again)).toBe(true)
@@ -1027,7 +1023,7 @@ describe('directional canvas placement', () => {
     expect(second.changed).toBe(false)
   })
 
-  it('creates generate_audio with an audio output cell to the right', async () => {
+  it('creates generate_audio with its output cell in the Audio lane', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -1076,7 +1072,7 @@ describe('directional canvas placement', () => {
 
     expect(generated.output_cell).toMatchObject({
       type: 'audio',
-      slot: { row: 0, column: 1 },
+      slot: { row: 1, column: 0 },
       inputs: {
         mediaRole: 'generate-audio-output',
         producerCellId: generated.id,
@@ -1092,7 +1088,7 @@ describe('directional canvas placement', () => {
     const tile = notebook.cells.find((cell) => cell.id === generated.id)!
     const output = findGenerateAudioOutput(notebook, generated.id)!
     expect(tile.outputArtifactId).toBeUndefined()
-    expect(output.outputCell.slot).toEqual({ row: 0, column: 1 })
+    expect(output.outputCell.slot).toEqual({ row: 1, column: 0 })
   })
 
   it('ensureGenerateAudioOutput is idempotent for existing output cells', async () => {
@@ -1125,7 +1121,7 @@ describe('directional canvas placement', () => {
     expect(second.outputCell.id).toBe(first.outputCell.id)
   })
 
-  it('relayouts a legacy inline generate_audio into a pair', async () => {
+  it('relayouts a legacy inline generate_audio into a tile and an Audio lane output', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
@@ -1169,8 +1165,8 @@ describe('directional canvas placement', () => {
     expect(audioOutput!.outputCell.inputs?.mediaRole).toBe('generate-audio-output')
     expect(audioOutput!.outputCell.inputs?.producerCellId).toBe(genAudio.id)
     expect(audioOutput!.outputEdge.targetInput).toBe('media')
-    expect(audioOutput!.outputCell.slot.row).toBe(tile.slot.row)
-    expect(audioOutput!.outputCell.slot.column).toBe(tile.slot.column + 1)
+    expect(tile.slot).toEqual({ row: 0, column: 0 })
+    expect(audioOutput!.outputCell.slot).toEqual({ row: 1, column: 0 })
   })
 
   it('records ensure_generate_audio_output during run-notebook preflight', async () => {

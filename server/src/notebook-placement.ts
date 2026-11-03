@@ -21,7 +21,7 @@ export function slotBelowArtifactOrFirstFree(notebook: NotebookDocument, sourceA
   throw new Error(fullMessage);
 }
 
-export function slotBelow(slot: NotebookGridSlot): NotebookGridSlot {
+function slotBelow(slot: NotebookGridSlot): NotebookGridSlot {
   if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
     return { row: slot.row + 1, column: slot.column };
   }

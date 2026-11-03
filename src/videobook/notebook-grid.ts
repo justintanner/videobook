@@ -5,16 +5,20 @@ import {
   notebookCellOccupiedSlots,
   notebookOccupiedSlots,
   isNotebookGridSlot,
-  nextHorizontalSlotFrom,
-  nextVerticalSlotFrom,
-  nextWaveTileSlot,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_ROW_COUNT,
   notebookGridAddress,
   notebookGridTag,
   parseNotebookGridAddress,
 } from 'videobook-engine/notebook-grid'
-import type { NotebookGridSlot } from 'videobook-engine'
+import type { NotebookCellType, NotebookGridSlot } from 'videobook-engine'
+import {
+  notebookLanePlacement,
+  notebookRowOpening,
+  notebookTypeLane,
+  type NotebookLaneCell,
+  type NotebookLanePlacement,
+} from '../../server/src/notebook-lanes'
 
 export interface NotebookGridData extends Record<string, unknown> {
   slot: NotebookGridSlot
@@ -200,160 +204,31 @@ export function nextNotebookGridSlot<T extends NotebookGridData>(
   })))
 }
 
-const imageCellTypes = new Set([
-  'image',
-  'generate_image',
-  'character',
-])
-
-function isNotebookImageCellType(type: string): boolean {
-  return imageCellTypes.has(type)
-}
-
-export {
-  nextHorizontalSlotFrom,
-  nextVerticalSlotFrom,
-}
-
-function optionalLastWorkSlot(
-  lastWorkSlot: NotebookGridSlot | null | undefined,
-): NotebookGridSlot | null {
-  if (!lastWorkSlot) return null
-  return boundedSlot(lastWorkSlot)
-}
-
-function slotBelowForPair(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.row + 1 < NOTEBOOK_GRID_ROW_COUNT) {
-    return { row: slot.row + 1, column: slot.column }
-  }
-  return {
-    row: slot.row,
-    column: Math.min(slot.column + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
-  }
-}
-
-function slotRightForPair(slot: NotebookGridSlot): NotebookGridSlot {
-  if (slot.column + 1 < NOTEBOOK_GRID_COLUMN_COUNT) {
-    return { row: slot.row, column: slot.column + 1 }
-  }
-  return {
-    row: Math.min(slot.row + 1, NOTEBOOK_GRID_ROW_COUNT - 1),
-    column: slot.column,
-  }
-}
-
-const horizontalCreationTypes = new Set([
-  'generate_image',
-  'generate_audio',
-  'extract_audio',
-])
-
-/**
- * Wave/lane placement for generate_video tiles. Sibling generations sourced
- * from the base image row pack left-to-right in the row below their sources;
- * generations fed by a derived image continue that image's column lane. Each
- * tile keeps the slot beneath it free for its video output cell. No-source
- * generations with a last-work anchor scan top-to-bottom from that slot.
- */
-export function nextNotebookVideoGenerationSlot(
-  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
-  sourceSlots: readonly NotebookGridSlot[] = [],
-  lastWorkSlot: NotebookGridSlot | null = null,
-): NotebookGridSlot {
-  const occupied = notebookOccupiedSlots(cells)
-  if (sourceSlots.length > 0) {
-    const waveRow = Math.max(...sourceSlots.map((slot) => slot.row)) + 1
-    const baseRowSources = sourceSlots.every((slot) => slot.row === 0)
-    const startColumn = baseRowSources ? 0 : sourceSlots[0].column
-    return nextWaveTileSlot(waveRow, startColumn, occupied)
-  }
-  const lastWork = optionalLastWorkSlot(lastWorkSlot)
-  if (lastWork) {
-    return nextVerticalSlotFrom(lastWork, occupied)
-  }
-  let lastImageRow = -1
-  for (const cell of cells) {
-    if (!isNotebookImageCellType(cell.type)) continue
-    if (cell.slot.row > lastImageRow) lastImageRow = cell.slot.row
-  }
-  return nextWaveTileSlot(lastImageRow + 1, 0, occupied)
-}
-
-/**
- * Reserve tile + output-below pair for generate_video so client optimistic
- * placement matches server-created output cells.
- */
-export function allocateNotebookVideoGenerationSlots(
-  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
-  sourceSlots: readonly NotebookGridSlot[] = [],
-  lastWorkSlot: NotebookGridSlot | null = null,
-): { tile: NotebookGridSlot; output: NotebookGridSlot } {
-  const occupied = notebookOccupiedSlots(cells)
-  const tile = nextNotebookVideoGenerationSlot(cells, sourceSlots, lastWorkSlot)
-  const output = nextVerticalSlotFrom(slotBelowForPair(tile), [...occupied, tile])
-  return { tile, output }
-}
-
-/** Horizontal placement for generate_image / generate_audio / extract tiles. */
-export function nextNotebookHorizontalGenerationSlot(
-  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
-  sourceSlots: readonly NotebookGridSlot[] = [],
-  lastWorkSlot: NotebookGridSlot | null = null,
-): NotebookGridSlot {
-  const occupied = notebookOccupiedSlots(cells)
-  if (sourceSlots.length === 0) {
-    const lastWork = optionalLastWorkSlot(lastWorkSlot)
-    return nextHorizontalSlotFrom(lastWork ?? { row: 0, column: 0 }, occupied)
-  }
-  const maxColumn = Math.max(...sourceSlots.map((slot) => slot.column))
-  const minRow = Math.min(...sourceSlots.map((slot) => slot.row))
-  const anchor = {
-    row: minRow,
-    column: Math.min(maxColumn + 1, NOTEBOOK_GRID_COLUMN_COUNT - 1),
-  }
-  return nextHorizontalSlotFrom(anchor, occupied)
-}
-
-/**
- * Reserve tile + output-to-the-right pair for generate_image / generate_audio
- * so client optimistic placement matches server-created output cells.
- */
-export function allocateNotebookHorizontalGenerationSlots(
-  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
-  sourceSlots: readonly NotebookGridSlot[] = [],
-  lastWorkSlot: NotebookGridSlot | null = null,
-): { tile: NotebookGridSlot; output: NotebookGridSlot } {
-  const occupied = notebookOccupiedSlots(cells)
-  const tile = nextNotebookHorizontalGenerationSlot(
-    cells,
-    sourceSlots,
-    lastWorkSlot,
+export function openNotebookGridNodeRow<T extends NotebookGridData & { kind: string }>(
+  nodes: readonly Node<T>[],
+  row: number,
+): Array<Node<T>> {
+  const moves = notebookRowOpening(
+    nodes.map((node) => ({ id: node.id, type: node.data.kind, slot: node.data.slot })),
+    row,
   )
-  const output = nextHorizontalSlotFrom(
-    slotRightForPair(tile),
-    [...occupied, tile],
-  )
-  return { tile, output }
+  if (!moves) return [...nodes]
+  return nodes.map((node) => {
+    const slot = moves.get(node.id)
+    return slot
+      ? { ...node, position: notebookGridPosition(slot), data: { ...node.data, slot } }
+      : node
+  })
 }
 
-/** Next empty slot for a newly created cell of `type`, using last-work when set. */
-export function nextNotebookCreationSlot(
-  type: string,
-  cells: ReadonlyArray<{ type: string; slot: NotebookGridSlot }>,
-  lastWorkSlot: NotebookGridSlot | null = null,
-): NotebookGridSlot {
-  if (type === 'timeline') return firstEmptyNotebookGridRow(notebookOccupiedSlots(cells))
-  if (type === 'generate_video') {
-    return nextNotebookVideoGenerationSlot(cells, [], lastWorkSlot)
+export function notebookCreationPlacement(
+  type: NotebookCellType,
+  cells: readonly NotebookLaneCell[],
+): NotebookLanePlacement {
+  if (type === 'timeline') {
+    return { slot: firstEmptyNotebookGridRow(notebookOccupiedSlots(cells)), makeRoom: false }
   }
-  if (horizontalCreationTypes.has(type)) {
-    return nextNotebookHorizontalGenerationSlot(cells, [], lastWorkSlot)
-  }
-  const lastWork = optionalLastWorkSlot(lastWorkSlot)
-  if (lastWork) {
-    return nextHorizontalSlotFrom(lastWork, notebookOccupiedSlots(cells))
-  }
-  return firstEmptyNotebookGridSlot(notebookOccupiedSlots(cells))
+  return notebookLanePlacement(cells, notebookTypeLane(type))
 }
 
 export interface NotebookGridMetrics {

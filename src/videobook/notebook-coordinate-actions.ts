@@ -10,7 +10,7 @@ import type {
   NotebookGridSlot,
 } from 'videobook-engine'
 import { notebookCellAtSlot } from './notebook-addressing'
-import { nextNotebookCreationSlot } from './notebook-grid'
+import { notebookCreationPlacement } from './notebook-grid'
 
 type NotebookCoordinateAction =
   | {
@@ -22,6 +22,7 @@ type NotebookCoordinateAction =
       kind: 'create'
       cellType: NotebookCellType
       destination: NotebookGridSlot | null
+      makeRoom?: boolean
     }
   | {
       kind: 'delete' | 'run'
@@ -146,21 +147,21 @@ export function parseNotebookCoordinateAction(
 export function planNotebookCoordinateAction(
   document: NotebookDocument,
   parsed: NotebookCoordinateAction,
-  lastWorkSlot: NotebookGridSlot | null = null,
 ): NotebookCoordinateActionPlan {
   if (parsed.kind === 'create') {
-    const destination = parsed.destination
-      ?? nextNotebookCreationSlot(
-        parsed.cellType,
-        document.cells,
-        lastWorkSlot,
-      )
-    const occupied = notebookCellAtSlot(document, destination)
-    if (occupied) {
+    const placement = parsed.destination
+      ? { slot: parsed.destination, makeRoom: false }
+      : notebookCreationPlacement(parsed.cellType, document.cells)
+    const destination = placement.slot
+    if (!placement.makeRoom && notebookCellAtSlot(document, destination)) {
       throw new Error(`Notebook cell ${notebookGridTag(destination)} is occupied`)
     }
     return {
-      action: { ...parsed, destination },
+      action: {
+        ...parsed,
+        destination,
+        ...(placement.makeRoom ? { makeRoom: true } : {}),
+      },
       expectations: [expectation(document, destination)],
       reason: 'This request creates a notebook cell',
       summary: `Create a ${parsed.cellType.replaceAll('_', ' ')} cell at ${notebookGridTag(destination)}`,

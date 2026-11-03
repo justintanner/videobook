@@ -87,28 +87,36 @@ describe('notebook coordinate chat actions', () => {
     expect(explicit.expectations).toEqual([{ address: '@bl8', cellId: null }])
   })
 
-  it('places no-source generations next to last-work instead of the origin', () => {
-    const current = document([cell('one', 6, 4)])
+  it('places new cells in their lane and opens a row when the lane is missing', () => {
+    const current = document([
+      { id: 'source', type: 'video', slot: { row: 0, column: 0 } },
+      cell('gen', 1, 4),
+      { id: 'image', type: 'image', slot: { row: 2, column: 0 } },
+    ])
     const image = planNotebookCoordinateAction(
       current,
       parseNotebookCoordinateAction('create a generate image')!,
-      { row: 6, column: 4 },
     )
-    expect(image.action).toMatchObject({
+    expect(image.action).toEqual({
       kind: 'create',
       cellType: 'generate_image',
-      destination: { row: 6, column: 5 },
+      destination: { row: 1, column: 0 },
     })
+    expect(image.expectations).toEqual([{ address: '@b1', cellId: null }])
     const video = planNotebookCoordinateAction(
-      current,
+      document([
+        { id: 'source', type: 'video', slot: { row: 0, column: 0 } },
+        { id: 'image', type: 'image', slot: { row: 1, column: 0 } },
+      ]),
       parseNotebookCoordinateAction('create a generate video')!,
-      { row: 6, column: 4 },
     )
-    expect(video.action).toMatchObject({
+    expect(video.action).toEqual({
       kind: 'create',
       cellType: 'generate_video',
-      destination: { row: 7, column: 4 },
+      destination: { row: 1, column: 0 },
+      makeRoom: true,
     })
+    expect(video.expectations).toEqual([{ address: '@b1', cellId: 'image' }])
   })
 
   it('rejects empty sources, occupied creates, and a full grid', () => {

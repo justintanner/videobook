@@ -185,7 +185,7 @@ describe('notebook frame commands', () => {
     )).toBeNull()
   })
 
-  it('extracts a frame into a new image cell wired to its source', async () => {
+  it('extracts a frame into the Images lane, wired to its source', async () => {
     const harness = await setup('frame-command', 1)
     const { engine, callTool, notebookId, sourceCellId, sourceArtifactId } = harness
     await callTool('create_notebook_cell', {
@@ -216,7 +216,7 @@ describe('notebook frame commands', () => {
       reusedAction: false,
       sourceCellId,
       sourceAddress: '@a1',
-      actionAddress: '@a3',
+      actionAddress: '@b1',
     })
     expect(firstRun.outputCellId).toBe(firstRun.actionCellId)
     await waitForJob(firstRun.jobId)
@@ -280,7 +280,7 @@ describe('notebook frame commands', () => {
     })
     expect(secondRun.reusedAction).toBe(false)
     expect(secondRun.actionCellId).not.toBe(firstRun.actionCellId)
-    expect(secondRun.actionAddress).toBe('@a4')
+    expect(secondRun.actionAddress).toBe('@b2')
     await waitForJob(secondRun.jobId)
     const afterSecond = engine.notebooks.read(notebookId)
     expect(afterSecond.ok).toBe(true)

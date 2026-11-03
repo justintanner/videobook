@@ -376,7 +376,7 @@ import {
 import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
 import {
   changedNotebookGridNodes,
-  nextNotebookCreationSlot,
+  notebookCreationPlacement,
   parseNotebookGridAddress,
   notebookGrid,
   notebookGridAddress,
@@ -388,6 +388,7 @@ import {
   notebookGridSlot,
   notebookGridSlotKey,
   notebookGridSquareAt,
+  openNotebookGridNodeRow,
   notebookGridTag,
   notebookGridViewport,
   resolveNotebookGridGroupMove,
@@ -925,7 +926,6 @@ function planContextMenuGeneration(input: {
   cellId: string
   cellType: ContextMenuGenerationCellType
   document: NotebookDocument
-  lastWorkSlot: NotebookGridSlot | null
   sourceCellId: string
 }): NotebookChatGenerationDraft {
   const source = input.document.cells.find((cell) =>
@@ -941,12 +941,6 @@ function planContextMenuGeneration(input: {
       sourceReferences: [notebookGridTag(source.slot)],
     },
     document: input.document,
-    fallbackSlot: nextNotebookCreationSlot(
-      input.cellType,
-      input.document.cells,
-      input.lastWorkSlot,
-    ),
-    lastWorkSlot: input.lastWorkSlot,
   })
 }
 
@@ -2893,8 +2887,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const notebookLaneCells = useMemo(
     () => nodes.map((node) => ({
+      id: node.id,
       type: node.data.kind,
       slot: node.data.slot,
+      inputs: node.data.inputs,
+      outputArtifactId: node.data.outputArtifactId,
     })),
     [nodes],
   )
@@ -4635,12 +4632,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     let slot: NotebookGridSlot
+    let makeRoom = false
     try {
-      slot = position ? notebookGridDropSlot(position, notebookBaseMetrics)
-        : nextNotebookCreationSlot(type, notebook.cells, lastWorkSlot)
-      if (type === 'timeline') slot = { row: slot.row, column: 0 }
+      const placement = position
+        ? { slot: notebookGridDropSlot(position, notebookBaseMetrics), makeRoom: false }
+        : notebookCreationPlacement(type, notebook.cells)
+      slot = type === 'timeline' ? { row: placement.slot.row, column: 0 } : placement.slot
+      makeRoom = placement.makeRoom
       const footprint = new Set(notebookCellOccupiedSlots({ type, slot }).map(notebookGridSlotKey))
-      if (notebookOccupiedSlots.some((occupied) => footprint.has(notebookGridSlotKey(occupied)))) {
+      if (!makeRoom && notebookOccupiedSlots.some((occupied) => footprint.has(notebookGridSlotKey(occupied)))) {
         setNotice(type === 'timeline' ? 'Choose a completely empty row for Timeline' : 'Choose an empty grid square for the new cell', 'error')
         return
       }
@@ -4653,6 +4653,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
+        ...(makeRoom ? { make_room: true } : {}),
         cell: {
           type,
           slot,
@@ -5142,6 +5143,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const createMediaCellFromFile = async (
     slot: NotebookGridSlot,
     file: File,
+    makeRoom = false,
   ) => {
     if (!bookId || !notebook) return
     const restoreFocus = capturePointerComposerFocus()
@@ -5154,7 +5156,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Drop an image, video, or audio file on an open square', 'error')
       return
     }
-    if (notebookOccupiedSlots.some((occupied) =>
+    if (!makeRoom && notebookOccupiedSlots.some((occupied) =>
       occupied.row === slot.row && occupied.column === slot.column)) {
       setNotice('Choose an empty grid square for the media file', 'error')
       return
@@ -5169,6 +5171,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
+        ...(makeRoom ? { make_room: true } : {}),
         cell: {
           type: kind,
           slot,
@@ -5450,10 +5453,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBusy(true)
     try {
       if (cellId === null) {
-        const slot = picker.slot ?? nextNotebookCreationSlot(kind, notebook.cells, lastWorkSlot)
+        const { slot, makeRoom } = picker.slot
+          ? { slot: picker.slot, makeRoom: false }
+          : notebookCreationPlacement(kind, notebook.cells)
         const created = recordValue(await call('create_notebook_cell', {
           book_id: bookId,
           notebook_id: notebook.id,
+          ...(makeRoom ? { make_room: true } : {}),
           cell: { type: kind, slot },
         }))
         createdCellId = created && asString(created.id)
@@ -5555,7 +5561,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         bookId,
         callTool: (tool, args) => call(tool, args, { chat }),
         document: currentNotebook,
-        lastWorkSlot,
         text,
         voiceId,
         ...(currentNotebook.revision
@@ -7018,16 +7023,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, undefined, isCurrent, chat)
       return { ok: true, message: messageFor(result, 'Download queued') }
     }
-    const cell = downloadVideoCellInput(
-      result,
-      sourceUrl,
-      slot ?? nextNotebookCreationSlot('video', notebook.cells, lastWorkSlot),
-    )
+    const placement = slot
+      ? { slot, makeRoom: false }
+      : notebookCreationPlacement('video', notebook.cells)
+    const cell = downloadVideoCellInput(result, sourceUrl, placement.slot)
     let createdCellId: string
     try {
       const created = recordValue(await call('create_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
+        ...(placement.makeRoom ? { make_room: true } : {}),
         cell,
       }, { chat }))
       const nextCellId = asString(created?.id)
@@ -7559,12 +7564,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cellId: uuidv7(),
         command,
         document: currentNotebook,
-        fallbackSlot: nextNotebookCreationSlot(
-          command.cellType,
-          currentNotebook.cells,
-          lastWorkSlot,
-        ),
-        lastWorkSlot,
         ...(options?.preferredModel
           ? { preferredModel: options.preferredModel }
           : {}),
@@ -7626,7 +7625,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }),
           {
             address: notebookGridTag(draft.cell.slot),
-            cellId: null,
+            cellId: draft.makeRoom
+              ? notebookCellAtSlot(currentNotebook, draft.cell.slot)?.id ?? null
+              : null,
           },
         ],
         reason: options?.reason
@@ -7789,16 +7790,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : { ...outcome, nextInput: '', selectInput: false }
       }
       const routedCells = notebook
-        ? routedMediaCellInputs(plan.tool, result, notebook.cells, lastWorkSlot)
+        ? routedMediaCellInputs(plan.tool, result, notebook.cells)
         : []
       if (notebook && routedCells.length > 0) {
         const placements: string[] = []
         let firstCellId: string | null = null
-        for (const cell of routedCells) {
+        for (const { cell, makeRoom } of routedCells) {
           if (isCurrent?.() === false) return { ok: true, message: 'Action accepted in the previous workspace.' }
           const created = recordValue(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
+            ...(makeRoom ? { make_room: true } : {}),
             cell,
           }, { chat }))
           const cellId = asString(created?.id)
@@ -8377,7 +8379,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               data: { ...optimistic.data, status: 'queued', statusStartedAt: startedAt },
             }
           : node)
-      : [...current, {
+      : [...(draft.makeRoom ? openNotebookGridNodeRow(current, draft.cell.slot.row) : current), {
           ...optimistic,
           data: { ...optimistic.data, status: 'queued', statusStartedAt: startedAt },
         }])
@@ -8964,6 +8966,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             book_id: bookId,
             notebook_id: currentNotebook.id,
             ...revisionInput,
+            ...(action.makeRoom ? { make_room: true } : {}),
             cell: {
               type: action.cellType,
               slot: destination,
@@ -9070,15 +9073,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return await completeVideoDownload(result, asString(args.url) ?? '', undefined, chat)
     }
     const routedCells = notebook
-      ? routedMediaCellInputs(tool, result, notebook.cells, lastWorkSlot)
+      ? routedMediaCellInputs(tool, result, notebook.cells)
       : []
     if (notebook && routedCells.length > 0) {
       const placements: string[] = []
       let firstCellId: string | null = null
-      for (const cell of routedCells) {
+      for (const { cell, makeRoom } of routedCells) {
         const created = recordValue(await call('create_notebook_cell', {
           book_id: bookId,
           notebook_id: notebook.id,
+          ...(makeRoom ? { make_room: true } : {}),
           cell,
         }, { chat }))
         const cellId = asString(created?.id)
@@ -10500,7 +10504,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             cellId: `context-menu-${cellType}`,
             cellType,
             document: notebook,
-            lastWorkSlot,
             sourceCellId: contextMenuCell.id,
           })
           return true
@@ -10516,7 +10519,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cellId: `context-menu-${followUp}`,
         document: notebook,
         followUp,
-        lastWorkSlot,
         sourceCellId: contextMenuCell.id,
       }) !== null)
     : []
@@ -10676,7 +10678,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actions: generationActions,
         cellId: uuidv7(),
         document: currentNotebook,
-        lastWorkSlot,
         sourceCellId,
       }
       const draft = followUp
@@ -10697,10 +10698,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       openCellInspector(materialized.cellId)
       selectGenerationCellPreview(materialized.cellId, undefined, updatedNotebook)
       revealNotebookCanvasCell(materialized.cellId)
+      const movedSource = updatedNotebook?.cells.find((cell) => cell.id === sourceCellId)
+      const sourceAddress = movedSource ? notebookGridTag(movedSource.slot) : materialized.sourceAddresses[0]
       setNotice(
         followUp
-          ? `Added ${materialized.cellAddress} ${draft.action.title} from ${materialized.sourceAddresses[0]}`
-          : `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${materialized.sourceAddresses[0]}`,
+          ? `Added ${materialized.cellAddress} ${draft.action.title} from ${sourceAddress}`
+          : `Added ${materialized.cellAddress} ${cellType === 'generate_video' ? 'video' : 'image'} generation from ${sourceAddress}`,
       )
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error), 'error')
@@ -11674,8 +11677,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const kind = mediaKindForFile(file)
         if (!kind || !notebook) return
         try {
-          const slot = mediaLibraryPicker?.slot ?? nextNotebookCreationSlot(kind, notebook.cells, lastWorkSlot)
-          void createMediaCellFromFile(slot, file)
+          const { slot, makeRoom } = mediaLibraryPicker?.slot
+            ? { slot: mediaLibraryPicker.slot, makeRoom: false }
+            : notebookCreationPlacement(kind, notebook.cells)
+          void createMediaCellFromFile(slot, file, makeRoom)
         } catch (error) {
           setNotice(error instanceof Error ? error.message : String(error), 'error')
         }

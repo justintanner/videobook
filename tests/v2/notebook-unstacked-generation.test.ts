@@ -149,11 +149,11 @@ describe("unstacked image/video generation results", () => {
       first.outputCell.id,
       second.outputCell.id,
     ]);
-    expect(listed[0]?.outputCell.slot).toEqual({ row: 0, column: 1 });
-    expect(listed[1]?.outputCell.slot).toEqual({ row: 0, column: 2 });
+    expect(listed[0]?.outputCell.slot).toEqual({ row: 1, column: 0 });
+    expect(listed[1]?.outputCell.slot).toEqual({ row: 1, column: 1 });
   });
 
-  it("places video results downward without collisions", async () => {
+  it("places video results across the Videos lane without collisions", async () => {
     const { notebookId, producerId } = await writeProducer("generate_video");
     const document = engine.notebooks.read(notebookId);
     expect(document.ok).toBe(true);
@@ -172,8 +172,8 @@ describe("unstacked image/video generation results", () => {
     expect(listed.map((item) => item.outputCell.id)).toEqual(ids);
     expect(listed.map((item) => item.outputCell.slot)).toEqual([
       { row: 1, column: 0 },
-      { row: 2, column: 0 },
-      { row: 3, column: 0 },
+      { row: 1, column: 1 },
+      { row: 1, column: 2 },
     ]);
   });
 

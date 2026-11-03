@@ -4,7 +4,7 @@ import {
   type NotebookChatGenerationDraft,
 } from './notebook-chat-generation'
 import type { NotebookGenerationAction } from './notebook-generation-actions'
-import { nextNotebookCreationSlot, notebookGridTag } from './notebook-grid'
+import { notebookGridTag } from './notebook-grid'
 
 export type NotebookFollowUp = 'extend_video' | 'upscale_video'
 
@@ -46,7 +46,6 @@ function planWithModel(input: {
   actions: readonly NotebookGenerationAction[]
   cellId: string
   document: NotebookDocument
-  lastWorkSlot: NotebookGridSlot | null
   model: string
   sourceSlot: NotebookGridSlot
 }): NotebookChatGenerationDraft | null {
@@ -61,8 +60,6 @@ function planWithModel(input: {
         sourceReferences: [notebookGridTag(input.sourceSlot)],
       },
       document: input.document,
-      fallbackSlot: nextNotebookCreationSlot('generate_video', input.document.cells, input.lastWorkSlot),
-      lastWorkSlot: input.lastWorkSlot,
       preferredModel: input.model,
     })
     return draft.action.model === input.model ? draft : null
@@ -76,13 +73,18 @@ export function planNotebookFollowUp(input: {
   cellId: string
   document: NotebookDocument
   followUp: NotebookFollowUp
-  lastWorkSlot: NotebookGridSlot | null
   sourceCellId: string
 }): NotebookChatGenerationDraft | null {
   const source = input.document.cells.find((cell) => cell.id === input.sourceCellId)
   if (!source) return null
   for (const model of notebookFollowUpModels(input.actions, input.followUp, source.model)) {
-    const draft = planWithModel({ ...input, model, sourceSlot: source.slot })
+    const draft = planWithModel({
+      actions: input.actions,
+      cellId: input.cellId,
+      document: input.document,
+      model,
+      sourceSlot: source.slot,
+    })
     if (draft) return draft
   }
   return null

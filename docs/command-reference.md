@@ -48,7 +48,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `create_character` — Create a new character artifact, optionally seeded from existing image artifacts
 - `create_entity` — Create a reusable prompt, scene or character
 - `create_notebook` — Create an empty notebook
-- `create_notebook_cell` — Create a UUIDv7 notebook cell
+- `create_notebook_cell` — Create a UUIDv7 notebook cell; make_room first moves a taken slot's row and the rows below it down one
 - `create_qart` — Create scan-safe color and monochrome QR mosaics from a source image artifact. The image is sampled per QR module with protected QR structures and white quiet zones.
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
@@ -156,7 +156,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate, audio_generate.
 - `recover_asset` — Clear a failed asset's generation error and keep its media, returning it to ready. Use clean_failed_assets instead to delete failed generations.
 - `register_search_manifest` — Register an immutable semantic-index model manifest
-- `relayout_notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.
+- `relayout_notebook` — Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.
 - `release_search_reference` — Release a temporary reverse-search reference
 - `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Silence a described sound (e.g. a horse neigh) in a video or audio asset in place, using ElevenLabs Scribe audio-event timestamps; the picture is unchanged.
@@ -269,7 +269,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/create-book` — Create a book with a Main notebook. Project names are normalized to lowercase slugs with hyphens.; MCP: `create_book`
 - `/create-character` — Create a new character artifact, optionally seeded from existing image artifacts; MCP: `create_character`
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
-- `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
+- `/create-notebook-cell` — Create a UUIDv7 notebook cell; make_room first moves a taken slot's row and the rows below it down one; MCP: `create_notebook_cell`
 - `/create-watermark-card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.; MCP: `create_watermark_card`
 - `/crop` (aliases: `/reframe`) — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
 - `/crop-asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_asset`
@@ -404,7 +404,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/record-post-metrics` — Record a performance observation for a published Post: omit values to fetch current X metrics, or pass values for a manual observation (observed_at defaults to now). Omit unavailable metrics; zero means an observed zero.; MCP: `record_post_metrics`
 - `/recover-asset` — Clear a failed asset's generation error and keep its media, returning it to ready. Use clean_failed_assets instead to delete failed generations.; MCP: `recover_asset`
 - `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
-- `/relayout-notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.; MCP: `relayout_notebook`
+- `/relayout-notebook` — Arrange cells into the Clean lanes (source videos, generators, images, generated videos, audio, work; Timeline rows stay put; goal notebooks keep the goal layout). Migrates legacy inline generate_video / generate_image artifacts into output cells.; MCP: `relayout_notebook`
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`

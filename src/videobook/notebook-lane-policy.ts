@@ -1,117 +1,93 @@
-import type { NotebookCellType } from 'videobook-engine'
-import { notebookCellFamily } from './notebook-cell-types'
-
-export type NotebookLaneFamily = 'audio' | 'gen' | 'image' | 'video' | 'work'
-
-export type NotebookLaneCell = {
-  type: NotebookCellType
-  slot: { row: number; column: number }
-}
+import {
+  NOTEBOOK_LANE_ORDER,
+  notebookCellLane,
+  notebookLaneLabel,
+  type NotebookLane,
+  type NotebookLaneCell,
+} from '../../server/src/notebook-lanes'
 
 type NotebookLaneRowKind = 'empty' | 'homogeneous' | 'mixed' | 'starter'
 
 type NotebookLaneRowSummary = {
   caption: string
   continuation: boolean
-  families: readonly NotebookLaneFamily[]
-  family: NotebookLaneFamily | null
+  families: readonly NotebookLane[]
+  family: NotebookLane | null
   kind: NotebookLaneRowKind
   row: number
 }
 
 export type NotebookLaneSection = {
   caption: string
-  families: readonly NotebookLaneFamily[]
-  family: NotebookLaneFamily | null
+  families: readonly NotebookLane[]
+  family: NotebookLane | null
   kind: Exclude<NotebookLaneRowKind, 'empty'>
   rowCount: number
   startRow: number
 }
 
-export const NOTEBOOK_LANE_FAMILY_ORDER = [
-  'image',
+const NOTEBOOK_STARTER_LANES = [
+  'source',
   'gen',
-  'video',
-  'audio',
-  'work',
-] as const satisfies readonly NotebookLaneFamily[]
-
-export const NOTEBOOK_LANE_FAMILY_LABELS: Record<NotebookLaneFamily, string> = {
-  audio: 'Audio',
-  gen: 'Gen',
-  image: 'Images',
-  video: 'Videos',
-  work: 'Work',
-}
-
-const NOTEBOOK_STARTER_LANE_FAMILIES = [
   'image',
-  'gen',
-  'video',
-] as const satisfies readonly NotebookLaneFamily[]
-
-export function notebookLaneFamily(type: NotebookCellType): NotebookLaneFamily {
-  const family = notebookCellFamily(type)
-  return family === 'data' || family === 'goal' ? 'work' : family
-}
-
-export function notebookLaneFamilyLabel(family: NotebookLaneFamily): string {
-  return NOTEBOOK_LANE_FAMILY_LABELS[family]
-}
+] as const satisfies readonly NotebookLane[]
 
 function notebookLaneCaption(
-  families: readonly NotebookLaneFamily[],
+  families: readonly NotebookLane[],
 ): string {
-  return families.map(notebookLaneFamilyLabel).join(' · ')
+  return families.map(notebookLaneLabel).join(' · ')
 }
 
-function familiesInRow(
+function lanesByRow(
   cells: readonly NotebookLaneCell[],
-  row: number,
-): NotebookLaneFamily[] {
-  const present = new Set<NotebookLaneFamily>()
+): Map<number, Set<NotebookLane>> {
+  const rows = new Map<number, Set<NotebookLane>>()
   for (const cell of cells) {
-    if (cell.slot.row !== row) continue
-    present.add(notebookLaneFamily(cell.type))
+    const present = rows.get(cell.slot.row) ?? new Set<NotebookLane>()
+    present.add(notebookCellLane(cell, cells))
+    rows.set(cell.slot.row, present)
   }
-  return NOTEBOOK_LANE_FAMILY_ORDER.filter((family) => present.has(family))
+  return rows
+}
+
+function orderedLanes(present: ReadonlySet<NotebookLane> | undefined): NotebookLane[] {
+  return present ? NOTEBOOK_LANE_ORDER.filter((lane) => present.has(lane)) : []
+}
+
+function emptyRowSummary(row: number, emptyBook: boolean): NotebookLaneRowSummary {
+  const starter = emptyBook ? NOTEBOOK_STARTER_LANES[row] : undefined
+  if (starter) {
+    return {
+      caption: notebookLaneLabel(starter),
+      continuation: false,
+      families: [starter],
+      family: starter,
+      kind: 'starter',
+      row,
+    }
+  }
+  return {
+    caption: '',
+    continuation: false,
+    families: [],
+    family: null,
+    kind: 'empty',
+    row,
+  }
 }
 
 function rowSummary(
   row: number,
-  families: readonly NotebookLaneFamily[],
-  previous: readonly NotebookLaneFamily[],
+  families: readonly NotebookLane[],
+  previous: readonly NotebookLane[],
   emptyBook: boolean,
 ): NotebookLaneRowSummary {
-  if (families.length === 0) {
-    const starter = emptyBook
-      ? NOTEBOOK_STARTER_LANE_FAMILIES[row]
-      : undefined
-    if (starter) {
-      return {
-        caption: notebookLaneFamilyLabel(starter),
-        continuation: false,
-        families: [starter],
-        family: starter,
-        kind: 'starter',
-        row,
-      }
-    }
-    return {
-      caption: '',
-      continuation: false,
-      families: [],
-      family: null,
-      kind: 'empty',
-      row,
-    }
-  }
+  if (families.length === 0) return emptyRowSummary(row, emptyBook)
   if (families.length === 1) {
     const family = families[0]!
-    const continuation = previous.length === 1 && previous[0] === family
     return {
-      caption: notebookLaneFamilyLabel(family),
-      continuation,
+      caption: notebookLaneLabel(family),
+      continuation: previous.length === 1 && previous[0] === family,
       families,
       family,
       kind: 'homogeneous',
@@ -133,12 +109,12 @@ export function summarizeNotebookLaneRows(
   rowCount: number,
 ): NotebookLaneRowSummary[] {
   const emptyBook = cells.length === 0
+  const lanes = lanesByRow(cells)
   const summaries: NotebookLaneRowSummary[] = []
-  let previous: readonly NotebookLaneFamily[] = []
+  let previous: readonly NotebookLane[] = []
   for (let row = 0; row < rowCount; row += 1) {
-    const families = familiesInRow(cells, row)
-    const summary = rowSummary(row, families, previous, emptyBook)
-    summaries.push(summary)
+    const families = orderedLanes(lanes.get(row))
+    summaries.push(rowSummary(row, families, previous, emptyBook))
     previous = families
   }
   return summaries

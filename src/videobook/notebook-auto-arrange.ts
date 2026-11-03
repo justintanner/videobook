@@ -1,17 +1,7 @@
-import type {
-  NotebookCell,
-  NotebookDocument,
-} from 'videobook-engine'
-import {
-  NOTEBOOK_GRID_COLUMN_COUNT,
-  NOTEBOOK_GRID_ROW_COUNT,
-} from 'videobook-engine/notebook-grid'
-import {
-  NOTEBOOK_LANE_FAMILY_ORDER,
-  notebookLaneFamily,
-  type NotebookLaneFamily,
-} from './notebook-lane-policy'
+import type { NotebookDocument } from 'videobook-engine'
+import { NOTEBOOK_GRID_ROW_COUNT } from 'videobook-engine/notebook-grid'
 import { arrangeGoalNotebook } from '../../server/src/notebook-goal-layout'
+import { arrangeNotebookLanes } from '../../server/src/notebook-lanes'
 
 interface NotebookAutoArrangeAssignment {
   id: string
@@ -48,18 +38,6 @@ function failure(
   return { ok: false, code, message }
 }
 
-function readingOrder(cells: readonly NotebookCell[]): NotebookCell[] {
-  return [...cells].sort((left, right) =>
-    left.slot.row - right.slot.row
-    || left.slot.column - right.slot.column
-    || left.id.localeCompare(right.id))
-}
-
-function familyRowCount(cellCount: number): number {
-  if (cellCount <= 0) return 0
-  return Math.ceil(cellCount / NOTEBOOK_GRID_COLUMN_COUNT)
-}
-
 export function planNotebookArrangement(
   document: NotebookDocument,
 ): NotebookAutoArrangeResult {
@@ -83,50 +61,14 @@ export function planNotebookArrangement(
     }
   }
 
-  const idsByFamily: Record<NotebookLaneFamily, string[]> = {
-    audio: [],
-    gen: [],
-    image: [],
-    video: [],
-    work: [],
-  }
-  const timelines = document.cells.filter((cell) => cell.type === 'timeline')
-  const reservedRows = new Set(timelines.map((cell) => cell.slot.row))
-  for (const cell of readingOrder(document.cells)) {
-    if (cell.type === 'timeline') continue
-    idsByFamily[notebookLaneFamily(cell.type)].push(cell.id)
-  }
-
-  const requiredRows = NOTEBOOK_LANE_FAMILY_ORDER.reduce(
-    (total, family) => total + familyRowCount(idsByFamily[family].length),
-    0,
-  )
-  if (requiredRows + reservedRows.size > NOTEBOOK_GRID_ROW_COUNT) {
+  const arranged = arrangeNotebookLanes(document.cells)
+  if (!arranged.ok) {
     return failure(
       'capacity',
-      `Cannot auto-arrange because the layout needs ${requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
+      `Cannot auto-arrange because the layout needs ${arranged.requiredRows} rows, but the grid supports ${NOTEBOOK_GRID_ROW_COUNT}.`,
     )
   }
-
-  const slots: NotebookAutoArrangeAssignment[] = timelines.map((cell) => ({ id: cell.id, ...cell.slot }))
-  let nextRow = 0
-  for (const family of NOTEBOOK_LANE_FAMILY_ORDER) {
-    const ids = idsByFamily[family]
-    if (ids.length === 0) continue
-    for (let index = 0; index < ids.length; index += NOTEBOOK_GRID_COLUMN_COUNT) {
-      while (reservedRows.has(nextRow)) nextRow += 1
-      for (const [column, id] of ids.slice(index, index + NOTEBOOK_GRID_COLUMN_COUNT).entries()) {
-        slots.push({ id, row: nextRow, column })
-      }
-      nextRow += 1
-    }
-  }
-
-  return {
-    ok: true,
-    rowCount: Math.max(nextRow, ...timelines.map((cell) => cell.slot.row + 1)),
-    slots,
-  }
+  return arranged
 }
 
 export function revealNotebookArrangement(

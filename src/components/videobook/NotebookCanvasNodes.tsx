@@ -86,7 +86,7 @@ import {
   previewMeter,
   previewMetadataLabel,
 } from '@/videobook/cell-preview'
-import { notebookLaneFamily } from '@/videobook/notebook-lane-policy'
+import { notebookTypeLane } from '../../../server/src/notebook-lanes'
 import {
   notebookIncomingRouteText,
   notebookOutgoingRouteText,
@@ -538,7 +538,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         mediaTile ? 'cell-node-media-tile' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
-      data-lane-family={notebookLaneFamily(data.kind)}
+      data-lane-family={data.lane ?? notebookTypeLane(data.kind)}
       data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
       data-highlight={data.highlighted ? 'generated' : undefined}
       data-version-count={outputVersions.length}

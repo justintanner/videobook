@@ -108,7 +108,6 @@ describe('notebook chat generation', () => {
         sourceReferences: [],
       },
       document: current.value,
-      fallbackSlot: { row: 0, column: 0 },
       preferredModel: typeof params.model === 'string' ? params.model : undefined,
       routedParams: params,
     })
@@ -211,7 +210,6 @@ describe('notebook chat generation', () => {
       cellId: plannedCellId,
       command,
       document: current.value,
-      fallbackSlot: { row: 0, column: 0 },
     })
     expect(managed.value.engine.notebooks.read(notebookId)).toMatchObject({
       ok: true,
@@ -279,7 +277,7 @@ describe('notebook chat generation', () => {
     expect(connected.value.cells.find((cell) => cell.id === materialized.cellId))
       .toMatchObject({
         type: 'generate_image',
-        slot: { row: 0, column: 3 },
+        slot: { row: 1, column: 0 },
         prompt: 'neon rain',
         provider: 'kie',
         model: 'kie:nano-banana-2-1',
@@ -426,7 +424,6 @@ describe('notebook chat generation', () => {
       cellId: '01900000-0000-7000-8000-000000000020',
       command,
       document: current.value,
-      fallbackSlot: { row: 1, column: 0 },
       preferredModel: 'kie:nano-banana-pro',
     })
     const selectedCells = draft.sourceCellIds.flatMap((cellId) => {
@@ -612,7 +609,6 @@ describe('notebook chat generation', () => {
         sourceReferences: ['a2'],
       },
       document: current.value,
-      fallbackSlot: { row: 0, column: 0 },
       preferredModel: 'kie:nano-banana-pro',
     })
     expect(draft.sourceCellIds).toEqual([firstSource.id])

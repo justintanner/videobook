@@ -1,4 +1,3 @@
-import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine";
 import { mutateNotebook } from "./notebook-mutations.js";
@@ -7,7 +6,7 @@ import {
   allocateGenerateVideoResult,
   allocateGenerateAudioResult,
 } from "./notebook-cell-outputs.js";
-import { lastCreatedCellSlot, nextGenerationOutputSlot } from "./notebook-placement.js";
+import { placeInNotebookLane } from "./notebook-lanes.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { tryResolveModel } from "./media/descriptor.js";
 import { generationLabel } from "./artifact-label.js";
@@ -81,15 +80,12 @@ export async function placeChainGeneration(
     "chain_generation",
     (notebook) => {
       const anchors = notebook.cells.filter((cell) => sourceCellIds.includes(cell.id));
-      const anchorSlot = anchors[0]?.slot
-        ?? lastCreatedCellSlot(notebook.cells)
-        ?? { row: 1, column: 1 };
-      const occupied = notebookOccupiedSlots(notebook.cells);
+      const placed = placeInNotebookLane(notebook.cells, "gen");
       const model = producerModel(input.params);
       const producer = input.engine.notebooks.createCell({
         type: input.placement,
         label: producerLabel(input.params, input.placement),
-        slot: nextGenerationOutputSlot(input.placement, anchorSlot, occupied),
+        slot: placed.slot,
         tool: input.tool,
         ...(model ? { model: model.id, provider: model.provider, operation: model.entry.operations[0]! } : {}),
         ...(typeof input.params.prompt === "string"
@@ -106,7 +102,7 @@ export async function placeChainGeneration(
       });
       const withProducer = {
         ...notebook,
-        cells: [...notebook.cells, producer],
+        cells: [...placed.cells, producer],
         edges: [...notebook.edges, ...provenance],
       };
       const allocate = {

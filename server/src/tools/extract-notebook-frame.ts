@@ -1,11 +1,9 @@
-import { notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import type {
   Engine,
   NotebookCell,
   NotebookDocument,
 } from "videobook-engine";
 import {
-  nextHorizontalSlotFrom,
   notebookGridTag,
   resolveNotebookCellArtifactId,
 } from "videobook-engine";
@@ -17,7 +15,7 @@ import {
   findGenerationMediaOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
-import { slotRight } from "../notebook-placement.js";
+import { placeInNotebookLane } from "../notebook-lanes.js";
 import { resolvePublishedPostSourceCell } from "../notebook-published-post.js";
 import {
   notebookCellFingerprint,
@@ -121,12 +119,11 @@ export function extractNotebookFrameDef(engine: Engine): ToolDef {
           }
           const anchor = notebook.cells.find((cell) => cell.id === source.id);
           if (!anchor) throw new Error(`Source cell not found: ${source.id}`);
-          const occupied = notebookOccupiedSlots(notebook.cells);
-          const slot = nextHorizontalSlotFrom(slotRight(anchor.slot), occupied);
+          const placed = placeInNotebookLane(notebook.cells, "image");
           const cell = engine.notebooks.createCell({
             type: "image",
             label,
-            slot,
+            slot: placed.slot,
             inputs: {
               mediaRole: EXTRACT_FRAME_OUTPUT_ROLE,
               frameMode,
@@ -144,7 +141,7 @@ export function extractNotebookFrameDef(engine: Engine): ToolDef {
           const queuedAt = new Date().toISOString();
           return {
             ...notebook,
-            cells: [...notebook.cells, cell],
+            cells: [...placed.cells, cell],
             edges: [...notebook.edges, edge],
             execution: {
               ...(notebook.execution ?? {}),

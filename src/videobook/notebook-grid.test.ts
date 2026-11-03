@@ -1,17 +1,12 @@
 import type { Node } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
+import type { NotebookCellType } from 'videobook-engine'
 import {
-  allocateNotebookHorizontalGenerationSlots,
-  allocateNotebookVideoGenerationSlots,
   changedNotebookGridNodes,
   fitNotebookGridZoom,
-  nextHorizontalSlotFrom,
-  nextNotebookCreationSlot,
   nextNotebookGridSlot,
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-  nextVerticalSlotFrom,
   normalizeNotebookGridZoom,
+  notebookCreationPlacement,
   notebookGrid,
   notebookGridDetailScale,
   notebookGridDropSlot,
@@ -22,17 +17,21 @@ import {
   notebookGridSlot,
   notebookGridTag,
   notebookGridViewport,
+  openNotebookGridNodeRow,
   resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridData,
 } from './notebook-grid'
 import {
+  nextHorizontalSlotFrom,
+  nextVerticalSlotFrom,
   NOTEBOOK_GRID_CAPACITY,
   NOTEBOOK_GRID_COLUMN_COUNT,
   NOTEBOOK_GRID_FULL_ERROR,
   NOTEBOOK_GRID_ROW_COUNT,
 } from 'videobook-engine/notebook-grid'
+import { notebookRowOpening, type NotebookLaneCell } from '../../server/src/notebook-lanes'
 
 interface TestData extends NotebookGridData {
   name: string
@@ -45,6 +44,24 @@ function node(id: string, row: number, column: number): Node<TestData> {
     position: notebookGridPosition(slot),
     data: { name: id, slot },
   }
+}
+
+function laneCell(
+  id: string,
+  type: NotebookCellType,
+  row: number,
+  column: number,
+): NotebookLaneCell {
+  return { id, type, slot: { row, column } }
+}
+
+function laneRow(
+  prefix: string,
+  type: NotebookCellType,
+  row: number,
+  count: number,
+): NotebookLaneCell[] {
+  return Array.from({ length: count }, (_, column) => laneCell(`${prefix}-${column}`, type, row, column))
 }
 
 describe('notebook grid', () => {
@@ -62,14 +79,17 @@ describe('notebook grid', () => {
       .toEqual(cells.map((item) => item.data.slot))
     expect(resolveNotebookGridGroupMove(cells, 'source', ['source', 'timeline'], { row: 2, column: 7 }).map((item) => item.data.slot))
       .toEqual([{ row: 2, column: 7 }, { row: 3, column: 0 }])
-    const row = { type: 'timeline' as const, slot: timeline.data.slot }
+    const row = laneCell('timeline', 'timeline', 1, 0)
     expect(nextNotebookGridSlot([timeline, ...Array.from({ length: 8 }, (_, column) => node(String(column), 0, column))]))
       .toEqual({ row: 2, column: 0 })
-    expect(nextNotebookCreationSlot('timeline', [row, { type: 'image', slot: { row: 0, column: 7 } }]))
-      .toEqual({ row: 2, column: 0 })
-    expect(nextNotebookVideoGenerationSlot([row, { type: 'image', slot: { row: 0, column: 0 } }]))
-      .toEqual({ row: 2, column: 0 })
-    expect(() => nextNotebookCreationSlot('timeline', Array.from({ length: 64 }, (_, row) => ({ type: 'image' as const, slot: { row, column: 7 } }))))
+    expect(notebookCreationPlacement('timeline', [row, laneCell('image', 'image', 0, 7)]))
+      .toEqual({ slot: { row: 2, column: 0 }, makeRoom: false })
+    expect(notebookCreationPlacement('generate_video', [row, laneCell('image', 'image', 0, 0)]))
+      .toEqual({ slot: { row: 0, column: 0 }, makeRoom: true })
+    expect(notebookRowOpening([row, laneCell('image', 'image', 0, 0)], 0))
+      .toEqual(new Map([['image', { row: 2, column: 0 }]]))
+    expect(notebookRowOpening([row, laneCell('image', 'image', 0, 0)], 1)).toBeNull()
+    expect(() => notebookCreationPlacement('timeline', Array.from({ length: 64 }, (_, index) => laneCell(`image-${index}`, 'image', index, 7))))
       .toThrow('empty row')
   })
 
@@ -192,196 +212,89 @@ describe('notebook grid', () => {
     expect(() => nextNotebookGridSlot(full)).toThrow('Notebook grid is full')
   })
 
-  it('packs generation waves horizontally with room for outputs below', () => {
-    // Row below the image band, skipping occupied columns.
-    expect(nextNotebookVideoGenerationSlot([
-      { type: 'image', slot: { row: 0, column: 0 } },
-      { type: 'image', slot: { row: 0, column: 2 } },
-      { type: 'prompt', slot: { row: 1, column: 0 } },
-    ])).toEqual({ row: 1, column: 1 })
+  it('places a new tile in the first free square of its lane', () => {
+    const cells = [
+      ...laneRow('source', 'video', 0, 2),
+      laneCell('gen', 'generate_video', 1, 0),
+      laneCell('image', 'image', 2, 0),
+      laneCell('generated', 'video', 3, 0),
+    ]
+    cells[3] = { ...cells[3]!, inputs: { mediaRole: 'generate-video-output', producerCellId: 'gen' } }
+    expect(notebookCreationPlacement('generate_image', cells)).toEqual({ slot: { row: 1, column: 1 }, makeRoom: false })
+    expect(notebookCreationPlacement('generate_video', cells)).toEqual({ slot: { row: 1, column: 1 }, makeRoom: false })
+    expect(notebookCreationPlacement('prompt', cells)).toEqual({ slot: { row: 1, column: 1 }, makeRoom: false })
+    expect(notebookCreationPlacement('video', cells)).toEqual({ slot: { row: 0, column: 2 }, makeRoom: false })
+    expect(notebookCreationPlacement('image', cells)).toEqual({ slot: { row: 2, column: 1 }, makeRoom: false })
+    expect(notebookCreationPlacement('audio', cells)).toEqual({ slot: { row: 4, column: 0 }, makeRoom: false })
+  })
 
-    // Sibling generation joins the wave row beside the first tile.
-    expect(nextNotebookVideoGenerationSlot([
-      { type: 'image', slot: { row: 0, column: 0 } },
-      { type: 'generate_video', slot: { row: 1, column: 0 } },
-      { type: 'video', slot: { row: 2, column: 0 } },
-    ])).toEqual({ row: 1, column: 1 })
+  it('fills a gap in the lane before the end of its row', () => {
+    const cells = [
+      laneCell('gen-0', 'generate_image', 0, 0),
+      laneCell('gen-2', 'generate_video', 0, 2),
+      laneCell('image', 'image', 1, 0),
+    ]
+    expect(notebookCreationPlacement('generate_video', cells)).toEqual({ slot: { row: 0, column: 1 }, makeRoom: false })
+  })
 
-    // Base-row sources pack the wave from column 1.
-    expect(nextNotebookVideoGenerationSlot(
-      [
-        { type: 'image', slot: { row: 0, column: 2 } },
-        { type: 'image', slot: { row: 0, column: 3 } },
-      ],
-      [{ row: 0, column: 2 }, { row: 0, column: 3 }],
-    )).toEqual({ row: 1, column: 0 })
-
-    // A derived image source starts a lane in its own column.
-    expect(nextNotebookVideoGenerationSlot(
-      [{ type: 'image', slot: { row: 3, column: 2 } }],
-      [{ row: 3, column: 2 }],
-    )).toEqual({ row: 4, column: 2 })
-
-    const first = allocateNotebookVideoGenerationSlots([])
-    expect(first).toEqual({
-      tile: { row: 0, column: 0 },
-      output: { row: 1, column: 0 },
-    })
-    const second = allocateNotebookVideoGenerationSlots([
-      { type: 'generate_video', slot: first.tile },
-      { type: 'video', slot: first.output },
+  it('opens a row under a full lane and moves the rows below it down', () => {
+    const nodes = [
+      ...laneRow('source', 'video', 0, 1),
+      ...laneRow('gen', 'generate_video', 1, 8),
+      ...laneRow('image', 'image', 2, 3),
+    ].map((cell) => ({
+      id: cell.id,
+      position: notebookGridPosition(cell.slot),
+      data: { kind: cell.type, slot: cell.slot },
+    }))
+    const cells = nodes.map((item) => laneCell(item.id, item.data.kind, item.data.slot.row, item.data.slot.column))
+    expect(notebookCreationPlacement('generate_image', cells)).toEqual({ slot: { row: 2, column: 0 }, makeRoom: true })
+    const opened = openNotebookGridNodeRow(nodes, 2)
+    expect(opened.filter((item) => item.id.startsWith('image')).map((item) => item.data.slot)).toEqual([
+      { row: 3, column: 0 },
+      { row: 3, column: 1 },
+      { row: 3, column: 2 },
     ])
-    expect(second).toEqual({
-      tile: { row: 0, column: 1 },
-      output: { row: 1, column: 1 },
-    })
+    expect(opened.find((item) => item.id === 'image-1')?.position).toEqual(notebookGridPosition({ row: 3, column: 1 }))
+    expect(opened.filter((item) => !item.id.startsWith('image'))).toEqual(nodes.filter((item) => !item.id.startsWith('image')))
   })
 
-  it('anchors no-source image/audio work right of last-work and skips occupied', () => {
-    const lastWork = { row: 5, column: 3 }
-    expect(nextNotebookHorizontalGenerationSlot(
-      [{ type: 'prompt', slot: lastWork }],
-      [],
-      lastWork,
-    )).toEqual({ row: 5, column: 4 })
-
-    expect(nextNotebookHorizontalGenerationSlot(
-      [
-        { type: 'prompt', slot: lastWork },
-        { type: 'generate_image', slot: { row: 5, column: 4 } },
-        { type: 'image', slot: { row: 5, column: 5 } },
-      ],
-      [],
-      lastWork,
-    )).toEqual({ row: 5, column: 6 })
-
-    const pair = allocateNotebookHorizontalGenerationSlots(
-      [{ type: 'prompt', slot: lastWork }],
-      [],
-      lastWork,
-    )
-    expect(pair).toEqual({
-      tile: { row: 5, column: 4 },
-      output: { row: 5, column: 5 },
-    })
-    const secondPair = allocateNotebookHorizontalGenerationSlots(
-      [
-        { type: 'prompt', slot: lastWork },
-        { type: 'generate_image', slot: pair.tile },
-        { type: 'image', slot: pair.output },
-      ],
-      [],
-      lastWork,
-    )
-    expect(secondPair).toEqual({
-      tile: { row: 5, column: 6 },
-      output: { row: 5, column: 7 },
-    })
+  it('opens a missing lane in lane order and reuses an empty row without moving tiles', () => {
+    const sourcesAndImages = [laneCell('source', 'video', 0, 0), laneCell('image', 'image', 1, 0)]
+    expect(notebookCreationPlacement('generate_video', sourcesAndImages)).toEqual({ slot: { row: 1, column: 0 }, makeRoom: true })
+    expect(notebookCreationPlacement('video', [laneCell('gen', 'generate_video', 0, 0)])).toEqual({ slot: { row: 0, column: 0 }, makeRoom: true })
+    expect(notebookCreationPlacement('image', [laneCell('source', 'video', 0, 0), laneCell('gen', 'generate_video', 1, 0)]))
+      .toEqual({ slot: { row: 2, column: 0 }, makeRoom: false })
+    expect(notebookCreationPlacement('generate_image', [])).toEqual({ slot: { row: 0, column: 0 }, makeRoom: false })
   })
 
-  it('anchors no-source video work below last-work and skips occupied', () => {
-    const lastWork = { row: 5, column: 3 }
-    expect(nextNotebookVideoGenerationSlot(
-      [{ type: 'prompt', slot: lastWork }],
-      [],
-      lastWork,
-    )).toEqual({ row: 6, column: 3 })
-
-    const pair = allocateNotebookVideoGenerationSlots(
-      [{ type: 'prompt', slot: lastWork }],
-      [],
-      lastWork,
-    )
-    expect(pair).toEqual({
-      tile: { row: 6, column: 3 },
-      output: { row: 7, column: 3 },
-    })
-    const secondPair = allocateNotebookVideoGenerationSlots(
-      [
-        { type: 'prompt', slot: lastWork },
-        { type: 'generate_video', slot: pair.tile },
-        { type: 'video', slot: pair.output },
-      ],
-      [],
-      lastWork,
-    )
-    expect(secondPair).toEqual({
-      tile: { row: 8, column: 3 },
-      output: { row: 9, column: 3 },
-    })
+  it('stops moving rows at the first empty row and steps over Timeline rows', () => {
+    const cells = [
+      laneCell('image', 'image', 0, 0),
+      laneCell('timeline', 'timeline', 1, 0),
+      laneCell('video', 'video', 2, 3),
+      laneCell('audio', 'audio', 4, 0),
+    ]
+    expect(notebookRowOpening(cells, 0)).toEqual(new Map([
+      ['image', { row: 2, column: 0 }],
+      ['video', { row: 3, column: 3 }],
+    ]))
+    expect(notebookRowOpening(cells, 3)).toEqual(new Map())
   })
 
-  it('clamps last-work scans at @h* and @*64 without leaving the board', () => {
-    const lastColumn = { row: 4, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 }
-    expect(nextNotebookHorizontalGenerationSlot(
-      [{ type: 'prompt', slot: lastColumn }],
-      [],
-      lastColumn,
-    )).toEqual({ row: 5, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 })
-    expect(allocateNotebookHorizontalGenerationSlots(
-      [{ type: 'prompt', slot: lastColumn }],
-      [],
-      lastColumn,
-    )).toEqual({
-      tile: { row: 5, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 },
-      output: { row: 6, column: NOTEBOOK_GRID_COLUMN_COUNT - 1 },
-    })
-
-    const lastRow = { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 4 }
-    expect(nextNotebookVideoGenerationSlot(
-      [{ type: 'prompt', slot: lastRow }],
-      [],
-      lastRow,
-    )).toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 5 })
-    expect(allocateNotebookVideoGenerationSlots(
-      [{ type: 'prompt', slot: lastRow }],
-      [],
-      lastRow,
-    )).toEqual({
-      tile: { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 5 },
-      output: { row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 6 },
-    })
-
-    expect(nextNotebookHorizontalGenerationSlot(
-      [],
-      [],
-      { row: 100, column: -4 },
-    )).toEqual({ row: NOTEBOOK_GRID_ROW_COUNT - 1, column: 0 })
+  it('falls back to the first empty square when no row can be opened', () => {
+    const cells = Array.from({ length: NOTEBOOK_GRID_ROW_COUNT }, (_, row) => laneCell(`image-${row}`, 'image', row, 0))
+    expect(notebookCreationPlacement('generate_video', cells)).toEqual({ slot: { row: 0, column: 1 }, makeRoom: false })
+    const full = Array.from({ length: NOTEBOOK_GRID_CAPACITY }, (_, index) => laneCell(
+      `image-${index}`,
+      'image',
+      Math.floor(index / NOTEBOOK_GRID_COLUMN_COUNT),
+      index % NOTEBOOK_GRID_COLUMN_COUNT,
+    ))
+    expect(() => notebookCreationPlacement('generate_video', full)).toThrow(NOTEBOOK_GRID_FULL_ERROR)
   })
 
-  it('keeps source-fed placement even when a last-work anchor is set', () => {
-    const lastWork = { row: 8, column: 6 }
-    expect(nextNotebookHorizontalGenerationSlot(
-      [{ type: 'video', slot: { row: 2, column: 0 } }],
-      [{ row: 2, column: 0 }],
-      lastWork,
-    )).toEqual({ row: 2, column: 1 })
-    expect(nextNotebookVideoGenerationSlot(
-      [{ type: 'image', slot: { row: 3, column: 2 } }],
-      [{ row: 3, column: 2 }],
-      lastWork,
-    )).toEqual({ row: 4, column: 2 })
-  })
-
-  it('uses last-work for no-source creation by media kind', () => {
-    const lastWork = { row: 6, column: 2 }
-    const cells = [{ type: 'prompt', slot: lastWork }]
-    expect(nextNotebookCreationSlot('generate_audio', cells, lastWork))
-      .toEqual({ row: 6, column: 3 })
-    expect(nextNotebookCreationSlot('generate_video', cells, lastWork))
-      .toEqual({ row: 7, column: 2 })
-    expect(nextNotebookCreationSlot('prompt', cells, lastWork))
-      .toEqual({ row: 6, column: 3 })
-    expect(nextNotebookCreationSlot('prompt', cells, null))
-      .toEqual({ row: 0, column: 0 })
-  })
-
-  it('places image and frame work horizontally near sources', () => {
-    expect(nextNotebookHorizontalGenerationSlot(
-      [{ type: 'video', slot: { row: 2, column: 0 } }],
-      [{ row: 2, column: 0 }],
-    )).toEqual({ row: 2, column: 1 })
-
+  it('scans the grid horizontally and vertically from an anchor', () => {
     expect(nextHorizontalSlotFrom(
       { row: 0, column: 3 },
       [{ row: 0, column: 0 }, { row: 0, column: 1 }, { row: 0, column: 2 }],

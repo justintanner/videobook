@@ -2,7 +2,6 @@ import { isSeedanceEdit } from '../../server/src/media/seedance-edit'
 import type {
   NotebookCell,
   NotebookDocument,
-  NotebookGridSlot,
 } from 'videobook-engine'
 import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-artifact'
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
@@ -10,10 +9,7 @@ import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
 import { generationInputTarget } from '../../server/src/generation-input-policy'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
-import {
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-} from './notebook-grid'
+import { notebookLanePlacement } from '../../server/src/notebook-lanes'
 import {
   compatibleGenerationModes,
   generationActionForSelection,
@@ -48,6 +44,7 @@ export type NotebookChatGenerationDraft = {
     sourceCellId: string
     targetInput: string
   }>
+  makeRoom?: boolean
   sourceCellIds: string[]
   sourceAddresses: string[]
 }
@@ -249,8 +246,6 @@ export function planNotebookChatGeneration(input: {
   cellId: string
   command: NotebookChatGenerationCommand
   document: NotebookDocument
-  fallbackSlot: NotebookGridSlot
-  lastWorkSlot?: NotebookGridSlot | null
   preferredModel?: string
   routedParams?: Record<string, unknown>
 }): NotebookChatGenerationDraft {
@@ -296,26 +291,11 @@ export function planNotebookChatGeneration(input: {
     ...(mode ? { generationMode: mode.id } : {}),
     ...(Object.keys(settings).length > 0 ? { generationSettings: settings } : {}),
   }
-  const sourceSlots = sources.map((source) => source.cell.slot)
-  const lastWorkSlot = input.lastWorkSlot ?? null
-  const slot = input.command.cellType === 'generate_video'
-    ? nextNotebookVideoGenerationSlot(
-      input.document.cells,
-      sourceSlots,
-      lastWorkSlot,
-    )
-    : input.command.cellType === 'generate_image'
-      || input.command.cellType === 'generate_audio'
-      ? nextNotebookHorizontalGenerationSlot(
-        input.document.cells,
-        sourceSlots,
-        lastWorkSlot,
-      )
-      : input.fallbackSlot
+  const placement = notebookLanePlacement(input.document.cells, 'gen')
   const cell: NotebookCell = {
     id: input.cellId,
     type: input.command.cellType,
-    slot,
+    slot: placement.slot,
     prompt: input.command.prompt,
     ...selection,
     ...(Object.keys(cellInputs).length > 0 ? { inputs: cellInputs } : {}),
@@ -328,6 +308,7 @@ export function planNotebookChatGeneration(input: {
       sourceCellId: source.cell.id,
       targetInput: targetInputs[index] ?? source.kind,
     })),
+    ...(placement.makeRoom ? { makeRoom: true } : {}),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
   }
@@ -608,6 +589,7 @@ export function reviseNotebookChatGenerationSources(input: {
       sourceCellId: source.cell.id,
       targetInput: targetInputs[index] ?? source.kind,
     })),
+    ...(input.draft.makeRoom ? { makeRoom: true } : {}),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
   }
@@ -628,6 +610,7 @@ export async function materializeNotebookChatGeneration(input: {
       ...(input.expectedRevision
         ? { expected_revision: input.expectedRevision }
         : {}),
+      ...(input.draft.makeRoom ? { make_room: true } : {}),
       cell: {
         id: input.draft.cell.id,
         type: input.draft.cell.type,

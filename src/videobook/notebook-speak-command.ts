@@ -1,6 +1,6 @@
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
-import { nextNotebookHorizontalGenerationSlot } from './notebook-grid'
-import type { NotebookDocument, NotebookGridSlot } from 'videobook-engine'
+import { notebookLanePlacement } from '../../server/src/notebook-lanes'
+import type { NotebookDocument } from 'videobook-engine'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 type NotebookSpeakCommandRun = {
@@ -74,17 +74,12 @@ export async function materializeNotebookSpeakCommand(input: {
   text: string
   voiceId: string
   expectedRevision?: string
-  lastWorkSlot?: NotebookGridSlot | null
 }): Promise<NotebookSpeakCommandRun> {
   const prompt = input.text.trim()
   const voiceId = input.voiceId.trim()
   if (!prompt) throw new Error('Speak text is required')
   if (!voiceId) throw new Error('Speak voice is required')
-  const slot = nextNotebookHorizontalGenerationSlot(
-    input.document.cells,
-    [],
-    input.lastWorkSlot ?? null,
-  )
+  const { slot, makeRoom } = notebookLanePlacement(input.document.cells, 'gen')
   let cellId: string | null = null
   let outputCellId: string | null = null
   try {
@@ -94,6 +89,7 @@ export async function materializeNotebookSpeakCommand(input: {
       ...(input.expectedRevision
         ? { expected_revision: input.expectedRevision }
         : {}),
+      ...(makeRoom ? { make_room: true } : {}),
       cell: {
         type: 'generate_audio',
         label: 'Speak',

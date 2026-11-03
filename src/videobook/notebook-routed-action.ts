@@ -1,8 +1,5 @@
-import type { NotebookCell, NotebookGridSlot } from 'videobook-engine'
-import {
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-} from './notebook-grid.js'
+import type { NotebookCell } from 'videobook-engine'
+import { notebookLanePlacement, openNotebookRow, type NotebookLaneCell } from '../../server/src/notebook-lanes.js'
 import { isPublishedPostCell } from './notebook-published-post.js'
 import { nonBlankStringValue, recordValue } from './value-decoders.js'
 
@@ -11,6 +8,11 @@ interface RoutedMediaCellInput {
   slot: { row: number; column: number }
   inputs: Record<string, unknown>
   output_artifact_id: string
+}
+
+interface RoutedMediaCellPlacement {
+  cell: RoutedMediaCellInput
+  makeRoom: boolean
 }
 
 interface RoutedMediaOutput {
@@ -101,62 +103,37 @@ function spliceOutput(
   }
 }
 
-function coverSongSlot(
-  value: Record<string, unknown>,
+function placeRoutedOutputs(
+  outputs: readonly RoutedMediaOutput[],
   cells: readonly NotebookCell[],
-  lastWorkSlot: NotebookGridSlot | null,
-): { row: number; column: number } {
-  const sourceArtifactId = nonBlankStringValue(value.source_asset_id)
-  const source = sourceArtifactId
-    ? cells.find((cell) =>
-      !isPublishedPostCell(cell) && cell.outputArtifactId === sourceArtifactId)
-    : undefined
-  return nextNotebookHorizontalGenerationSlot(
-    cells,
-    source ? [source.slot] : [],
-    lastWorkSlot,
-  )
-}
-
-function videoOutputSlots(
-  value: Record<string, unknown>,
-  cells: readonly NotebookCell[],
-  count: number,
-  lastWorkSlot: NotebookGridSlot | null,
-): NotebookGridSlot[] {
-  const sourceArtifactIds = new Set([
-    nonBlankStringValue(value.source_asset_id),
-    nonBlankStringValue(value.first_asset_id)
-      ?? nonBlankStringValue(value.first),
-    nonBlankStringValue(value.second_asset_id)
-      ?? nonBlankStringValue(value.second),
-    ...additionalSourceIds(value),
-  ].filter((artifactId): artifactId is string => artifactId !== null))
-  const sourceSlots = cells
-    .filter((cell) => cell.outputArtifactId
-      && sourceArtifactIds.has(cell.outputArtifactId)
-      && !isPublishedPostCell(cell))
-    .map((cell) => cell.slot)
-  const working: Array<{ type: string; slot: NotebookGridSlot }> = [...cells]
-  const slots: NotebookGridSlot[] = []
-  for (let index = 0; index < count; index += 1) {
-    const slot = nextNotebookVideoGenerationSlot(
-      working,
-      sourceSlots,
-      lastWorkSlot,
-    )
-    slots.push(slot)
-    working.push({ type: 'video', slot })
-  }
-  return slots
+): RoutedMediaCellPlacement[] {
+  let working: NotebookLaneCell[] = [...cells]
+  return outputs.map((output, index) => {
+    const placement = notebookLanePlacement(working, output.type === 'audio' ? 'audio' : 'video')
+    if (placement.makeRoom) working = openNotebookRow(working, placement.slot.row)
+    working = [...working, {
+      id: `routed-output-${index}`,
+      type: output.type,
+      slot: placement.slot,
+      inputs: output.inputs,
+    }]
+    return {
+      cell: {
+        type: output.type,
+        slot: placement.slot,
+        inputs: output.inputs,
+        output_artifact_id: output.artifactId,
+      },
+      makeRoom: placement.makeRoom,
+    }
+  })
 }
 
 export function routedMediaCellInputs(
   tool: string,
   result: unknown,
   cells: readonly NotebookCell[],
-  lastWorkSlot: NotebookGridSlot | null = null,
-): RoutedMediaCellInput[] {
+): RoutedMediaCellPlacement[] {
   if (
     tool !== 'make_cover_song'
     && tool !== 'splice_video'
@@ -169,14 +146,5 @@ export function routedMediaCellInputs(
     : [spliceOutput(tool, value)]
   const unplaced = outputs.filter((output) => !cells.some((cell) =>
     !isPublishedPostCell(cell) && cell.outputArtifactId === output.artifactId))
-  if (unplaced.length === 0) return []
-  const slots = tool === 'make_cover_song'
-    ? [coverSongSlot(value, cells, lastWorkSlot)]
-    : videoOutputSlots(value, cells, unplaced.length, lastWorkSlot)
-  return unplaced.map((output, index) => ({
-    type: output.type,
-    slot: slots[index]!,
-    inputs: output.inputs,
-    output_artifact_id: output.artifactId,
-  }))
+  return placeRoutedOutputs(unplaced, cells)
 }

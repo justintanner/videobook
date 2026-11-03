@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { NotebookDocument } from 'videobook-engine'
+import type { NotebookCellType, NotebookDocument } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
 import {
@@ -20,12 +20,7 @@ import {
 import { buildSevenStageScaffold } from '../../server/src/notebook-workflow.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
-import {
-  allocateNotebookHorizontalGenerationSlots,
-  allocateNotebookVideoGenerationSlots,
-  nextNotebookHorizontalGenerationSlot,
-  nextNotebookVideoGenerationSlot,
-} from '../../src/videobook/notebook-grid.js'
+import { notebookCreationPlacement } from '../../src/videobook/notebook-grid.js'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined()
@@ -71,11 +66,11 @@ describe('last-work placement', () => {
     expect(lastCreatedCellSlot([later, earlier])).toEqual(later.slot)
   })
 
-  it('places image/audio right, video below, repeats, edges, sources, and relayout', async () => {
+  it('places each new tile in its lane so the board already matches Clean', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const created = resultJson(await byName.get('create_book')!.handler({
-      name: 'last-work-placement',
+      name: 'lane-placement',
     })) as { bookId: string }
     const managed = books.get(created.bookId)
     expect(managed.ok).toBe(true)
@@ -95,185 +90,37 @@ describe('last-work placement', () => {
       id: string
     }>
     const notebookId = notebooks[0]!.id
-
-    const originImage = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_image',
-        label: 'origin-image',
-        slot: { row: 0, column: 0 },
-        prompt: 'origin kitten',
-      },
-    })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(originImage.output_cell).toBeUndefined()
-    const originDoc = value(engine.notebooks.read(notebookId))
-    expect(notebookDocumentsEqual(originDoc, relayoutNotebookDocument(engine, originDoc)))
-      .toBe(true)
-
-    const lastWork = { row: 8, column: 5 }
-    resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'prompt',
-        label: 'last-work',
-        slot: lastWork,
-        prompt: 'anchor',
-      },
-    }))
-
-    const imageSlots = allocateNotebookHorizontalGenerationSlots(
-      [{ type: 'prompt', slot: lastWork }],
-      [],
-      lastWork,
-    )
-    expect(imageSlots).toEqual({
-      tile: { row: 8, column: 6 },
-      output: { row: 8, column: 7 },
-    })
-    const image = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_image',
-        label: 'gen-image',
-        slot: imageSlots.tile,
-        prompt: 'a kitten',
-      },
-    })) as { id: string; output_cell?: { id: string; slot: { row: number; column: number } } }
-    expect(image.output_cell).toBeUndefined()
-
-    const afterImage = value(engine.notebooks.read(notebookId))
-    const imageRepeat = allocateNotebookHorizontalGenerationSlots(
-      afterImage.cells,
-      [],
-      lastWork,
-    )
-    expect(imageRepeat.tile.row).toBe(8)
-    expect(imageRepeat.tile.column).toBeGreaterThan(imageSlots.tile.column)
-    const imageTwo = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_image',
-        label: 'gen-image-2',
-        slot: imageRepeat.tile,
-        prompt: 'another kitten',
-      },
-    })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(imageTwo.output_cell).toBeUndefined()
-
-    const audioSlots = allocateNotebookHorizontalGenerationSlots(
-      value(engine.notebooks.read(notebookId)).cells,
-      [],
-      lastWork,
-    )
-    const audio = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_audio',
-        label: 'gen-audio',
-        slot: audioSlots.tile,
-        prompt: 'hello',
-      },
-    })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(audio.output_cell?.slot).toEqual(audioSlots.output)
-    expect(audio.output_cell?.slot.row).toBe(audioSlots.tile.row)
-    expect(audio.output_cell!.slot.column).toBeGreaterThan(audioSlots.tile.column)
-
-    const videoSlots = allocateNotebookVideoGenerationSlots(
-      value(engine.notebooks.read(notebookId)).cells,
-      [],
-      lastWork,
-    )
-    expect(videoSlots.tile.column).toBe(lastWork.column)
-    expect(videoSlots.tile.row).toBeGreaterThan(lastWork.row)
-    const video = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_video',
-        label: 'gen-video',
-        slot: videoSlots.tile,
-        prompt: 'a cat walks',
-      },
-    })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(video.output_cell).toBeUndefined()
-
-    const beforeRelayout = value(engine.notebooks.read(notebookId))
-    const createdLayout: NotebookDocument = {
-      ...beforeRelayout,
-      cells: beforeRelayout.cells.filter((cell) => cell.type !== 'prompt'),
+    const place = async (type: NotebookCellType, label: string) => {
+      const placement = notebookCreationPlacement(type, value(engine.notebooks.read(notebookId)).cells)
+      const cell = resultJson(await invoke('create_notebook_cell', {
+        notebook_id: notebookId,
+        ...(placement.makeRoom ? { make_room: true } : {}),
+        cell: { type, label, slot: placement.slot, ...(type.startsWith('generate_') ? { prompt: '' } : {}) },
+      })) as { id: string; output_cell?: { id: string } }
+      return { ...cell, placement }
     }
-    expect(notebookDocumentsEqual(
-      createdLayout,
-      relayoutNotebookDocument(engine, createdLayout),
-    )).toBe(true)
+    const slotOf = (id: string) => value(engine.notebooks.read(notebookId)).cells.find((cell) => cell.id === id)?.slot
 
-    const source = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'image',
-        label: 'source-image',
-        slot: { row: 3, column: 2 },
-      },
-    })) as { id: string }
-    const sourceFedTile = nextNotebookHorizontalGenerationSlot(
-      value(engine.notebooks.read(notebookId)).cells,
-      [{ row: 3, column: 2 }],
-      lastWork,
-    )
-    expect(sourceFedTile).toEqual({ row: 3, column: 3 })
-    const sourceFed = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_image',
-        label: 'from-source',
-        slot: sourceFedTile,
-        prompt: 'based on source',
-      },
-    })) as { id: string; output_cell?: { slot: { row: number; column: number } } }
-    expect(sourceFed.output_cell).toBeUndefined()
-    resultJson(await invoke('connect_notebook_cells', {
-      notebook_id: notebookId,
-      source_cell_id: source.id,
-      target_cell_id: sourceFed.id,
-      target_input: 'image',
-    }))
-    expect(nextNotebookVideoGenerationSlot(
-      value(engine.notebooks.read(notebookId)).cells,
-      [{ row: 3, column: 2 }],
-      lastWork,
-    )).toEqual({ row: 4, column: 2 })
-
-    const edgeImage = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_image',
-        label: 'edge-image',
-        slot: { row: 0, column: 7 },
-        prompt: 'edge',
-      },
-    })) as { output_cell?: { slot: { row: number; column: number } } }
-    expect(edgeImage.output_cell).toBeUndefined()
-
-    const edgeVideo = resultJson(await invoke('create_notebook_cell', {
-      notebook_id: notebookId,
-      cell: {
-        type: 'generate_video',
-        label: 'edge-video',
-        slot: { row: 63, column: 0 },
-        prompt: 'edge walk',
-      },
-    })) as { output_cell?: { slot: { row: number; column: number } } }
-    expect(edgeVideo.output_cell).toBeUndefined()
+    const source = await place('video', 'source')
+    expect(source.placement).toEqual({ slot: { row: 0, column: 0 }, makeRoom: false })
+    const image = await place('generate_image', 'gen-image')
+    expect(image.placement).toEqual({ slot: { row: 1, column: 0 }, makeRoom: false })
+    const audio = await place('generate_audio', 'gen-audio')
+    expect(audio.placement).toEqual({ slot: { row: 1, column: 1 }, makeRoom: false })
+    expect(slotOf(audio.output_cell!.id)).toEqual({ row: 2, column: 0 })
+    const frame = await place('image', 'frame')
+    expect(frame.placement).toEqual({ slot: { row: 2, column: 0 }, makeRoom: true })
+    expect(slotOf(audio.output_cell!.id)).toEqual({ row: 3, column: 0 })
+    const video = await place('generate_video', 'gen-video')
+    expect(video.placement).toEqual({ slot: { row: 1, column: 2 }, makeRoom: false })
+    const secondSource = await place('video', 'second-source')
+    expect(secondSource.placement).toEqual({ slot: { row: 0, column: 1 }, makeRoom: false })
 
     const notebook = value(engine.notebooks.read(notebookId))
     expect(findGenerateImageOutput(notebook, image.id)).toBeNull()
-    expect(findGenerateAudioOutput(notebook, audio.id)?.outputCell.slot)
-      .toEqual(audioSlots.output)
     expect(findGenerateVideoOutput(notebook, video.id)).toBeNull()
-    expect(notebook.cells.every((cell) =>
-      cell.slot.row >= 0
-      && cell.slot.row <= 63
-      && cell.slot.column >= 0
-      && cell.slot.column <= 7)).toBe(true)
+    expect(findGenerateAudioOutput(notebook, audio.id)?.outputCell.slot).toEqual({ row: 3, column: 0 })
+    expect(notebookDocumentsEqual(notebook, relayoutNotebookDocument(engine, notebook))).toBe(true)
     const occupiedKeys = notebook.cells.map((cell) =>
       `${cell.slot.row}:${cell.slot.column}`)
     expect(new Set(occupiedKeys).size).toBe(occupiedKeys.length)
