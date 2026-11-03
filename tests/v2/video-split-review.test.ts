@@ -9,8 +9,10 @@ describe('video segment split', () => {
   it('renders a buttons-only editor with KEEP/REMOVE/ALL and two loop tiles', () => {
     const html = renderToStaticMarkup(createElement(SplitBody, {
       cutPointsSeconds: [0.03, 0.11],
+      destination: 'new',
       mediaUrl: '/files/book/video/proxy.mp4',
       onChange: () => undefined,
+      onDestinationChange: () => undefined,
       outputMode: 'keep',
       selectedIndex: 1,
       sourceDurationSeconds: 30,
@@ -37,8 +39,10 @@ describe('video segment split', () => {
   it('hides frame steps when fps is unknown', () => {
     const html = renderToStaticMarkup(createElement(SplitBody, {
       cutPointsSeconds: [15],
+      destination: 'new',
       mediaUrl: '/files/book/video/proxy.mp4',
       onChange: () => undefined,
+      onDestinationChange: () => undefined,
       outputMode: 'all',
       selectedIndex: 0,
       sourceDurationSeconds: 30,
