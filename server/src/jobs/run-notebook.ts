@@ -91,6 +91,7 @@ import { generationInputTarget } from "../generation-input-policy.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
 import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
+import { currentStream } from "../current-media-streams.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -1612,63 +1613,38 @@ async function assembleCanonicalSequence(
   const clipDurations: number[] = [];
   let timelineStartFrame = 0;
 
-  for (const clipId of clips) {
-    const manifest = await engine.files.manifest(clipId);
-    if (!manifest.ok) throw new Error(manifest.error.message);
-    const file = manifest.value.files.find((entry) => entry.name.startsWith("original."))
-      ?? manifest.value.files[0];
-    if (!file) throw new Error(`Clip artifact ${clipId} has no files`);
-
-    let durationFrames = 90;
-    const streams = engine.streams.list(clipId);
-    if (streams.ok) {
-      const videoStream = streams.value.find((stream) => stream.kind === "video")
-        ?? streams.value[0];
-      if (videoStream) {
-        const seconds = videoStream.durationTicks
-          * videoStream.timeBase.numerator
-          / videoStream.timeBase.denominator;
-        durationFrames = Math.max(1, Math.round(seconds * fps));
-        placements.push({
-          trackId: activeVideoTrack.trackId,
-          timelineStartFrame,
-          durationFrames,
-          source: {
-            kind: "timed",
-            artifactId: clipId,
-            range: {
-              streamId: videoStream.streamId,
-              objectHash: videoStream.objectHash,
-              startTick: 0,
-              durationTicks: videoStream.durationTicks,
-              timeBase: videoStream.timeBase,
-            },
-          },
-          speed: { numerator: 1, denominator: 1 },
-          reverse: false,
-          audioPolicy: "mute",
-          audio: {
-            gainDb: 0,
-            muted: true,
-            fadeInFrames: 0,
-            fadeOutFrames: 0,
-          },
-        });
-        clipDurations.push(durationFrames);
-        timelineStartFrame += durationFrames;
-        continue;
-      }
+  for (const [index, clipId] of clips.entries()) {
+    const videoStream = await currentStream(engine, clipId, "video");
+    if (!videoStream) {
+      throw new Error(`Wait for concat input clip:${index} to finish processing`);
     }
-
+    const seconds = videoStream.durationTicks
+      * videoStream.timeBase.numerator
+      / videoStream.timeBase.denominator;
+    const durationFrames = Math.max(1, Math.round(seconds * fps));
     placements.push({
       trackId: activeVideoTrack.trackId,
       timelineStartFrame,
       durationFrames,
       source: {
-        kind: "still",
+        kind: "timed",
         artifactId: clipId,
-        sourcePath: file.name,
-        objectHash: file.objectHash,
+        range: {
+          streamId: videoStream.streamId,
+          objectHash: videoStream.objectHash,
+          startTick: 0,
+          durationTicks: videoStream.durationTicks,
+          timeBase: videoStream.timeBase,
+        },
+      },
+      speed: { numerator: 1, denominator: 1 },
+      reverse: false,
+      audioPolicy: "mute",
+      audio: {
+        gainDb: 0,
+        muted: true,
+        fadeInFrames: 0,
+        fadeOutFrames: 0,
       },
     });
     clipDurations.push(durationFrames);
@@ -1676,43 +1652,41 @@ async function assembleCanonicalSequence(
   }
 
   if (audioId && audioTrack) {
-    const audioStreams = engine.streams.list(audioId);
-    if (audioStreams.ok) {
-      const audioStream = audioStreams.value.find((stream) => stream.kind === "audio");
-      if (audioStream) {
-        const seconds = audioStream.durationTicks
-          * audioStream.timeBase.numerator
-          / audioStream.timeBase.denominator;
-        placements.push({
-          trackId: audioTrack.trackId,
-          timelineStartFrame: 0,
-          durationFrames: Math.min(
-            timelineStartFrame,
-            Math.max(1, Math.round(seconds * fps)),
-          ),
-          source: {
-            kind: "timed",
-            artifactId: audioId,
-            range: {
-              streamId: audioStream.streamId,
-              objectHash: audioStream.objectHash,
-              startTick: 0,
-              durationTicks: audioStream.durationTicks,
-              timeBase: audioStream.timeBase,
-            },
-          },
-          speed: { numerator: 1, denominator: 1 },
-          reverse: false,
-          audioPolicy: "preserve-pitch",
-          audio: {
-            gainDb: 0,
-            muted: false,
-            fadeInFrames: 0,
-            fadeOutFrames: 0,
-          },
-        });
-      }
+    const audioStream = await currentStream(engine, audioId, "audio");
+    if (!audioStream) {
+      throw new Error("Wait for the concat audio input to finish processing");
     }
+    const seconds = audioStream.durationTicks
+      * audioStream.timeBase.numerator
+      / audioStream.timeBase.denominator;
+    placements.push({
+      trackId: audioTrack.trackId,
+      timelineStartFrame: 0,
+      durationFrames: Math.min(
+        timelineStartFrame,
+        Math.max(1, Math.round(seconds * fps)),
+      ),
+      source: {
+        kind: "timed",
+        artifactId: audioId,
+        range: {
+          streamId: audioStream.streamId,
+          objectHash: audioStream.objectHash,
+          startTick: 0,
+          durationTicks: audioStream.durationTicks,
+          timeBase: audioStream.timeBase,
+        },
+      },
+      speed: { numerator: 1, denominator: 1 },
+      reverse: false,
+      audioPolicy: "preserve-pitch",
+      audio: {
+        gainDb: 0,
+        muted: false,
+        fadeInFrames: 0,
+        fadeOutFrames: 0,
+      },
+    });
   }
   const targetTrackIds = [
     activeVideoTrack.trackId,

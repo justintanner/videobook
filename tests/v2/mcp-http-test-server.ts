@@ -111,22 +111,34 @@ export async function callTool<T>(
 interface PlannedEdit { stages: Array<{ intent: Record<string, unknown> }> }
 interface EditPreview { valid: boolean; previewHash: string }
 
-export async function appendAudioClip(client: Client, bookId: string, artifactId: string): Promise<SequenceClip> {
-  const current = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
-  const track = current.tracks.find((entry) => entry.kind === 'audio')
-  if (!track) throw new Error('The primary sequence has no audio track')
+async function commitSequenceEdit(client: Client, bookId: string, current: Sequence, edit: Record<string, unknown>): Promise<Sequence> {
   const planned = await callTool<PlannedEdit>(client, 'plan_sequence_edit', {
-    book_id: bookId, source_surface: 'ui', actor: 'e2e', expected_revision: current.revision,
-    edits: [{ kind: 'append', track_id: track.trackId, artifact_id: artifactId }],
+    book_id: bookId, source_surface: 'ui', actor: 'e2e', expected_revision: current.revision, edits: [edit],
   })
   const intent = planned.stages[0]?.intent
   if (!intent) throw new Error('plan_sequence_edit returned no stage')
   const preview = await callTool<EditPreview>(client, 'preview_edit_intent', { book_id: bookId, intent })
-  if (!preview.valid) throw new Error(`Append preview is invalid: ${JSON.stringify(preview)}`)
+  if (!preview.valid) throw new Error(`${String(edit.kind)} preview is invalid: ${JSON.stringify(preview)}`)
   await callTool(client, 'commit_edit_intent', { book_id: bookId, intent, preview_hash: preview.previewHash })
-  const updated = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+  return callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+}
+
+export async function appendAudioClip(client: Client, bookId: string, artifactId: string): Promise<SequenceClip> {
+  const current = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+  const track = current.tracks.find((entry) => entry.kind === 'audio')
+  if (!track) throw new Error('The primary sequence has no audio track')
+  const updated = await commitSequenceEdit(client, bookId, current, { kind: 'append', track_id: track.trackId, artifact_id: artifactId })
   const clip = updated.clips.find((entry) => entry.trackId === track.trackId
     && entry.source.kind === 'timed' && entry.source.artifactId === artifactId)
   if (!clip) throw new Error('The appended audio clip is missing from the sequence')
+  return clip
+}
+
+export async function insertIntoSequence(client: Client, bookId: string, artifactId: string): Promise<Extract<SequenceClip, { source: { kind: 'timed' } }>> {
+  const current = await callTool<Sequence>(client, 'get_primary_sequence', { book_id: bookId })
+  const updated = await commitSequenceEdit(client, bookId, current, { kind: 'insert', artifact_id: artifactId, timeline_start_frame: 0 })
+  const clip = updated.clips.find((entry): entry is Extract<SequenceClip, { source: { kind: 'timed' } }> =>
+    entry.source.kind === 'timed' && entry.source.artifactId === artifactId)
+  if (!clip) throw new Error('The inserted clip is missing from the sequence')
   return clip
 }

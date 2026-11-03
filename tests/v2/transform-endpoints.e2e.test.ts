@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,7 @@ import { chromium } from 'playwright'
 import sharp from 'sharp'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG, FFPROBE, probeVideo } from '../../server/src/ffmpeg.js'
-import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { appendAudioClip, callTool, insertIntoSequence, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -233,7 +234,9 @@ describe('transformation endpoints over HTTP MCP', () => {
     await idle()
     expect((await probe(id, 'original.wav')).audioCodec).toBe('pcm_s16le')
     expect((await rms(id, 'original.wav')) / level).toBeCloseTo(2, 1)
-    expect((await appendAudioClip(client, bookId, id)).durationFrames).toBe(30)
+    const clip = await insertIntoSequence(client, bookId, id)
+    expect(clip.durationFrames).toBe(30)
+    expect(clip.source.range.objectHash).toBe(createHash('sha256').update(await file(id, 'original.wav')).digest('hex'))
   })
 
   it('rejects empty or out-of-range audio trims before affecting the artifact', async () => {

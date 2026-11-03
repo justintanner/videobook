@@ -10,7 +10,7 @@ import {
   type NotebookCell,
   type NotebookDocument,
 } from "videobook-engine";
-import { FFMPEG } from "../../server/src/ffmpeg.js";
+import { FFMPEG, probeVideo } from "../../server/src/ffmpeg.js";
 import {
   prepareNotebookGeneration,
   resolveNotebookGenerationTool,
@@ -19,6 +19,7 @@ import {
 import { frameAspectRatio } from "../../server/src/media/frame-options.js";
 import { previewGeneration } from "../../server/src/media/preview.js";
 import { DEFAULT_ANIMATION_MODEL } from "../../server/src/notebook-action-catalog.js";
+import { registerMediaProbe } from "../../server/src/notebook-media-ops.js";
 import { buildAssetList } from "../../server/src/tools/reconcile-project-work.js";
 import { testBudget } from "../../server/src/test-budget.js";
 
@@ -848,6 +849,9 @@ describe("notebook runner frames and concat", () => {
     if (!clipA.ok || !clipB.ok) return;
     await engine.files.writeFromPath(clipA.value.artifactId, "original.mp4", clipPath);
     await engine.files.writeFromPath(clipB.value.artifactId, "original.mp4", clipPath);
+    const clipProbe = await probeVideo(clipPath);
+    await registerMediaProbe(engine, clipA.value.artifactId, "original.mp4", clipProbe);
+    await registerMediaProbe(engine, clipB.value.artifactId, "original.mp4", clipProbe);
 
     const notebook = await engine.notebooks.create("Main");
     expect(notebook.ok).toBe(true);
@@ -921,6 +925,14 @@ describe("notebook runner frames and concat", () => {
       ),
     ).rejects.toThrow(/requires exactly one completed video on first and second/i);
 
+    const editedPath = join(rootDir, "edited.mp4");
+    await makeClip(editedPath, 2);
+    await engine.files.writeFromPath(clipB.value.artifactId, "original.mp4", editedPath);
+    await expect(
+      runNotebookCell(engine, engine.book.get().bookId, document.id, document, concat),
+    ).rejects.toThrow("Wait for concat input clip:1 to finish processing");
+    await registerMediaProbe(engine, clipB.value.artifactId, "original.mp4", await probeVideo(editedPath));
+
     const completed = await runNotebookCell(
       engine,
       engine.book.get().bookId,
@@ -928,6 +940,20 @@ describe("notebook runner frames and concat", () => {
       document,
       concat,
     );
+    const sourceHash = async (artifactId: string) => {
+      const files = await engine!.files.manifest(artifactId);
+      if (!files.ok) throw new Error(files.error.message);
+      return files.value.files.find((file) => file.name === "original.mp4")?.objectHash;
+    };
+    expect([...engine.sequences.getPrimary().clips]
+      .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+      .map((clip) => clip.source.kind === "timed"
+        ? { artifactId: clip.source.artifactId, objectHash: clip.source.range.objectHash, durationFrames: clip.durationFrames }
+        : clip.source))
+      .toEqual([
+        { artifactId: clipA.value.artifactId, objectHash: await sourceHash(clipA.value.artifactId), durationFrames: 30 },
+        { artifactId: clipB.value.artifactId, objectHash: await sourceHash(clipB.value.artifactId), durationFrames: 60 },
+      ]);
     expect(completed.outputArtifactId).toBeTruthy();
     const completedCell = completed.document.cells.find((cell) => cell.id === concat.id);
     expect(completedCell?.type).toBe("concat");

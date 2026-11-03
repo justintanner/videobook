@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
+  ArtifactStream,
   ClipAudio,
   EditIntent,
   EditOperation,
@@ -10,7 +11,6 @@ import type {
   SourceSurface,
 } from "videobook-engine";
 import {
-  findAudioFile,
   findPrimaryMediaFile,
   MVP_CONTRACT_VERSION,
   sequenceFramesToSourceTicks,
@@ -22,6 +22,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { scanNotebookMentions } from "videobook-engine/notebook-mentions";
 import { fittedTransform } from "../rhythm/visual-fit.js";
 import { resolveArtifactRefs } from "../artifact-refs.js";
+import { currentStream, currentStreams } from "../current-media-streams.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 
@@ -302,15 +303,18 @@ function nativeClipFrames(
   );
 }
 
-function requiredVideoStream(engine: Engine, artifactId: string) {
+const SOURCE_PROCESSING_MESSAGE = "Wait for the current source media to finish processing before adding it";
+
+async function requiredVideoStream(
+  engine: Engine,
+  artifactId: string,
+): Promise<ArtifactStream> {
   const artifact = engine.artifacts.get(artifactId);
   if (!artifact.ok) throw new Error(artifact.error.message);
   if (artifact.value.kind !== "video" && artifact.value.kind !== "final") {
     throw new Error("Music-video sources must be video or final artifacts");
   }
-  const streams = engine.streams.list(artifactId);
-  if (!streams.ok) throw new Error(streams.error.message);
-  const stream = streams.value.find((candidate) => candidate.kind === "video");
+  const stream = await currentStream(engine, artifactId, "video");
   if (!stream) throw new Error(`Video source has no registered stream: ${artifactId}`);
   return stream;
 }
@@ -320,7 +324,7 @@ function timedVideoPlacement(
   timelineStartFrame: number,
   durationFrames: number,
   artifactId: string,
-  stream: ReturnType<typeof requiredVideoStream>,
+  stream: ArtifactStream,
   nativeFrames: number,
   visualFit?: "fit" | "fill",
 ): InsertClipOperation {
@@ -359,7 +363,7 @@ function rebalanceLaneAppend(
   existing: SequenceClip[],
   sources: Array<{
     artifactId: string;
-    stream: ReturnType<typeof requiredVideoStream>;
+    stream: ArtifactStream;
     nativeFrames: number;
   }>,
   limit: number,
@@ -373,7 +377,7 @@ function rebalanceLaneAppend(
   const slots = splitFrames(limit, count);
   type LaneSource = {
     artifactId: string;
-    stream: ReturnType<typeof requiredVideoStream>;
+    stream: ArtifactStream;
     nativeFrames: number;
   };
   type LaneItem =
@@ -486,12 +490,12 @@ function clipAudio(clip: SequenceClip, muted: boolean): ClipAudio {
   };
 }
 
-function audioSetupOperations(
+async function audioSetupOperations(
   engine: Engine,
   sequence: Sequence,
   audioArtifactId: string,
   audioTrackId: string,
-): EditOperation[] {
+): Promise<EditOperation[]> {
   const artifact = engine.artifacts.get(audioArtifactId);
   if (!artifact.ok) throw new Error(artifact.error.message);
   if (artifact.value.kind !== "audio") {
@@ -505,9 +509,7 @@ function audioSetupOperations(
     && candidate.solo)) {
     throw new Error("Disable solo on other audio tracks before applying the soundtrack");
   }
-  const streams = engine.streams.list(audioArtifactId);
-  if (!streams.ok) throw new Error(streams.error.message);
-  const stream = streams.value.find((candidate) => candidate.kind === "audio");
+  const stream = await currentStream(engine, audioArtifactId, "audio");
   if (!stream) throw new Error("The soundtrack has no registered audio stream");
   const durationFrames = sourceTicksToSequenceFrames(
     stream.durationTicks,
@@ -758,16 +760,8 @@ async function operationsForRequest(
       ? artifact.value.kind === "audio"
       : artifact.value.kind === "video" || artifact.value.kind === "final";
     if (!compatible) throw new Error(`Choose ${track.kind === "audio" ? "an audio" : "a video"} source for this track`);
-    const manifest = await engine.files.manifest(request.artifact_id);
-    if (!manifest.ok) throw new Error(manifest.error.message);
-    const file = track.kind === "audio"
-      ? findAudioFile(manifest.value.files, artifact.value.kind)
-      : findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
-    const streams = engine.streams.list(request.artifact_id);
-    if (!streams.ok) throw new Error(streams.error.message);
-    const stream = streams.value.find((entry) => entry.kind === track.kind
-      && entry.sourcePath === file?.name && entry.objectHash === file.objectHash);
-    if (!stream) throw new Error("Wait for the current source media to finish processing before adding it");
+    const stream = await currentStream(engine, request.artifact_id, track.kind);
+    if (!stream) throw new Error(SOURCE_PROCESSING_MESSAGE);
     const durationFrames = sourceTicksToSequenceFrames(
       stream.durationTicks, stream.timeBase, sequence.frameRate, "ceil",
     );
@@ -807,8 +801,8 @@ async function operationsForRequest(
   if (request.kind === "append_clips") {
     const track = requiredTrack(sequence, request.track_id, "video");
     const existing = clipsOnTrack(sequence, track.trackId);
-    const sources = request.artifact_ids.map((artifactId) => {
-      const stream = requiredVideoStream(engine, artifactId);
+    const sources = await Promise.all(request.artifact_ids.map(async (artifactId) => {
+      const stream = await requiredVideoStream(engine, artifactId);
       return {
         artifactId,
         stream,
@@ -819,7 +813,7 @@ async function operationsForRequest(
           "ceil",
         ),
       };
-    });
+    }));
     if ((request.fit ?? "fill") === "source") {
       let timelineStartFrame = Math.max(0, ...existing.map(clipEnd));
       const operations: EditOperation[] = [];
@@ -1226,10 +1220,11 @@ async function operationsForRequest(
   }
   const artifact = engine.artifacts.get(request.artifact_id);
   if (!artifact.ok) throw new Error(artifact.error.message);
-  const streams = engine.streams.list(artifact.value.artifactId);
-  if (!streams.ok) throw new Error(streams.error.message);
-  const timedStream = streams.value.find((stream) =>
-    stream.kind === "video") ?? streams.value.find((stream) =>
+  const manifest = await engine.files.manifest(artifact.value.artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const streams = currentStreams(engine, artifact.value.artifactId, manifest.value.files);
+  const timedStream = streams.find((stream) =>
+    stream.kind === "video") ?? streams.find((stream) =>
     stream.kind === "audio");
   if (timedStream) {
     const track = requiredTrack(
@@ -1278,8 +1273,9 @@ async function operationsForRequest(
       },
     }];
   }
-  const manifest = await engine.files.manifest(artifact.value.artifactId);
-  if (!manifest.ok) throw new Error(manifest.error.message);
+  if (["video", "audio", "final"].includes(artifact.value.kind)) {
+    throw new Error(SOURCE_PROCESSING_MESSAGE);
+  }
   const media = findPrimaryMediaFile(manifest.value.files, artifact.value.kind);
   if (!media) throw new Error("The artifact has no insertable source media");
   const track = requiredTrack(sequence, request.track_id, "video");

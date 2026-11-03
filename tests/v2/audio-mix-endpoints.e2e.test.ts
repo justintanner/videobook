@@ -8,7 +8,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { Sequence } from 'videobook-engine'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
-import { appendAudioClip, callTool, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
+import { callTool, insertIntoSequence, startServer, stopServer, type StartedServer } from './mcp-http-test-server.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -107,13 +107,13 @@ describe('audio mix endpoints over HTTP MCP', () => {
     const after = await asset(target)
     expect(after.assetWork?.status).toBe('ready')
     expect(after.media_url).not.toBe(before.media_url)
+    const mixedHash = createHash('sha256').update(await bytes(target, filename)).digest('hex')
     const streams = await call<Array<{ objectHash: string; kind: string }>>('list_media_streams', { artifact_id: target })
-    expect(streams).toEqual(expect.arrayContaining([expect.objectContaining({
-      kind: 'audio', objectHash: createHash('sha256').update(await bytes(target, filename)).digest('hex'),
-    })]))
-    const frames = (await appendAudioClip(client, bookId, target)).durationFrames
-    expect(frames).toBeGreaterThanOrEqual(90)
-    expect(frames).toBeLessThanOrEqual(91)
+    expect(streams).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'audio', objectHash: mixedHash })]))
+    const clip = await insertIntoSequence(client, bookId, target)
+    expect(clip.source.range.objectHash).toBe(mixedHash)
+    expect(clip.durationFrames).toBeGreaterThanOrEqual(90)
+    expect(clip.durationFrames).toBeLessThanOrEqual(91)
   })
 
   it.each([false, true])('mixes into video with existing audio=%s without changing picture bytes', async (hasAudio) => {

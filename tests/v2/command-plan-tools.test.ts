@@ -5,6 +5,7 @@ import {
   MVP_CONTRACT_VERSION,
   createEngine,
   type EditIntent,
+  type Sequence,
 } from 'videobook-engine'
 import { afterEach, describe, expect, it } from 'vitest'
 import { v7 as uuidv7 } from 'uuid'
@@ -748,6 +749,123 @@ describe('CommandPlan edit tools', () => {
     })
     expect(many.success).toBe(true)
     if (many.success) expect(many.data.media_context).toBeUndefined()
+    engine.close()
+  })
+
+  it('places the stream registered for the current source after in-place edits', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-current-stream-'))
+    const engine = createEngine({ durableWrites: false, rootDir,
+    initialBookName: 'current-stream', })
+    const bookId = engine.book.get().bookId
+    const tools = new Map(commandPlanDefs(engine).map((tool) => [tool.name, tool]))
+    const createMedia = async (kind: 'audio' | 'video') => {
+      const artifact = await engine.artifacts.create(kind, `${kind} source`)
+      if (!artifact.ok) throw new Error(artifact.error.message)
+      return artifact.value.artifactId
+    }
+    const writeSource = async (artifactId: string, kind: 'audio' | 'video', bytes: string, seconds?: number) => {
+      const sourcePath = kind === 'audio' ? 'original.wav' : 'original.mp4'
+      const written = await engine.files.write(artifactId, sourcePath, Buffer.from(bytes))
+      if (!written.ok) throw new Error(written.error.message)
+      const manifest = await engine.files.manifest(artifactId)
+      if (!manifest.ok) throw new Error(manifest.error.message)
+      const objectHash = manifest.value.files.find((file) => file.name === sourcePath)!.objectHash
+      if (seconds === undefined) return { objectHash, streamId: undefined }
+      const registered = await engine.streams.register({
+        artifactId,
+        sourcePath,
+        objectHash,
+        streamIndex: 0,
+        kind,
+        ...(kind === 'audio'
+          ? {
+              timeBase: { numerator: 1, denominator: 44_100 },
+              durationTicks: seconds * 44_100,
+              codec: 'pcm_s16le',
+              audio: { sampleRateHz: 44_100, channels: 1, channelLayout: 'mono' },
+            }
+          : {
+              timeBase: { numerator: 1, denominator: 30 },
+              durationTicks: seconds * 30,
+              codec: 'h264',
+              video: { width: 160, height: 96, rotationDegrees: 0, pixelAspect: { numerator: 1, denominator: 1 } },
+            }),
+      })
+      if (!registered.ok) throw new Error(registered.error.message)
+      return { objectHash, streamId: registered.value.streamId }
+    }
+    const planEdit = (edit: Record<string, unknown>) => tools.get('plan_sequence_edit')!.handler({
+      book_id: bookId,
+      source_surface: 'slash',
+      actor: 'current-stream-fixture',
+      edits: [edit],
+    })
+    const placement = async (edit: Record<string, unknown>) => {
+      const plan = resultJson(await planEdit(edit)) as { stages: Array<{ intent: EditIntent }> }
+      const operation = plan.stages[0]!.intent.operations.find((candidate) => candidate.kind === 'insert-clip')
+      if (operation?.kind !== 'insert-clip') throw new Error('expected insert-clip operation')
+      return operation.placement
+    }
+    const refusal = async (edit: Record<string, unknown>) => {
+      const result = await planEdit(edit)
+      expect(result.isError).toBe(true)
+      return result.content[0]?.text
+    }
+
+    const audio = await createMedia('audio')
+    await writeSource(audio, 'audio', 'three-second upload', 3)
+    await writeSource(audio, 'audio', 'two-second trim', 2)
+    const boosted = await writeSource(audio, 'audio', 'one-second boost', 1)
+    const video = await createMedia('video')
+    await writeSource(video, 'video', 'three-second upload', 3)
+    const reversed = await writeSource(video, 'video', 'two-second reverse', 2)
+    expect(engine.streams.list(audio)).toMatchObject({ ok: true, value: { length: 3 } })
+    const sequence = engine.sequences.getPrimary()
+    const videoTrack = sequence.tracks.find((track) => track.kind === 'video')!
+    const audioTracks = sequence.tracks.filter((track) => track.kind === 'audio')
+    const currentAudio = { streamId: boosted.streamId, objectHash: boosted.objectHash, startTick: 0, durationTicks: 44_100 }
+    const currentVideo = { streamId: reversed.streamId, objectHash: reversed.objectHash, startTick: 0, durationTicks: 60 }
+
+    expect(await placement({ kind: 'append', artifact_id: audio, track_id: audioTracks[0]!.trackId }))
+      .toMatchObject({ durationFrames: 30, source: { kind: 'timed', range: currentAudio } })
+    expect(await placement({ kind: 'music_video_setup', audio_artifact_id: audio, audio_track_id: audioTracks[1]!.trackId }))
+      .toMatchObject({ durationFrames: 30, source: { kind: 'timed', range: currentAudio } })
+    expect(await placement({ kind: 'insert', artifact_id: video, timeline_start_frame: 0 }))
+      .toMatchObject({ trackId: videoTrack.trackId, durationFrames: 60, source: { kind: 'timed', range: currentVideo } })
+    expect(await placement({ kind: 'append_clips', track_id: videoTrack.trackId, artifact_ids: [video], timeline_limit_frame: 60 }))
+      .toMatchObject({ durationFrames: 60, source: { kind: 'timed', range: currentVideo } })
+
+    const insertPlan = resultJson(await planEdit({ kind: 'insert', artifact_id: audio, timeline_start_frame: 0 })) as {
+      stages: Array<{ intent: EditIntent }>
+    }
+    const intent = insertPlan.stages[0]!.intent
+    const preview = resultJson(await tools.get('preview_edit_intent')!.handler({ book_id: bookId, intent })) as {
+      valid: boolean
+      previewHash: string
+    }
+    expect(preview.valid).toBe(true)
+    const committed = resultJson(await tools.get('commit_edit_intent')!.handler({
+      book_id: bookId,
+      intent,
+      preview_hash: preview.previewHash,
+    })) as { sequence: Sequence }
+    expect(committed.sequence.clips).toEqual([expect.objectContaining({
+      trackId: audioTracks[0]!.trackId,
+      timelineStartFrame: 0,
+      durationFrames: 30,
+      source: { kind: 'timed', artifactId: audio, range: { ...currentAudio, timeBase: { numerator: 1, denominator: 44_100 } } },
+    })])
+
+    await writeSource(audio, 'audio', 'mix awaiting processing')
+    await writeSource(video, 'video', 'crop awaiting processing')
+    const processing = 'Wait for the current source media to finish processing before adding it'
+    expect(await refusal({ kind: 'insert', artifact_id: audio, timeline_start_frame: 30 })).toBe(processing)
+    expect(await refusal({ kind: 'append', artifact_id: audio, track_id: audioTracks[0]!.trackId })).toBe(processing)
+    expect(await refusal({ kind: 'music_video_setup', audio_artifact_id: audio, audio_track_id: audioTracks[1]!.trackId }))
+      .toBe('The soundtrack has no registered audio stream')
+    expect(await refusal({ kind: 'insert', artifact_id: video, timeline_start_frame: 0 })).toBe(processing)
+    expect(await refusal({ kind: 'append_clips', track_id: videoTrack.trackId, artifact_ids: [video], timeline_limit_frame: 60 }))
+      .toBe(`Video source has no registered stream: ${video}`)
     engine.close()
   })
 })
