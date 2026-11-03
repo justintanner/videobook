@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { probeVideo, FFMPEG } from "../ffmpeg.js";
+import { probeVideo, FFMPEG, FFPROBE } from "../ffmpeg.js";
 import { createTimewarpPlan } from "../timewarp.js";
 import {
   registerTimewarpVideoJob,
@@ -111,6 +111,19 @@ async function rgbAt(filePath: string, seconds: number): Promise<[number, number
   ], { encoding: "buffer", maxBuffer: 1024 });
   const rgb = stdout as unknown as Buffer;
   return [rgb[0], rgb[1], rgb[2]];
+}
+
+async function videoFrames(filePath: string): Promise<{ rate: string; frames: number }> {
+  const { stdout } = await execFileAsync(FFPROBE, [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-count_frames",
+    "-show_entries", "stream=r_frame_rate,nb_read_frames",
+    "-of", "json",
+    filePath,
+  ]);
+  const [stream] = (JSON.parse(stdout) as { streams: Array<{ r_frame_rate: string; nb_read_frames: string }> }).streams;
+  return { rate: stream!.r_frame_rate, frames: Number(stream!.nb_read_frames) };
 }
 
 describe("timewarp video media rendering", () => {
@@ -225,5 +238,35 @@ describe("timewarp video media rendering", () => {
     expect(blue[2]).toBeGreaterThan(blue[0]);
     expect(blue[2]).toBeGreaterThan(blue[1]);
     expect(plan.segments[0].stretchFactor).toBe(plan.segments[2].stretchFactor);
+  });
+
+  it("keeps a 30fps source at 30fps with one frame per output frame time", async () => {
+    const inputPath = join(dir, "thirty-fps-source.mp4");
+    const outputPath = join(dir, "thirty-fps-output.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-f", "lavfi", "-i", "testsrc=duration=4:size=320x180:rate=30",
+      "-c:v", "libx264",
+      "-preset", "ultrafast",
+      "-pix_fmt", "yuv420p",
+      "-an",
+      inputPath,
+    ]);
+    const source = await probeVideo(inputPath);
+    const plan = createTimewarpPlan({
+      sourceDuration: source.duration,
+      sourceFps: source.fps,
+      startSeconds: 1,
+      endSeconds: 2,
+      stretchFactor: 2,
+    });
+
+    await renderTimewarpedVideo(inputPath, outputPath, plan, false);
+    await validateTimewarpOutput(inputPath, outputPath, plan);
+
+    expect(await videoFrames(outputPath)).toEqual({
+      rate: "30/1",
+      frames: Math.round((plan.selectedOutputDuration + plan.outsideOutputDuration) * 30),
+    });
   });
 });

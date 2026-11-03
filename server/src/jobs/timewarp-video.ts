@@ -42,6 +42,7 @@ function outputArgs(
     "-map", "[vout]",
     ...(hasAudio ? ["-map", "0:a:0"] : ["-an"]),
     ...H264_MEDIUM,
+    "-r", String(plan.sourceFps),
     "-pix_fmt", "yuv420p",
     ...(hasAudio ? (audioMode === "copy" ? ["-c:a", "copy"] : AUDIO_OPTS) : []),
     "-t", plan.sourceDuration.toFixed(9),
