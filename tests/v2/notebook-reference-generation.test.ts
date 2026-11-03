@@ -172,6 +172,12 @@ describe("reference video generation inputs", () => {
     const gemini = actions.find((candidate) => candidate.model === "kie:gemini-omni-video")!;
     expect(generationModeIsCompatible(gemini, "r2v", [{ kind: "audio", target: "audio" }])).toBe(false);
     expect(generationModeIsCompatible(action, "r2v", [])).toBe(false);
+    const frames = action.inputContract.modes.find((candidate) => candidate.id === "i2v")!;
+    expect(generationModeInputError(frames, [{ kind: "image", target: "last_frame" }]))
+      .toBe("A last frame needs a first frame. Add it or change the type.");
+    expect(generationModeInputError(frames, [{ kind: "image", target: "first_frame" }, { kind: "image", target: "last_frame" }]))
+      .toBeNull();
+    expect(generationModeIsCompatible(action, "i2v", [{ kind: "image", target: "last_frame" }])).toBe(false);
   });
 
   it("persists the same prompt references when more images are connected and blocks removed references", async () => {

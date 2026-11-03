@@ -1,4 +1,5 @@
 import { generationModeInputTarget, type GenerationInputKind as InputKind } from "./generation-input-targets.js";
+import type { InputLimit } from "./media/types.js";
 
 interface ModeInput {
   kind: InputKind;
@@ -17,6 +18,14 @@ interface InputMode {
   id: string;
   slots: InputSlot[];
   requiredGroups: string[][];
+  limits?: readonly InputLimit[];
+}
+
+function unmetRequirement(mode: InputMode, counts: ReadonlyMap<string, number>): string | null {
+  const limit = (mode.limits ?? []).find((candidate) => candidate.kind === "requires"
+    && (counts.get(candidate.role) ?? 0) > 0
+    && (counts.get(candidate.requires) ?? 0) === 0);
+  return limit ? `${limit.message}. Add it or change the type.` : null;
 }
 
 function modeInputs(mode: InputMode, inputs: readonly ModeInput[]): ModeInput[] {
@@ -80,6 +89,8 @@ export function generationModeInputError(
   if (missing) {
     return `Add at least ${missing.min} ${inputLabel(missing.targets[0] ?? missing.kind)} input${missing.min === 1 ? "" : "s"} for ${name}.`;
   }
+  const requirement = unmetRequirement(mode, counts);
+  if (requirement) return requirement;
   const group = mode.requiredGroups.find((fields) =>
     !fields.some((field) => (counts.get(field) ?? 0) > 0));
   if (!group) return null;
