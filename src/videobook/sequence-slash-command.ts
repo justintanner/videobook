@@ -43,26 +43,22 @@ export type SequenceSlashResult =
 const SEQUENCE_COMMANDS = new Set([
   '/caption',
   '/move',
-  '/split-clip',
-  '/clip-delete',
   '/gap',
   '/fit',
-  '/reframe',
-  '/clip-reverse',
   '/clip-audio',
   '/duck',
   '/insert',
   '/overwrite',
-  '/clip-trim',
-  '/volume',
 ])
+
+const CLIP_TARGET_COMMANDS = new Set(['/delete', '/trim', '/reverse', '/split', '/crop'])
 
 export function parseSequenceSlashCommand(
   commandToken: string,
   restParts: readonly string[],
   context: SequenceSlashContext,
 ): SequenceSlashResult {
-  if (commandToken === '/delete' || commandToken === '/trim' || commandToken === '/reverse') {
+  if (CLIP_TARGET_COMMANDS.has(commandToken)) {
     if (!clipReference(context.sequence, restParts[0])) return { handled: false }
   } else if (!SEQUENCE_COMMANDS.has(commandToken)) {
     return { handled: false }
@@ -113,12 +109,12 @@ export function parseSequenceSlashCommand(
     })
   }
 
-  if (commandToken === '/split-clip') {
+  if (commandToken === '/split') {
     const [clipValue, frameValue] = restParts
     const clip = clipReference(sequence, clipValue)
     const splitFrame = Number(frameValue)
     if (!clip || !Number.isSafeInteger(splitFrame) || splitFrame < 0) {
-      return failure('Usage: /split-clip @clip-id <sequence-frame>')
+      return failure('Usage: /split @clip-id <sequence-frame>')
     }
     return success({
       kind: 'split',
@@ -127,11 +123,11 @@ export function parseSequenceSlashCommand(
     })
   }
 
-  if (commandToken === '/clip-delete' || commandToken === '/delete') {
+  if (commandToken === '/delete') {
     const clip = clipReference(sequence, restParts[0])
     const unknown = restParts.slice(1).filter((value) => value !== '--ripple')
     if (!clip || unknown.length > 0) {
-      return failure('Usage: /clip-delete @clip-id [--ripple]')
+      return failure('Usage: /delete @clip-id [--ripple]')
     }
     return success({
       kind: 'delete',
@@ -177,9 +173,9 @@ export function parseSequenceSlashCommand(
     })
   }
 
-  if (commandToken === '/reframe') {
+  if (commandToken === '/crop') {
     const clip = clipReference(sequence, restParts[0])
-    if (!clip) return failure('Usage: /reframe @visual-clip-id')
+    if (!clip) return failure('Usage: /crop @visual-clip-id')
     if (trackOf(sequence, clip)?.kind !== 'video') {
       return failure('Automatic reframe requires a visual clip')
     }
@@ -189,11 +185,11 @@ export function parseSequenceSlashCommand(
     })
   }
 
-  if (commandToken === '/clip-reverse' || commandToken === '/reverse') {
+  if (commandToken === '/reverse') {
     const clip = clipReference(sequence, restParts[0])
-    if (!clip) return failure('Usage: /clip-reverse @timed-clip-id')
+    if (!clip) return failure('Usage: /reverse @timed-clip-id')
     if (clip.source.kind !== 'timed' || !clip.speed || clip.reverse === undefined || !clip.audioPolicy) {
-      return failure('/clip-reverse requires a timed clip')
+      return failure('/reverse requires a timed clip')
     }
     return success({
       kind: 'speed',
@@ -206,7 +202,7 @@ export function parseSequenceSlashCommand(
   }
 
   if (commandToken === '/clip-audio') {
-    const parsed = parseClipAudioCommand(restParts)
+    const parsed = parseClipAudioCommand(gainShorthand(restParts))
     if (!parsed.ok) return failure(parsed.message)
     const target = resolveClipAudioTarget(sequence, parsed.clipRef)
     if (!target.ok) return failure(target.message)
@@ -229,7 +225,7 @@ export function parseSequenceSlashCommand(
     })
   }
 
-  if (commandToken === '/insert' || commandToken === '/overwrite' || commandToken === '/clip-trim' || commandToken === '/trim' || commandToken === '/volume') {
+  if (commandToken === '/insert' || commandToken === '/overwrite' || commandToken === '/trim') {
     const values = restParts.map((value) => value.startsWith('@') ? value.slice(1) : value)
     if (commandToken === '/insert' || commandToken === '/overwrite') {
       const [source, startValue, durationValue] = values
@@ -255,7 +251,7 @@ export function parseSequenceSlashCommand(
         ...(durationFrames === undefined ? {} : { duration_frames: durationFrames }),
       })
     }
-    if (commandToken === '/clip-trim' || commandToken === '/trim') {
+    if (commandToken === '/trim') {
       const [clipValue, startValue, durationValue] = values
       const clip = clipReference(sequence, clipValue)
       const startFrame = Number(startValue)
@@ -267,7 +263,7 @@ export function parseSequenceSlashCommand(
         || !Number.isSafeInteger(durationFrames)
         || durationFrames < 1
       ) {
-        return failure('Usage: /clip-trim @clip-id <start-frame> <duration-frames>')
+        return failure('Usage: /trim @clip-id <start-frame> <duration-frames>')
       }
       return success({
         kind: 'trim',
@@ -276,23 +272,16 @@ export function parseSequenceSlashCommand(
         duration_frames: durationFrames,
       })
     }
-    const [clipValue, gainValue] = values
-    const clip = clipReference(sequence, clipValue)
-    const gainDb = Number(gainValue)
-    if (!clip || !Number.isFinite(gainDb) || gainDb < -96 || gainDb > 24) {
-      return failure('Usage: /volume @clip-id <gain-db from -96 to 24>')
-    }
-    if (trackOf(sequence, clip)?.kind !== 'audio') {
-      return failure('Volume changes require a clip on an audio track')
-    }
-    return success({
-      kind: 'volume',
-      clip_id: clip.clipId,
-      gain_db: gainDb,
-    })
+    return { handled: false }
   }
 
   return { handled: false }
+}
+
+function gainShorthand(parts: readonly string[]): readonly string[] {
+  const [clipRef, value, ...extra] = parts
+  if (clipRef && value !== undefined && extra.length === 0 && Number.isFinite(Number(value))) return [clipRef, 'gain', value]
+  return parts
 }
 
 function clipReference(sequence: SequenceSlashContext['sequence'], value: string | undefined) {

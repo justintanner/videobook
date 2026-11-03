@@ -3,14 +3,13 @@ export type CommandInteraction = "direct" | "preview" | "fullscreen";
 export const FULLSCREEN_COMMANDS: readonly string[] = ["/notebook", "/music-video", "/providers", "/jobs"];
 
 export const PREVIEW_COMMANDS: readonly string[] = [
-  "/trim-video", "/trim-audio", "/overlay", "/translate-subs", "/post", "/crop", "/describe", "/suggest-cuts",
-  "/analyze-jokes", "/suggest-sfx", "/apply-sfx", "/sound-effects", "/goal", "/run", "/generate-cell", "/rename-all",
+  "/trim", "/trim-audio", "/overlay", "/translate-subs", "/post", "/crop", "/describe", "/suggest-cuts",
+  "/analyze-jokes", "/suggest-sfx", "/apply-sfx", "/sound-effects", "/goal", "/run", "/rename-all",
   "/edit-cold-open", "/watermark", "/rewrite", "/rewrite-script", "/tldr", "/make-cover-song", "/archive",
   "/extend-audio", "/remove-sound", "/clean-audio", "/vocals", "/transcribe", "/subs", "/settings",
   "/settings-landscape", "/settings-portrait", "/settings-square", "/bg", "/audio-settings", "/speed", "/timewarp",
   "/sync-audio", "/splice", "/scene-concat", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",
-  "/gap", "/insert", "/move", "/overwrite", "/clip-audio", "/volume", "/rough-cut", "/export-sequence", "/final",
-  "/reframe", "/clip-trim", "/split-clip", "/audio-add", "/audio-move", "/audio-set",
+  "/gap", "/insert", "/move", "/overwrite", "/clip-audio", "/rough-cut", "/export",
 ];
 
 export function commandInteraction(command: string, uiAction?: string): CommandInteraction {

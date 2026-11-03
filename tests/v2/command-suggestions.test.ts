@@ -17,16 +17,16 @@ describe('command suggestions', () => {
     expect(hasExactCommandSuggestion('/book', suggestions)).toBe(false)
   })
 
-  it('keeps every command reachable and download first in the bare-slash menu', () => {
+  it('keeps every command reachable and import first in the bare-slash menu', () => {
     const commands = Array.from({ length: 18 }, (_, index) => ({
       command: `/command-${index + 1}`,
     }))
-    commands.push({ command: '/download' })
+    commands.push({ command: '/import' })
 
     const suggestions = commandSuggestionCandidates(commands, '')
 
     expect(suggestions).toHaveLength(19)
-    expect(suggestions[0]?.command).toBe('/download')
+    expect(suggestions[0]?.command).toBe('/import')
   })
 
   it('preserves catalog order while filtering typed command text', () => {

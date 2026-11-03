@@ -1,4 +1,4 @@
-const EXPORT_SEQUENCE_USAGE = 'Usage: /export-sequence --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit'
+const EXPORT_SEQUENCE_USAGE = 'Usage: /export --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit'
 
 type ExportSequenceRequest = {
   orientation: 'landscape' | 'portrait' | 'square'

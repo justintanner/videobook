@@ -802,6 +802,13 @@ export function applyInjectedCommandArgs(
   return { ...parsed, ...injected };
 }
 
+export function canonicalCommandToken(commands: readonly Pick<ServerCommand, 'command' | 'aliases'>[], token: string): string {
+  const normalized = token.toLowerCase()
+  return commands.find((command) => command.command.toLowerCase() === normalized)?.command
+    ?? commands.find((command) => command.aliases?.some((alias) => alias.toLowerCase() === normalized))?.command
+    ?? normalized
+}
+
 export function selectCommandForInput(commands: ServerCommand[], commandStr: string, rest: string): ServerCommand | undefined {
   const normalized = commandStr.toLowerCase();
   const exactMatches = commands.filter((command) => command.command.toLowerCase() === normalized);

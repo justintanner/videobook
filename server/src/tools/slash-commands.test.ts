@@ -66,8 +66,8 @@ describe("slash_commands tool", () => {
     const commands: Command[] = JSON.parse(content[0].text);
 
     const commandNames = commands.map((c) => c.command);
-    expect(commandNames).not.toContain("/trim");
-    expect(commandNames).toContain("/trim-video");
+    expect(commandNames).toContain("/trim");
+    expect(commandNames).not.toContain("/trim-video");
     expect(commandNames).toContain("/trim-audio");
     expect(commandNames).not.toContain("/split-chunks");
     expect(commandNames).toContain("/overlay");
@@ -76,7 +76,6 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/transcript");
     expect(commandNames).toContain("/translate-subs");
     expect(commandNames).toContain("/audio-settings");
-    expect(commandNames).toContain("/final");
     expect(commandNames).toContain("/download");
     expect(commandNames).toContain("/upload");
     expect(commandNames).toContain("/inbox");
@@ -90,9 +89,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/open");
     expect(commandNames).toContain("/delete");
     expect(commandNames).toContain("/rename");
-    expect(commandNames).toContain("/assign");
     expect(commandNames).not.toContain("/insert-slot");
-    expect(commandNames).toContain("/remove-slot");
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).not.toContain("/render");
@@ -133,19 +130,14 @@ describe("slash_commands tool", () => {
       .toMatch(/chat controls \(right\)/u);
     expect(commandNames).toContain("/sort");
     expect(commandNames).toContain("/archive-browse");
-    expect(commandNames).toContain("/audio-add");
     expect(commandNames).toContain("/audio-mix");
     expect(commandNames).toContain("/extend-audio");
     expect(commandNames).toContain("/remove-sound");
-    expect(commandNames).toContain("/audio-move");
-    expect(commandNames).toContain("/audio-remove");
-    expect(commandNames).toContain("/audio-set");
     expect(commandNames).toContain("/reverse");
     expect(commandNames).toContain("/speed");
     expect(commandNames).toContain("/timewarp");
     expect(commandNames).toContain("/sync-audio");
     expect(commandNames).toContain("/split");
-    expect(commandNames).toContain("/split-clip");
     expect(commandNames).toContain("/clip-audio");
     expect(commandNames).toContain("/export-to");
     expect(commandNames).toContain("/skeleton");
@@ -172,11 +164,10 @@ describe("slash_commands tool", () => {
     expect(timewarp.mcpTool?.autoInject).toContain("book_id");
     expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
 
-    const removeSlot = commands.find((c) => c.command === "/remove-slot")!;
-    expect(removeSlot.mcpTool?.tool).toBe("remove_timeline_slot");
-    expect(removeSlot.aliases).toEqual(["/unassign"]);
-    expect(removeSlot.mcpTool?.autoInject).toContain("book_id");
-    expect(removeSlot.params.map((p) => p.name)).toEqual(["slot"]);
+    expect(commands.find((c) => c.command === "/delete")?.aliases).toEqual(["/clip-delete", "/remove-slot", "/unassign", "/audio-remove"]);
+    expect(commands.find((c) => c.command === "/insert")?.aliases).toEqual(["/assign", "/audio-add"]);
+    expect(commands.find((c) => c.command === "/clip-audio")?.aliases).toEqual(["/volume", "/audio-set"]);
+    expect(commands.find((c) => c.command === "/export")?.aliases).toEqual(["/export-sequence", "/final"]);
 
     const syncAudio = commands.find((c) => c.command === "/sync-audio")!;
     expect(syncAudio.mcpTool?.tool).toBe("sync_video_to_audio");
@@ -325,7 +316,7 @@ describe("slash_commands tool", () => {
     expect(archive.mcpTool?.tool).toBe("archive_clip");
     expect(archive.mcpTool?.autoInject).toContain("book_id");
 
-    expect(commands.find((c) => c.command === "/trim-video")?.aliases).toContain("/trim");
+    expect(commands.find((c) => c.command === "/trim")?.aliases).toContain("/trim-video");
     expect(commands.find((c) => c.command === "/render-video")?.aliases).toContain("/render");
     expect(commands.find((c) => c.command === "/activity")?.aliases).toContain("/status");
     expect(commands.find((c) => c.command === "/copy-media")?.aliases).toContain("/copy-video");
@@ -335,10 +326,10 @@ describe("slash_commands tool", () => {
     const result = await client.callTool({ name: "slash_commands", arguments: {} });
     expect(result.isError).toBeFalsy();
     const summaries = JSON.parse((result.content as TextContent)[0].text) as Array<Record<string, unknown>>;
-    expect(summaries.find((entry) => entry.command === "/trim-video")).toEqual({
-      command: "/trim-video",
+    expect(summaries.find((entry) => entry.command === "/trim")).toEqual({
+      command: "/trim",
       description: "Trim video clip",
-      aliases: ["/trim"],
+      aliases: ["/trim-video", "/clip-trim"],
       runs: "tool:trim_video",
     });
     expect(summaries.find((entry) => entry.command === "/play")).toMatchObject({ runs: "ui:open_slot_player" });

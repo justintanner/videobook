@@ -14,7 +14,6 @@ import { parseExportSequenceCommand } from "../../../src/videobook/export-sequen
 import { parseTrackAddCommand } from "../../../src/videobook/track-add-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
 import { normalizePanelSide, parseFilePosition, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
-import { slotIndex } from "../timeline-helpers.js";
 import { getCanonicalCommands } from "./commands.js";
 
 describe("slash command parse/normalize/dispatch", () => {
@@ -195,18 +194,12 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
-  describe("/remove-slot", () => {
-    it("parses a stored timeline slot", () => {
-      expect(simulateParse("/remove-slot", "@s02")).toEqual({ slot: "s02" });
-    });
-  });
-
   // -----------------------------------------------------------------------
-  // 1. /download — download_video
+  // 1. /import — download_video
   // -----------------------------------------------------------------------
-  describe("/download", () => {
-    it("parses '/download https://youtube.com/watch?v=abc'", () => {
-      const args = simulateParse("/download", "https://youtube.com/watch?v=abc");
+  describe("/import", () => {
+    it("parses '/import https://youtube.com/watch?v=abc'", () => {
+      const args = simulateParse("/import", "https://youtube.com/watch?v=abc");
       expect(args.url).toBe("https://youtube.com/watch?v=abc");
     });
   });
@@ -268,27 +261,6 @@ describe("slash command parse/normalize/dispatch", () => {
       const args = simulateParse("/rename", "@img to my new name");
       expect(args.asset_id).toBe("img");
       expect(args.new_name).toBe("my new name");
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 6. /assign — assign_slot
-  // -----------------------------------------------------------------------
-  describe("/assign", () => {
-    it("parses '/assign @a1 @s02'", () => {
-      const args = simulateParse("/assign", "@a1 @s02");
-      expect(args.asset_id).toBe("a1");
-      expect(args.slot).toBe("s02");
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 7. /unassign — remove_timeline_slot
-  // -----------------------------------------------------------------------
-  describe("/unassign", () => {
-    it("parses '/unassign @s02'", () => {
-      const args = simulateParse("/unassign", "@s02");
-      expect(args.slot).toBe("s02");
     });
   });
 
@@ -358,7 +330,7 @@ describe("slash command parse/normalize/dispatch", () => {
     });
 
     it("does not treat full or fix as on for a different command", () => {
-      expect(simulateParse("/download", "https://example.com/v full")).toEqual({
+      expect(simulateParse("/import", "https://example.com/v full")).toEqual({
         url: "https://example.com/v",
         full: true,
       });
@@ -517,15 +489,6 @@ describe("slash command parse/normalize/dispatch", () => {
         second_asset_id: "a2",
         transition_seconds: 0.25,
       });
-      expect(simulateParse("/audio-add", "@a1 2s 10sec")).toEqual({
-        asset_id: "a1",
-        start: 2,
-        duration: 10,
-      });
-      expect(simulateParse("/audio-move", "@a1 5s")).toEqual({
-        audio_ref: "a1",
-        start: 5,
-      });
       expect(simulateParse("/extract-frame", "@vid-clip 2.5s")).toEqual({
         asset_id: "vid-clip",
         timestamp: 2.5,
@@ -569,18 +532,6 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
-  describe("timeline slot case", () => {
-    it("accepts a capitalized @S02 slot on assign, unassign, and remove", () => {
-      expect(simulateParse("/assign", "@a1 @S02")).toEqual({ asset_id: "a1", slot: "S02" });
-      expect(slotIndex(String(simulateParse("/assign", "@a1 @S02").slot))).toBe(1);
-      expect(slotIndex(String(simulateParse("/unassign", "@S02").slot))).toBe(1);
-      expect(slotIndex(String(simulateParse("/remove-slot", "@s02").slot))).toBe(1);
-      expect(slotIndex("@S02")).toBe(1);
-      expect(slotIndex("s00")).toBeNull();
-      expect(slotIndex("slot1")).toBeNull();
-    });
-  });
-
   describe("/track-add", () => {
     it("accepts a capitalized track kind and keeps the display name", () => {
       expect(parseTrackAddCommand(["Audio", "Score", "Bed"])).toEqual({
@@ -595,7 +546,7 @@ describe("slash command parse/normalize/dispatch", () => {
     });
   });
 
-  describe("/export-sequence flags", () => {
+  describe("/export flags", () => {
     it("accepts capitalized caption and aspect flags", () => {
       expect(parseExportSequenceCommand(["--captions", "Burned"], "seq-1")).toEqual({
         ok: true,
@@ -609,7 +560,7 @@ describe("slash command parse/normalize/dispatch", () => {
       });
       expect(parseExportSequenceCommand(["--captions", "nope"], "seq-1")).toEqual({
         ok: false,
-        message: "Usage: /export-sequence --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit",
+        message: "Usage: /export --aspect 16:9|9:16|1:1 --captions burned|sidecar|omit",
       });
     });
   });
@@ -627,20 +578,6 @@ describe("slash command parse/normalize/dispatch", () => {
       });
       expect(() => adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 faster", command.params)))
         .toThrow("Usage: /speed @asset <0.25-4 or 8.32s>");
-    });
-
-    it("folds a capitalized /final orientation and rejects an unknown one", () => {
-      const command = findCommand("/final");
-      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("Portrait", command.params))).toEqual({
-        orientation: "portrait",
-      });
-      const render = findCommand("/render-video");
-      expect(adaptCommandArgs(render.mcpTool?.adapter, parseCommandArgs("@a1 Square", render.params))).toEqual({
-        asset_id: "a1",
-        orientation: "square",
-      });
-      expect(() => adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("widescreen", command.params)))
-        .toThrow("Orientation must be landscape, portrait, or square");
     });
 
     it("folds /bg, /subs, /sort, and panel sides", () => {
@@ -731,19 +668,6 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(keep.split_spec).toBe("keep 0.03-0.11");
       const remove = simulateParse("/split", "@a1 remove 0:00.030-0:00.110");
       expect(remove.split_spec).toBe("remove 0:00.030-0:00.110");
-    });
-
-    it("keeps canonical-sequence splitting under /split-clip", () => {
-      const args = simulateParse("/split-clip", "@clip-id 45");
-      expect(args.clip_id).toBe("clip-id");
-      expect(args.sequence_frame).toBe(45);
-    });
-
-    it("/final dispatches render_timeline via mcpTool", () => {
-      const cmd = findCommand("/final");
-      expect(cmd.mcpTool?.tool).toBe("render_timeline");
-      expect(cmd.mcpTool?.autoInject).toContain("book_id");
-      expect(cmd.uiAction).toBeUndefined();
     });
 
     it("parses and dispatches /inject-first-frame", () => {
@@ -1001,16 +925,10 @@ describe("slash command parse/normalize/dispatch", () => {
       }
     });
 
-    it("/assign with leading @ on both params", () => {
-      const args = simulateParse("/assign", "@my-video @s03");
-      expect(args.asset_id).toBe("my-video");
-      expect(args.slot).toBe("s03");
-    });
-
-    it("/download with URL containing spaces fails gracefully", () => {
-      const args = simulateParse("/download", "https://example.com/path with spaces");
+    it("/import with URL containing spaces fails gracefully", () => {
+      const args = simulateParse("/import", "https://example.com/path with spaces");
       // First token is the url, remaining tokens are lost because it's a multi-param command
-      // but /download only has url as first required string + optional start_time, end_time
+      // but /import only has url as first required string + optional start_time, end_time
       expect(args.url).toBe("https://example.com/path");
     });
 
@@ -1032,13 +950,8 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(args.topics).toEqual(["ai", "interview"]);
     });
 
-    it("/unassign without @ prefix", () => {
-      const args = simulateParse("/unassign", "s03");
-      expect(args.slot).toBe("s03");
-    });
-
-    it("/download with start_time and end_time", () => {
-      const args = simulateParse("/download", "https://youtube.com/watch?v=abc 1:30 2:45");
+    it("/import with start_time and end_time", () => {
+      const args = simulateParse("/import", "https://youtube.com/watch?v=abc 1:30 2:45");
       expect(args.url).toBe("https://youtube.com/watch?v=abc");
       expect(args.start_time).toBe("1:30");
       expect(args.end_time).toBe("2:45");
@@ -1089,15 +1002,9 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(args.prompt).toBe("a beautiful sunset over mountains");
     });
 
-    it("/download parses URL with query params and fragments", () => {
-      const args = simulateParse("/download", "https://youtube.com/watch?v=abc&t=30#section");
+    it("/import parses URL with query params and fragments", () => {
+      const args = simulateParse("/import", "https://youtube.com/watch?v=abc&t=30#section");
       expect(args.url).toBe("https://youtube.com/watch?v=abc&t=30#section");
-    });
-
-    it("/assign without @ on slot still works", () => {
-      const args = simulateParse("/assign", "@my-video s03");
-      expect(args.asset_id).toBe("my-video");
-      expect(args.slot).toBe("s03");
     });
 
     it("/files parses large position number", () => {
@@ -1110,8 +1017,8 @@ describe("slash command parse/normalize/dispatch", () => {
   // 54. parseCommandArgs — new differentiators
   // -----------------------------------------------------------------------
   describe("parseCommandArgs new differentiators", () => {
-    it("/download URL-only no extra params", () => {
-      const args = simulateParse("/download", "twitch.tv/videos/12345");
+    it("/import URL-only no extra params", () => {
+      const args = simulateParse("/import", "twitch.tv/videos/12345");
       expect(args.url).toBe("twitch.tv/videos/12345");
       expect(args.start_time).toBeUndefined();
     });
@@ -1127,12 +1034,6 @@ describe("slash command parse/normalize/dispatch", () => {
       const args = simulateParse("/duplicate", "hero-intro my-copy");
       expect(args.asset_id).toBe("hero-intro");
       expect(args.new_name).toBe("my-copy");
-    });
-
-    it("/assign without @ on either param", () => {
-      const args = simulateParse("/assign", "a1 s02");
-      expect(args.asset_id).toBe("a1");
-      expect(args.slot).toBe("s02");
     });
 
     it("/rename with 'to' connector and multi-word name", () => {

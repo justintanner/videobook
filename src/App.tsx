@@ -133,6 +133,7 @@ import {
   parseCommandArgs,
   parseSlashCommandArgs,
   selectCommandForInput,
+  canonicalCommandToken,
   type CommandToolArgs,
   type ServerCommand,
 } from '@/lib/command-registry'
@@ -9273,8 +9274,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       }
       const [rawCommandToken, ...restParts] = input.trim().split(/\s+/)
-      const commandToken = rawCommandToken.toLowerCase()
+      const commandToken = canonicalCommandToken(commands, rawCommandToken)
       const rest = restParts.join(' ')
+      if (commandToken === '/download' && /^https?:\/\//iu.test(restParts[0] ?? '')) return await executeCommand(`/import ${rest}`, context, chat)
       if (commandToken === '/goal') return await startGoal(rest, chat)
       if (commandToken.toLowerCase() === '/actions') {
         await openWorkspaceActions(undefined, undefined, rest, undefined, chat)
@@ -9311,6 +9313,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const values = advertisedCommand ? parseSlashCommandArgs(advertisedCommand, resolvedRest) : {}
         await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values, undefined, undefined, chat)
         return { ok: true, message: 'Action options opened' }
+      }
+      const sequenceSlash = parseSequenceSlashCommand(commandToken, restParts, {
+        sequence,
+        assets,
+        mentionAssets: commandMentionAssets,
+      })
+      if (sequenceSlash.handled) {
+        if (!sequenceSlash.ok) return sequenceSlash
+        return await prepareSequenceEdit(sequenceSlash.request, 'slash', chat)
       }
       if (commandToken === '/extract-audio') {
         if (!notebook || restParts.length !== 1) {
@@ -9349,9 +9360,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (commandToken === '/sound-effects') {
         return await prepareSoundEffects('slash', chat)
       }
-      if (commandToken === '/generate-cell') {
+      if (commandToken === '/run' && restParts.length > 0) {
         if (!notebook || restParts.length !== 1) {
-          return { ok: false, message: 'Usage: /generate-cell @cell-id' }
+          return { ok: false, message: 'Usage: /run @cell-id' }
         }
         const token = normalizeNotebookReference(restParts[0])
         const cell = notebook.cells.find((candidate) =>
@@ -9396,7 +9407,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
         return await removeSequenceTrack(track.trackId, chat)
       }
-      if (commandToken === '/export-sequence' || (commandToken === '/export' && restParts.some((value) => value === '@sequence-main' || value.startsWith('--') || value === `@${sequence?.sequenceId}`))) {
+      if (commandToken === '/export') {
         if (!sequence) return { ok: false, message: 'Load the primary sequence first.' }
         const parsedExport = parseExportSequenceCommand(restParts, sequence.sequenceId)
         if (!parsedExport.ok) return parsedExport
@@ -9422,15 +9433,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           return { ok: false, message: errors.join(' · ') || 'Export validation failed' }
         }
         return await previewCommandPlan(asCommandPlan(value), chat)
-      }
-      const sequenceSlash = parseSequenceSlashCommand(commandToken, restParts, {
-        sequence,
-        assets,
-        mentionAssets: commandMentionAssets,
-      })
-      if (sequenceSlash.handled) {
-        if (!sequenceSlash.ok) return sequenceSlash
-        return await prepareSequenceEdit(sequenceSlash.request, 'slash', chat)
       }
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
@@ -9568,8 +9570,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const args = Object.keys(action.inputSchema.properties ?? {}).map((name) => values[name])
         .filter((value) => value !== undefined && value !== null)
         .map((value) => Array.isArray(value) ? value.join(' ') : String(value)).join(' ')
-      const input = action.command === '/export-sequence'
-        ? `/export-sequence --aspect ${String(values.aspect ?? '16:9')} --captions ${String(values.captions ?? 'burned')}`
+      const input = action.command === '/export'
+        ? `/export --aspect ${String(values.aspect ?? '16:9')} --captions ${String(values.captions ?? 'burned')}`
         : `${action.command}${args ? ` ${args}` : ''}`
       const result = await executeCommand(input, undefined, chat)
       if (!result.ok) throw new Error(result.message)
@@ -11519,7 +11521,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     frame: timeline.frame,
     onSeek: openTimelinePreview,
     onPreview: openTimelinePreview,
-    onExport: () => { void executeCommand('/export-sequence').then((outcome) => { if (!outcome.ok) setNotice(outcome.message, 'error') }) },
+    onExport: () => { void executeCommand('/export').then((outcome) => { if (!outcome.ok) setNotice(outcome.message, 'error') }) },
     onRemove: (cellId) => {
       const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
       if (cell) void deleteNotebookCells([cell])

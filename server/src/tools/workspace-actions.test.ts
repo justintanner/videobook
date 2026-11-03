@@ -90,7 +90,7 @@ describe("workspace action exposure contract", () => {
     expect(summary.actions).toHaveLength(full.actions.length);
     expect(JSON.stringify(summary).length).toBeLessThan(JSON.stringify(full).length / 5);
     expect(summary.actions.find((action) => action.id === "tool.trim_video")).toEqual({
-      id: "tool.trim_video", command: "/trim-video", title: expect.any(String), group: "Video", runs: "tool:trim_video",
+      id: "tool.trim_video", command: "/trim", title: expect.any(String), group: "Video", runs: "tool:trim_video",
     });
     const trims = await read({ query: "trim" });
     expect(trims.actions.map((action) => action.id)).toEqual(expect.arrayContaining(["tool.trim_video", "tool.trim_audio"]));
@@ -108,9 +108,9 @@ describe("workspace action exposure contract", () => {
     expect(() => buildWorkspaceActionCatalog([...tools, { ...source, name: "new_user_operation" }], commands))
       .toThrow("No workspace action group for new_user_operation");
     expect(() => buildWorkspaceActionCatalog(tools.filter((tool) => tool.name !== "trim_video"), commands))
-      .toThrow("No registered handler for /trim-video");
-    expect(() => buildWorkspaceActionCatalog(tools, [...commands, { ...commands[0]!, command: "/custom", aliases: ["/trim"] }]))
-      .toThrow("Duplicate workspace command or alias: /trim");
+      .toThrow("No registered handler for /trim");
+    expect(() => buildWorkspaceActionCatalog(tools, [...commands, { ...commands[0]!, command: "/custom", aliases: ["/trim-video"] }]))
+      .toThrow("Duplicate workspace command or alias: /trim-video");
     expect(() => buildWorkspaceActionCatalog(tools, [...commands, { ...commands[0]!, command: "/custom", aliases: [], uiAction: "missing_handler" }]))
       .toThrow("No UI action handler contract");
   });

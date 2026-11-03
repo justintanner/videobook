@@ -229,7 +229,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (287; 135 dedicated command routes)
+## Slash actions (276; 121 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -249,14 +249,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/arrange-videos-row` — Line up all video cells across the current row starting at the selected cell; cells in the way move to free slots; preview or workspace operation
 - `/asset-history` — Get immutable Dolt revision history for an asset; MCP: `asset_history`
 - `/asset-manifest` — List all files in an asset directory; MCP: `asset_manifest`
-- `/assign` — Assign asset to timeline slot; MCP: `assign_slot`
+- `/assign-slot` — Assign an artifact to a typed timeline slot; MCP: `assign_slot`
 - `/attach-library-asset` — Copy a foreign Library asset into a book and attach it to a media slot; MCP: `attach_library_asset`
-- `/audio-add` — Add an audio asset to the timeline audio lane (times in seconds); UI: `timeline_audio_add`
 - `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
 - `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
-- `/audio-move` — Move a timeline audio clip to a new start position (seconds); UI: `timeline_audio_move`
-- `/audio-remove` — Remove an audio clip from the timeline audio lane; UI: `timeline_audio_remove`
-- `/audio-set` — Update a timeline audio clip: volume (0-100), fade-in or fade-out (ms); UI: `timeline_audio_update`
 - `/audio-settings` (aliases: `/audio`) — Audio viewer settings for volume and fades; UI: `settings_audio`
 - `/backfill-asset-tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.; MCP: `backfill_asset_tags`
 - `/bg` — Background mode; UI: `settings_bg`
@@ -271,10 +267,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/check-kimi-coding-api` — Check whether the Kimi Coding API is reachable and its configured API key is valid; MCP: `check_kimi_coding_api`
 - `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
 - `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
-- `/clip-audio` — Edit a sequence audio clip's gain, mute, or fades; preview or workspace operation
-- `/clip-delete` — Preview deleting a sequence clip while retaining its source media; preview or workspace operation
-- `/clip-reverse` — Preview reversing a sequence clip while retaining its source media; preview or workspace operation
-- `/clip-trim` — Preview trimming a sequence clip in frames; preview or workspace operation
+- `/clip-audio` (aliases: `/volume`, `/audio-set`) — Edit a sequence audio clip's gain, mute, or fades; preview or workspace operation
 - `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
 - `/collapse` — Close the project selector (left), chat controls (right), or both; UI: `sidebar_collapse`
 - `/commit-edit-intent` — Commit an unchanged previewed CommandPlan edit stage atomically; MCP: `commit_edit_intent`
@@ -291,9 +284,9 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/create-notebook` — Create an empty notebook; MCP: `create_notebook`
 - `/create-notebook-cell` — Create a UUIDv7 notebook cell; MCP: `create_notebook_cell`
 - `/create-watermark-card` — Make a transparent QR plus X or TikTok handle badge as an image asset, with optional platform icon, border, padding and rounding. Burn it in with apply_watermark.; MCP: `create_watermark_card`
-- `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
+- `/crop` (aliases: `/reframe`) — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
 - `/crop-asset` — Crop an image or video in place to a 16:9, 9:16 or 1:1 region given as 0-1 fractions (x, y, w, h), resized to 1920x1080, 1080x1920 or 1080x1080.; MCP: `crop_asset`
-- `/delete` — Delete an asset; MCP: `delete_asset`
+- `/delete` (aliases: `/clip-delete`, `/remove-slot`, `/unassign`, `/audio-remove`) — Delete an asset; MCP: `delete_asset`
 - `/delete-book` — Permanently delete a book after typed name confirmation; MCP: `delete_book`
 - `/delete-entity` — Delete a reusable prompt, scene or character; MCP: `delete_entity`
 - `/delete-notebook` — Delete a notebook and its cells, edges, and runs; MCP: `delete_notebook`
@@ -303,7 +296,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/diagnostics` (aliases: `/storage`) — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
 - `/disconnect-notebook-cells` — Delete a notebook edge; MCP: `disconnect_notebook_cells`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
-- `/download` — Download video from URL; MCP: `download_video`
+- `/download` — Save an asset to the Downloads folder; MCP: `export_asset_file`
 - `/duck` — Lower background audio beneath a narration clip; preview or workspace operation
 - `/duplicate` — Duplicate an asset into an optional notebook destination; MCP: `duplicate_asset`
 - `/edit-asset-tag` — Add, remove or restore one tag on an asset. add makes a manual tag that survives re-analysis; removing an automatic tag records a dismissal so re-analysis cannot bring it back; restore clears that dismissal.; MCP: `edit_asset_tag`
@@ -315,8 +308,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/entities` — Open the reusable entity library; UI: `open_entities`
 - `/estimate-cost` — Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.; MCP: `estimate_cost`
 - `/expand` — Open the project selector (left), chat controls (right), or both; UI: `sidebar_expand`
-- `/export` — Export asset to Downloads folder; MCP: `export_asset_file`
-- `/export-sequence` — Review and export the current sequence; preview or workspace operation
+- `/export` (aliases: `/export-sequence`, `/final`) — Review and export the current sequence; preview or workspace operation
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
 - `/export-transcript-srt` — Render an asset's word-timed ElevenLabs transcript as SubRip (.srt) and save it to the user's Downloads folder. Errors when the asset has no elevenlabs.json timings.; MCP: `export_transcript_srt`
 - `/extend-audio` — Extend an audio asset to a longer total duration with a matching ElevenLabs continuation, creating a new audio asset; MCP: `extend_audio_asset`
@@ -327,12 +319,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/extract-notebook-audio` — Extract audio from a video cell into a new audio cell wired to its source, recording the source cell and optional time range; MCP: `extract_notebook_audio`
 - `/extract-notebook-frame` — Extract a frame from a video cell into a new image cell wired to its source, recording the source cell and timestamp; MCP: `extract_notebook_frame`
 - `/files` — Focus file by position; UI: `viewer_focus_file`
-- `/final` — Finalize and export the project timeline; MCP: `render_timeline`
 - `/fit` — Fit, fill or crop a visual sequence clip; preview or workspace operation
 - `/folder` — Show asset folder; MCP: `export_asset_file`
 - `/gap` — Preview inserting a gap that shifts later clips forward; preview or workspace operation
 - `/generate-audio` — Generate audio (speech, dialogue, music, sound effects) with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_audio`
-- `/generate-cell` — Review generation for a configured notebook cell; preview or workspace operation
 - `/generate-image` — Generate an image with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_image`
 - `/generate-video` — Generate a video with any catalog model. Pick a model id from list_generation_models; options are validated against that model's apicity schema and omitted options use apicity defaults.; MCP: `generate_video`
 - `/get-book` — Read the current book identity; MCP: `get_book`
@@ -356,10 +346,11 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/goal` — Build a portrait video in Cinematic or IG Influencer style; choose format, delivery, camera and light before the frame, then review each stage; UI: `start_goal`
 - `/group-images` — Gather all image cells into horizontal lines starting at the selected cell, wrapping onto the next row at the grid edge; cells in the way move to free slots; preview or workspace operation
 - `/history` — View asset version history; UI: `show_history`
+- `/import` — Import a video from a URL (YouTube, X, Instagram, TikTok and more); MCP: `download_video`
 - `/inbox` — View generations inbox; UI: `open_inbox`
 - `/info` — Show asset metadata; UI: `viewer_toggle_info`
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
-- `/insert` — Preview inserting media into the sequence; preview or workspace operation
+- `/insert` (aliases: `/assign`, `/audio-add`) — Preview inserting media into the sequence; preview or workspace operation
 - `/inspect-generation-request` — Read the persisted provider request payload, task details, status-page information, failure info and HAR capture status for a single asset. Used by the generating-cell inspector to show what was sent to the provider.; MCP: `inspect_generation_request`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
 - `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
@@ -385,7 +376,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/list-sequence-replace-targets` — List clips that a search moment can explicitly replace; MCP: `list_sequence_replace_targets`
 - `/make-cover-song` (aliases: `/replicate-song`) — Generate a rhythm-and-style-guided drums-and-strings cover with the source media's exact duration; MCP: `make_cover_song`
 - `/mark-asset-seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.; MCP: `mark_asset_seen`
-- `/move` — Preview moving a sequence clip to a track and frame; preview or workspace operation
+- `/move` (aliases: `/audio-move`) — Preview moving a sequence clip to a track and frame; preview or workspace operation
 - `/move-notebook-cells` — Persist notebook cell grid slots; MCP: `move_notebook_cells`
 - `/move-timeline-audio` — Move an audio overlay to a frame offset; MCP: `move_timeline_audio`
 - `/music-video` — Open the full-screen music-video editor with a required master soundtrack; UI: `open_music_video`
@@ -425,18 +416,18 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/reconcile-project-work` — Finish pending provider tasks for this book and pick up files added outside the app (Finder or CLI) that need processing.; MCP: `reconcile_project_work`
 - `/record-post-metrics` — Record a performance observation for a published Post: omit values to fetch current X metrics, or pass values for a manual observation (observed_at defaults to now). Omit unavailable metrics; zero means an observed zero.; MCP: `record_post_metrics`
 - `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
-- `/reframe` — Preview a crop transform for a visual sequence clip; preview or workspace operation
 - `/register-search-manifest` — Register an immutable semantic-index model manifest; MCP: `register_search_manifest`
 - `/relayout-notebook` — Recompute notebook cell slots with directional placement: video stacks vertical near column 1, image/frame chains horizontal, compact near @a1. Migrates legacy generate_video / generate_image inline artifacts into output cells.; MCP: `relayout_notebook`
 - `/release-search-reference` — Release a temporary reverse-search reference; MCP: `release_search_reference`
 - `/remove-sequence-track` — Remove an empty canonical track while preserving required track kinds; MCP: `remove_sequence_track`
-- `/remove-slot` (aliases: `/unassign`) — Remove a timeline slot and shift later slots left; MCP: `remove_timeline_slot`
 - `/remove-sound` — Remove a described sound from a video or audio asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
 - `/remove-timeline-audio` — Remove an audio overlay by its UUIDv7 id; MCP: `remove_timeline_audio`
+- `/remove-timeline-slot` — Remove a typed timeline slot and shift later slots left; MCP: `remove_timeline_slot`
 - `/rename` — Rename an asset; MCP: `rename_asset`
 - `/rename-all` — Bulk-rename video/image assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
 - `/rename-book` — Rename a book. Project names are normalized to lowercase slugs with hyphens.; MCP: `rename_book`
 - `/rename-notebook` — Rename a notebook; MCP: `rename_notebook`
+- `/render-timeline` — Render the selected book's typed v2 timeline; MCP: `render_timeline`
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
 - `/reorder-character-images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).; MCP: `reorder_character_images`
 - `/repair-library-search-indexes` — Index ready visual media that is missing Similar-search coverage across books; MCP: `repair_library_search_indexes`
@@ -448,13 +439,13 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/retry-generation` — Re-run a failed generation with its original request payload and inputs, clearing the asset's error first.; MCP: `retry_generation`
 - `/retry-ingest` — Retry derivation jobs without uploading source bytes again; MCP: `retry_ingest`
 - `/retry-job` — Re-enqueue a failed or cancelled persistent job with the same durable payload; MCP: `retry_job`
-- `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
+- `/reverse` (aliases: `/clip-reverse`) — Reverse video playback (play backwards); MCP: `reverse_video`
 - `/revise-notebook-generation-plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan; MCP: `revise_notebook_generation_plan`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`
 - `/rewrite` — Optimize a prompt; MCP: `rewrite_prompt`
 - `/rewrite-script` — Rewrite a script asset in place with the full describe model; MCP: `rewrite_script`
 - `/rough-cut` — Review a rough cut built from notebook media; preview or workspace operation
-- `/run` — Save and run the active notebook; UI: `run_notebook`
+- `/run` (aliases: `/generate-cell`) — Save and run the active notebook; UI: `run_notebook`
 - `/run-notebook` — Run missing, stale, or explicitly selected notebook cells topologically; MCP: `run_notebook`
 - `/run-notebook-cell` — Run one selected notebook cell using saved upstream media. retry_failed_cell_id replaces an output that failed only because provider credits ran out.; MCP: `run_notebook_cell`
 - `/save` — Save the active notebook as a new revision; UI: `save_notebook`
@@ -482,8 +473,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/speak` (aliases: `/voices`, `/say`) — Generate ElevenLabs speech into the notebook from the inline voice preview; UI: `speak_preview`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice videos with an overlap window; use 0 to concatenate complete clips; MCP: `splice_video`
-- `/split` — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
-- `/split-clip` — Split a canonical-sequence clip at an exact sequence frame; preview or workspace operation
+- `/split` (aliases: `/split-clip`) — Open the interactive splitter for a notebook video, seeded with cut times or with detected scene cuts; preview or workspace operation
 - `/split-video` — Split a video into consecutive clips while keeping the source: at cut_points (e.g. [15] for 'first 15s and the rest'), into chunks of the given durations plus the leftover, or at detected scenes (scenes: true). A notebook source gets one new cell per clip below it; any other video gets new assets.; MCP: `split_video`
 - `/storage-status` — Read catalog and object publication status; MCP: `storage_status`
 - `/subs` (aliases: `/alive`) — Open the TikTok-style subtitle editor for a video (/subs @a1), or change a render subtitle setting (/subs position top); UI: `settings_subs`
@@ -503,8 +493,8 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/transcript` — Read transcript of a video or audio asset; MCP: `read_transcript`
 - `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
 - `/trending` — Schedule or sample TikTok research. Defaults to Thailand: /trending schedule creates that schedule, /trending and /trending TH sample it, and a YYYY-MM-DD date cuts that local day. list, run, and status use the only schedule when there is exactly one. Omkar is optional and is included only when OMKAR_API_KEY is set; status shows omkar as not configured when the key is unset.; MCP: `trending_research`
+- `/trim` (aliases: `/trim-video`, `/clip-trim`) — Trim video clip; MCP: `trim_video`
 - `/trim-audio` — Trim audio clip; MCP: `trim_audio`
-- `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
 - `/update-entity` — Replace a reusable prompt, scene or character with an edited copy from get_entity; MCP: `update_entity`
 - `/update-notebook-cell` — Update one notebook cell; MCP: `update_notebook_cell`
 - `/update-post` — Edit a Post's draft or notes, attach the real link after posting it by hand (url with posted_at), or cancel its scheduled X post (cancel_schedule). Delivered media, caption and source versions are immutable; post the clip again for a repost.; MCP: `update_post`
@@ -515,7 +505,6 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
 - `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
-- `/volume` — Preview a sequence clip's audio gain; preview or workspace operation
 - `/wait-for-asset-ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.; MCP: `wait_for_asset_ready`
 - `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`
 - `/<project-name>` — Switch to that project; generated dynamically for each project whose name does not conflict with a command or alias.

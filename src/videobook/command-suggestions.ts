@@ -20,7 +20,7 @@ export function commandSuggestionCandidates<T extends { command: string; aliases
       return Number(exact(right)) - Number(exact(left))
     })
   if (normalized) return matches.slice(0, limit)
-  const download = matches.find((command) => command.command === '/download')
+  const download = matches.find((command) => command.command === '/import')
   if (!download) return matches.slice(0, limit)
   return [
     download,

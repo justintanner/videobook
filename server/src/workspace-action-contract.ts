@@ -17,10 +17,10 @@ export const UI_ACTION_IDS = [
 export type UiActionId = typeof UI_ACTION_IDS[number];
 
 export const APPLICATION_COMMAND_IDS = [
-  "/arrange-videos-column", "/arrange-videos-row", "/group-images", "/split", "/split-clip",
-  "/caption", "/duck", "/fit", "/gap", "/generate-cell", "/insert", "/move",
-  "/overwrite", "/reframe", "/rough-cut", "/sound-effects", "/track-add",
-  "/track-remove", "/volume", "/clip-audio", "/clip-delete", "/clip-reverse", "/clip-trim", "/export-sequence",
+  "/arrange-videos-column", "/arrange-videos-row", "/group-images", "/split",
+  "/caption", "/duck", "/fit", "/gap", "/insert", "/move",
+  "/overwrite", "/rough-cut", "/sound-effects", "/track-add",
+  "/track-remove", "/clip-audio", "/export",
 ] as const;
 
 export type ApplicationCommandId = typeof APPLICATION_COMMAND_IDS[number];

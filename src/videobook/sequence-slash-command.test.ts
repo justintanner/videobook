@@ -46,14 +46,14 @@ const context: SequenceSlashContext = {
 }
 
 describe('sequence slash commands', () => {
-  it('keeps an invalid clip delete on the sequence command', () => {
-    expect(parseSequenceSlashCommand('/clip-delete', ['missing'], context)).toEqual({
+  it('deletes a sequence clip with /delete and leaves other targets to asset delete', () => {
+    expect(parseSequenceSlashCommand('/delete', [`@${videoClipId}`, 'extra'], context)).toEqual({
       handled: true,
       ok: false,
-      message: 'Usage: /clip-delete @clip-id [--ripple]',
+      message: 'Usage: /delete @clip-id [--ripple]',
     })
     expect(parseSequenceSlashCommand('/delete', ['missing'], context)).toEqual({ handled: false })
-    expect(parseSequenceSlashCommand('/clip-delete', [`@${videoClipId}`, '--ripple'], context)).toEqual({
+    expect(parseSequenceSlashCommand('/delete', [`@${videoClipId}`, '--ripple'], context)).toEqual({
       handled: true,
       ok: true,
       request: { kind: 'delete', clip_id: videoClipId, ripple: true },
@@ -61,13 +61,13 @@ describe('sequence slash commands', () => {
   })
 
   it('trims a sequence clip in frames and leaves media trim to /trim', () => {
-    expect(parseSequenceSlashCommand('/clip-trim', [`@${videoClipId}`, '0'], context)).toEqual({
+    expect(parseSequenceSlashCommand('/trim', [`@${videoClipId}`, '0'], context)).toEqual({
       handled: true,
       ok: false,
-      message: 'Usage: /clip-trim @clip-id <start-frame> <duration-frames>',
+      message: 'Usage: /trim @clip-id <start-frame> <duration-frames>',
     })
     expect(parseSequenceSlashCommand('/trim', ['@a1', '0', '2'], context)).toEqual({ handled: false })
-    expect(parseSequenceSlashCommand('/clip-trim', [videoClipId, '0', '15'], context)).toEqual({
+    expect(parseSequenceSlashCommand('/trim', [videoClipId, '0', '15'], context)).toEqual({
       handled: true,
       ok: true,
       request: {
@@ -80,16 +80,12 @@ describe('sequence slash commands', () => {
   })
 
   it('reverses only a timed sequence clip', () => {
-    expect(parseSequenceSlashCommand('/clip-reverse', [stillClipId], context)).toEqual({
+    expect(parseSequenceSlashCommand('/reverse', [stillClipId], context)).toEqual({
       handled: true,
       ok: false,
-      message: '/clip-reverse requires a timed clip',
+      message: '/reverse requires a timed clip',
     })
-    expect(parseSequenceSlashCommand('/clip-reverse', [], context)).toEqual({
-      handled: true,
-      ok: false,
-      message: 'Usage: /clip-reverse @timed-clip-id',
-    })
+    expect(parseSequenceSlashCommand('/reverse', [], context)).toEqual({ handled: false })
     expect(parseSequenceSlashCommand('/reverse', [videoClipId], context)).toMatchObject({
       handled: true,
       ok: true,
@@ -103,22 +99,22 @@ describe('sequence slash commands', () => {
       ok: false,
       message: '/fit requires a visual clip',
     })
-    expect(parseSequenceSlashCommand('/reframe', [audioClipId], context)).toEqual({
+    expect(parseSequenceSlashCommand('/crop', [audioClipId], context)).toEqual({
       handled: true,
       ok: false,
       message: 'Automatic reframe requires a visual clip',
     })
-    expect(parseSequenceSlashCommand('/volume', [videoClipId, '-6'], context)).toEqual({
+    expect(parseSequenceSlashCommand('/clip-audio', [videoClipId, '-6'], context)).toEqual({
       handled: true,
       ok: false,
-      message: 'Volume changes require a clip on an audio track',
+      message: '/clip-audio requires a clip on an audio track',
     })
     expect(parseSequenceSlashCommand('/fit', [videoClipId, 'Fill'], context)).toEqual({
       handled: true,
       ok: true,
       request: { kind: 'transform', clip_id: videoClipId, fit: 'fill' },
     })
-    expect(parseSequenceSlashCommand('/volume', [audioClipId, '-6'], context)).toEqual({
+    expect(parseSequenceSlashCommand('/clip-audio', [audioClipId, '-6'], context)).toMatchObject({
       handled: true,
       ok: true,
       request: { kind: 'volume', clip_id: audioClipId, gain_db: -6 },
