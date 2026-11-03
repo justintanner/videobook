@@ -3,6 +3,7 @@ import { z } from "zod";
 import { gcEngineCatalog, type BookCatalogGcReport } from "../catalog-gc.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
+import { clearFailedTasksDef } from "./clear-failed-tasks.js";
 
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
@@ -118,7 +119,7 @@ export function doctorDef(engine: Engine): ToolDef {
   return {
     name: "doctor",
     description:
-      "Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. gc reclaims catalog storage for this book.",
+      "Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. clean deletes failed-generation husks and clears error badges on assets that kept their media. gc reclaims catalog storage for this book.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z
@@ -135,15 +136,22 @@ export function doctorDef(engine: Engine): ToolDef {
         .optional()
         .default(false)
         .describe("Run catalog GC on this book and report bytes/chunks reclaimed."),
+      clean: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Delete failed-generation husks and clear error badges from assets that already hold media."),
     },
     handler: async (args) => {
-      const { book_id, asset_id, fix, gc } = args as {
+      const { book_id, asset_id, fix, gc, clean } = args as {
         book_id: string;
         asset_id?: string;
         fix?: boolean;
         gc?: boolean;
+        clean?: boolean;
       };
       const assetId = asset_id?.replace(/^@/, "");
+      if (clean) return clearFailedTasksDef(engine).handler({ book_id });
 
       if (fix) {
         if (!assetId) {

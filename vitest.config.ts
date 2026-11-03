@@ -86,6 +86,7 @@ export default defineConfig({
       'src/videobook/notebook-group-images.test.ts',
       'src/videobook/command-plan.test.ts',
       'src/videobook/command-interaction.test.ts',
+      'src/videobook/command-merges.test.ts',
       'src/videobook/composer-dock.test.ts',
       'src/videobook/subject-workspace.test.ts',
       'src/videobook/confirm-sheet-chrome.test.ts',

@@ -4,11 +4,11 @@ export const FULLSCREEN_COMMANDS: readonly string[] = ["/notebook", "/music-vide
 
 export const PREVIEW_COMMANDS: readonly string[] = [
   "/trim", "/trim-audio", "/overlay", "/translate-subs", "/post", "/crop", "/describe", "/suggest-cuts",
-  "/analyze-jokes", "/suggest-sfx", "/apply-sfx", "/sound-effects", "/goal", "/run", "/rename-all",
-  "/edit-cold-open", "/watermark", "/rewrite", "/rewrite-script", "/tldr", "/make-cover-song", "/archive",
+  "/analyze-jokes", "/sfx", "/goal", "/run", "/rename-all",
+  "/edit-cold-open", "/watermark", "/rewrite", "/make-cover-song", "/archive",
   "/extend-audio", "/remove-sound", "/clean-audio", "/vocals", "/transcribe", "/subs", "/settings",
-  "/settings-landscape", "/settings-portrait", "/settings-square", "/bg", "/audio-settings", "/speed", "/timewarp",
-  "/sync-audio", "/splice", "/scene-concat", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",
+  "/speed", "/timewarp",
+  "/sync-audio", "/splice", "/split", "/skeleton", "/speak", "/caption", "/duck", "/fit",
   "/gap", "/insert", "/move", "/overwrite", "/clip-audio", "/rough-cut", "/export",
 ];
 

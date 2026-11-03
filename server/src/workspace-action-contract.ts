@@ -19,7 +19,7 @@ export type UiActionId = typeof UI_ACTION_IDS[number];
 export const APPLICATION_COMMAND_IDS = [
   "/arrange-videos-column", "/arrange-videos-row", "/group-images", "/split",
   "/caption", "/duck", "/fit", "/gap", "/insert", "/move",
-  "/overwrite", "/rough-cut", "/sound-effects", "/track-add",
+  "/overwrite", "/rough-cut", "/track-add",
   "/track-remove", "/clip-audio", "/export",
 ] as const;
 

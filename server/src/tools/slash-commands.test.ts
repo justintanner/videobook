@@ -73,9 +73,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/overlay");
     expect(commandNames).not.toContain("/apply-cuts");
     expect(commandNames).toContain("/extract-frame");
-    expect(commandNames).toContain("/transcript");
     expect(commandNames).toContain("/translate-subs");
-    expect(commandNames).toContain("/audio-settings");
     expect(commandNames).toContain("/download");
     expect(commandNames).toContain("/upload");
     expect(commandNames).toContain("/inbox");
@@ -91,7 +89,6 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/rename");
     expect(commandNames).not.toContain("/insert-slot");
     expect(commandNames).toContain("/rewrite");
-    expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).not.toContain("/render");
     expect(commandNames).toContain("/render-video");
     expect(commandNames).toContain("/clean-audio");
@@ -108,7 +105,6 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/save");
     expect(commandNames).toContain("/run");
     expect(commandNames).toContain("/prompt-new");
-    expect(commandNames).toContain("/character-new");
     expect(commandNames).toContain("/scene-new");
     expect(commandNames).toContain("/entities");
     expect(commandNames).toContain("/jobs");
@@ -139,11 +135,9 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/sync-audio");
     expect(commandNames).toContain("/split");
     expect(commandNames).toContain("/clip-audio");
-    expect(commandNames).toContain("/export-to");
     expect(commandNames).toContain("/skeleton");
     expect(commandNames).toContain("/archive-restore");
     expect(commandNames).toContain("/rewind");
-    expect(commandNames).toContain("/clear-failed");
     expect(commandNames).toContain("/speak");
     const speak = commands.find((c) => c.command === "/speak")!;
     expect(speak.uiAction).toBe("speak_preview");
@@ -155,9 +149,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).not.toContain("/grok-upscale");
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");
-    expect(commandNames).toContain("/apply-sfx");
     expect(commandNames).toContain("/inject-first-frame");
-    expect(commandNames).toContain("/scene-concat");
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
@@ -207,15 +199,9 @@ describe("slash_commands tool", () => {
       "add_light_music",
     ]);
 
-    const applySfx = commands.find((c) => c.command === "/apply-sfx")!;
-    expect(applySfx.mcpTool?.tool).toBe("apply_sfx");
-    expect(applySfx.mcpTool?.autoInject).toContain("book_id");
-    expect(applySfx.params.map((p) => p.name)).toEqual([
-      "asset_id",
-      "timestamp",
-      "type",
-      "description",
-    ]);
+    const sfx = commands.find((c) => c.command === "/sfx")!;
+    expect(sfx.mcpTool?.tool).toBe("suggest_sfx");
+    expect(sfx.aliases).toEqual(["/suggest-sfx", "/apply-sfx", "/sound-effects"]);
 
     const audioMix = commands.find((c) => c.command === "/audio-mix")!;
     expect(audioMix.mcpTool?.tool).toBe("audio_mix");
@@ -236,15 +222,10 @@ describe("slash_commands tool", () => {
     ]);
     expect(splice.params[2]).toMatchObject({ type: "number", required: true });
 
-    const sceneConcat = commands.find((c) => c.command === "/scene-concat")!;
-    expect(sceneConcat.mcpTool?.tool).toBe("smooth_scene_concat");
-    expect(sceneConcat.mcpTool?.autoInject).toContain("book_id");
-    expect(sceneConcat.params.map((p) => p.name)).toEqual([
-      "first_asset_id",
-      "second_asset_id",
-      "transition_seconds",
-    ]);
-    expect(sceneConcat.params[2]).toMatchObject({ type: "number", required: false });
+    expect(splice.aliases).toEqual(["/scene-concat"]);
+    expect(commands.find((c) => c.command === "/doctor")?.aliases).toEqual(["/recover", "/clear-failed"]);
+    expect(commands.find((c) => c.command === "/rewrite")?.aliases).toEqual(["/rewrite-script", "/tldr"]);
+    expect(commands.find((c) => c.command === "/settings")?.aliases).not.toContain("/audio");
 
     const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
     expect(extendAudio.mcpTool?.tool).toBe("extend_audio_asset");
@@ -306,8 +287,8 @@ describe("slash_commands tool", () => {
     const run = commands.find((c) => c.command === "/run")!;
     expect(run.uiAction).toBe("run_notebook");
 
-    for (const kind of ["prompt", "character", "scene"]) {
-      expect(commands.find((c) => c.command === `/${kind}-new`)?.mcpTool)
+    for (const [command, kind] of [["/prompt-new", "prompt"], ["/character", "character"], ["/scene-new", "scene"]]) {
+      expect(commands.find((c) => c.command === command)?.mcpTool)
         .toMatchObject({ tool: "create_entity", injectParams: { kind } });
     }
 

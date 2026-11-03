@@ -134,6 +134,28 @@ describe("clear_failed_tasks tool", () => {
     expect(errorRow.ok && errorRow.value).toBeNull();
   });
 
+  it("runs the same cleanup through doctor clean", async () => {
+    const failed = await createImageAsset(fs, "test-proj", "bad one");
+    const healthy = await createImageAsset(fs, "test-proj", "good");
+    await writeSyntheticPendingTask(fs, "test-proj", failed, "task-doctor-clean");
+    await failPendingTaskAndLog(fs, failed, "task-doctor-clean", { message: "boom" });
+
+    const res = await client.callTool({
+      name: "doctor",
+      arguments: { book_id: "test-proj", clean: true },
+    });
+    expect(res.isError).toBeFalsy();
+    const parsed = JSON.parse(
+      (res.content as Array<{ type: string; text: string }>)[0].text,
+    ) as { cleared: string[] };
+    expect(parsed.cleared).toEqual([failed]);
+    const healthyManifest = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: healthy, book_id: "test-proj" },
+    });
+    expect(healthyManifest.isError).toBeFalsy();
+  });
+
   it("returns empty lists when there are no failed assets", async () => {
     await createImageAsset(fs, "test-proj", "only good");
 

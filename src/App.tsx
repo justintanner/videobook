@@ -233,6 +233,7 @@ import { loadWorkspaceActionResources } from '@/videobook/workspace-action-resou
 import type { WorkspaceActionResources } from '@/videobook/workspace-action-resources'
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
 import { commandOpensPreviewForm, commandRunsAsPreview, fillDirectTarget } from '@/videobook/command-interaction'
+import { rewriteRetiredCommand, routeMergedCommand, transcribeRequestsFreshRun, type MergedCommandRoute } from '@/videobook/command-merges'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -9202,6 +9203,38 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { ok: true, message: 'Media preview opened' }
   }
 
+  const readExistingTranscript = async (assetRef: string | undefined, chat?: ChatExecution): Promise<ComposerOutcome | null> => {
+    const reference = assetRef?.replace(/^@/u, '').toLowerCase()
+    const artifactId = reference
+      ? commandMentionAssets.find((mention) => mention.cellAddress.toLowerCase() === reference)?.artifactId
+        ?? assets.find((asset) => asset.artifactId.toLowerCase() === reference || asset.id.toLowerCase() === reference)?.artifactId
+      : selectedNotebookCell?.outputArtifactId ?? undefined
+    if (!artifactId) return null
+    const args = { book_id: bookId, asset_id: artifactId }
+    try {
+      const result = await call('read_transcript', args, { chat })
+      return await completeWorkspaceToolResult('read_transcript', result, args, 'Transcript', chat)
+    } catch {
+      return null
+    }
+  }
+
+  const runMergedCommand = async (route: MergedCommandRoute, action: WorkspaceAction | undefined, command: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
+    if (route.kind === 'sound-effects') return await prepareSoundEffects('slash', chat)
+    if (route.kind === 'settings') {
+      if (!action) return { ok: false, message: `Unknown command: ${command}` }
+      const outcome = await executeWorkspaceUiRoute({ ...action, handler: { kind: 'ui', action: route.uiAction } }, route.values, chat)
+      return outcome ?? { ok: false, message: `${command} is available from its workspace.` }
+    }
+    const args: CommandToolArgs = { ...route.args, book_id: bookId }
+    if (route.preview) {
+      await openWorkspaceActions(`tool.${route.tool}`, args, undefined, undefined, chat)
+      return { ok: true, message: `${command.slice(1)} preview ready` }
+    }
+    const result = await call(route.tool, args, { chat })
+    return await completeWorkspaceToolResult(route.tool, result, args, command, chat)
+  }
+
   const executeCommand = async (
     input: string,
     context?: { speakVoiceId?: string },
@@ -9273,7 +9306,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: messageFor(routed, 'Command complete'),
         }
       }
-      const [rawCommandToken, ...restParts] = input.trim().split(/\s+/)
+      const [rawCommandToken, ...restParts] = rewriteRetiredCommand(input).trim().split(/\s+/)
       const commandToken = canonicalCommandToken(commands, rawCommandToken)
       const rest = restParts.join(' ')
       if (commandToken === '/download' && /^https?:\/\//iu.test(restParts[0] ?? '')) return await executeCommand(`/import ${rest}`, context, chat)
@@ -9295,8 +9328,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             gridMentionAssets,
           )
       if (commandToken === '/transcribe') {
-        const assetRef = resolvedRest.split(/\s+/).find((token) => token.length > 0)
-        return openTranscribeReview({ assetRef, chat })
+        const parts = resolvedRest.split(/\s+/).filter((token) => token.length > 0 && token.toLowerCase() !== 'again')
+        const assetRef = parts[0]
+        const existing = transcribeRequestsFreshRun(restParts) ? null : await readExistingTranscript(assetRef, chat)
+        return existing ?? openTranscribeReview({ assetRef, chat })
       }
       if (commandToken === '/subs' || commandToken === '/alive') {
         const target = subtitlesCommandTarget(resolvedRest)
@@ -9309,6 +9344,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!workspaceActions.length) setWorkspaceActions(availableActions)
       const advertisedCommand = selectCommandForInput(workspaceActionCommands(availableActions, commands), commandToken, resolvedRest)
       const advertisedAction = availableActions.find((action) => [action.command, ...action.aliases].includes(commandToken))
+      const merged = routeMergedCommand(commandToken, resolvedRest.split(/\s+/).filter(Boolean))
+      if (merged) return await runMergedCommand(merged, advertisedAction, commandToken, chat)
       if (advertisedCommand?.workspaceActionId || commandOpensPreviewForm(advertisedAction, rest)) {
         const values = advertisedCommand ? parseSlashCommandArgs(advertisedCommand, resolvedRest) : {}
         await openWorkspaceActions(advertisedAction?.id ?? advertisedCommand?.workspaceActionId, values, undefined, undefined, chat)
@@ -9356,9 +9393,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (commandToken === '/rough-cut') {
         return await prepareRoughCut('slash', chat)
-      }
-      if (commandToken === '/sound-effects') {
-        return await prepareSoundEffects('slash', chat)
       }
       if (commandToken === '/run' && restParts.length > 0) {
         if (!notebook || restParts.length !== 1) {

@@ -158,7 +158,6 @@ function commandSchema(command: Command): ActionInputSchema {
     Object.assign(fields.captions!, { enum: ["burned", "sidecar", "omit"], default: "burned" });
   }
   if (command.command === "/crop") fields.ratio!.enum = ["16:9", "9:16", "1:1"];
-  if (command.command === "/bg") fields.mode!.enum = ["blur", "black"];
   if (["/collapse", "/expand"].includes(command.command)) fields.side!.enum = ["left", "right", "both"];
   if (command.command === "/sort") fields.order!.enum = ["newest", "oldest"];
   return schema;

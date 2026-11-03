@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   adaptCommandArgs,
   parseCommandArgs,
-  normalizeApplySfxCommandArgs,
   normalizePostCommandArgs,
   normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
@@ -11,6 +10,7 @@ import {
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 import { executeUiAction } from "../../../src/lib/ui-actions.js";
 import { parseExportSequenceCommand } from "../../../src/videobook/export-sequence-command.js";
+import { rewriteRetiredCommand, routeMergedCommand } from "../../../src/videobook/command-merges.js";
 import { parseTrackAddCommand } from "../../../src/videobook/track-add-command.js";
 import { resolvePlaySlot } from "../../../src/videobook/play-command.js";
 import { normalizePanelSide, parseFilePosition, workspaceUiFormValues } from "../../../src/videobook/workspace-ui-routes.js";
@@ -23,6 +23,12 @@ describe("slash command parse/normalize/dispatch", () => {
     const cmd = selectCommandForInput(commands, name, rest);
     if (!cmd) throw new Error(`Command ${name} not found`);
     return cmd;
+  }
+
+  function mergedArgs(input: string): Record<string, unknown> | null {
+    const [token = "", ...parts] = rewriteRetiredCommand(input).split(/\s+/u);
+    const route = routeMergedCommand(token, parts);
+    return route?.kind === "tool" ? route.args : null;
   }
 
   function simulateParse(commandStr: string, rest: string): Record<string, unknown> {
@@ -90,11 +96,7 @@ describe("slash command parse/normalize/dispatch", () => {
 
   describe("/apply-sfx", () => {
     it("normalizes a free-text effect into the structured MCP payload", () => {
-      const parsed = simulateParse(
-        "/apply-sfx",
-        "@a1 2.5 whoosh fast cinematic transition whoosh",
-      );
-      expect(normalizeApplySfxCommandArgs(parsed)).toEqual({
+      expect(mergedArgs("/apply-sfx @a1 2.5 whoosh fast cinematic transition whoosh")).toEqual({
         asset_id: "a1",
         sfx: [{
           timestamp: 2.5,
@@ -105,13 +107,14 @@ describe("slash command parse/normalize/dispatch", () => {
     });
 
     it.each([
-      "a1",
       "a1 later whoosh fast transition",
       "a1 2.5 whoosh",
     ])("rejects malformed arguments: %s", (rest) => {
-      expect(() => normalizeApplySfxCommandArgs(
-        simulateParse("/apply-sfx", rest),
-      )).toThrow();
+      expect(() => mergedArgs(`/sfx ${rest}`)).toThrow();
+    });
+
+    it("keeps a bare asset on the suggestion tool", () => {
+      expect(mergedArgs("/sfx @a1")).toBeNull();
     });
   });
 
@@ -173,20 +176,14 @@ describe("slash command parse/normalize/dispatch", () => {
 
   describe("/scene-concat", () => {
     it("parses two videos with automatic audio alignment", () => {
-      expect(simulateParse(
-        "/scene-concat",
-        "@a1 @a2",
-      )).toEqual({
+      expect(mergedArgs("/scene-concat @a1 @a2")).toEqual({
         first_asset_id: "a1",
         second_asset_id: "a2",
       });
     });
 
     it("parses an optional fixed transition duration", () => {
-      expect(simulateParse(
-        "/scene-concat",
-        "@a1 @a2 0.25",
-      )).toEqual({
+      expect(mergedArgs("/splice @a1 @a2 smooth 0.25")).toEqual({
         first_asset_id: "a1",
         second_asset_id: "a2",
         transition_seconds: 0.25,
@@ -351,16 +348,16 @@ describe("slash command parse/normalize/dispatch", () => {
 
   describe("free text after an optional token", () => {
     it("keeps a free-text /tldr instruction out of the platform field", () => {
-      const command = findCommand("/tldr");
-      const parsed = parseCommandArgs("@a1 make it shorter", command.params);
-      expect(adaptCommandArgs(command.mcpTool?.adapter, parsed)).toEqual({
+      expect(mergedArgs("/tldr @a1 make it shorter")).toEqual({
         asset_id: "a1",
         custom_prompt: "make it shorter",
+        variant: "tldr",
       });
-      expect(adaptCommandArgs(command.mcpTool?.adapter, parseCommandArgs("@a1 tiktok punch the ending", command.params))).toEqual({
+      expect(mergedArgs("/tldr @a1 tiktok punch the ending")).toEqual({
         asset_id: "a1",
         platform: "tiktok",
         custom_prompt: "punch the ending",
+        variant: "tldr",
       });
     });
 
@@ -484,7 +481,7 @@ describe("slash command parse/normalize/dispatch", () => {
         asset_id: "a1",
         target_duration_seconds: 15,
       });
-      expect(simulateParse("/scene-concat", "@a1 @a2 0.25s")).toEqual({
+      expect(mergedArgs("/scene-concat @a1 @a2 0.25s")).toEqual({
         first_asset_id: "a1",
         second_asset_id: "a2",
         transition_seconds: 0.25,
@@ -1078,24 +1075,6 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
     });
 
-    it("/audio has uiAction=settings_audio and field+value params", () => {
-      const cmd = findCommand("/audio");
-      expect(cmd.uiAction).toBe("settings_audio");
-      const names = cmd.params.map((p) => p.name);
-      expect(names).toContain("field");
-      expect(names).toContain("value");
-      expect(cmd.params.find((p) => p.name === "field")!.required).toBe(true);
-      expect(cmd.params.find((p) => p.name === "value")!.required).toBe(false);
-    });
-
-    it("/bg has uiAction=settings_bg and mode param", () => {
-      const cmd = findCommand("/bg");
-      expect(cmd.uiAction).toBe("settings_bg");
-      const names = cmd.params.map((p) => p.name);
-      expect(names).toContain("mode");
-      expect(cmd.params.find((p) => p.name === "mode")!.required).toBe(true);
-    });
-
     it("/osg has uiAction=open_osg with required asset_id + optional image params", () => {
       const cmd = findCommand("/osg");
       expect(cmd.uiAction).toBe("open_osg");
@@ -1181,56 +1160,6 @@ describe("slash command parse/normalize/dispatch", () => {
       const args = simulateParse("/subs", "highlight #00FF00");
       expect(args.field).toBe("highlight");
       expect(args.value).toBe("#00FF00");
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // /audio different inputs — parse + dispatch
-  // -----------------------------------------------------------------------
-  describe("/audio different inputs", () => {
-    it("/audio volume 80", () => {
-      const args = simulateParse("/audio", "volume 80");
-      expect(args.field).toBe("volume");
-      expect(args.value).toBe("80");
-    });
-
-    it("/audio volume 0", () => {
-      const args = simulateParse("/audio", "volume 0");
-      expect(args.field).toBe("volume");
-      expect(args.value).toBe("0");
-    });
-
-    it("/audio volume 100", () => {
-      const args = simulateParse("/audio", "volume 100");
-      expect(args.field).toBe("volume");
-      expect(args.value).toBe("100");
-    });
-
-    it("/audio fade-in 200", () => {
-      const args = simulateParse("/audio", "fade-in 200");
-      expect(args.field).toBe("fade-in");
-      expect(args.value).toBe("200");
-    });
-
-    it("/audio fade-out 500", () => {
-      const args = simulateParse("/audio", "fade-out 500");
-      expect(args.field).toBe("fade-out");
-      expect(args.value).toBe("500");
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // /bg different inputs — parse + dispatch
-  // -----------------------------------------------------------------------
-  describe("/bg different inputs", () => {
-    it("/bg blur", () => {
-      const args = simulateParse("/bg", "blur");
-      expect(args.mode).toBe("blur");
-    });
-
-    it("/bg black", () => {
-      const args = simulateParse("/bg", "black");
-      expect(args.mode).toBe("black");
     });
   });
 
