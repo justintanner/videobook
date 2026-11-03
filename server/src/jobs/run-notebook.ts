@@ -1061,6 +1061,17 @@ export function notebookCellInputPorts(
   return mediaInputsFor(model, upstream, generationModeFor(model, document, cell, upstream)).ports;
 }
 
+function fieldRefsFor(model: ResolvedModel, upstream: readonly UpstreamEntry[]): Record<string, string[]> {
+  return Object.fromEntries(model.fieldSlots.flatMap((slot) => {
+    const entries = sortByGenerationInputPort(upstream.filter((entry) =>
+      typeof entry.output === "string"
+      && notebookCellMediaType(entry.cell) === slot.kind
+      && generationInputTarget(slot.kind, entry.targetInput) === slot.target), slot.target);
+    const outputs = outputsOf(entries);
+    return outputs.length > 0 ? [[slot.field, outputs]] : [];
+  }));
+}
+
 function refParamsFor(model: ResolvedModel, cell: NotebookCell, ports: MediaInputPorts): RefParams {
   const stored = cellInputParams(cell);
   const params: Partial<Record<RefRole, Array<Record<string, number> | null>>> = {};
@@ -1102,11 +1113,13 @@ export function mediaGenerationArgs(
     entry.targetInput === "replace_audio" && typeof entry.output === "string");
   const { refs, ports } = mediaInputsFor(model, upstream, mode);
   const refParams = refParamsFor(model, cell, ports);
+  const fieldRefs = fieldRefsFor(model, upstream);
   const input: Record<string, unknown> = {
     book_id: bookId,
     model: model.id,
     ...(mentions.prompt ? { prompt: mentions.prompt } : {}),
     refs,
+    ...(Object.keys(fieldRefs).length > 0 ? { field_refs: fieldRefs } : {}),
     ...(Object.keys(refParams).length > 0 ? { ref_params: refParams } : {}),
     options: mediaOptions(model, cell),
     ...(mode && mode !== "default" ? { mode } : {}),

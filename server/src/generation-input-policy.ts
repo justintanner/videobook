@@ -48,6 +48,7 @@ function modeInputs(mode: InputMode, inputs: readonly ModeInput[]): ModeInput[] 
 }
 
 function inputLabel(target: string): string {
+  if (target.startsWith("slot:")) return target.slice(5).replaceAll("_", " ");
   if (target === "replace_audio") return "replacement audio";
   if (target === "first_frame") return "first frame";
   if (target === "last_frame") return "last frame";

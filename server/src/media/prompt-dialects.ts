@@ -107,7 +107,13 @@ function renderRefMentions(prompt: string, refs: MediaRefs): string {
   return replaceNotebookMentions(prompt, replacements);
 }
 
-export function applyPromptDialect(dialect: PromptDialect | undefined, prompt: string, refs: MediaRefs): string {
+export function applyPromptDialect(
+  dialect: PromptDialect | undefined,
+  prompt: string,
+  refs: MediaRefs,
+  unmentioned: readonly string[] = [],
+): string {
   const rewritten = rewrite(dialect ?? "natural", expandSlotTokens(prompt, refs), refs);
-  return renderRefMentions(rewritten, refs).replace(/[ \t]{2,}/gu, " ").trim();
+  const rendered = renderRefMentions(rewritten, refs);
+  return (unmentioned.length > 0 ? stripRefMentions(rendered, unmentioned) : rendered).replace(/[ \t]{2,}/gu, " ").trim();
 }

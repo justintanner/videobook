@@ -31,6 +31,7 @@ import {
 import { mutateNotebook, mutateNotebookIfChanged, withNotebookMutation } from "../notebook-mutations.js";
 import {
   adoptUnplacedLegacyParams,
+  cellFieldInputsError,
   cellInputItemsError,
   cellInputLayoutChanged,
   cellMediaEdges,
@@ -901,6 +902,8 @@ function nextCellInputs(engine: Engine, notebook: NotebookDocument, cellId: stri
   const itemError = cellInputItemsError(notebook, cellId, items);
   if (itemError) throw new Error(itemError);
   const model = notebookCellModel(cell);
+  const fieldError = cellFieldInputsError(notebook, model, items);
+  if (fieldError) throw new Error(fieldError);
   const oldEdges = cellMediaEdges(notebook, cellId);
   const layout = planCellInputLayout({
     document: notebook,

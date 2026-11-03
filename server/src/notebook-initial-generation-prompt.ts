@@ -103,7 +103,7 @@ function promptInputs(
       .map((mention) => [`${mention.sourceCellId}:${mention.targetInput}`, mention.token]),
   );
   return document.edges
-    .filter((edge) => edge.target === cell.id && edge.targetInput !== "media")
+    .filter((edge) => edge.target === cell.id && edge.targetInput !== "media" && !edge.targetInput.startsWith("slot:"))
     .flatMap((edge) => {
       const source = cells.get(edge.source);
       const kind = source ? mediaKind(source) : null;

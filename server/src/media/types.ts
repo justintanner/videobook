@@ -161,6 +161,19 @@ export interface SlotSpec {
   itemParams: readonly ItemParamSpec[];
 }
 
+export interface FieldSlotSpec {
+  target: string;
+  field: string;
+  kind: SlotKind;
+  label: string;
+  fields: SlotField[];
+  multi: boolean;
+  min: number;
+  max: number | null;
+}
+
+export type FieldRefs = Partial<Record<string, string[]>>;
+
 export type OptionValueType = "string" | "number" | "integer" | "boolean" | "json";
 
 export interface OptionSpec {
@@ -187,6 +200,7 @@ export interface ResolvedModel {
   promptField: string | null;
   promptRequired: boolean;
   slots: SlotSpec[];
+  fieldSlots: FieldSlotSpec[];
   options: OptionSpec[];
   modes: ModeSpec[];
 }

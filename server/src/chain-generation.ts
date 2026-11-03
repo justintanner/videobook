@@ -56,7 +56,9 @@ function producerSettings(params: Record<string, unknown>): Record<string, unkno
 
 function pinTargetInput(pin: PinnedChainTarget): string {
   const role = pin.field.split(".").pop() ?? pin.field;
-  const field = role === "replace_audio_with" ? "replace_audio" : role;
+  const field = pin.field.startsWith("field_refs.")
+    ? `slot:${role}`
+    : role === "replace_audio_with" ? "replace_audio" : role;
   return generationInputPort(field, (pin.index ?? 0) + 1);
 }
 

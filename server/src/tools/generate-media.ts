@@ -6,11 +6,11 @@ import { generationLabel } from "../artifact-label.js";
 import { previewPlaceholderUrl } from "../preview-payload.js";
 import { resolveModel, UnknownModelError } from "../media/descriptor.js";
 import { buildWireRequest } from "../media/request.js";
-import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeRefParams, normalizeRefs } from "../media/refs.js";
+import { checkFieldRefs, checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, checkRefs, normalizeFieldRefs, normalizeRefParams, normalizeRefs } from "../media/refs.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { PROVIDER_ENV_KEYS } from "../media/adapters/index.js";
 import { listModels, modelListing } from "../media/listing.js";
-import { OPERATIONS_BY_MEDIA, REF_ROLES, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
+import { OPERATIONS_BY_MEDIA, REF_ROLES, type FieldRefs, type Media, type MediaRefs, type Operation, type ResolvedModel } from "../media/types.js";
 import type { GenerateMediaJob } from "../jobs/generate-media.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -48,6 +48,16 @@ function refParamsSchema() {
     video: itemParamList,
     audio: itemParamList,
   }).optional().describe("Per-item values aligned with refs, such as keyframe times: {keyframe: [{timestamp_s: 2}, {timestamp_s: 5}]}. Each model lists its item params under inputs in list_generation_models");
+}
+
+function fieldRefsSchema() {
+  return z.record(z.string(), z.array(z.string()).max(16)).optional()
+    .describe("Media for request fields that have no role, keyed by field, such as {mask_url: [\"@a2\"]} or {target_audio_url: [artifact id]}. Each model lists them under inputs in list_generation_models");
+}
+
+function placeholderFieldRefs(fieldRefs: FieldRefs): FieldRefs {
+  return Object.fromEntries(Object.entries(fieldRefs).map(([field, refs]) =>
+    [field, (refs ?? []).map((ref) => ref.startsWith("http") ? ref : previewPlaceholderUrl(ref))]));
 }
 
 function toolError(text: string): ToolResult {
@@ -99,15 +109,18 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
   if (operationError) return operationError;
   const source = await resolveGenerationSource(engine, model, refs);
   if (!source.ok) return source.error;
+  const fieldRefs = normalizeFieldRefs(args.field_refs);
   const built = buildWireRequest(model, {
     prompt: optionalString(args.prompt),
     refUrls: placeholderRefs(source.refs),
+    fieldUrls: placeholderFieldRefs(fieldRefs),
     refParams: normalizeRefParams(args.ref_params),
     options: { ...optionsOf(args.options), ...source.options },
     mode: optionalString(args.mode),
   });
   if (!built.ok) return built.error;
   return (await checkRefs(engine, refs))
+    ?? (await checkFieldRefs(engine, model, fieldRefs))
     ?? (await checkInsertVideoTiming(engine, model, refs, optionsOf(args.options)))
     ?? (await checkSeedanceEditSource(engine, model, refs, args.mode))
     ?? checkRefDurations(engine, model, refs);
@@ -120,6 +133,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
   const { artifactId, path } = created.value;
   const jobId = `generate-${model.media}-${artifactId}-${Date.now()}`;
   const refParams = normalizeRefParams(args.ref_params);
+  const fieldRefs = normalizeFieldRefs(args.field_refs);
   const job: GenerateMediaJob = {
     type: "generate_media",
     runId: currentBookContext()?.runId,
@@ -130,6 +144,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     assetDir: path,
     ...(prompt !== undefined ? { prompt } : {}),
     refs,
+    ...(Object.keys(fieldRefs).length > 0 ? { fieldRefs } : {}),
     ...(Object.keys(refParams).length > 0 ? { refParams } : {}),
     options: optionsOf(args.options),
     ...(optionalString(args.mode) ? { mode: optionalString(args.mode)! } : {}),
@@ -149,6 +164,7 @@ function generateDef(engine: Engine, media: Media): ToolDef {
       model: z.string().describe("Model id such as kie:nano-banana-2-1 or fal:fal-ai/nano-banana-pro; see list_generation_models"),
       prompt: z.string().optional().describe("Prompt; name inputs as @image1, @video1, @audio1, @firstframe or @lastframe"),
       refs: refsSchema(),
+      field_refs: fieldRefsSchema(),
       ref_params: refParamsSchema(),
       mode: z.string().optional().describe("Input mode id for models with several (for example i2v or r2v)"),
       operation: z.enum(OPERATIONS_BY_MEDIA[media]).optional().describe("Optional check that the model supports this operation"),

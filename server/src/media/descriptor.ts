@@ -2,7 +2,7 @@ import { MODEL_DISPLAY } from "@apicity/cost";
 import { modelEntry } from "./catalog.js";
 import { parseModelId } from "./model-id.js";
 import { preferredDefaults } from "./preferred-defaults.js";
-import { claimedFields, resolveSlot } from "./ref-fields.js";
+import { claimedFields, resolveFieldSlots, resolveSlot } from "./ref-fields.js";
 import { wireSpec } from "./wire.js";
 import {
   acceptsNoValue,
@@ -140,6 +140,7 @@ function build(entry: ModelEntry): ResolvedModel {
   const promptField = resolvePromptField(entry, input);
   const slots = resolveSlots(entry, input, promptField);
   const excluded = claimedFields(slots);
+  const fieldSlots = resolveFieldSlots(input, excluded);
   const promptTop = promptField?.split(".")[0];
   if (promptTop && promptField === promptTop) excluded.add(promptTop);
   const aliasTops = new Set(Object.values(entry.aliases ?? {}).map((path) => path.split(".")[0]!));
@@ -158,6 +159,7 @@ function build(entry: ModelEntry): ResolvedModel {
     promptField,
     promptRequired: promptTop !== undefined && promptField === promptTop && (input.required ?? []).includes(promptTop),
     slots,
+    fieldSlots,
     options: resolveOptions(tuned, input, excluded, wire.fixed),
     modes: entry.modes ? [...entry.modes] : defaultModes(slots),
   };

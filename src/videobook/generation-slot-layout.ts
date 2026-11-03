@@ -7,7 +7,10 @@ import {
 } from '../../server/src/generation-input-mentions'
 import {
   generationInputPort,
+  generationInputTarget,
+  isGenerationFieldPort,
   nextGenerationInputPort,
+  sortByGenerationInputPort,
   type GenerationInputKind,
 } from '../../server/src/generation-input-targets'
 import { inputLimitCap, inputLimitViolations, type InputCounts } from '../../server/src/media/input-limits'
@@ -108,6 +111,10 @@ function columnItems(
   items: ReadonlyArray<SlotItem & { targetInput: string }>,
   roles: Partial<Record<RefRole, Array<SlotItem & { targetInput: string }>>>,
 ): Array<SlotItem & { targetInput: string }> {
+  if (isGenerationFieldPort(spec.target)) {
+    return sortByGenerationInputPort(items.filter((item) =>
+      item.kind === spec.kind && generationInputTarget(item.kind, item.targetInput) === spec.target), spec.target)
+  }
   return spec.sent
     ? roles[spec.target as RefRole] ?? []
     : items.filter((item) => item.targetInput === spec.target && item.kind === spec.kind)
@@ -136,7 +143,7 @@ export function slotLayout(connections: readonly SlotConnection[], context: Slot
 }
 
 function portBase(port: string): string {
-  const match = /^(.*?)(?:_\d+)?$/u.exec(port)
+  const match = (isGenerationFieldPort(port) ? /^(.*?)(?:#\d+)?$/u : /^(.*?)(?:_\d+)?$/u).exec(port)
   return match?.[1] || port
 }
 
@@ -248,7 +255,7 @@ export function applySlotEdit(
 
 function slotCounts(layout: SlotLayout): InputCounts {
   return Object.fromEntries(layout.slots
-    .filter((column) => column.spec.sent && column.items.length > 0)
+    .filter((column) => column.spec.sent && !isGenerationFieldPort(column.spec.target) && column.items.length > 0)
     .map((column) => [column.spec.target, column.items.length]))
 }
 

@@ -184,12 +184,15 @@ function optionControl(option: OptionSpec): NotebookGenerationControl | null {
   };
 }
 
-function itemParamOptionNames(model: ResolvedModel): Set<string> {
-  return new Set(model.slots.flatMap((slot) => slot.itemParams.flatMap((param) => param.legacyOptions ?? [])));
+function slotOwnedOptionNames(model: ResolvedModel): Set<string> {
+  return new Set([
+    ...model.slots.flatMap((slot) => slot.itemParams.flatMap((param) => param.legacyOptions ?? [])),
+    ...model.fieldSlots.map((slot) => slot.field),
+  ]);
 }
 
 export function controlsForModel(model: ResolvedModel): NotebookGenerationControl[] {
-  const itemOptions = itemParamOptionNames(model);
+  const itemOptions = slotOwnedOptionNames(model);
   return model.options.flatMap((option) => {
     const control = optionControl(option);
     if (!control) return [];

@@ -11,7 +11,7 @@ import {
   schemaTypes,
   type JsonSchema,
 } from "./json-schema.js";
-import type { ItemParamSpec, ModelEntry, RefRole, SlotField, SlotKind, SlotSpec } from "./types.js";
+import type { FieldSlotSpec, ItemParamSpec, ModelEntry, RefRole, SlotField, SlotKind, SlotSpec } from "./types.js";
 
 const CANDIDATES: Readonly<Record<RefRole, readonly string[]>> = {
   first_frame: [
@@ -228,6 +228,32 @@ export function resolveSlot(role: RefRole, input: JsonSchema, entry: ModelEntry)
     max,
     itemParams: itemParamsFor(input, entry, role, expanded),
   };
+}
+
+const FIELD_SLOT_FIELDS: Readonly<Record<string, { kind: SlotKind; label: string }>> = {
+  mask_url: { kind: "image", label: "Mask" },
+  mask_image_url: { kind: "image", label: "Mask" },
+  target_audio_url: { kind: "audio", label: "Soundtrack audio" },
+  middle_image_url: { kind: "image", label: "Middle frame" },
+};
+
+export function resolveFieldSlots(input: JsonSchema, claimed: ReadonlySet<string>): FieldSlotSpec[] {
+  return Object.entries(FIELD_SLOT_FIELDS).flatMap(([field, spec]) => {
+    if (claimed.has(field) || !fieldPresent(input, field)) return [];
+    const [expanded] = expandField(input, field);
+    if (!expanded) return [];
+    const { min, ...slotField } = expanded;
+    return [{
+      target: `slot:${field}`,
+      field,
+      kind: spec.kind,
+      label: spec.label,
+      fields: [slotField],
+      multi: expanded.multi,
+      min,
+      max: expanded.max,
+    }];
+  });
 }
 
 export function claimedFields(slots: readonly SlotSpec[]): Set<string> {

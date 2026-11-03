@@ -55,10 +55,17 @@ function slotKind(role: RefRole): NotebookGenerationInputKind {
   return "image";
 }
 
+function fieldModeSlots(model: ResolvedModel): NotebookGenerationInputSlot[] {
+  return model.fieldSlots.map((slot) => ({ field: slot.target, kind: slot.kind, targets: [slot.target], min: slot.min, max: slot.max }));
+}
+
 function modeSlots(model: ResolvedModel, roles: readonly RefRole[]): NotebookGenerationInputSlot[] {
-  const slots = model.slots
-    .filter((slot) => roles.includes(slot.role))
-    .map((slot) => ({ field: slot.role, kind: slotKind(slot.role), targets: [slot.role], min: slot.min, max: slot.max }));
+  const slots = [
+    ...model.slots
+      .filter((slot) => roles.includes(slot.role))
+      .map((slot) => ({ field: slot.role, kind: slotKind(slot.role), targets: [slot.role], min: slot.min, max: slot.max })),
+    ...fieldModeSlots(model),
+  ];
   return model.media === "video"
     ? [...slots, { field: "replace_audio", kind: "audio", targets: ["replace_audio"], min: 0, max: 1 }]
     : slots;
@@ -105,7 +112,18 @@ function modeInputSpecs(model: ResolvedModel, roles: readonly RefRole[]): Notebo
         }]
       : [];
   });
-  return model.media === "video" ? [...inputs, REPLACE_AUDIO_INPUT] : inputs;
+  const fields = model.fieldSlots.map((slot): NotebookGenerationInputSpec => ({
+    target: slot.target,
+    kind: slot.kind,
+    label: slot.label,
+    fields: slot.fields.map(({ path, label, max }) => ({ path, label, max })),
+    min: slot.min,
+    max: slot.max,
+    token: null,
+    itemParams: [],
+    sent: true,
+  }));
+  return model.media === "video" ? [...inputs, ...fields, REPLACE_AUDIO_INPUT] : [...inputs, ...fields];
 }
 
 function modeLimits(model: ResolvedModel, roles: readonly RefRole[]): readonly InputLimit[] {

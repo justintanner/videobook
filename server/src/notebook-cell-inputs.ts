@@ -2,7 +2,11 @@ import type { NotebookCell, NotebookDocument, NotebookEdge } from "videobook-eng
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { cellInputParams, type InputParams } from "./generation-input-params.js";
 import { remapGenerationInputLayoutPrompt } from "./generation-input-mentions.js";
-import { generationInputTarget, type GenerationInputKind } from "./generation-input-targets.js";
+import {
+  generationInputTarget,
+  isGenerationFieldPort,
+  type GenerationInputKind,
+} from "./generation-input-targets.js";
 import type { RefRole, ResolvedModel } from "./media/types.js";
 import { notebookGenerationInputKind } from "./notebook-generation-contract.js";
 
@@ -36,6 +40,7 @@ function edgeKey(source: string, port: string): string {
 }
 
 function portKind(targetInput: string): GenerationInputKind | null {
+  if (isGenerationFieldPort(targetInput)) return null;
   if (targetInput === "replace_audio") return "audio";
   if (generationInputTarget("image", targetInput) !== "image") return "image";
   return (KIND_PORT.exec(targetInput)?.groups?.kind as GenerationInputKind | undefined) ?? null;
@@ -60,6 +65,22 @@ function cellInputItemError(document: NotebookDocument, cellId: string, item: Ce
   if (expected !== null && expected !== kind) return `${notebookGridTag(source.slot)} produces ${kind} but ${item.targetInput} takes ${expected}`;
   const holder = kept.get(item.targetInput);
   return holder ? `${item.targetInput} is already connected to ${notebookGridTag(holder.slot)}` : null;
+}
+
+export function cellFieldInputsError(
+  document: NotebookDocument,
+  model: ResolvedModel | null,
+  items: readonly CellInputItem[],
+): string | null {
+  for (const item of items.filter((candidate) => isGenerationFieldPort(candidate.targetInput))) {
+    const target = generationInputTarget("image", item.targetInput);
+    const slot = model?.fieldSlots.find((candidate) => candidate.target === target);
+    if (!slot) return `${model?.title ?? "This model"} has no ${target.slice(5)} input`;
+    const source = document.cells.find((cell) => cell.id === item.sourceCellId);
+    const kind = source ? notebookGenerationInputKind(source) : null;
+    if (kind !== slot.kind) return `${slot.label} takes ${slot.kind === "audio" ? "audio" : `${slot.kind}s`}`;
+  }
+  return null;
 }
 
 export function cellInputItemsError(document: NotebookDocument, cellId: string, items: readonly CellInputItem[]): string | null {

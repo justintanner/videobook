@@ -5,7 +5,7 @@ import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timin
 import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
 import type { RefParams } from "./request.js";
-import { REF_ROLES, type MediaRefs, type RefDurationWindowMs, type RefRole, type ResolvedModel } from "./types.js";
+import { REF_ROLES, type FieldRefs, type MediaRefs, type RefDurationWindowMs, type RefRole, type ResolvedModel } from "./types.js";
 
 export interface ResolvedRefs {
   urls: MediaRefs;
@@ -65,6 +65,48 @@ export async function uploadRefs(engine: Engine, adapter: ProviderAdapter, refs:
     result.urls[role] = urls;
   }
   return result;
+}
+
+export async function uploadFieldRefs(
+  engine: Engine,
+  adapter: ProviderAdapter,
+  model: ResolvedModel,
+  fieldRefs: FieldRefs,
+  result: ResolvedRefs,
+): Promise<FieldRefs> {
+  const urls: FieldRefs = {};
+  for (const slot of model.fieldSlots) {
+    const raws = fieldRefs[slot.field] ?? [];
+    const uploaded: string[] = [];
+    for (const raw of raws) uploaded.push(await uploadRef(engine, adapter, slot.kind, raw, result));
+    if (uploaded.length > 0) urls[slot.field] = uploaded;
+  }
+  return urls;
+}
+
+export async function checkFieldRefs(engine: Engine, model: ResolvedModel, fieldRefs: FieldRefs): Promise<string | null> {
+  for (const [field, raws] of Object.entries(fieldRefs)) {
+    const slot = model.fieldSlots.find((candidate) => candidate.field === field);
+    if (!slot) return `${model.id} has no ${field} input`;
+    for (const raw of raws ?? []) {
+      if (isHttpUrl(raw)) continue;
+      try {
+        await resolveRefInput(engine, slot.kind, raw);
+      } catch (error) {
+        return `${field} ref ${raw}: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+  }
+  return null;
+}
+
+export function normalizeFieldRefs(raw: unknown): FieldRefs {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).flatMap(([field, value]) => {
+    const list = Array.isArray(value) ? value : [value];
+    const strings = list.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim());
+    return strings.length > 0 ? [[field, strings]] : [];
+  }));
 }
 
 export async function checkRefs(engine: Engine, refs: MediaRefs): Promise<string | null> {

@@ -2,13 +2,14 @@ import { isSeedanceEdit } from "./seedance-edit.js";
 import type { ZodError } from "zod";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
 import { evenKeyframeSeconds } from "./item-param-defaults.js";
-import type { MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
+import type { FieldRefs, MediaRefs, ModeSpec, OptionSpec, RefRole, ResolvedModel, SlotField, SlotSpec } from "./types.js";
 
 export type RefParams = Partial<Record<RefRole, ReadonlyArray<Readonly<Record<string, number>> | null>>>;
 
 export interface WireRequestInput {
   prompt?: string;
   refUrls?: MediaRefs;
+  fieldUrls?: FieldRefs;
   refParams?: RefParams;
   options?: Record<string, unknown>;
   mode?: string;
@@ -225,6 +226,25 @@ function placeRefs(model: ResolvedModel, value: Record<string, unknown>, refs: M
   return explicit;
 }
 
+function fieldRefError(model: ResolvedModel, fieldUrls: FieldRefs): string | null {
+  for (const [field, urls] of Object.entries(fieldUrls)) {
+    if (!urls || urls.length === 0) continue;
+    const slot = model.fieldSlots.find((candidate) => candidate.field === field);
+    if (!slot) return `${model.id} has no ${field} input`;
+    if (slot.max !== null && urls.length > slot.max) return `${model.id} accepts at most ${slot.max} ${field} input${slot.max === 1 ? "" : "s"}`;
+  }
+  return null;
+}
+
+function placeFieldRefs(model: ResolvedModel, value: Record<string, unknown>, fieldUrls: FieldRefs): void {
+  for (const slot of model.fieldSlots) {
+    const urls = fieldUrls[slot.field] ?? [];
+    const field = slot.fields[0];
+    if (urls.length === 0 || !field) continue;
+    setPath(value, field.path, field.multi ? [...urls] : urls[0]);
+  }
+}
+
 function applyOptions(model: ResolvedModel, value: Record<string, unknown>, options: Record<string, unknown>): string | null {
   for (const [name, raw] of Object.entries(options)) {
     if (raw === undefined) continue;
@@ -294,7 +314,7 @@ function formatIssues(model: ResolvedModel, error: ZodError): string {
 
 export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): WireRequestResult {
   const refs = call.refUrls ?? {};
-  const refError = checkRefs(model, refs, call.mode);
+  const refError = checkRefs(model, refs, call.mode) ?? fieldRefError(model, call.fieldUrls ?? {});
   if (refError) return { ok: false, error: refError };
   if (isSeedanceEdit(model.id, call.mode) && refs.video?.length !== 1) return { ok: false, error: "Seedance Edit video requires exactly one source video (4–30 seconds)." };
   const promptError = checkPrompt(model, call.prompt);
@@ -305,6 +325,7 @@ export function buildWireRequest(model: ResolvedModel, call: WireRequestInput): 
   const explicitFrames = placeRefs(model, value, refs, refParams);
   const optionError = applyOptions(model, value, { ...call.options, ...legacyParamOptions(model, refParams) });
   if (optionError) return { ok: false, error: optionError };
+  placeFieldRefs(model, value, call.fieldUrls ?? {});
   applyFrameOptions(model, value, refs, call.mode);
   retimeKeyframes(model, value, explicitFrames);
   fillComputedItemParams(model, value);

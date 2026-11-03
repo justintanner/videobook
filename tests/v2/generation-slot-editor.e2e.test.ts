@@ -73,6 +73,7 @@ describe('generation slot editor in the browser', () => {
   let notebookId: string
   let images: string[]
   let generationId: string
+  let editId: string
 
   const call = async <T,>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
     const result = await client.callTool({ name, arguments: { book_id: bookId, notebook_id: notebookId, ...args } })
@@ -119,6 +120,9 @@ describe('generation slot editor in the browser', () => {
     }
     generationId = (await call<{ id: string }>('create_notebook_cell', {
       cell: { type: 'generate_video', slot: { row: 1, column: 0 }, prompt: 'Hold @image1, pass @keyframe1, land on @keyframe2', provider: 'kie', model: GROK, operation: 'image_to_video', tool: 'generate_video', inputs: { generationMode: 'i2v', generationSettings: { duration: 10 } } },
+    })).id
+    editId = (await call<{ id: string }>('create_notebook_cell', {
+      cell: { type: 'generate_image', slot: { row: 2, column: 0 }, prompt: 'Swap the sky', provider: 'fal', model: 'fal:openai/gpt-image-2/edit', operation: 'edit_image', tool: 'generate_image' },
     })).id
     vite = startProcess([join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)], {
       ...process.env,
@@ -184,11 +188,27 @@ describe('generation slot editor in the browser', () => {
   }, testBudget(90_000))
 
   it('takes a board cell dragged by its canvas grip into a slot', async () => {
+    const nodes = await page.locator('.notebook-flow .react-flow__node').count()
     const grip = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-grip`)
     await grip.dragTo(chip('Keyframes', 1), { targetPosition: { x: 40, y: 50 } })
     await expect.poll(keyframes, { timeout: testBudget(15_000) })
       .toEqual([[0, 'image'], [1, 'keyframe'], [2, 'keyframe_2'], [0, 'keyframe_3']])
-    expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(4)
+    expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(nodes)
+  }, testBudget(90_000))
+
+  it('fills a request field without a role, such as an edit mask, from the board', async () => {
+    await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [{ source_cell_id: images[0], target_input: 'image', params: {} }] })
+    await page.reload()
+    await page.locator(`.notebook-flow .react-flow__node[data-id="${editId}"] .cell-node`).click({ timeout: testBudget(60_000) })
+    const mask = slot('Mask')
+    await mask.waitFor({ state: 'visible', timeout: testBudget(30_000) })
+    expect(await mask.locator('.generation-slot-field').textContent()).toBe('mask_url')
+    await page.locator('.inspector .generation-slot-tile').filter({ hasText: '@a2' }).locator('.generation-slot-grip').dragTo(mask.locator('.generation-slot-empty'))
+    await expect.poll(async () => (await call<Notebook>('get_notebook')).edges
+      .filter((edge) => edge.target === editId).map((edge) => [images.indexOf(edge.source), edge.targetInput]).sort(), { timeout: testBudget(15_000) })
+      .toEqual([[0, 'image'], [1, 'slot:mask_url']])
+    await expect.poll(async () => await page.locator('.inspector .generation-review-json pre').textContent(), { timeout: testBudget(15_000) })
+      .toContain('"mask_url"')
   }, testBudget(90_000))
 
   it('commits a setting on Enter without starting a run', async () => {

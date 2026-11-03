@@ -80,7 +80,7 @@ function connectedInputs(
 ): KindedInput[] {
   const cellsById = new Map(cells.map((cell) => [cell.id, cell]));
   return edges.flatMap((edge) => {
-    if (edge.target !== cellId) return [];
+    if (edge.target !== cellId || edge.targetInput.startsWith("slot:")) return [];
     const source = cellsById.get(edge.source);
     const kind = source ? generationInputMediaKind(source.type) : null;
     return kind

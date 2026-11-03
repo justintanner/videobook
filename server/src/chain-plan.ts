@@ -57,6 +57,12 @@ const GENERATION_OUTPUTS: Record<string, ChainOutputType> = {
   status: "string",
 };
 
+function fieldRefGridFields(spec: ChainToolSpec, params: Record<string, unknown>): string[] {
+  const fieldRefs = params.field_refs;
+  if (!spec.placement || fieldRefs === null || typeof fieldRefs !== "object" || Array.isArray(fieldRefs)) return [];
+  return Object.keys(fieldRefs).map((field) => `field_refs.${field}`);
+}
+
 export const CHAIN_TOOL_CATALOG: Readonly<Record<string, ChainToolSpec>> = {
   generate_image: {
     outputs: GENERATION_OUTPUTS,
@@ -717,7 +723,7 @@ export async function preflightChainPlan(
     }
 
     const pins: PinnedChainTarget[] = [];
-    for (const field of spec.gridFields) {
+    for (const field of [...spec.gridFields, ...fieldRefGridFields(spec, step.params)]) {
       const raw = readChainParam(step.params, field);
       if (isChainRef(raw) || raw === undefined) continue;
       const entries: Array<{ index: number | null; value: unknown }> = Array.isArray(raw)

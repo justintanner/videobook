@@ -1,5 +1,10 @@
 import { REF_ROLES, type RefRole } from "./media/types.js";
-import { generationInputTarget, sortByGenerationInputPort, type GenerationInputKind } from "./generation-input-targets.js";
+import {
+  generationInputTarget,
+  isGenerationFieldPort,
+  sortByGenerationInputPort,
+  type GenerationInputKind,
+} from "./generation-input-targets.js";
 
 export interface GenerationRoleEntry {
   targetInput: string;
@@ -23,10 +28,11 @@ function imageEntries<T extends GenerationRoleEntry>(entries: readonly T[], mode
 }
 
 export function generationInputRoles<T extends GenerationRoleEntry>(
-  entries: readonly T[],
+  connected: readonly T[],
   modeRoles: ReadonlySet<RefRole>,
   mode: string | undefined,
 ): GenerationInputRoles<T> {
+  const entries = connected.filter((entry) => !isGenerationFieldPort(entry.targetInput));
   let firstFrame = frameEntry(entries, "first_frame", mode);
   let lastFrame = frameEntry(entries, "last_frame", mode);
   const loop = frameEntry(entries, "loop", mode);

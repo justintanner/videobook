@@ -2,7 +2,7 @@ import { isPreviewPlaceholderUrl, previewPlaceholderUrl } from "../preview-paylo
 import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
-import { normalizeRefParams, normalizeRefs } from "./refs.js";
+import { normalizeFieldRefs, normalizeRefParams, normalizeRefs } from "./refs.js";
 import { wavespeedDotPath } from "./wavespeed.js";
 import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "./types.js";
@@ -91,10 +91,14 @@ export function previewGeneration(args: Record<string, unknown>): { ok: true; pr
     return { ok: false, error: error instanceof UnknownModelError ? error.message : String(error) };
   }
   const refs = normalizeRefs(args.refs);
+  const fieldRefs = normalizeFieldRefs(args.field_refs);
   const rawPrompt = stringOrUndefined(args.prompt);
+  const fieldIds = Object.values(fieldRefs).flatMap((ids) => ids ?? []);
   const built = buildWireRequest(model, {
-    prompt: rawPrompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, rawPrompt, refs),
+    prompt: rawPrompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, rawPrompt, refs, fieldIds),
     refUrls: placeholderRefs(refs),
+    fieldUrls: Object.fromEntries(Object.entries(fieldRefs).map(([field, ids]) =>
+      [field, (ids ?? []).map((ref) => /^https?:\/\//u.test(ref) ? ref : previewPlaceholderUrl(ref))])),
     refParams: normalizeRefParams(args.ref_params),
     options: optionsOf(args.options),
     mode: stringOrUndefined(args.mode),
