@@ -185,7 +185,7 @@ function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandA
   };
 }
 
-export function normalizeApplySfxCommandArgs(
+function normalizeApplySfxCommandArgs(
   args: Readonly<Record<string, unknown>>,
 ): ApplySfxCommandArgs {
   const assetValue = args.asset_id;
