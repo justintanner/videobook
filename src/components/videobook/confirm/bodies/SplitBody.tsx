@@ -31,6 +31,8 @@ import type { SceneData } from '../../../../../server/src/scene-cuts'
 import { CutInspector } from '../CutInspector'
 import { SceneCutReview } from '../SceneCutReview'
 import { moveSceneCut } from '@/videobook/scene-timeline-edits'
+import { splitResultTimeline } from '@/videobook/split-result-timeline'
+import { SplitResultTimeline } from './SplitResultTimeline'
 
 const NUDGE_STEPS = [-1, -0.1, -0.01, 0.01, 0.1, 1] as const
 const MOVE_STEPS = [-1, -0.1, 0.1, 1] as const
@@ -224,6 +226,9 @@ export function SplitBody({
     setFocusedCut(index)
     applyEdit(moveSceneCut({ cutPointsSeconds, index, seconds, sourceDurationSeconds }))
   }
+  const resultTimeline = outputMode === 'all'
+    ? null
+    : splitResultTimeline({ cutPointsSeconds, outputMode, selectedIndex, sourceDurationSeconds })
   const outputSummary = outputSummaryText({
     destination,
     outputMode,
@@ -548,6 +553,12 @@ export function SplitBody({
           )}
           <p className="confirm-help">{outputSummary}</p>
         </section>
+        {resultTimeline && (
+          <SplitResultTimeline
+            resultLabel={destination === 'in_place' ? 'Result · in place' : 'Result · new cell'}
+            timeline={resultTimeline}
+          />
+        )}
       </div>
     </div>
   )

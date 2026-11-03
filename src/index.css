@@ -8013,6 +8013,103 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.confirm-split-result-row {
+  display: grid;
+  gap: 5px;
+}
+
+.confirm-split-result-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #a6cdb7;
+  font-size: 10px;
+}
+
+.confirm-split-result-heading > strong {
+  font-weight: 500;
+}
+
+.confirm-split-result-track {
+  position: relative;
+  height: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(90, 132, 108, 0.28);
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.confirm-split-result-track[data-result='true'] {
+  border-style: dashed;
+}
+
+.confirm-split-result-kept,
+.confirm-split-result-removed {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+}
+
+.confirm-split-result-kept {
+  border-inline: 1px solid #86e0a0;
+  background: rgba(134, 224, 160, 0.18);
+}
+
+.confirm-split-result-removed {
+  border-inline: 2px solid #f0907a;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(240, 144, 122, 0.3) 0 5px,
+    rgba(240, 144, 122, 0.1) 5px 10px
+  );
+}
+
+.confirm-split-result-splice {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #e9c46a;
+}
+
+.confirm-split-result-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border: 1px solid rgba(90, 132, 108, 0.28);
+  background: rgba(90, 132, 108, 0.28);
+}
+
+.confirm-split-result-stats > div {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  background: rgba(1, 9, 5, 0.9);
+}
+
+.confirm-split-result-stats dt {
+  color: #6fa184;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.confirm-split-result-stats dd {
+  margin: 0;
+  color: #d8eadf;
+  font-size: 12px;
+}
+
+.confirm-split-result-stats dd[data-tone='removed'] {
+  color: #f0907a;
+}
+
+.confirm-split-result-stats dd[data-tone='kept'] {
+  color: #86e0a0;
+}
+
 @media (max-width: 1180px) {
   .confirm-watermark {
     grid-template-columns: minmax(0, 1fr);
