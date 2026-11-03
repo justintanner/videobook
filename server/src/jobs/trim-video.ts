@@ -4,7 +4,9 @@ import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS, FFPROBE } from "../ffmpeg.js";
+import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS, FFPROBE } from "../ffmpeg.js";
+import { cutFrameAlignedRanges } from "../notebook-media-ops.js";
+import type { VideoRange } from "../video-cut-ranges.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { SOUND_SIDECARS } from "../stale-sidecars.js";
@@ -340,6 +342,17 @@ type TrimVideoPayload = {
   commitParams: Record<string, unknown>;
 };
 
+async function keptRange(
+  inputPath: string,
+  trimStart: number | undefined,
+  trimEnd: number | undefined,
+): Promise<VideoRange> {
+  const startSeconds = trimStart ?? 0;
+  if (trimEnd !== undefined) return { startSeconds, endSeconds: trimEnd };
+  const probe = await probeVideo(inputPath);
+  return { startSeconds, endSeconds: probe.videoDuration || probe.duration };
+}
+
 export function registerTrimVideoJob(engine: Engine): void {
   registerJobHandler("trim_video", async (payload, ctx) => {
     const {
@@ -355,13 +368,13 @@ export function registerTrimVideoJob(engine: Engine): void {
       "trim",
       { durationMs: LOCK_DURATION_MS, data: { state: "trimming" } },
       async () => {
-      if (mode === "cut") {
-        await cutMiddle(inputPath, outputPath, cutStart!, cutEnd!);
-      } else {
-        await trimRange(inputPath, outputPath, trimStart, trimEnd);
-      }
-
       try {
+        if (mode === "cut") {
+          await cutMiddle(inputPath, outputPath, cutStart!, cutEnd!);
+        } else {
+          const range = await keptRange(inputPath, trimStart, trimEnd);
+          await cutFrameAlignedRanges(assetId, inputPath, [range], outputPath);
+        }
         await assertSaneTrimOutput(inputPath, outputPath);
       } catch (err) {
         await rm(outputPath, { force: true });

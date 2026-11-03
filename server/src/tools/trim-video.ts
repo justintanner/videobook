@@ -32,7 +32,7 @@ type TrimArgs = {
   actor?: string;
 };
 
-type SourceFile = { assetDir: string; videoPath: string; durationSeconds: number; hasAudio: boolean };
+type SourceFile = { assetDir: string; videoPath: string; durationSeconds: number };
 
 function requiredTimestamp(value: string | number, field: string): number {
   return parseVideoTimestamp(value, field)!;
@@ -78,7 +78,6 @@ async function sourceFile(engine: Engine, artifactId: string): Promise<SourceFil
     assetDir: manifest.value.path,
     videoPath,
     durationSeconds: probe.videoDuration || probe.duration,
-    hasAudio: probe.hasAudio,
   };
 }
 
@@ -103,7 +102,6 @@ function inPlaceJob(artifactId: string, bookId: string, file: SourceFile, keeps:
     outputPath: join(file.assetDir, "original_cuts.mp4"),
     cuts: cutRangesOutside(keeps, file.durationSeconds).map((cut) => ({ cut_start: cut.startSeconds, cut_end: cut.endSeconds })),
     duration: file.durationSeconds,
-    hasAudio: file.hasAudio,
     assetId: artifactId,
     assetDir: file.assetDir,
     bookId,

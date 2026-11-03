@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine } from "videobook-engine";
-import { FFMPEG } from "../../server/src/ffmpeg.js";
+import { FFMPEG, probeVideo, type ProbeResult } from "../../server/src/ffmpeg.js";
 import {
   captureFrame,
   concatSourceRanges,
@@ -86,6 +86,12 @@ async function makeLongAudioMp4(path: string): Promise<void> {
     "aac",
     path,
   ]);
+}
+
+async function probeArtifactVideo(engine: Engine, artifactId: string): Promise<ProbeResult> {
+  const manifest = await engine.files.manifest(artifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  return await probeVideo(join(manifest.value.path, "original.mp4"));
 }
 
 async function makeAudioOnlyMp4(path: string): Promise<void> {
@@ -210,6 +216,14 @@ describe("notebook local media and analysis fan-out", () => {
       .toEqual({ startSeconds: 0.5, endSeconds: 1.5 });
   });
 
+  it("reads millisecond-rounded range times as the frame edges they round", () => {
+    const timing = { durationSeconds: 18.333333, fps: 30 };
+    expect(frameAlignedRange({ startSeconds: 3, endSeconds: 18.333 }, timing))
+      .toEqual({ startSeconds: 3, endSeconds: 18.333333 });
+    expect(frameAlignedRange({ startSeconds: 0.067, endSeconds: 0.133 }, timing))
+      .toEqual({ startSeconds: 0.066667, endSeconds: 0.133333 });
+  });
+
   it("never outputs a clip longer than the requested range when the source audio runs past the video", async () => {
     if (!engine || !rootDir) throw new Error("engine missing");
     const sourcePath = join(rootDir, "long-audio.mp4");
@@ -248,6 +262,9 @@ describe("notebook local media and analysis fan-out", () => {
     expect(tail.durationSeconds).toBeGreaterThan(0.98);
     expect(joined.durationSeconds).toBeLessThanOrEqual(1);
     expect(joined.durationSeconds).toBeGreaterThan(0.98);
+    const joinedVideo = await probeArtifactVideo(engine, joined.artifactId);
+    expect(joinedVideo.fps).toBe(30);
+    expect(joinedVideo.videoDuration).toBeCloseTo(1, 5);
   }, testBudget(60_000));
 
   it("rejects split ranges that start at the end of the source video", async () => {

@@ -150,7 +150,7 @@ type SourceVideoTiming = {
   hasAudio: boolean;
 };
 
-const FRAME_EPSILON = 1e-6;
+const RANGE_ROUNDING_SECONDS = 0.0005;
 
 function microseconds(seconds: number): number {
   return Math.round(seconds * 1_000_000) / 1_000_000;
@@ -162,8 +162,8 @@ export function frameAlignedRange(
 ): MediaRange {
   const endSeconds = Math.min(range.endSeconds, timing.durationSeconds);
   if (!(timing.fps > 0)) return { startSeconds: range.startSeconds, endSeconds };
-  const startFrame = Math.max(0, Math.ceil(range.startSeconds * timing.fps - FRAME_EPSILON));
-  const endFrame = Math.floor(endSeconds * timing.fps + FRAME_EPSILON);
+  const startFrame = Math.max(0, Math.ceil((range.startSeconds - RANGE_ROUNDING_SECONDS) * timing.fps));
+  const endFrame = Math.floor((endSeconds + RANGE_ROUNDING_SECONDS) * timing.fps);
   return {
     startSeconds: microseconds(startFrame / timing.fps),
     endSeconds: microseconds(endFrame / timing.fps),
@@ -193,6 +193,85 @@ function sourceVideoTiming(probe: ProbeResult): SourceVideoTiming {
   };
 }
 
+function rangeCutArgs(
+  sourcePath: string,
+  timing: SourceVideoTiming,
+  range: MediaRange,
+  outputPath: string,
+): string[] {
+  const duration = microseconds(range.endSeconds - range.startSeconds);
+  return [
+    "-y",
+    "-ss",
+    String(range.startSeconds),
+    "-i",
+    sourcePath,
+    "-t",
+    String(duration),
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0?",
+    ...H264_MEDIUM,
+    ...(timing.hasAudio ? ["-af", `atrim=end=${duration},asetpts=PTS-STARTPTS`] : []),
+    ...AUDIO_OPTS,
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ];
+}
+
+function concatCutArgs(
+  sourcePath: string,
+  timing: SourceVideoTiming,
+  ranges: readonly MediaRange[],
+  outputPath: string,
+): string[] {
+  return [
+    "-y",
+    "-i",
+    sourcePath,
+    "-filter_complex",
+    buildConcatFilterGraph(ranges, timing.hasAudio),
+    "-map",
+    "[v]",
+    ...(timing.hasAudio ? ["-map", "[a]"] : []),
+    ...H264_MEDIUM,
+    ...(timing.fps > 0 ? ["-r", String(timing.fps)] : []),
+    ...(timing.hasAudio ? AUDIO_OPTS : []),
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ];
+}
+
+export async function cutFrameAlignedRanges(
+  sourceArtifactId: string,
+  sourcePath: string,
+  ranges: readonly MediaRange[],
+  outputPath: string,
+): Promise<MediaRange[]> {
+  if (ranges.length === 0) throw new Error("At least one cut range is required");
+  const probe = await probeVideo(sourcePath);
+  if (!probe.videoStream) {
+    throw new Error(
+      `Cannot cut artifact ${sourceArtifactId}: source has no video stream`,
+    );
+  }
+  const timing = sourceVideoTiming(probe);
+  if (!(timing.durationSeconds > 0)) {
+    throw new Error(
+      `Cannot cut artifact ${sourceArtifactId}: source video duration is unavailable`,
+    );
+  }
+  const aligned = ranges.map((range) =>
+    alignedSplitRange(sourceArtifactId, timing, range));
+  await runFfmpeg(aligned.length === 1
+    ? rangeCutArgs(sourcePath, timing, aligned[0]!, outputPath)
+    : concatCutArgs(sourcePath, timing, aligned, outputPath));
+  return aligned;
+}
+
 async function splitMaterializedRange(
   engine: Engine,
   sourceArtifactId: string,
@@ -206,25 +285,7 @@ async function splitMaterializedRange(
   const outDir = await mkdtemp(join(tmpdir(), "vb-split-"));
   const outPath = join(outDir, "split.mp4");
   try {
-    await runFfmpeg([
-      "-y",
-      "-ss",
-      String(range.startSeconds),
-      "-i",
-      sourcePath,
-      "-t",
-      String(duration),
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a:0?",
-      ...H264_MEDIUM,
-      ...(timing.hasAudio ? ["-af", `atrim=end=${duration},asetpts=PTS-STARTPTS`] : []),
-      ...AUDIO_OPTS,
-      "-movflags",
-      "+faststart",
-      outPath,
-    ]);
+    await runFfmpeg(rangeCutArgs(sourcePath, timing, range, outPath));
     const probe = await probeVideo(outPath);
     if (!probe.videoStream) {
       throw new Error(
@@ -372,32 +433,12 @@ export async function concatSourceRanges(
   const outDir = await mkdtemp(join(tmpdir(), "vb-concat-"));
   const outPath = join(outDir, "concat.mp4");
   try {
-    const probe = await probeVideo(source.path);
-    if (!probe.videoStream) {
-      throw new Error(
-        `Cannot concat artifact ${sourceArtifactId}: source has no video stream`,
-      );
-    }
-    const timing = sourceVideoTiming(probe);
-    const alignedRanges = ranges.map((range) =>
-      alignedSplitRange(sourceArtifactId, timing, range));
-    const hasAudio = probe.hasAudio;
-    const filter = buildConcatFilterGraph(alignedRanges, hasAudio);
-    await runFfmpeg([
-      "-y",
-      "-i",
+    const alignedRanges = await cutFrameAlignedRanges(
+      sourceArtifactId,
       source.path,
-      "-filter_complex",
-      filter,
-      "-map",
-      "[v]",
-      ...(hasAudio ? ["-map", "[a]"] : []),
-      ...H264_MEDIUM,
-      ...(hasAudio ? AUDIO_OPTS : []),
-      "-movflags",
-      "+faststart",
+      ranges,
       outPath,
-    ]);
+    );
     const outputProbe = await probeVideo(outPath);
     if (!outputProbe.videoStream) {
       throw new Error(

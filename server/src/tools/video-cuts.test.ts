@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Engine, NotebookCell } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { FFMPEG, probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { registerAllJobHandlers } from "../jobs/index.js";
 import { queue, setEngineRoot } from "../queue.js";
@@ -16,6 +16,7 @@ import { trimVideoDef } from "./trim-video.js";
 
 const execFileAsync = promisify(execFile);
 const SOURCE_SECONDS = 5;
+const LONG_AUDIO_FRAMES = 550;
 
 function resultValue(result: ToolResult): Record<string, unknown> {
   if (result.isError) throw new Error(result.content[0]?.text ?? "Tool failed");
@@ -46,25 +47,45 @@ async function generateSource(path: string): Promise<void> {
   ]);
 }
 
+async function generateLongAudioSource(path: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "testsrc=duration=18.333333:size=160x120:rate=30",
+    "-f", "lavfi", "-i", "anoisesrc=color=pink:amplitude=0.1:seed=1:sample_rate=48000:duration=18.401",
+    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    path,
+  ]);
+}
+
+function videoFrames(probe: ProbeResult): number {
+  return Math.round(probe.videoDuration * probe.fps);
+}
+
 describe("trim_video and split_video", () => {
   let engine: Engine;
   let root: string;
   let bookId: string;
   let sourcePath: string;
+  let longAudioPath: string;
   let notebookId: string;
 
-  async function videoArtifact(label: string): Promise<string> {
+  async function videoArtifact(label: string, path = sourcePath): Promise<string> {
     const created = await engine.artifacts.create({ kind: "video", label });
     if (!created.ok) throw new Error(created.error.message);
-    const written = await engine.files.writeFromPath(created.value.artifactId, "original.mp4", sourcePath);
+    const written = await engine.files.writeFromPath(created.value.artifactId, "original.mp4", path);
     if (!written.ok) throw new Error(written.error.message);
     return created.value.artifactId;
   }
 
-  async function artifactDuration(artifactId: string): Promise<number> {
+  async function artifactProbe(artifactId: string): Promise<ProbeResult> {
     const manifest = await engine.files.manifest(artifactId);
     if (!manifest.ok) throw new Error(manifest.error.message);
-    return (await probeVideo(join(manifest.value.path, "original.mp4"))).duration;
+    return await probeVideo(join(manifest.value.path, "original.mp4"));
+  }
+
+  async function artifactDuration(artifactId: string): Promise<number> {
+    return (await artifactProbe(artifactId)).duration;
   }
 
   async function placeOnNotebook(column: number): Promise<string> {
@@ -90,7 +111,8 @@ describe("trim_video and split_video", () => {
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-video-cuts-"));
     sourcePath = join(root, "source.mp4");
-    await generateSource(sourcePath);
+    longAudioPath = join(root, "long-audio.mp4");
+    await Promise.all([generateSource(sourcePath), generateLongAudioSource(longAudioPath)]);
     engine = createEngineForTest(root);
     registerAllJobHandlers(engine);
     await setEngineRoot(root, engine);
@@ -203,6 +225,67 @@ describe("trim_video and split_video", () => {
       status: "completed",
     });
     expect(await artifactDuration(sourceArtifactId)).toBeCloseTo(SOURCE_SECONDS - 2, 0);
+  }, testBudget(120_000));
+
+  it("trims a 30fps source in place to exactly 0-15s when its audio runs past the video", async () => {
+    const sourceArtifactId = await videoArtifact("long audio keep", longAudioPath);
+    resultValue(await trimVideoDef(engine).handler({
+      asset_id: sourceArtifactId,
+      book_id: bookId,
+      trim_start: 0,
+      trim_end: "15s",
+    }));
+    const probe = await artifactProbe(sourceArtifactId);
+    expect(probe.fps).toBe(30);
+    expect(videoFrames(probe)).toBe(450);
+    expect(probe.videoDuration).toBeCloseTo(15, 5);
+    expect(probe.duration).toBeCloseTo(15, 5);
+    expect(probe.audioDuration).not.toBeNull();
+    expect(probe.audioDuration!).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+  }, testBudget(120_000));
+
+  it("keeps every frame through the end when the head is trimmed in place", async () => {
+    const sourceArtifactId = await videoArtifact("long audio head", longAudioPath);
+    resultValue(await trimVideoDef(engine).handler({
+      asset_id: sourceArtifactId,
+      book_id: bookId,
+      head_seconds: 3,
+    }));
+    const probe = await artifactProbe(sourceArtifactId);
+    expect(videoFrames(probe)).toBe(LONG_AUDIO_FRAMES - 90);
+    expect(probe.duration).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+  }, testBudget(120_000));
+
+  it("keeps the source frame rate when several ranges are removed in place", async () => {
+    const sourceArtifactId = await videoArtifact("long audio cuts", longAudioPath);
+    resultValue(await trimVideoDef(engine).handler({
+      asset_id: sourceArtifactId,
+      book_id: bookId,
+      cuts: [{ start: 0, end: 1 }, { start: "10s", end: "12.5s" }],
+    }));
+    const probe = await artifactProbe(sourceArtifactId);
+    expect(probe.fps).toBe(30);
+    expect(videoFrames(probe)).toBe(LONG_AUDIO_FRAMES - 30 - 75);
+    expect(probe.duration).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+  }, testBudget(120_000));
+
+  it("finishes a keep trim queued without an end by an earlier release", async () => {
+    const sourceArtifactId = await videoArtifact("queued keep");
+    const manifest = await engine.files.manifest(sourceArtifactId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    await queue.enqueueAndWait(`trim-${sourceArtifactId}-queued`, {
+      type: "trim_video",
+      inputPath: join(manifest.value.path, "original.mp4"),
+      outputPath: join(manifest.value.path, "original_trimmed.mp4"),
+      mode: "keep",
+      trimStart: 1,
+      assetId: sourceArtifactId,
+      assetDir: manifest.value.path,
+      bookId,
+      commitParams: { mode: "keep", trim_start: 1 },
+    });
+    const probe = await artifactProbe(sourceArtifactId);
+    expect(videoFrames(probe)).toBe((SOURCE_SECONDS - 1) * 24);
   }, testBudget(120_000));
 
   it("rejects mixed trim modes and trims that remove everything", async () => {

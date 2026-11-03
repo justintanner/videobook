@@ -1,7 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
+import { cutFrameAlignedRanges } from "../notebook-media-ops.js";
+import type { VideoRange } from "../video-cut-ranges.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { SOUND_SIDECARS } from "../stale-sidecars.js";
@@ -16,45 +18,26 @@ type ApplyCutsPayload = {
   outputPath: string;
   cuts: Cut[];
   duration: number;
-  hasAudio: boolean;
   assetId: string;
   assetDir: string;
   bookId: string;
 };
 
-function buildKeepSegments(cuts: Cut[], duration: number): Array<[number, number]> {
-  const keeps: Array<[number, number]> = [];
+function buildKeepSegments(cuts: Cut[], duration: number): VideoRange[] {
+  const keeps: VideoRange[] = [];
   let cursor = 0;
   for (const c of cuts) {
-    if (c.cut_start > cursor) keeps.push([cursor, c.cut_start]);
+    if (c.cut_start > cursor) keeps.push({ startSeconds: cursor, endSeconds: c.cut_start });
     cursor = c.cut_end;
   }
-  if (cursor < duration) keeps.push([cursor, duration]);
+  if (cursor < duration) keeps.push({ startSeconds: cursor, endSeconds: duration });
   return keeps;
-}
-
-function buildFilterGraph(keeps: Array<[number, number]>, hasAudio: boolean): string {
-  const parts: string[] = [];
-  keeps.forEach(([s, e], i) => {
-    parts.push(`[0:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS[v${i}]`);
-    if (hasAudio) {
-      parts.push(`[0:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS[a${i}]`);
-    }
-  });
-  const concatInputs = keeps
-    .map((_, i) => (hasAudio ? `[v${i}][a${i}]` : `[v${i}]`))
-    .join("");
-  const tail = hasAudio ? "[v][a]" : "[v]";
-  parts.push(
-    `${concatInputs}concat=n=${keeps.length}:v=1:a=${hasAudio ? 1 : 0}${tail}`,
-  );
-  return parts.join(";");
 }
 
 export function registerApplyCutsJob(engine: Engine): void {
   registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
-      inputPath, outputPath, cuts, duration, hasAudio,
+      inputPath, outputPath, cuts, duration,
       assetId, assetDir, bookId,
     } = payload as ApplyCutsPayload;
 
@@ -72,17 +55,7 @@ export function registerApplyCutsJob(engine: Engine): void {
         throw new Error("Cuts cover entire video — nothing left to keep.");
       }
 
-      const filter = buildFilterGraph(keeps, hasAudio);
-      const args = [
-        "-y", "-i", inputPath,
-        "-filter_complex", filter,
-        "-map", "[v]",
-        ...(hasAudio ? ["-map", "[a]"] : []),
-        ...H264_MEDIUM,
-        ...(hasAudio ? AUDIO_OPTS : []),
-        outputPath,
-      ];
-      await runFfmpeg(args);
+      await cutFrameAlignedRanges(assetId, inputPath, keeps, outputPath);
 
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
