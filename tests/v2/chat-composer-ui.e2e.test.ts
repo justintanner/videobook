@@ -4370,7 +4370,7 @@ describe('chat composer browser flow', () => {
         model: bounds('.generation-review-model-section'),
         prompt: bounds('.generation-review-prompt-section'),
         settings: bounds('.generation-review-settings-section'),
-        estimate: bounds('.generation-review-estimate-section'),
+        estimate: bounds('.generation-review-estimate'),
       }
     })
     expect(layout.model.bottom).toBeLessThanOrEqual(layout.settings.top)

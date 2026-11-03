@@ -142,8 +142,8 @@ describe('voice generation review in the browser', () => {
       const editor = page.locator('.generation-cell-inspector .confirm-generation')
       const payload = editor.locator('.generation-review-json pre')
       await expect.poll(() => payload.textContent(), { timeout }).toContain(prompt)
-      await expect.poll(() => editor.locator('.generation-review-estimate-section').innerText(), { timeout }).toContain('$')
-      expect(await editor.locator('.generation-review-estimate-section').innerText()).not.toContain('Updating')
+      await expect.poll(() => editor.locator('.generation-review-estimate').innerText(), { timeout }).toContain('$')
+      expect(await editor.locator('.generation-review-estimate').innerText()).not.toContain('Updating')
       const notebook = await call<Notebook>('get_notebook')
       const cell = notebook.cells.find(candidate => candidate.type === 'generate_image' && candidate.prompt === prompt)!
       expect(cell).toBeDefined()
@@ -152,7 +152,7 @@ describe('voice generation review in the browser', () => {
       await page.bringToFront()
       await expect.poll(() => page.locator(`.react-flow__node[data-id="${cell.id}"] .cell-node-footer strong`).textContent(), { timeout }).toBe(notebookGridTag(slot))
       await expect.poll(() => payload.textContent(), { timeout }).toContain(prompt)
-      expect(await editor.locator('.generation-review-estimate-section').innerText()).not.toContain('Updating')
+      expect(await editor.locator('.generation-review-estimate').innerText()).not.toContain('Updating')
     }
     await page.getByLabel('Stop voice conversation').click()
   }, 60_000)

@@ -313,17 +313,6 @@ function SlotBoard({ editor, handlers }: { editor: GenerationSlotEditor; handler
           <div className="generation-slot-tile" key={cellId}>
             <button
               type="button"
-              className="generation-slot-grip"
-              draggable={!handlers.busy}
-              disabled={handlers.busy}
-              aria-label={`Drag @${source.address} into a slot`}
-              onDragStart={(event) => handlers.beginDrag(event, { sourceCellId: cellId, from: null })}
-              onDragEnd={handlers.finishDrag}
-            >
-              <GripVertical size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               className="generation-slot-tile-add"
               disabled={handlers.busy || !slot}
               title={slot ? `Add @${source.address} to ${slot.spec.label}` : `No slot takes @${source.address}`}
@@ -337,10 +326,18 @@ function SlotBoard({ editor, handlers }: { editor: GenerationSlotEditor; handler
                   eager
                 />
               </span>
-              <span className="generation-slot-chip-copy">
-                <strong>@{source.address}</strong>
-                <small>{source.type.replaceAll('_', ' ')}</small>
-              </span>
+              <small>@{source.address}</small>
+            </button>
+            <button
+              type="button"
+              className="generation-slot-grip generation-slot-tile-grip"
+              draggable={!handlers.busy}
+              disabled={handlers.busy}
+              aria-label={`Drag @${source.address} into a slot`}
+              onDragStart={(event) => handlers.beginDrag(event, { sourceCellId: cellId, from: null })}
+              onDragEnd={handlers.finishDrag}
+            >
+              <GripVertical size={11} aria-hidden="true" />
             </button>
           </div>
         )

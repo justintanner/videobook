@@ -311,6 +311,18 @@ export function GenerationBody({
   const previewValue = recordValue(preview)
   const artifactAssets = previewAssets(sources, preview)
   const estimate = generationEstimate(preview)
+  const estimateText = previewLoading || previewStale
+    ? '…'
+    : !previewError && estimate.usd !== null && !estimate.unknown
+      ? `$${estimate.usd.toFixed(estimate.usd < 0.01 ? 4 : 2)}`
+      : '—'
+  const estimateNote = previewLoading || previewStale
+    ? 'Updating estimate…'
+    : previewError || estimate.unknown || estimate.usd === null
+      ? 'Cost estimate unavailable'
+      : historicalAverageEstimate(estimate.warnings)
+        ? 'Historical average per call; this request can differ'
+        : 'Estimated provider cost'
   const promptLeaks = previewStale ? [] : providerPayloadPreviewMentions(preview).promptLeaks
   const previewJson = previewValue ?? {
     status: 'unresolved_draft',
@@ -408,20 +420,24 @@ export function GenerationBody({
                 onChange={(value) => onSettingChange(control.name, value)}
               />
             ))}
-            {toggleControls.map((control) => (
-              <GenerationControlField
-                key={control.name}
-                control={control}
-                settings={settings}
-                busy={busy}
-                toggleClassName="generation-review-toggle"
-                onChange={(value) => onSettingChange(control.name, value)}
-              />
-            ))}
             {generalControls.length === 0 && (
               <span className="generation-review-defaults">Provider defaults</span>
             )}
           </div>
+          {toggleControls.length > 0 && (
+            <div className="generation-review-toggles">
+              {toggleControls.map((control) => (
+                <GenerationControlField
+                  key={control.name}
+                  control={control}
+                  settings={settings}
+                  busy={busy}
+                  toggleClassName="generation-review-toggle"
+                  onChange={(value) => onSettingChange(control.name, value)}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         {voiceControl && voiceCatalog && (
@@ -525,7 +541,20 @@ export function GenerationBody({
       <section className="confirm-section generation-review-source-section" aria-label={sourceVisible ? 'MCP payload' : 'Payload'}>
         <div className="confirm-section-heading">
           <span>{sourceVisible ? 'MCP payload' : 'Payload'}</span>
+          <span className="generation-review-estimate" aria-label="Estimate" title={estimateNote}>
+            <strong>{estimateText}</strong>
+            {estimateText !== '…' && estimateText !== '—' && <small>{estimate.currency}</small>}
+          </span>
           {(previewStale || previewLoading) && <small className="generation-review-json-stale" role="status">Updating…</small>}
+          {previewError && <button
+            type="button"
+            className="generation-review-retry"
+            disabled={busy || previewLoading}
+            onClick={onRefreshPreview}
+          >
+            <RefreshCw size={10} aria-hidden="true" />
+            Retry preview
+          </button>}
         </div>
         <div className="generation-review-json" tabIndex={0} aria-label={sourceVisible ? 'MCP payload preview' : 'Generation payload preview'} aria-busy={previewLoading}>
           {previewLoading ? (
@@ -543,35 +572,6 @@ export function GenerationBody({
             />
           )}
         </div>
-      </section>
-
-      <section className="confirm-section generation-review-estimate-section" aria-label="Estimate">
-        <span className="confirm-section-label">Estimate</span>
-        <strong>
-          {previewLoading || previewStale
-            ? '…'
-            : !previewError && estimate.usd !== null && !estimate.unknown
-              ? `$${estimate.usd.toFixed(estimate.usd < 0.01 ? 4 : 2)}`
-              : '—'}
-        </strong>
-        <span>{estimate.currency}</span>
-        <small>
-          {previewLoading || previewStale
-            ? 'Updating estimate…'
-            : previewError || estimate.unknown || estimate.usd === null
-              ? 'Cost estimate unavailable'
-              : historicalAverageEstimate(estimate.warnings)
-                ? 'Historical average per call; this request can differ'
-                : 'Estimated provider cost'}
-        </small>
-        {previewError && <button
-          type="button"
-          disabled={busy || previewLoading}
-          onClick={onRefreshPreview}
-        >
-          <RefreshCw size={10} aria-hidden="true" />
-          Retry preview
-        </button>}
       </section>
     </div>
   )

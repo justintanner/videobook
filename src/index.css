@@ -7848,9 +7848,8 @@ textarea:focus-visible {
   grid-template-columns:
     var(--generation-review-inputs-width)
     minmax(0, 1.4fr)
-    minmax(0, 1fr)
-    144px;
-  grid-template-areas: 'inputs editor source estimate';
+    minmax(0, 1fr);
+  grid-template-areas: 'inputs editor source';
   grid-template-rows: auto;
   gap: 10px;
   align-items: stretch;
@@ -7884,8 +7883,8 @@ textarea:focus-visible {
 }
 
 .confirm-generation[data-view='source'] {
-  grid-template-columns: var(--generation-review-inputs-width) minmax(0, 1fr) minmax(0, 1fr) 144px;
-  grid-template-areas: 'inputs dolt mcp estimate';
+  grid-template-columns: var(--generation-review-inputs-width) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: 'inputs dolt mcp';
   grid-template-rows: auto;
 }
 
@@ -8157,18 +8156,14 @@ textarea:focus-visible {
 
   .confirm-generation {
     grid-template-columns: var(--generation-review-inputs-width) minmax(0, 1.2fr) minmax(0, 1fr);
-    grid-template-areas:
-      'inputs editor source'
-      'estimate editor source';
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: 'inputs editor source';
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .confirm-generation[data-view='source'] {
     grid-template-columns: var(--generation-review-inputs-width) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'inputs dolt mcp'
-      'estimate dolt mcp';
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: 'inputs dolt mcp';
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .confirm-transcribe {
@@ -8202,14 +8197,13 @@ textarea:focus-visible {
     grid-template-areas:
       'inputs'
       'editor'
-      'source'
-      'estimate';
+      'source';
     grid-template-rows: auto;
   }
 
   .confirm-generation[data-view='source'] {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'inputs' 'dolt' 'mcp' 'estimate';
+    grid-template-areas: 'inputs' 'dolt' 'mcp';
     grid-template-rows: auto;
   }
 
@@ -8482,11 +8476,38 @@ textarea:focus-visible {
 }
 
 .generation-slot-board {
-  display: grid;
+  display: flex;
   gap: 4px;
-  padding: 6px;
+  min-width: 0;
+  padding: 4px;
+  overflow-x: auto;
   border: 1px solid var(--line);
   background: var(--surface-deep);
+  scrollbar-width: thin;
+}
+
+.generation-slot-tile {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 48px;
+}
+
+.generation-slot-tile-grip {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 18px;
+  background: rgba(2, 10, 6, 0.78);
+}
+
+.generation-slot-tile-add small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .generation-slot {
@@ -8549,15 +8570,13 @@ textarea:focus-visible {
 }
 
 .generation-slot-chip,
-.generation-slot-tile,
 .generation-slot-empty {
   box-sizing: border-box;
   height: 56px;
   min-width: 0;
 }
 
-.generation-slot-chip,
-.generation-slot-tile {
+.generation-slot-chip {
   position: relative;
   display: flex;
   align-items: center;
@@ -8645,18 +8664,21 @@ textarea:focus-visible {
 }
 
 .generation-slot-tile-add {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: 6px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
   min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
+  padding: 2px;
+  border: 1px solid rgba(114, 231, 170, 0.22);
   color: inherit;
-  background: transparent;
-  text-align: left;
+  background: rgba(3, 16, 9, 0.92);
   cursor: pointer;
+}
+
+.generation-slot-tile-add:hover:not(:disabled),
+.generation-slot-tile-add:focus-visible:not(:disabled) {
+  border-color: var(--control-border-hover);
+  outline: 0;
 }
 
 .generation-slot-tile-add:disabled {
@@ -9086,6 +9108,39 @@ textarea:focus-visible {
 
 .generation-review-json .json-media-preview {
   margin: 0 6px;
+}
+
+.generation-review-estimate {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.generation-review-estimate > strong {
+  color: #bdf2d4;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.generation-review-estimate > small {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.generation-review-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 9px;
+  cursor: pointer;
 }
 
 .generation-review-json .json-media-trigger .inspector-source-thumb {
