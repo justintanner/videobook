@@ -9,7 +9,11 @@
 // Pure and dependency-free: the client imports it for the autocomplete menu
 // and the input cards, the server for prompt resolution.
 
-import { generationInputTarget } from "./generation-input-policy.js";
+import {
+  generationInputTarget,
+  generationInputTokenPattern,
+  sortByGenerationInputPort,
+} from "./generation-input-targets.js";
 
 export type GenerationInputMediaKind = "image" | "video" | "audio";
 
@@ -63,32 +67,6 @@ function generationInputMediaKind(
   return null;
 }
 
-function numberedKindSlotIndex(
-  targetInput: string,
-  kind: string,
-): number | null {
-  if (targetInput === kind) return 1;
-  const prefix = `${kind}_`;
-  if (!targetInput.startsWith(prefix)) return null;
-  const suffix = targetInput.slice(prefix.length);
-  if (!/^\d+$/.test(suffix)) return null;
-  return Number(suffix);
-}
-
-/** Stable sort by numbered slot ("image", "image_2", …); unnumbered last. */
-export function sortByKindSlot<T extends { targetInput: string }>(
-  entries: readonly T[],
-  kind: string,
-): T[] {
-  return [...entries].sort((left, right) => {
-    const leftIndex = numberedKindSlotIndex(left.targetInput, kind)
-      ?? Number.MAX_SAFE_INTEGER;
-    const rightIndex = numberedKindSlotIndex(right.targetInput, kind)
-      ?? Number.MAX_SAFE_INTEGER;
-    return leftIndex - rightIndex;
-  });
-}
-
 interface KindedInput {
   kind: GenerationInputMediaKind;
   sourceCellId: string;
@@ -124,7 +102,7 @@ function isKeyframeInput(input: KindedInput): boolean {
 }
 
 function keyframeMentions(inputs: readonly KindedInput[]): GenerationInputMention[] {
-  return sortByKindSlot(inputs.filter(isKeyframeInput), "keyframe").map((input, index) => ({
+  return sortByGenerationInputPort(inputs.filter(isKeyframeInput), "keyframe").map((input, index) => ({
     ...input,
     token: `keyframe${index + 1}`,
   }));
@@ -140,7 +118,7 @@ function numberedMentions(
     && !(modeId !== "r2v" && kind === "image" && input.targetInput in FRAME_TOKENS)
     && !isKeyframeInput(input)
     && !UNNAMED_TARGET_INPUTS.has(input.targetInput));
-  return sortByKindSlot(named, kind).map((input, index) => ({
+  return sortByGenerationInputPort(named, kind).map((input, index) => ({
     ...input,
     token: `${kind}${index + 1}`,
   }));
@@ -183,7 +161,7 @@ export function remapGenerationInputPrompt(
     used.add(missing);
     return [before.token, missing];
   }));
-  return prompt.replace(/@((?:image|video|audio|keyframe)\d+|firstframe|lastframe|loop)(?![\w-])/giu,
+  return prompt.replace(generationInputTokenPattern(),
     (match, token: string) => {
       const replacement = replacements.get(token.toLowerCase());
       return replacement && replacement !== token.toLowerCase() ? `@${replacement}` : match;
@@ -192,6 +170,6 @@ export function remapGenerationInputPrompt(
 
 /** "@image1"-style tokens in a prompt, lower-cased and without the "@". */
 export function scanGenerationInputTokens(prompt: string): string[] {
-  return [...prompt.matchAll(/@((?:image|video|audio|keyframe)\d+|firstframe|lastframe|loop)(?![\w-])/giu)]
+  return [...prompt.matchAll(generationInputTokenPattern())]
     .map((match) => match[1]!.toLowerCase());
 }

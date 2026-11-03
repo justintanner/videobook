@@ -1,4 +1,4 @@
-type InputKind = "image" | "video" | "audio";
+import { generationModeInputTarget, type GenerationInputKind as InputKind } from "./generation-input-targets.js";
 
 interface ModeInput {
   kind: InputKind;
@@ -17,27 +17,6 @@ interface InputMode {
   id: string;
   slots: InputSlot[];
   requiredGroups: string[][];
-}
-
-const FRAME_TARGETS = new Set(["first_frame", "last_frame", "loop"]);
-const KEYFRAME_TARGET = /^keyframe(?:_\d+)?$/u;
-
-export function generationInputTarget(kind: InputKind, targetInput: string): string {
-  if (FRAME_TARGETS.has(targetInput)) return targetInput;
-  if (KEYFRAME_TARGET.test(targetInput)) return "keyframe";
-  if (kind === "audio" && targetInput === "replace_audio") return targetInput;
-  return kind;
-}
-
-export function generationModeInputTarget(
-  modeId: string | undefined,
-  kind: InputKind,
-  target: string,
-): string {
-  return modeId === "r2v" && kind === "image"
-    && (target === "first_frame" || target === "last_frame")
-    ? "image"
-    : target;
 }
 
 function modeInputs(mode: InputMode, inputs: readonly ModeInput[]): ModeInput[] {

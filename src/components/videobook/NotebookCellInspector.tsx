@@ -88,7 +88,8 @@ import {
   type AssetMentionCandidate,
 } from '@/videobook/mention-suggestions'
 import { generationInputMentions, remapGenerationInputPrompt } from '../../../server/src/generation-input-mentions'
-import { generationModeInputError, generationModeInputTarget } from '../../../server/src/generation-input-policy'
+import { generationModeInputError } from '../../../server/src/generation-input-policy'
+import { generationModeInputTarget } from '../../../server/src/generation-input-targets'
 import { stickySettingsFor, stickySettingsFrom, type StickySettings } from '../../../server/src/media/preferred-defaults'
 import {
   providerPayloadPreviewMentions,

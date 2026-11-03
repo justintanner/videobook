@@ -8,7 +8,8 @@ import {
   isNotebookGenerationCellType,
   type NotebookGenerationCellType,
 } from './notebook-cell-types'
-import { generationInputTarget, generationModeInputError, generationModeInputTarget } from '../../server/src/generation-input-policy'
+import { generationModeInputError } from '../../server/src/generation-input-policy'
+import { generationInputTarget, generationModeInputTarget, nextGenerationInputPort } from '../../server/src/generation-input-targets'
 import { notebookConnectionEdges } from './notebook-graph'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
@@ -460,16 +461,6 @@ export function generationConnectedInputs(
   })
 }
 
-function nextGenerationTargetInput(
-  target: string,
-  usedTargetInputs: ReadonlySet<string>,
-): string {
-  if (!usedTargetInputs.has(target)) return target
-  let index = 2
-  while (usedTargetInputs.has(`${target}_${index}`)) index += 1
-  return `${target}_${index}`
-}
-
 export function generationInputAttachments(
   action: NotebookGenerationAction,
   modeId: string,
@@ -520,7 +511,7 @@ export function generationInputAttachments(
         seen.add(key)
         options.push({
           sourceCellId: source.id,
-          targetInput: nextGenerationTargetInput(target, usedTargetInputs),
+          targetInput: nextGenerationInputPort(target, usedTargetInputs),
           target,
           kind,
         })

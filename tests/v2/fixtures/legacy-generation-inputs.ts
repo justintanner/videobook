@@ -236,3 +236,27 @@ export function legacyNotebookConnectionTargetInput(
   if (kind === "audio" && (requestedInput === "replace_audio" || requestedInput === "scene_audio")) return requestedInput;
   return legacyNextNotebookReferenceInput(edges, target.id, kind);
 }
+
+export function legacyNextGenerationTargetInput(target: string, usedTargetInputs: ReadonlySet<string>): string {
+  if (!usedTargetInputs.has(target)) return target;
+  let index = 2;
+  while (usedTargetInputs.has(`${target}_${index}`)) index += 1;
+  return `${target}_${index}`;
+}
+
+export function legacyUniqueConnectionTargets(inputs: readonly { target: string }[]): string[] {
+  const counts = new Map<string, number>();
+  return inputs.map((input) => {
+    const count = (counts.get(input.target) ?? 0) + 1;
+    counts.set(input.target, count);
+    return count === 1 ? input.target : `${input.target}_${count}`;
+  });
+}
+
+export function legacyPinTargetInput(pin: { field: string; index: number | null }): string {
+  const role = pin.field.split(".").pop() ?? pin.field;
+  const field = role === "replace_audio_with" ? "replace_audio" : role;
+  return pin.index === null || pin.index === 0 ? field : `${field}_${pin.index + 1}`;
+}
+
+export const LEGACY_SLOT_TOKEN_SOURCE = "@((image|video|audio|keyframe)(\\d+)|firstframe|lastframe|loop)(?![\\w-])";

@@ -1,21 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import type { NotebookDocument } from 'videobook-engine'
-import { generationInputTarget, generationModeInputTarget } from '../../server/src/generation-input-policy.js'
+import {
+  generationInputPort,
+  generationInputTarget,
+  generationInputTokenPattern,
+  generationModeInputTarget,
+  nextGenerationInputPort,
+  sequentialGenerationInputPorts,
+  sortByGenerationInputPort,
+} from '../../server/src/generation-input-targets.js'
 import {
   generationInputMentions,
   remapGenerationInputPrompt,
   scanGenerationInputTokens,
-  sortByKindSlot,
 } from '../../server/src/generation-input-mentions.js'
 import { notebookConnectionTargetInput } from '../../src/videobook/notebook-draft'
 import {
+  LEGACY_SLOT_TOKEN_SOURCE,
   legacyGenerationInputMentions,
   legacyGenerationInputTarget,
   legacyGenerationModeInputTarget,
+  legacyNextGenerationTargetInput,
   legacyNotebookConnectionTargetInput,
+  legacyPinTargetInput,
   legacyRemapGenerationInputPrompt,
   legacyScanGenerationInputTokens,
   legacySortByKindSlot,
+  legacyUniqueConnectionTargets,
   type LegacyInputKind,
 } from './fixtures/legacy-generation-inputs'
 
@@ -110,7 +121,7 @@ describe('generation input naming matches the frozen legacy rules', () => {
     for (const layout of ALL_LAYOUTS) {
       const entries = layout.map((entry) => ({ targetInput: entry.name }))
       for (const kind of SORT_KINDS) {
-        expect(sortByKindSlot(entries, kind)).toEqual(legacySortByKindSlot(entries, kind))
+        expect(sortByGenerationInputPort(entries, kind)).toEqual(legacySortByKindSlot(entries, kind))
       }
     }
   })
@@ -140,6 +151,38 @@ describe('generation input naming matches the frozen legacy rules', () => {
           .toBe(legacyRemapGenerationInputPrompt(prompt, previous, next))
         expect(scanGenerationInputTokens(prompt)).toEqual(legacyScanGenerationInputTokens(prompt))
       }
+    }
+  })
+
+  it('numbers new and sequential ports the same way', () => {
+    const bases = ['image', 'keyframe', 'video', 'audio', 'replace_audio', 'first_frame']
+    for (const layout of ALL_LAYOUTS) {
+      const used = new Set(layout.map((entry) => entry.name))
+      for (const base of bases) {
+        expect(nextGenerationInputPort(base, used)).toBe(legacyNextGenerationTargetInput(base, used))
+      }
+      const targets = layout.map((entry) => ({ target: legacyGenerationInputTarget(entry.kind, entry.name) }))
+      expect(sequentialGenerationInputPorts(targets.map((input) => input.target))).toEqual(legacyUniqueConnectionTargets(targets))
+    }
+    for (const field of ['refs.image', 'refs.keyframe', 'refs.first_frame', 'replace_audio_with', 'video']) {
+      for (const index of [null, -1, 0, 1, 2, 9]) {
+        const role = field.split('.').pop() ?? field
+        const base = role === 'replace_audio_with' ? 'replace_audio' : role
+        expect(generationInputPort(base, (index ?? 0) + 1)).toBe(legacyPinTargetInput({ field, index }))
+      }
+    }
+  })
+
+  it('matches prompt tokens with the same groups as the legacy dialect pattern', () => {
+    const prompts = [
+      '@image1 @Image12 @video2 @audio3 @keyframe4 @firstframe @LastFrame @loop',
+      '@image @image1x @image1-2 email@image1 @loops @keyframe @image01',
+      'a @firstframe, then @keyframe2. End on @lastframe! @audio9?',
+    ]
+    for (const prompt of prompts) {
+      const current = [...prompt.matchAll(generationInputTokenPattern())].map((match) => [match.index, match[0], match[1], match[2], match[3]])
+      const legacy = [...prompt.matchAll(new RegExp(LEGACY_SLOT_TOKEN_SOURCE, 'giu'))].map((match) => [match.index, match[0], match[1], match[2], match[3]])
+      expect(current).toEqual(legacy)
     }
   })
 

@@ -8,9 +8,8 @@ import {
   rewriteViduReferenceMentions,
   stripRefMentions,
 } from "../generation-reference-mentions.js";
+import { generationInputTokenPattern } from "../generation-input-targets.js";
 import type { MediaRefs, PromptDialect, RefRole } from "./types.js";
-
-const SLOT_TOKEN = /@((image|video|audio|keyframe)(\d+)|firstframe|lastframe|loop)(?![\w-])/giu;
 
 function refsFor(refs: MediaRefs, role: RefRole): string[] {
   return (refs[role] ?? []).filter((ref) => !/^https?:\/\//u.test(ref));
@@ -24,7 +23,7 @@ function slotTarget(refs: MediaRefs, token: string, kind: string | undefined, in
 }
 
 function expandSlotTokens(prompt: string, refs: MediaRefs): string {
-  return prompt.replace(SLOT_TOKEN, (match, token: string, kind?: string, index?: string) => {
+  return prompt.replace(generationInputTokenPattern(), (match, token: string, kind?: string, index?: string) => {
     const target = slotTarget(refs, token, kind, index);
     return target ? `@${target}` : match;
   });

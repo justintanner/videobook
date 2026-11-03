@@ -86,8 +86,7 @@ import {
   type NotebookPromptResolution,
 } from "../notebook-reference-resolver.js";
 import { resolvedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
-import { sortByKindSlot } from "../generation-input-mentions.js";
-import { generationInputTarget } from "../generation-input-policy.js";
+import { generationInputTarget, sortByGenerationInputPort } from "../generation-input-targets.js";
 import { generationPromptSurface } from "../prompt-surfaces.js";
 import { recoverNotebookProviderTask } from "../provider-task-record.js";
 import { prepareNotebookImageEdit } from "../notebook-image-edit.js";
@@ -1002,7 +1001,7 @@ function toolArgsWithMentions(
   if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
     args.model = typeof cell.inputs?.targetModel === "string" ? cell.inputs.targetModel : "seedance25";
   }
-  const images = sortByKindSlot(
+  const images = sortByGenerationInputPort(
     upstreamOfKind(upstreamValues(document, cell), "image")
       .filter(({ targetInput }) => generationInputTarget("image", targetInput) === "image"),
     "image",
@@ -1045,11 +1044,11 @@ function mediaRefsFor(
   let firstFrame = frameEntry(upstream, "first_frame", mode);
   let lastFrame = frameEntry(upstream, "last_frame", mode);
   const loop = frameEntry(upstream, "loop", mode);
-  const keyframes = sortByKindSlot(
+  const keyframes = sortByGenerationInputPort(
     upstreamOfKind(upstream, "image").filter(({ targetInput }) => generationInputTarget("image", targetInput) === "keyframe"),
     "keyframe",
   );
-  const images = sortByKindSlot(
+  const images = sortByGenerationInputPort(
     upstreamOfKind(upstream, "image").filter(({ targetInput }) => {
       const target = generationInputTarget("image", targetInput);
       return target === "image" || (mode === "r2v" && (target === "first_frame" || target === "last_frame"));
@@ -1059,8 +1058,8 @@ function mediaRefsFor(
   const frameMode = mode === "i2v" || ((mode === undefined || mode === "default") && Boolean(firstFrame || lastFrame));
   if (frameMode && !firstFrame && modeRoles.has("first_frame") && !modeRoles.has("image")) firstFrame = images.shift();
   if (frameMode && !lastFrame && modeRoles.has("last_frame") && !modeRoles.has("image")) lastFrame = images.shift();
-  const videos = sortByKindSlot(upstreamOfKind(upstream, "video"), "video");
-  const audios = sortByKindSlot(
+  const videos = sortByGenerationInputPort(upstreamOfKind(upstream, "video"), "video");
+  const audios = sortByGenerationInputPort(
     upstreamOfKind(upstream, "audio").filter(({ targetInput }) => targetInput !== "replace_audio"),
     "audio",
   );

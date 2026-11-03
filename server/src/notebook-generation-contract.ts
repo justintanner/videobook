@@ -1,5 +1,6 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
-import { generationInputTarget, generationModeInputError } from "./generation-input-policy.js";
+import { generationModeInputError } from "./generation-input-policy.js";
+import { generationInputTarget } from "./generation-input-targets.js";
 import type { RefRole, ResolvedModel } from "./media/types.js";
 
 type NotebookGenerationInputKind = "image" | "video" | "audio";

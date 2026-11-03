@@ -1,5 +1,5 @@
 import type { ModelFrontierRanking } from '../../server/src/media/frontier'
-import { generationInputTarget } from '../../server/src/generation-input-policy'
+import { generationInputTarget } from '../../server/src/generation-input-targets'
 import type { ActionChoice } from './workspace-actions'
 
 const frontierTypes = ['t2i', 'i2i', 't2v', 'i2v', 'r2v', 'v2v'] as const

@@ -1,7 +1,7 @@
 import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { generationInputMentions } from "./generation-input-mentions.js";
-import { generationInputTarget } from "./generation-input-policy.js";
+import { generationInputTarget, generationInputTokenPattern } from "./generation-input-targets.js";
 
 const INITIAL_PROMPT_KEY = "initialGenerationPrompt";
 const INITIAL_PROMPT_VERSION = 1;
@@ -62,7 +62,7 @@ function cleanCue(value: string | undefined): string | null {
       / ?@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])/giu,
       "",
     )
-    .replace(/ ?@(?:(?:image|video|audio)\d+|firstframe|lastframe)(?![\w-])/giu, "")
+    .replace(generationInputTokenPattern(" ?"), "")
     .replace(/\s+/gu, " ")
     .trim()
     .replace(

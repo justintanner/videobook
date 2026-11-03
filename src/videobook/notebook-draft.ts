@@ -22,7 +22,7 @@ import {
   notebookCellRouteTags,
   type NotebookRouteTag,
 } from './notebook-route-tags'
-import { generationInputTarget } from '../../server/src/generation-input-policy'
+import { generationInputTarget, nextGenerationInputPort } from '../../server/src/generation-input-targets'
 import { notebookCellLane, type NotebookLane } from '../../server/src/notebook-lanes'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
@@ -90,14 +90,9 @@ function nextNotebookReferenceInput(
   targetId: string,
   kind: NotebookReferenceKind | 'keyframe',
 ): string {
-  const occupied = new Set(document.edges
+  return nextGenerationInputPort(kind, new Set(document.edges
     .filter((edge) => edge.target === targetId)
-    .map((edge) => edge.targetInput))
-  if (!occupied.has(kind)) return kind
-  for (let ordinal = 2; ; ordinal += 1) {
-    const input = `${kind}_${ordinal}`
-    if (!occupied.has(input)) return input
-  }
+    .map((edge) => edge.targetInput)))
 }
 
 function notebookCellAcceptsReferences(type: NotebookCellType): boolean {

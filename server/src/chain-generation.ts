@@ -1,6 +1,7 @@
 import type { Engine, NotebookCell } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { generationInputPort } from "./generation-input-targets.js";
 import {
   allocateGenerateImageResult,
   allocateGenerateVideoResult,
@@ -54,7 +55,7 @@ function producerSettings(params: Record<string, unknown>): Record<string, unkno
 function pinTargetInput(pin: PinnedChainTarget): string {
   const role = pin.field.split(".").pop() ?? pin.field;
   const field = role === "replace_audio_with" ? "replace_audio" : role;
-  return pin.index === null || pin.index === 0 ? field : `${field}_${pin.index + 1}`;
+  return generationInputPort(field, (pin.index ?? 0) + 1);
 }
 
 /**

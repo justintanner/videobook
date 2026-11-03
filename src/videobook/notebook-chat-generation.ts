@@ -7,7 +7,7 @@ import { resolveNotebookCellArtifactId } from 'videobook-engine/notebook-media-a
 import { notebookGridAddress } from 'videobook-engine/notebook-grid'
 import { replaceNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { generationInputMentions } from '../../server/src/generation-input-mentions'
-import { generationInputTarget } from '../../server/src/generation-input-policy'
+import { generationInputTarget, sequentialGenerationInputPorts } from '../../server/src/generation-input-targets'
 import { frameAspectRatio } from '../../server/src/media/frame-options'
 import { notebookLanePlacement } from '../../server/src/notebook-lanes'
 import {
@@ -85,17 +85,6 @@ function mediaInputKind(cell: NotebookCell): GenerationConnectedInput['kind'] | 
     || cell.type === 'generate_audio'
   ) return 'audio'
   return null
-}
-
-function uniqueConnectionTargets(
-  inputs: readonly GenerationConnectedInput[],
-): string[] {
-  const counts = new Map<string, number>()
-  return inputs.map((input) => {
-    const count = (counts.get(input.target) ?? 0) + 1
-    counts.set(input.target, count)
-    return count === 1 ? input.target : `${input.target}_${count}`
-  })
 }
 
 function connectedInputCandidates(
@@ -313,7 +302,7 @@ export function planNotebookChatGeneration(input: {
     ...selection,
     ...(Object.keys(cellInputs).length > 0 ? { inputs: cellInputs } : {}),
   }
-  const targetInputs = uniqueConnectionTargets(connectedInputs)
+  const targetInputs = sequentialGenerationInputPorts(connectedInputs.map((input) => input.target))
   return {
     action,
     cell,
@@ -568,7 +557,7 @@ export function reviseNotebookChatGenerationSources(input: {
     const value = currentSettings[control.name]
     return value === undefined ? [] : [[control.name, value]]
   }))
-  const targetInputs = uniqueConnectionTargets(connectedInputs)
+  const targetInputs = sequentialGenerationInputPorts(connectedInputs.map((input) => input.target))
   return {
     action,
     cell: {
