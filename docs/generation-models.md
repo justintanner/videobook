@@ -12,7 +12,7 @@ HeyGen Avatar 3 and 4 digital twins are text-to-video with a stock avatar (Abiga
 
 Kie Kling 4.0 reference-to-video and keyframe-to-video, PixVerse V6 Max text-to-video and image-to-video, and OmniHuman 2.0 are on no top-10 board, so they appear in the unranked group. Kling 4.0 prompts name connected media as Kling 4.0 documents them: `@image_1` and `@video_1` for references, `@first_frame`, `@keyframe_1` and `@last_frame` for frames; with no media connected, both endpoints generate from the prompt alone. PixVerse V6 Max image-to-video follows the image's aspect ratio. OmniHuman 2.0 renders as long as its driving audio. The Kie Grok Imagine Video 1.5 preview has two modes and shares the Grok Imagine Video 1.5 image-to-video ranking. Frames takes a reference image plus optional first and last frames; Loop takes a loop image (`loop_url`, `@loop`) that the clip starts and ends on, and the loop image is also the reference when no reference image is connected. Both modes take up to four keyframe images (`@keyframe1`-`@keyframe4`), sent as timed `keyframes`: `keyframe_1_seconds`-`keyframe_4_seconds` place each one, unset keyframes are spaced evenly across the clip, and every keyframe must fall inside the clip at least 1/3 s from the next.
 
-Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Utopai X, Wan 3.0, MiniMax H3 (768p), Dreamina Seedance 2.0, Aleph 2.0. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
+Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Utopai X, Dreamina Seedance 2.0, Aleph 2.0. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
 | --- | --- |
@@ -41,7 +41,7 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 316
+- Models: 339
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -338,6 +338,29 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `machgen:Topaz-Video-Precision-Animation` | Topaz Video Precision Animation (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `machgen:Topaz-Video-Generative` | Topaz Video Generative (MachGen) | video | upscale_video | video 1-1 |  | visible |
 | `machgen:Topaz-Video-Generative-Fast` | Topaz Video Generative Fast (MachGen) | video | upscale_video | video 1-1 |  | visible |
+| `wavespeed:bytedance/seedance-2.5/text-to-video` | Seedance 2.5 (WaveSpeed) | video | text_to_video | image 0-30, video 0-10, audio 0-10 |  | visible |
+| `wavespeed:bytedance/seedance-2.5/image-to-video` | Seedance 2.5 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:bytedance/seedance-2.5/reference-to-video` | Seedance 2.5 References (WaveSpeed) | video | reference_to_video | image 0-30, video 0-10, audio 0-10 |  | visible |
+| `wavespeed:bytedance/seedance-2.5/video-edit` | Seedance 2.5 Edit (WaveSpeed) | video | edit_video | image 0-30, video 1-1, audio 0-10 |  | visible |
+| `wavespeed:bytedance/seedance-2.0/text-to-video` | Seedance 2.0 (WaveSpeed) | video | text_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `wavespeed:bytedance/seedance-2.0/image-to-video` | Seedance 2.0 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:minimax/h3/text-to-video` | MiniMax H3 (WaveSpeed) | video | text_to_video | none |  | visible |
+| `wavespeed:minimax/h3/image-to-video` | MiniMax H3 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:minimax/h3/reference-to-video` | MiniMax H3 References (WaveSpeed) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `wavespeed:wavespeed-ai/minimax-h3/video-edit` | MiniMax H3 Edit (WaveSpeed) | video | edit_video | image 0-9, video 1-1, audio 0-3 |  | visible |
+| `wavespeed:alibaba/wan-3.0/text-to-video` | Wan 3.0 (WaveSpeed) | video | text_to_video | none |  | visible |
+| `wavespeed:alibaba/wan-3.0/image-to-video` | Wan 3.0 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:alibaba/wan-3.0/reference-to-video` | Wan 3.0 References (WaveSpeed) | video | reference_to_video | image 0-10, video 0-5, audio 0-5 |  | visible |
+| `wavespeed:alibaba/wan-3.0/video-edit` | Wan 3.0 Edit (WaveSpeed) | video | edit_video | image 0-10, video 1-1, audio 0-5 |  | visible |
+| `wavespeed:alibaba/happyhorse-1.1/image-to-video` | HappyHorse 1.1 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
+| `wavespeed:google/gemini-omni-1.1-flash/text-to-video` | Gemini Omni 1.1 Flash (WaveSpeed) | video | text_to_video | none |  | visible |
+| `wavespeed:google/gemini-omni-1.1-flash/image-to-video` | Gemini Omni 1.1 Flash Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:google/gemini-omni-1.1-flash/video-edit` | Gemini Omni 1.1 Flash Edit (WaveSpeed) | video | edit_video | video 1-1 |  | visible |
+| `wavespeed:black-forest-labs/flux-3/text-to-video` | FLUX 3 (WaveSpeed) | video | text_to_video | none |  | visible |
+| `wavespeed:black-forest-labs/flux-3/image-to-video` | FLUX 3 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
+| `wavespeed:heygen/video-1.0/text-to-video` | HeyGen Video (WaveSpeed) | video | text_to_video | none |  | visible |
+| `wavespeed:heygen/video-1.0/reference-to-video` | HeyGen Video References (WaveSpeed) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `wavespeed:x-ai/grok-imagine-video-v1.5/image-to-video` | Grok Imagine Video 1.5 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |

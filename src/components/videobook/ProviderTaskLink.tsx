@@ -3,11 +3,16 @@ import { Copy, ExternalLink } from 'lucide-react'
 import { providerStatusUrl, type ProviderTaskStatus } from '../../../server/src/provider-status-link'
 import './ProviderTaskLink.css'
 
+const TASK_ONLY_LABELS: Partial<Record<ProviderTaskStatus['provider'], string>> = {
+  machgen: 'MachGen task',
+  wavespeed: 'WaveSpeed prediction',
+}
+
 export function ProviderTaskLink({ task }: { task: ProviderTaskStatus }) {
   const [copied, setCopied] = useState<string | null>(null)
   const url = providerStatusUrl(task.provider, task.model)
-  if (!url && (task.provider !== 'machgen' || !task.taskId)) return null
-  const label = task.provider === 'fal' ? 'fal requests' : task.provider === 'machgen' ? 'MachGen task' : 'Kie logs'
+  if (!url && (!TASK_ONLY_LABELS[task.provider] || !task.taskId)) return null
+  const label = task.provider === 'fal' ? 'fal requests' : TASK_ONLY_LABELS[task.provider] ?? 'Kie logs'
   return (
     <div className="provider-task-link">
       {url

@@ -33,4 +33,5 @@ export const MEDIA_TASK_TYPES = {
   fal: "fal_media",
   xai: "xai_media",
   machgen: "machgen_media",
+  wavespeed: "wavespeed_media",
 } as const;

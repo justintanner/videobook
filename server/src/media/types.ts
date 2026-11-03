@@ -1,6 +1,6 @@
 import type { ZodObject, ZodRawShape, ZodType } from "zod";
 
-export type ProviderId = "kie" | "fal" | "xai" | "alibaba" | "elevenlabs" | "machgen";
+export type ProviderId = "kie" | "fal" | "xai" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed";
 
 export type Media = "image" | "video" | "audio";
 

@@ -13,6 +13,7 @@ import { createFal as fal, uploadFile as falUpload } from "@apicity/fal";
 import { createAlibaba as alibaba, uploadFile as alibabaUpload } from "@apicity/alibaba";
 import { createElevenLabs as elevenlabs } from "@apicity/elevenlabs";
 import { createMachGen as machgen } from "@apicity/machgen";
+import { createWaveSpeed as wavespeed } from "@apicity/wavespeed";
 import { capturedProvider, withHarCapture, withProviderCall } from "./har-capture.js";
 import { providerUsageFetch } from "./provider-usage.js";
 
@@ -42,6 +43,10 @@ export function createElevenLabs(options: Parameters<typeof elevenlabs>[0]): Ret
 
 export function createMachGen(options: NonNullable<Parameters<typeof machgen>[0]>): ReturnType<typeof machgen> {
   return capturedProvider("machgen", (fetch) => machgen({ ...options, fetch }), providerUsageFetch("machgen", options.fetch));
+}
+
+export function createWaveSpeed(options: NonNullable<Parameters<typeof wavespeed>[0]>): ReturnType<typeof wavespeed> {
+  return capturedProvider("wavespeed", (fetch) => wavespeed({ ...options, fetch }), providerUsageFetch("wavespeed", options.fetch));
 }
 
 export function createB2(options: Parameters<typeof b2>[0]): ReturnType<typeof b2> {

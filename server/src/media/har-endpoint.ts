@@ -1,3 +1,4 @@
+import { wavespeedDotPath } from "./wavespeed.js";
 import { isKieVeoModel, isXaiImageModel } from "./wire.js";
 import type { MediaRefs, ParsedModelId } from "./types.js";
 
@@ -14,6 +15,7 @@ export function generationHarEndpoint(model: ParsedModelId, refs: MediaRefs): st
       return refs.image?.length ? "v1.images.edits" : "v1.images.generations";
     case "alibaba": return "api.v1.services.aigc.multimodalGeneration.generation";
     case "machgen": return "api.v0.generate";
+    case "wavespeed": return wavespeedDotPath(model.apiId);
     case "elevenlabs":
       switch (model.apiId) {
         case "sound-generation": return "v1.soundGeneration";

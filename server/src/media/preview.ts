@@ -3,6 +3,7 @@ import { resolveModel, UnknownModelError } from "./descriptor.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { buildWireRequest } from "./request.js";
 import { normalizeRefs } from "./refs.js";
+import { wavespeedDotPath } from "./wavespeed.js";
 import { hasXaiImageSources, isKieSunoModel, isKieVeoModel, isXaiImageModel } from "./wire.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "./types.js";
 
@@ -44,6 +45,8 @@ function providerPath(model: ResolvedModel, request: Record<string, unknown>): s
       return ELEVENLABS_PATHS[model.apiId] ?? "elevenlabs";
     case "machgen":
       return "machgen.api.v0.generate(request)";
+    case "wavespeed":
+      return `wavespeed.${wavespeedDotPath(model.apiId)}(request)`;
   }
 }
 

@@ -1,6 +1,6 @@
 import type { ParsedModelId, ProviderId } from "./types.js";
 
-const PROVIDERS: readonly ProviderId[] = ["kie", "fal", "xai", "alibaba", "elevenlabs", "machgen"];
+const PROVIDERS: readonly ProviderId[] = ["kie", "fal", "xai", "alibaba", "elevenlabs", "machgen", "wavespeed"];
 
 function isProvider(value: string): value is ProviderId {
   return (PROVIDERS as readonly string[]).includes(value);

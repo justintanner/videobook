@@ -14,7 +14,7 @@ export interface ModelFrontierRanking {
 export function frontierCatalogId(row: FrontierRow): string | null {
   const endpoint = FRONTIER[row.type].entries.find((entry) => entry.rank === row.rank && entry.model === row.model)?.endpoints
     .find((endpoint) => endpoint.provider === row.provider && endpoint.dotPath === row.dotPath && endpoint.modelId === row.modelId);
-  const apiId = row.modelId ?? (row.provider === "fal" ? endpoint?.pricingKey : undefined);
+  const apiId = row.modelId ?? (row.provider === "fal" || row.provider === "wavespeed" ? endpoint?.pricingKey : undefined);
   return apiId && apiId !== "unpriced" ? `${row.provider}:${apiId}` : null;
 }
 

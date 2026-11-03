@@ -26,6 +26,7 @@ import {
   ElevenLabsVideoToMusicRequestSchema,
 } from "@apicity/elevenlabs/zod";
 import { machgenWire } from "./machgen.js";
+import { wavespeedWire } from "./wavespeed.js";
 import type { ParsedModelId, WireSpec } from "./types.js";
 
 type AnyObject = ZodObject<ZodRawShape>;
@@ -303,5 +304,7 @@ export function wireSpec(parsed: ParsedModelId): WireSpec | null {
       return elevenLabsWire(parsed.apiId);
     case "machgen":
       return machgenWire(parsed.apiId);
+    case "wavespeed":
+      return wavespeedWire(parsed.apiId);
   }
 }

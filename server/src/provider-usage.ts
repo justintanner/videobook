@@ -11,7 +11,7 @@ import { installedPackageVersion } from "./package-version.js";
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
-type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen";
+type Provider = "openai" | "xai" | "kie" | "fal" | "alibaba" | "elevenlabs" | "machgen" | "wavespeed";
 type RecordValue = Record<string, unknown>;
 type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersion" | "warnings" | "units" | "unit">;
 const incomplete = new WeakSet<Engine>();
@@ -126,6 +126,12 @@ function catalogMedia(provider: Provider, model: string, path: string): Media | 
   return modelEntry(provider === "fal" ? `fal:${path.slice(1)}` : `${provider}:${kieSunoApiId(provider, path) ?? model}`)?.media;
 }
 
+function endpointModel(provider: Provider, endpoint: string): string {
+  if (provider === "fal") return endpoint;
+  if (provider === "wavespeed") return endpoint.replace(/^api\/v3\//u, "");
+  return endpoint.split("/").slice(-2).join("/");
+}
+
 function activityFor(provider: Provider, model: string, path: string, operation = ""): UsageEntry["activity"] {
   if (/\/(responses|completions)$/u.test(path) && /chat|rewrite_prompt/u.test(operation)) return "chat";
   const media = catalogMedia(provider, model, path);
@@ -146,6 +152,7 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
   if (provider === "alibaba") return path.includes("/services/aigc/");
   if (provider === "elevenlabs") return /\/(text-to-speech|speech-to-text|speech-to-speech|sound-generation|audio-isolation|music)(\/|$)/u.test(path);
   if (provider === "machgen") return path === "/api/v0/generate";
+  if (provider === "wavespeed") return path.startsWith("/api/v3/") && !path.startsWith("/api/v3/predictions/");
   return /\/(videos|images)(\/|$)/u.test(path);
 }
 
@@ -165,10 +172,10 @@ function remoteId(body: RecordValue, url: URL, method: string): string | null {
   const data = object(body.data);
   const output = object(body.output);
   const pathId = url.searchParams.get("taskId") ?? url.searchParams.get("task_id")
-    ?? (/\/(requests|tasks|jobs|videos)\/([^/]+)(?:\/status)?$/u.exec(url.pathname)?.[2] ?? null);
+    ?? (/\/(requests|tasks|jobs|videos|predictions)\/([^/]+)(?:\/status|\/result)?$/u.exec(url.pathname)?.[2] ?? null);
   if (method === "GET" && pathId) return decodeURIComponent(pathId);
   return text(data.taskId) ?? text(data.task_id) ?? text(body.task_id) ?? text(body.request_id) ?? text(body.job_id)
-    ?? text(output.task_id) ?? text(body.id);
+    ?? text(output.task_id) ?? text(body.id) ?? text(data.id);
 }
 
 function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["status"] {
@@ -176,8 +183,8 @@ function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["statu
   const output = object(body.output);
   const state = String(body.status ?? data.state ?? data.status ?? output.task_status ?? "").toLowerCase();
   if (body.error || data.failCode || (typeof body.code === "number" && body.code >= 400) || data.successFlag === 2 || data.successFlag === 3
-    || ["failed", "fail", "error", "create_task_failed", "generate_audio_failed", "sensitive_word_error"].includes(state)) return "failed";
-  if (["cancelled", "canceled"].includes(state)) return "cancelled";
+    || ["failed", "fail", "error", "timeout", "create_task_failed", "generate_audio_failed", "sensitive_word_error"].includes(state)) return "failed";
+  if (["cancelled", "canceled", "deleted"].includes(state)) return "cancelled";
   if (state === "uncertain" || state === "expired") return "uncertain";
   if (data.successFlag === 1 || ["success", "succeeded", "completed", "done"].includes(state)) return "completed";
   if (data.successFlag === 0
@@ -247,7 +254,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
     if (billable) {
       const payload = await payloadOf(input, init);
       const endpoint = url.pathname.replace(/^\//u, "");
-      const model = text(payload.model) ?? text(payload.model_id) ?? (provider === "fal" ? endpoint : endpoint.split("/").slice(-2).join("/"));
+      const model = text(payload.model) ?? text(payload.model_id) ?? endpointModel(provider, endpoint);
       let hints: CostHints | undefined;
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
       hints = mergeCostHints(hints, usageCostHints.getStore());
@@ -256,7 +263,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : kieSunoApiId(provider, url.pathname), hints),
+        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname), hints),
       };
       safeRecord(engine, entry);
     }
@@ -271,7 +278,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const body = json ? object(await response.clone().json()) : {};
       const externalId = remoteId(body, url, method);
       if (entry) {
-        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
+        const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...observedPatch(provider, entry, body, status) });
       } else if (method === "GET" && externalId && response.ok && json) {

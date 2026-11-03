@@ -6,6 +6,25 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- WaveSpeed is a new video provider with 23 models: Seedance 2.5 (text,
+  image, references and video edit), Seedance 2.0, MiniMax H3 (text, image,
+  references and edit), Wan 3.0 (text, image, references and video edit),
+  HappyHorse 1.1, Gemini Omni 1.1 Flash (text, image and video edit),
+  FLUX 3, HeyGen Video and Grok Imagine Video 1.5. Each WaveSpeed endpoint is
+  its own catalog model, named with a "(WaveSpeed)" suffix, and estimates use
+  the @apicity/cost WaveSpeed list prices. A submission becomes a
+  `wavespeed_media` provider task that the reconcile poll completes from the
+  prediction's output URL. `WAVESPEED_API_KEY` is a managed key; without it,
+  generation stops before an asset is created and WaveSpeed predictions stay
+  unpolled. Usage rows, provider task status and the task panel include
+  WaveSpeed.
+
+### Changed
+
+- Every @apicity package moves to 0.25.0.
+
 ## [0.4.2] - 2026-11-01
 
 ### Added

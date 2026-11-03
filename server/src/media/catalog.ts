@@ -1,6 +1,7 @@
 import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
+import { WAVESPEED_MODEL_ENTRIES } from "./wavespeed.js";
 import type { InputRules, ModeSpec, ModelEntry, Operation, PromptGuide, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
@@ -512,6 +513,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
     operations: ["upscale_video"],
     title: `${apiId.replaceAll("-", " ")} (MachGen)`,
   })),
+  ...WAVESPEED_MODEL_ENTRIES,
 
   { id: "elevenlabs:text-to-speech", media: "audio", operations: ["speech"], title: "ElevenLabs Text to Speech", defaults: { model_id: "eleven_multilingual_v2" } },
   { id: "elevenlabs:sound-generation", media: "audio", operations: ["sfx"], title: "ElevenLabs Sound Effects" },

@@ -1,5 +1,5 @@
 export interface ProviderTaskStatus {
-  provider: "kie" | "fal" | "machgen";
+  provider: "kie" | "fal" | "machgen" | "wavespeed";
   model: string | null;
   taskId: string | null;
 }
@@ -14,7 +14,7 @@ export function providerStatusUrl(provider: string | null, model: string | null)
 export function parseProviderTaskStatus(value: unknown): ProviderTaskStatus | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (record.provider !== "kie" && record.provider !== "fal" && record.provider !== "machgen") return null;
+  if (record.provider !== "kie" && record.provider !== "fal" && record.provider !== "machgen" && record.provider !== "wavespeed") return null;
   return {
     provider: record.provider,
     model: typeof record.model === "string" ? record.model : null,

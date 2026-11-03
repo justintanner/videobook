@@ -16,6 +16,8 @@ import { AlibabaError } from "@apicity/alibaba";
 import { FalError } from "@apicity/fal";
 import { MachGenError } from "@apicity/machgen";
 import type { MachGenTaskStatusResponse } from "@apicity/machgen";
+import { WaveSpeedError } from "@apicity/wavespeed";
+import type { WaveSpeedPrediction } from "@apicity/wavespeed";
 import {
   EMPTY_TAG_SUMMARY,
   readAssetTagSummaries,
@@ -49,6 +51,7 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { planVideoTranscriptJobs } from "../jobs/process-video.js";
 import { providerEndpoints } from "../media/endpoints.js";
 import { machgenProvider } from "../media/adapters/machgen.js";
+import { wavespeedProvider } from "../media/adapters/wavespeed.js";
 import { MEDIA_TASK_TYPES } from "../media/adapters/types.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
@@ -863,6 +866,7 @@ type PollPendingProviderTasksOptions = {
   /** Point FAL queue status/result at a local server. Production polls use the provider default. */
   falQueueBaseURL?: string;
   machgenBaseURL?: string;
+  wavespeedBaseURL?: string;
 };
 
 const MACHGEN_RETRYABLE_STATUSES = new Set([408, 429, 499]);
@@ -898,14 +902,25 @@ async function processMachGenTaskStatus(
     });
     return;
   }
+  const output = status.task_output?.video ?? status.task_output?.image;
+  await enqueueTaskCompletion(engine, task, result, bookId, "machgen", typeof output === "string" && output ? [output] : []);
+}
+
+async function enqueueTaskCompletion(
+  engine: Engine,
+  task: PendingTask,
+  result: ProviderPollResult,
+  bookId: string,
+  provider: string,
+  resultUrls: string[],
+): Promise<void> {
   const assetDirResult = await engine.workspaces.resolveArtifact(task.artifactId);
   if (!assetDirResult.ok) {
-    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: `Asset not found: ${task.artifactId}`, prompt: metaPrompt(task.meta) });
     return;
   }
   await engine.jobs.pending.markCompleting(task.artifactId);
-  const jobId = `complete-machgen-${task.artifactId}-${Date.now()}`;
-  const output = status.task_output?.video ?? status.task_output?.image;
+  const jobId = `complete-${provider}-${task.artifactId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "complete_kie_task",
     taskId: task.taskId,
@@ -914,9 +929,80 @@ async function processMachGenTaskStatus(
     assetDir: assetDirResult.value,
     bookId,
     meta: task.meta,
-    resultUrls: typeof output === "string" && output ? [output] : [],
+    resultUrls,
   } as unknown as Record<string, unknown>);
   result.completed.push({ assetId: task.artifactId, taskType: task.taskType, jobId });
+}
+
+const WAVESPEED_RETRYABLE_STATUSES = new Set([408, 429, 499]);
+const WAVESPEED_FAILED_STATUSES = new Set(["failed", "cancelled", "timeout", "deleted"]);
+
+function wavespeedPollFailureIsFinal(error: unknown): boolean {
+  if (!(error instanceof WaveSpeedError)) return false;
+  const status = (error as WaveSpeedError).status;
+  return status >= 400 && status < 500 && !WAVESPEED_RETRYABLE_STATUSES.has(status);
+}
+
+function wavespeedOutputUrls(prediction: WaveSpeedPrediction): string[] {
+  return (prediction.outputs ?? []).filter((output): output is string => typeof output === "string" && /^https?:\/\//u.test(output));
+}
+
+async function processWaveSpeedPrediction(
+  engine: Engine,
+  task: PendingTask,
+  prediction: WaveSpeedPrediction,
+  result: ProviderPollResult,
+  bookId: string,
+): Promise<void> {
+  const prompt = metaPrompt(task.meta);
+  if (WAVESPEED_FAILED_STATUSES.has(prediction.status)) {
+    const failMsg = prediction.error || `WaveSpeed prediction ${prediction.status}`;
+    result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    return;
+  }
+  if (prediction.status !== "completed") {
+    result.pending.push({
+      assetId: task.artifactId,
+      taskType: task.taskType,
+      progress: 0,
+      state: prediction.status,
+      prompt,
+      startedAt: task.createdAt,
+    });
+    return;
+  }
+  const urls = wavespeedOutputUrls(prediction);
+  if (urls.length === 0) {
+    const failMsg = "WaveSpeed prediction completed without an output URL";
+    result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+    await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    return;
+  }
+  await enqueueTaskCompletion(engine, task, result, bookId, "wavespeed", urls);
+}
+
+async function pollWaveSpeedTasks(
+  engine: Engine,
+  tasks: readonly PendingTask[],
+  result: ProviderPollResult,
+  bookId: string,
+  baseURL: string | undefined,
+): Promise<void> {
+  const wavespeedTasks = tasks.filter((task) => task.taskType === MEDIA_TASK_TYPES.wavespeed);
+  if (!getApiKey("WAVESPEED_API_KEY") || wavespeedTasks.length === 0) return;
+  const provider = wavespeedProvider(30_000, baseURL);
+  await Promise.all(wavespeedTasks.map(async (task) => withProviderTaskContext(engine, bookId, task, async () => {
+    try {
+      const response = await provider.api.v3.predictions.result(task.taskId);
+      await processWaveSpeedPrediction(engine, task, response.data, result, bookId);
+    } catch (error) {
+      const failMsg = error instanceof Error ? error.message : "Poll failed";
+      const prompt = metaPrompt(task.meta);
+      result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+      if (wavespeedPollFailureIsFinal(error)) await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
+    }
+  })));
 }
 
 function withProviderTaskContext<T>(engine: Engine, bookId: string, task: PendingTask, operation: () => Promise<T>): Promise<T> {
@@ -950,7 +1036,7 @@ async function pollMachGenTasks(
 
 /**
  * Poll provider-pending tasks: submit queued KIE rows, age out stale tasks,
- * and poll kie/veo/xai/alibaba/fal/machgen recordInfo lanes that mark
+ * and poll kie/veo/xai/alibaba/fal/machgen/wavespeed recordInfo lanes that mark
  * completing + enqueue complete_kie_task. Does NOT process external uploads,
  * auto-render, or auto-transcribe.
  */
@@ -1339,6 +1425,7 @@ export async function pollPendingProviderTasks(
   }
 
   await pollMachGenTasks(engine, pollableTasks, result, book_id, options.machgenBaseURL ?? providerEndpoints().machgenBaseURL);
+  await pollWaveSpeedTasks(engine, pollableTasks, result, book_id, options.wavespeedBaseURL ?? providerEndpoints().wavespeedBaseURL);
 
   for (const task of expiredTasks) {
     if (options.signal?.aborted) break;
