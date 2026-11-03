@@ -18,6 +18,7 @@ import {
   type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
 import {
+  existingNotebookCellGenerationDraft,
   materializeNotebookChatGeneration,
   notebookChatGenerationCellPrompt,
   notebookChatGenerationConnectedInputs,
@@ -290,6 +291,20 @@ describe('notebook chat generation', () => {
       target: materialized.cellId,
       targetInput: 'image',
     }))
+
+    const existingCell = connected.value.cells.find((cell) => cell.id === materialized.cellId)!
+    const existing = existingNotebookCellGenerationDraft({ actions, cell: existingCell, document: connected.value })
+    expect(existing).toMatchObject({
+      action: { model: 'kie:nano-banana-2-1', tool: 'generate_image' },
+      cell: { id: materialized.cellId, prompt: 'neon rain' },
+      connections: [{ sourceCellId: source.id, targetInput: 'image' }],
+      sourceCellIds: [source.id],
+    })
+    expect(() => existingNotebookCellGenerationDraft({
+      actions,
+      cell: connected.value.cells.find((cell) => cell.id === source.id)!,
+      document: connected.value,
+    })).toThrow('is not a generation cell')
 
     const plan = await invoke('plan_notebook_generation', {
       notebook_id: notebookId,

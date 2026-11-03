@@ -191,7 +191,8 @@ describe('CommandComposer /voices prefill', () => {
   it('renders the speak preview when input is prefilled to /speak ', () => {
     const html = renderToStaticMarkup(createElement(CommandComposer, {
       commands: [{
-          description: 'Generate ElevenLabs speech into the notebook from the inline voice preview',
+        command: '/speak',
+        description: 'Generate ElevenLabs speech into the notebook from the inline voice preview',
         category: 'action',
         icon: 'Mic',
         size: 'default',

@@ -13,6 +13,8 @@ import {
   effectiveWorkspaceActionValues,
   patchWorkspaceActionDraft,
   seedWorkspaceActionDraft,
+  workspaceActionFields,
+  workspaceActionRequired,
   workspaceActionValidation,
   workspaceActionVariants,
   type WorkspaceActionDraft,
@@ -62,7 +64,6 @@ function renderActionSheet(action: WorkspaceAction, overrides: {
     applyFormId: 'command-composer-form',
     onChange: () => undefined,
     onPatch: () => undefined,
-    onCancelReview: () => undefined,
     onBack: () => undefined,
     onOpenAction: () => undefined,
     onCancel: () => undefined,
@@ -115,6 +116,17 @@ describe('workspace action sheet', () => {
     expect(html).not.toContain('Cancel review')
     const priced = renderActionSheet(remove, { review: { message: 'May incur charges.', cost: 'Estimated cost: $0.0400' } })
     expect(priced).toContain('<strong>Estimated cost: $0.0400</strong>')
+  })
+
+  it('edits a single sound effect as plain fields and sends it as one entry', () => {
+    const apply = catalogAction('tool.apply_sfx')
+    expect(workspaceActionFields(apply).map(([name]) => name)).toEqual(expect.arrayContaining(['asset_id', 'sfx.timestamp', 'sfx.type', 'sfx.description']))
+    expect(workspaceActionFields(apply).map(([name]) => name)).not.toContain('sfx')
+    expect([...workspaceActionRequired(apply)]).toEqual(expect.arrayContaining(['asset_id', 'sfx.timestamp', 'sfx.type', 'sfx.description']))
+    const draft = seedWorkspaceActionDraft(apply, context, { asset_id: 'video-1', sfx: [{ timestamp: 2.5, type: 'whoosh', description: 'fast transition' }] })
+    expect(draft).toMatchObject({ 'sfx.timestamp': 2.5, 'sfx.type': 'whoosh', 'sfx.description': 'fast transition' })
+    const edited = patchWorkspaceActionDraft(apply, context, draft, 'sfx.timestamp', 4)
+    expect(effectiveWorkspaceActionValues(apply, edited).sfx).toEqual([{ timestamp: 4, type: 'whoosh', description: 'fast transition' }])
   })
 
   it('keeps a run result on the sheet and offers Close', () => {

@@ -234,7 +234,7 @@ import type { WorkspaceActionResources } from '@/videobook/workspace-action-reso
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
 import { commandOpensPreviewForm, commandRunsAsPreview, fillDirectTarget } from '@/videobook/command-interaction'
 import { rewriteRetiredCommand, routeMergedCommand, transcribeRequestsFreshRun, type MergedCommandRoute } from '@/videobook/command-merges'
-import { commandPlanEditor, commandPlanEditorInput, commandPlanEditorSchema, type CommandPlanEditor } from '@/videobook/command-plan-editor'
+import { commandPlanEditor, commandPlanEditorInput, commandPlanEditorSchema, roughCutOptions, type CommandPlanEditor } from '@/videobook/command-plan-editor'
 import { CommandPlanEditorFields } from '@/components/videobook/confirm/bodies/CommandPlanEditorFields'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
@@ -472,6 +472,7 @@ import {
   reviseNotebookChatGenerationSetting,
   reviseNotebookChatGenerationSources,
   validateNotebookChatGenerationPromptSources,
+  existingNotebookCellGenerationDraft,
   type NotebookChatGenerationCommand,
   type NotebookChatGenerationDraft,
 } from '@/videobook/notebook-chat-generation'
@@ -770,6 +771,7 @@ type PendingChatAction =
       expectations: NotebookAddressExpectation[]
       reason: string
       summary: string
+      existingCell?: boolean
     }
   | {
       kind: 'frame'
@@ -821,6 +823,8 @@ type WorkspaceNoticeTone = 'info' | 'error'
 type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone; action?: { label: string; onRun: () => void } }
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
+
+const SKELETON_PROMPT = 'Create a pose skeleton guide from this reference image. Preserve the visible body poses, joint positions and framing. Show only clearly connected colored skeleton joints and limbs on a black background, without clothing, faces, scenery or text.'
 
 const NO_ACTION_CHOICES: Record<string, readonly ActionChoice[]> = {}
 
@@ -6578,6 +6582,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const prepareRoughCut = async (
     sourceSurface: 'ui' | 'slash' | 'chat',
     chat?: ChatExecution,
+    editor?: CommandPlanEditor,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook || !sequence) {
       return { ok: false, message: 'Open a notebook sequence first.' }
@@ -6601,9 +6606,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         source_surface: sourceSurface,
         actor: 'videobook-user',
         beats,
-        min_shot_frames: 30,
-        max_shot_frames: 120,
-        max_repeats_per_artifact: 1,
+        ...roughCutOptions(editor?.values ?? {}),
       }, { chat })
       const result = recordValue(value)
       if (result?.kind === 'rough-cut-uncovered') {
@@ -6615,7 +6618,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           message: `No existing indexed coverage for ${uncovered} narration beats.`,
         }
       }
-      return await previewCommandPlan(asCommandPlan(value), chat)
+      return await previewCommandPlan(asCommandPlan(value), chat, editor)
     } catch (error) {
       return {
         ok: false,
@@ -8381,6 +8384,68 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }])
   }
 
+  const updateExistingGenerationCell = async (draft: NotebookChatGenerationDraft, document: NotebookSnapshot, chat?: ChatExecution) => {
+    await call('update_notebook_cell', {
+      book_id: bookId,
+      notebook_id: document.id,
+      cell_id: draft.cell.id,
+      ...(document.revision ? { expected_revision: document.revision } : {}),
+      cell: {
+        prompt: notebookChatGenerationCellPrompt(draft, document),
+        provider: draft.cell.provider,
+        model: draft.cell.model,
+        operation: draft.cell.operation,
+        tool: draft.cell.tool,
+        inputs: draft.cell.inputs,
+      },
+    }, { chat })
+    const connected = new Set(document.edges.filter((edge) => edge.target === draft.cell.id).map((edge) => edge.source))
+    for (const connection of draft.connections.filter((entry) => !connected.has(entry.sourceCellId))) {
+      await call('connect_notebook_cells', {
+        book_id: bookId,
+        notebook_id: document.id,
+        source_cell_id: connection.sourceCellId,
+        target_cell_id: draft.cell.id,
+        target_input: connection.targetInput,
+      }, { chat })
+    }
+  }
+
+  const previewExistingCellGeneration = async (cellId: string, chat?: ChatExecution): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) return { ok: false, message: 'Open a notebook before generating media.' }
+    try {
+      const document = asNotebook(await call('get_notebook', { book_id: bookId, notebook_id: notebook.id }, { chat }))
+      const cell = document?.cells.find((candidate) => candidate.id === cellId)
+      if (!document || !cell) throw new Error('The generation cell is no longer in this notebook')
+      const draft = existingNotebookCellGenerationDraft({ actions: generationActions, cell, document })
+      const address = notebookGridTag(cell.slot)
+      reviewChat(chat, false, () => setPendingCommandPlan(null))
+      reviewChat(chat, true, () => setPendingChatAction({
+        kind: 'generation',
+        draft,
+        notebookId: document.id,
+        existingCell: true,
+        preview: null,
+        previewError: null,
+        previewLoading: true,
+        previewStale: false,
+        expectations: [
+          ...draft.sourceCellIds.flatMap((sourceId) => {
+            const source = document.cells.find((candidate) => candidate.id === sourceId)
+            return source ? [{ address: notebookGridTag(source.slot), cellId: source.id }] : []
+          }),
+          { address, cellId: cell.id },
+        ],
+        reason: 'Generation can incur provider spend and sends the prompt and required references',
+        summary: `Run ${address}`,
+      }))
+      requestPendingGenerationPreview(draft, document, chat)
+      return generationApplyReadyOutcome(`Generation ready to run ${address}`)
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
   const applyPendingGenerationAction = async (
     action: Extract<PendingChatAction, { kind: 'generation' }>,
     promptOverride: string | null = null,
@@ -8505,18 +8570,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellQueued(cellId, true)
     rememberLastWorkSlot(preparedAction.draft.cell.slot)
     selectCanvasCell(cellId, chat, validatedPreview)
-    showOptimisticGeneration(preparedAction.draft, currentNotebook)
+    if (!preparedAction.existingCell) showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
-      await materializeNotebookChatGeneration({
-        bookId,
-        callTool: (tool, args) => call(tool, args, { chat }),
-        document: currentNotebook,
-        draft: preparedAction.draft,
-        ...(currentNotebook.revision
-          ? { expectedRevision: currentNotebook.revision }
-          : {}),
-      })
-      materialized = true
+      if (preparedAction.existingCell) {
+        await updateExistingGenerationCell(preparedAction.draft, currentNotebook, chat)
+      } else {
+        await materializeNotebookChatGeneration({
+          bookId,
+          callTool: (tool, args) => call(tool, args, { chat }),
+          document: currentNotebook,
+          draft: preparedAction.draft,
+          ...(currentNotebook.revision
+            ? { expectedRevision: currentNotebook.revision }
+            : {}),
+        })
+        materialized = true
+      }
       const plan = await createGenerationPlan(cellId, 'chat', chat)
       const accepted = await call('run_notebook_cell', {
         book_id: bookId,
@@ -8580,7 +8649,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }, { chat }).catch(() => undefined)
       }
       if (!runAccepted) {
-        setNodes((current) => current.filter((node) => node.id !== cellId))
+        if (!preparedAction.existingCell) setNodes((current) => current.filter((node) => node.id !== cellId))
         setCellQueued(cellId, false)
       }
       setCellRunError(cellId, message)
@@ -9183,10 +9252,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (route.action === 'skeleton') {
       if (asset.type !== 'image') throw new Error('Choose an image for a pose guide.')
+      const address = commandMentionAssets.find((mention) => mention.artifactId === asset.artifactId)?.cellAddress
+      if (notebook && address) {
+        return await previewNotebookGenerationCommand({
+          cellType: 'generate_image',
+          mediaKind: 'image',
+          prompt: `${SKELETON_PROMPT} @${address}`,
+          sourceReferences: [`@${address}`],
+        }, { preferredModel: 'kie:qwen3/image-to-image', reason: 'A pose guide is generated by the provider from this reference image' }, chat)
+      }
       await openWorkspaceActions('tool.generate_image', {
         model: 'kie:qwen3/image-to-image',
         refs: { image: [asset.artifactId] },
-        prompt: 'Create a pose skeleton guide from this reference image. Preserve the visible body poses, joint positions and framing. Show only clearly connected colored skeleton joints and limbs on a black background, without clothing, faces, scenery or text.',
+        prompt: SKELETON_PROMPT,
       }, undefined, undefined, chat)
       return { ok: true, message: 'AI pose guide options opened. Review the provider and cost before generating.' }
     }
@@ -9384,7 +9462,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }, undefined, chat)
       }
       if (commandToken === '/rough-cut') {
-        return await prepareRoughCut('slash', chat)
+        return await prepareRoughCut('slash', chat, commandPlanEditor('/rough-cut', selectCommandForInput(commands, '/rough-cut', rest)?.params ?? [], restParts))
       }
       if (commandToken === '/run' && restParts.length > 0) {
         if (!notebook || restParts.length !== 1) {
@@ -9399,7 +9477,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ) {
           return { ok: false, message: 'Choose a configured generation cell' }
         }
-        return await prepareGenerationPlan(cell.id, 'slash', chat)
+        return await previewExistingCellGeneration(cell.id, chat)
       }
       if (
         commandToken === '/arrange-videos-column'

@@ -9,7 +9,9 @@ export type CommandPlanEditor = {
   error?: string
 }
 
-const EDITABLE_PLAN_COMMANDS = new Set(['/caption', '/duck', '/fit', '/gap', '/insert', '/move', '/overwrite', '/clip-audio', '/export'])
+const ROUGH_CUT_DEFAULTS = { min_shot_frames: 30, max_shot_frames: 120, max_repeats_per_artifact: 1 }
+
+const EDITABLE_PLAN_COMMANDS = new Set(['/rough-cut', '/caption', '/duck', '/fit', '/gap', '/insert', '/move', '/overwrite', '/clip-audio', '/export'])
 
 const clip = { name: 'clip_id', type: 'string', required: true, description: 'Sequence clip' } as const
 
@@ -55,10 +57,16 @@ export function commandPlanEditor(command: string, params: Params, parts: readon
     return { command, values: { aspect: flagValue(parts, '--aspect') ?? '16:9', captions: flagValue(parts, '--captions') ?? 'burned' } }
   }
   try {
-    return { command, values: parseCommandArgs(parts.join(' '), params) }
+    const values = parseCommandArgs(parts.join(' '), params)
+    return { command, values: command === '/rough-cut' ? { ...ROUGH_CUT_DEFAULTS, ...values } : values }
   } catch {
     return { command, values: {} }
   }
+}
+
+export function roughCutOptions(values: Record<string, unknown>): typeof ROUGH_CUT_DEFAULTS {
+  const pick = (name: keyof typeof ROUGH_CUT_DEFAULTS) => typeof values[name] === 'number' ? values[name] : ROUGH_CUT_DEFAULTS[name]
+  return { min_shot_frames: pick('min_shot_frames'), max_shot_frames: pick('max_shot_frames'), max_repeats_per_artifact: pick('max_repeats_per_artifact') }
 }
 
 export function commandPlanEditorInput(editor: CommandPlanEditor, schema: ActionInputSchema): string {

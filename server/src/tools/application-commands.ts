@@ -25,7 +25,7 @@ export const APPLICATION_COMMANDS: Command[] = [
   command("/insert", "Preview inserting media into the sequence", [media, start, { ...duration, required: false }], "/insert @a1 0 90", ["/assign", "/audio-add"]),
   command("/move", "Preview moving a sequence clip to a track and frame", [clip, track, start], undefined, ["/audio-move"]),
   command("/overwrite", "Preview overwriting sequence content with media", [media, start, { ...duration, required: false }], "/overwrite @a1 0 90"),
-  command("/rough-cut", "Review a rough cut built from notebook media"),
+  command("/rough-cut", "Review a rough cut built from notebook media", [number("min_shot_frames", "Shortest shot in frames; default 30", false), number("max_shot_frames", "Longest shot in frames; default 120", false), number("max_repeats_per_artifact", "Times one clip may repeat; default 1", false)], "/rough-cut 30 120 1"),
   command("/track-add", "Add a video, audio or caption track", [text("kind", "video, audio or caption"), text("name", "Display name", false)], "/track-add audio Music"),
   command("/track-remove", "Remove an empty sequence track", [track]),
   command("/clip-audio", "Edit a sequence audio clip's gain, mute, or fades", [clip, text("field", "gain, mute, fade-in, or fade-out"), text("value", "Gain from -96 to 24 dB, on or off, or fade length in frames")], "/clip-audio @clip-id gain -6", ["/volume", "/audio-set"]),

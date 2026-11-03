@@ -13,6 +13,7 @@ import {
   workspaceActionChoices,
   workspaceActionCropMedia,
   workspaceActionFields,
+  workspaceActionRequired,
   workspaceActionFrameAspectRatio,
   workspaceActionSeedanceEdit,
   workspaceActionValidation,
@@ -134,7 +135,7 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
   const formRef = useRef<HTMLFormElement>(null)
   const values = effectiveWorkspaceActionValues(action, draft)
   const frameAspectRatio = workspaceActionFrameAspectRatio(action, draft)
-  const required = new Set(action.inputSchema.required ?? [])
+  const required = workspaceActionRequired(action)
   const entityEditor = action.handler.kind === 'tool' && action.handler.tool === 'update_entity'
   const entityId = values.entity && typeof values.entity === 'object' && 'id' in values.entity ? String(values.entity.id) : ''
   const cropMedia = workspaceActionCropMedia(action, context, values)

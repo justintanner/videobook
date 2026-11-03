@@ -18,6 +18,49 @@ type WorkspaceActionMedia = NonNullable<WorkspaceActionContext['media']>[string]
 
 const HIDDEN_FIELDS = ['book_id', 'actor', 'source_surface']
 
+const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx' }
+
+function singleEntryArray(action: WorkspaceAction): string | undefined {
+  return action.handler.kind === 'tool' ? SINGLE_ENTRY_ARRAYS[action.handler.tool] : undefined
+}
+
+function entryFieldName(field: string, property: string): string {
+  return `${field}.${property}`
+}
+
+function entryTitle(property: string): string {
+  const words = property.replaceAll('_', ' ')
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
+}
+
+function flattenSingleEntry(action: WorkspaceAction, values: WorkspaceActionDraft): WorkspaceActionDraft {
+  const field = singleEntryArray(action)
+  const entries = field ? values[field] : undefined
+  if (!field || !Array.isArray(entries) || entries.length !== 1) return values
+  const entry = optionsRecord(entries[0])
+  return { ...values, ...Object.fromEntries(Object.entries(entry).map(([name, value]) => [entryFieldName(field, name), value])) }
+}
+
+function collectSingleEntry(action: WorkspaceAction, draft: WorkspaceActionDraft): WorkspaceActionDraft {
+  const field = singleEntryArray(action)
+  if (!field) return draft
+  const prefix = `${field}.`
+  const entry = Object.fromEntries(Object.entries(draft)
+    .filter(([name, value]) => name.startsWith(prefix) && value !== undefined && value !== '')
+    .map(([name, value]) => [name.slice(prefix.length), value]))
+  return Object.keys(entry).length > 0 ? { ...draft, [field]: [entry] } : draft
+}
+
+export function workspaceActionRequired(action: WorkspaceAction): Set<string> {
+  const required = new Set(action.inputSchema.required ?? [])
+  const field = singleEntryArray(action)
+  const item = field ? action.inputSchema.properties?.[field]?.items : undefined
+  if (!field || !item) return required
+  required.delete(field)
+  for (const name of item.required ?? []) required.add(entryFieldName(field, name))
+  return required
+}
+
 function stringList(value: unknown): string[] | undefined {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : undefined
 }
@@ -41,7 +84,7 @@ export function seedWorkspaceActionDraft(
   const properties = action.inputSchema.properties ?? {}
   const carried = Object.entries(initialValues)
     .filter(([name]) => name in properties && (name !== '_provider' || !action.generation))
-  return { ...seeded, ...Object.fromEntries(carried) }
+  return flattenSingleEntry(action, { ...seeded, ...Object.fromEntries(carried) })
 }
 
 export function workspaceActionFrameAspectRatio(action: WorkspaceAction, draft: WorkspaceActionDraft): string | undefined {
@@ -52,7 +95,8 @@ export function workspaceActionSeedanceEdit(draft: WorkspaceActionDraft): boolea
   return isSeedanceEdit(String(draft.model ?? ''), draft.mode)
 }
 
-export function effectiveWorkspaceActionValues(action: WorkspaceAction, draft: WorkspaceActionDraft): WorkspaceActionDraft {
+export function effectiveWorkspaceActionValues(action: WorkspaceAction, entryDraft: WorkspaceActionDraft): WorkspaceActionDraft {
+  const draft = collectSingleEntry(action, entryDraft)
   const options = optionsRecord(draft.options)
   if (workspaceActionSeedanceEdit(draft)) return { ...draft, options: { ...options, aspect_ratio: 'adaptive', duration: -1 } }
   const aspectRatio = workspaceActionFrameAspectRatio(action, draft)
@@ -87,7 +131,12 @@ export function patchWorkspaceActionDraft(
 
 export function workspaceActionFields(action: WorkspaceAction): [string, ActionInputSchema][] {
   const hidden = new Set(action.generation ? [...HIDDEN_FIELDS, '_provider'] : HIDDEN_FIELDS)
-  return Object.entries(action.inputSchema.properties ?? {}).filter(([name]) => !hidden.has(name))
+  const field = singleEntryArray(action)
+  return Object.entries(action.inputSchema.properties ?? {})
+    .filter(([name]) => !hidden.has(name))
+    .flatMap(([name, schema]): [string, ActionInputSchema][] => name === field && schema.items?.properties
+      ? Object.entries(schema.items.properties).map(([property, item]) => [entryFieldName(name, property), { ...item, title: item.title ?? entryTitle(property) }])
+      : [[name, schema]])
 }
 
 export function workspaceActionChoices(

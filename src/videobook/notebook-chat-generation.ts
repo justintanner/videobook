@@ -25,7 +25,7 @@ import {
   type GenerationControlValue,
   type NotebookGenerationAction,
 } from './notebook-generation-actions'
-import type { NotebookGenerationCellType } from './notebook-cell-types'
+import { isNotebookGenerationCellType, type NotebookGenerationCellType } from './notebook-cell-types'
 import {
   notebookCellTag,
   notebookReferences,
@@ -330,6 +330,36 @@ export function planNotebookChatGeneration(input: {
     })),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceAddresses: sources.map((source) => notebookCellTag(source.cell)),
+  }
+}
+
+export function existingNotebookCellGenerationDraft(input: {
+  actions: readonly NotebookGenerationAction[]
+  cell: NotebookCell
+  document: NotebookDocument
+}): NotebookChatGenerationDraft {
+  const { cell, document } = input
+  if (!isNotebookGenerationCellType(cell.type)) {
+    throw new Error(`${notebookCellTag(cell)} is not a generation cell`)
+  }
+  const action = generationActionForSelection(input.actions, cell.type, {
+    provider: cell.provider?.trim() ?? '',
+    model: cell.model?.trim() ?? '',
+    operation: cell.operation?.trim() ?? '',
+    tool: cell.tool?.trim() ?? '',
+  })
+  if (!action) throw new Error(`No available generation action matches ${notebookCellTag(cell)}`)
+  const sources = document.edges.flatMap((edge) => {
+    if (edge.target !== cell.id) return []
+    const source = document.cells.find((candidate) => candidate.id === edge.source)
+    return source ? [{ source, targetInput: edge.targetInput ?? '' }] : []
+  })
+  return {
+    action,
+    cell,
+    connections: sources.map(({ source, targetInput }) => ({ sourceCellId: source.id, targetInput })),
+    sourceCellIds: sources.map(({ source }) => source.id),
+    sourceAddresses: sources.map(({ source }) => notebookCellTag(source)),
   }
 }
 
