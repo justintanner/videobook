@@ -183,6 +183,14 @@ describe('generation slot editor in the browser', () => {
     await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[0, 'image'], [1, 'image_2'], [2, 'keyframe']])
   }, testBudget(90_000))
 
+  it('takes a board cell dragged by its canvas grip into a slot', async () => {
+    const grip = page.locator(`.notebook-flow .react-flow__node[data-id="${images[0]}"] .cell-ref-grip`)
+    await grip.dragTo(chip('Keyframes', 1), { targetPosition: { x: 40, y: 50 } })
+    await expect.poll(keyframes, { timeout: testBudget(15_000) })
+      .toEqual([[0, 'image'], [1, 'keyframe'], [2, 'keyframe_2'], [0, 'keyframe_3']])
+    expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(4)
+  }, testBudget(90_000))
+
   it('stores a keyframe time typed on the item and moves it with the keyboard', async () => {
     const time = chip('Keyframes', 1).getByLabel('Time for @a3')
     expect(await time.getAttribute('placeholder')).toBe('6.67')

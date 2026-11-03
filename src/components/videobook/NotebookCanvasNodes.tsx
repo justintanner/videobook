@@ -17,6 +17,7 @@ import {
   Sparkles,
   Ellipsis,
   Flag,
+  GripVertical,
   ArrowDown,
 } from 'lucide-react'
 import {
@@ -34,6 +35,8 @@ import { PostTile } from '@/components/videobook/PostTile'
 import type { CanvasCellData, CanvasNode } from '@/videobook/notebook-canvas'
 import { isNotebookGenerationCellType, notebookCellFamily } from '@/videobook/notebook-cell-types'
 import { notebookGridTag, notebookGridAddress } from '@/videobook/notebook-grid'
+import { endCellRefDrag, startCellRefDrag } from '@/videobook/cell-ref-drag'
+import { notebookGenerationInputKind } from '../../../server/src/notebook-generation-contract'
 import type { AssetRecord } from '@/videobook/workspace-responses'
 import {
   type PassiveMediaKind,
@@ -389,6 +392,7 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     tool: data.tool,
   }, data.status)
   const statusLabel = data.post ? postTileStatus(data.post) : notebookCellStatusLabel(data.kind, data.status)
+  const inputKind = data.outputArtifactId ? notebookGenerationInputKind({ type: data.kind }) : null
   const generationCell = isNotebookGenerationCellType(data.kind)
   const generationRun = generationCell || isImageVideoGenerationResultCell({
     type: data.kind,
@@ -756,6 +760,22 @@ export function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         <footer className="cell-node-footer">
           <strong>{notebookGridTag(data.slot)}</strong>
           <span className="cell-node-footer-actions">
+            {inputKind && (
+              <button
+                type="button"
+                className="cell-ref-grip nodrag nopan"
+                draggable
+                aria-label={`Drag ${notebookGridTag(data.slot)} into a generation input`}
+                title="Drag into a generation input slot"
+                onDragStart={(event) => {
+                  event.stopPropagation()
+                  startCellRefDrag(event, { sourceCellId: id, from: null })
+                }}
+                onDragEnd={endCellRefDrag}
+              >
+                <GripVertical size={13} aria-hidden="true" />
+              </button>
+            )}
             <CellStatusBadge status={statusLabel} />
             <button
               type="button"

@@ -8754,6 +8754,25 @@ textarea:focus-visible {
   font-size: 10px;
 }
 
+.cell-ref-grip {
+  display: grid;
+  flex: none;
+  width: 20px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: grab;
+}
+
+.cell-ref-grip:hover,
+.cell-ref-grip:focus-visible {
+  color: var(--ink);
+  outline: 1px solid var(--control-border-hover);
+}
+
 .generation-slot-disconnect {
   display: grid;
   height: 44px;
