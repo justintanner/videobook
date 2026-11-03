@@ -115,11 +115,6 @@ export function workspaceActionVariants(actions: readonly WorkspaceAction[], act
   return actions.filter((entry) => entry.generation?.operation === generation.operation && entry.generation?.mediaType === generation.mediaType)
 }
 
-export function workspaceActionApplyLabel(action: WorkspaceAction, review: WorkspaceActionReview | null): string {
-  if (review) return 'Confirm and run'
-  return action.confirmation === 'none' ? 'Run action' : 'Review action'
-}
-
 export function workspaceActionValidation(input: {
   action: WorkspaceAction | null
   context: WorkspaceActionContext

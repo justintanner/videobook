@@ -106,16 +106,15 @@ describe('workspace action sheet', () => {
     expect(html).toContain('aria-label="Crop preview"')
   })
 
-  it('reviews a destructive action before Apply runs it', () => {
+  it('shows a destructive action\'s review on the card and runs it with one Apply', () => {
     const remove = catalogAction('tool.delete_entity')
-    const reviewing = renderActionSheet(remove)
-    expect(reviewing).toContain('class="confirm-sheet-apply">Review action <kbd>↵</kbd>')
-    expect(reviewing).toContain('Changes or removes content')
-    expect(reviewing).not.toContain('Cancel review')
-    const confirming = renderActionSheet(remove, { review: { message: 'Delete entity changes or removes the selected content.' } })
-    expect(confirming).toContain('class="confirm-sheet-apply">Confirm and run <kbd>↵</kbd>')
-    expect(confirming).toContain('>Cancel review</button>')
-    expect(confirming).toContain('Delete entity changes or removes the selected content.')
+    const html = renderActionSheet(remove, { review: { message: 'Delete entity changes or removes the selected content.' } })
+    expect(html).toContain('class="confirm-sheet-apply">Run action <kbd>↵</kbd>')
+    expect(html).toContain('Changes or removes content')
+    expect(html).toContain('Delete entity changes or removes the selected content.')
+    expect(html).not.toContain('Cancel review')
+    const priced = renderActionSheet(remove, { review: { message: 'May incur charges.', cost: 'Estimated cost: $0.0400' } })
+    expect(priced).toContain('<strong>Estimated cost: $0.0400</strong>')
   })
 
   it('keeps a run result on the sheet and offers Close', () => {

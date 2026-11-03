@@ -76,7 +76,7 @@ describe('workspace action launcher with real endpoints', () => {
     await page.locator('.command-composer .confirm-sheet form.workspace-action-form').waitFor()
   }
 
-  async function applySheet(label: 'Run action' | 'Review action' | 'Confirm and run'): Promise<void> {
+  async function applySheet(label: 'Run action'): Promise<void> {
     const apply = page.locator('.command-composer .confirm-sheet-apply')
     await expect.poll(() => apply.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain(label)
     await expect.poll(() => apply.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
@@ -221,7 +221,7 @@ describe('workspace action launcher with real endpoints', () => {
         continue
       }
       await page.locator(`form.workspace-action-form[data-action-id="${action.id}"]`).waitFor()
-      expect(await page.locator('.command-composer .confirm-sheet-apply').textContent(), action.id).toMatch(/^(?:Run action|Review action) ↵$/u)
+      expect(await page.locator('.command-composer .confirm-sheet-apply').textContent(), action.id).toBe('Run action ↵')
       await page.getByRole('button', { name: 'All actions', exact: true }).click()
     }
     expect(browserErrors).toEqual([])
@@ -313,9 +313,8 @@ describe('workspace action launcher with real endpoints', () => {
     await page.keyboard.press('Escape')
     await openActions('/delete-entity')
     await page.getByRole('combobox', { name: /^Entity\b/u }).selectOption(String(entity.id))
-    await applySheet('Review action')
     expect(JSON.stringify(await call('list_entities', { kind: 'prompt' }))).toContain('Editable prompt')
-    await applySheet('Confirm and run')
+    await applySheet('Run action')
     await expect.poll(async () => JSON.stringify(await call('list_entities', { kind: 'prompt' })), { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Editable prompt')
   })
 
@@ -342,10 +341,9 @@ describe('workspace action launcher with real endpoints', () => {
     await model.selectOption(second!)
     expect(await prompt.inputValue()).toBe('Keep the same scene and use a watercolor style')
     const before = JSON.stringify(await call('list_jobs'))
-    await applySheet('Review action')
     const cost = page.locator('.workspace-action-review strong')
     await expect.poll(() => cost.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toMatch(/^(?:Estimated cost: \$\d+\.\d{4}|Cost estimate unavailable)$/u)
-    expect(await page.locator('.command-composer .confirm-sheet-apply').textContent()).toBe('Confirm and run ↵')
+    expect(await page.locator('.command-composer .confirm-sheet-apply').textContent()).toBe('Run action ↵')
     expect(await page.locator('.command-composer .confirm-sheet-apply').isEnabled()).toBe(true)
     expect(JSON.stringify(await call('list_jobs'))).toBe(before)
     await page.setViewportSize({ width: 390, height: 844 })
@@ -433,11 +431,8 @@ describe('workspace action launcher with real endpoints', () => {
     await expect.poll(async () => JSON.stringify(await call('list_notebooks')), { timeout: MCP_ROUNDTRIP_MS }).toContain('Managed notebook renamed')
     await page.keyboard.press('Escape')
     await openActions('/delete-notebook')
-    await applySheet('Review action')
-    await page.getByRole('button', { name: 'Cancel review', exact: true }).click()
     expect(JSON.stringify(await call('list_notebooks'))).toContain(String(created.id))
-    await applySheet('Review action')
-    await applySheet('Confirm and run')
+    await applySheet('Run action')
     await expect.poll(async () => JSON.stringify(await call('list_notebooks')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(created.id))
     expect(await page.getByRole('alert').count()).toBe(0)
   })
@@ -527,9 +522,8 @@ describe('workspace action launcher with real endpoints', () => {
     await applySheet('Run action')
     await page.locator('.workspace-action-linked-results > li').nth(revisionIndex).getByRole('button', { name: 'Restore revision', exact: true }).click()
     await expect.poll(() => hashPicker.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe(originalHash)
-    await applySheet('Review action')
     expect(await (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text()).toBe(nextContent)
-    await applySheet('Confirm and run')
+    await applySheet('Run action')
     await expect.poll(async () => (await fetch(`${origin}/files/${bookId}/${scriptId}/original.md`)).text(), { timeout: MCP_ROUNDTRIP_MS }).toBe(firstContent)
     const restoredHistory = await call('asset_history', { asset_id: scriptId }) as Record<string, unknown>[]
     expect(restoredHistory[0]!.hash).not.toBe(originalHash)
@@ -705,8 +699,7 @@ describe('workspace action launcher with real endpoints', () => {
     await sendCommand('/apply')
     await expect.poll(async () => ((record(await call('get_primary_sequence'))?.clips as Record<string, unknown>[])[0]?.reverse), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
     await sendCommand('/trim @a1 0 1')
-    await applySheet('Review action')
-    await applySheet('Confirm and run')
+    await applySheet('Run action')
     await expect.poll(async () => {
       const payload = record(await call('list_assets'))
       const asset = (Array.isArray(payload?.assets) ? payload.assets : []).map(record).find(entry => entry?.artifact_id === videoId)
@@ -726,8 +719,7 @@ describe('workspace action launcher with real endpoints', () => {
     expect(duplicate.assetId).not.toBe(imageId)
     await page.reload()
     await sendCommand(`/delete ${String(duplicate.assetId)}`)
-    await applySheet('Review action')
-    await applySheet('Confirm and run')
+    await applySheet('Run action')
     await expect.poll(async () => JSON.stringify(await call('list_assets')), { timeout: MCP_ROUNDTRIP_MS }).not.toContain(String(duplicate.assetId))
     expect(JSON.stringify(await call('list_assets'))).toContain(imageId)
   }, 120_000)

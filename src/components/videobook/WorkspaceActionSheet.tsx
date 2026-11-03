@@ -10,7 +10,6 @@ import {
 } from '@/videobook/workspace-actions'
 import {
   effectiveWorkspaceActionValues,
-  workspaceActionApplyLabel,
   workspaceActionChoices,
   workspaceActionCropMedia,
   workspaceActionFields,
@@ -57,13 +56,12 @@ type WorkspaceActionSheetProps = {
   applyFormId: string
   onChange: (name: string, value: unknown) => void
   onPatch: (patch: WorkspaceActionDraft) => void
-  onCancelReview: () => void
   onBack: () => void
   onOpenAction: OpenAction
   onCancel: () => void
 }
 
-type WorkspaceActionBodyProps = Omit<WorkspaceActionSheetProps, 'action' | 'draft' | 'loading' | 'error' | 'applyFormId' | 'onCancelReview' | 'onCancel'> & {
+type WorkspaceActionBodyProps = Omit<WorkspaceActionSheetProps, 'action' | 'draft' | 'loading' | 'error' | 'applyFormId' | 'onCancel'> & {
   action: WorkspaceAction
   draft: WorkspaceActionDraft
 }
@@ -170,13 +168,13 @@ function WorkspaceActionBody({ action, variants, context, draft, review, result,
     {workspaceActionSeedanceEdit(draft) && <p role="status">{SEEDANCE_EDIT_DESCRIPTION}</p>}
     {frameAspectRatio && <p role="status">{FRAME_ASPECT_DESCRIPTION}</p>}
     {hasDependentChoices && <button type="button" disabled={busy} onClick={() => onOpenAction(action.id, values)}>Refresh available choices</button>}
-    {review && <div className="workspace-action-review" role="status"><strong>{review.cost ?? 'Review action'}</strong><p>{review.message}</p></div>}
+    {review && <div className="workspace-action-review" role="status">{review.cost && <strong>{review.cost}</strong>}<p>{review.message}</p></div>}
     {result && <WorkspaceActionResultSection action={action} result={result} values={values} onOpenAction={onOpenAction} />}
   </form>
 }
 
 export function WorkspaceActionSheet(props: WorkspaceActionSheetProps) {
-  const { action, draft, review, result, loading, error, busy, applyFormId, context, onCancel, onCancelReview } = props
+  const { action, draft, result, loading, error, busy, applyFormId, context, onCancel } = props
   const validation = workspaceActionValidation({ action, context, loading, error, ready: Boolean(draft) })
   return <ConfirmSheet
     kind="workspace-action"
@@ -186,14 +184,11 @@ export function WorkspaceActionSheet(props: WorkspaceActionSheetProps) {
     effect={workspaceActionEffect(action)}
     validation={validation}
     busy={busy}
-    applyLabel={action ? workspaceActionApplyLabel(action, review) : 'Run action'}
-    busyLabel={review || action?.confirmation === 'none' ? 'Running…' : 'Reviewing…'}
+    applyLabel="Run action"
+    busyLabel="Running…"
     cancelLabel={result ? 'Close' : 'Cancel'}
     applyFormId={applyFormId}
     onCancel={onCancel}
-    secondaryActions={review
-      ? <button type="button" className="confirm-sheet-secondary" disabled={busy} onClick={onCancelReview}>Cancel review</button>
-      : null}
   >
     {action && draft && !loading
       ? <WorkspaceActionBody {...props} action={action} draft={draft} />

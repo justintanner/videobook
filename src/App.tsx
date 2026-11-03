@@ -819,6 +819,8 @@ type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone; action?: { lab
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
 
+const ROUTED_PREVIEW_TOOLS: ReadonlySet<string> = new Set(['change_video_speed', 'splice_video'])
+
 function noteCloudGenerationDisclosure(stage: {
   provider?: string | null
   model?: string | null
@@ -1329,6 +1331,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [actionCatalogStatus, setActionCatalogStatus] = useState<{ loading: boolean; error: string | null }>({ loading: false, error: null })
   const [actionSheet, setActionSheet] = useState<WorkspaceActionSheetState | null>(null)
   const actionCatalogRequestRef = useRef(0)
+  const actionReviewRequestRef = useRef(0)
   const transcribeEstimateRequestRef = useRef(0)
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
   const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
@@ -4083,7 +4086,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
    * Forget: delete the asset and destroy its stored bytes. Irreversible, so it
    * confirms first, and again when the engine reports what still holds it.
    */
-  const forgetAsset = useCallback(async (asset: LibraryAssetRecord, confirmed = false): Promise<ComposerOutcome> => {
+  const forgetAsset = useCallback(async (asset: LibraryAssetRecord, confirmed = false, clearReferences = false): Promise<ComposerOutcome> => {
     const name = `@${asset.id}`
     if (asset.owningBookId !== bookId) {
       setNotice(`Open ${asset.owningBookName} to forget ${name}`, 'error')
@@ -4096,8 +4099,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: bookId,
         asset_id: asset.artifactId,
         forget: true,
+        ...(clearReferences ? { clear_references: true } : {}),
       }))
-      if (outcome.status === 'in_use') {
+      if (outcome.status === 'in_use' && !confirmed) {
         if (!window.confirm(clearReferencesConfirmation(name, outcome.references))) {
           return { ok: false, message: 'Forget cancelled; media is still in use' }
         }
@@ -4299,7 +4303,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
         const loadedValues = { ...seededValues, ...resources.values }
         const draft = seedWorkspaceActionDraft(action, workspaceActionSheetContext(resources), loadedValues)
-        setActionSheet((current) => current?.key === request ? { ...current, values: loadedValues, resources, result, draft } : current)
+        const review = action.confirmation === 'none' ? undefined : await reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).catch(() => undefined)
+        if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
+        setActionSheet((current) => current?.key === request ? { ...current, values: loadedValues, resources, result, draft, review } : current)
       }
       setActionCatalogStatus({ loading: false, error: null })
     } catch (cause) {
@@ -4331,8 +4337,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const action = workspaceActions.find((entry) => entry.id === current?.actionId)
       if (!current?.draft || !action) return current
       const draft = change(current.draft, action, workspaceActionSheetContext(current.resources))
-      return { ...current, draft, review: undefined, result: undefined }
+      return { ...current, draft, result: undefined }
     })
+    const sheet = currentActionSheet
+    const action = workspaceActions.find((entry) => entry.id === sheet?.actionId)
+    if (!sheet?.draft || action?.confirmation !== 'generation') return
+    const draft = change(sheet.draft, action, workspaceActionSheetContext(sheet.resources))
+    const request = ++actionReviewRequestRef.current
+    void reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).then((review) => {
+      if (request !== actionReviewRequestRef.current) return
+      setActionSheet((current) => current?.key === sheet.key ? { ...current, review } : current)
+    }, () => undefined)
   }
 
   const refreshChatModels = useCallback(async () => {
@@ -9530,6 +9545,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.autoInject?.includes('notebook_id') && notebook) {
         args.notebook_id = notebook.id
       }
+      if (ROUTED_PREVIEW_TOOLS.has(command.mcpTool.tool)) {
+        return await previewRoutedChatAction({
+          kind: 'chat-action-plan', planId: uuidv7(), bookId, prompt: input, routedTool: command.mcpTool.tool, tool: command.mcpTool.tool,
+          params: args, message: '', summary: command.description, effect: 'mutation',
+          confirmation: { required: true, reason: 'Adjust the preview, then apply' },
+        }, input, undefined, chat)
+      }
       if (commandRunsAsPreview(advertisedAction)) {
         await openWorkspaceActions(advertisedAction!.id, args, undefined, undefined, chat)
         return { ok: true, message: `${advertisedAction!.title} preview ready` }
@@ -9571,7 +9593,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (tool === 'delete_asset' && values.forget === true) {
       const target = assets.find((asset) => asset.artifactId === values.asset_id)
       if (!target) throw new Error('Choose media from the current project.')
-      const result = await forgetAsset({ ...target, errorMessage: null, lastUsedAt: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true)
+      const result = await forgetAsset({ ...target, errorMessage: null, lastUsedAt: null, owningBookId: bookId, owningBookName: activeBook?.name ?? bookId }, true, values.clear_references === true)
       if (!result.ok) throw new Error(result.message)
       return { message: result.message, close: true }
     }
@@ -9615,12 +9637,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const priced = usd !== null && usd > 0 && (warnings.length === 0 || historical)
       return {
         cost: priced ? `Estimated cost: $${usd.toFixed(4)}` : 'Cost estimate unavailable',
-        message: `This action may send your prompt and selected media to a generation provider and incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''} Confirm to start.`,
+        message: `Running this sends your prompt and selected media to a generation provider and may incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''}`,
       }
     }
     return { message: action.confirmation === 'external'
-      ? `${action.title} sends the selected content outside this workspace. Review the destination and content before confirming.`
-      : `${action.title} changes or removes the selected content. Review the target and values before confirming.` }
+      ? `${action.title} sends the selected content outside this workspace.`
+      : `${action.title} changes or removes the selected content.` }
   }
 
   const applyTimelineClip = async (): Promise<ComposerOutcome> => {
@@ -9647,12 +9669,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       current?.key !== sheet.key ? current : patch && { ...current, ...patch })
     update({ running: true })
     try {
-      if (action.confirmation !== 'none' && !sheet.review) {
-        const review = await reviewWorkspaceAction(action, values)
-        update({ review, running: false })
-        markReview(true)
-        return applyReadyOutcome(`${review.cost ? `${review.cost}. ` : ''}Apply again to run ${action.title}.`)
-      }
       markReview(false)
       const run = await executeWorkspaceAction(action, values, chat)
       update(run.close ? null : { result: { message: run.message, value: run.value }, review: undefined, running: false })
@@ -11463,7 +11479,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       applyFormId={COMMAND_COMPOSER_FORM_ID}
       onChange={(name, value) => updateActionSheetDraft((draft, action, context) => patchWorkspaceActionDraft(action, context, draft, name, value))}
       onPatch={(patch) => updateActionSheetDraft((draft) => ({ ...draft, ...patch }))}
-      onCancelReview={() => setActionSheet((current) => current && { ...current, review: undefined })}
       onBack={() => {
         cancelChatReview()
         void openWorkspaceActions(undefined, currentActionSheet.values, currentActionSheet.query, currentActionSheet.opener)
