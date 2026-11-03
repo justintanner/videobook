@@ -234,6 +234,8 @@ import type { WorkspaceActionResources } from '@/videobook/workspace-action-reso
 import { WORKSPACE_UI_ROUTES, normalizePanelSide, parseFilePosition, workspaceUiFormValues } from '@/videobook/workspace-ui-routes'
 import { commandOpensPreviewForm, commandRunsAsPreview, fillDirectTarget } from '@/videobook/command-interaction'
 import { rewriteRetiredCommand, routeMergedCommand, transcribeRequestsFreshRun, type MergedCommandRoute } from '@/videobook/command-merges'
+import { commandPlanEditor, commandPlanEditorInput, commandPlanEditorSchema, type CommandPlanEditor } from '@/videobook/command-plan-editor'
+import { CommandPlanEditorFields } from '@/components/videobook/confirm/bodies/CommandPlanEditorFields'
 import { WorkspacePreviewDialog } from '@/components/videobook/WorkspacePreviewDialog'
 import type { WorkspaceMediaPreview } from '@/components/videobook/WorkspacePreviewDialog'
 import type { ActionChoice, WorkspaceActionContext } from '@/videobook/workspace-actions'
@@ -751,6 +753,7 @@ function mediaLibrarySearchCriteria(
 type PendingCommandPlan = {
   plan: CommandPlan
   previews: Record<string, EditPreview>
+  editor?: CommandPlanEditor
 }
 
 type PendingChatAction =
@@ -818,6 +821,8 @@ type WorkspaceNoticeTone = 'info' | 'error'
 type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone; action?: { label: string; onRun: () => void } }
 
 const CLOUD_GENERATION_CONSENT_KEY = 'videobook.cloud-generation-consent'
+
+const NO_ACTION_CHOICES: Record<string, readonly ActionChoice[]> = {}
 
 const ROUTED_PREVIEW_TOOLS: ReadonlySet<string> = new Set(['change_video_speed', 'splice_video'])
 
@@ -1332,6 +1337,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [actionSheet, setActionSheet] = useState<WorkspaceActionSheetState | null>(null)
   const actionCatalogRequestRef = useRef(0)
   const actionReviewRequestRef = useRef(0)
+  const planEditorRequestRef = useRef(0)
   const transcribeEstimateRequestRef = useRef(0)
   const [actionDiscovery, setActionDiscovery] = useState<(ComposerActionDiscovery & { bookId: string; session: string }) | null>(null)
   const [actionComposer, setActionComposer] = useState<{ bookId: string; session: string; opener: HTMLElement | null } | null>(null)
@@ -6257,6 +6263,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const previewCommandPlan = async (
     plan: CommandPlan,
     chat?: ChatExecution,
+    editor?: CommandPlanEditor,
   ): Promise<ComposerOutcome> => {
     try {
       const editStages = plan.stages.filter(
@@ -6271,7 +6278,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ] as const))
       const previews = Object.fromEntries(previewEntries)
       reviewChat(chat, false, () => setPendingChatAction(null))
-      reviewChat(chat, true, () => setPendingCommandPlan({ plan, previews }))
+      reviewChat(chat, true, () => setPendingCommandPlan({ plan, previews, editor }))
       const conflictCount = Object.values(previews)
         .reduce((count, preview) => count + preview.conflicts.length, 0)
       return conflictCount > 0
@@ -6314,6 +6321,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     request: Record<string, unknown> | Record<string, unknown>[],
     sourceSurface: 'ui' | 'slash' | 'chat',
     chat?: ChatExecution,
+    editor?: CommandPlanEditor,
   ): Promise<ComposerOutcome> => {
     if (!bookId) return { ok: false, message: 'Load or create a book first.' }
     try {
@@ -6323,13 +6331,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         actor: 'videobook-user',
         edits: Array.isArray(request) ? request : [request],
       }, { chat }))
-      return await previewCommandPlan(plan, chat)
+      return await previewCommandPlan(plan, chat, editor)
     } catch (error) {
       return {
         ok: false,
         message: error instanceof Error ? error.message : String(error),
       }
     }
+  }
+
+  const replanCommandPlan = async (name: string, value: unknown) => {
+    const editor = pendingCommandPlan?.editor
+    const schema = editor ? commandPlanEditorSchema(editor, workspaceActions.find((entry) => entry.command === editor.command)) : null
+    if (!editor || !schema) return
+    const next: CommandPlanEditor = { ...editor, values: { ...editor.values, [name]: value }, error: undefined }
+    setPendingCommandPlan((current) => current && { ...current, editor: next })
+    const request = ++planEditorRequestRef.current
+    const outcome = await executeCommand(commandPlanEditorInput(next, schema))
+    if (request !== planEditorRequestRef.current || outcome.ok) return
+    setPendingCommandPlan((current) => current?.editor ? { ...current, editor: { ...current.editor, error: outcome.message } } : current)
   }
 
   const applyPendingCommandPlan = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
@@ -9329,7 +9349,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       if (sequenceSlash.handled) {
         if (!sequenceSlash.ok) return sequenceSlash
-        return await prepareSequenceEdit(sequenceSlash.request, 'slash', chat)
+        const params = selectCommandForInput(commands, commandToken, rest)?.params ?? []
+        return await prepareSequenceEdit(sequenceSlash.request, 'slash', chat, commandPlanEditor(commandToken, params, restParts))
       }
       if (commandToken === '/extract-audio') {
         if (!notebook || restParts.length !== 1) {
@@ -9437,7 +9458,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             : []
           return { ok: false, message: errors.join(' · ') || 'Export validation failed' }
         }
-        return await previewCommandPlan(asCommandPlan(value), chat)
+        return await previewCommandPlan(asCommandPlan(value), chat, commandPlanEditor('/export', [], restParts))
       }
       const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
@@ -10939,6 +10960,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (pendingCommandPlan) {
       const plan = pendingCommandPlan.plan
+      const planEditorSchema = pendingCommandPlan.editor
+        ? commandPlanEditorSchema(pendingCommandPlan.editor, workspaceActions.find((action) => action.command === pendingCommandPlan.editor?.command))
+        : null
       const previews = Object.values(pendingCommandPlan.previews)
       const warningCount = previews.reduce(
         (count, preview) => count + preview.warnings.length,
@@ -10975,6 +10999,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               )
             : null}
         >
+          {planEditorSchema && pendingCommandPlan.editor && (
+            <CommandPlanEditorFields
+              schema={planEditorSchema}
+              busy={busy}
+              choices={NO_ACTION_CHOICES}
+              error={pendingCommandPlan.editor.error}
+              values={pendingCommandPlan.editor.values}
+              onChange={(name, value) => void replanCommandPlan(name, value)}
+            />
+          )}
           <CommandPlanBody
             busy={busy}
             plan={plan}

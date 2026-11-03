@@ -7542,6 +7542,15 @@ textarea:focus-visible {
   align-items: start;
 }
 
+.confirm-plan-editor {
+  margin-bottom: 8px;
+}
+
+.confirm-plan-editor-error {
+  margin: 0;
+  color: var(--danger, #e07a6b);
+}
+
 .confirm-plan-context {
   display: grid;
   gap: 12px;
