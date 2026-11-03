@@ -1088,7 +1088,7 @@ function mediaOptions(model: ResolvedModel, cell: NotebookCell): Record<string, 
     names.has(name) && value !== undefined && value !== ""));
 }
 
-function mediaGenerationArgs(
+export function mediaGenerationArgs(
   model: ResolvedModel,
   document: NotebookDocument,
   cell: NotebookCell,

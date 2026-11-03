@@ -30,6 +30,7 @@
     "check:client-bundle": "tsx scripts/check-client-bundle-size.ts",
     "check:dead-code": "knip --include files,exports,types,dependencies,devDependencies,optionalPeerDependencies,unlisted,unresolved,binaries",
     "docs:commands": "tsx scripts/generate-command-docs.ts",
+    "test:goldens:update": "tsx scripts/generate-generation-input-goldens.ts",
     "seed:dancing": "tsx scripts/seed-dancing.ts",
     "seed:multyculty": "tsx scripts/seed-multyculty.ts",
     "benchmark:search": "tsx scripts/run-search-benchmark.ts",
