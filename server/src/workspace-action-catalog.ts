@@ -50,6 +50,10 @@ export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason:
     actionId: "tool.chat",
     reason: "Records text entered through the composer and generation editors; browsing history is a separate action.",
   },
+  set_notebook_cell_inputs: {
+    actionId: "tool.set_notebook_cell_input",
+    reason: "The generation editor writes a cell's whole input layout when inputs are dragged between slots, reordered or removed.",
+  },
   check_duplicate_bytes: {
     actionId: "command.upload",
     reason: "Checks existing immutable bytes during Import before uploading a file.",

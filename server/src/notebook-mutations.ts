@@ -38,3 +38,19 @@ export async function mutateNotebook(
     });
   });
 }
+
+export async function mutateNotebookIfChanged(
+  engine: Engine,
+  notebookId: string,
+  operation: string,
+  mutate: (notebook: NotebookDocument) => NotebookDocument | null,
+  details: Record<string, unknown> = {},
+): Promise<NotebookMutationResult | { ok: true; value: null }> {
+  return await withNotebookMutation(notebookId, async () => {
+    const read = engine.notebooks.read(notebookId);
+    if (!read.ok) return read;
+    const next = mutate(normalizeLegacyExtractCells(read.value));
+    if (next === null) return { ok: true as const, value: null };
+    return await engine.notebooks.write(pruneInputParams(next), { operation, details });
+  });
+}

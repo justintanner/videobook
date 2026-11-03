@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (211)
+## MCP endpoints (212)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -191,6 +191,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_har_capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.
 - `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
+- `set_notebook_cell_inputs` — Replace every media input of a generation cell in one step. Each input names its source cell, the port it fills (image, image_2, first_frame, last_frame, loop, keyframe, keyframe_2, video, audio, replace_audio, ...) and optional per-item params such as {timestamp_s: 4.7}. Unchanged connections keep their ids, moved inputs keep their params and prompt tokens, and non-media edges such as prompt inputs are left alone
 - `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
 - `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.

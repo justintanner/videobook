@@ -139,6 +139,19 @@ describe('notebook graph endpoints over HTTP MCP', () => {
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
   })
 
+  it('allows only one concurrent set_notebook_cell_inputs at the same revision', async () => {
+    const images = [await create('image', 2, 0, 'Blue yarn still'), await create('image', 3, 0, 'Ginger cat still')]
+    const expected_revision = (await graph()).revision
+    const results = await Promise.allSettled(images.map((cell) => call('set_notebook_cell_inputs', {
+      cell_id: generated.id, inputs: [{ source_cell_id: cell.id, target_input: 'image' }], expected_revision,
+    })))
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+    const edges = (await graph()).edges.filter((edge) => edge.target === generated.id)
+    expect(edges).toHaveLength(1)
+    expect(images.map((cell) => cell.id)).toContain(edges[0]!.source)
+  })
+
   it('preserves concurrently added cells when relayout runs', async () => {
     await call('move_notebook_cells', { slots: [{ id: first.id, row: 10, column: 6 }, { id: second.id, row: 20, column: 6 }, { id: generated.id, row: 15, column: 6 }] })
     const results = await Promise.all([

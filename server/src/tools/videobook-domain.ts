@@ -28,7 +28,16 @@ import {
   ensureGenerateAudioOutput,
   normalizeLegacyExtractCells,
 } from "../notebook-cell-outputs.js";
-import { mutateNotebook, withNotebookMutation } from "../notebook-mutations.js";
+import { mutateNotebook, mutateNotebookIfChanged, withNotebookMutation } from "../notebook-mutations.js";
+import {
+  cellInputItemsError,
+  cellInputLayoutChanged,
+  cellMediaEdges,
+  planCellInputLayout,
+  remapPromptForLayout,
+  type CellInputItem,
+  type CellInputLayout,
+} from "../notebook-cell-inputs.js";
 import { cellInputParams, withInputParams } from "../generation-input-params.js";
 import type { NotebookRunAccepted } from "../notebook-run-enqueue.js";
 import { enqueueNotebookRun } from "../notebook-run-enqueue.js";
@@ -42,6 +51,8 @@ import {
   notebookCellIsRunnable,
   notebookCellMediaType,
   markNotebookCellQueued,
+  notebookCellInputPorts,
+  notebookCellModel,
   prepareNotebookGeneration,
 } from "../jobs/run-notebook.js";
 import {
@@ -83,6 +94,7 @@ import {
   planSelectedNotebookSubgraph,
 } from "../notebook-run-plan.js";
 import {
+  followsInitialGenerationPrompt,
   reconcileInitialGenerationPrompt,
   refreshInitialGenerationPrompts,
   seedInitialGenerationPrompt,
@@ -841,6 +853,73 @@ function refreshGenerationInputPrompt(
     ...seeded,
     cells: seeded.cells.map((cell) => cell.id === cellId ? { ...cell, prompt } : cell),
   };
+}
+
+function withCellInputLayout(document: NotebookDocument, cellId: string, layout: CellInputLayout): NotebookDocument {
+  return {
+    ...document,
+    cells: document.cells.map((cell) => {
+      if (cell.id !== cellId) return cell;
+      const raw = cell.inputs?.generationSettings;
+      const settings = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+      const inputs = settings
+        ? { ...cell.inputs, generationSettings: Object.fromEntries(Object.entries(settings).filter(([name]) => !layout.convertedSettings.includes(name))) }
+        : { ...cell.inputs };
+      return { ...cell, inputs: withInputParams(inputs, layout.inputParams) };
+    }),
+  };
+}
+
+function refreshPromptForLayout(
+  previous: NotebookDocument,
+  next: NotebookDocument,
+  cellId: string,
+  identity: ReadonlyMap<string, string>,
+): NotebookDocument {
+  const before = previous.cells.find((cell) => cell.id === cellId);
+  if (!before?.prompt || followsInitialGenerationPrompt(before)) return seedInitialGenerationPrompt(next, cellId);
+  const prompt = remapPromptForLayout(before.prompt, previous, next, cellId, identity);
+  return prompt === before.prompt ? next : {
+    ...next,
+    cells: next.cells.map((cell) => cell.id === cellId ? { ...cell, prompt } : cell),
+  };
+}
+
+interface CellInputsUpdate {
+  document: NotebookDocument | null;
+  cell: NotebookCell;
+  layout: CellInputLayout;
+}
+
+function nextCellInputs(engine: Engine, notebook: NotebookDocument, cellId: string, items: readonly CellInputItem[]): CellInputsUpdate {
+  const cell = notebook.cells.find((candidate) => candidate.id === cellId);
+  if (!cell) throw new Error(`Cell not found: ${cellId}`);
+  if (cell.type !== "generate_image" && cell.type !== "generate_video" && cell.type !== "generate_audio") {
+    throw new Error(`${notebookGridTag(cell.slot)} is not a generation cell`);
+  }
+  const itemError = cellInputItemsError(notebook, cellId, items);
+  if (itemError) throw new Error(itemError);
+  const model = notebookCellModel(cell);
+  const oldEdges = cellMediaEdges(notebook, cellId);
+  const layout = planCellInputLayout({
+    document: notebook,
+    cell,
+    items,
+    model,
+    ports: model ? notebookCellInputPorts(model, notebook, cell) : {},
+    createEdge: (edge) => engine.notebooks.createEdge(edge),
+  });
+  if (!cellInputLayoutChanged(cell, oldEdges, layout)) return { document: null, cell, layout };
+  const oldIds = new Set(oldEdges.map((edge) => edge.id));
+  let next: NotebookDocument = { ...notebook, edges: notebook.edges.filter((edge) => !oldIds.has(edge.id)) };
+  for (const edge of layout.edges) {
+    next = prepareNotebookConnection(engine, next, edge.source, cellId, edge.targetInput);
+    next = { ...next, edges: [...next.edges, edge] };
+  }
+  next = { ...next, edges: [...next.edges].sort((left, right) => left.id.localeCompare(right.id)) };
+  next = refreshPromptForLayout(notebook, withCellInputLayout(next, cellId, layout), cellId, layout.identity);
+  next = markCellAndDescendantsStale(next, cellId);
+  return { document: next, cell: next.cells.find((candidate) => candidate.id === cellId)!, layout };
 }
 
 export function videobookDomainDefs(
@@ -1979,6 +2058,64 @@ export function videobookDomainDefs(
                 revision: result.value.hash,
               })
             : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
+      },
+    },
+    {
+      name: "set_notebook_cell_inputs",
+      description:
+        "Replace every media input of a generation cell in one step. Each input names its source cell, the port it fills (image, image_2, first_frame, last_frame, loop, keyframe, keyframe_2, video, audio, replace_audio, ...) and optional per-item params such as {timestamp_s: 4.7}. Unchanged connections keep their ids, moved inputs keep their params and prompt tokens, and non-media edges such as prompt inputs are left alone",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+        inputs: z.array(z.object({
+          source_cell_id: z.string().uuid(),
+          target_input: z.string().min(1),
+          params: z.record(z.string(), z.number()).optional(),
+        })).max(64),
+        expected_revision: z.string().min(1).optional(),
+      },
+      handler: async (args) => {
+        if (typeof args.expected_revision === "string" && args.expected_revision !== engine.head) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
+        const cellId = String(args.cell_id);
+        const items = (args.inputs as Array<{ source_cell_id: string; target_input: string; params?: Record<string, number> }>)
+          .map((item): CellInputItem => ({
+            sourceCellId: item.source_cell_id,
+            targetInput: item.target_input,
+            ...(item.params ? { params: item.params } : {}),
+          }));
+        let update: CellInputsUpdate | null = null;
+        try {
+          const result = await mutateNotebookIfChanged(
+            engine,
+            String(args.notebook_id),
+            "set_notebook_cell_inputs",
+            (notebook) => {
+              if (typeof args.expected_revision === "string" && args.expected_revision !== engine.head) {
+                throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
+              }
+              update = nextCellInputs(engine, notebook, cellId, items);
+              return update.document;
+            },
+            { cellId, inputCount: items.length },
+          );
+          if (!result.ok) return failure(result.error.message);
+          const done = update as CellInputsUpdate | null;
+          if (!done) return failure(`Cell not found: ${cellId}`);
+          return json({
+            cell_id: cellId,
+            changed: result.value !== null,
+            revision: engine.head,
+            inputs: done.layout.edges.map((edge) => ({ edge_id: edge.id, source_cell_id: edge.source, target_input: edge.targetInput })),
+            input_params: done.layout.inputParams,
+            prompt: done.cell.prompt ?? "",
+          });
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));
         }

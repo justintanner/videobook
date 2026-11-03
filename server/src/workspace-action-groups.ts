@@ -12,7 +12,7 @@ export const WORKSPACE_TOOL_GROUPS: Readonly<Record<ActionGroup, readonly string
     "rename_notebook", "delete_notebook", "create_notebook_cell",
     "update_notebook_cell", "relayout_notebook", "move_notebook_cells",
     "delete_notebook_cell", "connect_notebook_cells", "disconnect_notebook_cells",
-    "set_notebook_cell_input", "preview_notebook_generation", "run_notebook_cell",
+    "set_notebook_cell_input", "set_notebook_cell_inputs", "preview_notebook_generation", "run_notebook_cell",
     "run_notebook", "set_notebook_media_slot", "attach_library_asset",
     "plan_notebook_generation", "list_notebook_generation_plans", "plan_notebook_run",
     "plan_notebook_subgraph", "list_notebook_run_plans", "enqueue_notebook_run",

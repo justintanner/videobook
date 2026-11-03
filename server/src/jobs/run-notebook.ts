@@ -1088,6 +1088,15 @@ function mediaInputsFor(
   return { refs, ports };
 }
 
+export function notebookCellInputPorts(
+  model: ResolvedModel,
+  document: NotebookDocument,
+  cell: NotebookCell,
+): MediaInputPorts {
+  const upstream = upstreamValues(document, cell).map((entry) => ({ ...entry, output: entry.output ?? entry.cell.id }));
+  return mediaInputsFor(model, upstream, generationModeFor(model, document, cell, upstream)).ports;
+}
+
 function refParamsFor(model: ResolvedModel, cell: NotebookCell, ports: MediaInputPorts): RefParams {
   const stored = cellInputParams(cell);
   const params: Partial<Record<RefRole, Array<Record<string, number> | null>>> = {};

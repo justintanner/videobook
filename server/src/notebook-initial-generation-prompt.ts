@@ -209,17 +209,20 @@ export function resolvedInitialGenerationPrompt(
   return prompt || buildInitialGenerationPrompt(document, cell);
 }
 
+export function followsInitialGenerationPrompt(cell: NotebookCell): boolean {
+  const record = initialPromptRecord(cell);
+  const currentPrompt = cell.prompt?.trim() ?? "";
+  return !currentPrompt || (record !== null && currentPrompt === record.prompt.trim());
+}
+
 export function seedInitialGenerationPrompt(
   document: NotebookDocument,
   cellId: string,
 ): NotebookDocument {
   const target = document.cells.find((cell) => cell.id === cellId);
-  if (!target || !generationKind(target)) return document;
+  if (!target || !generationKind(target) || !followsInitialGenerationPrompt(target)) return document;
   const record = initialPromptRecord(target);
   const currentPrompt = target.prompt?.trim() ?? "";
-  if (currentPrompt && (!record || currentPrompt !== record.prompt.trim())) {
-    return document;
-  }
   const prompt = buildInitialGenerationPrompt(document, target);
   if (
     currentPrompt === prompt

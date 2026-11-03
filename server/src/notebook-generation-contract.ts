@@ -127,7 +127,7 @@ export function notebookGenerationInputContract(model: ResolvedModel): NotebookG
   };
 }
 
-function cellInputKind(cell: NotebookCell): NotebookGenerationInputKind | null {
+export function notebookGenerationInputKind(cell: Pick<NotebookCell, "type">): NotebookGenerationInputKind | null {
   if (
     cell.type === "image"
     || cell.type === "generate_image"
@@ -155,7 +155,7 @@ function connectedInputs(
   return document.edges.flatMap((edge) => {
     if (edge.target !== cell.id) return [];
     const source = cells.get(edge.source);
-    const kind = source ? cellInputKind(source) : null;
+    const kind = source ? notebookGenerationInputKind(source) : null;
     return kind
       ? [{ kind, target: generationInputTarget(kind, edge.targetInput) }]
       : [];
