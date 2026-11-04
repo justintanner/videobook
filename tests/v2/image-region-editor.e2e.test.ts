@@ -287,6 +287,88 @@ describe('drawn region image editor through real MCP', () => {
     }
   }, testBudget(60_000))
 
+  it('previews and submits promptless upscales while preserving drafts across model changes', async () => {
+    await pauseBookQueueForTests(bookId)
+    const book = books.get(bookId)
+    if (!book.ok) throw new Error(book.error.message)
+    const engine = book.value.engine
+    const read = engine.notebooks.read(notebookId)
+    if (!read.ok) throw new Error(read.error.message)
+    const original = read.value
+    const videoFile = join(rootDir, 'topaz-source.mp4')
+    const audioFile = join(rootDir, 'topaz-audio.wav')
+    await runFfmpeg(['-y', '-f', 'lavfi', '-i', 'color=s=320x180:r=24:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', videoFile])
+    await runFfmpeg(['-y', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono', '-t', '1', audioFile])
+    const video = await engine.artifacts.create('video', 'Topaz source')
+    const audio = await engine.artifacts.create('audio', 'Replacement audio')
+    if (!video.ok) throw new Error(video.error.message)
+    if (!audio.ok) throw new Error(audio.error.message)
+    expect((await engine.files.writeFromPath(video.value.artifactId, 'original.mp4', videoFile)).ok).toBe(true)
+    expect((await engine.files.writeFromPath(audio.value.artifactId, 'original.wav', audioFile)).ok).toBe(true)
+    const { width, height, duration } = await probeVideo(videoFile)
+    await engine.metadata.artifacts.write(video.value.artifactId, 'original', { width, height, duration, fps: 24, hasAudio: false })
+    await engine.metadata.artifacts.write(audio.value.artifactId, 'original', { duration: 1 })
+    const poster = await sharp({ create: { width: 160, height: 90, channels: 3, background: '#345a42' } }).jpeg().toBuffer()
+    await engine.files.write(video.value.artifactId, 'original.jpg', poster)
+    const source = engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 0 }, outputArtifactId: video.value.artifactId })
+    const replacement = engine.notebooks.createCell({ type: 'audio', slot: { row: 1, column: 2 }, outputArtifactId: audio.value.artifactId })
+    const legacyPrompt = 'Motion video @video1. Replacement audio. Match motion, timing. Render coherent video.'
+    const producer = engine.notebooks.createCell({
+      type: 'generate_video', slot: { row: 1, column: 1 }, provider: 'machgen', model: 'machgen:Topaz-Video-Precision',
+      operation: 'upscale_video', tool: 'generate_video', prompt: legacyPrompt,
+      inputs: { generationMode: 'default', generationSettings: { resolution: '1080p' }, initialGenerationPrompt: { version: 1, prompt: legacyPrompt } },
+    })
+    expect((await engine.notebooks.write({ ...original, cells: [...original.cells, source, producer, replacement], edges: [
+      ...original.edges,
+      engine.notebooks.createEdge({ source: source.id, target: producer.id, targetInput: 'video' }),
+      engine.notebooks.createEdge({ source: replacement.id, target: producer.id, targetInput: 'replace_audio' }),
+    ] })).ok).toBe(true)
+    const requests: ObservedToolCall[] = []
+    const observe = (request: Request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/mcp')) requests.push(...toolCalls(request.postDataJSON()))
+    }
+    page.on('request', observe)
+    try {
+      await page.reload()
+      await page.locator(`.react-flow__node[data-id="${producer.id}"] .cell-node`).click()
+      const inspector = page.locator('.inspector')
+      const model = inspector.getByLabel('Generation model')
+      const generate = inspector.getByRole('button', { name: /^Generate/ }).first()
+      const payload = inspector.getByLabel('Generation payload preview', { exact: true })
+      await expect.poll(() => payload.textContent()).toContain('"task_type": "UPSCALE"')
+      expect(await payload.textContent()).toContain('"prompt": ""')
+      expect(await inspector.getByText('This model uses the connected media and settings. No prompt is needed.').isVisible()).toBe(true)
+      expect(await inspector.locator('.generation-review-prompt-section').count()).toBe(0)
+      expect(await inspector.getByText('@video1', { exact: true }).count()).toBeGreaterThan(0)
+      expect(await inspector.getByText('Replacement audio', { exact: true }).count()).toBeGreaterThan(0)
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      await page.screenshot({ path: '/tmp/videobook-topaz-promptless.png' })
+      await model.selectOption('generation.fal:minimax/h3-max/reframe-video')
+      const prompt = inspector.locator('.generation-review-prompt-section textarea')
+      await prompt.fill('Preserve the painted houses and warm light')
+      await model.selectOption('generation.machgen:Topaz-Video-Precision')
+      await expect.poll(() => payload.textContent()).toContain('"task_type": "UPSCALE"')
+      expect(await payload.textContent()).toContain('"prompt": ""')
+      expect(await prompt.count()).toBe(0)
+      await model.selectOption('generation.fal:minimax/h3-max/reframe-video')
+      expect(await prompt.inputValue()).toBe('Preserve the painted houses and warm light')
+      await model.selectOption('generation.machgen:Topaz-Video-Precision')
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      await generate.click()
+      await expect.poll(() => requests.filter((request) => request.name === 'run_notebook_cell').length).toBe(1)
+      const saved = engine.notebooks.read(notebookId)
+      expect(saved.ok && saved.value.cells.find((cell) => cell.id === producer.id)?.model).toBe('machgen:Topaz-Video-Precision')
+      expect(saved.ok && saved.value.edges.filter((edge) => edge.target === producer.id).map((edge) => edge.targetInput).sort()).toEqual(['replace_audio', 'video'])
+    } finally {
+      page.off('request', observe)
+      await abortActiveBookJobsForTests()
+      expect((await engine.notebooks.write(original)).ok).toBe(true)
+      expect((await engine.artifacts.delete(video.value.artifactId)).ok).toBe(true)
+      expect((await engine.artifacts.delete(audio.value.artifactId)).ok).toBe(true)
+      await page.reload()
+    }
+  }, testBudget(60_000))
+
   it('retries only credit failures from the media tile without routing through chat', async () => {
     await pauseBookQueueForTests(bookId)
     const book = books.get(bookId)

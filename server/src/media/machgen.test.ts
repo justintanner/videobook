@@ -11,7 +11,9 @@ import type { Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests, waitForJob } from "../queue.js";
-import { runFfmpeg } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { prepareNotebookGeneration } from "../jobs/run-notebook.js";
+import { resolvedInitialGenerationPrompt, seedInitialGenerationPrompt } from "../notebook-initial-generation-prompt.js";
 import { pollPendingProviderTasks } from "../tools/reconcile-project-work.js";
 import { readProviderTaskStatus } from "../provider-task-status.js";
 import { MODEL_ENTRIES } from "./catalog.js";
@@ -560,6 +562,7 @@ describe("MachGen provider tasks", () => {
   const UPSCALE_TASK_ID = "a7b3c9d1-0000-4000-8000-000000000002";
   let fixtures: string;
   let mp4: Buffer;
+  let wav: Buffer;
   let png: Buffer;
   let jpeg: Buffer;
   let asset: Buffer;
@@ -594,9 +597,11 @@ describe("MachGen provider tasks", () => {
   beforeAll(async () => {
     fixtures = await mkdtemp(join(tmpdir(), "videobook-machgen-fixtures-"));
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", join(fixtures, "clip.mp4")]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", "1", join(fixtures, "audio.wav")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-frames:v", "1", join(fixtures, "still.png")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-frames:v", "1", join(fixtures, "still.jpg")]);
     mp4 = await readFile(join(fixtures, "clip.mp4"));
+    wav = await readFile(join(fixtures, "audio.wav"));
     png = await readFile(join(fixtures, "still.png"));
     jpeg = await readFile(join(fixtures, "still.jpg"));
     server = createServer((incoming, response) => {
@@ -904,6 +909,62 @@ describe("MachGen provider tasks", () => {
       src_video_urls: [expect.any(String)],
       upscale_config: { engine: "starlight-sharp" },
     });
+  });
+
+  it("prepares promptless notebook upscales with replacement audio despite blank, inherited or saved prompts", async () => {
+    const bookId = engine.book.get().bookId;
+    const sourceId = await seededVideo(null);
+    const metadata = await probeVideo(join(fixtures, "clip.mp4"));
+    await engine.metadata.artifacts.write(sourceId, "original", metadata);
+    const audio = await engine.artifacts.create("audio", "replacement");
+    if (!audio.ok) throw new Error(audio.error.message);
+    expect((await engine.files.write(audio.value.artifactId, "original.wav", wav)).ok).toBe(true);
+    const created = await engine.notebooks.create("Promptless");
+    if (!created.ok) throw new Error(created.error.message);
+    const source = engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 0 }, outputArtifactId: sourceId });
+    const replacement = engine.notebooks.createCell({ type: "audio", slot: { row: 0, column: 1 }, outputArtifactId: audio.value.artifactId });
+    const upstream = engine.notebooks.createCell({ type: "prompt", slot: { row: 0, column: 2 }, prompt: "Old upstream instruction @image9" });
+    const legacyPrompt = "Motion video @video1. Replacement audio. Match motion, timing. Sync action, timing. Render coherent video.";
+    const generation = engine.notebooks.createCell({
+      type: "generate_video", slot: { row: 1, column: 0 }, prompt: legacyPrompt,
+      model: "machgen:Topaz-Video-Precision", provider: "machgen", operation: "upscale_video", tool: "generate_video",
+      inputs: { generationSettings: { resolution: "1080p" }, initialGenerationPrompt: { prompt: legacyPrompt, version: 1 } },
+    });
+    const document = {
+      ...created.value, cells: [source, replacement, upstream, generation], edges: [
+        engine.notebooks.createEdge({ source: source.id, target: generation.id, targetInput: "video" }),
+        engine.notebooks.createEdge({ source: replacement.id, target: generation.id, targetInput: "replace_audio" }),
+        engine.notebooks.createEdge({ source: upstream.id, target: generation.id, targetInput: "prompt" }),
+      ],
+    };
+    expect(seedInitialGenerationPrompt(document, generation.id).cells.find((cell) => cell.id === generation.id)?.prompt).toBe("");
+    for (const prompt of ["", legacyPrompt, "My custom edit @image9"]) {
+      const cell = { ...generation, prompt };
+      const draft = { ...document, cells: document.cells.map((candidate) => candidate.id === cell.id ? cell : candidate) };
+      expect(resolvedInitialGenerationPrompt(draft, cell)).toBe("");
+      const prepared = await prepareNotebookGeneration(engine, draft, cell, bookId);
+      expect(prepared.input).not.toHaveProperty("prompt");
+      expect(prepared.input).toMatchObject({ refs: { video: [sourceId] }, replace_audio_with: audio.value.artifactId });
+      expect(prepared.mentions.unresolved).toEqual([]);
+      if (prompt.startsWith("My custom")) {
+        expect(seedInitialGenerationPrompt(draft, cell.id)).toBe(draft);
+        const switched = { ...cell, provider: "fal", model: "fal:minimax/h3-max/reframe-video", operation: "edit_video" };
+        expect(resolvedInitialGenerationPrompt(draft, switched)).toBe(prompt);
+      }
+    }
+    expect((await engine.notebooks.write(document)).ok).toBe(true);
+    const preview = await client.callTool({ name: "preview_notebook_generation", arguments: { book_id: bookId, notebook_id: document.id, cell_id: generation.id } });
+    expect(preview.isError, toolText(preview)).toBeFalsy();
+    expect(JSON.parse(toolText(preview)).payload).toMatchObject({
+      model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
+      video_config: { height: 1080, duration_secs: 1 }, src_video_urls: [expect.any(String)],
+    });
+    const plan = await client.callTool({ name: "plan_notebook_generation", arguments: { book_id: bookId, notebook_id: document.id, cell_id: generation.id, timeline_start_frame: 0, source_surface: "ui", actor: "user" } });
+    expect(plan.isError, toolText(plan)).toBeFalsy();
+    const direct = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, model: generation.model, prompt: "Unsupported instruction", refs: { video: [sourceId] } } });
+    expect(direct.isError).toBe(true);
+    expect(toolText(direct)).toContain("takes no prompt");
+    expect(recorded).toEqual([]);
   });
 
   it("refuses a Topaz upscale of a URL or a video without a known length before any MachGen call", async () => {

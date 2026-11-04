@@ -405,6 +405,7 @@ export function GenerationBody({
         {insertVideo && <InsertVideoEditor sources={sources} settings={settings} controls={draft.action.controls} busy={busy} onChange={onSettingChange} />}
 
         <section className="generation-review-settings-section" aria-label="Settings">
+          {draft.action.prompt === null && <p className="muted">This model uses the connected media and settings. No prompt is needed.</p>}
           {seedanceEdit && <p className="muted">{SEEDANCE_EDIT_DESCRIPTION}</p>}
           {isH3ReframeModel(draft.action.model) && <p className="muted">{H3_REFRAME_DESCRIPTION}</p>}
           {frameAspectRatio && <p className="muted">{FRAME_ASPECT_DESCRIPTION}</p>}
@@ -486,7 +487,7 @@ export function GenerationBody({
           </section>
         )}
 
-        <section className="generation-review-prompt-section" aria-label="Prompt">
+        {draft.action.prompt !== null && <section className="generation-review-prompt-section" aria-label="Prompt">
           {promptEditor ?? <div className="generation-review-prompt-field">
             <div className="confirm-section-heading">
               <span>Prompt</span>
@@ -519,7 +520,7 @@ export function GenerationBody({
               ))}
             </div>
           )}
-        </section>
+        </section>}
       </div>
 
       {sourceVisible && (

@@ -1107,7 +1107,7 @@ export function mediaGenerationArgs(
     engine,
     document,
     cell: generationCell,
-    prompt: promptFor(document, generationCell),
+    prompt: model.promptField === null ? "" : promptFor(document, generationCell),
   });
   const replacementAudio = upstream.find((entry) =>
     entry.targetInput === "replace_audio" && typeof entry.output === "string");

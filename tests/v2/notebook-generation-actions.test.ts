@@ -15,6 +15,7 @@ import {
   generationInputKind,
   generationInputAttachments,
   generationModeLabel,
+  generationRequiresPrompt,
   generationSelectionForAction,
   initialGenerationMode,
   initialGenerationSelection,
@@ -254,6 +255,20 @@ const emptyImageCell: NotebookCell = {
 }
 
 describe('notebook generation actions', () => {
+  it('carries required, optional and unsupported prompt capabilities into the client', () => {
+    const catalog = asNotebookGenerationActions({ actions: listNotebookActions() })
+    const promptless = catalog.find((action) => action.model === 'machgen:Topaz-Video-Precision')!
+    const optional = catalog.find((action) => action.model === 'fal:minimax/h3-max/reframe-video')!
+    const required = catalog.find((action) => action.model === 'machgen:MiniMax-H3')!
+    expect(promptless.prompt).toBeNull()
+    expect(generationRequiresPrompt(promptless)).toBe(false)
+    expect(optional.prompt).toMatchObject({ field: 'prompt', required: false })
+    expect(generationRequiresPrompt(optional)).toBe(false)
+    expect(required.prompt).toMatchObject({ field: 'prompt', required: true })
+    expect(generationRequiresPrompt(required)).toBe(true)
+    expect(generationRequiresPrompt(actions[0]!)).toBe(true)
+  })
+
   it('parses the generation picker contract and ignores other actions', () => {
     expect(asNotebookGenerationActions({
       actions: [

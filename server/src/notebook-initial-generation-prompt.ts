@@ -2,6 +2,7 @@ import type { NotebookCell, NotebookDocument } from "videobook-engine";
 import { NOTEBOOK_GRID_ADDRESS_SOURCE } from "videobook-engine/notebook-mentions";
 import { generationInputMentions } from "./generation-input-mentions.js";
 import { generationInputTarget, generationInputTokenPattern } from "./generation-input-targets.js";
+import { tryResolveModel } from "./media/descriptor.js";
 
 const INITIAL_PROMPT_KEY = "initialGenerationPrompt";
 const INITIAL_PROMPT_VERSION = 1;
@@ -21,6 +22,11 @@ type PromptInput = {
   kind: MediaKind;
   targetInput: string;
 };
+
+function acceptsPrompt(cell: NotebookCell): boolean {
+  if (!cell.model || cell.tool === "edit_image_subjects") return true;
+  return tryResolveModel(cell.model)?.promptField !== null;
+}
 
 function generationKind(cell: NotebookCell): GenerationKind | null {
   if (cell.type === "generate_image") return "image";
@@ -168,6 +174,7 @@ function buildInitialGenerationPrompt(
   document: NotebookDocument,
   cell: NotebookCell,
 ): string {
+  if (!acceptsPrompt(cell)) return "";
   const kind = generationKind(cell);
   if (!kind) return cell.prompt?.trim() ?? "";
   const inputs = promptInputs(document, cell);
@@ -201,6 +208,7 @@ export function resolvedInitialGenerationPrompt(
   document: NotebookDocument,
   cell: NotebookCell,
 ): string {
+  if (!acceptsPrompt(cell)) return "";
   const prompt = cell.prompt?.trim() ?? "";
   const record = initialPromptRecord(cell);
   if (record && prompt === record.prompt.trim()) {

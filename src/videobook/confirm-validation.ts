@@ -85,6 +85,7 @@ export function watermarkValidation(input: WatermarkValidationInput): ConfirmVal
 
 interface GenerationValidationInput {
   prompt: string | null | undefined
+  promptRequired?: boolean
   previewLoading: boolean
   previewError: string | null
   settingsError?: string | null
@@ -94,7 +95,7 @@ interface GenerationValidationInput {
 }
 
 export function generationValidation(input: GenerationValidationInput): ConfirmValidation {
-  if (!input.prompt?.trim()) {
+  if (input.promptRequired !== false && !input.prompt?.trim()) {
     return blocking('Write a prompt before applying.')
   }
   if (input.settingsError) return blocking(input.settingsError)

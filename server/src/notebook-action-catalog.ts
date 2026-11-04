@@ -63,6 +63,7 @@ interface NotebookAction {
   defaultPriority?: number;
   inputContract?: NotebookGenerationInputContract;
   controls?: NotebookGenerationControl[];
+  prompt?: { field: string; required: boolean } | null;
   existingCellOnly?: boolean;
   available?: boolean;
   frontier?: readonly ModelFrontierRanking[];
@@ -366,6 +367,7 @@ function generationAction(model: ResolvedModel): NotebookAction {
     ...(DEFAULT_MODELS.has(model.id) ? { defaultPriority: 0, isDefault: true } : {}),
     inputContract: notebookGenerationInputContract(model),
     controls: controlsForModel(model),
+    prompt: model.promptField ? { field: model.promptField, required: model.promptRequired } : null,
     available: Boolean(process.env[PROVIDER_ENV_KEYS[model.provider]]?.trim()),
     frontier: modelFrontierRankings(model.id),
   };

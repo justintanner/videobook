@@ -310,6 +310,7 @@ import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
   compatibleGenerationModes,
+  generationRequiresPrompt,
   type GenerationControlValue,
   type GenerationPreviewDraft,
   type NotebookGenerationAction,
@@ -7839,7 +7840,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       : action
     const retryInput = promptOverride ? `/apply ${promptOverride}` : '/apply '
-    if (!preparedAction.draft.cell.prompt?.trim()) {
+    if (generationRequiresPrompt(preparedAction.draft.action) && !preparedAction.draft.cell.prompt?.trim()) {
       return {
         ok: false,
         message: 'Enter a generation prompt before applying.',
@@ -10332,6 +10333,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           effect={{ label: 'Queues 1 job · new cell', tone: 'default' }}
           validation={generationValidation({
             prompt: action.draft.cell.prompt,
+            promptRequired: generationRequiresPrompt(action.draft.action),
             previewLoading: action.previewLoading,
             previewError: action.previewError,
             settingsError: insertVideoReviewError(action.draft.action.model, notebookChatGenerationSettings(action.draft), pendingGenerationSources),

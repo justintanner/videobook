@@ -94,9 +94,14 @@ export type NotebookGenerationAction = {
   defaultPriority: number | null
   inputContract: GenerationInputContract
   controls: GenerationControl[]
+  prompt?: { field: string; required: boolean } | null
   available?: boolean
   frontier?: readonly ModelFrontierRanking[]
   existingCellOnly?: boolean
+}
+
+export function generationRequiresPrompt(action: NotebookGenerationAction): boolean {
+  return action.prompt === null ? false : action.prompt?.required ?? true
 }
 
 export function effectiveGenerationControlValue(
@@ -336,6 +341,8 @@ export function asNotebookGenerationActions(
       return []
     }
     const priority = finiteNumber(action.defaultPriority)
+    const prompt = recordValue(action.prompt)
+    const promptField = nonBlankStringValue(prompt?.field)
     return [{
       id: nonBlankStringValue(action.id) ?? `generation.${tool}`,
       cellTypes,
@@ -349,6 +356,8 @@ export function asNotebookGenerationActions(
       defaultPriority: priority,
       inputContract: contract,
       controls,
+      ...(action.prompt === null ? { prompt: null }
+        : promptField ? { prompt: { field: promptField, required: prompt?.required === true } } : {}),
       ...(typeof action.available === 'boolean' ? { available: action.available } : {}),
       ...(Array.isArray(action.frontier) ? { frontier: parseFrontierRankings(action.frontier) } : {}),
       ...(action.existingCellOnly === true ? { existingCellOnly: true } : {}),

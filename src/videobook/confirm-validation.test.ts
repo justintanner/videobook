@@ -95,6 +95,13 @@ describe('generation validation', () => {
     expect(validation.notice).toBeNull()
   })
 
+  it('accepts models without a required prompt while preserving preview validation', () => {
+    expect(generationValidation({ ...base, prompt: '', promptRequired: false })).toEqual(VALID_CONFIRMATION)
+    expect(generationValidation({ ...base, prompt: '', promptRequired: false, previewError: 'Missing source video' }).blocking)
+      .toBe('Preview failed — Missing source video')
+    expect(generationValidation({ ...base, prompt: '', promptRequired: true }).blocking).toBe('Write a prompt before applying.')
+  })
+
   it('mentions an unknown estimate without blocking', () => {
     expect(generationValidation({ ...base, estimateUnknown: true })).toEqual({
       blocking: null,
