@@ -17,6 +17,8 @@ import { trimVideoDef } from "./trim-video.js";
 const execFileAsync = promisify(execFile);
 const SOURCE_SECONDS = 5;
 const LONG_AUDIO_FRAMES = 550;
+const AUDIO_END_TOLERANCE_SECONDS = 0.0005;
+const MOVIE_HEADER_TICK_SECONDS = 0.001;
 
 function resultValue(result: ToolResult): Record<string, unknown> {
   if (result.isError) throw new Error(result.content[0]?.text ?? "Tool failed");
@@ -60,6 +62,12 @@ async function generateLongAudioSource(path: string): Promise<void> {
 
 function videoFrames(probe: ProbeResult): number {
   return Math.round(probe.videoDuration * probe.fps);
+}
+
+function expectAudioToStopWithVideo(probe: ProbeResult): void {
+  expect(probe.audioDuration).not.toBeNull();
+  expect(probe.audioDuration!).toBeLessThanOrEqual(probe.videoDuration + AUDIO_END_TOLERANCE_SECONDS);
+  expect(probe.duration).toBeLessThanOrEqual(probe.videoDuration + MOVIE_HEADER_TICK_SECONDS);
 }
 
 describe("trim_video and split_video", () => {
@@ -240,8 +248,7 @@ describe("trim_video and split_video", () => {
     expect(videoFrames(probe)).toBe(450);
     expect(probe.videoDuration).toBeCloseTo(15, 5);
     expect(probe.duration).toBeCloseTo(15, 5);
-    expect(probe.audioDuration).not.toBeNull();
-    expect(probe.audioDuration!).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+    expectAudioToStopWithVideo(probe);
   }, testBudget(120_000));
 
   it("keeps every frame through the end when the head is trimmed in place", async () => {
@@ -253,7 +260,7 @@ describe("trim_video and split_video", () => {
     }));
     const probe = await artifactProbe(sourceArtifactId);
     expect(videoFrames(probe)).toBe(LONG_AUDIO_FRAMES - 90);
-    expect(probe.duration).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+    expectAudioToStopWithVideo(probe);
   }, testBudget(120_000));
 
   it("keeps the source frame rate when several ranges are removed in place", async () => {
@@ -266,7 +273,7 @@ describe("trim_video and split_video", () => {
     const probe = await artifactProbe(sourceArtifactId);
     expect(probe.fps).toBe(30);
     expect(videoFrames(probe)).toBe(LONG_AUDIO_FRAMES - 30 - 75);
-    expect(probe.duration).toBeLessThanOrEqual(probe.videoDuration + 0.0005);
+    expectAudioToStopWithVideo(probe);
   }, testBudget(120_000));
 
   it("finishes a keep trim queued without an end by an earlier release", async () => {
