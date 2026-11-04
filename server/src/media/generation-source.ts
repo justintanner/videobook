@@ -77,7 +77,7 @@ async function resolveMachGenUpscale(engine: Engine, model: ResolvedModel, upsca
   };
 }
 
-async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
+async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown>): Promise<GenerationSource> {
   const raws = refs.video ?? [];
   if (raws.length !== 1) return refused(`${model.title} upscales one connected video`);
   const raw = raws[0]!;
@@ -86,17 +86,35 @@ async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: M
   if (typeof assetId !== "string") return assetId;
   const seconds = await referenceVideoDuration(engine, [assetId]);
   if (seconds === undefined) return refused(`${raw} has no known duration yet; wait for it to finish`);
+  const pending = engine.jobs.pending.read(assetId);
+  if (pending.ok && pending.value) return refused(`${raw} is still generating; wait for it to finish`);
+  const output = await machgenOutput(engine, assetId);
+  if (!output) return refused(`${model.title} needs a completed MachGen video from this book; use Topaz Video Precision via fal for other videos`);
+  const metadata = await engine.metadata.artifacts.read<{ width?: number; height?: number; download_url_content_hash?: string }>(assetId, "original");
+  const originalHash = metadata.ok ? metadata.value.download_url_content_hash : undefined;
+  if (originalHash) {
+    const input = await resolveRefInput(engine, "video", raw);
+    const manifest = await engine.files.manifest(assetId);
+    const currentHash = manifest.ok ? manifest.value.files.find((file) => file.name === input.filename)?.objectHash : undefined;
+    if (currentHash !== originalHash) return refused(`${raw} has changed since MachGen generated it; use Topaz Video Precision via fal to upscale the edited video`);
+  }
+  const { width, height } = metadata.ok ? metadata.value : {};
+  const resolution = options.resolution ?? model.entry.defaults?.resolution ?? "2160p";
+  const target = typeof resolution === "string" ? Number(/^(\d+)p$/u.exec(resolution)?.[1]) : NaN;
+  if (typeof width === "number" && typeof height === "number" && width > 0 && height > 0 && target <= Math.min(width, height)) {
+    return refused(`${model.title} target ${resolution} must exceed the source video's ${Math.min(width, height)}p short edge (${width}×${height})`);
+  }
   return {
     ok: true,
-    refs,
-    sourceVideoIds: [],
+    refs: { ...refs, video: [machgenTaskUrl(output.taskId, Math.max(1, Math.ceil(seconds)))] },
+    sourceVideoIds: [assetId],
     costHints: { inputDurationSeconds: seconds, durationSeconds: seconds },
     options: { source_seconds: Math.max(1, Math.ceil(seconds)) },
   };
 }
 
-export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs): Promise<GenerationSource> {
-  if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs);
+export async function resolveGenerationSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown> = {}): Promise<GenerationSource> {
+  if (model.provider === "machgen" && machgenTopaz(model.apiId)) return resolveMachGenTopaz(engine, model, refs, options);
   const upscale = model.provider === "machgen" ? machgenUpscale(model.apiId) : null;
   if (!upscale) return { ok: true, refs, sourceVideoIds: [], costHints: {}, options: {} };
   return resolveMachGenUpscale(engine, model, upscale, refs);
@@ -108,7 +126,7 @@ export async function sourcedGenerationInput(
 ): Promise<{ ok: true; input: Record<string, unknown> } | { ok: false; error: string }> {
   const model = typeof input.model === "string" ? tryResolveModel(input.model.trim()) : null;
   if (!model || model.provider !== "machgen" || !(machgenUpscale(model.apiId) || machgenTopaz(model.apiId))) return { ok: true, input };
-  const source = await resolveGenerationSource(engine, model, normalizeRefs(input.refs));
+  const source = await resolveGenerationSource(engine, model, normalizeRefs(input.refs), record(input.options));
   if (!source.ok) return source;
   return { ok: true, input: { ...input, refs: source.refs, options: { ...record(input.options), ...source.options } } };
 }

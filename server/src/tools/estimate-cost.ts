@@ -87,7 +87,7 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   const sourceError = (await checkSeedanceEditSource(engine, model, refs, input.mode))
     ?? await checkReframeVideoGeometry(engine, model, refs, options);
   if (sourceError) return unavailable(sourceError);
-  const source = await resolveGenerationSource(engine, model, refs);
+  const source = await resolveGenerationSource(engine, model, refs, options);
   if (!source.ok) return unavailable(source.error);
   const hints = { ...await mediaHints(engine, refs, model), ...await seedanceDraftCostHints(engine, model.id, options), ...source.costHints };
   const result = await estimateGeneration(model, {

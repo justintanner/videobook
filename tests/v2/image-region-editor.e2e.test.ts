@@ -307,6 +307,8 @@ describe('drawn region image editor through real MCP', () => {
     expect((await engine.files.writeFromPath(audio.value.artifactId, 'original.wav', audioFile)).ok).toBe(true)
     const { width, height, duration } = await probeVideo(videoFile)
     await engine.metadata.artifacts.write(video.value.artifactId, 'original', { width, height, duration, fps: 24, hasAudio: false })
+    await engine.metadata.artifacts.write(video.value.artifactId, 'provider-task', { taskId: 'topaz-source-task', taskType: 'machgen_media', createdAt: Date.now(), meta: {} })
+    await engine.metadata.artifacts.write(video.value.artifactId, 'generation-payload', { model: 'MiniMax-H3', task_type: 'T2V', video_config: { height: 768, duration_secs: 1 } })
     await engine.metadata.artifacts.write(audio.value.artifactId, 'original', { duration: 1 })
     const poster = await sharp({ create: { width: 160, height: 90, channels: 3, background: '#345a42' } }).jpeg().toBuffer()
     await engine.files.write(video.value.artifactId, 'original.jpg', poster)

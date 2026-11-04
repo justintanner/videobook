@@ -22,6 +22,7 @@ const SAMPLE_OPTIONS: Record<string, Record<string, unknown>> = {
 };
 
 const SAMPLE_REFS: Record<string, MediaRefs> = {
+  ...Object.fromEntries(MACHGEN_TOPAZ_MODELS.map((apiId) => [`machgen:${apiId}`, { video: [machgenTaskUrl("task-1", 10)] }])),
   "kie:grok-imagine/image-to-video": { image: ["https://example.com/image0.png"] },
   "machgen:MiniMax-H3/upscale": { video: [machgenTaskUrl("task-1", 10)] },
   "machgen:MiniMax-H3/sharpen": { video: [machgenTaskUrl("task-1", 10)] },

@@ -97,7 +97,7 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
     ?? (await checkSeedanceEditSource(engine, model, job.refs, job.mode))
     ?? await checkRefDurations(engine, model, job.refs);
   if (sourceError) throw new Error(sourceError);
-  const source = await resolveGenerationSource(engine, model, job.refs);
+  const source = await resolveGenerationSource(engine, model, job.refs, job.options);
   if (!source.ok) throw new Error(source.error);
   const uploaded = await uploadRefs(engine, adapter, source.refs, ctx.signal);
   const fieldUrls = await uploadFieldRefs(engine, adapter, model, job.fieldRefs ?? {}, uploaded, ctx.signal);

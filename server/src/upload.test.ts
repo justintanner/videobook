@@ -78,7 +78,7 @@ describe("free-host media uploads", () => {
   beforeAll(async () => {
     fixtures = await mkdtemp(join(tmpdir(), "videobook-upload-fixtures-"));
     const path = join(fixtures, "source.mp4");
-    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", path]);
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=2", "-pix_fmt", "yuv420p", path]);
     video = await readFile(path);
   });
 
@@ -139,7 +139,7 @@ describe("free-host media uploads", () => {
     if (!source.ok || !output.ok) throw new Error("Could not create video artifacts");
     const sourceId = source.value.artifactId;
     expect((await engine.files.write(sourceId, "original.mp4", video)).ok).toBe(true);
-    expect((await engine.metadata.artifacts.write(sourceId, "original", { duration: 1, width: 64, height: 64 })).ok).toBe(true);
+    expect((await engine.metadata.artifacts.write(sourceId, "original", { duration: 2, width: 64, height: 64 })).ok).toBe(true);
     const assetId = output.value.artifactId;
     const manifest = await engine.files.manifest(assetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
@@ -148,8 +148,8 @@ describe("free-host media uploads", () => {
     let token: LeaseToken = { kind: "owner", ownerId: lease.ownerId };
     return {
       sourceId,
-      job: { type: "generate_media", model: "machgen:Topaz-Video-Precision", bookId: engine.book.get().bookId,
-        assetId, assetDir: manifest.value.path, refs: { video: [sourceId] }, options: { resolution: "1080p" } },
+      job: { type: "generate_media", model: "machgen:MiniMax-H3", bookId: engine.book.get().bookId,
+        assetId, assetDir: manifest.value.path, prompt: "Continue the scene", refs: { video: [sourceId] }, mode: "r2v", options: { resolution: "768p", duration: 5 } },
       context: {
         jobId: 1, signal,
         setLease: (next) => { token = next; },
@@ -162,13 +162,13 @@ describe("free-host media uploads", () => {
     };
   }
 
-  it("submits a MachGen upscale after uploading beyond the former 30-second deadline", async () => {
+  it("submits a MachGen reference video after uploading beyond the former 30-second deadline", async () => {
     delayMs = testBudget(31_000);
     const { job, context, sourceId } = await generation(new AbortController().signal);
     await expect(runGenerateMedia(engine, job, context)).resolves.toMatchObject({ status: "pending", taskId: TASK_ID });
     expect(uploads).toHaveLength(1);
     expect(uploads[0]).toMatchObject({ filename: `${contentHash(video)}.mp4`, contentType: "video/mp4", bytes: video });
-    expect(submissions).toEqual([expect.objectContaining({ model: "Topaz-Video-Precision", task_type: "UPSCALE", src_video_urls: [`${baseURL}/files/source.mp4`] })]);
+    expect(submissions).toEqual([expect.objectContaining({ model: "MiniMax-H3", task_type: "R2V", src_video_urls: [`${baseURL}/files/source.mp4`] })]);
     const source = await engine.files.read(sourceId, "original.mp4");
     expect(source.ok && Buffer.from(source.value)).toEqual(video);
     const task = engine.jobs.pending.read(job.assetId);

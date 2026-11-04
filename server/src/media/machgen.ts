@@ -640,23 +640,25 @@ function topazInput(apiId: string): WireSpec["input"] {
   const fallback = labels.includes("2160p") ? "2160p" : labels[labels.length - 1]!;
   const engines = upscale.engines as [string, ...string[]] | undefined;
   return z.object({
-    video_url: z.string().min(1).describe("The video to upscale"),
-    resolution: z.enum(labels).default(fallback).describe("Target height; MachGen needs it above the source's height"),
+    video_url: z.string().min(1).describe("A completed MachGen video from this book"),
+    resolution: z.enum(labels).default(fallback).describe("Target short-edge resolution; must exceed the source's short edge"),
     ...(engines?.length ? { engine: z.enum(engines).optional().describe("Topaz enhancement model") } : {}),
     source_seconds: z.number().int().positive().optional().describe("Whole seconds of the source video; filled from the connected book video"),
   }).superRefine((value, ctx) => {
+    if (!parseTaskUrl(value.video_url)) addIssue(ctx, "video_url", "connect a completed MachGen video from this book; use Topaz Video Precision via fal for other videos");
     if (value.source_seconds === undefined) addIssue(ctx, "video_url", "connect a video from this book so its length is known");
   });
 }
 
 function topazRequest(apiId: string, value: Record<string, unknown>): Record<string, unknown> {
   const engine = text(value.engine);
+  const source = parseTaskUrl(value.video_url);
   return {
     model: apiId,
     task_type: "UPSCALE",
     prompt: "",
     video_config: { height: heightOf(value), duration_secs: value.source_seconds },
-    src_video_urls: [String(value.video_url)],
+    src_task_ids: [source?.taskId ?? String(value.video_url)],
     ...(engine ? { upscale_config: { engine } } : {}),
   };
 }

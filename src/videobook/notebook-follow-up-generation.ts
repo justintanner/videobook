@@ -17,7 +17,7 @@ export const notebookFollowUpLabels: Record<NotebookFollowUp, string> = {
 
 const preferredModels: Record<NotebookFollowUp, readonly string[]> = {
   extend_video: ['fal:minimax/h3-max-turbo/extend-video'],
-  upscale_video: ['machgen:Topaz-Video-Precision', 'fal:topaz/upscale/video/precision', 'kie:topaz/video-upscale'],
+  upscale_video: ['fal:topaz/upscale/video/precision', 'kie:topaz/video-upscale', 'machgen:Topaz-Video-Precision'],
 }
 
 const nativeModels: Partial<Record<NotebookFollowUp, Readonly<Record<string, string>>>> = {
@@ -29,7 +29,8 @@ export function notebookFollowUpModels(
   followUp: NotebookFollowUp,
   sourceModel: string | undefined,
 ): string[] {
-  const native = sourceModel ? nativeModels[followUp]?.[sourceModel] : undefined
+  const native = sourceModel ? nativeModels[followUp]?.[sourceModel]
+    ?? (followUp === 'upscale_video' && sourceModel.startsWith('machgen:') ? 'machgen:Topaz-Video-Precision' : undefined) : undefined
   const offered = actions
     .filter((action) => action.operation === followUp && action.cellTypes.includes('generate_video'))
     .map((action) => action.model)

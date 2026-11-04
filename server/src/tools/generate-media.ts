@@ -107,7 +107,7 @@ async function validate(engine: Engine, model: ResolvedModel, args: Record<strin
   if (!process.env[envKey]) return `${envKey} environment variable is not set`;
   const operationError = checkOperation(model, args.operation);
   if (operationError) return operationError;
-  const source = await resolveGenerationSource(engine, model, refs);
+  const source = await resolveGenerationSource(engine, model, refs, optionsOf(args.options));
   if (!source.ok) return source.error;
   const fieldRefs = normalizeFieldRefs(args.field_refs);
   const built = buildWireRequest(model, {

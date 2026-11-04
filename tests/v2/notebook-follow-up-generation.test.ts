@@ -100,7 +100,9 @@ describe('notebook follow-up generation', () => {
       type: 'generate_video', provider: 'machgen', model: 'machgen:MiniMax-H3', tool: 'generate_video', operation: 'reference_to_video', prompt: 'a red boat',
     })
     expect((await book.plan('upscale_video', h3.id))?.action.model).toBe('machgen:MiniMax-H3/upscale')
-    expect((await book.plan('upscale_video', video.id))?.action.model).toBe('machgen:Topaz-Video-Precision')
+    expect((await book.plan('upscale_video', video.id))?.action.model).toBe('fal:topaz/upscale/video/precision')
+    const seedance = await book.mediaCell('video', 4, { type: 'video', provider: 'machgen', model: 'machgen:Seedance-2.5' })
+    expect((await book.plan('upscale_video', seedance.id))?.action.model).toBe('machgen:Topaz-Video-Precision')
     delete process.env[PROVIDER_ENV_KEYS.machgen]
     expect((await book.plan('upscale_video', video.id))?.action.model).toBe('fal:topaz/upscale/video/precision')
   })
@@ -109,7 +111,7 @@ describe('notebook follow-up generation', () => {
     const book = await openBook()
     delete process.env[PROVIDER_ENV_KEYS.kie]
     const models = notebookFollowUpModels(await book.actions(), 'upscale_video', undefined)
-    expect(models.slice(0, 2)).toEqual(['machgen:Topaz-Video-Precision', 'fal:topaz/upscale/video/precision'])
+    expect(models.slice(0, 2)).toEqual(['fal:topaz/upscale/video/precision', 'machgen:Topaz-Video-Precision'])
     expect(models).toEqual(expect.arrayContaining([
       'machgen:MiniMax-H3/upscale',
       'machgen:Topaz-Video-Precision-Animation',
