@@ -1,0 +1,217 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createEngine, type Engine } from "videobook-engine";
+import { runFfmpeg } from "./ffmpeg.js";
+import { runGenerateMedia, type GenerateMediaJob } from "./jobs/generate-media.js";
+import { configureProviderEndpoints } from "./media/endpoints.js";
+import type { JobHandlerContext, LeaseToken } from "./queue.js";
+import { testBudget } from "./test-budget.js";
+import { contentHash, uploadBytesToFreeHost } from "./upload.js";
+
+const UPLOAD_HOSTS = new Set(["litterbox.catbox.moe", "uguu.se", "tmpfile.link"]);
+const TASK_ID = "local-upscale-task";
+
+type Upload = { host: string; filename: string; contentType: string; bytes: Buffer };
+
+async function requestBytes(request: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
+  return Buffer.concat(chunks);
+}
+
+describe("free-host media uploads", () => {
+  let fixtures: string;
+  let video: Buffer;
+  let root: string;
+  let engine: Engine;
+  let server: Server;
+  let baseURL: string;
+  let originalFetch: typeof fetch;
+  let originalKey: string | undefined;
+  let originalHarMode: string | undefined;
+  let restoreEndpoints: () => void;
+  let uploads: Upload[];
+  let submissions: Record<string, unknown>[];
+  let errors: unknown[];
+  let delayMs: number;
+  let hold: boolean;
+  let failures: number;
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+
+  async function serve(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await requestBytes(request);
+    if (request.url === "/api/v0/generate") {
+      submissions.push(JSON.parse(body.toString()) as Record<string, unknown>);
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ task_id: TASK_ID }));
+      return;
+    }
+    const form = await new Request(baseURL, {
+      method: "POST", headers: { "content-type": request.headers["content-type"] ?? "" }, body: new Uint8Array(body),
+    }).formData();
+    const file = form.get("fileToUpload") ?? form.get("files[]") ?? form.get("file");
+    if (!(file instanceof File)) throw new Error("Upload has no file");
+    const host = request.url?.split("/")[1] ?? "";
+    uploads.push({ host, filename: file.name, contentType: file.type, bytes: Buffer.from(await file.arrayBuffer()) });
+    if (failures > 0) {
+      failures -= 1;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "Host temporarily unavailable" }));
+      return;
+    }
+    if (hold) return;
+    const timer = setTimeout(() => {
+      timers.delete(timer);
+      const url = `${baseURL}/files/source.mp4`;
+      if (host === "litterbox.catbox.moe") response.end(url);
+      else {
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify(host === "uguu.se" ? { success: true, files: [{ url }] } : { downloadLink: url }));
+      }
+    }, uploads.length === 1 ? delayMs : 0);
+    timers.add(timer);
+  }
+
+  beforeAll(async () => {
+    fixtures = await mkdtemp(join(tmpdir(), "videobook-upload-fixtures-"));
+    const path = join(fixtures, "source.mp4");
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", path]);
+    video = await readFile(path);
+  });
+
+  afterAll(async () => { await rm(fixtures, { recursive: true, force: true }); });
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "videobook-upload-"));
+    engine = createEngine({ rootDir: join(root, "book"), initialBookName: "uploads", durableWrites: false });
+    uploads = [];
+    submissions = [];
+    errors = [];
+    delayMs = 0;
+    hold = false;
+    failures = 0;
+    server = createServer((request, response) => {
+      void serve(request, response).catch((error: unknown) => {
+        errors.push(error);
+        response.destroy();
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("No HTTP address");
+    baseURL = `http://127.0.0.1:${address.port}`;
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      return UPLOAD_HOSTS.has(url.hostname)
+        ? originalFetch(`${baseURL}/${url.hostname}${url.pathname}`, init)
+        : originalFetch(input, init);
+    };
+    originalKey = process.env.MACHGEN_API_KEY;
+    originalHarMode = process.env.VIDEOBOOK_HAR_CAPTURE;
+    process.env.MACHGEN_API_KEY = "local-upload-key";
+    process.env.VIDEOBOOK_HAR_CAPTURE = "off";
+    restoreEndpoints = configureProviderEndpoints({ machgenBaseURL: baseURL });
+  });
+
+  afterEach(async () => {
+    for (const timer of timers) clearTimeout(timer);
+    timers.clear();
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    globalThis.fetch = originalFetch;
+    restoreEndpoints();
+    if (originalKey === undefined) delete process.env.MACHGEN_API_KEY;
+    else process.env.MACHGEN_API_KEY = originalKey;
+    if (originalHarMode === undefined) delete process.env.VIDEOBOOK_HAR_CAPTURE;
+    else process.env.VIDEOBOOK_HAR_CAPTURE = originalHarMode;
+    engine.close();
+    await rm(root, { recursive: true, force: true });
+    expect(errors).toEqual([]);
+  });
+
+  async function generation(signal: AbortSignal): Promise<{ job: GenerateMediaJob; context: JobHandlerContext; sourceId: string }> {
+    const source = await engine.artifacts.create("video", "source");
+    const output = await engine.artifacts.create("video", "upscale");
+    if (!source.ok || !output.ok) throw new Error("Could not create video artifacts");
+    const sourceId = source.value.artifactId;
+    expect((await engine.files.write(sourceId, "original.mp4", video)).ok).toBe(true);
+    expect((await engine.metadata.artifacts.write(sourceId, "original", { duration: 1, width: 64, height: 64 })).ok).toBe(true);
+    const assetId = output.value.artifactId;
+    const manifest = await engine.files.manifest(assetId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const lease = await engine.jobs.artifactWork.begin(assetId, { kind: "generate", ownerKind: "job", durationMs: testBudget(120_000) });
+    if (!lease) throw new Error("Could not lease output");
+    let token: LeaseToken = { kind: "owner", ownerId: lease.ownerId };
+    return {
+      sourceId,
+      job: { type: "generate_media", model: "machgen:Topaz-Video-Precision", bookId: engine.book.get().bookId,
+        assetId, assetDir: manifest.value.path, refs: { video: [sourceId] }, options: { resolution: "1080p" } },
+      context: {
+        jobId: 1, signal,
+        setLease: (next) => { token = next; },
+        getOwnerId: () => {
+          if (token.kind !== "owner") throw new Error("Lease already handed off");
+          return token.ownerId;
+        },
+        markAssetFailureHandled: () => {},
+      },
+    };
+  }
+
+  it("submits a MachGen upscale after uploading beyond the former 30-second deadline", async () => {
+    delayMs = testBudget(31_000);
+    const { job, context, sourceId } = await generation(new AbortController().signal);
+    await expect(runGenerateMedia(engine, job, context)).resolves.toMatchObject({ status: "pending", taskId: TASK_ID });
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]).toMatchObject({ filename: `${contentHash(video)}.mp4`, contentType: "video/mp4", bytes: video });
+    expect(submissions).toEqual([expect.objectContaining({ model: "Topaz-Video-Precision", task_type: "UPSCALE", src_video_urls: [`${baseURL}/files/source.mp4`] })]);
+    const source = await engine.files.read(sourceId, "original.mp4");
+    expect(source.ok && Buffer.from(source.value)).toEqual(video);
+    const task = engine.jobs.pending.read(job.assetId);
+    expect(task.ok && task.value).toMatchObject({ taskId: TASK_ID, taskType: "machgen_media" });
+  }, testBudget(70_000));
+
+  it("rotates to another host after an HTTP failure without changing the video", async () => {
+    failures = 1;
+    await expect(uploadBytesToFreeHost(video, "source.mp4")).resolves.toBe(`${baseURL}/files/source.mp4`);
+    expect(uploads).toHaveLength(2);
+    expect(new Set(uploads.map((upload) => upload.host)).size).toBe(2);
+    expect(uploads.every((upload) => upload.bytes.equals(video))).toBe(true);
+  });
+
+  it("reports upload deadlines instead of unexplained aborts for each host", async () => {
+    hold = true;
+    const timeoutMs = testBudget(500);
+    const outcome = uploadBytesToFreeHost(video, "source.mp4", { timeoutMs });
+    await expect(outcome).rejects.toThrow("All upload hosts failed");
+    await expect(outcome).rejects.toThrow(`Upload timed out after ${timeoutMs / 1_000} seconds`);
+    expect(new Set(uploads.map((upload) => upload.host))).toEqual(UPLOAD_HOSTS);
+    await expect(outcome).rejects.not.toThrow("AbortError");
+  });
+
+  it("cancels a generation during upload without contacting other hosts or submitting to MachGen", async () => {
+    hold = true;
+    const controller = new AbortController();
+    const { job, context } = await generation(controller.signal);
+    const stopped = new Error("Generation cancelled");
+    const outcome = runGenerateMedia(engine, job, context);
+    const rejected = expect(outcome).rejects.toBe(stopped);
+    await expect.poll(() => uploads.length, { timeout: testBudget(5_000) }).toBe(1);
+    controller.abort(stopped);
+    await rejected;
+    expect(uploads).toHaveLength(1);
+    expect(submissions).toEqual([]);
+    const task = engine.jobs.pending.read(job.assetId);
+    expect(task.ok && task.value).toBeNull();
+  });
+
+  it("refuses an already cancelled upload before sending any bytes", async () => {
+    const stopped = new Error("Already cancelled");
+    await expect(uploadBytesToFreeHost(video, "source.mp4", { signal: AbortSignal.abort(stopped) })).rejects.toBe(stopped);
+    expect(uploads).toEqual([]);
+  });
+});

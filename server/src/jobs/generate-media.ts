@@ -99,8 +99,9 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   if (sourceError) throw new Error(sourceError);
   const source = await resolveGenerationSource(engine, model, job.refs);
   if (!source.ok) throw new Error(source.error);
-  const uploaded = await uploadRefs(engine, adapter, source.refs);
-  const fieldUrls = await uploadFieldRefs(engine, adapter, model, job.fieldRefs ?? {}, uploaded);
+  const uploaded = await uploadRefs(engine, adapter, source.refs, ctx.signal);
+  const fieldUrls = await uploadFieldRefs(engine, adapter, model, job.fieldRefs ?? {}, uploaded, ctx.signal);
+  ctx.signal.throwIfAborted();
   const refs = { ...uploaded, sourceVideoIds: [...source.sourceVideoIds, ...uploaded.sourceVideoIds] };
   const built = buildWireRequest(model, { prompt, refUrls: refs.urls, fieldUrls, ...(job.refParams ? { refParams: job.refParams } : {}), options: { ...job.options, ...source.options }, mode: job.mode });
   if (!built.ok) throw new Error(built.error);

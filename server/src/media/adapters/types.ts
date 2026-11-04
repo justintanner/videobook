@@ -23,7 +23,7 @@ export type SubmitResult =
 export interface ProviderAdapter {
   provider: ProviderId;
   envKey: string;
-  upload(engine: Engine, assetId: string, filename: string): Promise<string>;
+  upload(engine: Engine, assetId: string, filename: string, signal?: AbortSignal): Promise<string>;
   uploadUrl(url: string): Promise<string>;
   submit(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult>;
 }

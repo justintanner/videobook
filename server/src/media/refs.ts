@@ -51,20 +51,22 @@ async function uploadRef(
   kind: Kind,
   raw: string,
   result: ResolvedRefs,
+  signal?: AbortSignal,
 ): Promise<string> {
+  signal?.throwIfAborted();
   if (isHttpUrl(raw)) return adapter.uploadUrl(raw);
   const input = await resolveRefInput(engine, kind, raw);
   sourceList(result, kind).push(input.assetId);
-  return adapter.upload(engine, input.assetId, input.filename);
+  return adapter.upload(engine, input.assetId, input.filename, signal);
 }
 
-export async function uploadRefs(engine: Engine, adapter: ProviderAdapter, refs: MediaRefs): Promise<ResolvedRefs> {
+export async function uploadRefs(engine: Engine, adapter: ProviderAdapter, refs: MediaRefs, signal?: AbortSignal): Promise<ResolvedRefs> {
   const result: ResolvedRefs = { urls: {}, sourceImageIds: [], sourceVideoIds: [], sourceAudioIds: [] };
   for (const role of REF_ROLES) {
     const raws = refs[role] ?? [];
     if (raws.length === 0) continue;
     const urls: string[] = [];
-    for (const raw of raws) urls.push(await uploadRef(engine, adapter, kindOf(role), raw, result));
+    for (const raw of raws) urls.push(await uploadRef(engine, adapter, kindOf(role), raw, result, signal));
     result.urls[role] = urls;
   }
   return result;
@@ -76,12 +78,13 @@ export async function uploadFieldRefs(
   model: ResolvedModel,
   fieldRefs: FieldRefs,
   result: ResolvedRefs,
+  signal?: AbortSignal,
 ): Promise<FieldRefs> {
   const urls: FieldRefs = {};
   for (const slot of model.fieldSlots) {
     const raws = fieldRefs[slot.field] ?? [];
     const uploaded: string[] = [];
-    for (const raw of raws) uploaded.push(await uploadRef(engine, adapter, slot.kind, raw, result));
+    for (const raw of raws) uploaded.push(await uploadRef(engine, adapter, slot.kind, raw, result, signal));
     if (uploaded.length > 0) urls[slot.field] = uploaded;
   }
   return urls;

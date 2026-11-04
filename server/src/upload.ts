@@ -4,6 +4,13 @@ import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
+const FREE_HOST_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
+interface UploadOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 export function contentHash(data: Buffer | Uint8Array): string {
   return createHash("sha256").update(data).digest("hex");
 }
@@ -46,17 +53,41 @@ function inferMimeType(filename: string): string {
 export async function uploadBytesToFreeHost(
   data: Uint8Array | Buffer,
   filename: string,
+  { signal, timeoutMs = FREE_HOST_UPLOAD_TIMEOUT_MS }: UploadOptions = {},
 ): Promise<string> {
+  signal?.throwIfAborted();
   const mimeType = inferMimeType(filename);
   const blob = new Blob([new Uint8Array(data)], { type: mimeType });
   const file = new File([blob], filename, { type: mimeType });
-
-  return uploadToAnyHost(createFreeMediaUpload(), {
-    file,
-    filename,
-    hosts: ["litterbox", "uguu", "tflink"],
-    time: "1h",
+  const baseFetch = globalThis.fetch;
+  const provider = createFreeMediaUpload({
+    timeout: timeoutMs,
+    fetch: async (input, init) => {
+      signal?.throwIfAborted();
+      try {
+        const requestSignal = signal && init?.signal ? AbortSignal.any([signal, init.signal]) : signal ?? init?.signal;
+        return await baseFetch(input, { ...init, signal: requestSignal });
+      } catch (cause) {
+        signal?.throwIfAborted();
+        if (init?.signal?.aborted) {
+          throw new Error(`Upload timed out after ${timeoutMs / 1_000} seconds`, { cause });
+        }
+        throw cause;
+      }
+    },
   });
+
+  try {
+    return await uploadToAnyHost(provider, {
+      file,
+      filename,
+      hosts: ["litterbox", "uguu", "tflink"],
+      time: "1h",
+    });
+  } catch (cause) {
+    signal?.throwIfAborted();
+    throw cause;
+  }
 }
 
 async function prepareBytesForUpload(
@@ -95,7 +126,9 @@ export async function uploadAssetFile(
   engine: Engine,
   assetId: string,
   filename: string,
+  signal?: AbortSignal,
 ): Promise<string> {
+  signal?.throwIfAborted();
   const { data, hashedFilename } = await prepareAssetForUpload(engine, assetId, filename);
-  return uploadBytesToFreeHost(data, hashedFilename);
+  return uploadBytesToFreeHost(data, hashedFilename, { signal });
 }

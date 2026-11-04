@@ -111,6 +111,7 @@ export default defineConfig({
       'server/src/app-state.test.ts',
       'server/src/har-capture.test.ts',
       'server/src/har-export.test.ts',
+      'server/src/upload.test.ts',
       'server/src/engine-rename.test.ts',
       'server/src/engine-tags-contract.test.ts',
       'server/src/archive-store.test.ts',
