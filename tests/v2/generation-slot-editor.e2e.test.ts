@@ -231,6 +231,93 @@ describe('generation slot editor in the browser', () => {
     expect(await page.locator('.notebook-flow .react-flow__node').count()).toBe(nodes)
   }, testBudget(90_000))
 
+  it('opens an empty slot picker, searches large previews and saves the chosen image to that slot', async () => {
+    await slot('Reference images').getByRole('button', { name: 'Remove @a1 from Reference images' }).click()
+    await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[1, 'keyframe'], [2, 'keyframe_2']])
+    await slot('Reference images').getByRole('button', { name: 'Choose an image', exact: false }).click()
+    const picker = page.getByRole('dialog', { name: 'Choose image for reference images' })
+    await picker.waitFor({ state: 'visible' })
+    expect(await picker.locator('.generation-input-picker-card').count()).toBe(4)
+    expect(await picker.locator('.generation-input-picker-preview img').count()).toBe(3)
+    const firstImage = picker.locator('.generation-input-picker-preview img').first()
+    await expect.poll(() => firstImage.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+    expect((await firstImage.boundingBox())!.height).toBeGreaterThan(140)
+    await picker.getByRole('searchbox').fill('@a3')
+    expect(await picker.locator('.generation-input-picker-card').count()).toBe(1)
+    await picker.getByRole('button', { name: 'Add @a3 to Reference images' }).focus()
+    await page.keyboard.press('Enter')
+    await picker.waitFor({ state: 'detached' })
+    await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[2, 'image'], [1, 'keyframe'], [2, 'keyframe_2']])
+    await expect.poll(async () => await page.locator('.inspector .generation-review-json pre').textContent(), { timeout: testBudget(15_000) }).toContain('"image_urls"')
+    await page.reload()
+    await page.locator(`.notebook-flow .react-flow__node[data-id="${generationId}"] .cell-node`).click({ timeout: testBudget(60_000) })
+    await expect.poll(async () => await chip('Reference images', 0).locator('.generation-slot-chip-meta > small').textContent()).toBe('@a3')
+  }, testBudget(90_000))
+
+  it('explains the image limit in the picker and permits another reference after lowering resolution', async () => {
+    const inspector = page.locator('.inspector')
+    await inspector.getByLabel('Resolution').selectOption({ label: '1080p' })
+    const opener = slot('Reference images').getByRole('button', { name: 'Choose image for reference images' })
+    await opener.click()
+    const picker = page.getByRole('dialog', { name: 'Choose image for reference images' })
+    expect(await picker.getByRole('button', { name: 'Add @a1 to Reference images' }).isDisabled()).toBe(true)
+    const other = picker.getByRole('button', { name: 'Add @a2 to Reference images' })
+    expect(await other.isDisabled()).toBe(true)
+    expect(await other.textContent()).toContain('1080p takes one reference image')
+    await page.keyboard.press('Escape')
+    await picker.waitFor({ state: 'detached' })
+    expect(await opener.evaluate((button) => document.activeElement === button)).toBe(true)
+    expect(await inspector.isVisible()).toBe(true)
+    expect(await keyframes()).toEqual([[0, 'image'], [1, 'keyframe'], [2, 'keyframe_2']])
+    await inspector.getByLabel('Resolution').selectOption({ label: '720p' })
+    await opener.click()
+    await other.click()
+    await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[0, 'image'], [1, 'image_2'], [1, 'keyframe'], [2, 'keyframe_2']])
+  }, testBudget(90_000))
+
+  it('keeps the picker and full thumbnails inside desktop, phone and short windows with keyboard focus contained', async () => {
+    try {
+      for (const viewport of [{ width: 1600, height: 1000 }, { width: 390, height: 844 }, { width: 667, height: 375 }]) {
+        await page.setViewportSize(viewport)
+        const opener = slot('Keyframes').getByRole('button', { name: 'Choose image for keyframes' })
+        await opener.click()
+        const picker = page.getByRole('dialog', { name: 'Choose image for keyframes' })
+        await picker.waitFor({ state: 'visible' })
+        const bounds = (await picker.boundingBox())!
+        expect(bounds.x).toBeGreaterThanOrEqual(0)
+        expect(bounds.y).toBeGreaterThanOrEqual(0)
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width)
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height)
+        await expect.poll(async () => await picker.locator('.generation-input-picker-preview img').evaluateAll((images) => images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true)
+        const contained = await picker.locator('.generation-input-picker-preview img').evaluateAll((images) => images.every((image) => {
+          const bounds = image.getBoundingClientRect()
+          const frame = image.parentElement!.getBoundingClientRect()
+          return bounds.width > 100 && bounds.height > 90 && getComputedStyle(image).objectFit === 'contain'
+            && bounds.left >= frame.left && bounds.right <= frame.right
+            && bounds.top >= frame.top && bounds.bottom <= frame.bottom
+        }))
+        expect(contained).toBe(true)
+        expect(await picker.evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth)).toBe(true)
+        expect(await picker.locator('.generation-input-picker-card').first().evaluate((card) => {
+          const results = card.closest('.generation-input-picker-results')!
+          return card.getBoundingClientRect().height <= results.clientHeight
+        })).toBe(true)
+        await picker.getByRole('button', { name: 'Close input picker' }).focus()
+        await page.keyboard.press('Shift+Tab')
+        expect(await picker.locator('.generation-input-picker-card:not(:disabled)').last().evaluate((button) => document.activeElement === button)).toBe(true)
+        await page.keyboard.press('Tab')
+        expect(await picker.getByRole('button', { name: 'Close input picker' }).evaluate((button) => document.activeElement === button)).toBe(true)
+        await picker.getByRole('searchbox').fill('@z8')
+        expect(await picker.getByRole('status').textContent()).toContain('No cells match')
+        await picker.getByRole('button', { name: 'Close input picker' }).click()
+        await picker.waitFor({ state: 'detached' })
+        expect(await opener.evaluate((button) => document.activeElement === button)).toBe(true)
+      }
+    } finally {
+      await page.setViewportSize({ width: 1600, height: 1000 })
+    }
+  }, testBudget(90_000))
+
   it('fills a request field without a role, such as an edit mask, from the board', async () => {
     await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [{ source_cell_id: images[0], target_input: 'image', params: {} }] })
     await page.reload()

@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
-import { GripVertical, X } from 'lucide-react'
+import { GripVertical, Plus, X } from 'lucide-react'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
+import { GenerationInputPicker } from '@/components/videobook/GenerationInputPicker'
 import type { GenerationReviewSource } from '@/components/videobook/confirm/bodies/GenerationBody'
 import {
   activeCellRefDrag,
@@ -50,6 +51,7 @@ type SlotHandlers = {
   focusRef: (key: string) => (node: HTMLButtonElement | null) => void
   onEdit: (edit: SlotEdit) => void
   onSelectSource: (cellId: string) => void
+  onPickSource: (target: string, opener: HTMLButtonElement) => void
 }
 
 function dropEdit(drag: CellRefDrag, to: SlotPosition, copy: boolean): DropEdit {
@@ -269,6 +271,18 @@ function SlotSection({
           <code className="generation-slot-field">{spec.fields.map((field) => field.path).join(' + ')}</code>
         )}
         <span className="generation-slot-count">{items.length}{capacity === null ? '' : `/${capacity}`}</span>
+        <button
+          type="button"
+          className="generation-slot-add"
+          disabled={handlers.busy}
+          aria-label={`Choose ${spec.kind} for ${spec.label.toLowerCase()}`}
+          aria-haspopup="dialog"
+          data-composer-focus="preserve"
+          title={`Choose ${spec.kind}`}
+          onClick={(event) => handlers.onPickSource(spec.target, event.currentTarget)}
+        >
+          <Plus size={14} aria-hidden="true" />
+        </button>
       </header>
       <ol className="generation-slot-items">
         {items.map((item, index) => (
@@ -284,7 +298,16 @@ function SlotSection({
         ))}
         {items.length === 0 && (
           <li className="generation-slot-empty" data-drop={hover && !hover.error ? 'before' : undefined}>
-            Drop {spec.kind === 'audio' ? 'audio' : `an ${spec.kind}`}
+            <button
+              type="button"
+              disabled={handlers.busy}
+              aria-haspopup="dialog"
+              data-composer-focus="preserve"
+              onClick={(event) => handlers.onPickSource(spec.target, event.currentTarget)}
+            >
+              <span>Choose {spec.kind === 'audio' ? 'audio' : spec.kind === 'image' ? 'an image' : 'a video'}</span>
+              <small>or drop here</small>
+            </button>
           </li>
         )}
       </ol>
@@ -357,6 +380,7 @@ export function GenerationInputSlots({
 }) {
   const [hover, setHover] = useState<DropHover | null>(null)
   const [dragging, setDragging] = useState<CellRefDrag | null>(null)
+  const [picker, setPicker] = useState<{ target: string; opener: HTMLButtonElement } | null>(null)
   const pendingFocus = useRef<string | null>(null)
   const limitMessages = slotLayoutLimitMessages(editor.layout, editor.context)
   const finishDrag = () => {
@@ -418,8 +442,10 @@ export function GenerationInputSlots({
     },
     onEdit: editor.onEdit,
     onSelectSource,
+    onPickSource: (target, opener) => setPicker({ target, opener }),
   }
   const disconnectFrom = dragging?.from ?? null
+  const pickerColumn = picker && editor.layout.slots.find((column) => column.spec.target === picker.target)
   return (
     <div className="generation-slots" data-dragging={dragging ? 'true' : undefined}>
       <SlotBoard editor={editor} handlers={handlers} />
@@ -466,6 +492,15 @@ export function GenerationInputSlots({
         >
           Drop here to disconnect
         </div>
+      )}
+      {picker && pickerColumn && (
+        <GenerationInputPicker
+          busy={busy}
+          column={pickerColumn}
+          editor={editor}
+          opener={picker.opener}
+          onClose={() => setPicker(null)}
+        />
       )}
     </div>
   )
