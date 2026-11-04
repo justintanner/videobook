@@ -27,6 +27,22 @@ export function binaryRunsOnHost(header: Uint8Array, hostArch: string): boolean 
   return arch === null || arch === "universal" || arch === hostArch;
 }
 
+export interface LibavformatVersion {
+  major: number;
+  minor: number;
+  micro: number;
+}
+
+export function libavformatVersion(versionOutput: string): LibavformatVersion | null {
+  const match = /^libavformat\s+(\d+)\.\s*(\d+)\.\s*(\d+)/mu.exec(versionOutput);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]), micro: Number(match[3]) };
+}
+
+export function readsDurationFromMvhd({ major, minor }: LibavformatVersion): boolean {
+  return major < 59 || (major === 59 && minor < 31);
+}
+
 export function readBinaryHeader(path: string): Uint8Array | null {
   try {
     const fd = openSync(path, "r");

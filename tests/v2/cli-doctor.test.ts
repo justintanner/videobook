@@ -81,4 +81,28 @@ describe('videobook doctor', () => {
     expect(result.stdout).toMatch(/FAIL\s+ffmpeg\s+\/nonexistent\/ffmpeg did not run/u)
     expect(result.stdout).toContain('npm install -g videobook --allow-scripts=ffmpeg-static,ytdlp-nodejs,@dolthub/doltlite,usearch,onnxruntime-node,esbuild')
   }, testBudget(60_000))
+
+  it('warns about an ffprobe older than the 2022 mvhd change and leaves newer ones alone', async () => {
+    const dir = await tempDir()
+    const home = join(dir, 'home')
+    const writeProber = async (name: string, version: string, libavformat: string): Promise<string> => {
+      const path = join(dir, name)
+      await writeFile(path, ['#!/bin/sh', `printf '%s\\n' 'ffprobe version ${version}' 'libavformat    ${libavformat} / ${libavformat}'`, ''].join('\n'))
+      await chmod(path, 0o755)
+      return path
+    }
+
+    const old = await writeProber('old-ffprobe', 'n4.4.1', '58. 76.100')
+    const warned = await runCli(['doctor', '--json', '--home', home], cliEnv({ VIDEOBOOK_FFPROBE_PATH: old }))
+    expect(warned.code, warned.stdout + warned.stderr).toBe(0)
+    const row = (JSON.parse(warned.stdout) as { checks: DoctorCheck[] }).checks.find((check) => check.id === 'ffprobe')
+    expect(row).toMatchObject({ status: 'warn', required: true, remedy: 'Install FFmpeg 6.0 or newer and set VIDEOBOOK_FFPROBE_PATH to its ffprobe.' })
+    expect(row?.detail).toContain(`ffprobe version n4.4.1 (VIDEOBOOK_FFPROBE_PATH: ${old}); libavformat 58.76.100 reads format duration from mvhd`)
+
+    const newer = await writeProber('new-ffprobe', 'n6.0', '60.  3.100')
+    const clean = await runCli(['doctor', '--home', home], cliEnv({ VIDEOBOOK_FFPROBE_PATH: newer }))
+    expect(clean.code, clean.stdout + clean.stderr).toBe(0)
+    expect(clean.stdout).toMatch(/ok\s+ffprobe\s+ffprobe version n6\.0 \(VIDEOBOOK_FFPROBE_PATH: /u)
+    expect(clean.stdout).not.toContain('reads format duration from mvhd')
+  }, testBudget(60_000))
 })

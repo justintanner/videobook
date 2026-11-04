@@ -375,6 +375,11 @@ Outside `op run`, values that are `op://` references and the vault named by
 override the bundled media binaries; without them the server falls back to
 `ffmpeg`, `ffprobe` and `yt-dlp` on PATH when a bundled binary is missing or
 built for another CPU.
+The bundled arm64 Mac `ffprobe` is FFmpeg 4.4.1, the newest published build.
+Probers older than FFmpeg 6.0 read the format duration from the `mvhd` atom, so
+a file whose tracks all start late reports that delay as extra duration.
+`videobook doctor` warns about such a prober; set `VIDEOBOOK_FFPROBE_PATH` to a
+newer `ffprobe` to avoid it.
 `VIDEOBOOK_YTDLP_COOKIES` names a Netscape-format cookies file for TikTok
 downloads. Each download gives yt-dlp a private copy, so the file only needs to
 be readable and is never rewritten; `videobook doctor` shows its path, never its

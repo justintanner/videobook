@@ -5,12 +5,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
+import { FFMPEG } from "./ffmpeg-binary.js";
+import { probeVideo } from "./ffmpeg.js";
 import {
   FFPROBE,
   binaryRunsOnHost,
   bundledFfprobe,
   ensureExecutable,
+  libavformatVersion,
   machOArch,
+  readsDurationFromMvhd,
   resolveFfprobePath,
 } from "./ffprobe-binary.js";
 
@@ -77,10 +81,51 @@ describe("ffprobe binary resolution", () => {
     expect(resolveFfprobePath(installedFfprobe, undefined, process.arch)).toBe(installedFfprobe);
     const { stdout } = await execFileAsync(installedFfprobe, ["-version"]);
     expect(stdout).toMatch(/^ffprobe version/u);
+    expect(libavformatVersion(stdout)).not.toBeNull();
   });
 
   it("resolves an ffprobe that runs on this machine", async () => {
     const { stdout } = await execFileAsync(FFPROBE, ["-version"]);
     expect(stdout).toMatch(/^ffprobe version/u);
+  });
+
+  it("reads the libavformat version from ffprobe -version output", () => {
+    const output = [
+      "ffprobe version n4.4.1 Copyright (c) 2007-2021 the FFmpeg developers",
+      "libavutil      56. 70.100 / 56. 70.100",
+      "libavformat    58. 76.100 / 58. 76.100",
+      "",
+    ].join("\n");
+    expect(libavformatVersion(output)).toEqual({ major: 58, minor: 76, micro: 100 });
+    expect(libavformatVersion("libavformat    60.  3.100 / 60.  3.100\n")).toEqual({ major: 60, minor: 3, micro: 100 });
+    expect(libavformatVersion("ffprobe version test\n")).toBeNull();
+  });
+
+  it("marks the libavformat builds that read format duration from mvhd", () => {
+    expect(readsDurationFromMvhd({ major: 58, minor: 76, micro: 100 })).toBe(true);
+    expect(readsDurationFromMvhd({ major: 59, minor: 27, micro: 100 })).toBe(true);
+    expect(readsDurationFromMvhd({ major: 59, minor: 30, micro: 101 })).toBe(true);
+    expect(readsDurationFromMvhd({ major: 59, minor: 31, micro: 100 })).toBe(false);
+    expect(readsDurationFromMvhd({ major: 60, minor: 3, micro: 100 })).toBe(false);
+  });
+
+  it("reports a leading empty edit as duration only on a prober that reads mvhd", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vb-ffprobe-mvhd-"));
+    roots.push(root);
+    const source = join(root, "source.mp4");
+    const delayed = join(root, "delayed.mp4");
+    await execFileAsync(FFMPEG, [
+      "-hide_banner", "-loglevel", "error",
+      "-f", "lavfi", "-i", "testsrc2=s=64x64:r=30:d=1",
+      "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+      source,
+    ]);
+    await execFileAsync(FFMPEG, ["-hide_banner", "-loglevel", "error", "-itsoffset", "2", "-i", source, "-c", "copy", delayed]);
+    const { stdout } = await execFileAsync(FFPROBE, ["-version"]);
+    const version = libavformatVersion(stdout);
+    if (!version) throw new Error(`no libavformat version in: ${stdout}`);
+    const probe = await probeVideo(delayed);
+    expect(probe.videoDuration).toBeCloseTo(1, 2);
+    expect(probe.duration).toBeCloseTo(readsDurationFromMvhd(version) ? 3 : 1, 2);
   });
 });

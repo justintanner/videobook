@@ -473,7 +473,7 @@ async function doctorYtdlpCheck(packageDir, env) {
 
 async function verifyBundledFfprobe(packageDir, env, label) {
   const ffprobe = await doctorCheck(packageDir, env, 'ffprobe')
-  expect(ffprobe?.status === 'ok' && ffprobe.detail.includes('(bundled: '), `${label}: the bundled ffprobe did not run with its chmod script blocked: ${JSON.stringify(ffprobe)}`)
+  expect(ffprobe?.status !== 'fail' && ffprobe?.detail.includes('(bundled: '), `${label}: the bundled ffprobe did not run with its chmod script blocked: ${JSON.stringify(ffprobe)}`)
   log(`${label}: bundled ffprobe runs without its chmod script`)
 }
 

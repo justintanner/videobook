@@ -11,7 +11,7 @@ import { dataLayout } from "../data-home.js";
 import { bookManager } from "../engine.js";
 import { MANAGED_ENV_KEYS, getDefaultSecretStore } from "../env-secrets.js";
 import { FFMPEG } from "../ffmpeg-binary.js";
-import { FFPROBE, bundledFfprobe } from "../ffprobe-binary.js";
+import { FFPROBE, bundledFfprobe, libavformatVersion, readsDurationFromMvhd } from "../ffprobe-binary.js";
 import { inspectServerOwner } from "../server-lock.js";
 import { readOnePasswordSettings, type OnePasswordResolution } from "../one-password.js";
 import { remotionBrowserDir, remotionCacheRoot } from "../remotion/browser.js";
@@ -118,11 +118,40 @@ function bundledPath(moduleName: string): string | null {
   }
 }
 
-async function binaryCheck(id: string, label: string, binary: string, bundled: string | null, envName: string): Promise<DoctorCheck> {
+interface VersionWarning {
+  note: string;
+  remedy: string;
+}
+
+function ffprobeVersionWarning(versionOutput: string): VersionWarning | null {
+  const version = libavformatVersion(versionOutput);
+  if (!version || !readsDurationFromMvhd(version)) return null;
+  return {
+    note: `libavformat ${version.major}.${version.minor}.${version.micro} reads format duration from mvhd, so files whose tracks all start late report that delay as extra duration`,
+    remedy: "Install FFmpeg 6.0 or newer and set VIDEOBOOK_FFPROBE_PATH to its ffprobe.",
+  };
+}
+
+async function binaryCheck(
+  id: string,
+  label: string,
+  binary: string,
+  bundled: string | null,
+  envName: string,
+  versionWarning?: (versionOutput: string) => VersionWarning | null,
+): Promise<DoctorCheck> {
   const origin = binary === bundled ? "bundled" : binary.includes("/") ? envName : "from PATH";
   try {
     const { stdout } = await execFileAsync(binary, ["-version"], { timeout: 15_000 });
-    return check({ id, label, status: "ok", detail: `${stdout.split("\n")[0]} (${origin}: ${binary})`, required: true });
+    const warning = versionWarning?.(stdout);
+    return check({
+      id,
+      label,
+      status: warning ? "warn" : "ok",
+      detail: `${stdout.split("\n")[0]} (${origin}: ${binary})${warning ? `; ${warning.note}` : ""}`,
+      ...(warning ? { remedy: warning.remedy } : {}),
+      required: true,
+    });
   } catch (error) {
     return check({
       id,
@@ -308,7 +337,7 @@ async function collectDoctorChecks(): Promise<DoctorCheck[]> {
     await harCaptureCheck(),
     await libraryCheck(),
     await binaryCheck("ffmpeg", "ffmpeg", FFMPEG, bundledPath("ffmpeg-static"), "VIDEOBOOK_FFMPEG_PATH"),
-    await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledFfprobe(), "VIDEOBOOK_FFPROBE_PATH"),
+    await binaryCheck("ffprobe", "ffprobe", FFPROBE, bundledFfprobe(), "VIDEOBOOK_FFPROBE_PATH", ffprobeVersionWarning),
     await ytdlpCheck(),
     nativeCoreCheck(),
     searchRuntimeCheck(),
