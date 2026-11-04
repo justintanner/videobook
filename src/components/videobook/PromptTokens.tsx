@@ -1,5 +1,4 @@
 import type { RefObject } from 'react'
-import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import type { PromptTokenSources } from '@/videobook/prompt-tokens'
 import { generationInputTokenPattern } from '../../../server/src/generation-input-targets'
 
@@ -37,37 +36,6 @@ export function PromptTokenLayer({
         ? <mark key={part.offset} className="prompt-token" data-known={sources.has(part.token) ? 'true' : undefined}>{part.text}</mark>
         : <span key={part.offset}>{part.text}</span>)}
       {' '}
-    </div>
-  )
-}
-
-export function PromptTokenStrip({ prompt, sources }: { prompt: string; sources: PromptTokenSources }) {
-  const used = [...new Set(promptParts(prompt).flatMap((part) => part.token ? [part.token] : []))]
-  if (used.length === 0) return null
-  return (
-    <div className="prompt-token-strip" aria-label="Prompt inputs">
-      {used.map((token) => {
-        const source = sources.get(token)
-        return (
-          <span
-            key={token}
-            className="prompt-token-pill"
-            data-known={source ? 'true' : undefined}
-            title={source ? `@${token} is @${source.address}` : `@${token} names no connected input`}
-          >
-            <span className="prompt-token-thumb">
-              {source && (
-                <MediaLibraryAssetPreview
-                  asset={source.asset ?? { type: source.type, mediaUrl: null, thumbnailUrl: null, duration: null }}
-                  eager
-                />
-              )}
-            </span>
-            <strong>@{token}</strong>
-            {source && <small>@{source.address}</small>}
-          </span>
-        )
-      })}
     </div>
   )
 }

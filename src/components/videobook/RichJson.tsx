@@ -159,7 +159,7 @@ export function RichJson({
   value: unknown
   ariaLabel?: string
   artifactAssets?: ReadonlyMap<string, ArtifactThumbAsset>
-  mediaDisplay?: 'thumbnail' | 'preview'
+  mediaDisplay?: 'thumbnail' | 'preview' | 'url-preview'
   /** Also preview http(s) strings that point at image or video files. */
   remoteMedia?: boolean
 }) {
@@ -175,12 +175,19 @@ export function RichJson({
           ? artifactAssets?.get(unquoted)
             ?? (remoteMedia ? remoteMediaAsset(unquoted) : undefined)
           : undefined
+        const compactUrl = mediaDisplay === 'url-preview' && Boolean(asset)
+          && /^(?:https?:\/\/|\/)/i.test(unquoted ?? '')
         return (
-          <span className={`json-${token.kind}`} key={`${index}-${token.value}`}>
-            {token.value}
-            {asset && (mediaDisplay === 'preview'
-              ? <JsonMediaPreview asset={asset} />
-              : <ArtifactThumb asset={asset} />)}
+          <span
+            className={`json-${token.kind}${compactUrl ? ' json-media-url' : ''}`}
+            key={`${index}-${token.value}`}
+            title={compactUrl ? unquoted ?? undefined : undefined}
+          >
+            {compactUrl ? 'url(' : token.value}
+            {asset && (mediaDisplay === 'thumbnail'
+              ? <ArtifactThumb asset={asset} />
+              : <JsonMediaPreview asset={asset} />)}
+            {compactUrl && ')'}
           </span>
         )
       })}

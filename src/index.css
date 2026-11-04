@@ -6328,17 +6328,21 @@ textarea:focus-visible {
   overflow: auto;
 }
 
-.generation-review-editor {
+.generation-review-editor,
+.confirm-section.generation-review-editor {
   grid-area: editor;
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .generation-review-editor > section {
   display: grid;
   min-width: 0;
+  flex-shrink: 0;
   gap: 6px;
 }
 
@@ -6347,6 +6351,8 @@ textarea:focus-visible {
 }
 
 .generation-cell-inspector {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: auto;
   padding: 8px 14px;
@@ -6356,6 +6362,8 @@ textarea:focus-visible {
 .generation-cell-form {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -6364,6 +6372,11 @@ textarea:focus-visible {
   margin: 0;
   gap: 4px;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.generation-review-prompt-section .inspector-prompt-editor {
+  display: grid;
+  min-height: 0;
 }
 
 .generation-review-prompt-section .inspector-prompt-textarea {
@@ -7874,8 +7887,9 @@ textarea:focus-visible {
 }
 
 .generation-review-prompt-section {
-  flex: 1 1 auto;
-  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1 0 auto;
+  min-height: 120px;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .confirm-generation[data-inputs='slots'] {
@@ -8199,6 +8213,18 @@ textarea:focus-visible {
       'editor'
       'source';
     grid-template-rows: auto;
+  }
+
+  .generation-cell-inspector {
+    display: block;
+  }
+
+  .generation-cell-form {
+    grid-template-rows: auto;
+  }
+
+  .confirm-section.generation-review-editor {
+    overflow: visible;
   }
 
   .confirm-generation[data-view='source'] {
@@ -8873,62 +8899,6 @@ textarea:focus-visible {
   background: transparent;
 }
 
-.prompt-token-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.prompt-token-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 8px 0 3px;
-  border: 1px solid rgba(114, 231, 170, 0.42);
-  background: rgba(114, 231, 170, 0.08);
-  font-size: 11px;
-}
-
-.prompt-token-pill:not([data-known]) {
-  border-color: rgba(240, 126, 126, 0.5);
-  background: rgba(240, 126, 126, 0.08);
-}
-
-.prompt-token-pill strong {
-  color: #bce5cf;
-  font-weight: 500;
-}
-
-.prompt-token-pill small {
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.prompt-token-thumb {
-  display: grid;
-  width: 18px;
-  height: 22px;
-  place-items: center;
-  overflow: hidden;
-  background: #020a06;
-}
-
-.prompt-token-thumb img,
-.prompt-token-thumb video,
-.prompt-token-thumb .media-library-asset-preview,
-.prompt-token-thumb .media-library-asset-placeholder {
-  width: 18px;
-  height: 22px;
-  object-fit: cover;
-}
-
-.prompt-token-thumb svg {
-  width: 12px;
-  height: 12px;
-}
-
 /* Shorter rows, bigger text: the sheet reads at one size and six fields give
    back 12px. */
 .generation-review-model-section select,
@@ -9152,6 +9122,13 @@ textarea:focus-visible {
   display: inline-block;
   margin: 2px 6px;
   vertical-align: middle;
+}
+
+.json-media-url {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .json-media-trigger {

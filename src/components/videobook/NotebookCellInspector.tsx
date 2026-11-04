@@ -102,7 +102,7 @@ import {
   type SlotLayoutContext,
 } from '@/videobook/generation-slot-layout'
 import type { GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
-import { PromptTokenLayer, PromptTokenStrip } from '@/components/videobook/PromptTokens'
+import { PromptTokenLayer } from '@/components/videobook/PromptTokens'
 import { promptTokenSources, syncPromptTokenLayer } from '@/videobook/prompt-tokens'
 import { generationModeInputError } from '../../../server/src/generation-input-policy'
 import { generationModeInputTarget } from '../../../server/src/generation-input-targets'
@@ -3185,7 +3185,6 @@ function ExecutableCellInspector({
           <span aria-live="polite">{promptCopyLabel}</span>
         </button>
       </header>
-      {generationCell && <PromptTokenStrip prompt={draft.prompt} sources={promptTokenSources(slotEditor)} />}
       <div className="inspector-prompt-editor" ref={promptFieldRef}>
         {generationCell && (
           <PromptTokenLayer layerRef={promptLayerRef} prompt={draft.prompt} sources={promptTokenSources(slotEditor)} />

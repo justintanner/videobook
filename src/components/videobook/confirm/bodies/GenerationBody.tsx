@@ -17,7 +17,7 @@ import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
 import { RichJson } from '@/components/videobook/RichJson'
 import { GenerationInputSlots, type GenerationSlotEditor } from '@/components/videobook/GenerationInputSlots'
-import { PromptTokenLayer, PromptTokenStrip } from '@/components/videobook/PromptTokens'
+import { PromptTokenLayer } from '@/components/videobook/PromptTokens'
 import { promptTokenSources, syncPromptTokenLayer } from '@/videobook/prompt-tokens'
 import {
   DoltCellSource,
@@ -490,7 +490,6 @@ export function GenerationBody({
               <span>Prompt</span>
               {promptHistory && <PromptHistoryControls history={promptHistory} disabled={busy} />}
             </div>
-            <PromptTokenStrip prompt={draft.cell.prompt ?? ''} sources={tokenSources} />
             <div className="prompt-token-field">
               <PromptTokenLayer layerRef={promptLayerRef} prompt={draft.cell.prompt ?? ''} sources={tokenSources} />
               <textarea
@@ -568,7 +567,7 @@ export function GenerationBody({
               value={sourceVisible ? previewJson : previewValue?.payload ?? null}
               ariaLabel={sourceVisible ? 'MCP payload JSON' : 'Generation payload JSON'}
               artifactAssets={artifactAssets}
-              mediaDisplay="preview"
+              mediaDisplay={sourceVisible ? 'preview' : 'url-preview'}
             />
           )}
         </div>

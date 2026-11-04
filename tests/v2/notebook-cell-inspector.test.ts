@@ -878,7 +878,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('title="Add @a4 to Reference images"')
     expect(html).toContain('<mark class="prompt-token" data-known="true">@loop</mark>')
     expect(html).toContain('<mark class="prompt-token" data-known="true">@keyframe1</mark>')
-    expect(html).toMatch(/aria-label="Prompt inputs".*title="@loop is @a1".*title="@keyframe1 is @a2"/s)
+    expect(html).not.toContain('aria-label="Prompt inputs"')
   })
 
   it('omits input sources that would make the notebook cyclic', () => {
