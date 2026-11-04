@@ -1,4 +1,5 @@
 import { seedanceEditFailure } from "../media/seedance-edit.js";
+import { reframeVideoFailure } from "../media/reframe-video.js";
 import { createKie, createXai, createAlibaba, createFal } from "../usage-providers.js";
 import { describeFalError } from "../jobs/_fal-shared.js";
 import { currentBookContext, withBookContext } from "../book-context.js";
@@ -1412,7 +1413,7 @@ export async function pollPendingProviderTasks(
           });
         }
       } catch (e) {
-        const failMsg = describeFalError(e);
+        const failMsg = reframeVideoFailure(task.meta?.model ?? task.meta?.falEndpointId, describeFalError(e));
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof FalError) {
           const falErr = e as FalError;

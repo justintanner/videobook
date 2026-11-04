@@ -2,6 +2,7 @@ import { MiniMaxH3ReferenceClipDurationMs } from "@apicity/kie/zod";
 import { LIGHTNING_SCENE_OPTIONS, LIGHTNING_VIDEO_OPTIONS } from "../lightning-defaults.js";
 import { MACHGEN_TOPAZ_MODELS } from "./machgen.js";
 import { WAVESPEED_MODEL_ENTRIES } from "./wavespeed.js";
+import { H3_REFRAME_DESCRIPTION } from "./reframe-video.js";
 import type { InputLimit, InputRules, ItemParamSpec, ModeSpec, ModelEntry, Operation, PromptGuide, RefRole } from "./types.js";
 
 const SEEDANCE_MODES: readonly ModeSpec[] = [
@@ -367,7 +368,7 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:blackforestlabs/flux-3-max/text-to-video", media: "video", operations: ["text_to_video"], title: "FLUX 3 Max", defaults: FLUX_3_MAX_DEFAULTS },
   { id: "fal:blackforestlabs/flux-3-max/image-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Image", refs: { first_frame: "image_url" }, modes: FRAME_MODES, defaults: FLUX_3_MAX_DEFAULTS },
   { id: "fal:blackforestlabs/flux-3-max/keyframes-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Keyframes", refs: { image: "keyframes" }, keyframeFps: 24, defaults: FLUX_3_MAX_DEFAULTS },
-  { id: "fal:minimax/h3-max/reframe-video", media: "video", operations: ["edit_video"] },
+  { id: "fal:minimax/h3-max/reframe-video", media: "video", operations: ["edit_video"], description: H3_REFRAME_DESCRIPTION },
   { id: "fal:minimax/h3-max/insert-video", media: "video", operations: ["edit_video"], refs: { video: ["video_url", "reference_video_urls"] } },
   { id: "fal:minimax/h3-max/recast", media: "video", operations: ["edit_video"] },
   { id: "fal:minimax/h3-max-turbo/extend-video", media: "video", operations: ["extend_video"] },

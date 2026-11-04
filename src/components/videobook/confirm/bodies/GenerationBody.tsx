@@ -12,6 +12,7 @@ import {
 import { GenerationControlField } from '@/components/videobook/GenerationControlField'
 import { InsertVideoEditor } from '@/components/videobook/InsertVideoEditor'
 import { isInsertVideoModel } from '../../../../../server/src/media/insert-video-timing'
+import { H3_REFRAME_DESCRIPTION, isH3ReframeModel } from '../../../../../server/src/media/reframe-video'
 import { PromptHistoryControls } from '@/components/videobook/PromptHistoryControls'
 import type { PromptHistoryControl } from '@/videobook/use-prompt-history'
 import type { ArtifactThumbAsset } from '@/components/videobook/ArtifactThumb'
@@ -405,6 +406,7 @@ export function GenerationBody({
 
         <section className="generation-review-settings-section" aria-label="Settings">
           {seedanceEdit && <p className="muted">{SEEDANCE_EDIT_DESCRIPTION}</p>}
+          {isH3ReframeModel(draft.action.model) && <p className="muted">{H3_REFRAME_DESCRIPTION}</p>}
           {frameAspectRatio && <p className="muted">{FRAME_ASPECT_DESCRIPTION}</p>}
           <div className="generation-review-settings">
             {fieldControls.map((control) => (

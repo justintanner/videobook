@@ -2,6 +2,7 @@ import { createFal } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
 import { uploadAssetToFal } from "../../jobs/_fal-upload.js";
 import { describeFalError } from "../../jobs/_fal-shared.js";
+import { reframeVideoFailure } from "../reframe-video.js";
 import { withProviderHandoff } from "../../jobs/_lease.js";
 import { generationCostHints } from "../cost.js";
 import { providerEndpoints } from "../endpoints.js";
@@ -23,7 +24,7 @@ async function submitQueued(request: Record<string, unknown>, context: SubmitCon
   try {
     submitted = await falProvider().post.v1.queue.submit({ endpoint_id: endpointId, input: request } as never);
   } catch (cause) {
-    const message = describeFalError(cause);
+    const message = reframeVideoFailure(context.model.id, describeFalError(cause));
     if (cause instanceof Error && message === cause.message) throw cause;
     throw new Error(message, { cause });
   }

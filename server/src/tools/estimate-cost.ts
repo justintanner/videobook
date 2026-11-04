@@ -9,7 +9,7 @@ import { previewPlaceholderUrl } from "../preview-payload.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-models.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { estimateGeneration } from "../media/cost.js";
-import { checkSeedanceEditSource, normalizeRefParams, normalizeRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkReframeVideoGeometry, normalizeRefParams, normalizeRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
@@ -84,7 +84,8 @@ async function estimateMedia(engine: Engine, input: Record<string, unknown>): Pr
   const options = input.options !== null && typeof input.options === "object" && !Array.isArray(input.options)
     ? input.options as Record<string, unknown>
     : {};
-  const sourceError = await checkSeedanceEditSource(engine, model, refs, input.mode);
+  const sourceError = (await checkSeedanceEditSource(engine, model, refs, input.mode))
+    ?? await checkReframeVideoGeometry(engine, model, refs, options);
   if (sourceError) return unavailable(sourceError);
   const source = await resolveGenerationSource(engine, model, refs);
   if (!source.ok) return unavailable(source.error);

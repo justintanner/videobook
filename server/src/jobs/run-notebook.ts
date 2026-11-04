@@ -50,7 +50,7 @@ import { spliceVideoDef } from "../tools/splice-video.js";
 import { tryResolveModel } from "../media/descriptor.js";
 import { previewGeneration } from "../media/preview.js";
 import { sourcedGenerationInput } from "../media/generation-source.js";
-import { checkSeedanceEditSource, checkInsertVideoTiming, normalizeRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkInsertVideoTiming, checkReframeVideoGeometry, normalizeRefs } from "../media/refs.js";
 import { REF_ROLES, type MediaRefs, type RefRole, type ResolvedModel } from "../media/types.js";
 import type { RefParams } from "../media/request.js";
 import { cellInputParams } from "../generation-input-params.js";
@@ -1205,6 +1205,9 @@ async function prepareMediaGeneration(
     const timingError = await checkInsertVideoTiming(engine, model, normalizeRefs(prepared.input.refs),
       preview.preview.payload.input as Record<string, unknown> ?? {});
     if (timingError) throw new Error(timingError);
+    const geometryError = await checkReframeVideoGeometry(engine, model, normalizeRefs(prepared.input.refs),
+      preview.preview.payload.input as Record<string, unknown> ?? {});
+    if (geometryError) throw new Error(geometryError);
     const sourceError = await checkSeedanceEditSource(engine, model, normalizeRefs(prepared.input.refs), prepared.input.mode);
     if (sourceError) throw new Error(sourceError);
   }

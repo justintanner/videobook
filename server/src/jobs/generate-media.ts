@@ -11,7 +11,7 @@ import { referenceVideoDuration } from "../reference-video-duration.js";
 import { resolveModel } from "../media/descriptor.js";
 import { buildWireRequest, type RefParams } from "../media/request.js";
 import { applyPromptDialect } from "../media/prompt-dialects.js";
-import { checkSeedanceEditSource, checkInsertVideoTiming, checkRefDurations, resolveRefInput, uploadFieldRefs, uploadRefs, type ResolvedRefs } from "../media/refs.js";
+import { checkSeedanceEditSource, checkInsertVideoTiming, checkReframeVideoGeometry, checkRefDurations, resolveRefInput, uploadFieldRefs, uploadRefs, type ResolvedRefs } from "../media/refs.js";
 import { seedanceDraftCostHints } from "../media/seedance-draft.js";
 import { resolveGenerationSource } from "../media/generation-source.js";
 import { adapterFor } from "../media/adapters/index.js";
@@ -92,10 +92,11 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
   await engine.metadata.artifacts.write(job.assetId, "generation-request", job);
   const fieldIds = Object.values(job.fieldRefs ?? {}).flatMap((ids) => ids ?? []);
   const prompt = job.prompt === undefined ? undefined : applyPromptDialect(model.entry.dialect, job.prompt, job.refs, fieldIds);
-  const durationError = (await checkInsertVideoTiming(engine, model, job.refs, job.options))
+  const sourceError = (await checkInsertVideoTiming(engine, model, job.refs, job.options))
+    ?? (await checkReframeVideoGeometry(engine, model, job.refs, job.options))
     ?? (await checkSeedanceEditSource(engine, model, job.refs, job.mode))
     ?? await checkRefDurations(engine, model, job.refs);
-  if (durationError) throw new Error(durationError);
+  if (sourceError) throw new Error(sourceError);
   const source = await resolveGenerationSource(engine, model, job.refs);
   if (!source.ok) throw new Error(source.error);
   const uploaded = await uploadRefs(engine, adapter, source.refs);

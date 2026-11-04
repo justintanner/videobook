@@ -10,7 +10,8 @@ import { chromium } from 'playwright'
 import type { Browser, Page, Request } from 'playwright'
 import type { NotebookCell } from 'videobook-engine'
 import sharp from 'sharp'
-import { runFfmpeg } from '../../server/src/ffmpeg.js'
+import { probeVideo, runFfmpeg } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine } from '../../server/src/book-context.js'
@@ -227,6 +228,64 @@ describe('drawn region image editor through real MCP', () => {
       await page.reload()
     }
   }, 60_000)
+
+  it('blocks a filled H3 reframe canvas and recovers when its aspect ratio changes', async () => {
+    const book = books.get(bookId)
+    if (!book.ok) throw new Error(book.error.message)
+    const engine = book.value.engine
+    const read = engine.notebooks.read(notebookId)
+    if (!read.ok) throw new Error(read.error.message)
+    const original = read.value
+    const file = join(rootDir, 'reframe-source.mp4')
+    await runFfmpeg(['-y', '-f', 'lavfi', '-i', 'color=s=1536x2688:r=24:d=0.25', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', file])
+    const asset = await engine.artifacts.create('video', 'Portrait source')
+    if (!asset.ok) throw new Error(asset.error.message)
+    expect((await engine.files.writeFromPath(asset.value.artifactId, 'original.mp4', file)).ok).toBe(true)
+    const { width, height, duration } = await probeVideo(file)
+    await engine.metadata.artifacts.write(asset.value.artifactId, 'original', { width, height, duration, fps: 24, hasAudio: false })
+    const poster = await sharp({ create: { width: 96, height: 168, channels: 3, background: '#345a42' } }).jpeg().toBuffer()
+    await engine.files.write(asset.value.artifactId, 'original.jpg', poster)
+    const source = engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 0 }, outputArtifactId: asset.value.artifactId })
+    const producer = engine.notebooks.createCell({
+      type: 'generate_video', slot: { row: 1, column: 1 }, provider: 'fal', model: 'fal:minimax/h3-max/reframe-video',
+      operation: 'edit_video', tool: 'generate_video', prompt: 'looks realistic',
+      inputs: { generationMode: 'default', generationSettings: { aspect_ratio: '9:16', resolution: '1080p' } },
+    })
+    expect((await engine.notebooks.write({ ...original, cells: [...original.cells, source, producer], edges: [
+      ...original.edges, engine.notebooks.createEdge({ source: source.id, target: producer.id, targetInput: 'video' }),
+    ] })).ok).toBe(true)
+    const requests: ObservedToolCall[] = []
+    const observe = (request: Request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/mcp')) requests.push(...toolCalls(request.postDataJSON()))
+    }
+    page.on('request', observe)
+    try {
+      await page.reload()
+      await page.locator(`.react-flow__node[data-id="${producer.id}"] .cell-node`).click()
+      const inspector = page.locator('.inspector')
+      const generate = inspector.getByRole('button', { name: /^Generate/ }).first()
+      await expect.poll(() => inspector.textContent()).toContain('1536×2688 source fills the 9:16 canvas')
+      expect(await inspector.getByText(/The prompt describes the new surroundings/).isVisible()).toBe(true)
+      expect(await generate.isDisabled()).toBe(true)
+      await inspector.getByRole('combobox', { name: 'Aspect ratio', exact: true }).press('Control+Enter')
+      expect(requests.filter((request) => request.name === 'run_notebook_cell')).toHaveLength(0)
+      await inspector.getByRole('combobox', { name: 'Aspect ratio', exact: true }).selectOption({ label: '16:9' })
+      await expect.poll(() => generate.isEnabled()).toBe(true)
+      const payload = inspector.getByLabel('Generation payload preview', { exact: true })
+      await expect.poll(() => payload.textContent()).toContain('"aspect_ratio": "16:9"')
+      expect(await payload.textContent()).toContain('"resolution": "1080p"')
+      await inspector.getByRole('combobox', { name: 'Aspect ratio', exact: true }).selectOption({ label: '9:16' })
+      await expect.poll(() => inspector.textContent()).toContain('leaving no area to outpaint')
+      expect(await generate.isDisabled()).toBe(true)
+      expect(requests.filter((request) => request.name === 'run_notebook_cell')).toHaveLength(0)
+    } finally {
+      page.off('request', observe)
+      await abortActiveBookJobsForTests()
+      expect((await engine.notebooks.write(original)).ok).toBe(true)
+      expect((await engine.artifacts.delete(asset.value.artifactId)).ok).toBe(true)
+      await page.reload()
+    }
+  }, testBudget(60_000))
 
   it('retries only credit failures from the media tile without routing through chat', async () => {
     await pauseBookQueueForTests(bookId)

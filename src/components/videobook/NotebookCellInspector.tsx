@@ -2803,6 +2803,7 @@ function ExecutableCellInspector({
     ? promptMentionPreview
     : initialGenerationPreview ?? promptMentionPreview
   const generationPreviewStale = (promptMentionPreview.key ?? initialPreviewKey) !== currentPreviewKey
+  const generationPreviewFailed = generationCell && !generationPreviewStale && Boolean(generationPreview.error)
   const loadGenerationPreview = async (
     value = draft,
     inputEdges = edges,
@@ -2975,6 +2976,7 @@ function ExecutableCellInspector({
       || saving
       || action?.disabled
       || !valid
+      || generationPreviewFailed
       || (generationCell && promptMentionPreview.loading)
     ) return
     setSaving(true)
@@ -3251,6 +3253,7 @@ function ExecutableCellInspector({
     || saving
     || Boolean(action?.disabled)
     || !valid
+    || generationPreviewFailed
     || (generationCell && promptMentionPreview.loading)
     || (!saveOnRun && dirty)
   const { onKeyDown } = useConfirmSheetKeys({

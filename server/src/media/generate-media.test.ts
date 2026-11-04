@@ -63,6 +63,7 @@ describe("generic media generation", () => {
   let mp3: Buffer;
   let longClip: string;
   let shortClip: string;
+  let portraitClip: string;
   let server: Server;
   let baseURL: string;
   let requests: RecordedRequest[];
@@ -105,6 +106,8 @@ describe("generic media generation", () => {
 
   beforeAll(async () => {
     fixtures = await mkdtemp(join(tmpdir(), "videobook-media-fixtures-"));
+    portraitClip = join(fixtures, "portrait.mp4");
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=s=1536x2688:r=24:d=0.25", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", portraitClip]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1", join(fixtures, "red.png")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", join(fixtures, "clip.mp4")]);
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "libmp3lame", join(fixtures, "tone.mp3")]);
@@ -181,8 +184,8 @@ describe("generic media generation", () => {
     const created = await engine.artifacts.create("vid", "reference clip");
     if (!created.ok) throw new Error(created.error.message);
     expect((await engine.files.write(created.value.artifactId, "original.mp4", await readFile(file))).ok).toBe(true);
-    const { duration } = await probeVideo(file);
-    expect((await engine.metadata.artifacts.write(created.value.artifactId, "original", { duration })).ok).toBe(true);
+    const { duration, width, height } = await probeVideo(file);
+    expect((await engine.metadata.artifacts.write(created.value.artifactId, "original", { duration, width, height })).ok).toBe(true);
     return created.value.artifactId;
   }
 
@@ -674,6 +677,31 @@ describe("generic media generation", () => {
     const job = queuedJob(String(accepted.asset_id));
     await expect(runGenerateMedia(engine, { ...job, options: { ...job.options, start_time: 14 } }, await ownerContext(job.assetId)))
       .rejects.toThrow(/Replace from/);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("rejects H3 reframing into a filled canvas before creating work or uploading a retried job", async () => {
+    const book_id = engine.book.get().bookId;
+    const source = await probedVideoArtifact(portraitClip);
+    const model = "fal:minimax/h3-max/reframe-video";
+    const before = engine.artifacts.list().length;
+    for (const options of [{}, { aspect_ratio: "9:16", resolution: "768p" }, { aspect_ratio: "9:16", resolution: "1080p" }]) {
+      const result = await client.callTool({ name: "generate_video", arguments: { book_id, model, refs: { video: [source] }, options } });
+      expect(toolError(result)).toContain("1536×2688 source fills the 9:16 canvas");
+    }
+    expect(engine.artifacts.list()).toHaveLength(before);
+    expect(engine.jobs.queue.list({ type: "generate_media" })).toHaveLength(0);
+    const estimate = toolJson(await client.callTool({ name: "estimate_cost", arguments: { calls: [{
+      tool_name: "generate_video", input: { book_id, model, refs: { video: [source] } },
+    }] } }));
+    expect(JSON.stringify(estimate)).toContain("leaving no area to outpaint");
+    const accepted = toolJson(await client.callTool({ name: "generate_video", arguments: {
+      book_id, model, refs: { video: [source] }, options: { aspect_ratio: "16:9", resolution: "1080p" },
+    } }));
+    const job = queuedJob(String(accepted.asset_id));
+    expect(job.options).toEqual({ aspect_ratio: "16:9", resolution: "1080p" });
+    await expect(runGenerateMedia(engine, { ...job, options: {} }, await ownerContext(job.assetId)))
+      .rejects.toThrow("leaving no area to outpaint");
     expect(requests).toHaveLength(0);
   });
 });

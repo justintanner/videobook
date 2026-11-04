@@ -1,7 +1,10 @@
 import { isSeedanceEdit } from "./seedance-edit.js";
 import type { Engine } from "videobook-engine";
+import { join } from "node:path";
+import { probeVideo } from "../ffmpeg.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { insertVideoTimingError, isInsertVideoModel } from "./insert-video-timing.js";
+import { isH3ReframeModel, reframeVideoGeometryError } from "./reframe-video.js";
 import { resolveAudioRef, resolveImageRef, resolveVideoRef, type RefInput } from "../tools/_media-refs.js";
 import type { ProviderAdapter } from "./adapters/types.js";
 import type { RefParams } from "./request.js";
@@ -204,6 +207,25 @@ export async function checkInsertVideoTiming(engine: Engine, model: ResolvedMode
   const source = refs.video?.[0];
   const duration = source ? await referenceVideoDuration(engine, [source]) : undefined;
   return insertVideoTimingError(options, duration);
+}
+
+export async function checkReframeVideoGeometry(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown>): Promise<string | null> {
+  if (!isH3ReframeModel(model.id)) return null;
+  const source = refs.video?.[0];
+  if (!source || isHttpUrl(source)) return null;
+  const input = await resolveRefInput(engine, "video", source);
+  const settings = { ...model.entry.defaults, ...options };
+  if (/^original\.[^.]+$/u.test(input.filename)) {
+    const meta = await engine.metadata.artifacts.read<{ width?: unknown; height?: unknown }>(input.assetId, "original");
+    const { width, height } = meta.ok ? meta.value : {};
+    if (typeof width === "number" && Number.isFinite(width) && width > 0 && typeof height === "number" && Number.isFinite(height) && height > 0) {
+      return reframeVideoGeometryError(settings, width, height);
+    }
+  }
+  const manifest = await engine.files.manifest(input.assetId);
+  if (!manifest.ok) return manifest.error.message;
+  const { width, height } = await probeVideo(join(manifest.value.path, input.filename));
+  return reframeVideoGeometryError(settings, width, height);
 }
 
 export async function checkSeedanceEditSource(engine: Engine, model: ResolvedModel, refs: MediaRefs, mode: unknown): Promise<string | null> {

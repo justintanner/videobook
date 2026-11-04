@@ -83,14 +83,18 @@ describe("pollPendingProviderTasks", () => {
     if (stillPending.ok) expect(stillPending.value).toEqual([]);
   });
 
-  it("keeps structured Fal result validation details on the failed artifact", async () => {
-    const { assetSlug } = await seedPendingTask(fs, "fal_media", "invalid-insert", { falEndpointId: "minimax/h3-max/insert-video" });
+  it.each([
+    { endpoint: "minimax/h3-max/insert-video", field: "start_time", message: "Start time must be within the source video", guidance: "" },
+    { endpoint: "minimax/h3-max/reframe-video", field: "video_url", message: "Canvas and source_scale leave no area to outpaint",
+      guidance: ". Choose a different aspect ratio to expand the surroundings, or use a video editing model to change the existing picture." },
+  ])("keeps actionable Fal validation details for $endpoint on the failed artifact", async ({ endpoint, field, message, guidance }) => {
+    const { assetSlug } = await seedPendingTask(fs, "fal_media", "invalid-input", { falEndpointId: endpoint });
     const server = createServer((request, response) => {
       request.resume();
       const status = request.url?.endsWith("/status");
       response.writeHead(status ? 200 : 422, { "content-type": "application/json" });
       response.end(JSON.stringify(status ? { status: "COMPLETED" } : {
-        detail: [{ loc: ["body", "start_time"], msg: "Start time must be within the source video" }],
+        detail: [{ loc: ["body", field], msg: message }],
       }));
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -100,7 +104,7 @@ describe("pollPendingProviderTasks", () => {
     process.env.FAL_API_KEY = "local-poll-key";
     try {
       const result = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: `http://127.0.0.1:${address.port}` });
-      const expected = "Fal API error: 422: start_time: Start time must be within the source video";
+      const expected = `Fal API error: 422: ${field}: ${message}${guidance}`;
       expect(result.failed[0]?.failMsg).toBe(expected);
       const failure = fs.jobs.failures.read(assetSlug);
       expect(failure.ok && failure.value?.message).toBe(expected);
