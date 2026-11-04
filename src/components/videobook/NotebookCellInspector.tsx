@@ -133,6 +133,13 @@ import {
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import { isNotebookGenerationCellType } from '@/videobook/notebook-cell-types'
+import {
+  cellFormDraftFields,
+  rebaseCellFormDraft,
+  sameCellFormDraft,
+  type CellFormDraft,
+  type CellFormSync,
+} from '@/videobook/cell-form-draft'
 import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
 import { ProviderTaskLink } from './ProviderTaskLink'
 import type { ProviderTaskStatus } from '../../../server/src/provider-status-link'
@@ -184,35 +191,6 @@ function isActionCellType(
 ): boolean {
   return actionCellTypes.has(type)
 }
-
-type CellFormDraft = {
-  prompt: string
-  provider: string
-  model: string
-  operation: string
-  tool: string
-  startSeconds: string
-  endSeconds: string
-  overlap: string
-  frameMode: 'first' | 'time' | 'last'
-  timestampSeconds: string
-  generationMode: string
-  generationSettings: Record<string, GenerationControlValue>
-}
-
-const cellFormDraftFields = [
-  'prompt',
-  'provider',
-  'model',
-  'operation',
-  'tool',
-  'startSeconds',
-  'endSeconds',
-  'overlap',
-  'frameMode',
-  'timestampSeconds',
-  'generationMode',
-] as const satisfies readonly (keyof CellFormDraft)[]
 
 function draftNumber(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value)
@@ -287,6 +265,22 @@ function cellFormDraft(
     ...draft,
     ...selection,
     generationMode: action ? initialGenerationMode(action, inputs, draft.generationMode) : draft.generationMode,
+  }
+}
+
+function openedCellFormDraft(
+  cell: NotebookCell,
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+  actions: readonly NotebookGenerationAction[],
+): CellFormDraft {
+  const initial = cellFormDraft(cell, actions, generationConnectedInputs(cell.id, cells, edges))
+  if (!isNotebookGenerationCellType(cell.type) || initial.generationMode !== 'r2v') return initial
+  return {
+    ...initial,
+    prompt: remapGenerationInputPrompt(initial.prompt,
+      generationInputMentions(cell.id, cells, edges, 'i2v'),
+      generationInputMentions(cell.id, cells, edges, initial.generationMode)),
   }
 }
 
@@ -2549,20 +2543,20 @@ function ExecutableCellInspector({
 }) {
   const formId = useId()
   const dock = useContext(ComposerDockContext)
-  const [draft, setDraft] = useState(() => {
-    const initial = cellFormDraft(
-      cell,
-      generationActions,
-      generationConnectedInputs(cell.id, cells, edges),
-    )
-    if (!isNotebookGenerationCellType(cell.type) || initial.generationMode !== 'r2v') return initial
-    return {
-      ...initial,
-      prompt: remapGenerationInputPrompt(initial.prompt,
-        generationInputMentions(cell.id, cells, edges, 'i2v'),
-        generationInputMentions(cell.id, cells, edges, initial.generationMode)),
+  const allGenerationControls = generationActions.flatMap((candidate) =>
+    candidate.controls)
+  const storedDraft = persistedCellFormDraft(cell, allGenerationControls)
+  const [draft, setDraft] = useState(() =>
+    openedCellFormDraft(cell, cells, edges, generationActions))
+  const [synced, setSynced] = useState<CellFormSync>(() => ({ stored: storedDraft, draft }))
+  if (!sameCellFormDraft(storedDraft, synced.stored)) {
+    const next = {
+      stored: storedDraft,
+      draft: openedCellFormDraft(cell, cells, edges, generationActions),
     }
-  })
+    setSynced(next)
+    setDraft(rebaseCellFormDraft(draft, synced, next))
+  }
   const [saving, setSaving] = useState(false)
   const ensureVoiceCatalog = () => {
     if (!voiceCatalog) return
@@ -2682,8 +2676,6 @@ function ExecutableCellInspector({
       )
     : []
   const generationControls = selectedGenerationAction?.controls ?? []
-  const allGenerationControls = generationActions.flatMap((candidate) =>
-    candidate.controls)
   const generationSettingsMessage = generationSettingsError(
     generationControls,
     draft.generationSettings,
@@ -3114,15 +3106,20 @@ function ExecutableCellInspector({
     ]
     const remapped = remapSlotPrompt(draft.prompt, cell.id, cells, currentSlotConnections, change)
     const savedPrompt = await onSetInputs(change.connections)
+    const prompt = savedPrompt !== null && draft.prompt === (cell.prompt ?? '') ? savedPrompt : remapped
     const legacySettings = slotLegacySettingNames(slotContext.mode)
-    const next = {
+    const withoutLegacy = (settings: CellFormDraft['generationSettings']) =>
+      Object.fromEntries(Object.entries(settings).filter(([name]) => !legacySettings.has(name)))
+    setDraft((current) => ({
+      ...current,
+      prompt: current.prompt === draft.prompt ? prompt : current.prompt,
+      generationSettings: withoutLegacy(current.generationSettings),
+    }))
+    refreshGenerationPreview({
       ...draft,
-      prompt: savedPrompt !== null && draft.prompt === (cell.prompt ?? '') ? savedPrompt : remapped,
-      generationSettings: Object.fromEntries(Object.entries(draft.generationSettings)
-        .filter(([name]) => !legacySettings.has(name))),
-    }
-    setDraft(next)
-    refreshGenerationPreview(next, nextEdges)
+      prompt,
+      generationSettings: withoutLegacy(draft.generationSettings),
+    }, nextEdges)
   }
   const slotEditor: GenerationSlotEditor | undefined = slotContext
     ? {

@@ -412,7 +412,7 @@ export function GenerationInputSlots({
       editor.onEdit(edit)
     },
     focusRef: (key) => (node) => {
-      if (!node || pendingFocus.current !== key) return
+      if (!node || node.disabled || pendingFocus.current !== key) return
       pendingFocus.current = null
       node.focus()
     },

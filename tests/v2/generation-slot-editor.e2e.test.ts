@@ -13,10 +13,11 @@ import { testBudget } from '../../server/src/test-budget.js'
 
 type StartedProcess = { child: ChildProcess; output: string[] }
 type Edge = { id: string; source: string; target: string; targetInput: string }
-type Cell = { id: string; prompt?: string; inputs?: Record<string, unknown> }
+type Cell = { id: string; model?: string; prompt?: string; inputs?: Record<string, unknown> }
 type Notebook = { cells: Cell[]; edges: Edge[] }
 
 const GROK = 'kie:grok-imagine-video-1-5-preview'
+const PICKED = 'kie:grok-imagine/image-to-video'
 
 async function availablePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -154,7 +155,7 @@ describe('generation slot editor in the browser', () => {
         { source_cell_id: images[2], target_input: 'keyframe_2', params: {} },
       ],
     })
-    await call('update_notebook_cell', { cell_id: generationId, cell: { prompt: 'Hold @image1, pass @keyframe1, land on @keyframe2', inputs: { generationMode: 'i2v', generationSettings: { duration: 10 } } } })
+    await call('update_notebook_cell', { cell_id: generationId, cell: { provider: 'kie', model: GROK, operation: 'image_to_video', tool: 'generate_video', prompt: 'Hold @image1, pass @keyframe1, land on @keyframe2', inputs: { generationMode: 'i2v', generationSettings: { duration: 10 } } } })
     await page.reload()
     await page.locator(`.notebook-flow .react-flow__node[data-id="${generationId}"] .cell-node`).click({ timeout: testBudget(60_000) })
     await chip('Keyframes', 1).waitFor({ state: 'visible', timeout: testBudget(30_000) })
@@ -185,6 +186,40 @@ describe('generation slot editor in the browser', () => {
     await page.locator('.inspector').getByLabel('Resolution').selectOption({ label: '720p' })
     await grip.dragTo(target, { targetPosition: { x: 40, y: (await target.boundingBox())!.height - 4 } })
     await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[0, 'image'], [1, 'image_2'], [2, 'keyframe']])
+  }, testBudget(90_000))
+
+  it('keeps an unsaved model and settings picked in the inspector while inputs move', async () => {
+    await call('set_notebook_cell_inputs', {
+      cell_id: generationId,
+      inputs: [
+        { source_cell_id: images[0], target_input: 'image', params: {} },
+        { source_cell_id: images[1], target_input: 'image_2', params: {} },
+      ],
+    })
+    await call('update_notebook_cell', { cell_id: generationId, cell: { prompt: 'Blend @image1 into @image2' } })
+    await page.reload()
+    await page.locator(`.notebook-flow .react-flow__node[data-id="${generationId}"] .cell-node`).click({ timeout: testBudget(60_000) })
+    const model = page.locator('.inspector').getByLabel('Generation model')
+    await model.selectOption(`generation.${PICKED}`)
+    const resolution = page.locator('.inspector').getByLabel('Resolution')
+    await resolution.selectOption({ label: '720p' })
+    const grip = chip('Reference images', 1).locator('.generation-slot-grip')
+    await grip.focus()
+    await page.keyboard.press('ArrowUp')
+    await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[1, 'image'], [0, 'image_2']])
+    const saved = (await call<Notebook>('get_notebook')).cells.find((cell) => cell.id === generationId)
+    expect(saved?.model).toBe(GROK)
+    expect(saved?.prompt).toBe('Blend @image2 into @image1')
+    expect(await model.inputValue()).toBe(`generation.${PICKED}`)
+    expect(await resolution.locator('option:checked').textContent()).toBe('720p')
+    await expect.poll(async () => await page.evaluate(() => document.activeElement?.closest('.generation-slot-chip')?.textContent ?? ''), {
+      timeout: testBudget(15_000),
+    }).toContain('@a2')
+    await page.keyboard.press('ArrowDown')
+    await expect.poll(keyframes, { timeout: testBudget(15_000) }).toEqual([[0, 'image'], [1, 'image_2']])
+    expect((await call<Notebook>('get_notebook')).cells.find((cell) => cell.id === generationId)?.prompt).toBe('Blend @image1 into @image2')
+    expect(await model.inputValue()).toBe(`generation.${PICKED}`)
+    expect(await resolution.locator('option:checked').textContent()).toBe('720p')
   }, testBudget(90_000))
 
   it('takes a board cell dragged by its canvas grip into a slot', async () => {

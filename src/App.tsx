@@ -11922,7 +11922,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onReviewX={reviewPublicationOnX} onDelete={() => void deleteNotebookCells([selectedNotebookCell])} />
       ) : (
         <NotebookCellInspector
-          key={`${selectedNotebookCell.id}:${selectedNotebookCell.prompt ?? ''}`}
+          key={selectedNotebookCell.id}
           headerActionHost={inspectorActionHost}
           notebookId={notebook?.id ?? ''}
           bookId={bookId}
