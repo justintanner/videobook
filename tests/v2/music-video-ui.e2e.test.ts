@@ -390,6 +390,7 @@ describe('music video recovery and export in the browser', () => {
     } finally { await playback.close() }
     await page.reload()
     await openEditor()
+    await tab('Music')
     await panel().getByText('Using your corrected beat map.', { exact: false }).waitFor()
     expect((await sequence()).clips).toEqual(applied.clips)
     expect(errors).toEqual([])

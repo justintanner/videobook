@@ -1,3 +1,6 @@
+import { requestFromEditStage } from '@/videobook/command-plan-edit'
+import { useMusicVideoEditing } from '@/videobook/useMusicVideoEditing'
+import { isCompatibleLibraryAsset, useMediaLibrarySearch } from '@/videobook/useMediaLibrarySearch'
 import { PostInspector } from '@/components/videobook/PostInspector'
 import { insertVideoReviewError } from '@/videobook/insert-video-review'
 import type { PostView } from '../server/src/posts/post-contract'
@@ -101,20 +104,11 @@ import type {
 import { sequenceContentRevision } from './videobook/sequence-revision'
 import { useTimelineAssembly } from './videobook/useTimelineAssembly'
 import { useMusicRhythm } from './videobook/useMusicRhythm'
-import type { MusicDraftOptions, MusicVideoDraft } from '../server/src/rhythm/draft-model'
 import {
   clearReferencesConfirmation,
   forgetConfirmation,
   forgottenNotice,
 } from './videobook/forget-asset'
-import {
-  sameTagFilter,
-  tagFilterArgs,
-  toggleTagFilter,
-  type TagFilterTerm,
-  type TagSuggestion,
-} from './videobook/asset-tag-editing'
-import type { LibraryBrowsePage as LibrarySearchPage } from '@/videobook/library-browse'
 import {
   NOTEBOOK_GRID_ADDRESS_SOURCE,
   normalizeNotebookReference,
@@ -159,7 +153,7 @@ import {
   type CellGenerationAttempt,
   type NotebookCellInspectorAsset,
 } from '@/components/videobook/NotebookCellInspector'
-import { MediaLibraryPanel, type MediaLibraryKind, type MediaLibraryPanelState } from '@/components/videobook/MediaLibraryPanel'
+import { MediaLibraryPanel } from '@/components/videobook/MediaLibraryPanel'
 import {
   GenerationBody,
   type GenerationReviewSource,
@@ -303,10 +297,6 @@ import {
   type XPostThreadReview,
   type XPostThreadStep,
 } from '@/videobook/x-post-thread'
-import type {
-  MusicVideoCommitResult,
-  MusicVideoSetupState,
-} from '@/components/videobook/MusicVideoEditor'
 import {
   notebookEdges,
   notebookEdgesWithCellFocus,
@@ -331,21 +321,6 @@ import {
 import {
   startNotebookCellRun,
 } from '@/videobook/notebook-cell-actions'
-import {
-  prepareExistingSearchReference,
-  referenceKind,
-  searchReferenceRange,
-  uploadSearchReference,
-  type ReverseSearchMode,
-  type SearchReferenceDescriptor,
-} from '@/videobook/search-reference'
-import {
-  type SearchReferenceLifecycleState,
-  type SearchReferenceMode,
-} from '@/videobook/search-reference-lifecycle'
-import { searchWithPreparation } from '@/videobook/search-preparation'
-import { repairSearchIndexes } from '@/videobook/search-index-repair'
-import { useSearchReferenceLifecycle } from '@/videobook/useSearchReferenceLifecycle'
 import {
   pathForScreen,
   screenFromPath,
@@ -641,7 +616,6 @@ import {
   asGenerationPlans,
   asInitialWorkspace,
   asJobs,
-  asLibrarySearchResult,
   asNotebook,
   asNotebooks,
   asSequence,
@@ -698,23 +672,6 @@ const MusicVideoEditor = lazy(async () => {
   return { default: module.MusicVideoEditor }
 })
 
-type MusicVideoPreparedSetup = Extract<
-  MusicVideoSetupState,
-  { status: 'ready' }
-> & {
-  plan: CommandPlan
-  preview: EditPreview
-}
-
-type MusicVideoSession = {
-  key: string
-  audioArtifactId: string
-  returnFocus: HTMLElement | null
-  setup:
-    | Exclude<MusicVideoSetupState, { status: 'ready' }>
-    | MusicVideoPreparedSetup
-}
-
 type MediaFullscreenSession = {
   key: string
   bookId: string
@@ -727,47 +684,6 @@ type MediaFullscreenSession = {
   subjectMapLoading: boolean
   mode: MediaFullscreenMode
   initialInstruction: string
-}
-
-type MediaSearchMode = SearchReferenceMode
-
-type MediaLibraryPickerState = {
-  unindexedVisualAssets: number
-  preparingIndex: boolean
-  bookId: string
-  notebookId: string
-  cellId: string | null
-  slot?: NotebookGridSlot
-  query: string
-  draftQuery: string
-  assets: LibraryAssetRecord[]
-  page: LibrarySearchPage
-  booksWithErrors: Array<{ bookId: string; message: string }>
-  loading: boolean
-  loadingMore: boolean
-  error: string | null
-  activeArtifactId: string | null
-  /** Exact tag terms narrowing this search; changing them resets paging. */
-  tagFilters: TagFilterTerm[]
-  tagSuggestions: TagSuggestion[]
-}
-
-type MediaLibrarySearchCriteria = {
-  mode: MediaSearchMode
-  reference: SearchReferenceDescriptor | null
-  referenceStartSeconds: string
-  referenceDurationSeconds: string
-}
-
-function mediaLibrarySearchCriteria(
-  state: SearchReferenceLifecycleState,
-): MediaLibrarySearchCriteria {
-  return {
-    mode: state.mode,
-    reference: state.reference,
-    referenceStartSeconds: state.startSeconds,
-    referenceDurationSeconds: state.durationSeconds,
-  }
 }
 
 type PendingCommandPlan = {
@@ -1018,196 +934,6 @@ function sequenceTrackReference(sequence: Sequence | null, value: string | undef
   return matches.length === 1 ? matches[0] : null
 }
 
-function musicVideoSoundtrackTrack(
-  sequence: Sequence,
-  audioArtifactId: string,
-) {
-  const candidates = sequence.tracks.filter((track) =>
-    track.kind === 'audio' && track.enabled && !track.locked && !track.muted)
-  const existing = candidates.find((track) => {
-    const clips = sequence.clips.filter((clip) => clip.trackId === track.trackId)
-    return clips.length === 1
-      && clips[0]?.timelineStartFrame === 0
-      && clips[0].source.kind === 'timed'
-      && clips[0].source.artifactId === audioArtifactId
-  })
-  return existing ?? candidates.find((track) =>
-    !sequence.clips.some((clip) => clip.trackId === track.trackId)) ?? null
-}
-
-function musicVideoSoundtrackApplied(
-  sequence: Sequence,
-  audioArtifactId: string,
-  timelineLimitFrame: number,
-): boolean {
-  const track = musicVideoSoundtrackTrack(sequence, audioArtifactId)
-  if (!track) return false
-  const clips = sequence.clips.filter((clip) => clip.trackId === track.trackId)
-  const clip = clips[0]
-  return clips.length === 1
-    && clip !== undefined
-    && clip.timelineStartFrame === 0
-    && clip.durationFrames === timelineLimitFrame
-    && clip.source.kind === 'timed'
-    && clip.source.artifactId === audioArtifactId
-}
-
-function musicVideoTimelineLimit(
-  plan: CommandPlan,
-  sequence: Sequence,
-  audioArtifactId: string,
-): number {
-  const stage = plan.stages.find(
-    (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
-  )
-  const inserted = stage?.intent.operations.find((operation) =>
-    operation.kind === 'insert-clip'
-    && operation.placement.source.artifactId === audioArtifactId)
-  if (inserted?.kind === 'insert-clip') return inserted.placement.durationFrames
-  const existing = sequence.clips.find((clip) =>
-    clip.timelineStartFrame === 0
-    && clip.source.kind === 'timed'
-    && clip.source.artifactId === audioArtifactId)
-  const trimmed = stage?.intent.operations.find((operation) =>
-    operation.kind === 'trim-clip' && operation.clipId === existing?.clipId)
-  if (trimmed?.kind === 'trim-clip') return trimmed.durationFrames
-  if (existing) return existing.durationFrames
-  throw new Error('The soundtrack setup plan has no duration boundary')
-}
-
-function musicVideoSetupSummary(plan: CommandPlan): string {
-  const operations = plan.stages.flatMap((stage) =>
-    stage.kind === 'edit' ? stage.intent.operations : [])
-  const inserts = operations.filter((operation) => operation.kind === 'insert-clip').length
-  const muted = operations.filter((operation) =>
-    operation.kind === 'set-clip-audio'
-      ? operation.audio.muted
-      : operation.kind === 'set-clip-speed' && operation.audioPolicy === 'mute')
-    .length
-  return `${inserts > 0 ? 'Place' : 'Normalize'} master soundtrack · mute ${muted} other ${muted === 1 ? 'clip' : 'clips'}`
-}
-
-function editPreviewError(preview: EditPreview): string | null {
-  if (preview.valid) return null
-  const conflicts = preview.conflicts.map((conflict) => conflict.message)
-  return conflicts.join(' · ') || 'The canonical edit preview is invalid'
-}
-
-function requestFromEditStage(
-  stages: CommandPlan['stages'],
-): Record<string, unknown> | Record<string, unknown>[] {
-  const stage = stages.find(
-    (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
-  )
-  const requests = stage?.intent.operations.map((operation) => {
-    if (operation.kind === 'insert-clip') {
-      return {
-        kind: 'insert',
-        mode: operation.mode,
-        artifact_id: operation.placement.source.artifactId,
-        track_id: operation.placement.trackId,
-        timeline_start_frame: operation.placement.timelineStartFrame,
-        duration_frames: operation.placement.durationFrames,
-        ...(operation.placement.source.kind === 'timed'
-          ? {
-              source_start_tick: operation.placement.source.range.startTick,
-              source_duration_ticks: operation.placement.source.range.durationTicks,
-            }
-          : {}),
-      }
-    }
-    if (operation.kind === 'trim-clip') {
-      return {
-        kind: 'trim',
-        clip_id: operation.clipId,
-        timeline_start_frame: operation.timelineStartFrame,
-        duration_frames: operation.durationFrames,
-      }
-    }
-    if (operation.kind === 'set-clip-audio') {
-      return {
-        kind: 'volume',
-        clip_id: operation.clipId,
-        gain_db: operation.audio.gainDb,
-        muted: operation.audio.muted,
-        fade_in_frames: operation.audio.fadeInFrames,
-        fade_out_frames: operation.audio.fadeOutFrames,
-      }
-    }
-    if (operation.kind === 'move-clip') {
-      return {
-        kind: 'move',
-        clip_id: operation.clipId,
-        track_id: operation.trackId,
-        timeline_start_frame: operation.timelineStartFrame,
-      }
-    }
-    if (operation.kind === 'split-clip') {
-      return {
-        kind: 'split',
-        clip_id: operation.clipId,
-        split_frame: operation.splitFrame,
-      }
-    }
-    if (operation.kind === 'set-clip-transform') {
-      return {
-        kind: 'transform',
-        clip_id: operation.clipId,
-        fit: operation.transform.fit,
-        position_x: operation.transform.positionX,
-        position_y: operation.transform.positionY,
-        scale_x: operation.transform.scaleX,
-        scale_y: operation.transform.scaleY,
-        rotation_degrees: operation.transform.rotationDegrees,
-        opacity: operation.transform.opacity,
-        crop_top: operation.transform.cropTop,
-        crop_right: operation.transform.cropRight,
-        crop_bottom: operation.transform.cropBottom,
-        crop_left: operation.transform.cropLeft,
-      }
-    }
-    if (operation.kind === 'set-clip-speed') {
-      return {
-        kind: 'speed',
-        clip_id: operation.clipId,
-        numerator: operation.speed.numerator,
-        denominator: operation.speed.denominator,
-        reverse: operation.reverse,
-        audio_policy: operation.audioPolicy,
-      }
-    }
-    if (operation.kind === 'set-transition') {
-      return {
-        kind: 'transition',
-        outgoing_clip_id: operation.outgoingClipId,
-        incoming_clip_id: operation.incomingClipId,
-        transition_kind: operation.transition?.kind ?? null,
-        ...(operation.transition
-          ? {
-              duration_frames: operation.transition.durationFrames,
-              alignment: operation.transition.alignment,
-            }
-          : {}),
-      }
-    }
-    if (operation.kind === 'upsert-caption-cue') {
-      return {
-        kind: 'caption',
-        cue_id: operation.cue.cueId,
-        track_id: operation.cue.trackId,
-        timeline_start_frame: operation.cue.timelineStartFrame,
-        duration_frames: operation.cue.durationFrames,
-        text: operation.cue.text,
-        style_id: operation.cue.styleId,
-        ...(operation.cue.speaker ? { speaker: operation.cue.speaker } : {}),
-      }
-    }
-    throw new Error(`The edit cannot be replanned: ${operation.kind}`)
-  }) ?? []
-  if (requests.length === 0) throw new Error('The plan has no editable operation')
-  return requests.length === 1 ? requests[0] : requests
-}
-
 function savedValue(key: string): string {
   try {
     return window.localStorage.getItem(key) ?? ''
@@ -1224,28 +950,9 @@ function saveValue(key: string, value: string): void {
   }
 }
 
-const emptyLibraryPage: LibrarySearchPage = {
-  offset: 0,
-  limit: 24,
-  total: 0,
-  hasMore: false,
-}
-
 function passiveMediaKindForAsset(type: string): PassiveMediaKind | null {
   if (type === 'final') return 'video'
   return type === 'audio' || type === 'image' || type === 'video' ? type : null
-}
-
-function mediaLibraryKinds(kind: MediaLibraryKind): string[] {
-  if (kind === 'all') return ['audio', 'image', 'video', 'final']
-  return kind === 'video' ? ['video', 'final'] : [kind]
-}
-
-function isCompatibleLibraryAsset(
-  kind: MediaLibraryKind,
-  assetType: string,
-): boolean {
-  return mediaLibraryKinds(kind).includes(assetType)
 }
 
 async function fileObjectHash(file: File): Promise<string> {
@@ -1381,13 +1088,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     Record<string, MediaInsightWork>
   >({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
-  const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
-  const mediaLibraryReference = useSearchReferenceLifecycle()
   const [pendingWatermarkReview, setPendingWatermarkReview] =
     useState<WatermarkReviewState | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
-  const [musicVideoSession, setMusicVideoSession] = useState<MusicVideoSession | null>(null)
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
     useState<HTMLDivElement | null>(null)
   const [mediaFullscreenSidebarEditing, setMediaFullscreenSidebarEditing] =
@@ -1448,10 +1152,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const bookMenuRequestRef = useRef(0)
-  const mediaLibraryRequestRef = useRef(0)
   const imageSubjectMapRequestRef = useRef(0)
   const bookDataRequestRef = useRef(0)
-  const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
 
@@ -1790,6 +1492,35 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : current),
   )
 
+  const {
+    mediaLibraryPicker,
+    setMediaLibraryPicker,
+    mediaLibraryReference,
+    mediaLibraryRequestRef,
+    mediaLibraryKind,
+    mediaLibraryPanelState,
+    closeMediaLibrary,
+    openMediaLibraryPicker,
+    updateMediaLibraryDraft,
+    changeMediaLibraryMode,
+    prepareMediaLibraryFile,
+    prepareMediaLibrarySimilar,
+    clearMediaLibraryReference,
+    repairMediaLibraryIndexes,
+    searchMediaLibrary,
+    loadMoreMediaLibrary,
+    toggleMediaLibraryTagFilter,
+    clearMediaLibraryTagFilters,
+    loadMediaLibraryTagSuggestions,
+  } = useMediaLibrarySearch({
+    bookId,
+    notebook,
+    ready: mcp.state === 'ready',
+    call,
+    mediaSlotStates,
+    setNotice,
+  })
+
   const goalScope = useMemo(
     () => bookId && notebook ? { bookId, notebookId: notebook.id } : null,
     [bookId, notebook],
@@ -1869,6 +1600,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const next = asSequence(value)
       if (next) { watchSnapshotClockRef.current = performance.now(); setSequence(next) }
     },
+  })
+  const {
+    musicVideoSession,
+    setMusicVideoSession,
+    prepareMusicVideoSetup,
+    applyMusicVideoSetup,
+    commitMusicVideoEdit,
+    planMusicDraft,
+    applyMusicDraft,
+    restoreMusicVideoRevision,
+    createMusicVideoTrack,
+    closeMusicVideoEditor,
+  } = useMusicVideoEditing({
+    bookId,
+    call,
+    musicRhythm,
+    setSequence,
+    setLastEditActionId,
+    watchSnapshotClockRef,
   })
   const timelinePreviewCell = timelinePreview?.bookId === bookId
     ? notebook?.cells.find((cell) => cell.id === timelinePreview.cellId && cell.type === 'timeline')
@@ -2079,7 +1829,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ) return
     selectedCellIdsRef.current = next
     setSelectedCellIds(next)
-  }, [])
+  }, [setMediaLibraryPicker])
 
   const subtitles = useSubtitleEditor({ bookId, ready: mcp.state === 'ready', call })
   const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
@@ -2171,7 +1921,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       current && next.cells.some((cell) => cell.id === current) ? current : null)
     setSourceViewCellId((current) =>
       current && cellIds.has(current) ? current : null)
-  }, [bookId, observeChat, updateSelectedCellIds])
+  }, [bookId, observeChat, setMediaLibraryPicker, updateSelectedCellIds])
 
   useNotebookAutoRefresh({
     bookId,
@@ -5292,143 +5042,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const closeMediaLibrary = () => {
-    const restoreFocus = captureDismissedComposerFocus(mediaLibraryOpenerRef.current)
-    mediaLibraryRequestRef.current += 1
-    mediaLibraryReference.lifecycle.close()
-    setMediaLibraryPicker(null)
-    mediaLibraryOpenerRef.current = null
-    restoreFocus()
-  }
-
-  const loadMediaLibrary = async (
-    cellId: string | null,
-    query: string,
-    offset: number,
-    append: boolean,
-    criteria?: MediaLibrarySearchCriteria,
-    tagFilters?: readonly TagFilterTerm[],
-    knownKind?: MediaLibraryKind,
-  ) => {
-    const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
-    const kind = knownKind ?? (cellId === null ? 'all' : cell && passiveMediaKind(cell.type))
-    if (!kind) return
-    const activeCriteria = criteria
-      ?? (mediaLibraryPicker?.cellId === cellId
-        ? mediaLibrarySearchCriteria(mediaLibraryReference.state)
-        : {
-            mode: 'text' as const,
-            reference: null,
-            referenceStartSeconds: '0',
-            referenceDurationSeconds: '',
-          })
-    // Terms come in with the call rather than being read from state: a chip
-    // click sets state and searches in the same tick, and state has not
-    // updated yet.
-    const activeTagFilters = tagFilters
-      ?? (mediaLibraryPicker?.cellId === cellId
-        ? mediaLibraryPicker.tagFilters
-        : [])
-    const requestId = mediaLibraryRequestRef.current + 1
-    mediaLibraryRequestRef.current = requestId
-    setMediaLibraryPicker((current) => {
-      if (!current || current.cellId !== cellId) return current
-      return {
-        ...current,
-        query,
-        tagFilters: [...activeTagFilters],
-        assets: append ? current.assets : [],
-        page: append ? current.page : emptyLibraryPage,
-        booksWithErrors: append ? current.booksWithErrors : [],
-        preparingIndex: false,
-        loading: !append,
-        loadingMore: append,
-        error: null,
-      }
-    })
-    try {
-      let referenceRange
-      try {
-        referenceRange = activeCriteria.mode === 'video-reverse'
-          && activeCriteria.reference
-          ? searchReferenceRange(
-              activeCriteria.referenceStartSeconds,
-              activeCriteria.referenceDurationSeconds,
-              activeCriteria.reference,
-            )
-          : undefined
-      } catch (error) {
-        const message = mediaLibraryReference.lifecycle.getState().reference
-          === activeCriteria.reference
-          ? mediaLibraryReference.lifecycle.resetInvalidRange(error)
-          : error instanceof Error ? error.message : String(error)
-        throw new Error(message)
-      }
-      const isCancelled = () => mediaLibraryRequestRef.current !== requestId
-      const response = await searchWithPreparation({
-        search: () => call('search_library_assets', {
-          ...(activeCriteria.mode === 'text' && query.trim()
-            ? { query: query.trim() }
-            : {}),
-          ...(activeCriteria.mode !== 'text' && activeCriteria.reference
-            ? { reference_id: activeCriteria.reference.referenceId }
-            : {}),
-          ...(referenceRange
-            ? { reference_range: referenceRange }
-            : {}),
-          kinds: kind === 'all' ? ['audio', 'image', 'video'] : [kind],
-          ...tagFilterArgs(activeTagFilters),
-          limit: emptyLibraryPage.limit,
-          offset,
-        }),
-        listJobs: (owningBookId, jobIds) => call('list_jobs', {
-          book_id: owningBookId, job_ids: jobIds,
-        }, { background: true }),
-        onPreparing: (preparingIndex) => {
-          if (isCancelled()) return
-          setMediaLibraryPicker((current) => current && current.cellId === cellId
-            ? { ...current, preparingIndex }
-            : current)
-        },
-        isCancelled,
-      })
-      if (isCancelled()) return
-      const result = asLibrarySearchResult(response)
-      setMediaLibraryPicker((current) => {
-        if (!current || current.cellId !== cellId) return current
-        const compatible = result.assets.filter((asset) =>
-          isCompatibleLibraryAsset(kind, asset.type))
-        const combined = append ? [...current.assets, ...compatible] : compatible
-        const unique = new Map(combined.map((asset) => [
-          `${asset.owningBookId}:${asset.artifactId}`,
-          asset,
-        ]))
-        return {
-          ...current,
-          assets: [...unique.values()],
-          page: result.page,
-          booksWithErrors: result.booksWithErrors,
-          unindexedVisualAssets: result.unindexedVisualAssets,
-          loading: false,
-          loadingMore: false,
-        }
-      })
-    } catch (error) {
-      if (mediaLibraryRequestRef.current !== requestId) return
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaLibraryPicker((current) =>
-        current && current.cellId === cellId
-          ? {
-              ...current,
-              loading: false,
-              loadingMore: false,
-              error: message,
-            }
-          : current)
-      setNotice(message, 'error')
-    }
-  }
-
   const emptyMediaSlotKind = (
     cellId: string,
     currentNotebook: NotebookDocument | null | undefined = notebook,
@@ -5458,36 +5071,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setSourceViewCellId(null)
     setHistoryViewCellId(null)
     setComposerDockOpen(true)
-    mediaLibraryOpenerRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null
-    mediaLibraryReference.lifecycle.close()
     if (cellId) setMediaSlotOperation(cellId, null)
-    setMediaLibraryPicker({
-      unindexedVisualAssets: 0,
-      preparingIndex: false,
-      bookId,
-      notebookId: currentNotebook.id,
-      cellId,
-      slot,
-      query: '',
-      draftQuery: '',
-      assets: [],
-      page: emptyLibraryPage,
-      booksWithErrors: [],
-      loading: true,
-      loadingMore: false,
-      error: null,
-      activeArtifactId: null,
-      tagFilters: [],
-      tagSuggestions: [],
-    })
-    void loadMediaLibrary(cellId, '', 0, false, {
-      mode: 'text',
-      reference: null,
-      referenceStartSeconds: '0',
-      referenceDurationSeconds: '',
-    }, [], kind)
+    openMediaLibraryPicker(cellId, currentNotebook, slot, kind)
   }
 
   const dismissMediaLibrary = () => {
@@ -6782,277 +6367,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     }
   }
-
-  const prepareMusicVideoSetup = async (
-    sessionKey: string,
-    audioArtifactId: string,
-    targetSequence: Sequence,
-    chat?: ChatExecution,
-  ): Promise<void> => {
-    if (!bookId) {
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? {
-            ...current,
-            setup: {
-              status: 'error',
-              message: 'Load or create a book first.',
-            },
-          }
-        : current)
-      return
-    }
-    setMusicVideoSession((current) => current?.key === sessionKey
-      ? { ...current, setup: { status: 'loading' } }
-      : current)
-    const audioTrack = musicVideoSoundtrackTrack(targetSequence, audioArtifactId)
-    if (!audioTrack) {
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? {
-            ...current,
-            setup: {
-              status: 'needs-audio-track',
-              message: 'Create an empty, enabled soundtrack track before reviewing setup.',
-            },
-          }
-        : current)
-      return
-    }
-    try {
-      const plan = asCommandPlan(await call('plan_sequence_edit', {
-        book_id: bookId,
-        source_surface: 'ui',
-        actor: 'videobook-user',
-        expected_revision: await sequenceContentRevision(targetSequence),
-        edits: [{
-          kind: 'music_video_setup',
-          audio_artifact_id: audioArtifactId,
-          audio_track_id: audioTrack.trackId,
-        }],
-      }, { chat }))
-      const stage = plan.stages.find(
-        (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
-      )
-      if (!stage) throw new Error('The soundtrack setup plan has no edit stage')
-      const preview = await call('preview_edit_intent', {
-        book_id: bookId,
-        intent: stage.intent,
-      }, { chat }) as EditPreview
-      const invalid = editPreviewError(preview)
-      if (invalid) throw new Error(invalid)
-      const timelineLimitFrame = musicVideoTimelineLimit(
-        plan,
-        targetSequence,
-        audioArtifactId,
-      )
-      if (musicVideoSoundtrackApplied(
-        targetSequence,
-        audioArtifactId,
-        timelineLimitFrame,
-      )) {
-        setMusicVideoSession((current) => current?.key === sessionKey
-          ? {
-              ...current,
-              setup: {
-                status: 'applied',
-                audioTrackId: audioTrack.trackId,
-                timelineLimitFrame,
-              },
-            }
-          : current)
-        return
-      }
-      const prepared: MusicVideoPreparedSetup = {
-        status: 'ready',
-        audioTrackId: audioTrack.trackId,
-        timelineLimitFrame,
-        operationCount: stage.intent.operations.length,
-        summary: musicVideoSetupSummary(plan),
-        warnings: preview.warnings.map((warning) => warning.message),
-        plan,
-        preview,
-      }
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? { ...current, setup: prepared }
-        : current)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? { ...current, setup: { status: 'error', message } }
-        : current)
-    }
-  }
-
-  const applyMusicVideoSetup = async (): Promise<MusicVideoCommitResult> => {
-    if (!bookId || !musicVideoSession || musicVideoSession.setup.status !== 'ready') {
-      throw new Error('Review the soundtrack setup before applying it')
-    }
-    const sessionKey = musicVideoSession.key
-    const prepared = musicVideoSession.setup
-    const stage = prepared.plan.stages.find(
-      (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
-    )
-    if (!stage) throw new Error('The soundtrack setup plan has no edit stage')
-    setMusicVideoSession((current) => current?.key === sessionKey
-      ? {
-          ...current,
-          setup: {
-            status: 'applying',
-            audioTrackId: prepared.audioTrackId,
-            timelineLimitFrame: prepared.timelineLimitFrame,
-            operationCount: prepared.operationCount,
-            summary: prepared.summary,
-            warnings: prepared.warnings,
-          },
-        }
-      : current)
-    try {
-      const committed = recordValue(await call('commit_edit_intent', {
-        book_id: bookId,
-        intent: stage.intent,
-        preview_hash: prepared.preview.previewHash,
-      }))
-      const nextSequence = asSequence(committed?.sequence)
-      const actionId = asString(committed?.actionId)
-      if (!nextSequence || !actionId) {
-        throw new Error('The server returned an invalid soundtrack commit')
-      }
-      setSequence(nextSequence)
-      setLastEditActionId(actionId)
-      const master = nextSequence.clips.find((clip) => clip.trackId === prepared.audioTrackId && clip.source.artifactId === musicVideoSession.audioArtifactId)
-      if (master) await musicRhythm.save({ masterClipId: master.clipId, correction: null }, nextSequence)
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? {
-            ...current,
-            setup: {
-              status: 'applied',
-              audioTrackId: prepared.audioTrackId,
-              timelineLimitFrame: prepared.timelineLimitFrame,
-            },
-          }
-        : current)
-      return {
-        sequence: nextSequence,
-        actionId,
-        beforeRevision: stage.intent.baseRevision,
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setMusicVideoSession((current) => current?.key === sessionKey
-        ? { ...current, setup: { status: 'error', message } }
-        : current)
-      throw error
-    }
-  }
-
-  const commitMusicVideoEdit = async (
-    request: Record<string, unknown>,
-    expectedSequence: Sequence,
-  ): Promise<MusicVideoCommitResult> => {
-    if (!bookId) throw new Error('Load or create a book first.')
-    const plan = asCommandPlan(await call('plan_sequence_edit', {
-      book_id: bookId,
-      source_surface: 'ui',
-      actor: 'videobook-user',
-      expected_revision: await sequenceContentRevision(expectedSequence),
-      edits: [request],
-    }))
-    const stage = plan.stages.find(
-      (candidate): candidate is EditCommandStage => candidate.kind === 'edit',
-    )
-    if (!stage) throw new Error('The music-video plan has no edit stage')
-    const preview = await call('preview_edit_intent', {
-      book_id: bookId,
-      intent: stage.intent,
-    }) as EditPreview
-    const invalid = editPreviewError(preview)
-    if (invalid) throw new Error(invalid)
-    const committed = recordValue(await call('commit_edit_intent', {
-      book_id: bookId,
-      intent: stage.intent,
-      preview_hash: preview.previewHash,
-    }))
-    const nextSequence = asSequence(committed?.sequence)
-    const actionId = asString(committed?.actionId)
-    if (!nextSequence || !actionId) {
-      throw new Error('The server returned an invalid music-video edit commit')
-    }
-    watchSnapshotClockRef.current = performance.now()
-    setSequence(nextSequence)
-    setLastEditActionId(actionId)
-    return {
-      sequence: nextSequence,
-      actionId,
-      beforeRevision: stage.intent.baseRevision,
-    }
-  }
-
-  const planMusicDraft = async (options: MusicDraftOptions, expectedSequence: Sequence): Promise<MusicVideoDraft> => {
-    return await call('plan_music_video', {
-      book_id: bookId, expected_revision: await sequenceContentRevision(expectedSequence),
-      rhythm_revision: musicRhythm.rhythm.revision, options, source_surface: 'ui', actor: 'videobook-user',
-    }) as MusicVideoDraft
-  }
-
-  const applyMusicDraft = async (draft: MusicVideoDraft): Promise<MusicVideoCommitResult> => {
-    const intent = draft.plan.stages[0]?.intent
-    if (!intent || draft.uncovered.length) throw new Error('Review a complete draft before applying it')
-    const result = recordValue(await call('commit_music_video', { book_id: bookId, intent, preview_hash: draft.preview.previewHash, rhythm_revision: draft.rhythmRevision, sequence_content_revision: draft.sequenceContentRevision }))
-    const next = asSequence(result?.sequence)
-    const actionId = asString(result?.actionId)
-    if (!next || !actionId) throw new Error('The server returned an invalid draft commit')
-    watchSnapshotClockRef.current = performance.now()
-    setSequence(next)
-    setLastEditActionId(actionId)
-    return { sequence: next, actionId, beforeRevision: intent.baseRevision }
-  }
-
-  const restoreMusicVideoRevision = async (
-    targetRevision: string,
-    expectedRevision: string,
-  ): Promise<MusicVideoCommitResult> => {
-    if (!bookId) throw new Error('Load or create a book first.')
-    const restored = recordValue(await call('restore_edit_action', {
-      book_id: bookId,
-      target_revision: targetRevision,
-      base_revision: expectedRevision,
-      actor: 'videobook-user',
-      source_surface: 'ui',
-    }))
-    const nextSequence = asSequence(restored?.sequence)
-    const actionId = asString(restored?.actionId)
-    if (!nextSequence || !actionId) {
-      throw new Error('The server returned an invalid sequence restore')
-    }
-    watchSnapshotClockRef.current = performance.now()
-    setSequence(nextSequence)
-    setLastEditActionId(actionId)
-    return {
-      sequence: nextSequence,
-      actionId,
-      beforeRevision: expectedRevision,
-    }
-  }
-
-  const createMusicVideoTrack = async (
-    kind: 'video' | 'audio',
-  ): Promise<Sequence> => {
-    if (!bookId) throw new Error('Load or create a book first.')
-    const nextSequence = asSequence(await call('add_sequence_track', {
-      book_id: bookId,
-      kind,
-      name: kind === 'audio' ? 'Master Soundtrack' : 'Music Video',
-    }))
-    if (!nextSequence) throw new Error('The server returned an invalid sequence')
-    watchSnapshotClockRef.current = performance.now()
-    setSequence(nextSequence)
-    return nextSequence
-  }
-
-  const closeMusicVideoEditor = useCallback(() => {
-    const restoreFocus = capturePointerComposerFocus()
-    setMusicVideoSession(null)
-    restoreFocus()
-  }, [])
 
   const openSubtitles = (artifactId: string, chat?: ChatExecution): ComposerOutcome => {
     const holder = notebook?.cells.find((cell) => cell.outputArtifactId === artifactId)
@@ -10185,246 +9499,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     onFileError: setMediaSlotError,
     onOpenLibrary: openMediaLibrary,
   }
-  const mediaLibraryCell = mediaLibraryPicker
-    ? notebook?.cells.find((cell) => cell.id === mediaLibraryPicker.cellId)
-    : undefined
-  const mediaLibraryKind = mediaLibraryCell
-    ? passiveMediaKind(mediaLibraryCell.type)
-    : mediaLibraryPicker?.cellId === null ? 'all' : null
-  const mediaLibraryPanelState: MediaLibraryPanelState | null = mediaLibraryPicker
-    ? {
-        ...mediaLibraryPicker,
-        uploading: mediaLibraryPicker.cellId !== null && mediaSlotStates[mediaLibraryPicker.cellId]?.operation === 'upload',
-        mode: mediaLibraryReference.state.mode,
-        reference: mediaLibraryReference.state.reference,
-        referenceStartSeconds: mediaLibraryReference.state.startSeconds,
-        referenceDurationSeconds: mediaLibraryReference.state.durationSeconds,
-        preparingReference: mediaLibraryReference.state.preparing,
-        error: mediaLibraryReference.state.error ?? mediaLibraryPicker.error,
-      }
-    : null
-  const updateMediaLibraryDraft = (query: string) => {
-    setMediaLibraryPicker((current) => current ? { ...current, draftQuery: query } : current)
-  }
-  const changeMediaLibraryMode = (mode: MediaSearchMode) => {
-    if (!mediaLibraryPicker || mediaLibraryReference.state.mode === mode) return
-    const cellId = mediaLibraryPicker.cellId
-    mediaLibraryRequestRef.current += 1
-    mediaLibraryReference.lifecycle.changeMode(mode)
-    setMediaLibraryPicker((current) => current && current.cellId === cellId
-      ? {
-          ...current,
-          page: mode === 'text'
-            ? current.page
-            : {
-                ...emptyLibraryPage,
-                total: current.assets.length,
-              },
-          error: null,
-          loading: false,
-          loadingMore: false,
-          preparingIndex: false,
-        }
-      : current)
-    if (mode === 'text') {
-      void loadMediaLibrary(
-        cellId,
-        mediaLibraryPicker.draftQuery,
-        0,
-        false,
-        {
-          mode,
-          reference: null,
-          referenceStartSeconds: '0',
-          referenceDurationSeconds: '',
-        },
-      )
-    }
-  }
-  const prepareMediaLibraryFile = async (file: File) => {
-    if (!mediaLibraryPicker || mediaLibraryReference.state.mode === 'text' || !bookId) return
-    const picker = mediaLibraryPicker
-    mediaLibraryRequestRef.current += 1
-    const mode = mediaLibraryReference.state.mode
-    setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-      ? { ...current, error: null, loading: false, loadingMore: false, preparingIndex: false }
-      : current)
-    const result = await mediaLibraryReference.lifecycle.prepare(
-      mode,
-      () => uploadSearchReference(file, bookId, referenceKind(mode)),
-    )
-    if (result.status === 'error') {
-      setNotice(result.error, 'error')
-      return
-    }
-    if (result.status === 'stale') return
-    await loadMediaLibrary(picker.cellId, '', 0, false, {
-      mode: result.mode,
-      reference: result.reference,
-      referenceStartSeconds: '0',
-      referenceDurationSeconds: '',
-    })
-  }
-  const prepareMediaLibrarySimilar = async (asset: LibraryAssetRecord) => {
-    if (!mediaLibraryPicker) return
-    const picker = mediaLibraryPicker
-    mediaLibraryRequestRef.current += 1
-    const mode: ReverseSearchMode = asset.type === 'image'
-      ? 'image-reverse'
-      : 'video-reverse'
-    setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
-      ? {
-          ...current,
-          error: null,
-          loading: false,
-          loadingMore: false,
-          preparingIndex: false,
-        }
-      : current)
-    const result = await mediaLibraryReference.lifecycle.prepare(
-      mode,
-      () => prepareExistingSearchReference(call, {
-        sourceBookId: asset.owningBookId,
-        sourceArtifactId: asset.artifactId,
-        mode,
-        previewUrl: mode === 'image-reverse'
-          ? asset.thumbnailUrl ?? asset.mediaUrl
-          : asset.mediaUrl,
-      }),
-    )
-    if (result.status === 'error') {
-      setNotice(result.error, 'error')
-      return
-    }
-    if (result.status === 'stale') return
-    await loadMediaLibrary(picker.cellId, '', 0, false, {
-      mode: result.mode,
-      reference: result.reference,
-      referenceStartSeconds: '0',
-      referenceDurationSeconds: '',
-    })
-  }
-  const clearMediaLibraryReference = () => {
-    if (!mediaLibraryPicker) return
-    mediaLibraryRequestRef.current += 1
-    mediaLibraryReference.lifecycle.clearReference()
-    setMediaLibraryPicker((current) => current ? { ...current, error: null, loading: false, loadingMore: false, preparingIndex: false } : current)
-  }
-  const repairMediaLibraryIndexes = async () => {
-    if (!mediaLibraryPicker || !mediaLibraryKind || mediaLibraryKind === 'audio') return
-    const picker = mediaLibraryPicker
-    const requestId = ++mediaLibraryRequestRef.current
-    setMediaLibraryPicker((current) => current ? { ...current, preparingIndex: true, error: null } : current)
-    try {
-      const result = await repairSearchIndexes({
-        start: () => call('repair_library_search_indexes', { kinds: mediaLibraryKind === 'all' ? ['image', 'video'] : [mediaLibraryKind] }),
-        listJobs: (bookId, jobIds) => call('list_jobs', { book_id: bookId, job_ids: jobIds }),
-        isCancelled: () => mediaLibraryRequestRef.current !== requestId,
-      })
-      if (mediaLibraryRequestRef.current !== requestId) return
-      const reloadId = mediaLibraryRequestRef.current + 1
-      await loadMediaLibrary(picker.cellId, picker.query, 0, false)
-      if (mediaLibraryRequestRef.current !== reloadId) return
-      const failed = asNumber(result?.failed) ?? 0
-      if (failed > 0) {
-        const failures = Array.isArray(result?.failures) ? result.failures : []
-        const detail = asString(recordValue(failures[0])?.message)
-        const message = `Some media could not be indexed.${detail ? ` ${detail}` : ''}`
-        setMediaLibraryPicker((current) => current ? { ...current, error: message } : current)
-        setNotice(message, 'error')
-      } else {
-        setNotice(`Indexed ${asNumber(result?.indexed) ?? 0} media assets for Similar search`)
-      }
-    } catch (error) {
-      if (mediaLibraryRequestRef.current !== requestId) return
-      const message = error instanceof Error ? error.message : String(error)
-      setMediaLibraryPicker((current) => current ? { ...current, preparingIndex: false, error: message } : current)
-      setNotice(message, 'error')
-    }
-  }
-  const searchMediaLibrary = () => {
-    if (!mediaLibraryPicker) return
-    mediaLibraryReference.lifecycle.clearError()
-    void loadMediaLibrary(
-      mediaLibraryPicker.cellId,
-      mediaLibraryPicker.draftQuery,
-      0,
-      false,
-    )
-  }
-  const loadMoreMediaLibrary = () => {
-    if (!mediaLibraryPicker) return
-    void loadMediaLibrary(
-      mediaLibraryPicker.cellId,
-      mediaLibraryPicker.query,
-      mediaLibraryPicker.page.offset + mediaLibraryPicker.page.limit,
-      true,
-    )
-  }
-
-  /**
-   * Applying or lifting a tag term re-runs the search from the first page:
-   * an offset into the previous result set means nothing once the filter that
-   * produced it has changed.
-   */
-  const toggleMediaLibraryTagFilter = (term: TagFilterTerm) => {
-    if (!mediaLibraryPicker) return
-    const next = toggleTagFilter(mediaLibraryPicker.tagFilters, term)
-    if (sameTagFilter(next, mediaLibraryPicker.tagFilters)) return
-    void loadMediaLibrary(
-      mediaLibraryPicker.cellId,
-      mediaLibraryPicker.query,
-      0,
-      false,
-      undefined,
-      next,
-    )
-  }
-
-  const clearMediaLibraryTagFilters = () => {
-    if (!mediaLibraryPicker || mediaLibraryPicker.tagFilters.length === 0) return
-    void loadMediaLibrary(
-      mediaLibraryPicker.cellId,
-      mediaLibraryPicker.query,
-      0,
-      false,
-      undefined,
-      [],
-    )
-  }
-
-  const loadMediaLibraryTagSuggestions = async (prefix: string) => {
-    if (!mediaLibraryPicker || mcp.state !== 'ready') return
-    const cellId = mediaLibraryPicker.cellId
-    try {
-      const response = await call('suggest_asset_tags', {
-        book_id: bookId,
-        ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-        limit: 20,
-      }, { background: true }) as { suggestions?: unknown }
-      const suggestions = Array.isArray(response?.suggestions)
-        ? response.suggestions.flatMap((entry) => {
-            const row = entry as Record<string, unknown>
-            return typeof row.facet === 'string'
-              && typeof row.key === 'string'
-              && typeof row.label === 'string'
-              ? [{
-                  facet: row.facet as TagFilterTerm['facet'],
-                  key: row.key,
-                  label: row.label,
-                  assets: Number(row.assets) || 0,
-                }]
-              : []
-          })
-        : []
-      setMediaLibraryPicker((current) => current && current.cellId === cellId
-        ? { ...current, tagSuggestions: suggestions }
-        : current)
-    } catch {
-      // Autocomplete never blocks a search someone can still type by hand.
-    }
-  }
-
   const openCellInspector = (cellId: string) => {
     if (emptyMediaSlotKind(cellId) && mcp.state === 'ready') {
       openMediaLibrary(cellId)
