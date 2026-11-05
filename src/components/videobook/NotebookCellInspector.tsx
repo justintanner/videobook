@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Ban,
   Braces,
-  Captions,
   Check,
   ChevronDown,
   CircleAlert,
@@ -29,7 +28,7 @@ import {
 import { createPortal } from 'react-dom'
 import { useGenerationPreviewRefresh } from '@/videobook/useGenerationPreviewRefresh'
 import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 import type {
   GenerationStatus,
   NotebookCell,
@@ -149,7 +148,7 @@ import type { GenerationCellPreview } from '@/videobook/use-generation-cell-prev
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
-import { MediaFileActions } from './MediaFileActions'
+import { MediaDockActions, type MediaDockTranscribeAction } from './MediaDockActions'
 import { SplicePreview, type SplicePreviewClip } from './SplicePreview'
 import { useSplicePreview } from '@/videobook/use-splice-preview'
 import { AssetTagEditor } from './AssetTagEditor'
@@ -502,6 +501,7 @@ type NotebookCellInspectorProps = {
   onOpenFullscreen: (asset: NotebookCellInspectorAsset, mode?: MediaFullscreenMode) => void
   initialGenerationPreview?: GenerationCellPreview
   onSelectSource?: (cellId: string) => void
+  onFocusInput?: (cellId: string) => void
   onPreviewPayload?: (
     cellId: string,
     draft: GenerationPreviewDraft,
@@ -731,15 +731,20 @@ function NotebookCellMedia({
   address,
   allowFullscreen,
   overlayMetadata = true,
+  videoActions = true,
+  videoRef: providedVideoRef,
   onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
   address: string
   allowFullscreen: boolean
   overlayMetadata?: boolean
+  videoActions?: boolean
+  videoRef?: RefObject<HTMLVideoElement | null>
   onOpenFullscreen: (asset: NotebookCellInspectorAsset, mode?: MediaFullscreenMode) => void
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const ownVideoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = providedVideoRef ?? ownVideoRef
   const mediaUrl = asset.mediaUrl
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
   const isVideo = asset.type === 'video' || asset.type === 'final'
@@ -797,7 +802,7 @@ function NotebookCellMedia({
           />
         )}
       </div>
-      {canOpenFullscreen && isVideo && (
+      {videoActions && canOpenFullscreen && isVideo && (
         <CellMediaActions
           address={address}
           onOpen={() => openFullscreen('view')}
@@ -837,12 +842,50 @@ function SourceCellThumb({
   return <ArtifactThumb asset={asset} kindHint={cell.type} />
 }
 
+function SourcePickerSelection({
+  selectedCell,
+  cellAssets,
+}: {
+  selectedCell: NotebookCell | undefined
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+}) {
+  if (!selectedCell) {
+    return (
+      <>
+        <span
+          className="inspector-source-thumb inspector-source-thumb-empty"
+          aria-hidden="true"
+        >
+          <CircleX size={15} />
+        </span>
+        <span className="inspector-source-picker-copy">
+          <strong>No source</strong>
+          <small>Optional input</small>
+        </span>
+      </>
+    )
+  }
+  return (
+    <>
+      <SourceCellThumb
+        cell={selectedCell}
+        asset={cellAssets?.get(selectedCell.id)}
+      />
+      <span className="inspector-source-picker-copy">
+        <strong>{notebookGridTag(selectedCell.slot)}</strong>
+        <small>{sourceCellTypeLabel(selectedCell)}</small>
+      </span>
+    </>
+  )
+}
+
 function SourceCellPicker({
   input,
   candidates,
   selectedCellId,
   cellAssets,
   busy,
+  compact = false,
   onSelect,
 }: {
   input: string
@@ -850,11 +893,14 @@ function SourceCellPicker({
   selectedCellId: string | null
   cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
   busy: boolean
+  compact?: boolean
   onSelect: (sourceCellId: string | null) => Promise<void>
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null)
   const selectedCell = candidates.find((candidate) =>
     candidate.id === selectedCellId)
+  const inputName = input.replaceAll('_', ' ')
+  const triggerLabel = compact ? `Change ${inputName} input` : `${inputName} input`
   const choose = (sourceCellId: string | null) => {
     detailsRef.current?.removeAttribute('open')
     if (sourceCellId === selectedCellId) return
@@ -864,7 +910,9 @@ function SourceCellPicker({
   return (
     <details
       ref={detailsRef}
-      className="inspector-source-picker"
+      className={compact
+        ? 'inspector-source-picker inspector-source-picker-compact'
+        : 'inspector-source-picker'}
       onToggle={(event) => {
         positionOpenSourcePicker(event.currentTarget)
       }}
@@ -883,38 +931,19 @@ function SourceCellPicker({
     >
       <summary
         data-composer-focus="preserve"
-        aria-label={`${input.replaceAll('_', ' ')} input`}
-        title={`${input.replaceAll('_', ' ')} input`}
+        aria-label={triggerLabel}
+        title={triggerLabel}
         aria-disabled={busy}
         tabIndex={busy ? -1 : 0}
         onClick={(event) => {
           if (busy) event.preventDefault()
         }}
       >
-        {selectedCell ? (
-          <>
-            <SourceCellThumb
-              cell={selectedCell}
-              asset={cellAssets?.get(selectedCell.id)}
-            />
-            <span className="inspector-source-picker-copy">
-              <strong>{notebookGridTag(selectedCell.slot)}</strong>
-              <small>{sourceCellTypeLabel(selectedCell)}</small>
-            </span>
-          </>
-        ) : (
-          <>
-            <span
-              className="inspector-source-thumb inspector-source-thumb-empty"
-              aria-hidden="true"
-            >
-              <CircleX size={15} />
-            </span>
-            <span className="inspector-source-picker-copy">
-              <strong>No source</strong>
-              <small>Optional input</small>
-            </span>
-          </>
+        {!compact && (
+          <SourcePickerSelection
+            selectedCell={selectedCell}
+            cellAssets={cellAssets}
+          />
         )}
         <ChevronDown
           className="inspector-source-picker-chevron"
@@ -1092,6 +1121,42 @@ function generationInputMentionSources(
   })
 }
 
+function InputFocusCard({
+  sourceCell,
+  asset,
+  inputLabel,
+  onFocus,
+}: {
+  sourceCell: NotebookCell
+  asset: NotebookCellInspectorAsset | undefined
+  inputLabel: string
+  onFocus: (cellId: string) => void
+}) {
+  const tag = notebookGridTag(sourceCell.slot)
+  const cardStyle: InputCardStyle = {
+    '--input-aspect': String(mediaDockAspect('image', asset ?? null)),
+  }
+  return (
+    <button
+      type="button"
+      className="inspector-input-focus"
+      style={cardStyle}
+      aria-label={`Focus ${tag}, ${inputLabel}`}
+      title={`Focus ${tag}`}
+      onClick={() => onFocus(sourceCell.id)}
+    >
+      <SourceCellThumb cell={sourceCell} asset={asset} />
+      <span className="inspector-source-picker-copy">
+        <strong>
+          {tag}
+          <ArrowRight size={12} aria-hidden="true" />
+        </strong>
+        <small>{inputLabel}</small>
+      </span>
+    </button>
+  )
+}
+
 function InputSources({
   cell,
   cells,
@@ -1100,6 +1165,7 @@ function InputSources({
   cellAssets,
   attachments = [],
   onSetInput,
+  onFocusSource,
 }: {
   cell: NotebookCell
   cells: NotebookCell[]
@@ -1108,6 +1174,7 @@ function InputSources({
   cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
   attachments?: readonly GenerationInputAttachment[]
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
+  onFocusSource?: (cellId: string) => void
 }) {
   const inputs = cellInputNames(cell, edges)
   const rows = inputs.flatMap((input) => {
@@ -1151,17 +1218,28 @@ function InputSources({
       <div className="inspector-input-source-rows">
         {rows.map(({ input, edge, sourceCell, candidates, inputLabel }) => (
             <div
-              className={edge
-                ? 'inspector-input-source-row connected'
-                : 'inspector-input-source-row'}
+              className={[
+                'inspector-input-source-row',
+                edge ? 'connected' : '',
+                onFocusSource && sourceCell ? 'focusable' : '',
+              ].filter(Boolean).join(' ')}
               key={input}
             >
+              {onFocusSource && sourceCell && (
+                <InputFocusCard
+                  sourceCell={sourceCell}
+                  asset={cellAssets?.get(sourceCell.id)}
+                  inputLabel={inputLabel}
+                  onFocus={onFocusSource}
+                />
+              )}
               <SourceCellPicker
                 input={input}
                 candidates={candidates}
                 selectedCellId={edge?.source ?? null}
                 cellAssets={cellAssets}
                 busy={busy}
+                compact={Boolean(onFocusSource && sourceCell)}
                 onSelect={(sourceCellId) => onSetInput(input, sourceCellId)}
               />
               {edge && (
@@ -1442,6 +1520,8 @@ function MediaCellFacts({
 }
 
 type MediaTrackStyle = CSSProperties & { '--media-aspect'?: string }
+
+type InputCardStyle = CSSProperties & { '--input-aspect'?: string }
 
 function GenerationMediaPlaceholder({
   kind,
@@ -1771,6 +1851,26 @@ function GeneratingMediaLayout({
   )
 }
 
+function isOpenableVideo(asset: NotebookCellInspectorAsset): boolean {
+  const isVideo = asset.type === 'video' || asset.type === 'final'
+  return isVideo && Boolean(asset.thumbnailUrl ?? asset.mediaUrl)
+}
+
+function mediaTranscribeAction(
+  asset: NotebookCellInspectorAsset,
+  transcribing: boolean,
+  busy: boolean,
+  onTranscribeAsset: ((artifactId: string) => void) | undefined,
+): MediaDockTranscribeAction | undefined {
+  if (!onTranscribeAsset || !mediaCellHasSpokenAudio(asset.type)) return undefined
+  return {
+    label: asset.transcript?.elevenlabs ? 'Transcribe again' : 'Transcribe',
+    running: transcribing,
+    disabled: busy || transcribing,
+    onRun: () => onTranscribeAsset(asset.artifactId),
+  }
+}
+
 function MediaCellInspector({
   kind,
   cell,
@@ -1788,6 +1888,7 @@ function MediaCellInspector({
   onRun,
   onCancelJob,
   onSelectSource,
+  onFocusInput,
   onDelete,
   onOpenFullscreen,
   onTranscribeAsset,
@@ -1833,9 +1934,11 @@ function MediaCellInspector({
   cancelJobId?: number
   /** Select a connected cell (the producer, or one of its inputs). */
   onSelectSource?: (cellId: string) => void
+  onFocusInput?: (cellId: string) => void
   /** Every asset the inspector knows, for media previews in JSON. */
   artifactAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
 }) {
+  const previewVideoRef = useRef<HTMLVideoElement>(null)
   const address = notebookGridAddress(cell.slot)
   const producer = mediaGenerationProducer(cell, cells, edges)
   const versionArtifactIds = cell.type === 'audio'
@@ -1929,6 +2032,8 @@ function MediaCellInspector({
       address={address}
       allowFullscreen={canOpenFullscreen}
       overlayMetadata={false}
+      videoActions={false}
+      videoRef={previewVideoRef}
       onOpenFullscreen={onOpenFullscreen}
     />
   ) : (
@@ -1959,11 +2064,7 @@ function MediaCellInspector({
         artifactId={previewAsset.artifactId}
         transcript={previewAsset.transcript ?? null}
         busy={busy}
-        transcribing={insightWork.transcribing}
         error={insightWork.error}
-        onTranscribe={onTranscribeAsset
-          ? () => onTranscribeAsset(previewAsset.artifactId)
-          : undefined}
         onLoadTranscriptJson={onLoadTranscriptJson
           ? (source) => onLoadTranscriptJson(previewAsset.artifactId, source)
           : undefined}
@@ -1973,17 +2074,10 @@ function MediaCellInspector({
       />
     ) : (
       <div className="inspector-media-insights">
-        {onTranscribeAsset && (
-          <button
-            type="button"
-            className="inspector-generation-action"
-            disabled={busy || insightWork.transcribing}
-            onClick={() => onTranscribeAsset(previewAsset.artifactId)}
-          >
-            <Captions size={13} aria-hidden="true" />
-            {insightWork.transcribing ? 'Transcribing…' : 'Transcribe'}
-          </button>
-        )}
+        <div className="inspector-media-no-transcript">
+          <span className="inspector-media-field-label">Transcript</span>
+          <p>{insightWork.transcribing ? 'Transcribing…' : 'No transcript yet.'}</p>
+        </div>
         {insightWork.error && (
           <p className="inspector-insight-error" role="alert">
             <CircleAlert size={12} aria-hidden="true" />
@@ -2003,8 +2097,18 @@ function MediaCellInspector({
       busy={busy}
       cellAssets={cellAssets}
       onSetInput={onSetInput}
+      onFocusSource={(cellId) => (onFocusInput ?? onSelectSource)?.(cellId)}
     />
   )
+  const previewFullscreen = canOpenFullscreen && previewAsset && isOpenableVideo(previewAsset)
+    ? {
+        address,
+        onOpen: () => {
+          previewVideoRef.current?.pause()
+          onOpenFullscreen(previewAsset, 'view')
+        },
+      }
+    : undefined
   const trackStyle: MediaTrackStyle = {
     '--media-aspect': String(mediaDockAspect(kind, previewAsset ?? null)),
   }
@@ -2037,40 +2141,51 @@ function MediaCellInspector({
           </div>
         )}
         <div className="inspector-media-row-meta">
-          <div className="inspector-media-summary">
-            {previewAsset && (
-              <MediaCellFacts
-                kind={kind}
-                address={address}
-                asset={previewAsset}
-                inputs={cell.inputs}
-              />
-            )}
-            {previewAsset && (
-              <MediaFileActions
-                key={`${bookId}:${previewAsset.artifactId}`}
-                bookId={bookId}
-                artifactId={previewAsset.artifactId}
-                kind={kind}
-                busy={busy || deleting}
-                call={assetTools}
-              />
-            )}
+          <div className="inspector-media-row-primary">
+            <div className="inspector-media-summary">
+              {previewAsset && (
+                <MediaDockActions
+                  key={`${bookId}:${previewAsset.artifactId}`}
+                  bookId={bookId}
+                  artifactId={previewAsset.artifactId}
+                  kind={kind}
+                  busy={busy || deleting}
+                  call={assetTools}
+                  fullscreen={previewFullscreen}
+                  transcribe={previewAsset && mediaTranscribeAction(
+                    previewAsset,
+                    insightWork.transcribing,
+                    busy,
+                    onTranscribeAsset,
+                  )}
+                />
+              )}
+              {previewAsset && (
+                <MediaCellFacts
+                  kind={kind}
+                  address={address}
+                  asset={previewAsset}
+                  inputs={cell.inputs}
+                />
+              )}
+            </div>
+            <div className="inspector-media-row-track inspector-media-row-details">
+              {versionSelector}
+              {assetTags}
+            </div>
+            <CellCleanupActions
+              busy={busy}
+              deleting={deleting}
+              onDelete={onDelete}
+            />
           </div>
-          <div className="inspector-media-row-track inspector-media-row-details">
-            {versionSelector}
-            {assetTags}
+          <div className="inspector-media-row-inputs">
             {inputSources}
           </div>
           <div className="inspector-media-row-track inspector-media-row-actions">
             <PublishedPostInspectorDetails inputs={cell.inputs} />
             {insights}
           </div>
-          <CellCleanupActions
-            busy={busy}
-            deleting={deleting}
-            onDelete={onDelete}
-          />
         </div>
       </div>
     </div>
@@ -3981,6 +4096,7 @@ export function NotebookCellInspector({
   onPreviewPayload,
   initialGenerationPreview,
   onSelectSource,
+  onFocusInput,
   onLoadGenerationPayload,
   onInspectGenerationRequest,
   onDownloadGenerationHar,
@@ -4100,6 +4216,7 @@ export function NotebookCellInspector({
         onRun={onRun}
         onCancelJob={onCancelJob}
         onSelectSource={onSelectSource}
+        onFocusInput={onFocusInput}
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
         onTranscribeAsset={onTranscribeAsset}

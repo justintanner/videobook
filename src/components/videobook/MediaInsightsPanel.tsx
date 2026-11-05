@@ -1,18 +1,15 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import {
-  Captions,
   Check,
   CircleAlert,
   Copy,
   Download,
-  RefreshCw,
 } from 'lucide-react'
 import {
   canDownloadTranscriptSrt,
   ELEVENLABS_TRANSCRIPT_CARD_TITLE,
   PLAIN_TRANSCRIPT_CARD_TITLE,
   resolveTranscriptCardView,
-  transcriptHasText,
   transcriptSourceBody,
   transcriptSourceCopyText,
   transcriptSourceEmptyMessage,
@@ -29,9 +26,7 @@ type MediaInsightsPanelProps = {
   artifactId: string
   transcript: MediaTranscriptSources | null
   busy: boolean
-  transcribing: boolean
   error: string | null
-  onTranscribe?: () => void
   onLoadTranscriptJson?: (
     source: TranscriptSidecarSource,
   ) => Promise<{ text: string; file: string }>
@@ -55,68 +50,11 @@ function TranscriptText({ text, label }: { text: string; label: string }) {
   )
 }
 
-function InsightRerunButton({
-  label,
-  running,
-  disabled,
-  onClick,
-}: {
-  label: string
-  running: boolean
-  disabled: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      className="inspector-insight-rerun"
-      aria-label={label}
-      title={label}
-      aria-busy={running}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <RefreshCw size={12} aria-hidden="true" />
-    </button>
-  )
-}
-
-function InsightStartButton({
-  icon,
-  label,
-  runningLabel,
-  running,
-  disabled,
-  onClick,
-}: {
-  icon: ReactNode
-  label: string
-  runningLabel: string
-  running: boolean
-  disabled: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      className="inspector-insight-action"
-      aria-busy={running}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {icon}
-      <span>{running ? runningLabel : label}</span>
-    </button>
-  )
-}
-
 function TranscriptSourceCard({
   source,
   title,
   transcript,
   busy,
-  transcribing,
-  onTranscribe,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
 }: {
@@ -124,8 +62,6 @@ function TranscriptSourceCard({
   title: string
   transcript: MediaTranscript | null
   busy: boolean
-  transcribing?: boolean
-  onTranscribe?: () => void
   onLoadTranscriptJson?: MediaInsightsPanelProps['onLoadTranscriptJson']
   onDownloadTranscriptSrt?: () => void
 }) {
@@ -138,9 +74,7 @@ function TranscriptSourceCard({
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [jsonLoading, setJsonLoading] = useState(false)
   const view = resolveTranscriptCardView(transcript, requestedView)
-  const hasText = transcriptHasText(transcript)
   const showSrt = source === 'elevenlabs'
-  const transcribe = source === 'elevenlabs' ? onTranscribe : undefined
   const canDownload = showSrt && canDownloadTranscriptSrt(transcript)
   const body = transcriptSourceBody({
     source,
@@ -246,14 +180,6 @@ function TranscriptSourceCard({
               <span>SRT</span>
             </button>
           )}
-          {transcribe && hasText && (
-            <InsightRerunButton
-              label="Transcribe again"
-              running={Boolean(transcribing)}
-              disabled={busy || Boolean(transcribing)}
-              onClick={transcribe}
-            />
-          )}
         </div>
       </header>
       <div
@@ -297,16 +223,6 @@ function TranscriptSourceCard({
         : (
           <div className="inspector-insight-empty">
             <p>{emptyMessage ?? 'No transcript yet.'}</p>
-            {transcribe && !hasText && (
-              <InsightStartButton
-                icon={<Captions size={13} aria-hidden="true" />}
-                label={transcript ? 'Transcribe again' : 'Transcribe'}
-                runningLabel="Transcribing…"
-                running={Boolean(transcribing)}
-                disabled={busy || Boolean(transcribing)}
-                onClick={transcribe}
-              />
-            )}
           </div>
         )}
     </section>
@@ -317,9 +233,7 @@ export function MediaInsightsPanel({
   artifactId,
   transcript,
   busy,
-  transcribing,
   error,
-  onTranscribe,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
 }: MediaInsightsPanelProps) {
@@ -339,8 +253,6 @@ export function MediaInsightsPanel({
         title={ELEVENLABS_TRANSCRIPT_CARD_TITLE}
         transcript={transcript?.elevenlabs ?? null}
         busy={busy}
-        transcribing={transcribing}
-        onTranscribe={onTranscribe}
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
       />

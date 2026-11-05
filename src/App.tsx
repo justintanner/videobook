@@ -85,6 +85,7 @@ import {
 } from '@xyflow/react'
 import {
   Activity,
+  ArrowLeft,
   BookOpen,
   Braces,
   Code,
@@ -407,6 +408,12 @@ import {
 } from '@/videobook/notebook-download'
 import { performMediaFileAction } from '@/videobook/use-media-file-actions'
 import { routedMediaCellInputs } from '@/videobook/notebook-routed-action'
+import {
+  inputFocusBackTarget,
+  popInputFocus,
+  pushInputFocus,
+  type InputFocusTrail,
+} from '@/videobook/input-focus-trail'
 import {
   enqueueNotebookAudioCommand,
   type NotebookAudioCommand,
@@ -1848,6 +1855,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const fromNode = nodes.find((node) => node.id === cellId)
     if (fromNode) rememberLastWorkSlot(fromNode.data.slot)
   }, [selectGenerationCellPreview, notebook, nodes, rememberLastWorkSlot, updateSelectedCellIds])
+
+  const [inputFocusTrail, setInputFocusTrail] = useState<InputFocusTrail | null>(null)
+  const focusInputCell = useCallback((fromCellId: string, inputCellId: string) => {
+    setInputFocusTrail((trail) => pushInputFocus(trail, fromCellId, inputCellId))
+    selectCanvasCell(inputCellId)
+    highlightCells([inputCellId], { scroll: 'offscreen' })
+  }, [highlightCells, selectCanvasCell])
+  const returnFromInputFocus = useCallback((trail: InputFocusTrail, backCellId: string) => {
+    setInputFocusTrail(popInputFocus(trail))
+    selectCanvasCell(backCellId)
+    highlightCells([backCellId], { scroll: 'offscreen' })
+  }, [highlightCells, selectCanvasCell])
 
   const closeCellContextMenu = useCallback(() => {
     setCellContextMenu(null)
@@ -10888,6 +10907,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       />
     ) : <GoalPanelPlaceholder />
   ) : null
+  const inputFocusBackCellId = selectedNotebookCell
+    ? inputFocusBackTarget(inputFocusTrail, selectedNotebookCell.id)
+    : null
+  const inputFocusBackCell = inputFocusBackCellId
+    ? notebook?.cells.find((candidate) => candidate.id === inputFocusBackCellId) ?? null
+    : null
   const notebookDockContent = libraryDockContent ?? goalDockContent ?? (!timelinePreviewOpen && selectedCell && selectedNotebookCell && selectedNotebookCell.type !== 'timeline' ? (
     <div
       className={[
@@ -10907,6 +10932,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <code className="inspector-cell-address">
             {notebookGridTag(selectedNotebookCell.slot)}
           </code>
+          {inputFocusTrail && inputFocusBackCell && (
+            <button
+              type="button"
+              className="inspector-input-back"
+              aria-label={`Back to ${notebookGridTag(inputFocusBackCell.slot)}`}
+              title={`Back to ${notebookGridTag(inputFocusBackCell.slot)}`}
+              onClick={() => returnFromInputFocus(inputFocusTrail, inputFocusBackCell.id)}
+            >
+              <ArrowLeft size={12} aria-hidden="true" />
+              <span>{notebookGridTag(inputFocusBackCell.slot)}</span>
+            </button>
+          )}
           {(selectedGenerationState?.kind === 'queued'
             || selectedGenerationState?.kind === 'generating') && (
             <span className="inspector-generating-badge" role="status">
@@ -11057,6 +11094,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             ? generationCellPreview
             : undefined}
           onSelectSource={selectCanvasCell}
+          onFocusInput={(inputCellId) => focusInputCell(selectedNotebookCell.id, inputCellId)}
           onLoadGenerationPayload={loadGenerationPayload}
           onInspectGenerationRequest={inspectGenerationRequest}
           onDownloadGenerationHar={downloadGenerationHar}

@@ -152,10 +152,6 @@ export function mediaCellHasSpokenAudio(cellType: string): boolean {
   return cellType === 'video' || cellType === 'audio' || cellType === 'final'
 }
 
-export function transcriptHasText(transcript: MediaTranscript | null): boolean {
-  return Boolean(transcript && transcript.kind !== 'silence' && transcript.text.trim())
-}
-
 export function transcriptDetailLabel(transcript: MediaTranscript): string {
   if (transcript.kind === 'silence') return 'No dialog detected'
   const details = [

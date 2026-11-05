@@ -481,7 +481,7 @@ describe('composer focus through real workspace interactions', () => {
       const dock = page.locator('.composer-notebook-dock.inspector')
       await dock.waitFor({ timeout: 15_000 })
       const mediaKind = id === imageCellId ? 'image' : id === audioCellId ? 'audio' : 'video'
-      const fileActions = dock.getByRole('region', { name: 'Media file actions' })
+      const fileActions = dock.getByRole('region', { name: 'Media actions' })
       expect(await fileActions.getByRole('button', { name: `Copy ${mediaKind}`, exact: true }).isEnabled()).toBe(true)
       await fileActions.getByRole('button', { name: `Download ${mediaKind}`, exact: true }).click()
       await expect.poll(() => fileActions.getByRole('status').textContent()).toContain(`Saved ${downloadsDir}/`)
@@ -489,7 +489,7 @@ describe('composer focus through real workspace interactions', () => {
       const sourcePath = id === imageCellId ? portraitPath : id === audioCellId ? audioPath : join(rootDir, 'video.mp4')
       expect(savedPath).toBe(join(downloadsDir, `focus-primary${extname(sourcePath)}`))
       expect(await readFile(savedPath)).toEqual(await readFile(sourcePath))
-      expect(await dock.locator('.inspector-media-row-meta > :last-child').getAttribute('aria-label')).toBe('Cell cleanup actions')
+      expect(await dock.locator('.inspector-media-row-primary > :last-child').getAttribute('aria-label')).toBe('Cell cleanup actions')
       for (const viewport of [
         { width: 1920, height: 1080 },
         { width: 1440, height: 1000 },
@@ -504,7 +504,7 @@ describe('composer focus through real workspace interactions', () => {
           const header = element.querySelector(':scope > header')
           const row = element.querySelector('.inspector-media-row-content')
           const preview = element.querySelector('.inspector-cell-preview')
-          const actions = element.querySelector('.inspector-media-row-meta > .inspector-compact-actions')
+          const actions = element.querySelector('.inspector-media-row-primary > .inspector-compact-actions')
           const metadata = element.querySelector('.inspector-media-row-meta')
           if (!(wrapper instanceof HTMLElement) || !(header instanceof HTMLElement)
             || !(row instanceof HTMLElement) || !(preview instanceof HTMLElement)
@@ -566,8 +566,12 @@ describe('composer focus through real workspace interactions', () => {
         if (id === imageCellId) {
           const tags = await dock.getByRole('region', { name: 'Asset tags' }).boundingBox()
           const sources = await dock.locator('.inspector-input-sources').boundingBox()
-          expect(sources!.y).toBeGreaterThanOrEqual(tags!.y + tags!.height)
-          const thumbs = dock.locator('.inspector-source-picker summary .inspector-source-thumb')
+          if (viewport.width >= 1024) {
+            expect(sources!.x).toBeGreaterThanOrEqual(tags!.x + tags!.width)
+          } else {
+            expect(sources!.y).toBeGreaterThanOrEqual(tags!.y + tags!.height)
+          }
+          const thumbs = dock.locator('.inspector-input-focus .inspector-source-thumb')
           expect(await thumbs.count()).toBe(2)
           const [firstThumb, secondThumb] = await thumbs.evaluateAll(elements => elements.map(element => {
             const { x, y, width, height } = element.getBoundingClientRect()
@@ -576,10 +580,13 @@ describe('composer focus through real workspace interactions', () => {
           expect(firstThumb!.height).toBeGreaterThan(40)
           expect(secondThumb!.height).toBeGreaterThan(40)
           if (viewport.width >= 1024) {
-            expect(secondThumb!.x).toBeGreaterThan(firstThumb!.x + firstThumb!.width)
-            expect(secondThumb!.y).toBeCloseTo(firstThumb!.y, 1)
+            const previewHeight = (await dock.locator('.inspector-cell-preview').boundingBox())!.height
+            const card = (await dock.locator('.inspector-input-focus').first().boundingBox())!
+            expect(card.height).toBeCloseTo(Math.max(60, (previewHeight - 8) / 2), 0)
+            expect(secondThumb!.x).toBeCloseTo(firstThumb!.x, 1)
+            expect(secondThumb!.y).toBeGreaterThanOrEqual(firstThumb!.y + firstThumb!.height)
           }
-          expect(await dock.getByLabel('segment input', { exact: true }).locator('img').count()).toBe(1)
+          expect(await dock.getByRole('button', { name: 'Focus @a1, segment input', exact: true }).locator('img').count()).toBe(1)
           const sourceImages = thumbs.locator('img')
           await expect.poll(async () => sourceImages.evaluateAll(images => images.map(image => {
             const frame = image.parentElement!
@@ -608,7 +615,7 @@ describe('composer focus through real workspace interactions', () => {
         const preview = dock.locator('.inspector-cell-preview')
         const previewBounds = await preview.boundingBox()
         const dockBounds = await dock.boundingBox()
-        await dock.getByLabel('segment input', { exact: true }).click()
+        await dock.getByLabel('Change segment input', { exact: true }).click()
         const sourceOptions = dock.getByRole('listbox', { name: 'segment input options' })
         await sourceOptions.getByRole('option', { name: /@a1/ }).click({ trial: true })
         await page.keyboard.press('Escape')
@@ -647,6 +654,59 @@ describe('composer focus through real workspace interactions', () => {
     }
   })
 
+  it('focuses an input from its card and returns to the cell it came from', async () => {
+    const uploaded = record(await call('upload_file', {
+      filename: 'input-focus.png', data: (await readFile(imagePath)).toString('base64'),
+    }))
+    const image = record(await call('create_notebook_cell', {
+      cell: {
+        type: 'image', slot: { row: 3, column: 5 },
+        output_artifact_id: uploaded?.assetId,
+      },
+    }))
+    const imageCellId = String(image?.id ?? '')
+    await call('connect_notebook_cells', {
+      source_cell_id: videoCellId,
+      target_cell_id: imageCellId,
+      target_input: 'segment',
+    })
+    await cell(imageCellId).waitFor({ timeout: 15_000 })
+    await cell(imageCellId).click({ position: { x: 20, y: 20 } })
+    const dock = page.locator('.composer-notebook-dock.inspector')
+    const address = dock.locator('.inspector-cell-address')
+    const imageAddress = String(await address.textContent())
+    expect(await dock.getByRole('button', { name: /^Back to / }).count()).toBe(0)
+
+    await dock.getByRole('button', { name: 'Focus @a1, segment input', exact: true }).click()
+    await expect.poll(() => address.textContent()).toBe('@a1')
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
+    expect(await dock.getByRole('listbox').count()).toBe(0)
+    const actions = dock.getByRole('region', { name: 'Media actions' }).getByRole('button')
+    expect(await actions.evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))).toEqual([
+      'Open @a1 fullscreen',
+      'Copy video',
+      'Download video',
+      'Transcribe',
+    ])
+
+    await dock.getByRole('button', { name: `Back to ${imageAddress}`, exact: true }).click()
+    await expect.poll(() => address.textContent()).toBe(imageAddress)
+    expect(await cell(imageCellId).getAttribute('data-selection')).toBe('primary')
+    expect(await dock.getByRole('button', { name: /^Back to / }).count()).toBe(0)
+
+    await dock.getByRole('button', { name: 'Focus @a1, segment input', exact: true }).click()
+    await expect.poll(() => address.textContent()).toBe('@a1')
+    await cell(imageCellId).click({ position: { x: 20, y: 20 } })
+    await expect.poll(() => address.textContent()).toBe(imageAddress)
+    expect(await dock.getByRole('button', { name: /^Back to / }).count()).toBe(0)
+
+    await dock.getByRole('button', { name: 'Remove @a1 from segment input', exact: true }).click()
+    await expect.poll(() => dock.getByRole('button', { name: 'Focus @a1, segment input', exact: true }).count()).toBe(0)
+    page.once('dialog', dialog => void dialog.accept())
+    await dock.getByRole('button', { name: 'Delete cell', exact: true }).click()
+    await expect.poll(() => cell(imageCellId).count(), { timeout: 15_000 }).toBe(0)
+  })
+
   it('downloads the selected image version and recovers from a real export failure', async () => {
     const secondPath = join(rootDir, 'second-version.png')
     await promisify(execFile)(FFMPEG, [
@@ -670,7 +730,7 @@ describe('composer focus through real workspace interactions', () => {
     await cell(imageCellId).waitFor({ timeout: 15_000 })
     await cell(imageCellId).click({ position: { x: 20, y: 20 } })
     const dock = page.locator('.composer-notebook-dock.inspector')
-    const actions = dock.getByRole('region', { name: 'Media file actions' })
+    const actions = dock.getByRole('region', { name: 'Media actions' })
     await actions.waitFor()
     await rm(downloadsDir, { recursive: true })
     try {

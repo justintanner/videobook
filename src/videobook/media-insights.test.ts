@@ -13,7 +13,6 @@ import {
   transcriptSourceMeta,
   visionAnalysisDetailLabel,
   transcriptDetailLabel,
-  transcriptHasText,
 } from './media-insights'
 
 describe('asMediaTranscript', () => {
@@ -51,36 +50,6 @@ describe('asMediaTranscript', () => {
     expect(asMediaTranscript(null)).toBeNull()
     expect(asMediaTranscript({ text: 'orphan' })).toBeNull()
     expect(asMediaTranscript({ kind: 'missing' })).toBeNull()
-  })
-})
-
-describe('transcriptHasText', () => {
-  it('is false for silence, blank text, and absent transcripts', () => {
-    expect(transcriptHasText(null)).toBe(false)
-    expect(transcriptHasText({
-      kind: 'silence',
-      languageCode: null,
-      text: '',
-      wordCount: 0,
-      words: [],
-    })).toBe(false)
-    expect(transcriptHasText({
-      kind: 'plain',
-      languageCode: null,
-      text: '   ',
-      wordCount: 0,
-      words: [],
-    })).toBe(false)
-  })
-
-  it('is true when the transcript carries dialog', () => {
-    expect(transcriptHasText({
-      kind: 'plain',
-      languageCode: null,
-      text: 'We need to go.',
-      wordCount: 4,
-      words: [],
-    })).toBe(true)
   })
 })
 

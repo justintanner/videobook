@@ -1299,11 +1299,13 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('aria-label="Cell cleanup actions"')).toBeGreaterThan(
       html.indexOf('inspector-media-row-meta'),
     )
-    // Copy and Download share the facts row; only Delete stays at the bottom.
-    expect(html.indexOf('aria-label="Media file actions"')).toBeGreaterThan(
+    expect(html.indexOf('aria-label="Media actions"')).toBeGreaterThan(
       html.indexOf('inspector-media-summary'),
     )
-    expect(html.indexOf('aria-label="Media file actions"')).toBeLessThan(
+    expect(html.indexOf('aria-label="Media actions"')).toBeLessThan(
+      html.indexOf('inspector-media-facts'),
+    )
+    expect(html.indexOf('inspector-media-facts')).toBeLessThan(
       html.indexOf('inspector-media-row-details'),
     )
   })
@@ -1457,15 +1459,19 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('1920 \u00d7 1080')
     expect(html).toContain('<dt>Duration</dt>')
     expect(html).toContain('<dd>0:12</dd>')
-    expect(html).toContain('class="inspector-fullscreen-button"')
+    expect(html).not.toContain('inspector-fullscreen-button')
     expect(html).not.toContain('inspector-edit-button')
     expect(html).not.toContain('inspector-cell-media-open')
-    expect(html.indexOf('inspector-media-row-preview')).toBeLessThan(
-      html.indexOf('class="inspector-media-actions'),
+    expect(html.indexOf('inspector-media-row-meta')).toBeLessThan(
+      html.indexOf('aria-label="Media actions"'),
     )
-    expect(html.indexOf('class="inspector-media-actions')).toBeLessThan(
-      html.indexOf('inspector-media-row-meta'),
-    )
+    const actions = [
+      'aria-label="Open @g5 fullscreen"',
+      'aria-label="Copy video"',
+      'aria-label="Download video"',
+    ].map((label) => html.indexOf(label))
+    expect(actions.every((position) => position >= 0)).toBe(true)
+    expect(actions).toEqual([...actions].sort((left, right) => left - right))
   })
 
   it('draws an audio cell as peaks over its transport', () => {
@@ -2255,7 +2261,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('aria-label="segment input"')
+    expect(html).toContain('aria-label="Change segment input"')
     expect(html).not.toContain('Timestamp seconds')
   })
 
@@ -2964,7 +2970,8 @@ describe('NotebookCellInspector', () => {
     expect(eleven).toContain('Word-timed · 4 words · eng')
     expect(eleven).not.toContain('The gpt-4o transcription.')
     expect(eleven).toContain('aria-label="Download SRT"')
-    expect(eleven).toContain('aria-label="Transcribe again"')
+    expect(eleven).not.toContain('Transcribe again')
+    expect(html).toContain('aria-label="Transcribe again"')
     expect(eleven).toContain('aria-label="ElevenLabs Transcript view"')
     expect(eleven).toContain('>JSON</button>')
   })
@@ -2983,7 +2990,8 @@ describe('NotebookCellInspector', () => {
     expect(eleven).toContain('No transcript yet.')
     expect(eleven).toContain('title="No ElevenLabs transcript"')
     expect(eleven).toContain('aria-label="Download SRT unavailable"')
-    expect(eleven).toContain('>Transcribe</span>')
+    expect(eleven).not.toContain('>Transcribe</span>')
+    expect(html).toContain('aria-label="Transcribe"')
     expect(gpt).not.toContain('Transcribe')
     expect(html).not.toContain('aria-label="Video analysis"')
   })
@@ -3002,7 +3010,7 @@ describe('NotebookCellInspector', () => {
     expect(gpt).toContain('title="No GPT-4o translation"')
     expect(eleven).toContain('0:00  Hello world')
     expect(eleven).toContain('aria-label="Download SRT"')
-    expect(eleven).toContain('aria-label="Transcribe again"')
+    expect(html).toContain('aria-label="Transcribe again"')
     expect(gpt).not.toContain('0:00')
   })
 
@@ -3018,18 +3026,19 @@ describe('NotebookCellInspector', () => {
 
     expect(gpt).toContain('This clip has a transcript but no spoken dialog.')
     expect(eleven).toContain('This clip has a transcript but no spoken dialog.')
-    expect(eleven).toContain('>Transcribe again</span>')
+    expect(eleven).not.toContain('Transcribe again')
+    expect(html).toContain('aria-label="Transcribe again"')
     expect(html).not.toContain('aria-label="Video analysis"')
   })
 
-  it('shows one compact Transcribe action when neither sidecar exists', () => {
+  it('keeps Transcribe in the toolbar with one quiet line when neither sidecar exists', () => {
     const html = renderSpokenInspector({ transcript: null })
 
     expect(html).not.toContain('aria-label="GPT-4o Translation"')
     expect(html).not.toContain('aria-label="ElevenLabs Transcript"')
-    expect(html).toContain('Transcribe')
+    expect(html).toContain('aria-label="Transcribe"')
     expect(html).not.toContain('No GPT-4o translation yet.')
-    expect(html).not.toContain('No transcript yet.')
+    expect(html).toContain('No transcript yet.')
     expect(html).not.toContain('aria-label="Video analysis"')
     expect(html).not.toContain('Analyze again')
   })
@@ -3165,8 +3174,13 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).toContain('aria-label="Focus @a1, media input"')
+    expect(html).toContain('aria-label="Change media input"')
     expect(html).toContain('aria-label="Remove @a1 from media input"')
     expect(html).toContain('Disconnect input')
+    expect(html.indexOf('aria-label="Focus @a1, media input"')).toBeLessThan(
+      html.indexOf('aria-label="Change media input"'),
+    )
   })
 
   it('lists published-post urls and followup errors in the inspector', () => {
