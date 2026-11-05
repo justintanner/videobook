@@ -24,7 +24,6 @@ import {
   type ProbeResult,
 } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
-import { ingestWorkspaceOutputs } from "./_persist-output.js";
 import { getApiKey } from "../api-key.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
 import {
@@ -369,32 +368,27 @@ async function processVideoSnapshot(
 
     if (force) {
       const currentManifest = await engine.files.manifest(assetId);
-      if (currentManifest.ok) {
-        const staleFiles = currentManifest.value.files
-          .map((file) => file.name)
-          .filter((filename) =>
-            filename === "original.jpg" ||
-            filename === "proxy.mp4" ||
-            filename.startsWith("original_frames/") ||
-            ["landscape", "portrait", "square"].some(
-              (orientation) =>
-                filename === `${orientation}.mp4` ||
-                filename === `${orientation}.jpg` ||
-                filename.startsWith(`${orientation}_frames/`),
-            ),
-          );
-        for (const filename of staleFiles) {
-          await engine.files.delete(assetId, filename);
-        }
+      if (!currentManifest.ok) throw new Error(currentManifest.error.message);
+      const staleFiles = currentManifest.value.files
+        .map((file) => file.name)
+        .filter((filename) =>
+          filename === "original.jpg" ||
+          filename === "proxy.mp4" ||
+          filename.startsWith("original_frames/") ||
+          ["landscape", "portrait", "square"].some(
+            (orientation) =>
+              filename === `${orientation}.mp4` ||
+              filename === `${orientation}.jpg` ||
+              filename.startsWith(`${orientation}_frames/`),
+          ),
+        );
+      for (const filename of staleFiles) {
+        const deleted = await engine.files.delete(assetId, filename);
+        if (!deleted.ok) throw new Error(deleted.error.message);
       }
-      await rm(join(assetDir, "original_frames"), { recursive: true, force: true });
-      await rm(join(assetDir, "original.jpg"), { force: true }).catch(() => {});
       // Renders are derived from the old source video — drop them so the UI
       // falls back to original.mp4 and prompts a re-render.
       for (const orient of ["landscape", "portrait", "square"] as const) {
-        await rm(join(assetDir, `${orient}.mp4`), { force: true }).catch(() => {});
-        await rm(join(assetDir, `${orient}.jpg`), { force: true }).catch(() => {});
-        await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
         await engine.metadata.artifacts.delete(assetId, `${orient}.render`);
       }
       await engine.metadata.artifacts.delete(assetId, "proxy");
@@ -471,13 +465,14 @@ async function processVideoSnapshot(
     }
 
     const timestamps = generateTimestamps(duration);
-    frameCount = timestamps.length;
 
-    const framesDir = join(assetDir, "original_frames");
+    const framesDir = join(dirname(videoPath), "original_frames");
     await mkdir(framesDir, { recursive: true });
+    const extractedFrames: string[] = [];
 
     for (const ts of timestamps) {
       const framePath = join(framesDir, `${formatTimestamp(ts)}.jpg`);
+      let frameData: Buffer;
       try {
         await runFfmpeg([
           "-y",
@@ -488,10 +483,20 @@ async function processVideoSnapshot(
           "-strict", "unofficial",
           framePath,
         ], { signal });
+        frameData = await fsReadFile(framePath);
       } catch {
         // frame extraction failure is non-fatal
+        signal?.throwIfAborted();
+        continue;
       }
+      const frame = await engine.files.write(
+        assetId, `original_frames/${formatTimestamp(ts)}.jpg`, frameData,
+      );
+      if (!frame.ok) throw new Error(frame.error.message);
+      extractedFrames.push(framePath);
+      frameCount += 1;
     }
+    if (frameCount === 0) throw new Error(`No frames could be extracted for ${assetId}`);
 
     // Extract original.mp3 from the video (kept in sync with original.mp4 so
     // standalone audio reads — timeline, transcription — match the source).
@@ -499,7 +504,7 @@ async function processVideoSnapshot(
       ? await engine.files.read(assetId, "original.mp3")
       : null;
     if (probe.hasAudio && (!existingMp3 || !existingMp3.ok)) {
-      const mp3TempPath = join(assetDir, "original.mp3.tmp");
+      const mp3TempPath = join(dirname(videoPath), "original.mp3.tmp");
       await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
@@ -525,29 +530,24 @@ async function processVideoSnapshot(
     // Create original.jpg from first frame if not already set (e.g., from OG image)
     const thumbResult = await engine.files.read(assetId, "original.jpg");
     if (!thumbResult.ok) {
-      try {
-        const firstFrameBuf = await fsReadFile(join(framesDir, "0.00.jpg"));
-        await engine.files.write(assetId, "original.jpg", firstFrameBuf);
-      } catch { /* frame not available */ }
+      const firstFrameBuf = await fsReadFile(extractedFrames[0]!);
+      await writeBinaryIfChanged(engine, assetId, "original.jpg", firstFrameBuf);
     }
 
     // If thumbnail is blank (all black/grey), replace with a mid-video frame
-    const thumbPath = join(assetDir, "original.jpg");
-    if (await isThumbnailBlank(thumbPath) && timestamps.length > 1) {
-      const midTs = timestamps[Math.floor(timestamps.length / 2)];
-      try {
-        const midFrameBuf = await fsReadFile(join(framesDir, `${formatTimestamp(midTs)}.jpg`));
-        await engine.files.write(assetId, "original.jpg", midFrameBuf);
-      } catch { /* mid-frame not available */ }
+    const thumbPath = join(dirname(videoPath), "poster.jpg");
+    if (await snapshotAssetFile(engine, assetId, "original.jpg", thumbPath)
+      && await isThumbnailBlank(thumbPath) && extractedFrames.length > 1) {
+      const midFrameBuf = await fsReadFile(extractedFrames[Math.floor(extractedFrames.length / 2)]!);
+      await writeBinaryIfChanged(engine, assetId, "original.jpg", midFrameBuf);
     }
 
-    await ingestWorkspaceOutputs(
-      engine,
-      assetId,
-      ["original_frames"],
+    const recorded = await engine.history.recordOperation(
       "process_video",
+      assetId,
       { width, height, duration, frame_count: frameCount },
     );
+    if (!recorded.ok) throw new Error(recorded.error.message);
 
     }
 

@@ -119,7 +119,7 @@ export function doctorDef(engine: Engine): ToolDef {
   return {
     name: "doctor",
     description:
-      "Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset (clears a stale error or lease, otherwise restores it from history); fix alone only reports. clean deletes failed-generation husks and clears error badges on assets that kept their media. gc reclaims catalog storage for this book.",
+      "Report assets stuck in an error state or past their work deadline. fix with an asset_id restores that one asset, rebuilding missing video previews and analysis frames from existing media, clearing stale errors or leases, or restoring from history; fix alone only reports. clean deletes failed-generation husks and clears error badges on assets that kept their media. gc reclaims catalog storage for this book.",
     schema: {
       book_id: z.string().describe("Book id"),
       asset_id: z

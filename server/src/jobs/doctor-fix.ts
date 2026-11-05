@@ -1,5 +1,9 @@
-import type { Engine } from "videobook-engine";
-import { registerJobHandler } from "../queue.js";
+import { findVideoFile, type Engine } from "videobook-engine";
+import { join } from "node:path";
+import { registerJobHandler, type JobHandlerContext } from "../queue.js";
+import { withLocalLease } from "./_lease.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
+import { processVideoFiles } from "./process-video.js";
 
 interface DoctorFixPayload {
   type: "doctor_fix";
@@ -28,6 +32,39 @@ async function statusOf(
   return res.ok ? res.value : "error";
 }
 
+async function repairVideoDerivatives(
+  engine: Engine,
+  assetId: string,
+  ctx: JobHandlerContext,
+): Promise<boolean> {
+  const artifact = engine.artifacts.get(assetId);
+  if (!artifact.ok || artifact.value.kind !== "video") return false;
+  const manifest = await engine.files.manifest(assetId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const files = manifest.value.files;
+  if (files.some((file) => file.name === "original.jpg")
+    && files.some((file) => file.name === "proxy.mp4")
+    && files.some((file) => /^original_frames\/\d+(?:\.\d+)?\.jpg$/u.test(file.name))) {
+    return false;
+  }
+  const source = findVideoFile(files.filter((file) => file.name !== "proxy.mp4"));
+  if (!source) return false;
+  const original = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+  await withLocalLease(engine, assetId, ctx, "process", () =>
+    withTransientStorageRetry(() => processVideoFiles(engine, {
+      type: "process_video",
+      bookId: engine.book.get().bookId,
+      assetId,
+      assetDir: manifest.value.path,
+      videoPath: join(manifest.value.path, source.name),
+      provenance: original.ok ? original.value : {},
+      skipDownstreamJobs: true,
+      preserveAudioArtifacts: true,
+      reviveVisualAnalysis: true,
+    }, ctx.signal), ctx.signal));
+  return true;
+}
+
 /**
  * Restore one asset to its last usable state before the current error.
  *
@@ -49,6 +86,7 @@ async function statusOf(
 async function fixAsset(
   engine: Engine,
   assetId: string,
+  ctx: JobHandlerContext,
 ): Promise<DoctorFixResult> {
   // Refuse to touch an asset a job is actively working (live, unexpired lease).
   const work = await engine.jobs.artifactWork.read(assetId);
@@ -77,8 +115,9 @@ async function fixAsset(
 
   const afterTier1 = await statusOf(engine, assetId);
   if (afterTier1 === "ready") {
+    const reprocessed = await repairVideoDerivatives(engine, assetId, ctx);
     return {
-      status: before === "ready" ? "already_healthy" : "recovered_in_place",
+      status: before === "ready" && !reprocessed ? "already_healthy" : "recovered_in_place",
       asset_id: assetId,
       asset_status: afterTier1,
     };
@@ -107,6 +146,7 @@ async function fixAsset(
     await engine.jobs.failures.clear(assetId);
     const status = await statusOf(engine, assetId);
     if (status === "ready") {
+      await repairVideoDerivatives(engine, assetId, ctx);
       return {
         status: "restored",
         asset_id: assetId,
@@ -129,8 +169,8 @@ async function fixAsset(
 }
 
 export function registerDoctorFixJob(engine: Engine): void {
-  registerJobHandler("doctor_fix", async (payload) => {
+  registerJobHandler("doctor_fix", async (payload, ctx) => {
     const { assetId } = payload as unknown as DoctorFixPayload;
-    return fixAsset(engine, assetId);
+    return fixAsset(engine, assetId, ctx);
   });
 }

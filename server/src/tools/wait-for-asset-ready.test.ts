@@ -160,4 +160,83 @@ describe("waitForAssetReadyDef handler", () => {
     const data = JSON.parse(result.content[0].text);
     expect(data.status).toBe("timeout");
   });
+
+  it("ignores failed attempts after a successful recovery", async () => {
+    const artifact = await fs.artifacts.create("image", "recovered");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const artifactId = artifact.value.artifactId;
+    const failed = fs.jobs.queue.enqueue({
+      type: "analyze_video", artifactId, initialState: "running", payload: {}, maxAttempts: 1,
+    }).job;
+    await fs.jobs.queue.fail(failed.id, { error: { message: "No frames to analyze" }, allowRetry: false });
+    const recovery = fs.jobs.queue.enqueue({
+      type: "doctor_fix", artifactId, initialState: "running", payload: {},
+    }).job;
+    await fs.jobs.queue.complete(recovery.id, { result: { status: "recovered_in_place", asset_status: "ready" } });
+
+    const result = await waitForAssetReadyDef(fs).handler({
+      asset_id: artifactId, book_id: fs.book.get().bookId, timeout_seconds: 1,
+    });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(result.content[0].text).status).toBe("ready");
+    expect(fs.jobs.queue.get(failed.id)?.state).toBe("failed");
+  });
+
+  it("waits for a queued retry instead of returning an older failure", async () => {
+    const artifact = await fs.artifacts.create("image", "retrying");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const artifactId = artifact.value.artifactId;
+    const failed = fs.jobs.queue.enqueue({
+      type: "process_video", artifactId, initialState: "running", payload: {}, maxAttempts: 1,
+    }).job;
+    await fs.jobs.queue.fail(failed.id, { error: { message: "Old processing failure" }, allowRetry: false });
+    fs.jobs.queue.enqueue({ type: "process_video", artifactId, payload: {} });
+
+    const result = await waitForAssetReadyDef(fs).handler({
+      asset_id: artifactId, book_id: fs.book.get().bookId, timeout_seconds: 0.01,
+    });
+    expect(JSON.parse(result.content[0].text).status).toBe("timeout");
+  });
+
+  it("reports the latest failed attempt even after an earlier recovery", async () => {
+    const artifact = await fs.artifacts.create("image", "failed again");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const artifactId = artifact.value.artifactId;
+    const recovery = fs.jobs.queue.enqueue({
+      type: "doctor_fix", artifactId, initialState: "running", payload: {},
+    }).job;
+    await fs.jobs.queue.complete(recovery.id, { result: { status: "recovered_in_place", asset_status: "ready" } });
+    const failed = fs.jobs.queue.enqueue({
+      type: "analyze_video", artifactId, initialState: "running", payload: {}, maxAttempts: 1,
+    }).job;
+    await fs.jobs.queue.fail(failed.id, { error: { message: "New analysis failure" }, allowRetry: false });
+
+    const result = await waitForAssetReadyDef(fs).handler({
+      asset_id: artifactId, book_id: fs.book.get().bookId, timeout_seconds: 1,
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({
+      status: "failed", error: "New analysis failure",
+    });
+  });
+
+  it.each(["busy", "unfixable"])("keeps failures when Doctor returns %s", async (status) => {
+    const artifact = await fs.artifacts.create("image", "not recovered");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const artifactId = artifact.value.artifactId;
+    const failed = fs.jobs.queue.enqueue({
+      type: "process_video", artifactId, initialState: "running", payload: {}, maxAttempts: 1,
+    }).job;
+    await fs.jobs.queue.fail(failed.id, { error: { message: "Processing failed" }, allowRetry: false });
+    const recovery = fs.jobs.queue.enqueue({
+      type: "doctor_fix", artifactId, initialState: "running", payload: {},
+    }).job;
+    await fs.jobs.queue.complete(recovery.id, { result: { status, asset_status: "error" } });
+
+    const result = await waitForAssetReadyDef(fs).handler({
+      asset_id: artifactId, book_id: fs.book.get().bookId, timeout_seconds: 1,
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ status: "failed", error: "Processing failed" });
+  });
 });

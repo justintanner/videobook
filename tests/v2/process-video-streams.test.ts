@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createEngine } from 'videobook-engine'
+import sharp from 'sharp'
 import { processVideoFiles } from '../../server/src/jobs/process-video.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { buildAssetList } from '../../server/src/tools/reconcile-project-work.js'
@@ -181,5 +182,102 @@ describe('video ingest stream identity', () => {
     const projected = await buildAssetList(engine, engine.book.get().bookId)
     expect(projected[0]?.media_url).toContain('/proxy.mp4')
     engine.close()
+  })
+
+  it('rebuilds forced video derivatives while readers materialize the workspace', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-video-force-readers-'))
+    const sourcePath = join(rootDir, 'original.mp4')
+    const replacementPath = join(rootDir, 'replacement.mp4')
+    for (const [path, color] of [[sourcePath, 'blue'], [replacementPath, 'red']] as const) {
+      await execFileAsync(FFMPEG, [
+        '-y', '-f', 'lavfi', '-i', `color=c=${color}:duration=1:size=240x320:rate=24`,
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1:sample_rate=48000',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', path,
+      ])
+    }
+    const engine = createEngine({
+      durableWrites: false,
+      rootDir: join(rootDir, 'book'),
+      initialBookName: 'video-force-readers',
+    })
+    await engine.ready
+    try {
+      const artifact = await engine.artifacts.create('video', 'watermarked source')
+      if (!artifact.ok) throw new Error(artifact.error.message)
+      const assetId = artifact.value.artifactId
+      const payload = {
+        type: 'process_video' as const,
+        videoPath: sourcePath,
+        assetId,
+        assetDir: artifact.value.path,
+        bookId: engine.book.get().bookId,
+        provenance: { origin: 'watermark' },
+        skipDownstreamJobs: true,
+      }
+      await processVideoFiles(engine, payload)
+      const oldFrame = await engine.files.read(assetId, 'original_frames/0.00.jpg')
+      if (!oldFrame.ok) throw new Error(oldFrame.error.message)
+      await engine.files.write(assetId, 'original_frames/999.00.jpg', oldFrame.value)
+      await engine.files.copy(assetId, 'original.mp4', assetId, 'portrait.mp4')
+      await engine.files.write(assetId, 'portrait_frames/0.00.jpg', oldFrame.value)
+      await engine.metadata.artifacts.write(assetId, 'portrait.render', { stale: true })
+      const replacement = await engine.files.writeFromPath(assetId, 'original.mp4', replacementPath)
+      if (!replacement.ok) throw new Error(replacement.error.message)
+      const source = await engine.files.read(assetId, 'original.mp4')
+      if (!source.ok) throw new Error(source.error.message)
+
+      let reading = true
+      let reads = 0
+      const concurrentReads = (async () => {
+        while (reading) {
+          const manifest = await engine.files.manifest(assetId)
+          if (!manifest.ok) throw new Error(manifest.error.message)
+          await engine.files.read(assetId, 'original_frames/0.00.jpg')
+          reads += 1
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+      })()
+      let frameCount = 0
+      try {
+        const result = await processVideoFiles(engine, {
+          ...payload,
+          videoPath: replacement.value,
+          force: true,
+        })
+        frameCount = result.frame_count
+      } finally {
+        reading = false
+        await concurrentReads
+      }
+
+      expect(reads).toBeGreaterThan(1)
+      const manifest = await engine.files.manifest(assetId)
+      if (!manifest.ok) throw new Error(manifest.error.message)
+      const names = manifest.value.files.map((file) => file.name)
+      expect(names).toEqual(expect.arrayContaining(['original.mp4', 'proxy.mp4', 'original.jpg']))
+      expect(names).not.toContain('original_frames/999.00.jpg')
+      expect(names).not.toContain('portrait.mp4')
+      expect(names).not.toContain('portrait_frames/0.00.jpg')
+      expect(await engine.metadata.artifacts.read(assetId, 'portrait.render')).toMatchObject({ ok: false })
+      const frames = names.filter((name) => name.startsWith('original_frames/'))
+      expect(frames).toHaveLength(frameCount)
+      expect(frameCount).toBeGreaterThan(0)
+      for (const name of [...frames, 'original.jpg']) {
+        const frame = await engine.files.read(assetId, name)
+        if (!frame.ok) throw new Error(frame.error.message)
+        const stats = await sharp(frame.value).stats()
+        expect(stats.channels[0]!.mean).toBeGreaterThan(220)
+        expect(stats.channels[2]!.mean).toBeLessThan(20)
+      }
+      const after = await engine.files.read(assetId, 'original.mp4')
+      expect(after.ok && after.value.equals(source.value)).toBe(true)
+      const proxy = await probeVideo(join(artifact.value.path, 'proxy.mp4'))
+      expect(proxy.videoDuration).toBeGreaterThan(0.9)
+      expect(proxy.hasAudio).toBe(true)
+      const projected = await buildAssetList(engine, engine.book.get().bookId)
+      expect(projected[0]?.media_url).toContain('/proxy.mp4')
+    } finally {
+      engine.close()
+    }
   })
 })

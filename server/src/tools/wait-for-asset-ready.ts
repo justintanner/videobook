@@ -1,10 +1,16 @@
-import type { Engine } from "videobook-engine";
+import type { Engine, Job } from "videobook-engine";
 import { z } from "zod";
 import { reconcileProjectWorkDef } from "./reconcile-project-work.js";
 import type { ToolDef } from "./tool-def.js";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isSuccessfulRecovery(job: Job): boolean {
+  return job.type === "doctor_fix" && job.state === "done"
+    && job.result !== null && typeof job.result === "object"
+    && "asset_status" in job.result && job.result.asset_status === "ready";
 }
 
 export function waitForAssetReadyDef(engine: Engine): ToolDef {
@@ -96,7 +102,10 @@ export function waitForAssetReadyDef(engine: Engine): ToolDef {
           artifactId: asset_id,
           limit: 20,
         });
-        const failedJob = jobs.find((job) => job.state === "failed");
+        const failedJob = jobs.find((job) => job.state === "failed"
+          && !jobs.some((newer) => newer.id > job.id
+            && (newer.type === job.type
+              || isSuccessfulRecovery(newer))));
         if (failedJob) {
           return {
             isError: true as const,

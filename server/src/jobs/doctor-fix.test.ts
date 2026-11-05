@@ -9,6 +9,13 @@ import { stopBookQueue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { testBudget } from "../test-budget.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { processVideoFiles } from "./process-video.js";
+import sharp from "sharp";
+
+const execFileAsync = promisify(execFile);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -210,6 +217,68 @@ describe("doctor tool", () => {
     expect(after.ok && after.value).toBe("ready");
     const manifest = await fs.files.manifest(assetId);
     expect(manifest.ok && manifest.value.files.some((f) => f.name === "original.png")).toBe(true);
+  });
+
+  it("fix rebuilds missing video derivatives even when the source is already ready", async () => {
+    const sourcePath = join(tempDir, "original.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y", "-f", "lavfi", "-i", "testsrc=duration=1:size=240x320:rate=24",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=48000",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", sourcePath,
+    ]);
+    const artifact = await fs.artifacts.create("video", "watermarked source");
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const assetId = artifact.value.artifactId;
+    await processVideoFiles(fs, {
+      type: "process_video",
+      bookId,
+      assetId,
+      assetDir: artifact.value.path,
+      videoPath: sourcePath,
+      provenance: { origin: "watermark", watermarked_at: "2026-11-05T13:17:00.000Z" },
+      skipDownstreamJobs: true,
+    });
+    const before = await fs.files.manifest(assetId);
+    if (!before.ok) throw new Error(before.error.message);
+    const sourceHash = before.value.files.find((file) => file.name === "original.mp4")!.objectHash;
+    const audioHash = before.value.files.find((file) => file.name === "original.mp3")!.objectHash;
+    for (const file of before.value.files) {
+      if (file.name.startsWith("original_frames/") || ["proxy.mp4", "original.jpg"].includes(file.name)) {
+        const deleted = await fs.files.delete(assetId, file.name);
+        if (!deleted.ok) throw new Error(deleted.error.message);
+      }
+    }
+    expect(await fs.status.get(assetId)).toMatchObject({ ok: true, value: "ready" });
+
+    const result = await client.callTool({
+      name: "doctor",
+      arguments: { book_id: bookId, asset_id: assetId, fix: true },
+    });
+    expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
+    expect(parse<DoctorFixResult>(result)).toMatchObject({
+      status: "recovered_in_place", asset_status: "ready",
+    });
+    const after = await fs.files.manifest(assetId);
+    if (!after.ok) throw new Error(after.error.message);
+    expect(after.value.files.find((file) => file.name === "original.mp4")?.objectHash).toBe(sourceHash);
+    expect(after.value.files.find((file) => file.name === "original.mp3")?.objectHash).toBe(audioHash);
+    const frames = after.value.files.filter((file) => file.name.startsWith("original_frames/"));
+    expect(frames).toHaveLength(3);
+    for (const frame of frames) {
+      const read = await fs.files.read(assetId, frame.name);
+      if (!read.ok) throw new Error(read.error.message);
+      expect(await sharp(read.value).metadata()).toMatchObject({ format: "jpeg", width: 240, height: 320 });
+    }
+    const proxy = await probeVideo(join(after.value.path, "proxy.mp4"));
+    expect(proxy.hasAudio).toBe(true);
+    expect(proxy.videoDuration).toBeGreaterThan(0.9);
+    const metadata = await fs.metadata.artifacts.read(assetId, "original");
+    expect(metadata).toMatchObject({ ok: true, value: { origin: "watermark", watermarked_at: "2026-11-05T13:17:00.000Z" } });
+    const again = await client.callTool({
+      name: "doctor",
+      arguments: { book_id: bookId, asset_id: assetId, fix: true },
+    });
+    expect(parse<DoctorFixResult>(again).status).toBe("already_healthy");
   });
 
   it("keeps the current media when no historical revision is ready", async () => {
