@@ -225,6 +225,7 @@ describe('Post delivery review in the chat composer', () => {
     await page.getByRole('menuitem', { name: 'Edit cell', exact: true }).click()
     const inspector = page.getByRole('region', { name: 'Post details' })
     await inspector.waitFor({ state: 'visible' })
+    expect(await inspector.evaluate(root => [root, ...root.querySelectorAll('.post-main, .post-rail')].filter(box => box.scrollHeight > box.clientHeight).map(box => box.className))).toEqual([])
     expect(await inspector.evaluate(root => [...root.querySelectorAll('.post-delivery:not(.post-link-field) button')].map(button => button.textContent?.trim()))).toEqual(['Save to iPhone', 'Download', 'Post to X…'])
     expect(await inspector.getByRole('button', { name: 'Save to iPhone', exact: true }).getAttribute('aria-pressed')).toBe('true')
     expect(await inspector.getByRole('button', { name: 'Download', exact: true }).getAttribute('aria-pressed')).toBe('false')

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { NotebookCell } from 'videobook-engine'
 import { notebookGridTag } from 'videobook-engine/notebook-grid'
 import { POST_METRIC_NAMES } from '../../../server/src/posts/post-contract'
-import { PLATFORM_CAPTION_LIMITS, PLATFORM_NAMES } from '../../../server/src/posts/post-copy-format'
+import { PLATFORM_CAPTION_LIMITS } from '../../../server/src/posts/post-copy-format'
 import type { PostDefinition, PostMetrics, PostView } from '../../../server/src/posts/post-contract'
 import { icloudPhoneReceipt, icloudProgressLabel, postDownloadFor } from '@/videobook/post-delivery-review'
 import type { ICloudSyncView } from '@/videobook/post-delivery-review'
@@ -61,7 +61,6 @@ export function PostInspector({ post, cells, asset, bookId, bookName, call, onRe
     await onRefresh()
   }
   return <section className="post-inspector" aria-label="Post details">
-    <div className="post-heading"><div><span className="post-eyebrow">{PLATFORM_NAMES[post.definition.platform]} publication</span><h2>{post.address} · Post</h2></div><span className={`post-status post-status-${post.runtime.status}`}>{post.runtime.status.replaceAll('_', ' ')}</span></div>
     <PostProgress post={post} />
     <div className="post-layout">
       <PostPreview post={post} asset={asset} caption={caption} credits={credits} account={account} eyebrow={post.runtime.url ? 'Published' : 'As it will appear'} />
@@ -82,9 +81,9 @@ export function PostInspector({ post, cells, asset, bookId, bookName, call, onRe
         <form className="post-form" onSubmit={event => { event.preventDefault(); void run('update_post', locked ? { notes } : { platform, caption, credits, account, notes }).then(saved => { if (saved) setDraft({}) }) }}>
           <PlatformPicker value={platform} disabled={locked} onChange={next => setDraft({ ...draft, platform: next })} />
           <label>Account<input value={account} disabled={locked} placeholder="@account" onChange={event => setDraft({ ...draft, account: event.target.value })} /></label>
-          <div className="post-field"><span className="post-label-row"><label htmlFor={`post-caption-${post.id}`}>Caption</label><span className={caption.length > captionLimit ? 'post-error' : undefined}>{caption.length.toLocaleString()} / {captionLimit.toLocaleString()}</span></span><textarea id={`post-caption-${post.id}`} value={caption} disabled={locked} rows={4} onChange={event => setDraft({ ...draft, caption: event.target.value })} placeholder="What will this post say?" /></div>
-          <label>Credits<textarea value={credits} disabled={locked} rows={2} onChange={event => setDraft({ ...draft, credits: event.target.value })} placeholder="Creator and source credits" /></label>
-          <label>Notes<textarea value={notes} rows={2} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="What worked? What would you change?" /></label>
+          <div className="post-field"><span className="post-label-row"><label htmlFor={`post-caption-${post.id}`}>Caption</label><span className={caption.length > captionLimit ? 'post-error' : undefined}>{caption.length.toLocaleString()} / {captionLimit.toLocaleString()}</span></span><textarea id={`post-caption-${post.id}`} value={caption} disabled={locked} rows={3} onChange={event => setDraft({ ...draft, caption: event.target.value })} placeholder="What will this post say?" /></div>
+          <label>Credits<textarea value={credits} disabled={locked} rows={1} onChange={event => setDraft({ ...draft, credits: event.target.value })} placeholder="Creator and source credits" /></label>
+          <label>Notes<textarea value={notes} rows={1} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder="What worked? What would you change?" /></label>
           <div className="post-form-actions"><button className="post-primary" disabled={actions.busy || !call}>{locked ? 'Save notes' : 'Save draft'}</button><small>{dirty ? 'Unsaved changes' : locked ? 'Caption and platform are locked to this publication' : 'Saved'}</small></div>
         </form>
         {actions.error && <p role="alert" className="post-error">{actions.error}</p>}
@@ -100,11 +99,13 @@ export function PostInspector({ post, cells, asset, bookId, bookName, call, onRe
           }}><label>Observed at<input type="datetime-local" step="0.001" required value={observedAt} onChange={event => setObservedAt(event.target.value)} /></label><div className="post-metric-inputs">{POST_METRIC_NAMES.map(name => <label key={name}>{name}<input type="number" min="0" step="1" placeholder="Unknown" value={metrics[name] ?? ''} onChange={event => setMetrics({ ...metrics, [name]: event.target.value })} /></label>)}</div><button disabled={actions.busy || !Object.values(metrics).some(Boolean)}>Save observation</button></form></details>
           {post.runtime.metrics.length > 0 && <details><summary>Observation history ({post.runtime.metrics.length})</summary><div className="post-history">{[...post.runtime.metrics].reverse().map(entry => <p key={entry.id ?? `${entry.observedAt}-${entry.source}`}><strong>{new Date(entry.observedAt).toLocaleString()} · {entry.source}</strong><span>{Object.entries(entry.values).map(([name, value]) => `${name}: ${value?.toLocaleString() ?? '—'}`).join(' · ')}</span></p>)}</div></details>}
         </div>}
-        <details><summary>Idea → clip → post ({post.definition.lineage.length} source cells)</summary><div className="post-lineage">{post.definition.lineage.map(item => {
-          const current = cells.find(cell => cell.id === item.cellId)
-          return <div key={item.cellId}>{current ? <button type="button" onClick={() => onSelectCell(current.id)}>{notebookGridTag(current.slot)} · {item.label ?? item.type}</button> : <strong>{item.label ?? item.type}</strong>}{item.prompt && <p>{item.prompt}</p>}</div>
-        })}</div></details>
-        <button type="button" className="post-delete" onClick={onDelete}>Remove Post cell</button>
+        <div className="post-main-footer">
+          <details><summary>Idea → clip → post ({post.definition.lineage.length} source cells)</summary><div className="post-lineage">{post.definition.lineage.map(item => {
+            const current = cells.find(cell => cell.id === item.cellId)
+            return <div key={item.cellId}>{current ? <button type="button" onClick={() => onSelectCell(current.id)}>{notebookGridTag(current.slot)} · {item.label ?? item.type}</button> : <strong>{item.label ?? item.type}</strong>}{item.prompt && <p>{item.prompt}</p>}</div>
+          })}</div></details>
+          <button type="button" className="post-delete" onClick={onDelete}>Remove Post cell</button>
+        </div>
       </div>
       <aside className="post-rail" aria-label="Deliver">
         {!post.runtime.url && <div className="post-delivery">
