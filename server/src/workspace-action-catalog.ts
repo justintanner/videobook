@@ -27,6 +27,7 @@ const uiActions = new Set<string>(UI_ACTION_IDS);
 const applicationCommands = new Set<string>(APPLICATION_COMMAND_IDS);
 
 export const WORKFLOW_TOOLS: Readonly<Record<string, { actionId: string; reason: string }>> = {
+  book_archive: { actionId: "command.upload", reason: "Coordinates portable book archives through the local export-book/import-book CLI; bytes and temporary paths stay on the same machine." },
   draft_post_copy: { actionId: "command.post", reason: "Drafts the caption and tags in the post sheet from the clip analysis, and rewrites them with an Astra prompt." },
   prepare_cold_open: { actionId: "command.edit-cold-open", reason: "Selects a highlight in the cold-open review." },
   edit_cold_open: { actionId: "command.edit-cold-open", reason: "Creates the reviewed cold-open copy." },

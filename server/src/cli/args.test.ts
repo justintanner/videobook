@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { CliUsageError, applyFlagsToEnv, helpText, parseCli, parseToolArgs, resolvePort } from "./args.js";
 
 describe("parseCli", () => {
+  it("parses portable book commands and requires an export destination", () => {
+    expect(parseCli(["export-book", "pig", "--out", "pig.tar.gz", "--json", "--library", "books"]))
+      .toEqual({ command: "export-book", reference: "pig", flags: { library: "books", out: "pig.tar.gz", json: true } });
+    expect(parseCli(["import-book", "pig.tar.gz"]))
+      .toEqual({ command: "import-book", reference: "pig.tar.gz", flags: { json: false } });
+    for (const args of [["export-book", "pig"], ["import-book"], ["import-book", "a", "b"]]) {
+      expect(() => parseCli(args)).toThrow(CliUsageError);
+    }
+  });
   it("defaults to serve with the web UI", () => {
     expect(parseCli([])).toEqual({ command: "serve", flags: { ui: true, open: false } });
     expect(parseCli(["--port", "4000", "--open"])).toEqual({ command: "serve", flags: { port: 4000, ui: true, open: true } });

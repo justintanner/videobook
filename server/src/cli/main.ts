@@ -32,6 +32,11 @@ function parseOrReport(argv: string[]): ParsedCli | number {
 
 async function runCommand(parsed: RunnableCli): Promise<number> {
   switch (parsed.command) {
+    case "export-book":
+    case "import-book": {
+      const { runBookArchiveCommand } = await import("./book-archive-command.js");
+      return runBookArchiveCommand(parsed);
+    }
     case "serve": {
       const { runServeCommand } = await import("./serve-command.js");
       return runServeCommand(parsed.flags);

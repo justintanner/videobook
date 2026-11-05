@@ -8,6 +8,7 @@ import { createApp, type UiStatus, type VideobookApp } from "./app.js";
 import { bookManager, scopedEngine } from "./engine.js";
 import { getDefaultSecretStore } from "./env-secrets.js";
 import { hydrateLibrary } from "./hydration.js";
+import { queue } from "./queue.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { logger } from "./logger.js";
 import { stopPostMetricsScheduler } from "./posts/post-metrics.js";
@@ -132,6 +133,8 @@ export async function startServer(options: ServeOptions): Promise<RunningServer>
   const close = closer(server, services, lock, () => {
     closing = true;
   });
+  const ready = startHydration(() => closing);
+  queue.waitForStartup(ready);
   return {
     port,
     url,
@@ -139,7 +142,7 @@ export async function startServer(options: ServeOptions): Promise<RunningServer>
     libraryDir,
     uiDir: services.uiDir,
     uiStatus: services.uiStatus,
-    ready: startHydration(() => closing),
+    ready,
     close,
   };
 }

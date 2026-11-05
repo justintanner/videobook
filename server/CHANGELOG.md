@@ -8,6 +8,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Portable `export-book` and `import-book` CLI commands preserve book identity,
+  media versions, notebooks, revision history, and posting records in a
+  checksummed archive. They coordinate with a running local app; imports reject
+  existing names/IDs and start automatic schedules paused. Upload archives
+  manually and explicitly resume schedules with `set_book_automation`.
+
 - WaveSpeed is a new video provider with 23 models: Seedance 2.5 (text,
   image, references and video edit), Seedance 2.0, MiniMax H3 (text, image,
   references and edit), Wan 3.0 (text, image, references and video edit),

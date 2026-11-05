@@ -40,6 +40,7 @@ const DENIED_PATHS = [
 const REQUIRED_PATHS = [
   'package.json', 'LICENSE', 'CHANGELOG.md', 'bin/videobook.js', 'dist/index.js', 'dist/cli/entry.js', 'dist/cli/main.js',
   'dist/test-queue-cleanup.js', 'dist/rhythm/worker.js', 'dist/remotion/public/qr-outro-impact.wav', 'ui/index.html', 'ui/favicon.svg',
+  'dist/cli/book-archive-command.js', 'dist/tools/book-archive.js',
 ]
 
 function parseOptions(args) {
@@ -374,6 +375,13 @@ async function verifyHeadless(packageDir, sdk) {
   await client.connect(new sdk.StreamableHTTPClientTransport(new URL(`${base}/mcp`)))
   const book = await callJson(client, 'create_book', { name: 'pack-install' })
   const books = await callJson(client, 'list_books', {})
+  const archive = join(runtimeRoot, 'pack-install.videobook.tar.gz')
+  const exported = await capture(process.execPath, [bin, 'export-book', book.bookId, '--out', archive, '--json'], runtimeRoot)
+  expect(exported.code === 0, `installed export-book failed:\n${exported.stderr}`)
+  expect(JSON.parse(exported.stdout).manifest.book.bookId === book.bookId, 'archive changed book identity')
+  const imported = await capture(process.execPath, [bin, 'import-book', archive, '--home', join(runtimeRoot, 'imported-home'), '--json'], runtimeRoot)
+  expect(imported.code === 0, `installed import-book failed:\n${imported.stderr}`)
+  expect(JSON.parse(imported.stdout).book.bookId === book.bookId && JSON.parse(imported.stdout).automation_paused === true, 'installed archive round trip lost identity or automation pause')
   await client.close()
   expect(books.some((candidate) => candidate.bookId === book.bookId), 'list_books did not return the created book')
   expect((await fetch(`${base}/`, { headers: { accept: 'text/html' } })).status === 404, '--headless still served the web UI')

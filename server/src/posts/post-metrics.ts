@@ -1,7 +1,7 @@
 import { createX } from "../usage-providers.js";
 import { XError } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
-import type { Engine } from "videobook-engine";
+import { BOOK_AUTOMATION_PAUSED_KEY, type Engine } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { getValidAccessToken } from "../x/x-tokens.js";
 import { listBookEngines, queue } from "../queue.js";
@@ -92,6 +92,7 @@ async function collectDuePostMetrics(): Promise<void> {
   polling = true;
   try {
     for (const engine of await listBookEngines()) {
+      if (engine.settings.get(BOOK_AUTOMATION_PAUSED_KEY) === true) continue;
       for (const post of listPosts(engine)) {
         if (post.definition.platform !== "x" || !post.runtime.url || !post.runtime.nextMetricAt || post.runtime.metricsPaused || new Date(post.runtime.nextMetricAt).getTime() > Date.now()) continue;
         await queue.enqueue(`post-metrics-${post.id}-${new Date(post.runtime.nextMetricAt).getTime()}`, { type: "post_metrics", bookId: engine.book.get().bookId, postCellId: post.id });

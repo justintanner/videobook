@@ -6,11 +6,19 @@ import { BOOK_SLUG_ERROR, normalizeBookSlug } from "videobook-engine/book-slug";
 import { logger } from "./logger.js";
 import {
   createEngine,
+  BOOK_AUTOMATION_PAUSED_KEY,
+  createBookImportWorkspace,
+  cleanupBookImportWorkspaces,
+  cleanupBookSnapshots,
+  releaseBookImportWorkspace,
+  releaseBookSnapshot,
   err,
   isUuidV7,
   ok,
   type ContentStore,
   type Engine,
+  type Book,
+  type BookSnapshot,
   type EngineError,
   type Result,
 } from "videobook-engine";
@@ -113,6 +121,9 @@ export class BookManager {
   private readonly knownRoots = new Set<string>();
   private readonly opening = new Map<string, Promise<void>>();
   private readonly reservedNames = new Set<string>();
+  private readonly reservedBookIds = new Set<string>();
+  private readonly imports = new Map<string, { rootDir: string; book: Book; head: string; ownerPid: number }>();
+  private readonly snapshots = new Map<string, BookSnapshot & { ownerPid: number }>();
   private scanPromise: Promise<void> | null = null;
   private readyPromise: Promise<void> | null = null;
 
@@ -177,6 +188,107 @@ export class BookManager {
     return book
       ? ok(book)
       : err(engineError("NOT_FOUND", `Book not found: ${name}`));
+  }
+
+  async prepareExport(reference: string, ownerPid = process.pid): Promise<BookSnapshot & { token: string }> {
+    await this.ready();
+    await this.releaseAbandonedArchives();
+    const selected = this.get(reference).ok ? this.get(reference) : this.getByName(reference);
+    if (!selected.ok) throw new Error(selected.error.message);
+    const snapshot = await selected.value.engine.storage.snapshot({ ownerPid });
+    const token = randomUUID();
+    this.snapshots.set(token, { ...snapshot, ownerPid });
+    return { ...snapshot, token };
+  }
+
+  async prepareImport(book: Book, head: string, ownerPid = process.pid): Promise<{ token: string; rootDir: string }> {
+    await this.ready();
+    await this.releaseAbandonedArchives();
+    if (!isUuidV7(book.bookId) || normalizeBookSlug(book.name) !== book.name) throw new Error("Invalid archive book identity");
+    if (this.knownRoots.has(book.bookId) || this.getByName(book.name).ok || this.reservedNames.has(book.name)
+      || this.reservedBookIds.has(book.bookId)) {
+      throw new Error("Book ID or name already exists at the destination");
+    }
+    this.reservedNames.add(book.name);
+    this.reservedBookIds.add(book.bookId);
+    const token = randomUUID();
+    try {
+      const rootDir = await createBookImportWorkspace(this.libraryDir, ownerPid);
+      this.imports.set(token, { rootDir, book, head, ownerPid });
+      return { token, rootDir };
+    } catch (error) {
+      this.reservedNames.delete(book.name);
+      this.reservedBookIds.delete(book.bookId);
+      throw error;
+    }
+  }
+
+  async commitImport(token: string): Promise<BookSummary> {
+    const pending = this.imports.get(token);
+    if (!pending) throw new Error("Unknown or expired book import reservation");
+    let engine: Engine | undefined;
+    let publishedRoot: string | undefined;
+    try {
+      if (this.knownRoots.has(pending.book.bookId) || this.getByName(pending.book.name).ok) throw new Error("Book already exists");
+      engine = this.createEngine(pending.rootDir);
+      await engine.ready;
+      const actual = engine.book.get();
+      if (actual.bookId !== pending.book.bookId || actual.name !== pending.book.name || engine.head !== pending.head) {
+        throw new Error("Staged book does not match its import reservation");
+      }
+      const paused = engine.settings.set(BOOK_AUTOMATION_PAUSED_KEY, true);
+      if (!paused.ok) throw new Error(paused.error.message);
+      engine.close();
+      engine = undefined;
+      const destination = this.bookRoot(actual.bookId);
+      try {
+        await lstat(destination);
+        throw new Error("Book directory already exists");
+      } catch (error) {
+        if (systemCode(error) !== "ENOENT") throw error;
+      }
+      await moveDirectory(pending.rootDir, destination);
+      publishedRoot = destination;
+      engine = this.createEngine(destination);
+      await engine.ready;
+      const managed = this.toManagedBook(engine, destination, engine.book.get());
+      this.assertUnique(managed);
+      this.knownRoots.add(managed.bookId);
+      this.books.set(managed.bookId, managed);
+      engine = undefined;
+      publishedRoot = undefined;
+      return this.summary(managed);
+    } finally {
+      engine?.close();
+      if (publishedRoot) await this.removeTemporaryRoot(publishedRoot);
+      await this.releaseArchive(token);
+    }
+  }
+
+  async releaseArchive(token: string): Promise<void> {
+    const snapshot = this.snapshots.get(token);
+    if (snapshot) {
+      this.snapshots.delete(token);
+      await releaseBookSnapshot(snapshot.rootDir);
+    }
+    const pending = this.imports.get(token);
+    if (pending) {
+      this.imports.delete(token);
+      this.reservedNames.delete(pending.book.name);
+      this.reservedBookIds.delete(pending.book.bookId);
+      await releaseBookImportWorkspace(pending.rootDir, this.libraryDir);
+    }
+  }
+
+  private async releaseAbandonedArchives(): Promise<void> {
+    for (const [token, item] of [...this.snapshots, ...this.imports]) {
+      try { process.kill(item.ownerPid, 0); }
+      catch (error) {
+        if (systemCode(error) === "ESRCH") await this.releaseArchive(token);
+      }
+    }
+    await cleanupBookImportWorkspaces(this.libraryDir);
+    await cleanupBookSnapshots();
   }
 
   async create(name: string): Promise<Result<BookSummary, EngineError>> {
@@ -301,6 +413,7 @@ export class BookManager {
   }
 
   async close(): Promise<void> {
+    for (const token of [...this.snapshots.keys(), ...this.imports.keys()]) await this.releaseArchive(token);
     for (const book of this.books.values()) book.engine.close();
     this.books.clear();
     this.knownRoots.clear();
@@ -344,6 +457,8 @@ export class BookManager {
 
   private async scanOnce(): Promise<void> {
     await mkdir(this.libraryDir, { recursive: true });
+    await cleanupBookImportWorkspaces(this.libraryDir);
+    await cleanupBookSnapshots();
     const entries = await readdir(this.libraryDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;

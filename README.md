@@ -206,7 +206,7 @@ Retention runs once a day after the cutoff. It deletes day books older than `ret
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v5.7.1 schema-v28 root under
+Each book owns an isolated `videobook-engine` v5.9.0 schema-v28 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable
@@ -233,6 +233,42 @@ history, or deletes canonical B2 objects.
 The engine materializes scratch paths within each book root for ffmpeg and
 Remotion. `/files/:bookId/:artifactId/*` resolves managed content through the
 selected book engine; file paths are not an authoritative data model.
+
+### Portable book archives
+
+Export a complete editable book, upload the archive yourself, and import it
+on another machine running a compatible Videobook release:
+
+```bash
+videobook export-book pig --out ~/Downloads/pig.videobook.tar.gz
+videobook import-book /path/to/pig.videobook.tar.gz
+```
+
+Both commands honor `--library` and `--home`. For this checkout's development
+library, use `--library ./runtime/books`. Add `--json` for a machine-readable
+result. Export prints the archive size and SHA-256; verify the checksum after
+uploading. The commands coordinate with the running local app, or take
+exclusive library ownership when it is stopped.
+
+Export requires an idle book. It briefly fences that book for a consistent
+snapshot; editing can continue while the CLI compresses the pinned snapshot.
+The archive preserves identities, notebook graphs, media versions, history,
+job records, and posting records. Canonical media appears once; model caches,
+duplicate workspaces, source connection configuration, and application
+credentials are excluded.
+
+Import verifies inventory, catalog integrity, and checksums before atomically
+adding the book. Existing names/IDs are rejected. Format v1 requires schema 28.
+Imported publishing, research, and metrics schedules retain their settings
+and history but start paused. Explicitly resume them with:
+
+```bash
+videobook run set_book_automation book_id=<imported-book-id> paused=false
+```
+
+The source stays intact. Delete it separately after checking the imported book.
+Interrupted commands clean their staging; abandoned workspaces are recovered
+when their owning process has exited.
 
 ## Development
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Engine } from "videobook-engine";
+import { BOOK_AUTOMATION_PAUSED_KEY, type Engine } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import { cutTrending } from "../../server/src/jobs/trending-cut.js";
 import { registerTrendingSampleJob, sampleTrending } from "../../server/src/jobs/trending-sample.js";
@@ -24,6 +24,18 @@ afterEach(async () => {
 });
 
 describe("trending scheduler", () => {
+  it("leaves imported research schedules intact without running them until reactivated", async () => {
+    root = await mkdtemp(join(tmpdir(), "trending-paused-"));
+    books = new BookManager({ libraryDir: root });
+    const control = await ensureControlBook(books, { ...schedule, createdAt: "2026-10-28T00:00:00.000Z", sources: [] });
+    control.engine.settings.set(BOOK_AUTOMATION_PAUSED_KEY, true);
+    const scheduler = createTrendingScheduler({ engines: async () => [control.engine], now: () => new Date("2026-10-29T01:00:00.000Z") });
+    try {
+      await scheduler.tick();
+      expect(control.engine.jobs.queue.list()).toEqual([]);
+      expect(readRuns(control.engine)).toEqual([]);
+    } finally { await scheduler.stop(); }
+  });
   it("stops an active sample by cancelling the queue before waiting for the scheduler", async () => {
     root = await mkdtemp(join(tmpdir(), "trending-shutdown-"));
     books = new BookManager({ libraryDir: root });

@@ -43,6 +43,11 @@ export interface HarFlags extends GlobalFlags {
   json: boolean;
 }
 
+export interface BookArchiveFlags extends GlobalFlags {
+  out?: string;
+  json: boolean;
+}
+
 export type ConfigAction = "list" | "get" | "set" | "unset";
 
 export type HarAction = "list" | "export";
@@ -57,6 +62,7 @@ export type ParsedCli =
   | { command: "setup"; target: "1password"; flags: SetupFlags }
   | { command: "config"; action: ConfigAction; key: string | null; value: string | null; flags: ConfigFlags }
   | { command: "har"; action: HarAction; flags: HarFlags }
+  | { command: "export-book" | "import-book"; reference: string; flags: BookArchiveFlags }
   | { command: "version" }
   | { command: "help" };
 
@@ -72,10 +78,10 @@ export class CliUsageError extends Error {
 type OptionSpec = { type: "string" | "boolean"; short?: string };
 
 const LOG_LEVELS: ReadonlySet<string> = new Set(["silent", "error", "warn", "info", "debug"]);
-const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "setup", "config", "har", "version", "help"]);
+const COMMANDS: ReadonlySet<string> = new Set(["serve", "mcp", "run", "tools", "gc-books", "doctor", "setup", "config", "har", "export-book", "import-book", "version", "help"]);
 const CONFIG_ACTIONS: ReadonlySet<string> = new Set(["list", "get", "set", "unset"]);
 const HAR_ACTIONS: ReadonlySet<string> = new Set(["list", "export"]);
-const POSITIONAL_COMMANDS: ReadonlySet<string> = new Set(["run", "setup", "config", "har"]);
+const POSITIONAL_COMMANDS: ReadonlySet<string> = new Set(["run", "setup", "config", "har", "export-book", "import-book"]);
 const DEFAULT_RUN_TIMEOUT_SECONDS = 600;
 
 const GLOBAL_OPTIONS: Record<string, OptionSpec> = {
@@ -97,6 +103,8 @@ const COMMAND_OPTIONS: Record<CommandName, Record<string, OptionSpec>> = {
   setup: { "op-vault": { type: "string" }, "op-token": { type: "string" }, "no-verify": { type: "boolean" }, remove: { type: "boolean" } },
   config: { json: { type: "boolean" } },
   har: { out: { type: "string" }, since: { type: "string" }, failures: { type: "boolean" }, provider: { type: "string" }, json: { type: "boolean" } },
+  "export-book": { out: { type: "string" }, json: { type: "boolean" } },
+  "import-book": { json: { type: "boolean" } },
 };
 
 type ParsedValues = Record<string, string | boolean | undefined>;
@@ -243,6 +251,17 @@ function buildHar(values: ParsedValues, positionals: string[], flags: GlobalFlag
 function buildCommand(command: CommandName, values: ParsedValues, positionals: string[]): ParsedCli {
   const flags = globalFlags(values);
   switch (command) {
+    case "export-book":
+    case "import-book": {
+      const [reference, ...extra] = positionals;
+      const out = stringValue(values.out);
+      if (!reference || extra.length > 0 || (command === "export-book" && !out)) {
+        throw new CliUsageError(command === "export-book"
+          ? "Usage: videobook export-book <name-or-id> --out <archive.tar.gz> [--json]"
+          : "Usage: videobook import-book <archive.tar.gz> [--json]");
+      }
+      return { command, reference, flags: { ...flags, ...(out ? { out } : {}), json: values.json === true } };
+    }
     case "serve":
       return { command, flags: { ...flags, ui: values.headless !== true && values["no-ui"] !== true, open: values.open === true } };
     case "run": {
@@ -304,6 +323,8 @@ export function helpText(): string {
     "  run <tool> [k=v]   Call one MCP tool and print its result",
     "  tools              List the MCP tools and their parameters",
     "  gc-books           Reclaim catalog storage in every book",
+    "  export-book <book> Export an idle book with history and media (--out <archive.tar.gz>)",
+    "  import-book <file> Import a portable book archive; imported schedules start paused",
     "  doctor             Check Node, media binaries, native modules and keys",
     "  config [action]    list | get <KEY> | set <KEY> <VALUE> | unset <KEY> in the data-home .env",
     "  har list           List provider HAR captures, newest first",
@@ -321,8 +342,8 @@ export function helpText(): string {
     "  --open             serve: open the web UI in a browser",
     "  --no-wait          run: do not wait for queued jobs",
     "  --timeout <s>      run: seconds to wait for jobs (default 600)",
-    "  --json             doctor, config, har: print machine-readable results",
-    "  --out <path>       har export: a new directory, or a .tar.gz/.tgz file",
+    "  --json             Print machine-readable doctor, config, har or book archive results",
+    "  --out <path>       export-book: archive file; har export: directory or .tar.gz/.tgz",
     "  --since <date>     har: only calls at or after this ISO date or time",
     "  --failures         har: only failed calls",
     "  --provider <p>     har: only these providers, comma separated",

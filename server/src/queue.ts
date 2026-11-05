@@ -54,6 +54,8 @@ interface QueueIndexEntry {
 }
 
 interface Queue {
+  waitForStartup(ready: Promise<void>): void;
+  maintenance<T>(work: () => Promise<T>): Promise<T>;
   enqueue(jobId: string, payload: JobPayload): Promise<Job>;
   enqueueAndWait<T = unknown>(
     jobId: string,
@@ -74,6 +76,8 @@ const runnerByBook = new Map<string, RunnerInfo>();
 const startingRunnerByBook = new Map<string, Promise<RunnerInfo>>();
 const stoppingRunnerByBook = new Map<string, Promise<void>>();
 let stoppingQueue: Promise<void> | null = null;
+let maintenanceWork: Promise<unknown> = Promise.resolve();
+let maintenanceStartup: Promise<void> = Promise.resolve();
 const jobIdIndex = new Map<string, QueueIndexEntry>();
 const testEngines = new Map<string, Engine>();
 let activeTestRoot: string | null = null;
@@ -665,6 +669,15 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
 }
 
 export const queue: Queue = {
+  waitForStartup(ready: Promise<void>): void {
+    maintenanceStartup = ready;
+  },
+  maintenance<T>(work: () => Promise<T>): Promise<T> {
+    if (stoppingQueue) return Promise.reject(new Error("Queue is stopping"));
+    const result = maintenanceWork.then(() => maintenanceStartup).then(work);
+    maintenanceWork = result.catch(() => undefined);
+    return result;
+  },
   async enqueue(jobId: string, payload: JobPayload) {
     const { bookId, engine, runner } = await ensureBookReady(payload);
     assertQueueAcceptingWork(bookId, runner);
@@ -715,11 +728,13 @@ export const queue: Queue = {
       await pending;
     } finally {
       stoppingQueue = null;
+      maintenanceStartup = Promise.resolve();
     }
   },
 };
 
 async function stopQueueRunners(): Promise<void> {
+  await maintenanceWork;
   await Promise.all([...startingRunnerByBook.values()].map((starting) =>
     starting.catch(() => undefined)));
   await Promise.all(stoppingRunnerByBook.values());

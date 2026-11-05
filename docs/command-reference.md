@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (212)
+## MCP endpoints (214)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -27,6 +27,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix a video or audio layer asset into a target video or audio asset in place, starting at 0 seconds at volume 0-100; the target keeps its duration and picture.
 - `backfill_asset_tags` — Tag the assets already in a book. 'start' adopts cached analysis; allow_analysis permits provider calls. Pause and cancel stop new work; already queued analysis may finish. Resume continues saved progress.
+- `book_archive` — Local export-book/import-book CLI coordination: prepare a consistent snapshot, reserve an import workspace, adopt a validated book, or release scratch files. Archive bytes stay on the local filesystem.
 - `cancel_job` — Cancel a queued or running persistent job
 - `caption_video` — Subtitles for a video in the TikTok style: read the editable draft and its preparation status, prepare word-timed transcription with vocal timing and face/text placement, save word, timing, phrase, position and style edits against the draft revision, or render the reviewed revision in the background into a new subtitled video cell (the source is kept) or into the source video in place.
 - `chain` — Run several existing book actions in order, passing earlier outputs to later steps with {$ref:{step_id,output}}. Steps are {id, tool, params}; ids are unique and start with a letter. Paid steps pause for review. action: run, status, cancel, or approve with chain_id and step_id to let a paused step continue.
@@ -187,6 +188,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `search_moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library
 - `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `service_status` — Read X or iCloud Drive status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones, or, with book_id and post_cell_id, whether that Post's clip and caption.txt finished uploading.
+- `set_book_automation` — Pause or explicitly resume a book's automatic publishing, research and metrics schedules. Imported books start paused; schedule configuration and history are preserved.
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_har_capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.
@@ -223,7 +225,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (262; 106 dedicated command routes)
+## Slash actions (263; 106 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -440,6 +442,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/search-moments` — Search indexed moments with text, media references and filters in this book, or in every book with scope library; MCP: `search_moments`
 - `/send-search-moment-to-sequence` — Append one search moment to the primary sequence as a reversible edit; MCP: `send_search_moment_to_sequence`
 - `/service-status` — Read X or iCloud Drive status without exposing credentials. X adds the account, its subscription tier and post_max_characters; iCloud adds the Videobook root folder and whether it is shared with the phones, or, with book_id and post_cell_id, whether that Post's clip and caption.txt finished uploading.; MCP: `service_status`
+- `/set-book-automation` — Pause or explicitly resume a book's automatic publishing, research and metrics schedules. Imported books start paused; schedule configuration and history are preserved.; MCP: `set_book_automation`
 - `/set-character-metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).; MCP: `set_character_metadata`
 - `/set-env-secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.; MCP: `set_env_secret`
 - `/set-har-capture` — Read or change opt-in local provider HAR diagnostics. Captures retain prompts, media URLs, parameters, responses and errors; secrets, cookies and oversized media bytes are scrubbed. Omit mode to read settings. Environment override wins.; MCP: `set_har_capture`

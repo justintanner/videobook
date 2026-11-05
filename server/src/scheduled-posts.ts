@@ -1,6 +1,6 @@
 import { patchPostRuntime, readPostRuntime } from "./posts/post-store.js";
 import { randomUUID } from "node:crypto";
-import type { Engine } from "videobook-engine";
+import { BOOK_AUTOMATION_PAUSED_KEY, type Engine } from "videobook-engine";
 import { logger } from "./logger.js";
 import type {
   PostToXResult,
@@ -107,6 +107,7 @@ function armTimer(bookId: string, entry: ScheduledPostEntry): void {
 
 async function firePost(bookId: string, scheduleId: string): Promise<void> {
   const engine = await resolveBookEngine(bookId);
+  if (engine.settings.get(BOOK_AUTOMATION_PAUSED_KEY) === true) return;
   const entries = readState(engine);
   const entry = entries.find((e) => e.schedule_id === scheduleId);
   if (!entry || entry.status !== "pending") return;
@@ -215,11 +216,12 @@ export async function listScheduledPosts(): Promise<ScheduledPostEntry[]> {
     .sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
-export async function loadAndArmAll(): Promise<void> {
+export async function loadAndArmAll(onlyBookId?: string): Promise<void> {
   const now = Date.now();
   const engines = await listBookEngines();
   for (const engine of engines) {
     const bookId = engine.book.get().bookId;
+    if ((onlyBookId && bookId !== onlyBookId) || engine.settings.get(BOOK_AUTOMATION_PAUSED_KEY) === true) continue;
     for (const entry of readState(engine)) {
       if (entry.status !== "pending") continue;
       const due = new Date(entry.scheduled_for).getTime();
@@ -246,6 +248,7 @@ async function rearmPending(): Promise<void> {
   const engines = await listBookEngines();
   for (const engine of engines) {
     const bookId = engine.book.get().bookId;
+    if (engine.settings.get(BOOK_AUTOMATION_PAUSED_KEY) === true) continue;
     for (const entry of readState(engine)) {
       if (entry.status !== "pending") continue;
       if (armed.has(timerKey(bookId, entry.schedule_id))) continue;

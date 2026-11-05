@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Engine } from "videobook-engine";
+import { BOOK_AUTOMATION_PAUSED_KEY, type Engine } from "videobook-engine";
+import { setTimeout as delay } from "node:timers/promises";
+import { testBudget } from "./test-budget.js";
 import { closeEngineForTest, createEngineForTest } from "./engine.js";
 import { queue, setEngineRoot } from "./queue.js";
 import {
@@ -110,5 +112,19 @@ describe("scheduled-posts persistence", () => {
   it("returns false when cancelling an unknown schedule id", async () => {
     const cancelled = await cancelScheduledPost("non-existent-id");
     expect(cancelled).toBe(false);
+  });
+
+  it("preserves overdue imported posts without submitting work while automation is paused", async () => {
+    const result = await schedulePost({ asset_id: "vid-paused", book_id: bookId, platform: "x" },
+      new Date(Date.now() + 60 * 60_000).toISOString());
+    stopScheduler();
+    const entries = await listScheduledPosts();
+    entries[0].scheduled_for = new Date(Date.now() - 60_000).toISOString();
+    engine.settings.set(SCHEDULED_POST_SETTINGS_KEY, entries);
+    engine.settings.set(BOOK_AUTOMATION_PAUSED_KEY, true);
+    await loadAndArmAll();
+    await delay(testBudget(50));
+    expect(await listScheduledPosts()).toEqual([expect.objectContaining({ schedule_id: result.schedule_id, status: "pending" })]);
+    expect(engine.jobs.queue.list()).toHaveLength(0);
   });
 });

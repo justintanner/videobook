@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import { logger } from "../logger.js";
 import { listBookEngines, queue } from "../queue.js";
+import { BOOK_AUTOMATION_PAUSED_KEY } from "videobook-engine";
 import { localDate, readLedger, readRetention, readRuns, readSchedule, retentionStart } from "./ledger.js";
 import type { TrendingRunRecord, TrendingSchedule } from "./types.js";
 
@@ -67,6 +68,7 @@ export function createTrendingScheduler(options: {
     const now = (options.now ?? (() => new Date()))();
     for (const engine of await (options.engines ?? listBookEngines)()) {
       if (stopped) return;
+      if (engine.settings.get(BOOK_AUTOMATION_PAUSED_KEY) === true) continue;
       const schedule = readSchedule(engine);
       if (!schedule?.enabled) continue;
       const bookId = engine.book.get().bookId;
