@@ -102,6 +102,7 @@ import {
   seedInitialGenerationPrompt,
 } from "../notebook-initial-generation-prompt.js";
 import { notebookConnectionEdges, notebookConnectionWouldCreateCycle } from "../notebook-graph.js";
+import { cancelJobDef } from "./cancel-job.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
@@ -2475,29 +2476,7 @@ export function videobookDomainDefs(
         }))));
       },
     },
-    {
-      name: "cancel_job",
-      description: "Cancel a queued or running persistent job",
-      scope: "book",
-      schema: {
-        ...bookSchema,
-        job_id: z.number().int().positive(),
-        reason: z.string().min(1).max(500).optional(),
-      },
-      handler: async (args) => {
-        const jobId = Number(args.job_id);
-        const job = engine.jobs.queue.get(jobId);
-        if (!job) return failure(`Job ${jobId} was not found`);
-        const cancelled = await engine.jobs.queue.abort(
-          jobId,
-          typeof args.reason === "string" ? args.reason : "Cancelled by user",
-        );
-        if (!cancelled) {
-          return failure(`Job ${jobId} is already ${job.state}`);
-        }
-        return json(engine.jobs.queue.get(jobId));
-      },
-    },
+    cancelJobDef(engine),
     {
       name: "retry_job",
       description: "Re-enqueue a failed or cancelled persistent job with the same durable payload",

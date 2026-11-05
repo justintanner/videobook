@@ -95,7 +95,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
-| `tool.cancel_job` | `/cancel-job` |  | book | none | `cancel_job` | slash, launcher | dialog | none |
+| `tool.cancel_job` | `/cancel-job` |  | book | asset: asset_id | `cancel_job` | slash, launcher, cell-menu | dialog | none |
 | `tool.caption_video` | `/caption-video` |  | book | asset: asset_id | `caption_video` | slash, launcher, cell-menu | dialog | generation |
 | `tool.chain` | `/chain` |  | book | notebook: notebook_id | `chain` | slash, launcher | dialog | none |
 | `tool.change_video_speed` | `/speed` |  | book | asset: asset_id | `change_video_speed` | slash, launcher, cell-menu | dialog | none |

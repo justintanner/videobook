@@ -8,6 +8,9 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `cancel_job` can cancel a leftover provider task by artifact and expected task
+  ID after local jobs finish, preserving media and recording the cancellation.
+
 - Portable `export-book` and `import-book` CLI commands preserve book identity,
   media versions, notebooks, revision history, and posting records in a
   checksummed archive. They coordinate with a running local app; imports reject
