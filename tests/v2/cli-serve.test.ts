@@ -35,6 +35,33 @@ function html(url: string): Promise<Response> {
 describe('videobook serve', () => {
   afterEach(cleanupCli)
 
+  it('serves the SPA from a UI directory nested inside a hidden installation directory', async () => {
+    const root = await tempDir()
+    const uiDir = await uiFixture(join(root, '.videobook-releases', 'builds', 'test'))
+    await writeFile(join(uiDir, '.private'), 'private fixture')
+    const port = await availablePort()
+    const base = `http://127.0.0.1:${port}`
+    const cli = spawnCli(['serve', '--port', String(port), '--home', join(root, 'home')],
+      cliEnv({ VIDEOBOOK_UI_DIR: uiDir }))
+
+    await waitForHealth(base, cli)
+    for (const path of ['/', '/books', '/index.html']) {
+      const response = await fetch(`${base}${path}`)
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('<!doctype html>')
+    }
+    const head = await fetch(`${base}/`, { method: 'HEAD' })
+    expect(head.status).toBe(200)
+    expect(head.headers.get('cache-control')).toBe('no-cache')
+    expect(await head.text()).toBe('')
+    expect((await fetch(`${base}/assets/app-abc.js`)).status).toBe(200)
+    const hidden = await fetch(`${base}/.private`, { headers: { accept: 'application/octet-stream' } })
+    expect(hidden.status).toBe(404)
+    expect(await hidden.text()).not.toContain('private fixture')
+    expect((await html(`${base}/api/unknown`)).status).toBe(404)
+    expect(await stopCli(cli)).toBe(0)
+  }, testBudget(60_000))
+
   it('serves the web UI, MCP and health from one loopback port and owns the library', async () => {
     const root = await tempDir()
     const home = join(root, 'home')

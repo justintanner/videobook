@@ -280,21 +280,21 @@ function isAppRoute(path: string): boolean {
   return !RESERVED_ROOTS.has(path.split("/")[1] ?? "");
 }
 
-function spaFallback(indexPath: string): (req: Request, res: Response, next: NextFunction) => void {
+function spaFallback(uiDir: string): (req: Request, res: Response, next: NextFunction) => void {
   return (req, res, next) => {
     if ((req.method !== "GET" && req.method !== "HEAD") || !isAppRoute(req.path) || !req.accepts("html")) {
       next();
       return;
     }
     res.set("Cache-Control", "no-cache");
-    res.sendFile(indexPath);
+    res.sendFile("index.html", { root: uiDir });
   };
 }
 
 function registerUi(app: Express, uiDir: string): void {
   app.use("/assets", express.static(join(uiDir, "assets"), { immutable: true, maxAge: "1y", index: false }));
   app.use(express.static(uiDir, { index: false }));
-  app.use(spaFallback(join(uiDir, "index.html")));
+  app.use(spaFallback(uiDir));
 }
 
 function mountUi(app: Express, options: AppOptions, uiDir: string): UiStatus {
