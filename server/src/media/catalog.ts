@@ -447,8 +447,6 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:fal-ai/kling-video/v3/turbo/pro/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "strip_frames", refs: { first_frame: "image_url" } },
   { id: "fal:fal-ai/kling-video/v3/turbo/standard/text-to-video", media: "video", operations: ["text_to_video"], guide: "kling30" },
   { id: "fal:fal-ai/kling-video/v3/turbo/standard/image-to-video", media: "video", operations: ["image_to_video"], guide: "kling30", dialect: "strip_frames", refs: { first_frame: "image_url" } },
-  { id: "fal:fal-ai/sora-2/text-to-video", media: "video", operations: ["text_to_video"] },
-  { id: "fal:fal-ai/sora-2/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },
   { id: "fal:fal-ai/veo3.1/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },
   { id: "fal:fal-ai/wan/v2.7/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:fal-ai/wan/v2.7/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" } },

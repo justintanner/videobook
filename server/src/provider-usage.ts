@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { createCost, PRICING, PRICING_AS_OF } from "@apicity/cost";
-import type { EstimateRequest, ModelPricing, CostHints } from "@apicity/cost";
+import { createCost, extractActual, mergeActuals, isFalDynamicPricingEndpoint, PRICING, PRICING_AS_OF } from "@apicity/cost";
+import type { EstimateRequest, ModelPricing, CostHints, CostActual, ProviderExchange } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
 import type { Media } from "./media/types.js";
@@ -30,13 +30,17 @@ function text(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function markIncomplete(engine: Engine): void {
+  incomplete.add(engine);
+  try { engine.settings.set("usage-incomplete", true); } catch { void 0; }
+}
+
 function safeRecord(engine: Engine, entry: UsageInput): void {
   try {
     const result = engine.usage.record(entry);
     if (result.ok) return;
   } catch { void 0; }
-  incomplete.add(engine);
-  try { engine.settings.set("usage-incomplete", true); } catch { void 0; }
+  markIncomplete(engine);
 }
 
 export function usageIncomplete(engine: Engine): boolean {
@@ -57,15 +61,6 @@ export async function settleFinishedUsage(engine: Engine): Promise<void> {
   }
 }
 
-function reportedTokens(value: unknown): Pick<UsageEntry, "inputTokens" | "outputTokens" | "cachedTokens"> {
-  const usage = object(value);
-  const inputTokens = number(usage.input_tokens) ?? number(usage.prompt_tokens) ?? number(usage.inputTokens);
-  const outputTokens = number(usage.output_tokens) ?? number(usage.completion_tokens) ?? number(usage.outputTokens);
-  const details = object(usage.input_tokens_details ?? usage.prompt_tokens_details ?? usage.input_token_details);
-  const cachedTokens = number(details.cached_tokens) ?? number(usage.cached_tokens);
-  return { inputTokens, outputTokens, cachedTokens: cachedTokens !== null && inputTokens !== null ? Math.min(cachedTokens, inputTokens) : cachedTokens };
-}
-
 function rateFor(provider: Provider, model: string): ModelPricing | undefined {
   const rates = PRICING[provider] as Record<string, ModelPricing> | undefined;
   return rates?.[model];
@@ -75,21 +70,13 @@ function unknownPrice(warnings = ["Price unavailable for this model"]): Price {
   return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${PRICING_AS_OF}`, warnings, units: null, unit: null };
 }
 
-function tokenPrice(provider: Provider, model: string, tokens: ReturnType<typeof reportedTokens>): Price {
-  const rate = rateFor(provider, model);
-  if (rate?.kind !== "tokens" || tokens.inputTokens === null || tokens.outputTokens === null) return unknownPrice();
-  const cached = tokens.cachedTokens ?? 0;
-  const usd = ((tokens.inputTokens - cached) * rate.rate.input + cached * (rate.rate.cacheRead ?? rate.rate.input) + tokens.outputTokens * rate.rate.output) / 1e6;
-  return { ...unknownPrice([]), costUsd: usd, basis: "estimated", rateSource: rate.source.url, unit: "tokens", units: tokens.inputTokens + tokens.outputTokens };
-}
-
 function historicalAverage(warnings: readonly string[]): boolean {
   return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
 }
 
-async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string | undefined, hints?: CostHints): Promise<Price> {
+async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string | undefined, hints?: CostHints, baseURL?: string): Promise<Price> {
   try {
-    const request: EstimateRequest = { provider, payload, ...(endpoint ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
+    const request: EstimateRequest = { provider, payload, baseURL, ...(endpoint ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
     const estimate = provider === "fal" && endpoint
       ? await estimateFalRequest(endpoint, payload, hints)
       : cost.estimate(request);
@@ -192,25 +179,56 @@ function responseStatus(body: RecordValue, accepted: boolean): UsageEntry["statu
   return accepted ? "pending" : "completed";
 }
 
-function usageOf(body: RecordValue): RecordValue {
-  return object(body.usage ?? object(body.data).usage ?? object(body.output).usage ?? object(body.response).usage);
+function actualPatch(actual: CostActual, status: UsageEntry["status"]): Partial<UsageEntry> {
+  const usage = actual.usage;
+  const units = usage.billableUnits ?? usage.credits ?? usage.seconds ?? usage.characters ?? usage.images;
+  const unit = usage.billableUnits !== undefined ? "billable-units" : usage.credits !== undefined ? "credits"
+    : usage.seconds !== undefined ? "seconds" : usage.characters !== undefined ? "characters" : "images";
+  return {
+    status,
+    ...(usage.inputTokens !== undefined || usage.outputTokens !== undefined ? { tokenBased: true } : {}),
+    ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
+    ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
+    ...(usage.cacheReadInputTokens !== undefined ? { cachedTokens: usage.cacheReadInputTokens } : {}),
+    ...(usage.cacheWriteInputTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteInputTokens } : {}),
+    ...(units !== undefined ? { units, unit } : {}),
+    ...(actual.basis !== "none" ? {
+      costUsd: actual.usd,
+      basis: actual.basis === "stated" ? "reported" : actual.basis === "derived" ? "estimated" : "unknown",
+      warnings: actual.warnings,
+      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${actual.rateAsOf ?? PRICING_AS_OF}`,
+    } : {}),
+  };
 }
 
-function observedPatch(provider: Provider, entry: UsageEntry | UsageInput, body: RecordValue, status: UsageEntry["status"]): Partial<UsageEntry> {
-  const usage = usageOf(body);
-  const reported = reportedTokens(usage);
-  const tokens = {
-    inputTokens: reported.inputTokens ?? entry.inputTokens ?? null,
-    outputTokens: reported.outputTokens ?? entry.outputTokens ?? null,
-    cachedTokens: reported.cachedTokens ?? entry.cachedTokens ?? null,
-  };
-  const ticks = provider === "xai" ? number(usage.cost_in_usd_ticks) : null;
-  const reportedUsd = number(usage.cost_usd) ?? number(body.cost_usd) ?? number(usage.cost_in_usd) ?? (ticks === null ? null : ticks / 1e10);
-  const hasTokens = reported.inputTokens !== null || reported.outputTokens !== null;
-  const price = reportedUsd !== null
-    ? { costUsd: reportedUsd, basis: "reported" as const, warnings: [] }
-    : entry.tokenBased && hasTokens ? tokenPrice(provider, entry.model, tokens) : {};
-  return { status, ...(hasTokens ? tokens : {}), ...price };
+function observedActual(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange): CostActual {
+  const key = `provider-actual:${entry.id}`;
+  const current = extractActual(exchange);
+  try {
+    const previous = engine.settings.get<CostActual>(key);
+    const actual = mergeActuals(previous ? [previous, current] : [current]);
+    engine.settings.set(key, actual);
+    return actual;
+  } catch {
+    markIncomplete(engine);
+    return current;
+  }
+}
+
+async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange, status: UsageEntry["status"]): Promise<Partial<UsageEntry>> {
+  const actual = observedActual(engine, entry, exchange);
+  if (exchange.provider === "fal" && isFalDynamicPricingEndpoint(entry.model) && actual.usage.billableUnits !== undefined && actual.statedUsd === null) {
+    const estimate = await estimateFalRequest(entry.model, {}, undefined, actual.usage.billableUnits);
+    if (estimate.warnings.length === 0) {
+      actual.usd = estimate.usd;
+      actual.derivedUsd = estimate.usd;
+      actual.basis = "derived";
+      actual.rateAsOf = estimate.rateAsOf;
+      actual.warnings = [];
+      engine.settings.set(`provider-actual:${entry.id}`, actual);
+    }
+  }
+  return actualPatch(actual, status);
 }
 
 async function costHints(engine: Engine, artifactId?: string): Promise<CostHints | undefined> {
@@ -234,12 +252,12 @@ function positiveSeconds(value: number | null): number | undefined {
 function mergeCostHints(artifact: CostHints | undefined, explicit: CostHints | undefined): CostHints | undefined {
   const durationSeconds = positiveSeconds(number(explicit?.durationSeconds));
   const inputDurationSeconds = positiveSeconds(number(explicit?.inputDurationSeconds));
-  const overlay: CostHints = {
-    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
-    ...(inputDurationSeconds !== undefined ? { inputDurationSeconds } : {}),
+  if (!artifact && !explicit) return undefined;
+  return {
+    ...artifact, ...explicit,
+    durationSeconds: durationSeconds ?? artifact?.durationSeconds,
+    inputDurationSeconds: inputDurationSeconds ?? artifact?.inputDurationSeconds,
   };
-  if (!artifact && durationSeconds === undefined && inputDurationSeconds === undefined) return undefined;
-  return { ...artifact, ...overlay };
 }
 
 export function providerUsageFetch(provider: Provider, transport: typeof fetch = fetch): typeof fetch {
@@ -251,8 +269,8 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     const billable = isBillable(provider, url.pathname, method);
     let entry: UsageInput | null = null;
-    if (billable) {
-      const payload = await payloadOf(input, init);
+    const payload = billable ? await payloadOf(input, init) : null;
+    if (billable && payload) {
       const endpoint = url.pathname.replace(/^\//u, "");
       const model = text(payload.model) ?? text(payload.model_id) ?? endpointModel(provider, endpoint);
       let hints: CostHints | undefined;
@@ -261,9 +279,9 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const activity = provider === "machgen" ? machgenActivity(payload) : activityFor(provider, model, url.pathname, context.operation);
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
-        tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname) || rateFor(provider, model)?.kind === "tokens",
+        tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname),
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname), hints),
+        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname), hints, url.href),
       };
       safeRecord(engine, entry);
     }
@@ -277,15 +295,20 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       const json = response.headers.get("content-type")?.includes("json");
       const body = json ? object(await response.clone().json()) : {};
       const externalId = remoteId(body, url, method);
+      const exchange: ProviderExchange = {
+        provider, method, url: url.href, status: response.status,
+        requestBody: payload, responseBody: body,
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+      };
       if (entry) {
         const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
-        safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...observedPatch(provider, entry, body, status) });
-      } else if (method === "GET" && externalId && response.ok && json) {
+        safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...await observedPatch(engine, entry, exchange, status) });
+      } else if (method === "GET" && externalId && response.ok) {
         const existing = engine.usage.find(provider, externalId);
         if (existing) {
           const status = responseStatus(body, /\/status$/u.test(url.pathname));
-          safeRecord(engine, { ...existing, ...observedPatch(provider, existing, body, status) });
+          safeRecord(engine, { ...existing, ...await observedPatch(engine, existing, exchange, status) });
         }
       }
     } catch {
@@ -295,21 +318,34 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
   };
 }
 
+function recordEventUsage(engine: Engine, entry: UsageInput, url: string, event: unknown): void {
+  const body = object(event);
+  const usage = object(body.usage);
+  const responseBody = { ...body, usage: {
+    ...usage,
+    input_tokens_details: usage.input_tokens_details ?? usage.input_token_details,
+    output_tokens_details: usage.output_tokens_details ?? usage.output_token_details,
+  } };
+  const actual = observedActual(engine, entry, {
+    provider: entry.provider, method: "POST", url, status: 200,
+    requestBody: { model: entry.model }, responseBody, responseHeaders: {},
+  });
+  safeRecord(engine, { ...entry, ...actualPatch(actual, responseStatus(body, false)) });
+}
+
 export function recordVoiceUsage(engine: Engine, provider: "openai" | "xai", model: string, sessionId: string, responseId: string, response: unknown): void {
-  const body = object(response);
   const entry: UsageInput = {
     id: `voice:${sessionId}:${responseId}`, externalId: `voice:${sessionId}:${responseId}`,
     provider, model, activity: "voice", tokenBased: true,
     ...unknownPrice(),
   };
-  safeRecord(engine, { ...entry, ...observedPatch(provider, entry, body, responseStatus(body, false)) });
+  recordEventUsage(engine, entry, provider === "openai" ? "https://api.openai.com/v1/realtime" : "https://api.x.ai/v1/realtime", response);
 }
 
 export function recordTranscriptionUsage(engine: Engine, model: string, sessionId: string, itemId: string, event: unknown): void {
-  const body = object(event);
   const entry: UsageInput = {
     id: `transcription:${sessionId}:${itemId}`, externalId: `transcription:${sessionId}:${itemId}`,
     provider: "openai", model, activity: "analysis", tokenBased: true, ...unknownPrice(),
   };
-  safeRecord(engine, { ...entry, ...observedPatch("openai", entry, body, responseStatus(body, false)) });
+  recordEventUsage(engine, entry, "https://api.openai.com/v1/audio/transcriptions", event);
 }

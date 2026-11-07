@@ -75,6 +75,7 @@ interface QueuedCommandStage extends CommandStageBase {
   model?: string
   estimatedCostUsd?: number
   estimateUnavailable?: boolean
+  estimateForecast?: boolean
   insertsOutput: boolean
   continuation?: {
     sequenceId: string

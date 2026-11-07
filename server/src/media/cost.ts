@@ -71,6 +71,7 @@ export async function estimateFalRequest(
   endpoint: string,
   payload: Record<string, unknown>,
   hints?: CostHints,
+  unitQuantity?: number,
 ): Promise<CostEstimate> {
   const estimator = currentFalEstimator();
   if (!estimator) {
@@ -83,8 +84,7 @@ export async function estimateFalRequest(
   }
   return resolveFalDynamicEstimate(endpoint, payload, estimator, {
     ...(hints ? { hints } : {}),
-    // Queue polls omit x-fal-billable-units, so this is one historical call.
-    callQuantity: 1,
+    ...(unitQuantity !== undefined ? { unitQuantity } : { callQuantity: 1 }),
     cache: falEstimateCache,
   });
 }

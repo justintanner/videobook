@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { computeEstimate } from "@apicity/cost";
 import { createEngine } from "videobook-engine";
 import type { Engine } from "videobook-engine";
 import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js";
@@ -25,6 +26,8 @@ describe("provider usage through real HTTP and engine storage", () => {
   let responseId: string;
   let mode: "normal" | "failure" | "disconnect";
   let reply: Record<string, unknown> | undefined;
+  let headers: Record<string, string>;
+  let pricingRequests: Record<string, unknown>[];
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "vb-book-usage-"));
@@ -33,16 +36,26 @@ describe("provider usage through real HTTP and engine storage", () => {
     responseId = "response-one";
     mode = "normal";
     reply = undefined;
+    headers = {};
+    pricingRequests = [];
     server = createServer((request, response) => {
-      request.resume();
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
       request.on("end", () => {
+        if (request.url === "/v1/models/pricing/estimate") {
+          const pricing = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+          pricingRequests.push(pricing);
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ total_cost: pricing.estimate_type === "unit_price" ? 0.21 : 0.42, currency: "USD" }));
+          return;
+        }
         if (mode === "disconnect") { request.socket.destroy(); return; }
         if (request.url?.includes("text-to-speech")) {
-          response.writeHead(200, { "content-type": "audio/mpeg" });
+          response.writeHead(200, { "content-type": "audio/mpeg", ...headers });
           response.end(Buffer.from([1, 2, 3]));
           return;
         }
-        response.writeHead(mode === "failure" ? 500 : 200, { "content-type": "application/json" });
+        response.writeHead(mode === "failure" ? 500 : 200, { "content-type": "application/json", ...headers });
         const body = request.url?.includes("recordInfo")
           ? { code: 200, data: { taskId: "kie-one", state: "success" } }
           : request.url?.includes("createTask")
@@ -104,11 +117,56 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.recent(2).map((row) => row.activity).sort()).toEqual(["analysis", "chat"]);
   });
 
+  it("prices declared cache writes and GPT-6 usage through Apicity", async () => {
+    const transport = providerUsageFetch("openai");
+    for (const model of ["gpt-5.6-sol", "gpt-6-astra"]) {
+      reply = { id: model, usage: { input_tokens: 1200, output_tokens: 300, input_tokens_details: { cached_tokens: 200, cache_write_tokens: 400 } } };
+      await scoped(() => transport(`${url}/v1/responses`, { method: "POST", body: JSON.stringify({ model, input: "private" }) }));
+      const estimate = computeEstimate({ provider: "openai", payload: { model }, costHints: { inputTokens: 1200, outputTokens: 300, cacheReadInputTokens: 200, cacheWriteInputTokens: 400 } });
+      expect(estimate.warnings).toEqual([]);
+      expect(engine.usage.find("openai", model)).toMatchObject({ basis: "estimated", costUsd: estimate.usd, cacheWriteTokens: 400 });
+    }
+  });
+
+  it("prices transcription seconds and KIE terminal credits", async () => {
+    const openai = providerUsageFetch("openai");
+    reply = { id: "transcribed", usage: { seconds: 60 } };
+    await scoped(() => openai(`${url}/v1/audio/transcriptions`, { method: "POST", body: JSON.stringify({ model: "gpt-transcribe" }) }));
+    const expected = computeEstimate({ provider: "openai", payload: { model: "gpt-transcribe" }, costHints: { durationSeconds: 60 } });
+    expect(engine.usage.find("openai", "transcribed")).toMatchObject({ costUsd: expected.usd, basis: "estimated", units: 60, unit: "seconds" });
+    const kie = providerUsageFetch("kie");
+    reply = { data: { taskId: "credits" } };
+    await scoped(() => kie(`${url}/api/v1/jobs/createTask`, { method: "POST", body: JSON.stringify({ model: "qwen2/text-to-image", input: {} }) }));
+    reply = { data: { taskId: "credits", state: "success", creditsConsumed: 12 } };
+    await scoped(() => kie(`${url}/api/v1/jobs/recordInfo?taskId=credits`));
+    expect(engine.usage.find("kie", "credits")).toMatchObject({ costUsd: 0.06, basis: "reported", units: 12, unit: "credits" });
+  });
+
+  it("prices terminal fal units and retains ElevenLabs credits without treating them as dollars", async () => {
+    const pricing = createFal({ apiKey: "test", baseURL: `${url}/v1` });
+    const restore = installFalDynamicEstimator(pricing.v1.models.pricing.estimate);
+    try {
+      const fal = providerUsageFetch("fal");
+      reply = { request_id: "units", status: "IN_QUEUE" };
+      await scoped(() => fal(`${url}/fal-ai/flux-2-flex`, { method: "POST", body: JSON.stringify({ prompt: "test" }) }));
+      reply = { images: [] };
+      headers = { "x-fal-billable-units": "7" };
+      for (let i = 0; i < 2; i++) await scoped(() => fal(`${url}/fal-ai/flux-2-flex/requests/units`));
+      expect(engine.usage.find("fal", "units")).toMatchObject({ costUsd: 0.21, basis: "estimated", units: 7, unit: "billable-units" });
+      expect(pricingRequests).toContainEqual({ estimate_type: "unit_price", endpoints: { "fal-ai/flux-2-flex": { unit_quantity: 7 } } });
+      headers = { "character-cost": "5" };
+      const elevenlabs = createElevenLabs({ apiKey: "test", baseURL: url });
+      await scoped(() => elevenlabs.v1.textToSpeech("voice", { text: "Hello", model_id: "eleven_multilingual_v2" }));
+      expect(engine.usage.recent(1)[0]).toMatchObject({ costUsd: null, basis: "unknown", units: 5, unit: "credits" });
+      expect(engine.usage.recent(1)[0]?.warnings.join(" ")).toContain("plan");
+    } finally { restore(); }
+  });
+
   it("records measured tokens and estimates once per provider response, without saving prompts", async () => {
     const provider = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });
     await scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "private prompt" }));
     await scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "private prompt" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 1, inputTokens: 1200, outputTokens: 300, cachedTokens: 200, estimatedUsd: 0.006, unpriced: 0 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 1, inputTokens: 1200, outputTokens: 300, cachedTokens: 200, estimatedUsd: 0.00575, unpriced: 0 });
     const result = await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId });
     expect(result.content[0]?.text).not.toContain("private prompt");
     expect(JSON.parse(result.content[0]!.text).recent).toHaveLength(1);
@@ -198,7 +256,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     const transport = providerUsageFetch("fal");
     reply = { request_id: "fal-alibaba", status: "IN_QUEUE" };
     await scoped(() => transport(`${url}/alibaba/qwen-image-3/edit`, { method: "POST", body: JSON.stringify({ prompt: "test", image_urls: ["https://example.test/image.png"] }) }));
-    reply = { id: "output-id", usage: { cost_usd: 0.3 } };
+    reply = { id: "output-id", usage: { cost: 0.3 } };
     await scoped(() => transport(`${url}/alibaba/qwen-image-3/requests/fal-alibaba`));
     expect(engine.usage.summary().totals).toMatchObject({ count: 1, pendingCount: 0, reportedUsd: 0.3, unpriced: 0 });
     expect(engine.usage.recent()[0]?.model).toBe("alibaba/qwen-image-3/edit");
@@ -266,16 +324,17 @@ describe("provider usage through real HTTP and engine storage", () => {
     await scoped(() => alibaba(`${url}/api/v1/services/aigc/multimodal-generation/generation`, { method: "POST", body: JSON.stringify({ model: "qwen-image-2.0", input: {}, parameters: { n: 1 } }) }));
     reply = { output: { task_id: "alibaba-image", task_status: "SUCCEEDED" } };
     await scoped(() => alibaba(`${url}/api/v1/tasks/alibaba-image`));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, unpriced: 0 });
-    expect(engine.usage.find("alibaba", "alibaba-image")?.costUsd).toBeGreaterThan(0);
+    expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, unpriced: 1 });
+    expect(engine.usage.find("alibaba", "alibaba-image")?.costUsd).toBeNull();
+    expect(engine.usage.find("alibaba", "alibaba-image")?.warnings.join(" ")).toMatch(/scope|baseURL/);
   });
 
   it("prefers reported charges and treats retries with different response ids as new spend", async () => {
     const provider = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });
     await scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }));
-    reply = { id: "response-two", usage: { input_tokens: 10, output_tokens: 5, cost_usd: 0.001 } };
-    await scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 2, inputTokens: 1210, outputTokens: 305, estimatedUsd: 0.006, reportedUsd: 0.001 });
+    reply = { id: "response-two", usage: { input_tokens: 10, output_tokens: 5, cost_in_usd_ticks: 10_000_000 } };
+    await scoped(() => providerUsageFetch("xai")(`${url}/v1/chat/completions`, { method: "POST", body: JSON.stringify({ model: "grok-4", messages: [] }) }));
+    expect(engine.usage.summary().totals).toMatchObject({ count: 2, inputTokens: 1210, outputTokens: 305, estimatedUsd: 0.00575, reportedUsd: 0.001 });
   });
 
   it("returns provider success even when usage cannot be recorded and discloses incomplete accounting", async () => {
@@ -316,7 +375,7 @@ describe("provider usage through real HTTP and engine storage", () => {
   it("prices binary speech by characters and excludes calls without a book", async () => {
     const provider = createElevenLabs({ apiKey: "test", baseURL: url });
     await scoped(() => provider.v1.textToSpeech("voice", { text: "Hello", model_id: "eleven_multilingual_v2" }));
-    expect(engine.usage.summary().totals).toMatchObject({ count: 1, estimatedUsd: 0.0006, inputTokens: 0, missingTokens: 0 });
+    expect(engine.usage.summary().totals).toMatchObject({ count: 1, estimatedUsd: 0.0004, inputTokens: 0, missingTokens: 0 });
     await provider.v1.textToSpeech("voice", { text: "Hello", model_id: "eleven_multilingual_v2" });
     expect(engine.usage.summary().totals.count).toBe(1);
   });
@@ -325,7 +384,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     const provider = createOpenAi({ apiKey: "test", baseURL: `${url}/v1` });
     mode = "failure";
     await expect(scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }))).rejects.toThrow();
-    expect(engine.usage.summary().totals).toMatchObject({ inputTokens: 1200, estimatedUsd: 0.006 });
+    expect(engine.usage.summary().totals).toMatchObject({ inputTokens: 1200, estimatedUsd: 0.00575 });
     mode = "disconnect";
     await expect(scoped(() => provider.post.v1.responses({ model: "gpt-4o", input: "test" }))).rejects.toThrow();
     expect(engine.usage.summary().totals).toMatchObject({ count: 2, unpriced: 1 });
@@ -374,6 +433,18 @@ describe("provider usage through real HTTP and engine storage", () => {
     await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId });
     expect(engine.usage.find("kie", "seedance-open")?.status).toBe("pending");
     expect(engine.usage.summary().totals.pendingCount).toBe(1);
+  });
+
+  it("retains realtime audio details and discloses missing upstream modality pricing hints", () => {
+    const model = "gpt-realtime-2.1";
+    recordVoiceUsage(engine, "openai", model, "session", "priced", { usage: {
+      input_tokens: 30, output_tokens: 10,
+      input_token_details: { audio_tokens: 20 }, output_token_details: { audio_tokens: 8 },
+    } });
+    expect(engine.usage.recent(1)[0]).toMatchObject({ costUsd: null, basis: "unknown", inputTokens: 30, outputTokens: 10 });
+    expect(engine.usage.recent(1)[0]?.warnings.join(" ")).toContain("cacheReadAudioInputTokens");
+    const actual = engine.settings.get<{ usage: { audioInputTokens: number; audioOutputTokens: number } }>("provider-actual:voice:session:priced");
+    expect(actual?.usage).toMatchObject({ audioInputTokens: 20, audioOutputTokens: 8 });
   });
 
   it("persists each realtime response once and labels missing model rates", () => {

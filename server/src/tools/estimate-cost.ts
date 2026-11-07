@@ -2,8 +2,10 @@ import { z } from "zod";
 import type { CostEstimate, CostHints } from "@apicity/cost";
 import type { Engine } from "videobook-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { getCostProvider } from "../cost.js";
+import { forecastLanguageCall } from "../cost.js";
 import type { BookManager } from "../book-manager.js";
+import { INTELLIGENCE_MODEL, OPENAI_ANALYSIS_TOOL } from "../openai-intelligence.js";
+import { DEFAULT_CHAT_MODEL } from "../chat-models.js";
 import { referenceVideoDuration } from "../reference-video-duration.js";
 import { previewPlaceholderUrl } from "../preview-payload.js";
 import { DEFAULT_IMAGE_EDIT_MODEL_ID, findImageEditModel } from "../image-edit-models.js";
@@ -15,10 +17,10 @@ import { resolveGenerationSource } from "../media/generation-source.js";
 import { REF_ROLES, type MediaRefs, type ResolvedModel } from "../media/types.js";
 
 const GENERATION_TOOLS = new Set(["generate_image", "generate_video", "generate_audio"]);
-const REWRITE_MODEL = "gpt-5.6-sol";
+const ANALYSIS_TOOLS = new Set(["analyze_video", "analyze_jokes", "describe_image", "suggest_cuts", "tag_assets", OPENAI_ANALYSIS_TOOL]);
 
 const callItem = z.object({
-  tool_name: z.string().describe("Tool whose cost to estimate: generate_image, generate_video, generate_audio, edit_image_subjects or rewrite_prompt"),
+  tool_name: z.string().describe("Tool whose cost to estimate: generate_image, generate_video, generate_audio, edit_image_subjects, rewrite_prompt, chat or analysis"),
   input: z.record(z.string(), z.unknown()).describe("Same arguments object you'd pass to the tool"),
 });
 
@@ -113,17 +115,17 @@ async function estimateImageEdit(input: Record<string, unknown>): Promise<CostEs
   return result.ok ? result.estimate : unavailable(result.error);
 }
 
-function estimateRewrite(input: Record<string, unknown>): CostEstimate {
-  return getCostProvider().estimate({
-    provider: "openai",
-    payload: { model: REWRITE_MODEL, input: text(input.prompt) ?? text(input.text) ?? "", max_output_tokens: 1000 },
-  });
+function estimateLanguageCall(toolName: string, input: Record<string, unknown>): CostEstimate {
+  const model = toolName === "chat" ? DEFAULT_CHAT_MODEL : INTELLIGENCE_MODEL;
+  const prompt = text(input.prompt) ?? text(input.text) ?? text(input.message) ?? "Analyze the connected input";
+  const estimate = forecastLanguageCall(model, prompt);
+  return { ...estimate, notes: [...(estimate.notes ?? []), "Forecast for one text call; excludes media tokens, tool calls and conversation history."] };
 }
 
 async function estimateOne(engine: Engine, toolName: string, input: Record<string, unknown>): Promise<CostEstimate> {
   if (GENERATION_TOOLS.has(toolName)) return estimateMedia(engine, input);
   if (toolName === "edit_image_subjects") return estimateImageEdit(input);
-  if (toolName === "rewrite_prompt") return estimateRewrite(input);
+  if (toolName === "rewrite_prompt" || toolName === "chat" || ANALYSIS_TOOLS.has(toolName)) return estimateLanguageCall(toolName, input);
   return unavailable(`no cost adapter registered for tool '${toolName}'`);
 }
 
@@ -140,6 +142,7 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
     breakdown: {},
     rateAsOf: estimates.find((e) => e.rateAsOf)?.rateAsOf ?? null,
     warnings,
+    notes: estimates.flatMap((estimate) => estimate.notes ?? []),
   };
 }
 
@@ -165,7 +168,7 @@ export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "estimate_cost",
     description:
-      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.",
+      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. Without that key, or without a published rate, the estimate is $0 with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;

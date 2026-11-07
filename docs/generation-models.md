@@ -12,7 +12,7 @@ HeyGen Avatar 3 and 4 digital twins are text-to-video with a stock avatar (Abiga
 
 Kie Kling 4.0 reference-to-video and keyframe-to-video, PixVerse V6 Max text-to-video and image-to-video, and OmniHuman 2.0 are on no top-10 board, so they appear in the unranked group. Kling 4.0 prompts name connected media as Kling 4.0 documents them: `@image_1` and `@video_1` for references, `@first_frame`, `@keyframe_1` and `@last_frame` for frames; with no media connected, both endpoints generate from the prompt alone. PixVerse V6 Max image-to-video follows the image's aspect ratio. OmniHuman 2.0 renders as long as its driving audio. The Kie Grok Imagine Video 1.5 preview has two modes and shares the Grok Imagine Video 1.5 image-to-video ranking. Frames takes a reference image plus optional first and last frames; Loop takes a loop image (`loop_url`, `@loop`) that the clip starts and ends on, and the loop image is also the reference when no reference image is connected. Both modes take up to four keyframe images (`@keyframe1`-`@keyframe4`), sent as timed `keyframes`: `keyframe_1_seconds`-`keyframe_4_seconds` place each one, unset keyframes are spaced evenly across the clip, and every keyframe must fall inside the clip at least 1/3 s from the next.
 
-Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Utopai X, Dreamina Seedance 2.0, Aleph 2.0. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
+Top-10 coverage policy: every registry endpoint must map exactly to a catalog entry or appear in the known gaps below. Models with no provider endpoint in the registry: MAI-Image-2.6, MAI-Image-2.6-Flash, Utopai X. Catalog gaps do not imply provider API support is missing; adding those endpoints is separate work.
 
 | Known endpoint gap | Reason |
 | --- | --- |
@@ -35,13 +35,22 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.alibaba.happyhorse1p0.videoEdit | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.alibaba.happyhorse1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.alibaba.wan2p7.videoEdit | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.bytedance.seedance2p0.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.bytedance.seedance2p0.videoEdit | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.google.geminiOmni1p1Flash.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.kwaivgi.klingVideoO3Pro.videoEdit | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.runwayml.aleph2 | This exact endpoint is not in the Videobook catalog. |
+| wavespeed:api.v3.xAi.grokImagineVideoV1p5.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 | openai:gpt-image-1.5 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 339
+- Models: 337
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -258,8 +267,6 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `fal:fal-ai/kling-video/v3/turbo/pro/image-to-video` | Kling v3 Turbo Pro | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:fal-ai/kling-video/v3/turbo/standard/text-to-video` | Kling v3 Turbo Standard | video | text_to_video | none |  | visible |
 | `fal:fal-ai/kling-video/v3/turbo/standard/image-to-video` | Kling v3 Turbo Standard | video | image_to_video | first_frame 1-1 |  | visible |
-| `fal:fal-ai/sora-2/text-to-video` | Sora 2 | video | text_to_video | none |  | visible |
-| `fal:fal-ai/sora-2/image-to-video` | Sora 2 | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:fal-ai/veo3.1/image-to-video` | Veo 3.1 | video | image_to_video | first_frame 1-1 |  | visible |
 | `fal:fal-ai/wan/v2.7/text-to-video` | Wan 2.7 | video | text_to_video | audio 0-1 |  | visible |
 | `fal:fal-ai/wan/v2.7/image-to-video` | Wan 2.7 | video | image_to_video | first_frame 1-1, last_frame 0-1, video 0-1, audio 0-1 |  | visible |

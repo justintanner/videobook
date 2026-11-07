@@ -537,7 +537,7 @@ describe("generic media generation", () => {
 
   it.each([
     { model: "kie:happyhorse/video-edit", prompt: "make it rain", options: { resolution: "720p" }, audio: false, hints: { inputDurationSeconds: 6, durationSeconds: 6 }, units: 12, usd: 12 * 0.14 },
-    { model: "kie:kling-3.0/motion-control", prompt: "dance", options: { mode: "720p" }, audio: false, hints: { inputDurationSeconds: 6, durationSeconds: 6 }, units: 6, usd: 6 * 0.1 },
+    { model: "kie:kling-3.0/motion-control", prompt: "dance", options: { mode: "720p" }, audio: false, hints: { inputDurationSeconds: 6, durationSeconds: 6 }, units: 6, usd: 6 * 0.1135 },
     { model: "kie:volcengine/video-to-video-lip-sync", prompt: undefined, options: { mode: "lite" }, audio: true, hints: { durationSeconds: 4.5 }, units: 4.5, usd: 4.5 * 0.04 },
   ])("prices $model from the media its output length follows through the queued job", async ({ model, prompt, options, audio, hints, units, usd }) => {
     const refs: Record<string, string[]> = { video: [await probedVideoArtifact(shortClip)] };

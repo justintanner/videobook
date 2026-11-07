@@ -268,7 +268,7 @@ describe("transcribe tool", () => {
         { kind: "speech", text: "Hello there", words: ["Hello", "there"] },
         { kind: "sound", text: "(laughter)", words: [] },
       ]);
-      const seconds = mediaProbe.audioDuration ?? mediaProbe.duration;
+      const seconds = speech.audio_duration_secs;
       const usage = fs.usage.recent(10).find((row) => row.model === "scribe_v2");
       expect(usage).toMatchObject({
         provider: "elevenlabs", basis: "estimated", unit: "seconds", status: "completed", operation: "transcribe", warnings: [],

@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.24.0 (2026-11-01). Image, video and audio
+Videobook now uses Apicity 0.27.0 (2026-11-07). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -28,13 +28,13 @@ job submission persists the same duration hints outside the provider payload
 Unknown reference durations produce an unavailable estimate instead of an
 output-only quote.
 
-Book usage records reported token counts and charges at the provider boundary,
-including xAI's `usage.cost_in_usd_ticks` ([cost tracking](https://docs.x.ai/developers/cost-tracking)).
-Supported rates are saved as estimates with their pricing version. Requests
-without a reported charge or supported rate stay unpriced. The bundled tables do not yet price the current chat
-and realtime defaults (`gpt-5.6-sol`, `gpt-realtime-2.1`, and
-`grok-voice-think-fast-2.0`). Accounting starts at rollout and does not
-reconstruct older usage.
+Book usage uses Apicity's `extractActual` and `mergeActuals` for provider
+responses, including terminal result headers. Provider-stated charges are
+reported; prices derived from measured usage are estimated. Usage without a
+supported rate stays unpriced with the upstream warning. The tables now price
+GPT-5.6 Sol, GPT-6 Astra and transcription seconds. Realtime WebSocket events
+use the same extraction path but never reach HTTP HAR capture. Accounting
+starts at rollout and does not reconstruct older usage.
 
 Sections written before 2026-10-16 name per-model tools (`generate_kie_*`,
 `generate_fal_*`), `payload-builders.ts`, `cost-adapters.ts` and similar
@@ -958,3 +958,49 @@ rendered in the same book supplies the completion's billed seconds; otherwise
 the estimate stays at $0 with the upstream warning. KIE's new chat models
 (`gpt-6-1-sol`, `claude-haiku-5-5`) do not apply: Videobook chat routes through
 OpenAI (vb-ga0z). KIE Seedance 2.5 rates moved to the 2026-10-22 price page.
+
+## 49. (adoption) Apicity 0.27.0 actual costs and forecasts
+
+Provider usage no longer maintains token rates or currency conversion arithmetic.
+Apicity owns cache-write pricing, xAI ticks, KIE credits, transcription seconds,
+and ElevenLabs cost headers. ElevenLabs character-cost credits remain unpriced
+when no USD charge can be derived because credit value depends on the plan.
+The engine stores prompt-free extracted actuals across submit and poll responses.
+Dynamic fal terminal units use the pricing resolver's `unitQuantity`; before
+completion the historical per-call estimate remains advisory. Missing admin
+credentials keep measured units unpriced.
+
+`estimate_cost` and its run-plan caller use `estimateEndpoint` forecast mode for
+rewrite, analysis and chat text calls. Forecast warnings identify the assumptions;
+these estimates exclude media tokens, tool calls and conversation history.
+Alibaba HTTP exchanges pass their actual URL so unknown deployment scopes fail
+closed. The application Alibaba adapter uses the provider's default base URL.
+
+The retired fal Sora 2 entries are removed from the catalog. Wan video edits
+require source duration; fal Grok extensions require source duration and
+resolution. Missing hints produce the upstream unavailable warning.
+
+Reconciliation changes in book-usage fixtures: GPT-4o's 1,200 input tokens
+(including 200 cached) and 300 output tokens now cost $0.00575 rather than
+$0.006; five ElevenLabs multilingual-v2 characters now estimate $0.0004 rather
+than $0.0006. Synthetic generic `cost_usd` fixtures use documented fal `usage.cost`
+and xAI ticks instead. A loopback Alibaba host without a deployment scope is
+unpriced instead of assuming a region.
+
+The queued Kling 3.0 motion-control fixture at 720p now uses the upstream
+November 5 rate of $0.1135 per second, so six seconds cost $0.681 instead
+of $0.60.
+
+OpenAI realtime modality pricing remains unavailable in `extractActual` 0.27.0:
+it omits cached-audio and cached-image hints required by the declared-usage
+price route. Apicity follow-up `ac-iikgzi` owns that gap. Videobook normalizes
+realtime detail-container names, retains measured audio counts, and displays
+the upstream warning instead of maintaining a local rate calculation.
+
+The transcription fixture now prices the provider-reported one-second duration
+instead of the slightly longer local MP3 probe duration. Reported usage takes
+precedence over a pre-call duration hint.
+
+The nine WaveSpeed reference/edit endpoints introduced in 0.27.0 are listed
+as explicit frontier catalog gaps. Catalog integration is tracked in `vb-n2t2z`;
+this pricing adoption does not add new generation tools.

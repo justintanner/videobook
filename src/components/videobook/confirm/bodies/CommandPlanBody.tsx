@@ -79,7 +79,7 @@ export function CommandPlanBody({
                     ? `${stage.provider} · ${stage.model}`
                     : stage.tool}
                   {stage.estimatedCostUsd !== undefined
-                    ? ` · estimated $${stage.estimatedCostUsd.toFixed(4)}`
+                    ? ` · ${stage.estimateForecast ? 'forecast' : 'estimated'} $${stage.estimatedCostUsd.toFixed(4)}`
                     : stage.estimateUnavailable
                       ? ' · cost estimate unavailable'
                       : ''}

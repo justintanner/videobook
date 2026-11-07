@@ -183,18 +183,31 @@ describe("estimate_cost tool", () => {
     expect(long.estimate.usd).toBeCloseTo(short.estimate.usd * 2, 6);
   });
 
-  it("reports missing rewrite token counts and prices image subject edits", async () => {
+  it("forecasts rewrite tokens and prices image subject edits", async () => {
     const payload = await estimate([
       { tool_name: "rewrite_prompt", input: { prompt: "x".repeat(400) } },
       { tool_name: "edit_image_subjects", input: { model: "nano-banana-2-1", image_refs: ["a", "b"] } },
       { tool_name: "edit_image_subjects", input: { model: "sharp/layer-composite", operation: "remove" } },
     ]);
-    expect(payload.per_call[0]!.estimate.source).toBe("declared-tokens+table");
-    expect(payload.per_call[0]!.estimate.breakdown.inputTokens).toBeUndefined();
-    expect(payload.per_call[0]!.estimate.usd).toBe(0);
-    expect(payload.per_call[0]!.estimate.warnings.join(" ")).toContain("costHints.inputTokens");
+    expect(payload.per_call[0]!.estimate.source).toBe("tokens-heuristic+table");
+    expect(payload.per_call[0]!.estimate.breakdown.inputTokens).toBe(100);
+    expect(payload.per_call[0]!.estimate.usd).toBeGreaterThan(0);
+    expect(payload.per_call[0]!.estimate.warnings.join(" ")).toContain("Forecast");
     expect(payload.per_call[1]!.estimate.usd).toBeGreaterThan(0);
     expect(payload.per_call[2]!.estimate.usd).toBe(0);
+  });
+
+  it("forecasts chat and analysis text calls and prices ElevenLabs catalog speech", async () => {
+    const payload = await estimate([
+      { tool_name: "chat", input: { message: "Plan a short video" } },
+      { tool_name: "analyze_video", input: {} },
+      { tool_name: "generate_audio", input: { model: "elevenlabs:text-to-speech", prompt: "Hello world", options: { voice_id: "test-voice" } } },
+    ]);
+    for (const entry of payload.per_call.slice(0, 2)) {
+      expect(entry.estimate.usd).toBeGreaterThan(0);
+      expect(entry.estimate.warnings.join(" ")).toContain("Forecast");
+    }
+    expect(payload.per_call[2]!.estimate.usd).toBeGreaterThan(0);
   });
 
   it("returns the model's validation error for invalid options", async () => {

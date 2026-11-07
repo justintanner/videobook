@@ -310,7 +310,7 @@ export async function planSelectedNotebookSubgraph(
         cellDefinitionFingerprint: definitionFingerprint,
         ...(estimate.estimateUnavailable
           ? { estimateUnavailable: true }
-          : { estimatedCostUsd: estimate.estimatedCostUsd }),
+          : { estimatedCostUsd: estimate.estimatedCostUsd, estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")) }),
         insertsOutput: false,
       });
     } else {
@@ -355,7 +355,7 @@ export async function planSelectedNotebookSubgraph(
       reason: confirmationRequired
         ? unknownCostCount > 0
           ? `This selected run has ${paidCellIds.length} provider calls; ${unknownCostCount} cannot be priced`
-          : `This selected run can incur up to $${knownCostUsd.toFixed(4)} in provider spend`
+          : `This selected run has an estimated provider cost of $${knownCostUsd.toFixed(4)}; actual spend may differ`
         : "Only local reversible processing will run",
     },
     notebookRun: {
@@ -460,7 +460,7 @@ export async function planNotebookRun(
       model: prepared.model,
       ...(estimate.estimateUnavailable
         ? { estimateUnavailable: true }
-        : { estimatedCostUsd: estimate.estimatedCostUsd }),
+        : { estimatedCostUsd: estimate.estimatedCostUsd, estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")) }),
       insertsOutput: false,
     });
   }
@@ -504,7 +504,7 @@ export async function planNotebookRun(
       reason: paid.length > 0
         ? unknownCostCount > 0
           ? `This run has ${paid.length} provider calls; ${unknownCostCount} cannot be priced`
-          : `This run can incur up to $${knownCostUsd.toFixed(4)} in provider spend`
+          : `This run has an estimated provider cost of $${knownCostUsd.toFixed(4)}; actual spend may differ`
         : runnable.length === 0
           ? "No cells need to run"
           : "Only local reversible processing will run",

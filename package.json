@@ -90,12 +90,12 @@
     }
   },
   "devDependencies": {
-    "@apicity/cost": "^0.25.0",
-    "@apicity/elevenlabs": "^0.25.0",
-    "@apicity/har": "^0.25.0",
-    "@apicity/kie": "^0.25.0",
-    "@apicity/openai": "^0.25.0",
-    "@apicity/x": "^0.25.0",
+    "@apicity/cost": "^0.27.0",
+    "@apicity/elevenlabs": "^0.27.0",
+    "@apicity/har": "^0.27.0",
+    "@apicity/kie": "^0.27.0",
+    "@apicity/openai": "^0.27.0",
+    "@apicity/x": "^0.27.0",
     "@dolthub/doltlite": "0.51.1",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/node": "2.1.2",

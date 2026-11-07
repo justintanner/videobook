@@ -1,10 +1,9 @@
-import { createCost } from "@apicity/cost";
-import type { CostProvider } from "@apicity/cost";
+import { estimateEndpoint } from "@apicity/cost";
+import type { EndpointEstimate } from "@apicity/cost";
 
-let cached: CostProvider | null = null;
-
-export function getCostProvider(): CostProvider {
-  if (cached) return cached;
-  cached = createCost();
-  return cached;
+export function forecastLanguageCall(model: string, input: string, maxOutputTokens = 1000): EndpointEstimate {
+  return estimateEndpoint({
+    provider: "openai", method: "POST", dotPath: "v1.responses", mode: "forecast",
+    payload: { model, input, max_output_tokens: maxOutputTokens },
+  });
 }
