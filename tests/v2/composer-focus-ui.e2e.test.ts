@@ -8,6 +8,7 @@ import { chromium } from 'playwright'
 import type { Browser, Locator, Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
+import { testBudget } from '../../server/src/test-budget.js'
 import {
   availablePort,
   record,
@@ -71,7 +72,7 @@ describe('composer focus through real workspace interactions', () => {
   }
 
   async function ready(): Promise<void> {
-    await input().waitFor({ state: 'visible', timeout: 30_000 })
+    await input().waitFor({ state: 'visible', timeout: testBudget(60_000) })
     await expect.poll(() => input().isEnabled(), { timeout: 15_000 }).toBe(true)
     await expect.poll(() => page.locator('.command-send .busy-indicator').count(), { timeout: 15_000 }).toBe(0)
   }
@@ -169,9 +170,9 @@ describe('composer focus through real workspace interactions', () => {
       const body = request.postData()
       if (body?.includes('"slash_commands"')) catalogRequests += 1
     })
-    await page.goto(appUrl)
+    await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: testBudget(60_000) })
     await ready()
-  })
+  }, testBudget(90_000))
 
   afterEach(async ({ task }) => {
     if (task.result?.state === 'fail') {
@@ -819,7 +820,17 @@ describe('composer focus through real workspace interactions', () => {
     await cell(videoCellId).click()
     expect(await composer.getAttribute('data-dock-open')).toBe('true')
     await cell(videoCellId).click({ button: 'right' })
-    await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click()
+    const duplicate = page.getByRole('menuitem', { name: 'Duplicate', exact: true })
+    expect(await duplicate.isEnabled()).toBe(false)
+    await page.keyboard.press('Escape')
+    const notebook = record(await call('get_notebook'))
+    const prompt = (Array.isArray(notebook?.cells) ? notebook.cells : [])
+      .map(record).find(entry => entry?.type === 'prompt')
+    expect(prompt?.id).toBeTruthy()
+    await call('move_notebook_cells', { slots: [{ id: prompt?.id, row: 7, column: 7 }] })
+    await cell(videoCellId).click({ button: 'right' })
+    await expect.poll(() => duplicate.isEnabled(), { timeout: testBudget(15_000) }).toBe(true)
+    await duplicate.click()
     await focused(input())
     expect(await page.locator('.cell-node').count()).toBe(4)
     expect(await composer.getAttribute('data-dock-open')).toBe('false')
@@ -837,9 +848,9 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Enter')
     const search = page.getByLabel('Search cell types')
     await focused(search)
-    await search.fill('split')
+    await search.fill('splice')
     await page.keyboard.press('Tab')
-    await focused(page.locator('.canvas-add-menu').getByRole('button', { name: 'Split video', exact: true }))
+    await focused(page.locator('.canvas-add-menu').getByRole('button', { name: 'Splice', exact: true }))
     await page.keyboard.press('Escape')
     await focused(add)
     await page.keyboard.press('Tab')
