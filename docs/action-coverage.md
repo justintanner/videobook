@@ -12,7 +12,6 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | launcher | [src/components/videobook/ComposerActionsPanel.tsx](../src/components/videobook/ComposerActionsPanel.tsx) | Search Actions in the main chat input; choose a command, then submit to continue |
 | button | [src/components/videobook/CommandComposer.tsx](../src/components/videobook/CommandComposer.tsx) | Actions beside the chat input; Ctrl+Shift+K / Cmd+Shift+K |
 | cell-menu | [src/components/videobook/NotebookCellContextMenu.tsx](../src/components/videobook/NotebookCellContextMenu.tsx) | Notebook cell context menu |
-| selection-menu | [src/components/videobook/NotebookToolbar.tsx](../src/components/videobook/NotebookToolbar.tsx) | Selection actions in the notebook toolbar |
 
 ## Actions
 
@@ -91,7 +90,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.archive_clip` | `/archive` |  | book | asset: asset_id | `archive_clip` | slash, launcher, cell-menu | dialog | external |
 | `tool.asset_history` | `/asset-history` |  | book | asset: asset_id | `asset_history` | slash, launcher, cell-menu | dialog | none |
 | `tool.asset_manifest` | `/asset-manifest` |  | book | asset: asset_id | `asset_manifest` | slash, launcher, cell-menu | dialog | none |
-| `tool.attach_library_asset` | `/attach-library-asset` |  | notebook | cell: cell_id | `attach_library_asset` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.attach_library_asset` | `/attach-library-asset` |  | notebook | cell: cell_id | `attach_library_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_boost` | `/audio-boost` |  | book | asset: asset_id | `audio_boost` | slash, launcher, cell-menu | dialog | none |
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
@@ -107,7 +106,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.commit_music_video` | `/commit-music-video` |  | book | none | `commit_music_video` | slash, launcher | dialog | none |
 | `tool.concat_images` | `/image-sheet` | /concat | book | asset selection: image_refs | `concat_images` | slash, launcher, cell-menu | dialog | none |
 | `tool.configure_asset_tagging` | `/configure-asset-tagging` |  | book | none | `configure_asset_tagging` | slash, launcher | dialog | none |
-| `tool.connect_notebook_cells` | `/connect-notebook-cells` |  | notebook | cell: source_cell_id | `connect_notebook_cells` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.connect_notebook_cells` | `/connect-notebook-cells` |  | notebook | cell: source_cell_id | `connect_notebook_cells` | slash, launcher, cell-menu | dialog | none |
 | `tool.connect_service` | `/connect-service` |  | global | none | `connect_service` | slash, launcher | dialog | none |
 | `tool.continue_notebook_generation` | `/continue-notebook-generation` |  | notebook | notebook: notebook_id | `continue_notebook_generation` | slash, launcher | dialog | generation |
 | `tool.continue_queued_insert` | `/continue-queued-insert` |  | book | none | `continue_queued_insert` | slash, launcher | dialog | none |
@@ -125,7 +124,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.delete_book` | `/delete-book` |  | book | none | `delete_book` | slash, launcher | dialog | destructive |
 | `tool.delete_entity` | `/delete-entity` |  | book | none | `delete_entity` | slash, launcher | dialog | destructive |
 | `tool.delete_notebook` | `/delete-notebook` |  | notebook | notebook: notebook_id | `delete_notebook` | slash, launcher | dialog | destructive |
-| `tool.delete_notebook_cell` | `/delete-notebook-cell` |  | notebook | cell: cell_id | `delete_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | destructive |
+| `tool.delete_notebook_cell` | `/delete-notebook-cell` |  | notebook | cell: cell_id | `delete_notebook_cell` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.describe_image` | `/describe` |  | book | asset: asset_id | `describe_image` | slash, launcher, cell-menu | dialog | generation |
 | `tool.detect_scenes` | `/detect-scenes` |  | book | notebook: notebook_id | `detect_scenes` | slash, launcher | dialog | none |
 | `tool.disconnect_notebook_cells` | `/disconnect-notebook-cells` |  | notebook | notebook: notebook_id | `disconnect_notebook_cells` | slash, launcher | dialog | none |
@@ -133,7 +132,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.download_video` | `/import` |  | book | none | `download_video` | slash, launcher | dialog | none |
 | `tool.duplicate_asset` | `/duplicate` | /export-to | book | asset: asset_id | `duplicate_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.edit_asset_tag` | `/edit-asset-tag` |  | book | asset: asset_id | `edit_asset_tag` | slash, launcher, cell-menu | dialog | none |
-| `tool.edit_image_subjects` | `/edit-image-subjects` |  | notebook | cell: source_cell_id | `edit_image_subjects` | slash, launcher, cell-menu, selection-menu | dialog | generation |
+| `tool.edit_image_subjects` | `/edit-image-subjects` |  | notebook | cell: source_cell_id | `edit_image_subjects` | slash, launcher, cell-menu | dialog | generation |
 | `tool.enqueue_notebook_run` | `/enqueue-notebook-run` |  | notebook | notebook: notebook_id | `enqueue_notebook_run` | slash, launcher | dialog | generation |
 | `tool.enqueue_sequence_export` | `/enqueue-sequence-export` |  | book | none | `enqueue_sequence_export` | slash, launcher | dialog | destructive |
 | `tool.ensure_notebook_workflow_scaffold` | `/ensure-notebook-workflow-scaffold` |  | notebook | notebook: notebook_id | `ensure_notebook_workflow_scaffold` | slash, launcher | dialog | none |
@@ -144,8 +143,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.extend_audio_asset` | `/extend-audio` |  | book | asset: asset_id | `extend_audio_asset` | slash, launcher, cell-menu | dialog | generation |
 | `tool.extract_audio` | `/extract-audio` |  | book | asset: asset_id | `extract_audio` | slash, launcher, cell-menu | dialog | none |
 | `tool.extract_frame` | `/extract-frame` |  | book | asset: asset_id | `extract_frame` | slash, launcher, cell-menu | dialog | none |
-| `tool.extract_notebook_audio` | `/extract-notebook-audio` |  | notebook | cell: source_cell_id | `extract_notebook_audio` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.extract_notebook_frame` | `/extract-notebook-frame` |  | notebook | cell: source_cell_id | `extract_notebook_frame` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.extract_notebook_audio` | `/extract-notebook-audio` |  | notebook | cell: source_cell_id | `extract_notebook_audio` | slash, launcher, cell-menu | dialog | none |
+| `tool.extract_notebook_frame` | `/extract-notebook-frame` |  | notebook | cell: source_cell_id | `extract_notebook_frame` | slash, launcher, cell-menu | dialog | none |
 | `tool.generate_audio` | `/generate-audio` |  | book | none | `generate_audio` | slash, launcher | dialog | generation |
 | `tool.generate_image` | `/generate-image` |  | book | none | `generate_image` | slash, launcher | dialog | generation |
 | `tool.generate_video` | `/generate-video` |  | book | none | `generate_video` | slash, launcher | dialog | generation |
@@ -159,7 +158,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.get_image_subject_map` | `/get-image-subject-map` |  | book | asset: artifact_id | `get_image_subject_map` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_music_analysis` | `/get-music-analysis` |  | book | asset: asset_id | `get_music_analysis` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_notebook` | `/get-notebook` |  | notebook | notebook: notebook_id | `get_notebook` | slash, launcher | dialog | none |
-| `tool.get_notebook_cell_details` | `/get-notebook-cell-details` |  | notebook | cell: cell_id | `get_notebook_cell_details` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.get_notebook_cell_details` | `/get-notebook-cell-details` |  | notebook | cell: cell_id | `get_notebook_cell_details` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_primary_sequence` | `/get-primary-sequence` |  | book | none | `get_primary_sequence` | slash, launcher | dialog | none |
 | `tool.get_render_settings` | `/get-render-settings` |  | book | asset: asset_id | `get_render_settings` | slash, launcher, cell-menu | dialog | none |
 | `tool.get_search_coverage` | `/get-search-coverage` |  | book | asset: artifact_id | `get_search_coverage` | slash, launcher, cell-menu | dialog | none |
@@ -174,7 +173,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.list_assets` | `/list-assets` |  | book | none | `list_assets` | slash, launcher | dialog | none |
 | `tool.list_book_actions` | `/list-book-actions` |  | book | none | `list_book_actions` | slash, launcher | dialog | none |
 | `tool.list_books` | `/list-books` |  | global | none | `list_books` | slash, launcher | dialog | none |
-| `tool.list_cell_generations` | `/list-cell-generations` |  | notebook | cell: cell_id | `list_cell_generations` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.list_cell_generations` | `/list-cell-generations` |  | notebook | cell: cell_id | `list_cell_generations` | slash, launcher, cell-menu | dialog | none |
 | `tool.list_chat_models` | `/list-chat-models` |  | global | none | `list_chat_models` | slash, launcher | dialog | none |
 | `tool.list_elevenlabs_voices` | `/list-elevenlabs-voices` |  | global | none | `list_elevenlabs_voices` | slash, launcher | dialog | none |
 | `tool.list_entities` | `/list-entities` |  | book | none | `list_entities` | slash, launcher | dialog | none |
@@ -194,28 +193,28 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.mark_asset_seen` | `/mark-asset-seen` |  | book | asset: asset_id | `mark_asset_seen` | slash, launcher, cell-menu | dialog | none |
 | `tool.move_notebook_cells` | `/move-notebook-cells` |  | notebook | notebook: notebook_id | `move_notebook_cells` | slash, launcher | dialog | none |
 | `tool.pad_video` | `/pad` |  | book | asset: asset_id | `pad_video` | slash, launcher, cell-menu | dialog | none |
-| `tool.pin_search_moment` | `/pin-search-moment` |  | notebook | cell: cell_id | `pin_search_moment` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.pin_search_moment` | `/pin-search-moment` |  | notebook | cell: cell_id | `pin_search_moment` | slash, launcher, cell-menu | dialog | none |
 | `tool.plan_chat_command` | `/plan-chat-command` |  | book | none | `plan_chat_command` | slash, launcher | dialog | none |
 | `tool.plan_generation_insert` | `/plan-generation-insert` |  | book | none | `plan_generation_insert` | slash, launcher | dialog | none |
 | `tool.plan_music_video` | `/plan-music-video` |  | book | none | `plan_music_video` | slash, launcher | dialog | none |
-| `tool.plan_notebook_generation` | `/plan-notebook-generation` |  | notebook | cell: cell_id | `plan_notebook_generation` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.plan_notebook_generation` | `/plan-notebook-generation` |  | notebook | cell: cell_id | `plan_notebook_generation` | slash, launcher, cell-menu | dialog | none |
 | `tool.plan_notebook_rough_cut` | `/plan-notebook-rough-cut` |  | notebook | track: track_id | `plan_notebook_rough_cut` | slash, launcher | dialog | none |
 | `tool.plan_notebook_run` | `/plan-notebook-run` |  | notebook | notebook: notebook_id | `plan_notebook_run` | slash, launcher | dialog | none |
-| `tool.plan_notebook_subgraph` | `/plan-notebook-subgraph` |  | notebook | cell: cell_id | `plan_notebook_subgraph` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.plan_notebook_subgraph` | `/plan-notebook-subgraph` |  | notebook | cell: cell_id | `plan_notebook_subgraph` | slash, launcher, cell-menu | dialog | none |
 | `tool.plan_sequence_edit` | `/plan-sequence-edit` |  | book | none | `plan_sequence_edit` | slash, launcher | dialog | none |
 | `tool.plan_sequence_export` | `/plan-sequence-export` |  | book | none | `plan_sequence_export` | slash, launcher | dialog | none |
 | `tool.plan_sequence_sound_effects` | `/plan-sequence-sound-effects` |  | book | track: track_id | `plan_sequence_sound_effects` | slash, launcher | dialog | none |
-| `tool.post` | `/tool-post` |  | book | cell: source_cell_id | `post` | slash, launcher, cell-menu, selection-menu | dialog | external |
+| `tool.post` | `/tool-post` |  | book | cell: source_cell_id | `post` | slash, launcher, cell-menu | dialog | external |
 | `tool.prepare_search_reference` | `/prepare-search-reference` |  | global | none | `prepare_search_reference` | slash, launcher | dialog | none |
 | `tool.preview_edit_intent` | `/preview-edit-intent` |  | book | none | `preview_edit_intent` | slash, launcher | dialog | none |
-| `tool.preview_notebook_generation` | `/preview-notebook-generation` |  | notebook | cell: cell_id | `preview_notebook_generation` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.preview_notebook_generation` | `/preview-notebook-generation` |  | notebook | cell: cell_id | `preview_notebook_generation` | slash, launcher, cell-menu | dialog | none |
 | `tool.preview_splice` | `/preview-splice` |  | book | none | `preview_splice` | slash, launcher | dialog | none |
 | `tool.provider_key_status` | `/provider-key-status` |  | global | none | `provider_key_status` | slash, launcher | dialog | none |
 | `tool.read_asset_metadata` | `/read-asset-metadata` |  | book | asset: asset_id | `read_asset_metadata` | slash, launcher, cell-menu | dialog | none |
 | `tool.read_file_at_commit` | `/read-file-at-commit` |  | book | asset: asset_id | `read_file_at_commit` | slash, launcher, cell-menu | dialog | none |
 | `tool.read_transcript` | `/read-transcript` |  | book | asset: asset_id | `read_transcript` | slash, launcher, cell-menu | dialog | none |
 | `tool.reconcile_project_work` | `/reconcile-project-work` |  | book | none | `reconcile_project_work` | slash, launcher | dialog | none |
-| `tool.record_post_metrics` | `/record-post-metrics` |  | book | cell: post_cell_id | `record_post_metrics` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.record_post_metrics` | `/record-post-metrics` |  | book | cell: post_cell_id | `record_post_metrics` | slash, launcher, cell-menu | dialog | none |
 | `tool.recover_asset` | `/recover-asset` |  | book | asset: asset_id | `recover_asset` | slash, launcher, cell-menu | dialog | none |
 | `tool.register_search_manifest` | `/register-search-manifest` |  | book | none | `register_search_manifest` | slash, launcher | dialog | none |
 | `tool.relayout_notebook` | `/relayout-notebook` |  | notebook | notebook: notebook_id | `relayout_notebook` | slash, launcher | dialog | none |
@@ -242,8 +241,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.revise_notebook_generation_plan` | `/revise-notebook-generation-plan` |  | notebook | notebook: notebook_id | `revise_notebook_generation_plan` | slash, launcher | dialog | none |
 | `tool.rewrite_prompt` | `/rewrite` | /rewrite-script, /tldr | book | asset: asset_ref | `rewrite_prompt` | slash, launcher, cell-menu | dialog | generation |
 | `tool.rewrite_script` | `/tool-rewrite-script` |  | book | asset: asset_id | `rewrite_script` | slash, launcher, cell-menu | dialog | generation |
-| `tool.run_notebook` | `/run-notebook` |  | notebook | cell selection: cell_ids | `run_notebook` | slash, launcher, cell-menu, selection-menu | dialog | generation |
-| `tool.run_notebook_cell` | `/run-notebook-cell` |  | notebook | cell: cell_id | `run_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | generation |
+| `tool.run_notebook` | `/run-notebook` |  | notebook | cell selection: cell_ids | `run_notebook` | slash, launcher, cell-menu | dialog | generation |
+| `tool.run_notebook_cell` | `/run-notebook-cell` |  | notebook | cell: cell_id | `run_notebook_cell` | slash, launcher, cell-menu | dialog | generation |
 | `tool.search_archive` | `/search-archive` |  | global | none | `search_archive` | slash, launcher | dialog | none |
 | `tool.search_library_assets` | `/search-library-assets` |  | global | none | `search_library_assets` | slash, launcher | dialog | none |
 | `tool.search_moments` | `/search-moments` |  | book | none | `search_moments` | slash, launcher | dialog | none |
@@ -253,8 +252,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.set_character_metadata` | `/set-character-metadata` |  | book | none | `set_character_metadata` | slash, launcher | dialog | none |
 | `tool.set_env_secret` | `/set-env-secret` |  | global | none | `set_env_secret` | slash, launcher | dialog | none |
 | `tool.set_har_capture` | `/set-har-capture` |  | global | none | `set_har_capture` | slash, launcher | dialog | none |
-| `tool.set_notebook_cell_input` | `/set-notebook-cell-input` |  | notebook | cell: source_cell_id | `set_notebook_cell_input` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.set_notebook_media_slot` | `/set-notebook-media-slot` |  | notebook | cell: cell_id | `set_notebook_media_slot` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.set_notebook_cell_input` | `/set-notebook-cell-input` |  | notebook | cell: source_cell_id | `set_notebook_cell_input` | slash, launcher, cell-menu | dialog | none |
+| `tool.set_notebook_media_slot` | `/set-notebook-media-slot` |  | notebook | cell: cell_id | `set_notebook_media_slot` | slash, launcher, cell-menu | dialog | none |
 | `tool.set_timeline` | `/set-timeline` |  | book | none | `set_timeline` | slash, launcher | dialog | none |
 | `tool.set_video_overlay` | `/set-video-overlay` |  | book | asset: asset_id | `set_video_overlay` | slash, launcher, cell-menu | dialog | none |
 | `tool.smooth_scene_concat` | `/smooth-scene-concat` |  | book | none | `smooth_scene_concat` | slash, launcher | dialog | none |
@@ -274,8 +273,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.trim_audio` | `/trim-audio` |  | book | asset: asset_id | `trim_audio` | slash, launcher, cell-menu | dialog | none |
 | `tool.trim_video` | `/trim` | /trim-video, /clip-trim | book | asset: asset_id | `trim_video` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.update_entity` | `/update-entity` |  | book | none | `update_entity` | slash, launcher | dialog | none |
-| `tool.update_notebook_cell` | `/update-notebook-cell` |  | notebook | cell: cell_id | `update_notebook_cell` | slash, launcher, cell-menu, selection-menu | dialog | none |
-| `tool.update_post` | `/update-post` |  | book | cell: post_cell_id | `update_post` | slash, launcher, cell-menu, selection-menu | dialog | none |
+| `tool.update_notebook_cell` | `/update-notebook-cell` |  | notebook | cell: cell_id | `update_notebook_cell` | slash, launcher, cell-menu | dialog | none |
+| `tool.update_post` | `/update-post` |  | book | cell: post_cell_id | `update_post` | slash, launcher, cell-menu | dialog | none |
 | `tool.update_script` | `/update-script` |  | book | asset: asset_id | `update_script` | slash, launcher, cell-menu | dialog | none |
 | `tool.update_sequence_rhythm` | `/update-sequence-rhythm` |  | sequence | none | `update_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.validate_sequence_export` | `/validate-sequence-export` |  | book | none | `validate_sequence_export` | slash, launcher | dialog | none |

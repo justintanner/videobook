@@ -1840,7 +1840,7 @@ describe('chat composer browser flow', () => {
     expect(await scroll.evaluate(element => element.scrollLeft)).toBe(0)
     expect(await input.textContent()).toBe('Keep my draft while resizing the notebook')
     await input.fill('')
-    await page.getByLabel('Clear selection', { exact: true }).click()
+    await input.click()
     await page.getByLabel('Open Assets', { exact: true }).click()
     await page.getByRole('button', { name: '/videobook', exact: true }).click()
     await expect.poll(async () => {
@@ -1943,7 +1943,7 @@ describe('chat composer browser flow', () => {
         await page.keyboard.up('Shift')
       }
       await page.emulateMedia({ reducedMotion: 'reduce' })
-      await page.getByLabel('Clear selection', { exact: true }).click()
+      await input.click()
       await positionForClick(videoId)
       await notebookCellNode(page, videoId).locator('.cell-node-body').click()
       await expect.poll(async () => (await layout(videoId)).centerError).toBeLessThanOrEqual(2)
@@ -5332,8 +5332,7 @@ describe('chat composer browser flow', () => {
     }).toBe(true)
 
     await collapseComposerDock(page)
-    const clear = page.getByLabel('Clear selection', { exact: true })
-    if (await clear.isVisible()) await clear.click()
+    await input.click()
     const firstCell = notebookCellNode(page, videoCellId)
     const secondCell = notebookCellNode(page, generationCellId)
     await firstCell.waitFor({ state: 'visible' })
@@ -5396,32 +5395,37 @@ describe('chat composer browser flow', () => {
     }
     await marquee.waitFor({ state: 'hidden' })
 
-    const actions = page.getByLabel('Notebook selection actions')
-    await actions.waitFor({ state: 'visible' })
-    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
-    expect(await actions.textContent()).toContain('@a1 active')
+    const selected = page.locator('.react-flow__node.selected')
+    await expect.poll(() => selected.count()).toBe(2)
+    expect(await page.getByLabel('Notebook selection actions').count()).toBe(0)
+    expect(await page.getByLabel('Clear selection', { exact: true }).count()).toBe(0)
     expect(await firstCell.getAttribute('data-selection')).toBe('primary')
     expect(await secondCell.getAttribute('data-selection')).toBe('selected')
 
     await secondCell.click({ modifiers: ['Shift'] })
-    await expect.poll(async () => await actions.textContent()).toContain('1 selected')
+    await expect.poll(() => selected.count()).toBe(1)
     expect(await firstCell.getAttribute('data-selection')).toBe('primary')
     expect(await secondCell.getAttribute('data-selection')).toBeNull()
     await secondCell.click({ modifiers: ['Shift'] })
-    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
+    await expect.poll(() => selected.count()).toBe(2)
 
-    await page.getByLabel('Clear selection').click()
-    await actions.waitFor({ state: 'hidden' })
-    expect(await firstCell.getAttribute('data-selection')).toBeNull()
-    expect(await secondCell.getAttribute('data-selection')).toBeNull()
-    await expect.poll(() => page!.getByLabel('Videobook command input', { exact: true })
-      .evaluate((element) => document.activeElement === element)).toBe(true)
-    await firstCell.click()
-    await secondCell.click({ modifiers: ['Shift'] })
-    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
+    for (const deselect of [
+      () => input.click(),
+      () => page!.locator('.topbar').click({ position: { x: 1, y: 1 } }),
+      () => page!.mouse.click(selectionStart.x, selectionStart.y),
+    ]) {
+      await deselect()
+      await expect.poll(() => selected.count()).toBe(0)
+      expect(await firstCell.getAttribute('data-selection')).toBeNull()
+      expect(await secondCell.getAttribute('data-selection')).toBeNull()
+      await expect.poll(() => input.evaluate((element) => document.activeElement === element)).toBe(true)
+      await firstCell.click()
+      await secondCell.click({ modifiers: ['Shift'] })
+      await expect.poll(() => selected.count()).toBe(2)
+    }
 
     observedCalls.length = 0
-    expect(await actions.getByRole('button', { name: /Delete/u }).count()).toBe(0)
+    expect(await page.locator('.topbar').getByRole('button', { name: /Delete/u }).count()).toBe(0)
     await firstCell.click({ button: 'right' })
     const selectionMenu = page.getByRole('menu', { name: 'Actions for 2 selected cells', exact: true })
     await selectionMenu.waitFor({ state: 'visible' })
@@ -5469,7 +5473,7 @@ describe('chat composer browser flow', () => {
     expect(await acceptedDialog).toContain('@a1, @b1')
     await firstCell.waitFor({ state: 'hidden' })
     await secondCell.waitFor({ state: 'hidden' })
-    await actions.waitFor({ state: 'hidden' })
+    await expect.poll(() => selected.count()).toBe(0)
     const deleteCalls = observedCalls.filter((call) =>
       call.name === 'delete_notebook_cell')
     expect(deleteCalls).toHaveLength(2)

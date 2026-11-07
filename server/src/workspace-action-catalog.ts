@@ -235,8 +235,8 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
     inputSchema: schema,
     ...(command?.mcpTool?.injectParams ? { initialArgs: { ...command.mcpTool.injectParams } } : {}),
     ...(mediaType ? { generation: { provider: "catalog", operation: tool.name, mediaType } } : {}),
-    surfaces: target.kind === "asset" ? ["slash", "launcher", "cell-menu"]
-      : target.kind === "cell" ? ["slash", "launcher", "cell-menu", "selection-menu"] : ["slash", "launcher"],
+    surfaces: target.kind === "asset" || target.kind === "cell"
+      ? ["slash", "launcher", "cell-menu"] : ["slash", "launcher"],
     focus: tool.name === "transcribe" ? "composer" : "dialog",
     confirmation: confirmationForTool(tool),
     interaction: command ? interactionFor(command) : "preview",

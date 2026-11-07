@@ -1,35 +1,27 @@
-import { BrushCleaning, Ellipsis, Library, Plus, X } from 'lucide-react'
+import { BrushCleaning, Library, Plus } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 
 type NotebookToolbarProps = {
   busy: boolean
   arrangeDisabled: boolean
-  selectedCount: number
-  activeAddress: string | null
   onAdd: (type: NotebookCellAddType) => void | Promise<void>
   onAddDragEnd: () => void
   onArrange: () => void | Promise<void>
   assetsOpen: boolean
   assetsDisabled: boolean
   onAssets: () => void
-  onClearSelection: () => void
-  onSelectionActions?: () => void
 }
 
 export function NotebookToolbar({
   busy,
   arrangeDisabled,
-  selectedCount,
-  activeAddress,
   onAdd,
   onAddDragEnd,
   onArrange,
   assetsOpen,
   assetsDisabled,
   onAssets,
-  onClearSelection,
-  onSelectionActions,
 }: NotebookToolbarProps) {
   return (
     <div className="canvas-toolbar" data-composer-focus="return" role="group" aria-label="Notebook canvas controls">
@@ -81,27 +73,6 @@ export function NotebookToolbar({
           <span>Assets</span>
         </button>
       </div>
-      {selectedCount > 0 && (
-        <div className="canvas-selection-actions" role="group" aria-label="Notebook selection actions">
-          <span
-            className="canvas-selection-count"
-            title="Shift-click cells or drag across the canvas to select more"
-          >
-            <strong>{selectedCount}</strong><span> selected</span>
-          </span>
-          {selectedCount > 1 && activeAddress && <code>{activeAddress} active</code>}
-          {onSelectionActions && <button type="button" className="canvas-clear-selection" title="Selection actions" aria-label="Selection actions" data-workspace-action-surface="selection-menu" onClick={onSelectionActions}><Ellipsis size={14} /></button>}
-          <button
-            type="button"
-            className="canvas-clear-selection"
-            title="Clear selection"
-            aria-label="Clear selection"
-            onClick={onClearSelection}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
     </div>
   )
 }

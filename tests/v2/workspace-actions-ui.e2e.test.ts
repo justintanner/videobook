@@ -386,7 +386,7 @@ describe('workspace action launcher with real endpoints', () => {
     const selectedIds = cells.filter(cell => record(cell.slot)?.row === 0 && Number(record(cell.slot)?.column) < 2).map(cell => String(cell.id))
     await page.locator(`[data-id="${selectedIds[0]}"] .cell-node-footer strong`).click()
     await page.locator(`[data-id="${selectedIds[1]}"] .cell-node-footer strong`).click({ modifiers: ['Shift'] })
-    await page.getByLabel('Selection actions', { exact: true }).click()
+    await page.keyboard.press('Control+Shift+K')
     const run = catalog.actions.find(action => action.id === 'tool.run_notebook')!
     await page.getByLabel('Videobook command input', { exact: true }).fill(run.command)
     await page.locator('.workspace-actions-list [data-action-id="tool.run_notebook"]').click()
@@ -396,6 +396,7 @@ describe('workspace action launcher with real endpoints', () => {
     const selected = await targets.evaluateAll(elements => elements.map(element => (element as HTMLSelectElement).value))
     expect(selected.sort()).toEqual(selectedIds.sort())
     await page.keyboard.press('Escape')
+    await page.locator(`[data-id="${selectedIds[0]}"] .cell-node-footer strong`).click()
     await page.getByLabel('Open @a1 cell menu', { exact: true }).click()
     await page.getByRole('menuitem', { name: 'Open media', exact: true }).click()
     const fullscreen = page.getByRole('dialog', { name: 'Fullscreen preview for @a1', exact: true })

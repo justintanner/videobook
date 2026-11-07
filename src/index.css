@@ -1193,58 +1193,6 @@ textarea:focus-visible {
   background: var(--control-bg-hover);
 }
 
-.canvas-selection-actions {
-  display: flex;
-  height: 32px;
-  align-items: center;
-  gap: 4px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(114, 231, 170, 0.24);
-  color: #a9d5ba;
-}
-
-.canvas-selection-actions > span,
-.canvas-selection-actions > code {
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.canvas-selection-actions > span strong {
-  color: #d0f6df;
-  font-size: 11px;
-}
-
-.canvas-selection-actions > code {
-  color: #6f9f81;
-  font-family: inherit;
-}
-
-.canvas-selection-count > span {
-  margin-left: 5px;
-}
-
-.canvas-clear-selection {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid transparent;
-  color: var(--ink);
-  background: transparent;
-  cursor: pointer;
-}
-
-.canvas-clear-selection:hover,
-.canvas-clear-selection:focus-visible {
-  border-color: var(--control-border-hover);
-  color: var(--control-fg-hover);
-  background: var(--control-bg-hover);
-}
-
 .canvas {
   --notebook-chrome-inset: var(--app-gutter);
   --notebook-chrome-gap: var(--app-gap);
@@ -11025,12 +10973,6 @@ textarea:focus-visible {
   }
 }
 
-@media (max-width: 1440px) {
-  .canvas-selection-actions > code {
-    display: none;
-  }
-}
-
 @media (max-width: 1280px) {
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -11223,7 +11165,6 @@ textarea:focus-visible {
 }
 
 @media (max-width: 360px) {
-  .canvas-selection-count > span,
   .canvas-quick-add > span {
     display: none;
   }
@@ -11231,10 +11172,6 @@ textarea:focus-visible {
   .canvas-quick-add {
     width: 32px;
     padding: 0;
-  }
-
-  .canvas-selection-actions > span {
-    padding: 0 4px;
   }
 }
 

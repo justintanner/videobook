@@ -345,7 +345,7 @@ describe('composer focus through real workspace interactions', () => {
     expect(errors).toEqual([])
   })
 
-  it('returns pointer canvas and toolbar actions to chat without losing selection or flooding catalogs', async () => {
+  it('returns pointer canvas and toolbar actions to chat and clears selection on outside clicks', async () => {
     await focused(input())
     const initialCatalogRequests = catalogRequests
     await input().fill('draft')
@@ -355,13 +355,14 @@ describe('composer focus through real workspace interactions', () => {
     await page.keyboard.press('Backspace')
     expect(await input().textContent()).toBe('draf')
     expect(await cell(videoCellId).count()).toBe(1)
-    // The inspector side column became the chat dock, so the toolbar holds
-    // the selection controls — there is no separate inspector to close.
     await toolbar().click({ position: await blankToolbarPosition() })
     await focused(input())
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBeNull()
+    await cell(videoCellId).click()
     expect(await cell(videoCellId).getAttribute('data-selection')).toBe('primary')
-    await page.getByLabel('Clear selection', { exact: true }).click()
+    await input().click()
     await focused(input())
+    expect(await cell(videoCellId).getAttribute('data-selection')).toBeNull()
     await page.locator('.react-flow__pane').click({ position: { x: 850, y: 450 } })
     await focused(input())
     expect(await input().textContent()).toBe('draf')

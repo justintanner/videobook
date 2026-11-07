@@ -211,8 +211,7 @@ describe('Post delivery review in the chat composer', () => {
 
     const collapse = page.getByLabel('Collapse chat', { exact: true })
     if (await collapse.isVisible()) await collapse.click()
-    const clear = page.getByLabel('Clear selection', { exact: true })
-    if (await clear.isVisible()) await clear.click()
+    await page.getByLabel('Videobook command input', { exact: true }).click()
     await expect.poll(() => page.getByRole('region', { name: 'Post details' }).count()).toBe(0)
     const cell = postNode().locator('.cell-node')
     const beforeSelect = syncChecks()

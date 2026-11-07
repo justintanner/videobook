@@ -1872,6 +1872,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellContextMenu(null)
   }, [])
 
+  const clearNotebookSelection = () => {
+    closeCellContextMenu()
+    selectCanvasCell(null)
+    setSourceViewCellId(null)
+  }
+
   const openCellContextMenu = useCallback((
     cellId: string,
     position: { x: number; y: number },
@@ -11123,6 +11129,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       onDragOver={handleAppFileDragOver}
       onDropCapture={handleAppFileDropCapture}
       onDrop={handleAppFileDrop}
+      onClickCapture={(event) => {
+        const target = event.target
+        if (screen !== 'notebook' || event.detail === 0 || selectedCellIdsRef.current.size === 0 || !(target instanceof Element)) return
+        if (target.closest('.notebook-flow, [role="menu"], [role="dialog"], :popover-open')) return
+        if (target.closest('.command-composer') && (
+          !target.closest('[aria-label="Videobook command input"]')
+          || actionDiscovery || composerReviewOpen
+        )) return
+        clearNotebookSelection()
+      }}
       onKeyDownCapture={(event) => {
         if (event.defaultPrevented) return
         if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'k' && !event.nativeEvent.isComposing) {
@@ -11167,24 +11183,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           <NotebookToolbar
             busy={busy || mcp.state !== 'ready'}
             arrangeDisabled={busy || mcp.state !== 'ready' || notebook.cells.length === 0}
-            selectedCount={selectedNotebookCells.length}
-            activeAddress={selectedNotebookCell ? notebookGridTag(selectedNotebookCell.slot) : null}
             onAdd={createCell}
             onAddDragEnd={() => setPreviewSlot(null)}
             onArrange={autoArrangeNotebook}
             assetsOpen={mediaLibraryPicker?.cellId === null && composerDockOpen}
             assetsDisabled={busy || mcp.state !== 'ready'}
             onAssets={() => openNotebookLibrary()}
-            onSelectionActions={() => void openWorkspaceActions(undefined, {
-              cell_id: selectedNotebookCell?.id,
-              cell_ids: selectedNotebookCells.map((cell) => cell.id),
-              artifact_ids: selectedNotebookCells.flatMap((cell) => cell.outputArtifactId ? [cell.outputArtifactId] : []),
-            })}
-            onClearSelection={() => {
-              selectCanvasCell(null)
-              setSourceViewCellId(null)
-              notebookScrollRef.current?.focus()
-            }}
           />
         )}
         <div className="topbar-tools">
@@ -11323,11 +11327,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           if (mediaLibraryPicker?.cellId !== node.id) openMediaLibrary(node.id)
                         }
                       }}
-                      onPaneClick={() => {
-                        closeCellContextMenu()
-                        selectCanvasCell(null)
-                        setSourceViewCellId(null)
-                      }}
+                      onPaneClick={clearNotebookSelection}
                       onPaneContextMenu={(event) => {
                         if (slotContextMenuActions.length === 0) return
                         const slot = emptyGridSlotAt(event.clientX, event.clientY)

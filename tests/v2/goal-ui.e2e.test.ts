@@ -269,7 +269,7 @@ describe('staged goal mode in the browser', () => {
     await panel().getByRole('button', { name: /^Generate frame ·/ }).click()
     await expect.poll(async () => (await current(saved)).status).toBe('running')
     await expect.poll(() => status().textContent(), { timeout: 15_000 }).toContain('Full frame · Generating')
-    await page.getByLabel('Clear selection', { exact: true }).click()
+    await page.getByLabel('Videobook command input', { exact: true }).click()
     await expect.poll(() => page.locator('.composer-history-entry[data-role="status"]').allTextContents(), { timeout: 15_000 }).toContainEqual(expect.stringContaining('Plan approved'))
     const running = await current(saved)
     expect(running.revision).toBe(2)
