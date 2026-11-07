@@ -1222,21 +1222,6 @@ textarea:focus-visible {
   font-family: inherit;
 }
 
-.canvas-delete-selection {
-  display: flex;
-  min-width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 7px;
-  border: 1px solid rgba(196, 117, 117, 0.25);
-  color: #c48d8d;
-  background: rgba(96, 39, 39, 0.18);
-  cursor: pointer;
-  font-size: 10px;
-}
-
 .canvas-selection-count > span {
   margin-left: 5px;
 }
@@ -1258,18 +1243,6 @@ textarea:focus-visible {
   border-color: var(--control-border-hover);
   color: var(--control-fg-hover);
   background: var(--control-bg-hover);
-}
-
-.canvas-delete-selection:hover:not(:disabled),
-.canvas-delete-selection:focus-visible:not(:disabled) {
-  border-color: var(--danger-border-hover);
-  color: var(--danger-fg-hover);
-  background: var(--danger-bg-hover);
-}
-
-.canvas-delete-selection:disabled {
-  cursor: wait;
-  opacity: 0.48;
 }
 
 .canvas {
@@ -11251,7 +11224,6 @@ textarea:focus-visible {
 
 @media (max-width: 360px) {
   .canvas-selection-count > span,
-  .canvas-delete-selection > span,
   .canvas-quick-add > span {
     display: none;
   }
@@ -11263,11 +11235,6 @@ textarea:focus-visible {
 
   .canvas-selection-actions > span {
     padding: 0 4px;
-  }
-
-  .canvas-delete-selection {
-    width: 32px;
-    padding: 0;
   }
 }
 

@@ -5110,14 +5110,14 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => (await readdir(downloadsDir).catch(() => []))
       .filter((file) => !existingDownloads.has(file)), { timeout: MCP_ROUNDTRIP_MS }).toHaveLength(1)
     const downloaded = (await readdir(downloadsDir)).find((file) => !existingDownloads.has(file))!
+    await page.getByText(`Saved ${join(downloadsDir, downloaded)}`, { exact: true })
+      .waitFor({ state: 'visible' })
     expect(await readFile(join(downloadsDir, downloaded)))
       .toEqual(await readFile(join(rootDir, 'split-source.mp4')))
     expect(observedCalls.filter((call) => call.name === 'export_asset_file')).toEqual([{
       name: 'export_asset_file',
       arguments: { book_id: bookId, asset_id: videoArtifactId, to: 'downloads' },
     }])
-    await page.getByText(`Saved ${join(downloadsDir, downloaded)}`, { exact: true })
-      .waitFor({ state: 'visible' })
     await page.getByRole('button', { name: 'Dismiss notice', exact: true }).click()
     await collapseComposerDock(page)
     await videoTarget.click({ button: 'right' })
@@ -5322,7 +5322,7 @@ describe('chat composer browser flow', () => {
     await slotMenu.waitFor({ state: 'hidden' })
   }, 60_000)
 
-  it('marquee-selects multiple cells and confirms before deleting the set', async () => {
+  it('marquee-selects multiple cells and confirms context-menu deletion of the set', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await openApp()
     const input = page.getByLabel('Videobook command input')
@@ -5421,7 +5421,14 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await actions.textContent()).toContain('2 selected')
 
     observedCalls.length = 0
-    const deleteSelection = page.getByLabel('Delete 2 selected cells')
+    expect(await actions.getByRole('button', { name: /Delete/u }).count()).toBe(0)
+    await firstCell.click({ button: 'right' })
+    const selectionMenu = page.getByRole('menu', { name: 'Actions for 2 selected cells', exact: true })
+    await selectionMenu.waitFor({ state: 'visible' })
+    const deleteSelection = selectionMenu.getByRole('menuitem', { name: /Delete 2 selected cells/u })
+    if (process.env.VIDEOBOOK_E2E_SCREENSHOT) {
+      await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT, fullPage: true })
+    }
     const cancelledDialog = new Promise<string>((resolve) => {
       page!.once('dialog', async (dialog) => {
         resolve(dialog.message())
@@ -5430,12 +5437,28 @@ describe('chat composer browser flow', () => {
     })
     await deleteSelection.click()
     const cancelMessage = await cancelledDialog
+    await selectionMenu.waitFor({ state: 'hidden' })
     expect(cancelMessage).toContain('Delete 2 selected cells?')
     expect(cancelMessage).toContain('@a1, @b1')
     expect(observedCalls.some((call) => call.name === 'delete_notebook_cell')).toBe(false)
     expect(await firstCell.count()).toBe(1)
     expect(await secondCell.count()).toBe(1)
 
+    await secondCell.click({ button: 'right' })
+    await selectionMenu.waitFor({ state: 'visible' })
+    const keyboardDialog = new Promise<string>((resolve) => {
+      page!.once('dialog', async (dialog) => {
+        resolve(dialog.message())
+        await dialog.dismiss()
+      })
+    })
+    await page.keyboard.press('Delete')
+    expect(await keyboardDialog).toContain('@a1, @b1')
+    await selectionMenu.waitFor({ state: 'hidden' })
+    expect(observedCalls.some((call) => call.name === 'delete_notebook_cell')).toBe(false)
+
+    await firstCell.getByLabel('Open @a1 cell menu', { exact: true }).click()
+    await selectionMenu.waitFor({ state: 'visible' })
     const acceptedDialog = new Promise<string>((resolve) => {
       page!.once('dialog', async (dialog) => {
         resolve(dialog.message())

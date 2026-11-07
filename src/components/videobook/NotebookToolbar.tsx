@@ -1,4 +1,4 @@
-import { BrushCleaning, Ellipsis, Library, Plus, Trash2, X } from 'lucide-react'
+import { BrushCleaning, Ellipsis, Library, Plus, X } from 'lucide-react'
 import { NotebookCellAddMenu } from '@/components/videobook/NotebookCellAddMenu'
 import type { NotebookCellAddType } from '@/videobook/notebook-cell-add-menu'
 
@@ -13,7 +13,6 @@ type NotebookToolbarProps = {
   assetsOpen: boolean
   assetsDisabled: boolean
   onAssets: () => void
-  onDeleteSelection: () => void | Promise<void>
   onClearSelection: () => void
   onSelectionActions?: () => void
 }
@@ -29,12 +28,9 @@ export function NotebookToolbar({
   assetsOpen,
   assetsDisabled,
   onAssets,
-  onDeleteSelection,
   onClearSelection,
   onSelectionActions,
 }: NotebookToolbarProps) {
-  const deleteLabel = `Delete ${selectedCount} selected ${selectedCount === 1 ? 'cell' : 'cells'}`
-
   return (
     <div className="canvas-toolbar" data-composer-focus="return" role="group" aria-label="Notebook canvas controls">
       <div className="canvas-primary-actions" role="group" aria-label="Notebook editing tools">
@@ -95,18 +91,6 @@ export function NotebookToolbar({
           </span>
           {selectedCount > 1 && activeAddress && <code>{activeAddress} active</code>}
           {onSelectionActions && <button type="button" className="canvas-clear-selection" title="Selection actions" aria-label="Selection actions" data-workspace-action-surface="selection-menu" onClick={onSelectionActions}><Ellipsis size={14} /></button>}
-          <button
-            type="button"
-            className="canvas-delete-selection"
-            title={deleteLabel}
-            aria-label={deleteLabel}
-            aria-keyshortcuts="Delete Backspace"
-            disabled={busy}
-            onClick={() => void onDeleteSelection()}
-          >
-            <Trash2 size={14} />
-            <span>Delete</span>
-          </button>
           <button
             type="button"
             className="canvas-clear-selection"

@@ -9676,19 +9676,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }
       })
     : []
-  const contextMenuSelectionCellIds = contextMenuCell && notebook
+  const contextMenuSourceCellIds = contextMenuCell && notebook
     ? selectionGenerationSourceIds(contextMenuCell.id, selectedCellIds, notebook.cells)
     : []
-  const contextMenuSelectionGenerationTypes = contextMenuSelectionCellIds.length > 1
-    ? contextMenuGenerationTypesFor(contextMenuSelectionCellIds)
-    : []
-  const contextMenuSelectionGeneration = contextMenuSelectionGenerationTypes.length > 0
-  const contextMenuSourceCellIds = contextMenuSelectionGeneration
-    ? contextMenuSelectionCellIds
-    : contextMenuCell ? [contextMenuCell.id] : []
-  const contextMenuGenerationTypes = contextMenuSelectionGeneration
-    ? contextMenuSelectionGenerationTypes
-    : contextMenuGenerationTypesFor(contextMenuSourceCellIds)
+  const contextMenuSelection = contextMenuSourceCellIds.length > 1
+  const contextMenuGenerationTypes = contextMenuGenerationTypesFor(contextMenuSourceCellIds)
   const contextMenuGenerationSources = notebook?.cells.filter((cell) =>
     contextMenuSourceCellIds.includes(cell.id)) ?? []
   const contextMenuGenerationActions = contextMenuGenerationTypes.map((cellType): NotebookCellContextAction => ({
@@ -9708,7 +9700,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }) !== null)
     : []
   const contextMenuActions: NotebookCellContextAction[] = []
-  if (contextMenuSelectionGeneration) {
+  if (contextMenuSelection) {
     contextMenuActions.push(...contextMenuGenerationActions)
   } else if (contextMenuCell && contextMenuNode) {
     if (contextMenuCell.type === 'post') {
@@ -9977,8 +9969,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
   }
-  const deleteContextMenuCell = () => {
-    if (contextMenuCell) void deleteNotebookCells([contextMenuCell])
+  const deleteContextMenuCells = () => {
+    if (!contextMenuCell || busy || mcp.state !== 'ready') return
+    void deleteNotebookCells(contextMenuSelection ? selectedNotebookCells : [contextMenuCell])
   }
   const repairCell = async (cellId: string) => {
     if (!bookId || !notebook) return
@@ -11182,7 +11175,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             assetsOpen={mediaLibraryPicker?.cellId === null && composerDockOpen}
             assetsDisabled={busy || mcp.state !== 'ready'}
             onAssets={() => openNotebookLibrary()}
-            onDeleteSelection={deleteSelectedCells}
             onSelectionActions={() => void openWorkspaceActions(undefined, {
               cell_id: selectedNotebookCell?.id,
               cell_ids: selectedNotebookCells.map((cell) => cell.id),
@@ -11487,19 +11479,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {cellContextMenu && contextMenuCell && (
         <NotebookCellContextMenu
           actions={contextMenuActions}
-          address={contextMenuSelectionGeneration
+          address={contextMenuSelection
             ? `${contextMenuSourceCellIds.length} cells`
             : notebookGridTag(contextMenuCell.slot)}
-          cellType={contextMenuSelectionGeneration ? 'SELECTION' : cellTypeLabel(contextMenuCell.type)}
-          deleteDisabled={busy || deletingCellIds.has(contextMenuCell.id)}
+          cellType={contextMenuSelection ? 'SELECTION' : cellTypeLabel(contextMenuCell.type)}
+          deleteDisabled={busy || mcp.state !== 'ready' || contextMenuSourceCellIds.some((cellId) => deletingCellIds.has(cellId))}
+          deleteLabel={contextMenuSelection ? `Delete ${contextMenuSourceCellIds.length} selected cells` : 'Delete cell'}
           menuId={cellContextMenuId(contextMenuCell.id)}
-          {...(contextMenuSelectionGeneration
+          {...(contextMenuSelection
             ? { menuLabel: `Actions for ${contextMenuSourceCellIds.length} selected cells` }
-            : { onDelete: deleteContextMenuCell })}
+            : {})}
           position={cellContextMenu.position}
           returnFocus={cellContextMenu.returnFocus}
           onAction={handleCellContextAction}
           onClose={closeCellContextMenu}
+          onDelete={deleteContextMenuCells}
         />
       )}
 

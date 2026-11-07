@@ -64,6 +64,7 @@ type NotebookCellContextMenuProps = {
   address: string
   cellType: string
   deleteDisabled?: boolean
+  deleteLabel?: string
   menuId: string
   /* Accessible name; defaults to the cell wording. Empty grid slots pass
      their own label because no cell backs the menu. */
@@ -109,6 +110,7 @@ export function NotebookCellContextMenu({
   address,
   cellType,
   deleteDisabled = false,
+  deleteLabel = 'Delete cell',
   menuId,
   menuLabel,
   position,
@@ -265,7 +267,7 @@ export function NotebookCellContextMenu({
             }}
           >
             <Trash2 size={15} aria-hidden="true" />
-            <span>Delete cell</span>
+            <span>{deleteLabel}</span>
             <kbd>⌫</kbd>
           </button>
         </div>
