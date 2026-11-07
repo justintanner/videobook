@@ -11134,7 +11134,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       onClickCapture={(event) => {
         const target = event.target
         if (screen !== 'notebook' || event.detail === 0 || selectedCellIdsRef.current.size === 0 || !(target instanceof Element)) return
-        if (target.closest('.notebook-flow, [role="menu"], [role="dialog"], :popover-open')) return
+        if (target.closest('.notebook-flow, [role="menu"], [role="dialog"], dialog, :popover-open')) return
         if (target.closest('.command-composer') && (
           !target.closest('[aria-label="Videobook command input"]')
           || actionDiscovery || composerReviewOpen
