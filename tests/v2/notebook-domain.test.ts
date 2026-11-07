@@ -14,6 +14,7 @@ import {
 } from '../../server/src/jobs/run-notebook.js'
 import { setEngineRoot, stopBookQueue } from '../../server/src/queue.js'
 import { executeRelayoutNotebook } from '../../server/src/jobs/relayout-notebook.js'
+import { allocateGenerateVideoResult } from '../../server/src/notebook-cell-outputs.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 
@@ -784,6 +785,118 @@ describe('v2 notebook domain tools', () => {
     expect(deleted.cells.some((cell) => cell.id === sourceVideo.id)).toBe(false)
     expect(deleted.edges.some((edge) =>
       edge.source === sourceVideo.id || edge.target === sourceVideo.id)).toBe(false)
+  })
+
+  it('renames a completed passive generated video without changing its artifact, inputs, or edges', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      name: 'passive-video-label',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const engine = managed.value.engine
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{ id: string }>
+    const notebookId = notebooks[0]!.id
+    const producer = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_video',
+        label: 'upscale',
+        slot: { row: 0, column: 0 },
+        prompt: 'Sharper pig',
+      },
+    })) as { id: string; provider: string; model: string; tool: string }
+    const artifact = await engine.artifacts.create('video', 'upscaled')
+    expect(artifact.ok).toBe(true)
+    if (!artifact.ok) return
+    const current = engine.notebooks.read(notebookId)
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    const allocated = allocateGenerateVideoResult(engine, current.value, producer.id, {
+      runId: 'run-passive-label',
+      acceptedAt: '2026-11-04T00:00:00.000Z',
+      artifactId: artifact.value.artifactId,
+      state: 'completed',
+    })
+    const written = await engine.notebooks.write(allocated.document, {
+      operation: 'allocate_generate_video_output',
+      details: { cellId: producer.id, outputCellId: allocated.outputCell.id },
+    })
+    expect(written.ok).toBe(true)
+    if (!written.ok) return
+    const before = engine.notebooks.read(notebookId)
+    expect(before.ok).toBe(true)
+    if (!before.ok) return
+    const output = before.value.cells.find((cell) => cell.id === allocated.outputCell.id)
+    expect(output).toMatchObject({
+      type: 'video',
+      provider: producer.provider,
+      model: producer.model,
+      tool: producer.tool,
+      outputArtifactId: artifact.value.artifactId,
+      inputs: expect.objectContaining({
+        mediaRole: 'generate-video-output',
+        producerCellId: producer.id,
+        state: 'completed',
+      }),
+    })
+    expect(notebookCellIsRunnable(output!)).toBe(false)
+    const edgesBefore = before.value.edges.filter((edge) => edge.target === output!.id)
+    expect(edgesBefore).toEqual([
+      expect.objectContaining({
+        source: producer.id,
+        target: output!.id,
+        targetInput: 'media',
+      }),
+    ])
+
+    const rejected = await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: producer.id,
+      cell: { model: 'not-a-real-model' },
+    })
+    expect(rejected.isError).toBe(true)
+    expect(rejected.content[0]?.text).toContain('not available')
+
+    resultJson(await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: output!.id,
+      cell: { label: 'Topaz Precision 4K' },
+    }))
+
+    const after = engine.notebooks.read(notebookId)
+    expect(after.ok).toBe(true)
+    if (!after.ok) return
+    const renamed = after.value.cells.find((cell) => cell.id === output!.id)
+    expect(renamed).toMatchObject({
+      label: 'Topaz Precision 4K',
+      type: 'video',
+      provider: output!.provider,
+      model: output!.model,
+      tool: output!.tool,
+      prompt: output!.prompt,
+      outputArtifactId: output!.outputArtifactId,
+      inputs: output!.inputs,
+      slot: output!.slot,
+    })
+    expect(after.value.edges.filter((edge) =>
+      edge.source === producer.id || edge.target === output!.id || edge.source === output!.id,
+    )).toEqual(edgesBefore)
+    expect(after.value.cells.find((cell) => cell.id === producer.id)).toMatchObject({
+      provider: producer.provider,
+      model: producer.model,
+      tool: producer.tool,
+    })
   })
 
   it('cancels a queued persistent job explicitly', async () => {

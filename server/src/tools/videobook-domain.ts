@@ -1684,7 +1684,9 @@ export function videobookDomainDefs(
                   ? seedNotebookStickySettings(reconciled, readNotebookStickySettings(engine, String(args.notebook_id)))
                   : reconciled;
                 const validation = validateCellConfiguration(next, document);
-                if (!validation.ok) throw new Error(validation.message);
+                if (!validation.ok && notebookCellIsRunnable(next)) {
+                  throw new Error(validation.message);
+                }
                 edited.previous = cell;
                 edited.next = reconciled;
                 return next;
