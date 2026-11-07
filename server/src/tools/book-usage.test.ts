@@ -435,7 +435,23 @@ describe("provider usage through real HTTP and engine storage", () => {
     expect(engine.usage.summary().totals.pendingCount).toBe(1);
   });
 
-  it("retains realtime audio details and discloses missing upstream modality pricing hints", () => {
+  it("prices realtime cached audio, image and text tokens from complete provider usage", () => {
+    recordVoiceUsage(engine, "openai", "gpt-realtime-2.1", "session", "cached", { usage: {
+      input_tokens: 100, output_tokens: 10,
+      input_token_details: {
+        audio_tokens: 60, image_tokens: 10, text_tokens: 30, cached_tokens: 30,
+        cached_tokens_details: { audio_tokens: 20, image_tokens: 5, text_tokens: 5 },
+      },
+      output_token_details: { audio_tokens: 8, text_tokens: 2 },
+    } });
+    const entry = engine.usage.recent(1)[0];
+    expect(entry).toMatchObject({ basis: "estimated", inputTokens: 100, outputTokens: 10, cachedTokens: 30 });
+    expect(entry?.costUsd).toBeCloseTo(0.0019775, 10);
+    const actual = engine.settings.get<{ usage: Record<string, number> }>("provider-actual:voice:session:cached");
+    expect(actual?.usage).toMatchObject({ cacheReadAudioInputTokens: 20, cacheReadImageInputTokens: 5 });
+  });
+
+  it("retains incomplete realtime audio details and explains the missing modality counts", () => {
     const model = "gpt-realtime-2.1";
     recordVoiceUsage(engine, "openai", model, "session", "priced", { usage: {
       input_tokens: 30, output_tokens: 10,

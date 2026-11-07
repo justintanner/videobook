@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.27.0 (2026-11-07). Image, video and audio
+Videobook now uses Apicity 0.27.1 (2026-11-07). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -991,11 +991,11 @@ The queued Kling 3.0 motion-control fixture at 720p now uses the upstream
 November 5 rate of $0.1135 per second, so six seconds cost $0.681 instead
 of $0.60.
 
-OpenAI realtime modality pricing remains unavailable in `extractActual` 0.27.0:
-it omits cached-audio and cached-image hints required by the declared-usage
-price route. Apicity follow-up `ac-iikgzi` owns that gap. Videobook normalizes
-realtime detail-container names, retains measured audio counts, and displays
-the upstream warning instead of maintaining a local rate calculation.
+Apicity 0.27.1 resolves follow-up `ac-iikgzi`: `extractActual` now retains
+cached audio and image counts and prices complete OpenAI realtime usage by
+modality. Videobook normalizes realtime detail-container names and uses that
+upstream calculation. Incomplete usage remains unpriced with the upstream
+warning when the missing modality counts cannot be inferred safely.
 
 The transcription fixture now prices the provider-reported one-second duration
 instead of the slightly longer local MP3 probe duration. Reported usage takes

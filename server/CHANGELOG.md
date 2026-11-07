@@ -6,7 +6,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-07
+
 ### Added
+
+- Generation inputs can be selected, reordered and edited as named slots in
+  the notebook inspector and chat review, with per-input controls, thumbnail
+  previews and prompts that keep their references when cells move.
 
 - `cancel_job` can cancel a leftover provider task by artifact and expected task
   ID after local jobs finish, preserving media and recording the cancellation.
@@ -32,7 +38,21 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Every @apicity package moves to 0.25.0.
+- Every @apicity package moves to 0.27.1. Usage and price forecasts use the
+  shared cost APIs, including provider-reported charges, fal billable units
+  and cached realtime audio, image and text tokens. Retired fal Sora 2 models
+  are removed.
+- `videobook-engine` 5.9.1 preserves the existing schema and fixes portable
+  book snapshots on Windows.
+
+### Fixed
+
+- Windows book exports no longer fail with "output file is in use by another
+  connection" when creating the catalog snapshot.
+- The installed web UI loads when its installation path contains a hidden
+  directory.
+- Recovery safely rebuilds video derivatives, and generation input dialogs
+  preserve the selected notebook cells and the inspector's model choice.
 
 ## [0.4.2] - 2026-11-01
 
