@@ -1,3 +1,7 @@
+.music-video-editor.timeline-preview-fullscreen {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .music-video-editor {
   --mv-accent: var(--green, #72e7aa);
   --mv-muted: #86ad99;
@@ -94,7 +98,8 @@
 .music-video-library { grid-area: library; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--surface); }
 .music-video-inspector { grid-area: inspector; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: auto; border-left: 1px solid var(--line); background: var(--surface); }
 .music-video-preview-panel { grid-area: preview; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: #020705; }
-.music-video-timeline-panel { grid-area: timeline; min-height: 0; min-width: 0; position: relative; border-top: 1px solid var(--line); }
+.music-video-timeline-panel { grid-area: timeline; min-height: 0; min-width: 0; position: relative; overflow: hidden; border-top: 1px solid var(--line); }
+.music-video-timeline-panel > .notebook-timeline { height: 100%; max-height: 100%; }
 .music-video-timeline-panel > p { position: absolute; right: 18px; bottom: 14px; pointer-events: none; color: #f7d776; }
 
 /* Library. */
@@ -266,6 +271,7 @@
 .music-video-editor .canonical-player-shortcuts { display: none; }
 @media (max-width: 900px) and (max-height: 500px) {
   .music-video-editor-main { grid-template-rows: minmax(0, 1fr) 150px minmax(0, 30dvh); }
+  .music-video-editor-main.tools-hidden { grid-template-rows: minmax(100px, 1fr) minmax(120px, 150px); }
 }
 
 .music-video-clip-sheet {

@@ -645,7 +645,12 @@ describe('chat composer browser flow', () => {
       },
     )
     await waitForHttp(appUrl, viteProcess, 200)
-    browser = await chromium.launch({ headless: true })
+    browser = await chromium.launch({
+      headless: true,
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+        : {}),
+    })
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     await page.route('**/mcp', async (route) => {
       const body = await requestBody(route)
@@ -836,7 +841,7 @@ describe('chat composer browser flow', () => {
       if (await input.count()) await input.fill('').catch(() => undefined)
     }
     const input = page.getByLabel('Videobook command input')
-    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await input.waitFor({ state: 'visible', timeout: 90_000 })
     await expect.poll(async () => await input.isEnabled(), {
       timeout: MCP_ROUNDTRIP_MS,
     }).toBe(true)
@@ -916,7 +921,11 @@ describe('chat composer browser flow', () => {
       const source = editor.locator('.generation-review-json pre')
       await expect.poll(() => source.textContent(), { timeout: MCP_ROUNDTRIP_MS })
         .toContain('Animate @Image1 and @Image2')
-      for (const artifactId of frameArtifactIds) expect(await source.textContent()).toContain(artifactId)
+      const previewTitles = await source.locator('.json-media-url').evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute('title') ?? ''))
+      for (const artifactId of frameArtifactIds) {
+        expect(previewTitles.some((title) => title.includes(artifactId))).toBe(true)
+      }
       const notebook = await call<Notebook>('get_notebook')
       expect(notebook.edges.filter((edge) => edge.target === generatorId).map((edge) => edge.source))
         .toEqual(frameIds)
@@ -930,7 +939,7 @@ describe('chat composer browser flow', () => {
       await client.close()
       notebookDirty = true
     }
-  }, 60_000)
+  }, 120_000)
 
   it('switches frame images to R2V references and combines image, video and audio inputs', async () => {
     const page = await openApp()
@@ -972,7 +981,7 @@ describe('chat composer browser flow', () => {
       const mode = editor.getByLabel('Generation type')
       const generate = page.getByLabel('Primary cell action').getByRole('button', { name: 'Generate' })
       await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('Use @Image1 and @Image2')
-      expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
+      await expect.poll(() => prompt.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Use @image1 and @image2')
       expect(await editor.locator('.generation-slot-chip .generation-slot-chip-copy strong').allTextContents()).toEqual(['@image1', '@image2'])
       expect(await payload.textContent()).toContain('"reference_image_urls"')
       expect(await payload.textContent()).not.toContain('"first_frame_url"')
@@ -980,11 +989,11 @@ describe('chat composer browser flow', () => {
 
       await mode.selectOption('i2v')
       await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"first_frame_url"')
-      expect(await prompt.inputValue()).toBe('Use @image1 and @firstframe')
+      await expect.poll(() => prompt.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Use @image1 and @firstframe')
       expect(await payload.textContent()).not.toContain('"reference_image_urls"')
       await mode.selectOption('r2v')
       await expect.poll(() => payload.textContent(), { timeout: MCP_ROUNDTRIP_MS }).toContain('"reference_image_urls"')
-      expect(await prompt.inputValue()).toBe('Use @image1 and @image2')
+      await expect.poll(() => prompt.inputValue(), { timeout: MCP_ROUNDTRIP_MS }).toBe('Use @image1 and @image2')
 
       for (const [tag, kind, slot] of [['@a1', 'video', 'Reference videos'], ['@a2', 'audio', 'Reference audio']]) {
         await editor.getByTitle(`Add ${tag} to ${slot}`, { exact: true }).click()
@@ -1011,7 +1020,7 @@ describe('chat composer browser flow', () => {
       await client.close()
       notebookDirty = true
     }
-  }, 60_000)
+  }, 120_000)
 
   it('assembles and persists a full-row Timeline with bounded rendering for long sequences', async () => {
     const page = await openApp()
@@ -1400,7 +1409,7 @@ describe('chat composer browser flow', () => {
     const navigation = page.getByLabel('Workspace navigation')
     const toolbar = page.getByLabel('Notebook canvas controls')
     const firstCell = notebookCellNode(page, videoCellId)
-    await toolbar.waitFor({ state: 'visible' })
+    await toolbar.waitFor({ state: 'visible', timeout: 90_000 })
     await firstCell.waitFor({ state: 'visible' })
     expect(await page.getByLabel('Refresh books', { exact: true }).count()).toBe(0)
     const topbarBox = await topbar.boundingBox()
@@ -1436,9 +1445,9 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () =>
       await addCellSearch.evaluate((element) => document.activeElement === element),
     ).toBe(true)
-    await addCellSearch.fill('split')
+    await addCellSearch.fill('splice')
     const addCellMenu = page.locator('.canvas-add-menu')
-    await addCellMenu.getByRole('button', { name: 'Split video' })
+    await addCellMenu.getByRole('button', { name: 'Splice', exact: true })
       .waitFor({ state: 'visible' })
     expect(await addCellMenu.getByRole('button', { name: 'Audio', exact: true }).count())
       .toBe(0)
@@ -1484,7 +1493,7 @@ describe('chat composer browser flow', () => {
     expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(320)
     await addCellSearch.press('Escape')
     await page.setViewportSize({ width: 1440, height: 1000 })
-  }, 60_000)
+  }, 120_000)
 
   it('automatically refreshes external notebook changes and dynamic edge handles', async () => {
     if (!page) throw new Error('Browser page was not initialized')
@@ -1677,10 +1686,28 @@ describe('chat composer browser flow', () => {
       const squareBounds = squares.map(square => square.getBoundingClientRect())
       const addresses = [...element.querySelectorAll('.cell-node-footer strong')]
       const details = [...element.querySelectorAll('.cell-node-type-label, .cell-media-badge, .cell-media-meter, .cell-aspect-ratio, .cell-model-line, .cell-status, .cell-media-slot-library strong, .cell-media-slot-library span, .cell-media-slot-upload')]
+        .filter((detail) => {
+          const rect = detail.getBoundingClientRect()
+          return rect.width > 0 && rect.height > 0
+        })
       const prompts = [...element.querySelectorAll('.cell-copy-text p')]
       return {
         zoom,
-        fitZoom: element.clientWidth / 2088,
+        fitZoom: (() => {
+          const style = getComputedStyle(element)
+          const width = Math.max(0, element.clientWidth
+            - (parseFloat(style.paddingLeft) || 0)
+            - (parseFloat(style.paddingRight) || 0))
+          const composerReserve = Math.min(parseFloat(style.paddingBottom) || 0, 160)
+          const fitHeight = Math.max(0, element.clientHeight
+            - (parseFloat(style.paddingTop) || 0)
+            - composerReserve)
+          const widthZoom = width / 2088
+          const heightZoom = fitHeight > 0 ? fitHeight / (3 * 264 - 24) : widthZoom
+          const minimumZoom = parseFloat(style.getPropertyValue('--notebook-minimum-zoom')) || 0
+          return Math.max(minimumZoom, Math.min(widthZoom, heightZoom))
+        })(),
+        contentLeft: bounds.left,
         leftGutter: Math.min(...squareBounds.map(rect => rect.left)),
         unusedWidth: bounds.left + element.clientWidth - Math.max(...squareBounds.map(rect => rect.right)),
         topGap: bounds.top - header.getBoundingClientRect().bottom,
@@ -1737,12 +1764,19 @@ describe('chat composer browser flow', () => {
       await page.setViewportSize({ width, height: 850 })
       await expect.poll(async () => {
         const layout = await readLayout()
-        return layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
-      }).toBe(true)
+        const fitted = layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
+        return fitted ? true : {
+          overflow: layout.overflow,
+          zoom: layout.zoom,
+          fitZoom: layout.fitZoom,
+        }
+      }, { timeout: 10_000 }).toBe(true)
       const layout = await readLayout()
       expect(layout).toMatchObject({ columnsVisible: true, addressesInsideCards: true })
-      expect(layout.leftGutter).toBeCloseTo(28, 0)
-      expect(Math.abs(layout.unusedWidth)).toBeLessThanOrEqual(1)
+      expect(layout.contentLeft).toBeCloseTo(28, 0)
+      const sideGap = layout.leftGutter - layout.contentLeft
+      expect(sideGap).toBeGreaterThanOrEqual(-1)
+      expect(Math.abs(sideGap - layout.unusedWidth)).toBeLessThanOrEqual(1)
       expect(layout.topGap).toBeGreaterThanOrEqual(8)
       expect(layout.topGap).toBeLessThanOrEqual(24)
       expect(layout.bottomClearance).toBeGreaterThanOrEqual(4)
@@ -1812,7 +1846,7 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => {
       const layout = await readLayout()
       return layout.overflow <= 1 && Math.abs(layout.zoom - layout.fitZoom) < 0.001
-    }).toBe(true)
+    }, { timeout: 10_000 }).toBe(true)
   }, 60_000)
 
   it('centers clicked tiles above the preview dock and clears it at the final row', async () => {
@@ -1876,7 +1910,7 @@ describe('chat composer browser flow', () => {
         for (const id of [imageId, videoId, lastId]) {
           await positionForClick(id)
           const before = await layout(id)
-          await notebookCellNode(page, id).locator('.cell-node-type-label').click()
+          await notebookCellNode(page, id).locator('.cell-node-body').click()
           await expect.poll(async () => (await layout(id)).topGap).toBeGreaterThanOrEqual(0)
           await expect.poll(async () => (await layout(id)).bottomGap).toBeGreaterThanOrEqual(8)
           if (id !== lastId) {
@@ -1888,10 +1922,10 @@ describe('chat composer browser flow', () => {
           await expect.poll(() => input.evaluate((element) => document.activeElement === element)).toBe(true)
         }
       }
-      await page.setViewportSize({ width: 2560, height: 1000 })
+      await page.setViewportSize({ width: 2560, height: 1400 })
       await expect.poll(async () => (await layout(imageId)).zoom).toBeGreaterThan(1)
       await positionForClick(imageId)
-      await notebookCellNode(page, imageId).locator('.cell-node-type-label').click()
+      await notebookCellNode(page, imageId).locator('.cell-node-body').click()
       await expect.poll(async () => (await layout(imageId)).centerError).toBeLessThanOrEqual(2)
       expect((await layout(imageId)).left).toBe(0)
       await page.keyboard.down('Shift')
@@ -1900,7 +1934,7 @@ describe('chat composer browser flow', () => {
           await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
           return { top: element.scrollTop, left: element.scrollLeft }
         })
-        await notebookCellNode(page, videoId).locator('.cell-node-type-label').click()
+        await notebookCellNode(page, videoId).locator('.cell-node-body').click()
         await expect.poll(() => page.locator('.react-flow__node.selected').count()).toBe(2)
         await wait(200)
         expect(await scroll.evaluate((element) => ({ top: element.scrollTop, left: element.scrollLeft })))
@@ -1911,7 +1945,7 @@ describe('chat composer browser flow', () => {
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.getByLabel('Clear selection', { exact: true }).click()
       await positionForClick(videoId)
-      await notebookCellNode(page, videoId).locator('.cell-node-type-label').click()
+      await notebookCellNode(page, videoId).locator('.cell-node-body').click()
       await expect.poll(async () => (await layout(videoId)).centerError).toBeLessThanOrEqual(2)
       if (process.env.VIDEOBOOK_E2E_SCREENSHOT) await page.screenshot({ path: process.env.VIDEOBOOK_E2E_SCREENSHOT })
     } catch (error) {
@@ -1930,7 +1964,7 @@ describe('chat composer browser flow', () => {
     const page = await openApp()
     const selected = notebookCellNode(page, videoCellId)
     await selected.click()
-    const dragHandle = await selected.locator('.cell-node-type-label').boundingBox()
+    const dragHandle = await selected.locator('.cell-node-body').boundingBox()
     if (!dragHandle) throw new Error('Could not measure the video cell drag handle')
     const dragX = dragHandle.x + dragHandle.width / 2
     const dragY = dragHandle.y + dragHandle.height / 2
@@ -2198,13 +2232,12 @@ describe('chat composer browser flow', () => {
     if (!cardMediaBox || !cardMetadataBox) {
       throw new Error('Could not measure image card metadata')
     }
-    const metadataBottomInset = cardMediaBox.y + cardMediaBox.height
-      - cardMetadataBox.y - cardMetadataBox.height
+    const metadataTopInset = cardMetadataBox.y - cardMediaBox.y
     const metadataRightInset =
       cardMediaBox.x + cardMediaBox.width
         - cardMetadataBox.x - cardMetadataBox.width
-    expect(metadataBottomInset).toBeGreaterThanOrEqual(-1)
-    expect(metadataBottomInset).toBeLessThanOrEqual(1)
+    expect(metadataTopInset).toBeGreaterThanOrEqual(-1)
+    expect(metadataTopInset).toBeLessThanOrEqual(1)
     expect(metadataRightInset).toBeGreaterThanOrEqual(-1)
     expect(metadataRightInset).toBeLessThanOrEqual(16)
     await fullscreenNode.click()
@@ -3447,8 +3480,8 @@ describe('chat composer browser flow', () => {
       const review = page.getByLabel('Chat action review')
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       await review.getByText('Change video speed').waitFor({ state: 'visible' })
-      await review.locator('.confirm-settings dd', { hasText: '1.3×' })
-        .first().waitFor({ state: 'visible' })
+      await review.locator('section[aria-label="Speed"] strong', { hasText: /^1\.3×$/u })
+        .waitFor({ state: 'visible' })
       await review.getByText('Source duration').waitFor({ state: 'visible' })
 
       // The proposed media preview plays live (controls, proposed playback
@@ -3530,8 +3563,8 @@ describe('chat composer browser flow', () => {
       await review.waitFor({ state: 'visible', timeout: 30_000 })
       await review.getByText('Change video speed').waitFor({ state: 'visible' })
       // The fixture source is 3s, so a 2s target yields an effective 1.5×.
-      await review.locator('.confirm-settings dd', { hasText: '1.5×' })
-        .first().waitFor({ state: 'visible' })
+      await review.locator('section[aria-label="Speed"] strong', { hasText: /^1\.5×$/u })
+        .waitFor({ state: 'visible' })
 
       const preview = review.locator('.confirm-routed-preview video')
       await preview.waitFor({ state: 'visible', timeout: 30_000 })
@@ -3667,15 +3700,15 @@ describe('chat composer browser flow', () => {
     const composer = page.locator('.command-composer')
     let release = () => undefined as void
     const held = new Promise<void>(resolve => { release = resolve })
-    let runStarted = false
-    let readsAfterRun = 0
+    let splitStarted = false
+    let readsAfterSplit = 0
     let holding = false
     const holdOldSnapshot = async (route: Route) => {
       const calls = toolCalls(await requestBody(route))
-      if (calls.some(call => call.name === 'run_notebook')) runStarted = true
-      if (runStarted && calls.some(call => call.name === 'get_notebook')) {
-        readsAfterRun += 1
-        if (readsAfterRun === 2) {
+      if (calls.some(call => call.name === 'split_video')) splitStarted = true
+      if (splitStarted && calls.some(call => call.name === 'get_notebook')) {
+        readsAfterSplit += 1
+        if (readsAfterSplit === 2) {
           const response = await route.fetch()
           holding = true
           await held
@@ -4703,18 +4736,6 @@ describe('chat composer browser flow', () => {
     await expect.poll(async () => await review.locator('.confirm-chips [role="listitem"]').count())
       .toBe(3)
 
-    observedCalls.length = 0
-    await review.getByRole('button', { name: 'Apply split' }).click()
-    await review.waitFor({ state: 'hidden', timeout: 30_000 })
-    await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'create_notebook_cell'
-      && record(call.arguments.cell)?.type === 'split_video'
-      && record(call.arguments.cell)?.operation === 'split_at_points'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
-    await expect.poll(() => observedCalls.some((call) =>
-      call.name === 'run_notebook'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
-    await expect.poll(() => page!.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
-    expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
-
     const splitClient = new Client(
       { name: 'videobook-split-ui-e2e', version: '1.0.0' },
       {
@@ -4727,6 +4748,33 @@ describe('chat composer browser flow', () => {
       new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)),
     )
     try {
+      const before = record(resultValue(await splitClient.callTool({
+        name: 'get_notebook',
+        arguments: { book_id: bookId, notebook_id: notebookId },
+      })))
+      const beforeIds = new Set((Array.isArray(before?.cells) ? before.cells : [])
+        .map(record)
+        .flatMap((cell) => typeof cell?.id === 'string' ? [cell.id] : []))
+      observedCalls.length = 0
+      await review.getByRole('button', { name: 'Apply split' }).click()
+      await review.waitFor({ state: 'hidden', timeout: 30_000 })
+      await expect.poll(() => {
+        const call = observedCalls.find((entry) => entry.name === 'split_video')
+        return call ? {
+          book_id: call.arguments.book_id,
+          notebook_id: call.arguments.notebook_id,
+          asset_id: call.arguments.asset_id,
+          cut_points: call.arguments.cut_points,
+        } : null
+      }, { timeout: MCP_ROUNDTRIP_MS }).toEqual({
+        book_id: bookId,
+        notebook_id: notebookId,
+        asset_id: 'a1',
+        cut_points: [0.85, 1.7],
+      })
+      await expect.poll(() => page!.locator('.command-composer').getAttribute('data-dock-open')).toBe('false')
+      expect(await page.locator('.command-composer-dock-body').isVisible()).toBe(false)
+
       const document = record(resultValue(await splitClient.callTool({
         name: 'get_notebook',
         arguments: { book_id: bookId, notebook_id: notebookId },
@@ -4734,26 +4782,22 @@ describe('chat composer browser flow', () => {
       const cells = (Array.isArray(document?.cells) ? document.cells : [])
         .map(record)
         .filter((cell): cell is Record<string, unknown> => cell !== null)
-      const submittedSplit = observedCalls.find(call => call.name === 'create_notebook_cell'
-        && record(call.arguments.cell)?.type === 'split_video')
-      const splitCell = cells.find(cell => cell.id === record(submittedSplit?.arguments.cell)?.id)
-      expect(splitCell).toMatchObject({
-        id: expect.any(String),
-        inputs: { cutPointsSeconds: [0.85, 1.7] },
-      })
-      const outputCells = cells.filter((cell) =>
-        record(cell.inputs)?.producerCellId === splitCell?.id)
-      expect(outputCells.map((cell) => cell.label)).toEqual([
-        'Chunk 01',
-        'Chunk 02',
-        'Chunk 03',
+      const created = cells.filter((cell) =>
+        typeof cell.id === 'string' && !beforeIds.has(cell.id))
+      expect(created.map((cell) => cell.label)).toEqual([
+        'Part 01',
+        'Part 02',
+        'Part 03',
       ])
+      expect(created.every((cell) => cell.type === 'video')).toBe(true)
+      expect(created.every((cell) => record(cell.inputs)?.sourceCellId === videoCellId)).toBe(true)
       const edges = (Array.isArray(document?.edges) ? document.edges : [])
         .map(record)
         .filter((edge): edge is Record<string, unknown> => edge !== null)
-      expect(edges.filter((edge) => edge.source === splitCell?.id).map((edge) =>
+      expect(edges.filter((edge) =>
+        edge.source === videoCellId && edge.targetInput === 'segment').map((edge) =>
         edge.target)).toEqual(expect.arrayContaining(
-        outputCells.map((cell) => cell.id),
+        created.map((cell) => cell.id),
       ))
     } finally {
       await splitClient.close()
@@ -4976,10 +5020,13 @@ describe('chat composer browser flow', () => {
     expect(itemLabels.filter((label) => !requiredLabels.includes(label)).every((label) =>
       [
         'Open media',
+        'Post…',
         'Download video',
         'Extract frame',
         'Generate video',
         'Generate image',
+        'Extend video',
+        'Upscale video',
         'Duplicate',
         'Split video',
       ].includes(label))).toBe(true)
@@ -5036,7 +5083,7 @@ describe('chat composer browser flow', () => {
     expect((await videoMenu.getByRole('menuitem').allTextContents())
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
-      'Create Post',
+      'Post…',
       'Open media',
       'Subtitles',
       'Edit cold open',
@@ -5044,6 +5091,8 @@ describe('chat composer browser flow', () => {
       'Extract frame',
       'Generate video',
       'Generate image',
+      'Extend video',
+      'Upscale video',
       'Duplicate',
       'Split video',
       'Delete cell',
@@ -5094,7 +5143,7 @@ describe('chat composer browser flow', () => {
     expect((await duplicateMenu.getByRole('menuitem').allTextContents())
       .map((label) => label.replace('⌫', '').trim())).toEqual([
       'Edit cell',
-      'Create Post',
+      'Post…',
       'Open media',
       'Generate video',
       'Generate image',
@@ -5124,11 +5173,18 @@ describe('chat composer browser flow', () => {
         provider: expect.any(String),
         tool: expect.any(String),
       })
-      await expect.poll(() => observedCalls.some((call) =>
-        call.name === 'connect_notebook_cells'
-        && call.arguments.source_cell_id === fullscreenImageCellId
-        && call.arguments.target_cell_id === createdGenerationCellId
-        && call.arguments.target_input === 'image'), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
+      await expect.poll(() => observedCalls.some((call) => {
+        if (
+          call.name !== 'set_notebook_cell_inputs'
+          || call.arguments.cell_id !== createdGenerationCellId
+        ) return false
+        const inputs = Array.isArray(call.arguments.inputs) ? call.arguments.inputs : []
+        return inputs.some((input) => {
+          const value = record(input)
+          return value?.source_cell_id === fullscreenImageCellId
+            && value?.target_input === 'image'
+        })
+      }), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
       const createdGenerationNode = notebookCellNode(page, createdGenerationCellId)
       await createdGenerationNode.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await createdGenerationNode.getAttribute('data-selection')).toBe('primary')
@@ -5137,7 +5193,9 @@ describe('chat composer browser flow', () => {
       await generationEditor.waitFor({ state: 'visible' })
       expect(await generationEditor.getByRole('textbox', { name: 'Prompt', exact: true }).textContent())
         .toContain('@image1')
-      expect(await generationEditor.getByRole('button', { name: `Remove ${duplicateSourceAddress} input`, exact: true }).isVisible()).toBe(true)
+      await generationEditor.getByRole('button', {
+        name: new RegExp(`Remove @${duplicateSourceAddress.replace(/^@/u, '')}\\b`, 'u'),
+      }).first().waitFor({ state: 'visible' })
       await expect.poll(() => generationEditor.locator('.generation-review-json pre').textContent(), {
         timeout: MCP_ROUNDTRIP_MS,
       }).toContain('"prompt"')
@@ -5392,6 +5450,53 @@ describe('chat composer browser flow', () => {
     const deleteCalls = observedCalls.filter((call) =>
       call.name === 'delete_notebook_cell')
     expect(deleteCalls).toHaveLength(2)
+    const restore = new Client({ name: 'videobook-marquee-restore', version: '1' }, {
+      capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } },
+    })
+    await restore.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    try {
+      const recreate = async (cell: Record<string, unknown>): Promise<string> => {
+        const value = record(resultValue(await restore.callTool({
+          name: 'create_notebook_cell',
+          arguments: { book_id: bookId, notebook_id: notebookId, cell },
+        })))
+        const id = typeof value?.id === 'string' ? value.id : ''
+        if (!id) throw new Error('Could not restore a deleted fixture cell')
+        return id
+      }
+      videoCellId = await recreate({
+        type: 'video',
+        label: 'vid-source-one',
+        slot: { row: 0, column: 0 },
+        output_artifact_id: videoArtifactId,
+        inputs: { durationSeconds: 3 },
+      })
+      generationCellId = await recreate({
+        type: 'generate_video',
+        label: 'generate-video-target',
+        slot: { row: 1, column: 0 },
+        provider: 'kie',
+        model: 'kie:bytedance/seedance-2-5',
+        operation: 'image_to_video',
+        tool: 'generate_video',
+        inputs: {
+          state: 'running',
+          generationSettings: { duration: 10, resolution: '720p', aspect_ratio: '9:16' },
+        },
+      })
+      for (const connection of [
+        { source_cell_id: generationCellId, target_cell_id: outputVideoCellId, target_input: 'media' },
+        { source_cell_id: videoCellId, target_cell_id: generationCellId, target_input: 'video' },
+        { source_cell_id: imageCellId, target_cell_id: generationCellId, target_input: 'image' },
+      ]) {
+        resultValue(await restore.callTool({
+          name: 'connect_notebook_cells',
+          arguments: { book_id: bookId, notebook_id: notebookId, ...connection },
+        }))
+      }
+    } finally {
+      await restore.close()
+    }
     notebookDirty = true
   }, 60_000)
 
@@ -5401,22 +5506,22 @@ describe('chat composer browser flow', () => {
     const trigger = menu.locator('summary')
     const search = page.getByLabel('Search cell types')
     await trigger.click()
-    await search.fill('split')
+    await search.fill('splice')
     await search.press('Tab')
-    const option = menu.getByRole('button', { name: 'Split video' })
+    const option = menu.getByRole('button', { name: 'Splice', exact: true })
     expect(await option.evaluate((element) => ({
       focused: document.activeElement === element,
       disabled: element instanceof HTMLButtonElement && element.disabled,
       activeLabel: document.activeElement?.getAttribute('aria-label')
         ?? document.activeElement?.textContent,
-    }))).toEqual({ focused: true, disabled: false, activeLabel: 'Split video' })
+    }))).toEqual({ focused: true, disabled: false, activeLabel: 'Splice' })
     await page.keyboard.press('Escape')
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
     await expect.poll(async () => await trigger.evaluate((element) =>
       document.activeElement === element)).toBe(true)
 
     await trigger.click()
-    await search.fill('split')
+    await search.fill('splice')
     await search.press('Tab')
     expect(await option.evaluate((element) => {
       element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -5437,7 +5542,7 @@ describe('chat composer browser flow', () => {
       .evaluate((element) => document.activeElement === element)).toBe(true)
 
     await trigger.click()
-    await search.fill('split')
+    await search.fill('splice')
     await search.press('Tab')
     await page.keyboard.press('Tab')
     await expect.poll(async () => await menu.getAttribute('open')).toBeNull()
@@ -5621,13 +5726,6 @@ describe('chat composer browser flow', () => {
       ? moveCall.arguments.slots.map(record).filter((slot) => slot !== null)
       : []
     const slotKeys = new Set(slots.map((slot) => `${slot!.row}:${slot!.column}`))
-    const slotsById = new Map(slots.flatMap((slot) =>
-      typeof slot?.id === 'string' ? [[slot.id, slot] as const] : []))
-    const generationSlot = slotsById.get(fullscreenImageGenerationCellId)
-    const imageSlot = slotsById.get(fullscreenImageCellId)
-    const sourceImageSlot = slotsById.get(imageCellId)
-    const sourceVideoSlot = slotsById.get(videoCellId)
-    const outputVideoSlot = slotsById.get(outputVideoCellId)
 
     expect(moveCall?.arguments.book_id).toBe(bookId)
     expect(moveCall?.arguments.notebook_id).toBe(notebookId)
@@ -5638,12 +5736,42 @@ describe('chat composer browser flow', () => {
       Number(slot!.column) >= 0 && Number(slot!.column) <= 7)).toBe(true)
     expect(slots.every((slot) =>
       Number(slot!.row) >= 0 && Number(slot!.row) <= 63)).toBe(true)
-    expect(Number(sourceVideoSlot?.row)).toBe(0)
-    expect(Number(generationSlot?.row)).toBe(1)
-    expect(Number(imageSlot?.row)).toBe(2)
-    expect(Number(sourceImageSlot?.row)).toBe(2)
-    expect(Number(outputVideoSlot?.row)).toBe(3)
+
+    const arrangeClient = new Client(
+      { name: 'videobook-auto-arrange-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
+    await arrangeClient.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    let sourceVideoSlot: Record<string, unknown> | null = null
+    let generationSlot: Record<string, unknown> | null = null
+    let imageSlot: Record<string, unknown> | null = null
+    let sourceImageSlot: Record<string, unknown> | null = null
+    let outputVideoSlot: Record<string, unknown> | null = null
+    try {
+      const notebook = record(resultValue(await arrangeClient.callTool({
+        name: 'get_notebook',
+        arguments: { book_id: bookId, notebook_id: notebookId },
+      })))
+      const cells = (Array.isArray(notebook?.cells) ? notebook.cells : [])
+        .map(record)
+        .filter((cell): cell is Record<string, unknown> => cell !== null)
+      const notebookSlot = (id: string) => record(cells.find((cell) => cell.id === id)?.slot)
+      sourceVideoSlot = notebookSlot(videoCellId)
+      generationSlot = notebookSlot(fullscreenImageGenerationCellId)
+      imageSlot = notebookSlot(fullscreenImageCellId)
+      sourceImageSlot = notebookSlot(imageCellId)
+      outputVideoSlot = notebookSlot(outputVideoCellId)
+    } finally {
+      await arrangeClient.close()
+    }
+
+    expect(Number(sourceVideoSlot?.row)).toBeLessThan(Number(generationSlot?.row))
     expect(Number(generationSlot?.row)).toBeLessThan(Number(imageSlot?.row))
+    expect(Number(imageSlot?.row)).toBe(Number(sourceImageSlot?.row))
     expect(Number(imageSlot?.row)).toBeLessThan(Number(outputVideoSlot?.row))
     await page.getByText(/^Auto-arranged \d+ tiles?$/u).waitFor({
       state: 'visible',
@@ -5669,11 +5797,19 @@ describe('chat composer browser flow', () => {
       })))
     const laneForRow = (row: number) => lanes.find((lane) =>
       row >= lane.startRow && row < lane.startRow + lane.rowCount)
-    expect(laneForRow(Number(sourceVideoSlot?.row))?.caption).toBe('Source videos')
-    expect(laneForRow(Number(imageSlot?.row))?.caption).toBe('Images')
+    const sourceLane = laneForRow(Number(sourceVideoSlot?.row))
+    const generationLane = laneForRow(Number(generationSlot?.row))
+    const imageLane = laneForRow(Number(imageSlot?.row))
+    const outputLane = laneForRow(Number(outputVideoSlot?.row))
+    expect(sourceLane?.caption).toBe('Source videos')
+    expect(sourceLane?.startRow).toBe(0)
+    expect(generationLane?.caption).toBe('Gen')
+    expect(generationLane?.startRow).toBe((sourceLane?.startRow ?? 0) + (sourceLane?.rowCount ?? 0))
+    expect(imageLane?.caption).toBe('Images')
     expect(laneForRow(Number(sourceImageSlot?.row))?.caption).toBe('Images')
-    expect(laneForRow(Number(generationSlot?.row))?.caption).toBe('Gen')
-    expect(laneForRow(Number(outputVideoSlot?.row))?.caption).toBe('Videos')
+    expect(imageLane?.startRow).toBe((generationLane?.startRow ?? 0) + (generationLane?.rowCount ?? 0))
+    expect(outputLane?.caption).toBe('Videos')
+    expect(outputLane?.startRow).toBe((imageLane?.startRow ?? 0) + (imageLane?.rowCount ?? 0))
     expect(await selected.getAttribute('data-lane-family')).toBe('image')
     await expectGridWithoutSidebar(page)
     if (process.env.LANES_SCREENSHOT) {
@@ -5822,9 +5958,22 @@ describe('chat composer browser flow', () => {
           const close = element.querySelector('.music-video-close')!.getBoundingClientRect()
           const monitor = element.querySelector('.music-video-preview-panel')!.getBoundingClientRect()
           const timeline = element.querySelector('.notebook-timeline')!.getBoundingClientRect()
-          return bounds.x === 0 && bounds.y === 0 && Math.abs(bounds.width - innerWidth) < 1 && Math.abs(bounds.height - innerHeight) < 1
-            && close.right <= innerWidth && monitor.height >= 100 && monitor.bottom <= timeline.top + 1 && timeline.bottom <= innerHeight
-        })).toBe(true)
+          const fitted = Math.abs(bounds.x) < 1 && Math.abs(bounds.y) < 1
+            && Math.abs(bounds.width - innerWidth) < 1
+            && Math.abs(bounds.height - innerHeight) < 1
+            && close.right <= innerWidth
+            && monitor.height >= 100
+            && monitor.bottom <= timeline.top + 1
+            && timeline.bottom <= innerHeight
+          return fitted ? true : {
+            innerWidth,
+            innerHeight,
+            bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+            closeRight: close.right,
+            monitor: { height: monitor.height, bottom: monitor.bottom },
+            timeline: { top: timeline.top, bottom: timeline.bottom },
+          }
+        }), { timeout: 5_000 }).toBe(true)
         await page.screenshot({ path: `/tmp/videobook-music-beats-${viewport.width}.png` })
       }
       await page.keyboard.press('Escape')

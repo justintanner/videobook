@@ -2661,16 +2661,30 @@ function ExecutableCellInspector({
   const allGenerationControls = generationActions.flatMap((candidate) =>
     candidate.controls)
   const storedDraft = persistedCellFormDraft(cell, allGenerationControls)
-  const [draft, setDraft] = useState(() =>
-    openedCellFormDraft(cell, cells, edges, generationActions))
+  const openedDraft = openedCellFormDraft(cell, cells, edges, generationActions)
+  const [draft, setDraft] = useState(openedDraft)
+  const [followedPrompt, setFollowedPrompt] = useState(openedDraft.prompt)
   const [synced, setSynced] = useState<CellFormSync>(() => ({ stored: storedDraft, draft }))
+  let visibleDraft = draft
+  const automaticPrompt = visibleDraft.prompt === followedPrompt
   if (!sameCellFormDraft(storedDraft, synced.stored)) {
     const next = {
       stored: storedDraft,
-      draft: openedCellFormDraft(cell, cells, edges, generationActions),
+      draft: openedDraft,
     }
     setSynced(next)
-    setDraft(rebaseCellFormDraft(draft, synced, next))
+    visibleDraft = rebaseCellFormDraft(draft, synced, next)
+    setDraft(visibleDraft)
+    if (automaticPrompt) setFollowedPrompt(visibleDraft.prompt)
+  }
+  if (
+    automaticPrompt
+    && visibleDraft.prompt === followedPrompt
+    && openedDraft.prompt !== followedPrompt
+  ) {
+    visibleDraft = { ...visibleDraft, prompt: openedDraft.prompt }
+    setFollowedPrompt(openedDraft.prompt)
+    setDraft(visibleDraft)
   }
   const [saving, setSaving] = useState(false)
   const ensureVoiceCatalog = () => {
