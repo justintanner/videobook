@@ -13,7 +13,7 @@ import { testBudget } from '../../server/src/test-budget.js'
 
 type StartedProcess = { child: ChildProcess; output: string[] }
 type Edge = { id: string; source: string; target: string; targetInput: string }
-type Cell = { id: string; model?: string; prompt?: string; inputs?: Record<string, unknown> }
+type Cell = { id: string; provider?: string; model?: string; operation?: string; tool?: string; prompt?: string; inputs?: Record<string, unknown> }
 type Notebook = { cells: Cell[]; edges: Edge[] }
 
 const GROK = 'kie:grok-imagine-video-1-5-preview'
@@ -134,8 +134,10 @@ describe('generation slot editor in the browser', () => {
     await waitForHttp(`http://127.0.0.1:${vitePort}`, vite)
     browser = await chromium.launch({ headless: true })
     page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
+    page.setDefaultTimeout(testBudget(30_000))
+    page.setDefaultNavigationTimeout(testBudget(120_000))
     await page.goto(`http://127.0.0.1:${vitePort}`)
-  }, testBudget(180_000))
+  }, testBudget(300_000))
 
   afterAll(async () => {
     await page?.close()
@@ -331,6 +333,40 @@ describe('generation slot editor in the browser', () => {
       .toEqual([[0, 'image'], [1, 'slot:mask_url']])
     await expect.poll(async () => await page.locator('.inspector .generation-review-json pre').textContent(), { timeout: testBudget(15_000) })
       .toContain('"mask_url"')
+  }, testBudget(90_000))
+
+  it('drops an image into Mask for an unsaved edit model', async () => {
+    const savedModel = 'kie:nano-banana-2-1'
+    const draftModel = 'kie:qwen2-1/image-to-image'
+    try {
+      await call('update_notebook_cell', {
+        cell_id: editId,
+        cell: { provider: 'kie', model: savedModel, operation: 'text_to_image', tool: 'generate_image', prompt: 'Swap the sky' },
+      })
+      await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [{ source_cell_id: images[0], target_input: 'image', params: {} }] })
+      await page.reload()
+      await page.locator(`.notebook-flow .react-flow__node[data-id="${editId}"] .cell-node`).click({ timeout: testBudget(60_000) })
+      const model = page.locator('.inspector').getByLabel('Generation model')
+      await model.selectOption(`generation.${draftModel}`)
+      const mask = slot('Mask')
+      await mask.waitFor({ state: 'visible', timeout: testBudget(30_000) })
+      await page.locator('.inspector .generation-slot-tile').filter({ hasText: '@a2' }).locator('.generation-slot-grip').dragTo(mask.locator('.generation-slot-empty'))
+      await expect.poll(async () => (await call<Notebook>('get_notebook')).edges
+        .filter((edge) => edge.target === editId).map((edge) => [images.indexOf(edge.source), edge.targetInput]).sort(), { timeout: testBudget(15_000) })
+        .toEqual([[0, 'image'], [1, 'slot:mask_url']])
+      const saved = (await call<Notebook>('get_notebook')).cells.find((cell) => cell.id === editId)
+      expect(saved?.model).toBe(savedModel)
+      expect(saved?.provider).toBe('kie')
+      expect(saved?.operation).toBe('text_to_image')
+      expect(saved?.tool).toBe('generate_image')
+      expect(await model.inputValue()).toBe(`generation.${draftModel}`)
+    } finally {
+      await call('update_notebook_cell', {
+        cell_id: editId,
+        cell: { provider: 'fal', model: 'fal:openai/gpt-image-2/edit', operation: 'edit_image', tool: 'generate_image', prompt: 'Swap the sky' },
+      })
+      await call('set_notebook_cell_inputs', { cell_id: editId, inputs: [] })
+    }
   }, testBudget(90_000))
 
   it('commits a setting on Enter without starting a run', async () => {

@@ -489,7 +489,7 @@ type NotebookCellInspectorProps = {
   mediaInsightWork?: Readonly<Record<string, MediaInsightWork>>
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
-  onSetInputs?: (connections: readonly SlotConnection[]) => Promise<string | null>
+  onSetInputs?: (connections: readonly SlotConnection[], model?: string) => Promise<string | null>
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
@@ -3236,7 +3236,11 @@ function ExecutableCellInspector({
       })),
     ]
     const remapped = remapSlotPrompt(draft.prompt, cell.id, cells, currentSlotConnections, change)
-    const savedPrompt = await onSetInputs(change.connections)
+    const planningModel = draft.model.trim()
+    const savedPrompt = await onSetInputs(
+      change.connections,
+      planningModel !== '' && planningModel !== (cell.model ?? '').trim() ? planningModel : undefined,
+    )
     const prompt = savedPrompt !== null && draft.prompt === (cell.prompt ?? '') ? savedPrompt : remapped
     const legacySettings = slotLegacySettingNames(slotContext.mode)
     const withoutLegacy = (settings: CellFormDraft['generationSettings']) =>

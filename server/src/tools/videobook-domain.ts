@@ -79,6 +79,8 @@ import {
 } from "../notebook-action-catalog.js";
 import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
+import { tryResolveModel } from "../media/descriptor.js";
+import type { ResolvedModel } from "../media/types.js";
 import { previewGeneration } from "../media/preview.js";
 import { sourcedGenerationInput } from "../media/generation-source.js";
 import {
@@ -894,7 +896,23 @@ interface CellInputsUpdate {
   layout: CellInputLayout;
 }
 
-function nextCellInputs(engine: Engine, notebook: NotebookDocument, cellId: string, items: readonly CellInputItem[]): CellInputsUpdate {
+function planningModel(cell: NotebookCell, modelId: string | undefined): ResolvedModel | null {
+  if (modelId === undefined) return notebookCellModel(cell);
+  const resolved = tryResolveModel(modelId);
+  const media = notebookCellMediaType(cell);
+  if (!resolved || resolved.media !== media) {
+    throw new Error(`Model ${modelId} is not available for ${cell.type} cells; pick a model from list_generation_models`);
+  }
+  return resolved;
+}
+
+function nextCellInputs(
+  engine: Engine,
+  notebook: NotebookDocument,
+  cellId: string,
+  items: readonly CellInputItem[],
+  modelId?: string,
+): CellInputsUpdate {
   const cell = notebook.cells.find((candidate) => candidate.id === cellId);
   if (!cell) throw new Error(`Cell not found: ${cellId}`);
   if (cell.type !== "generate_image" && cell.type !== "generate_video" && cell.type !== "generate_audio") {
@@ -902,7 +920,7 @@ function nextCellInputs(engine: Engine, notebook: NotebookDocument, cellId: stri
   }
   const itemError = cellInputItemsError(notebook, cellId, items);
   if (itemError) throw new Error(itemError);
-  const model = notebookCellModel(cell);
+  const model = planningModel(cell, modelId);
   const fieldError = cellFieldInputsError(notebook, model, items);
   if (fieldError) throw new Error(fieldError);
   const oldEdges = cellMediaEdges(notebook, cellId);
@@ -2074,7 +2092,7 @@ export function videobookDomainDefs(
     {
       name: "set_notebook_cell_inputs",
       description:
-        "Replace every media input of a generation cell in one step. Each input names its source cell, the port it fills (image, image_2, first_frame, last_frame, loop, keyframe, keyframe_2, video, audio, replace_audio, ...) and optional per-item params such as {timestamp_s: 4.7}. Unchanged connections keep their ids, moved inputs keep their params and prompt tokens, and non-media edges such as prompt inputs are left alone",
+        "Replace every media input of a generation cell in one step. Each input names its source cell, the port it fills (image, image_2, first_frame, last_frame, loop, keyframe, keyframe_2, video, audio, replace_audio, ...) and optional per-item params such as {timestamp_s: 4.7}. Unchanged connections keep their ids, moved inputs keep their params and prompt tokens, and non-media edges such as prompt inputs are left alone. An optional model validates and plans those ports for a draft picked in the inspector and is not saved.",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -2085,6 +2103,7 @@ export function videobookDomainDefs(
           target_input: z.string().min(1),
           params: z.record(z.string(), z.number()).optional(),
         })).max(64),
+        model: z.string().min(1).optional().describe("Draft model used only to validate and plan field slots. The saved cell model is left unchanged."),
         expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
@@ -2092,6 +2111,7 @@ export function videobookDomainDefs(
           return failure(`Stale notebook revision: expected ${args.expected_revision}`);
         }
         const cellId = String(args.cell_id);
+        const modelId = typeof args.model === "string" ? args.model : undefined;
         const items = (args.inputs as Array<{ source_cell_id: string; target_input: string; params?: Record<string, number> }>)
           .map((item): CellInputItem => ({
             sourceCellId: item.source_cell_id,
@@ -2108,7 +2128,7 @@ export function videobookDomainDefs(
               if (typeof args.expected_revision === "string" && args.expected_revision !== engine.head) {
                 throw new Error(`Stale notebook revision: expected ${args.expected_revision}`);
               }
-              update = nextCellInputs(engine, notebook, cellId, items);
+              update = nextCellInputs(engine, notebook, cellId, items, modelId);
               return update.document;
             },
             { cellId, inputCount: items.length },

@@ -8,6 +8,7 @@ import { scopedBookEngine, withBookContext } from '../../server/src/book-context
 import { MODEL_ENTRIES } from '../../server/src/media/catalog.js'
 import { resolveEntry, resolveModel } from '../../server/src/media/descriptor.js'
 import { previewGeneration } from '../../server/src/media/preview.js'
+import { LIGHTNING_SCENE_MODEL, LIGHTNING_VIDEO_MODEL } from '../../server/src/lightning-defaults.js'
 import { controlsForModel } from '../../server/src/notebook-generation-controls.js'
 import { notebookGenerationInputContract } from '../../server/src/notebook-generation-contract.js'
 import { mediaGenerationArgs } from '../../server/src/jobs/run-notebook.js'
@@ -114,5 +115,65 @@ describe('field slots in notebooks', () => {
     )
     expect(layout.slots.find((column) => column.spec.target === 'slot:mask_url')?.items.map((item) => item.sourceCellId)).toEqual([mask.id])
     expect(layout.unplaced).toEqual([])
+  })
+
+  it('accepts a mask for a draft edit model without saving that model', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-field-slots-draft-'))
+    books = new BookManager({ libraryDir: join(rootDir, 'books'), objectPrefix: 'test-objects' })
+    await books.ready()
+    const byName = new Map(videobookDomainDefs(scopedBookEngine, books).map((def) => [def.name, def] as [string, ToolDef]))
+    const bookId = (JSON.parse((await byName.get('create_book')!.handler({ name: 'field-slots-draft' })).content[0]!.text) as { bookId: string }).bookId
+    const managed = books.get(bookId)
+    if (!managed.ok) throw new Error(managed.error.message)
+    const engine: Engine = managed.value.engine
+    const notebookId = engine.notebooks.list()[0]!.id
+    const call = async (name: string, args: Record<string, unknown>) => withBookContext({ bookId, engine },
+      () => byName.get(name)!.handler({ book_id: bookId, notebook_id: notebookId, ...args }))
+    const json = async <T,>(name: string, args: Record<string, unknown>) => {
+      const result = await call(name, args)
+      expect(result.isError, result.content[0]?.text).toBeUndefined()
+      return JSON.parse(result.content[0]!.text) as T
+    }
+    const media = async (kind: 'image' | 'audio', column: number) => {
+      const artifact = await engine.artifacts.create(kind, `${kind} ${column}`)
+      if (!artifact.ok) throw new Error(artifact.error.message)
+      const cell = await json<NotebookCell>('create_notebook_cell', { cell: { type: kind, slot: { row: 0, column }, output_artifact_id: artifact.value.artifactId } })
+      return cell.id
+    }
+    const photo = await media('image', 0)
+    const mask = await media('image', 1)
+    const voice = await media('audio', 2)
+    const edit = await json<NotebookCell>('create_notebook_cell', {
+      cell: { type: 'generate_image', slot: { row: 1, column: 0 }, provider: 'kie', model: LIGHTNING_SCENE_MODEL, operation: 'text_to_image', tool: 'generate_image', prompt: 'Swap the sky' },
+    })
+    const maskInput = { source_cell_id: mask, target_input: 'slot:mask_url' }
+    const savedModel = await call('set_notebook_cell_inputs', { cell_id: edit.id, inputs: [maskInput] })
+    expect(savedModel.content[0]!.text).toContain('has no mask_url input')
+    const sameModel = await call('set_notebook_cell_inputs', { cell_id: edit.id, model: LIGHTNING_SCENE_MODEL, inputs: [maskInput] })
+    expect(sameModel.content[0]!.text).toContain('has no mask_url input')
+    const unknown = await call('set_notebook_cell_inputs', { cell_id: edit.id, model: 'not-a-real-model', inputs: [maskInput] })
+    expect(unknown.content[0]!.text).toBe('Model not-a-real-model is not available for generate_image cells; pick a model from list_generation_models')
+    const video = await call('set_notebook_cell_inputs', { cell_id: edit.id, model: LIGHTNING_VIDEO_MODEL, inputs: [maskInput] })
+    expect(video.content[0]!.text).toBe(`Model ${LIGHTNING_VIDEO_MODEL} is not available for generate_image cells; pick a model from list_generation_models`)
+    const audio = await call('set_notebook_cell_inputs', {
+      cell_id: edit.id,
+      model: 'fal:openai/gpt-image-2/edit',
+      inputs: [{ source_cell_id: voice, target_input: 'slot:mask_url' }],
+    })
+    expect(audio.content[0]!.text).toBe('Mask takes images')
+    await json('set_notebook_cell_inputs', {
+      cell_id: edit.id,
+      model: 'fal:openai/gpt-image-2/edit',
+      inputs: [{ source_cell_id: photo, target_input: 'image' }, maskInput],
+    })
+
+    const document = engine.notebooks.read(notebookId)
+    if (!document.ok) throw new Error(document.error.message)
+    const cell = document.value.cells.find((candidate) => candidate.id === edit.id)!
+    expect(cell).toMatchObject({ provider: 'kie', model: LIGHTNING_SCENE_MODEL, operation: 'text_to_image', tool: 'generate_image' })
+    expect(document.value.edges.filter((edge) => edge.target === edit.id).map((edge) => `${edge.source}:${edge.targetInput}`).sort()).toEqual([
+      `${mask}:slot:mask_url`,
+      `${photo}:image`,
+    ].sort())
   })
 })

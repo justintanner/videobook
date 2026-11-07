@@ -542,11 +542,14 @@ export async function writeNotebookChatGenerationInputs(input: {
   document: NotebookDocument
   draft: NotebookChatGenerationDraft
 }): Promise<void> {
+  const planningModel = input.draft.cell.model?.trim() ?? ''
+  const savedModel = input.document.cells.find((cell) => cell.id === input.draft.cell.id)?.model?.trim() ?? ''
   await input.callTool('set_notebook_cell_inputs', {
     book_id: input.bookId,
     notebook_id: input.document.id,
     cell_id: input.draft.cell.id,
     inputs: slotInputsArgument(notebookChatGenerationMediaInputs(input.draft, input.document)),
+    ...(planningModel !== '' && planningModel !== savedModel ? { model: planningModel } : {}),
   })
   const connected = new Set(input.document.edges
     .filter((edge) => edge.target === input.draft.cell.id)

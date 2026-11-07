@@ -4559,6 +4559,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const setSelectedCellInputs = async (
     connections: readonly SlotConnection[],
+    model?: string,
   ): Promise<string | null> => {
     if (!bookId || !notebook || !selectedNotebookCell) return null
     setBusy(true)
@@ -4568,6 +4569,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell_id: selectedNotebookCell.id,
         inputs: slotInputsArgument(connections),
+        ...(model ? { model } : {}),
       }))
       await refreshNotebook(bookId, notebook.id)
       if (result?.changed !== false) setNotice('Inputs updated')
