@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import type { UsageEntry } from 'videobook-engine'
 import type { BookUsageSnapshot } from '@/videobook/book-usage'
 import { formatUsageCost, formatUsageTokens, usageActivityLabels, usageCostLabel } from '@/videobook/book-usage'
+import { usageTotalFigures } from '@/videobook/usage-cost'
 import './BookUsageCounter.css'
 
 type Props = {
@@ -42,6 +43,7 @@ export function BookUsageCounter({ bookName, enabled, snapshot, stale, onRetry }
   const cost = totals ? usageCostLabel(totals) : '— cost'
   const partial = !!totals && (totals.unpriced > 0 || totals.missingTokens > 0 || snapshot?.incomplete)
   const activities = [...new Set(snapshot?.groups.map((group) => group.activity) ?? [])]
+  const quoted = snapshot?.rollup && snapshot.rollup.count > 0 ? usageTotalFigures(snapshot.rollup) : null
   return (
     <div className="book-usage" data-composer-focus="preserve">
       <button ref={buttonRef} type="button" className="book-usage-trigger" popoverTarget={id} disabled={!enabled}
@@ -60,6 +62,13 @@ export function BookUsageCounter({ bookName, enabled, snapshot, stale, onRetry }
             <div><small>Reported tokens</small><strong>{formatUsageTokens(snapshot.totals.inputTokens + snapshot.totals.outputTokens, true)}</strong></div>
             <div><small>Known cost · USD</small><strong>{usageCostLabel(snapshot.totals)}</strong></div>
           </div>
+          {quoted && <section className="book-usage-quote" aria-label="Estimate against actual">
+            <div className="book-usage-totals">
+              <div><small>Quoted estimate · USD</small><strong>{quoted.estimate ?? '—'}</strong></div>
+              <div><small>Actual · USD</small><strong>{quoted.actual ?? '—'}</strong></div>
+            </div>
+            {quoted.partial && <p className="book-usage-notice">{quoted.partial}. Calls still running or without an actual are left out of both.</p>}
+          </section>}
           <dl className="book-usage-facts">
             <div><dt>Input / output</dt><dd>{formatUsageTokens(snapshot.totals.inputTokens, true)} / {formatUsageTokens(snapshot.totals.outputTokens, true)}</dd></div>
             <div><dt>Cached input <small>(included)</small></dt><dd>{formatUsageTokens(snapshot.totals.cachedTokens, true)}</dd></div>

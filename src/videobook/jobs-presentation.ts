@@ -1,5 +1,7 @@
-import type { NotebookCell } from 'videobook-engine'
+import type { NotebookCell, UsageRollupGroup } from 'videobook-engine'
 import type { CommandPlan } from '@/videobook/command-plan'
+import { formatUsageCost } from '@/videobook/book-usage'
+import { usageTotalFigures } from '@/videobook/usage-cost'
 import { notebookGridTag } from '@/videobook/notebook-grid'
 import { isPublishedPostCell } from '@/videobook/notebook-published-post'
 import type { ProviderTaskStatus } from '../../server/src/provider-status-link'
@@ -18,6 +20,7 @@ export interface JobsScreenJob {
   enqueuedAt: number
   startedAt: number | null
   finishedAt: number | null
+  usage?: UsageRollupGroup | null
 }
 
 export interface JobsScreenPlan {
@@ -259,6 +262,18 @@ function jobSummary(job: JobsScreenJob, now: number): Pick<JobsRow, 'summary' | 
   }
 }
 
+function jobCostNote(job: JobsScreenJob): string | null {
+  if (!job.usage || job.usage.count === 0) return null
+  const figures = usageTotalFigures(job.usage)
+  const parts = [
+    figures.actual ? `${figures.actual} actual` : null,
+    figures.estimate ? `est. ${figures.estimate}` : null,
+    job.usage.pendingCount > 0 ? `est. ${formatUsageCost(job.usage.pendingEstimateUsd)} in progress` : null,
+    figures.partial?.toLowerCase() ?? null,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 function jobErrorCode(job: JobsScreenJob): string | null {
   const code = job.error?.code ?? null
   return code && code !== 'Error' ? code : null
@@ -275,6 +290,8 @@ function jobRow(job: JobsScreenJob, cells: NotebookCell[], now: number): JobsRow
         `operation ${job.operationId} · enqueued ${new Date(job.enqueuedAt).toLocaleString()}`,
       ].join('\n')
     : null
+  const summary = jobSummary(job, now)
+  const cost = jobCostNote(job)
   return {
     key: `job:${job.id}`,
     providerTask: job.providerTask,
@@ -285,7 +302,8 @@ function jobRow(job: JobsScreenJob, cells: NotebookCell[], now: number): JobsRow
     title: humanizeJobType(job.type),
     detail: jobDetail(job),
     target: jobTarget(job, cells),
-    ...jobSummary(job, now),
+    ...summary,
+    note: [summary.note, cost].filter(Boolean).join(' · ') || null,
     errorCode: jobErrorCode(job),
     errorDetail,
     attempt: `${job.attempts}/${job.maxAttempts}`,

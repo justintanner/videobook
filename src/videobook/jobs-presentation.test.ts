@@ -123,6 +123,31 @@ describe('buildJobsRows', () => {
     })
   })
 
+  it('shows a job\'s actual beside its estimate, partial while a call is still running', () => {
+    const usage = {
+      id: 'op-1', count: 3, inputTokens: 1200, outputTokens: 300, cachedTokens: 0, missingTokens: 0,
+      reportedUsd: 0.4, estimatedUsd: 0.41, unpriced: 0, pendingCount: 1, pendingUsd: 1.85,
+      actualUsd: 0.81, estimateUsd: 2.72, settledEstimateUsd: 0.87, pendingEstimateUsd: 1.85, unsettled: 1, unestimated: 0,
+    }
+    const [running] = buildJobsRows({
+      jobs: [job({ state: 'running', artifactId: 'artifact-a3', startedAt: NOW - 4_000, finishedAt: null, usage })],
+      plans: [],
+      cells,
+      now: NOW,
+    })
+    expect(running?.note).toBe('4.0s elapsed · ~$0.81 actual · est. $0.87 · est. $1.85 in progress · partial: 2 of 3 calls settled')
+    const settled = { ...usage, reportedUsd: 2.25, pendingCount: 0, pendingUsd: 0, actualUsd: 2.66, settledEstimateUsd: 2.72, pendingEstimateUsd: 0, unsettled: 0 }
+    const [done] = buildJobsRows({
+      jobs: [job({ state: 'done', artifactId: 'artifact-a3', startedAt: NOW - 4_000, finishedAt: NOW, usage: settled })],
+      plans: [],
+      cells,
+      now: NOW,
+    })
+    expect(done?.note).toBe('~$2.66 actual · est. $2.72')
+    const [free] = buildJobsRows({ jobs: [job({ state: 'done', usage: null })], plans: [], cells, now: NOW })
+    expect(free?.note).toBeNull()
+  })
+
   it('marks book-level jobs and surfaces the error code for failures', () => {
     const [row] = buildJobsRows({
       jobs: [job({

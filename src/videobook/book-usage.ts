@@ -1,6 +1,14 @@
-import type { UsageEntry, UsageSummary, UsageTotals } from 'videobook-engine'
+import type { UsageEntry, UsageRollupTotals, UsageSummary, UsageTotals } from 'videobook-engine'
 
-export type BookUsageSnapshot = UsageSummary & { recent: UsageEntry[]; incomplete: boolean }
+export type UsageScope = { id: string; totals: UsageRollupTotals; calls: UsageEntry[] }
+
+export type BookUsageSnapshot = UsageSummary & {
+  recent: UsageEntry[]
+  incomplete: boolean
+  rollup?: UsageRollupTotals
+  cell?: UsageScope
+  run?: UsageScope
+}
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
 const exact = new Intl.NumberFormat('en-US')

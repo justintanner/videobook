@@ -77,6 +77,8 @@ describe('book usage counter in the real browser', () => {
     await expect.poll(() => panel.isVisible()).toBe(true)
     expect(await panel.innerText()).toContain('1,500 / 500')
     expect(await panel.innerText()).toContain('Tracked since')
+    const quote = panel.getByRole('region', { name: 'Estimate against actual' })
+    expect(await quote.innerText()).toContain('~$1.25')
     await page.keyboard.press('Escape')
     await expect.poll(() => trigger.evaluate((node) => node === document.activeElement)).toBe(true)
     engine.usage.record({ id: 'video', provider: 'fal', model: 'video-model', activity: 'video', status: 'completed', basis: 'reported', costUsd: 12 })
@@ -96,6 +98,7 @@ describe('book usage counter in the real browser', () => {
       expect(popup!.x + popup!.width).toBeLessThanOrEqual(width!)
       expect(popup!.y + popup!.height).toBeLessThanOrEqual(height!)
       expect(await panel.innerText()).toContain('1 request has an unavailable price')
+      expect(await quote.innerText()).toContain('Partial: 2 of 3 calls settled, 1 call unpriced')
       if (width === 1440 || width === 390) {
         await mkdir('test-results/usage', { recursive: true })
         await page.screenshot({ path: `test-results/usage/counter-${width}.png` })

@@ -1,0 +1,85 @@
+.usage-cost {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.usage-cost-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.usage-cost-label,
+.usage-cost-estimate,
+.usage-cost-waiting,
+.usage-cost-pending,
+.usage-cost-call small {
+  color: var(--muted);
+}
+
+.usage-cost-partial {
+  margin: 0;
+  color: #dbc18e;
+}
+
+.usage-cost-pending {
+  margin: 0;
+}
+
+.usage-cost-calls {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usage-cost-call {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.usage-cost-call-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-cost-call-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.usage-cost-call-note {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+
+.usage-cost-basis {
+  color: var(--muted);
+}
+
+.usage-cost-call-stated .usage-cost-basis {
+  color: var(--color-primary);
+}
+
+.usage-cost-call-unavailable .usage-cost-basis,
+.usage-cost-call-usage-only .usage-cost-basis {
+  color: #dbc18e;
+}
+
+.usage-cost-scopes {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 36rem;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

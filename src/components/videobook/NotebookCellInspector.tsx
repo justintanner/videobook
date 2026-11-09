@@ -141,6 +141,7 @@ import {
 } from '@/videobook/cell-form-draft'
 import { GenerationBody, type GenerationReviewSource } from './confirm/bodies/GenerationBody'
 import { ProviderTaskLink } from './ProviderTaskLink'
+import { CellUsageCost } from './CellUsageCost'
 import type { ProviderTaskStatus } from '../../../server/src/provider-status-link'
 import { useConfirmSheetKeys } from './confirm/useConfirmSheetKeys'
 import { ComposerDockContext } from './composer-dock-context'
@@ -1764,6 +1765,8 @@ function GeneratingMediaLayout({
   onInspectGenerationRequest,
   onDownloadHar,
   onOpenSettings,
+  bookId,
+  call,
 }: {
   kind: MediaDockKind
   address: string
@@ -1783,6 +1786,8 @@ function GeneratingMediaLayout({
   onInspectGenerationRequest?: InspectGenerationRequest
   onDownloadHar?: DownloadGenerationHar
   onOpenSettings?: () => void
+  bookId: string
+  call?: NotebookCellInspectorProps['assetTools']
 }) {
   const failed = state.kind === 'failed'
   const running = state.kind === 'failed' ? null : state
@@ -1845,7 +1850,12 @@ function GeneratingMediaLayout({
             onDelete={onDelete}
           />
         )}
-        footer={<span className="sr-only">{`@${address} ${state.kind}`}</span>}
+        footer={(
+          <>
+            <CellUsageCost bookId={bookId} call={call} cellId={producerCellId} runId={running?.runId ?? null} />
+            <span className="sr-only">{`@${address} ${state.kind}`}</span>
+          </>
+        )}
       />
     </div>
   )
@@ -1981,6 +1991,8 @@ function MediaCellInspector({
           onInspectGenerationRequest={onInspectGenerationRequest}
           onDownloadHar={onDownloadGenerationHar}
           onOpenSettings={onOpenSettings}
+          bookId={bookId}
+          call={assetTools}
         />
       </div>
     )
@@ -2167,6 +2179,9 @@ function MediaCellInspector({
                   asset={previewAsset}
                   inputs={cell.inputs}
                 />
+              )}
+              {producer && (
+                <CellUsageCost bookId={bookId} call={assetTools} cellId={producer.id} />
               )}
             </div>
             <div className="inspector-media-row-track inspector-media-row-details">
@@ -3667,6 +3682,7 @@ function ExecutableCellInspector({
           </div>
         </section>
       )}
+      <CellUsageCost bookId={bookId} call={assetTools} cellId={cell.id} />
       {!generationCell && (
         <CellCleanupActions
           busy={busy}

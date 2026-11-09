@@ -2483,7 +2483,7 @@ export function videobookDomainDefs(
     },
     {
       name: "list_jobs",
-      description: "List persistent jobs for a book. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.",
+      description: "List persistent jobs for a book, each with its usage cost totals (quoted estimate against actual) once it has made a provider call. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -2493,9 +2493,14 @@ export function videobookDomainDefs(
       },
       handler: async (args) => {
         const jobs = selectJobs(engine, args);
-        return json(await Promise.all(jobs.map(async ({ job, jobKey }) => ({
-          ...job, ...(jobKey ? { jobKey } : {}), providerTask: await jobProviderTaskStatus(engine, job),
-        }))));
+        const usage = new Map(engine.usage.rollup().jobs.map((group) => [group.id, group]));
+        return json(await Promise.all(jobs.map(async ({ job, jobKey }) => {
+          const cost = usage.get(job.operationId);
+          return {
+            ...job, ...(jobKey ? { jobKey } : {}), providerTask: await jobProviderTaskStatus(engine, job),
+            ...(cost ? { usage: cost } : {}),
+          };
+        })));
       },
     },
     cancelJobDef(engine),

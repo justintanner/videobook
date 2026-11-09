@@ -6,15 +6,19 @@ type UsageOptions = {
   bookId: string
   ready: boolean
   call: (tool: string, args: Record<string, unknown>, options?: { background?: boolean }) => Promise<unknown>
+  cellId?: string | null
+  runId?: string | null
 }
 
-export function useBookUsage({ bookId, ready, call }: UsageOptions) {
+export function useBookUsage({ bookId, ready, call, cellId = null, runId = null }: UsageOptions) {
   const [snapshot, setSnapshot] = useState<{ bookId: string; data: BookUsageSnapshot } | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const read = useEffectEvent(async (current: () => boolean) => {
     try {
-      const data = parseBookUsage(await call('get_book_usage', { book_id: bookId }, { background: true }))
+      const scope = { ...(cellId ? { cell_id: cellId } : {}), ...(runId ? { run_id: runId } : {}) }
+      const args = Object.keys(scope).length > 0 ? { book_id: bookId, scope } : { book_id: bookId }
+      const data = parseBookUsage(await call('get_book_usage', args, { background: true }))
       if (!current()) return
       setSnapshot((previous) => previous?.bookId === bookId && JSON.stringify(previous.data) === JSON.stringify(data) ? previous : { bookId, data })
       setFailure(null)
@@ -48,7 +52,7 @@ export function useBookUsage({ bookId, ready, call }: UsageOptions) {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
-  }, [bookId, ready, refreshKey])
+  }, [bookId, ready, refreshKey, cellId, runId])
 
   return {
     snapshot: snapshot?.bookId === bookId ? snapshot.data : null,

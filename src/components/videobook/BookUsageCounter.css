@@ -89,3 +89,5 @@
   .book-usage-trigger small { font-size: 10px; }
   .book-usage-totals strong { font-size: 21px; }
 }
+.book-usage-quote { margin-bottom: 14px; }
+.book-usage-quote .book-usage-totals { margin-bottom: 8px; }

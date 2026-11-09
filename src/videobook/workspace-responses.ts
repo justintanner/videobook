@@ -1,4 +1,5 @@
 import type { PostView } from '../../server/src/posts/post-contract'
+import type { UsageRollupGroup } from 'videobook-engine'
 import type { NotebookAudioInfo, NotebookAnalysisInfo } from '@/videobook/notebook-cell-presentation'
 import {
   type MediaTranscriptSources,
@@ -113,6 +114,7 @@ export type JobRecord = {
   enqueuedAt: number
   startedAt: number | null
   finishedAt: number | null
+  usage?: UsageRollupGroup | null
 }
 
 export type GenerationPlanRecord = {
@@ -768,8 +770,17 @@ export function asJobs(value: unknown): JobRecord[] {
       enqueuedAt: asNumber(item.enqueuedAt ?? item.enqueued_at) ?? 0,
       startedAt: asNumber(item.startedAt ?? item.started_at),
       finishedAt: asNumber(item.finishedAt ?? item.finished_at),
+      usage: asUsageGroup(item.usage),
     }]
   })
+}
+
+const USAGE_GROUP_NUMBERS = ['count', 'actualUsd', 'settledEstimateUsd', 'pendingEstimateUsd', 'pendingCount', 'unsettled', 'unpriced', 'estimatedUsd'] as const
+
+function asUsageGroup(value: unknown): UsageRollupGroup | null {
+  const group = recordValue(value)
+  if (!group || !USAGE_GROUP_NUMBERS.every((key) => typeof group[key] === 'number')) return null
+  return group as unknown as UsageRollupGroup
 }
 
 export function asGenerationPlans(value: unknown): GenerationPlanRecord[] {
