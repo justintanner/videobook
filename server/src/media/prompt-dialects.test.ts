@@ -44,6 +44,28 @@ describe("prompt dialects", () => {
     )).toBe("[@reference_image_1] sings along to [reference_audio_1]");
   });
 
+  it("binds Gemini Omni, Grok 1.5 and Kling o3 references with each host's documented markers", () => {
+    const refs = { image: [IMG_ID, IMG_ID_2], video: [VID_ID] };
+    const prompt = "dress @video1 like @image2 and @image1";
+    for (const model of ["fal:google/gemini-omni-flash/v1.1/reference-to-video", "wavespeed:google/gemini-omni-1.1-flash/reference-to-video"]) {
+      expect(forModel(model, prompt, refs), model).toBe("dress <VIDEO_REF_0> like <IMAGE_REF_1> and <IMAGE_REF_0>");
+    }
+    expect(forModel("fal:google/gemini-omni-flash/reference-to-video", "@image1 waves", { image: [IMG_ID] })).toBe("<IMAGE_REF_0> waves");
+    for (const model of ["fal:xai/grok-imagine-video/v1.5/reference-to-video", "wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video", "xai:grok-imagine-video-1.5"]) {
+      expect(forModel(model, "@image2 hands @image1 a flower", { image: [IMG_ID, IMG_ID_2] }), model).toBe("<IMAGE_1> hands <IMAGE_0> a flower");
+    }
+    expect(forModel("xai:grok-imagine-video-1.5", "@firstframe to @lastframe", { first_frame: [IMG_ID], last_frame: [IMG_ID_2] }))
+      .toBe("the first frame to the last frame");
+    expect(forModel("xai:grok-imagine-video-1.5", "@video1 at night", { video: [VID_ID] })).toBe("the source video at night");
+    expect(forModel("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", prompt, refs)).toBe("dress <<<video_1>>> like <<<image_2>>> and <<<image_1>>>");
+    for (const model of ["fal:fal-ai/kling-video/o3/pro/video-to-video/edit", "fal:fal-ai/kling-video/o3/pro/video-to-video/reference"]) {
+      expect(forModel(model, prompt, refs), model).toBe("dress @Video1 like @Image2 and @Image1");
+    }
+    for (const model of ["fal:fal-ai/kling-video/o3/pro/reference-to-video", "fal:fal-ai/kling-video/o3/4k/reference-to-video"]) {
+      expect(forModel(model, "@firstframe then @image1", { first_frame: [VID_ID], image: [IMG_ID] }), model).toBe("then @Image1");
+    }
+  });
+
   it("naturalizes MiniMax H3 references and drops its frame mentions", () => {
     expect(forModel(
       "kie:minimax-h3/reference-to-video",
@@ -75,7 +97,7 @@ describe("prompt dialects", () => {
   it("never lets a connected artifact id reach the provider prompt", () => {
     const refs = { first_frame: [IMG_ID], last_frame: [VID_ID], loop: [VID_ID_2], keyframe: [AUD_ID, IMG_ID_2] };
     const prompt = "open on @firstframe, hold @keyframe1 then @keyframe2, close on @lastframe and return to @loop";
-    for (const dialect of ["natural", "natural_numbered", "natural_kinds", "natural_source_video", "brackets", "vidu", "kling4", "happyhorse_edit", "plain"] as const) {
+    for (const dialect of ["natural", "natural_numbered", "natural_kinds", "natural_source_video", "brackets", "vidu", "kling4", "kling_omni", "gemini_omni", "grok", "happyhorse_edit", "plain"] as const) {
       expect(applyPromptDialect(dialect, prompt, refs), dialect)
         .toBe("open on the first frame, hold keyframe 1 then keyframe 2, close on the last frame and return to the loop frame");
     }

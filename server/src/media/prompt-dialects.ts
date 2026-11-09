@@ -1,9 +1,12 @@
 import {
   replaceHappyHorseAssetMentions,
   replaceNaturalAssetMentions,
+  rewriteGeminiOmniReferenceMentions,
+  rewriteGrokReferenceMentions,
   rewriteImageRefMentionsToBrackets,
   rewriteKling4FrameMentions,
   rewriteKling4ReferenceMentions,
+  rewriteKlingOmniReferenceMentions,
   rewriteSeedanceAssetMentions,
   rewriteViduReferenceMentions,
   stripRefMentions,
@@ -94,6 +97,12 @@ function rewrite(dialect: PromptDialect, prompt: string, refs: MediaRefs): strin
         keyframes: refsFor(refs, "image"),
         last: refsFor(refs, "last_frame"),
       });
+    case "kling_omni":
+      return rewriteKlingOmniReferenceMentions(prompt, refsFor(refs, "image"), refsFor(refs, "video"));
+    case "gemini_omni":
+      return rewriteGeminiOmniReferenceMentions(prompt, refsFor(refs, "image"), refsFor(refs, "video"));
+    case "grok":
+      return rewriteGrokReferenceMentions(prompt, refsFor(refs, "image"));
     case "happyhorse_edit":
       return replaceHappyHorseAssetMentions(prompt, refsFor(refs, "video")[0] ?? null, refsFor(refs, "image"));
   }

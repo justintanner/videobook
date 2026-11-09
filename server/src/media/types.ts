@@ -45,6 +45,9 @@ export type PromptDialect =
   | "vidu"
   | "kling4"
   | "kling4_keyframes"
+  | "kling_omni"
+  | "gemini_omni"
+  | "grok"
   | "happyhorse_edit";
 
 export type PromptGuide =

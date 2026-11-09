@@ -170,7 +170,10 @@ describe("WaveSpeed catalog", () => {
     expect(rewrite("wavespeed:bytedance/seedance-2.0/reference-to-video", "@image1 dances to @audio1 like @video1", { image: [IMAGE_REF], video: [VIDEO_REF], audio: [AUDIO_REF] }))
       .toBe("@Image1 dances to @Audio1 like @Video1");
     expect(rewrite("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", "give @video1 the coat from @image1", { video: [VIDEO_REF], image: [IMAGE_REF] }))
-      .toBe("give the source video the coat from reference image 1");
+      .toBe("give <<<video_1>>> the coat from <<<image_1>>>");
+    expect(rewrite("wavespeed:google/gemini-omni-1.1-flash/reference-to-video", "@image1 moves like @video1", { image: [IMAGE_REF], video: [VIDEO_REF] }))
+      .toBe("<IMAGE_REF_0> moves like <VIDEO_REF_0>");
+    expect(rewrite("wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video", "@image1 waves", { image: [IMAGE_REF] })).toBe("<IMAGE_0> waves");
     expect(rewrite("wavespeed:runwayml/aleph-2", "@firstframe @keyframe1 turn @video1 to winter", { first_frame: [IMAGE_REF], keyframe: ["55555555-5555-4555-8555-555555555555"], video: [VIDEO_REF] }))
       .toBe("turn the source video to winter");
   });

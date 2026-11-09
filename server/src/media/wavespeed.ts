@@ -238,6 +238,9 @@ function guideFor(apiId: string): PromptGuide | undefined {
 
 function dialectFor(apiId: string, refs: Partial<Record<RefRole, string | null>>): PromptDialect {
   if (apiId.startsWith("bytedance/")) return "seedance";
+  if (apiId.startsWith("kwaivgi/kling-video-o3")) return "kling_omni";
+  if (apiId === "google/gemini-omni-1.1-flash/reference-to-video") return "gemini_omni";
+  if (apiId === "x-ai/grok-imagine-video-v1.5/reference-to-video") return "grok";
   if (apiId.startsWith("alibaba/happyhorse-") && refs.video) return "happyhorse_edit";
   if (apiId.startsWith("alibaba/happyhorse-") && refs.image) return "brackets";
   return refs.image || refs.video || refs.audio ? "natural_strip_frames" : "strip_frames";

@@ -98,11 +98,44 @@ export function rewriteSeedanceAssetMentions(
   return replaceNotebookMentions(prompt, replacements);
 }
 
-function numberedMentions(refs: readonly string[], marker: string): Array<{ reference: string; replacement: string }> {
+function indexedMentions(
+  refs: readonly string[],
+  marker: (index: number) => string,
+): Array<{ reference: string; replacement: string }> {
   return refMentionEntries(refs).map(({ ref, index }) => ({
     reference: ref,
-    replacement: `@${marker}_${index + 1}`,
+    replacement: marker(index),
   }));
+}
+
+function numberedMentions(refs: readonly string[], marker: string): Array<{ reference: string; replacement: string }> {
+  return indexedMentions(refs, (index) => `@${marker}_${index + 1}`);
+}
+
+export function rewriteKlingOmniReferenceMentions(
+  prompt: string,
+  imageRefs: readonly string[],
+  videoRefs: readonly string[],
+): string {
+  return replaceNotebookMentions(prompt, [
+    ...indexedMentions(imageRefs, (index) => `<<<image_${index + 1}>>>`),
+    ...indexedMentions(videoRefs, (index) => `<<<video_${index + 1}>>>`),
+  ]);
+}
+
+export function rewriteGeminiOmniReferenceMentions(
+  prompt: string,
+  imageRefs: readonly string[],
+  videoRefs: readonly string[],
+): string {
+  return replaceNotebookMentions(prompt, [
+    ...indexedMentions(imageRefs, (index) => `<IMAGE_REF_${index}>`),
+    ...indexedMentions(videoRefs, (index) => `<VIDEO_REF_${index}>`),
+  ]);
+}
+
+export function rewriteGrokReferenceMentions(prompt: string, imageRefs: readonly string[]): string {
+  return replaceNotebookMentions(prompt, indexedMentions(imageRefs, (index) => `<IMAGE_${index}>`));
 }
 
 export function rewriteKling4ReferenceMentions(

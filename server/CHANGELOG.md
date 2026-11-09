@@ -6,6 +6,16 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Gemini Omni references, Grok Imagine Video 1.5 references and Kling o3
+  prompts name connected inputs with each provider's documented markers:
+  `<IMAGE_REF_0>` and `<VIDEO_REF_0>` for Gemini Omni on fal and WaveSpeed,
+  `<IMAGE_0>` for Grok 1.5 on fal, WaveSpeed and xAI, `<<<image_1>>>` and
+  `<<<video_1>>>` for the Kling o3 edit on WaveSpeed, and `@Image1` and
+  `@Video1` for Kling o3 on fal. Notebook prompts keep their `@image1` slot
+  mentions.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added

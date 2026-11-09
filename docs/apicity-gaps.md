@@ -1039,9 +1039,9 @@ references. Catalog ids are `wavespeed:<pricing key>`, the path after
   1.0 edit names the source video and reference images in words
   (`happyhorse_edit`), as on KIE and fal. Seedance 2.0 uses the `seedance`
   dialect. Gemini Omni (`<IMAGE_REF_0>`), Grok (`<IMAGE_0>`) and Kling o3
-  (`<<<image_1>>>`) document their own markers, but their fal siblings in the
-  catalog use plain-word references, so these entries do the same. Kling o3
-  uses the `kling30` prompt guide.
+  (`<<<image_1>>>`) document their own markers. These entries first used
+  plain words like their fal siblings; §52 switched both hosts to the
+  markers. Kling o3 uses the `kling30` prompt guide.
 - Edits bill the source clip's seconds and Seedance 2.0 references their
   reference videos' seconds. Both come from `costHints.inputDurationSeconds`,
   which estimates and jobs read from connected book videos; a remote URL leaves
@@ -1092,3 +1092,58 @@ the Topaz adapter's upload and the wire builder. MachGen answered an
 
 The MiniMax H3 2K re-render and sharpen still take only MachGen's own H3
 outputs (§44).
+
+## 52. (decision) Provider reference markers for Gemini Omni, Grok 1.5 and Kling o3 — DECIDED 2026-11-09
+
+Gemini Omni, Grok Imagine Video 1.5 and Kling o3 document inline markers that
+tie a prompt phrase to one connected reference. Videobook now writes them
+(vb-12c27). Every host of a family switched together, and each entry uses the
+syntax its own contract names:
+
+- Gemini Omni references use `gemini_omni`: `<IMAGE_REF_0>` and
+  `<VIDEO_REF_0>`, numbered from 0 per kind in array order. Entries:
+  `fal:google/gemini-omni-flash/reference-to-video`,
+  `fal:google/gemini-omni-flash/v1.1/reference-to-video` and
+  `wavespeed:google/gemini-omni-1.1-flash/reference-to-video`.
+- Grok Imagine Video 1.5 references use `grok`: `<IMAGE_0>`, numbered from 0.
+  Entries: `fal:xai/grok-imagine-video/v1.5/reference-to-video`,
+  `wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video` and the
+  References mode of `xai:grok-imagine-video-1.5`.
+- The WaveSpeed Kling o3 edit, `wavespeed:kwaivgi/kling-video-o3-pro/video-edit`,
+  uses `kling_omni`: `<<<image_1>>>` and `<<<video_1>>>`, numbered from 1.
+- fal's Kling o3 references and edits
+  (`fal:fal-ai/kling-video/o3/4k/reference-to-video`,
+  `fal:fal-ai/kling-video/o3/pro/reference-to-video` and
+  `fal:fal-ai/kling-video/o3/pro/video-to-video/{edit,reference}`) use
+  `seedance`: `@Image1` and `@Video1`, as fal documents and as fal's Kling v4
+  entries already write.
+
+Notes:
+
+- Why: each contract names its marker as the way to refer to a reference
+  ("Refer to images as <IMAGE_REF_0>", "Tag references as <IMAGE_0>",
+  "Refer to images as <<<image_1>>>", "Reference the video as @Video1"). A
+  phrase such as "reference image 1" leaves the binding to the model, and
+  beside 0-based markers it can read as the second image. Videobook already
+  writes markers wherever an endpoint documents them (Seedance, HappyHorse
+  1.1, Vidu, Kling 4.0, fal Kling v4). Notebook prompts keep their
+  provider-neutral slot mentions (`@image1`), so only the provider prompt
+  changes.
+- fal's v1.1 Gemini Omni contract says only that reference media precedes the
+  prompt in list order. Videobook sends the same tags there, because fal's v1
+  contract and WaveSpeed's 1.1 contract both document them for the model.
+- The new dialects rewrite only image and video references. Frames, keyframes
+  and audio keep their natural phrases, so the xAI entry's Frames and Edit
+  modes read as before. Under `seedance`, fal's Kling o3 references drop frame
+  mentions, as fal's Kling v4 references do; the frames still ride
+  `start_image_url` and `end_image_url`.
+- Not switched: Gemini Omni image-to-video and edit endpoints, Grok 1.5
+  image-to-video endpoints, and MachGen's Kling o3 and Grok 1.5 document no
+  markers. Grok's unversioned endpoints are outside the 1.5 contracts (fal's
+  hidden `xai/grok-imagine-video/reference-to-video` examples use `@Image1`).
+  Kling o3 elements (`@Element1`, `<<<element_1>>>`) stay out, because
+  Videobook sends no elements.
+- Evidence is offline: the Apicity 0.27.1 schemas and xAI README quoted
+  above, `server/src/media/prompt-dialects.test.ts`,
+  `server/src/media/wavespeed.test.ts` and the regenerated generation-input
+  goldens. No live generation was run.
