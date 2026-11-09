@@ -6,6 +6,30 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-09
+
+### Added
+
+- Usage costs set the quoted estimate beside the actual for each notebook
+  cell, run and job. The cell inspector shows a cell's cost and, while it
+  runs, the run's, call by call, with usage-only, free and unavailable calls
+  explained. A total is marked partial while a call is unsettled or unpriced.
+  Job rows and the book usage popover show the estimate against the actual.
+  `get_book_usage` returns these totals and takes `scope.cell_id` or
+  `scope.run_id` for one cell or run, and `list_jobs` includes each job's
+  usage totals.
+
+- WaveSpeed adds nine models: Seedance 2.0 References and Edit, Wan 2.7 Edit,
+  HappyHorse 1.1 References, HappyHorse 1.0 Edit, Gemini Omni 1.1 Flash
+  References, Grok Imagine Video 1.5 References, Kling o3 Pro Edit and Runway
+  Aleph 2 Edit. Runway Aleph 2 takes a first frame, a last frame and timed
+  keyframes. Estimates for the edits and Seedance 2.0 reference videos use the
+  connected videos' durations.
+
+- The MachGen Topaz upscale models can upscale any book video, not only
+  MachGen's own outputs. The job sends the source through MachGen's upload,
+  and sources of 32 MiB or more are refused before any MachGen call.
+
 ### Changed
 
 - Video edits, lip sync, upscale and motion control no longer default to a
@@ -13,6 +37,18 @@ and the package uses [Semantic Versioning](https://semver.org/).
   omitted aspect keeps the source framing. An explicit setting or a remembered
   notebook aspect still wins. Text, image and reference generation, and the
   explicit reframe models, still default to 9:16.
+
+### Fixed
+
+- fal's H3 Max edit and extend models no longer fail with a 422 when the
+  source video is over 50 MiB. A larger source is re-encoded to H.264 under
+  the cap, keeping its resolution, frame rate and audio, and a clip too long
+  to fit at usable quality stops before upload with a message to trim it.
+- A fal request that fal rejects when its result is read is recorded as
+  failed, so its estimate no longer counts as spend.
+- On Node 22, provider requests no longer fail at random with "Cannot
+  construct a Request with a Request object that has already been used" when
+  garbage collection runs during the usage price lookup.
 
 ## [0.4.3] - 2026-11-07
 
