@@ -20,11 +20,13 @@ export function CellUsageCost({
   call,
   cellId,
   runId = null,
+  collapsible = false,
 }: {
   bookId: string
   call?: CallTool
   cellId: string | null
   runId?: string | null
+  collapsible?: boolean
 }) {
   const usage = useBookUsage({
     bookId,
@@ -40,8 +42,8 @@ export function CellUsageCost({
   if (!run && !cell) return null
   return (
     <div className="usage-cost-scopes">
-      {run && <UsageCostSummary label="Run cost" totals={run.totals} calls={run.calls} />}
-      {cell && !runIsCell && <UsageCostSummary label="Cell cost" totals={cell.totals} calls={run ? [] : cell.calls} />}
+      {run && <UsageCostSummary label="Run cost" totals={run.totals} calls={run.calls} collapsible={collapsible} />}
+      {cell && !runIsCell && <UsageCostSummary label="Cell cost" totals={cell.totals} calls={run ? [] : cell.calls} collapsible={collapsible} />}
     </div>
   )
 }

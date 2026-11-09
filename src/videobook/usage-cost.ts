@@ -89,6 +89,10 @@ export function usageCallFigures(entry: UsageEntry): UsageCallFigures {
   }
 }
 
+export function usageCallCountLabel(count: number): string {
+  return plural(count, 'call')
+}
+
 function partialNote(totals: UsageRollupTotals): string | null {
   const settled = totals.count - totals.unsettled
   const parts = [

@@ -22,6 +22,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   charge. A video MachGen must upload is quoted only at submission, and a
   failed quote leaves the estimate unpriced as before.
 
+### Fixed
+
+- A generation cell's cost breakdown no longer covers the Inputs, Model and
+  Payload panels of its editor once the cell has three or more provider calls.
+  The editor keeps its minimum height, and the per-call list is folded behind
+  an "N calls" disclosure that scrolls inside the dock when opened. A cell
+  with no recorded calls no longer shows an empty separator.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added

@@ -3682,7 +3682,7 @@ function ExecutableCellInspector({
           </div>
         </section>
       )}
-      <CellUsageCost bookId={bookId} call={assetTools} cellId={cell.id} />
+      <CellUsageCost bookId={bookId} call={assetTools} cellId={cell.id} collapsible={generationCell} />
       {!generationCell && (
         <CellCleanupActions
           busy={busy}

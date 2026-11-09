@@ -116,4 +116,28 @@ describe('a notebook run total', () => {
   it('renders nothing before the run makes a call', () => {
     expect(render()).toBe('')
   })
+
+  it('folds the calls behind a closed disclosure and keeps every figure when collapsible', () => {
+    const markup = (collapsible: boolean): string => renderToStaticMarkup(
+      <UsageCostSummary
+        label="Cell cost"
+        totals={engine.usage.rollup({ cellId: CELL }).totals}
+        calls={engine.usage.recent(10).filter((entry) => entry.cellId === CELL).reverse()}
+        collapsible={collapsible}
+      />,
+    )
+    record({ id: 'a', provider: 'machgen', model: 'Seedance-2.5', activity: 'video', status: 'completed', basis: 'reported', actualBasis: 'stated', costUsd: 0.4, estimateUsd: 0.45, createdAt: 1 })
+    expect(markup(true)).toContain('<details class="usage-cost-details"><summary>1 call</summary><ol')
+
+    record({ id: 'b', provider: 'openai', model: 'gpt-5.6', activity: 'chat', status: 'completed', basis: 'estimated', actualBasis: 'derived', costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true, createdAt: 2 })
+    record({ id: 'c', provider: 'wavespeed', model: 'runwayml/aleph-2', activity: 'video', status: 'pending', basis: 'estimated', costUsd: 1.85, estimateUsd: 1.85, createdAt: 3 })
+    const folded = markup(true)
+    const listed = markup(false)
+    expect(folded).toContain('class="usage-cost usage-cost-collapsible"')
+    expect(folded).toContain('<details class="usage-cost-details"><summary>3 calls</summary><ol')
+    expect(listed).not.toContain('<details')
+    expect(listed).not.toContain('usage-cost-collapsible')
+    expect(text(folded)).toContain('Cell cost ~$0.81 est. $0.87 Partial: 2 of 3 calls settled 1 in progress · $1.85 estimated, excluded from total 3 calls Seedance-2.5 Billed $0.40 est. $0.45')
+    expect(text(folded).replace(' 3 calls Seedance', ' Seedance')).toBe(text(listed))
+  })
 })

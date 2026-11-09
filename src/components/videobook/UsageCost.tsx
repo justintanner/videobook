@@ -1,5 +1,5 @@
 import type { UsageEntry, UsageRollupTotals } from 'videobook-engine'
-import { usageCallFigures, usageTotalFigures } from '@/videobook/usage-cost'
+import { usageCallCountLabel, usageCallFigures, usageTotalFigures } from '@/videobook/usage-cost'
 import './UsageCost.css'
 
 export function UsageCallRow({ entry }: { entry: UsageEntry }) {
@@ -17,17 +17,41 @@ export function UsageCallRow({ entry }: { entry: UsageEntry }) {
   )
 }
 
+type CallListProps = {
+  label: string
+  calls: readonly UsageEntry[]
+}
+
+function UsageCallList({ label, calls }: CallListProps) {
+  return (
+    <ol className="usage-cost-calls" aria-label={`${label} by call`}>
+      {calls.map((entry) => <UsageCallRow key={entry.id} entry={entry} />)}
+    </ol>
+  )
+}
+
+function UsageCallDisclosure({ label, calls }: CallListProps) {
+  return (
+    <details className="usage-cost-details">
+      <summary>{usageCallCountLabel(calls.length)}</summary>
+      <UsageCallList label={label} calls={calls} />
+    </details>
+  )
+}
+
 type SummaryProps = {
   label: string
   totals: UsageRollupTotals | null | undefined
   calls?: readonly UsageEntry[]
+  collapsible?: boolean
 }
 
-export function UsageCostSummary({ label, totals, calls = [] }: SummaryProps) {
+export function UsageCostSummary({ label, totals, calls = [], collapsible = false }: SummaryProps) {
   if (!totals || totals.count === 0) return null
   const figures = usageTotalFigures(totals)
+  const CallList = collapsible ? UsageCallDisclosure : UsageCallList
   return (
-    <section className="usage-cost" aria-label={label}>
+    <section className={collapsible ? 'usage-cost usage-cost-collapsible' : 'usage-cost'} aria-label={label}>
       <div className="usage-cost-total">
         <span className="usage-cost-label">{label}</span>
         {figures.actual
@@ -37,11 +61,7 @@ export function UsageCostSummary({ label, totals, calls = [] }: SummaryProps) {
       </div>
       {figures.partial && <p className="usage-cost-partial" role="status">{figures.partial}</p>}
       {figures.pending && <p className="usage-cost-pending">{figures.pending}</p>}
-      {calls.length > 0 && (
-        <ol className="usage-cost-calls" aria-label={`${label} by call`}>
-          {calls.map((entry) => <UsageCallRow key={entry.id} entry={entry} />)}
-        </ol>
-      )}
+      {calls.length > 0 && <CallList label={label} calls={calls} />}
     </section>
   )
 }

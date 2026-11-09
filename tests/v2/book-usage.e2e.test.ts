@@ -12,8 +12,79 @@ import type { Engine } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager'
 import { createHttpHandler } from '../../server/src/server'
 import { scopedBookEngine } from '../../server/src/book-context'
+import { testBudget } from '../../server/src/test-budget'
 import { availablePort, startProcess, stopProcess, waitForHttp, toolCalls, requestBody } from './e2e-harness'
 import type { StartedProcess } from './e2e-harness'
+
+const FAL_AVERAGE_WARNING = "fal pricing estimate for 'minimax/h3-max/extend-video' is fal's historical average per call x 1; it ignores this request's payload"
+const COST_VIEWPORTS = [[1474, 810], [1280, 720], [1024, 600]] as const
+const PANEL_MIN_HEIGHT = 240
+
+interface CellCostLayout {
+  panelHeights: number[]
+  panelBottom: number
+  formBottom: number
+  costTop: number
+  costBottom: number
+  costHeight: number
+  bodyBottom: number
+  open: boolean
+  lastCallInside: boolean
+}
+
+function cellCostLayout(): CellCostLayout {
+  const box = (selector: string): DOMRect => document.querySelector(selector)!.getBoundingClientRect()
+  const panels = [...document.querySelectorAll('.generation-cell-inspector .confirm-generation > .confirm-section:not([hidden])')]
+    .map((panel) => panel.getBoundingClientRect())
+  const cost = box('.generation-cell-inspector > .usage-cost-scopes')
+  const lastCall = [...document.querySelectorAll('.generation-cell-inspector .usage-cost-call')].at(-1)?.getBoundingClientRect()
+  return {
+    panelHeights: panels.map((panel) => panel.height),
+    panelBottom: Math.max(...panels.map((panel) => panel.bottom)),
+    formBottom: box('.generation-cell-form').bottom,
+    costTop: cost.top,
+    costBottom: cost.bottom,
+    costHeight: cost.height,
+    bodyBottom: box('.generation-cell-inspector').bottom,
+    open: document.querySelector<HTMLDetailsElement>('.generation-cell-inspector .usage-cost-details')?.open === true,
+    lastCallInside: lastCall !== undefined && lastCall.top >= cost.top - 1 && lastCall.bottom <= cost.bottom + 1,
+  }
+}
+
+function recordCellCalls(engine: Engine, cellId: string, from: number, to: number): void {
+  for (let index = from; index < to; index += 1) {
+    const written = engine.usage.record({
+      id: `cell-call-${index}`, provider: 'fal', model: 'minimax/h3-max/extend-video', activity: 'video', status: 'completed',
+      basis: 'estimated', actualBasis: 'none', costUsd: 0.32, warnings: [FAL_AVERAGE_WARNING], cellId, createdAt: 100 + index,
+    })
+    if (!written.ok) throw new Error(written.error.message)
+  }
+}
+
+function expectPanelsClearOfCost(layout: CellCostLayout, label: string): void {
+  expect(layout.panelHeights, label).toHaveLength(3)
+  expect(Math.min(...layout.panelHeights), label).toBeGreaterThanOrEqual(PANEL_MIN_HEIGHT - 0.5)
+  expect(layout.panelBottom, label).toBeLessThanOrEqual(layout.formBottom + 0.5)
+  expect(layout.costTop, label).toBeGreaterThanOrEqual(layout.panelBottom - 0.5)
+}
+
+async function expectCostLayoutAt(page: Page, width: number, height: number, calls: number): Promise<void> {
+  const label = `${calls} usage rows at ${width}x${height}`
+  const summary = page.locator('.generation-cell-inspector .usage-cost-details > summary')
+  await page.setViewportSize({ width, height })
+  const folded = await page.evaluate(cellCostLayout)
+  expect(folded.open, label).toBe(false)
+  expectPanelsClearOfCost(folded, `${label}, folded`)
+  expect(folded.costHeight, label).toBeLessThanOrEqual(32)
+  expect(folded.costBottom, label).toBeLessThanOrEqual(folded.bodyBottom + 0.5)
+  await summary.click()
+  await page.locator('.generation-cell-inspector .usage-cost-call').last().scrollIntoViewIfNeeded()
+  const opened = await page.evaluate(cellCostLayout)
+  expect(opened.open, label).toBe(true)
+  expectPanelsClearOfCost(opened, `${label}, opened`)
+  expect(opened.lastCallInside, label).toBe(true)
+  await summary.press('Enter')
+}
 
 describe('book usage counter in the real browser', () => {
   let root: string
@@ -146,4 +217,46 @@ describe('book usage counter in the real browser', () => {
       await page.unroute('**/mcp')
     }
   })
+
+  it('keeps the cell cost clear of the generation editor panels, folded until it is opened', async () => {
+    const notebook = engine.notebooks.list()[0]!
+    const priced = engine.notebooks.createCell({ type: 'generate_video', slot: { row: 0, column: 0 }, prompt: 'A fox crosses the road' })
+    const unused = engine.notebooks.createCell({ type: 'generate_video', slot: { row: 0, column: 1 }, prompt: 'A heron waits' })
+    for (const cell of [priced, unused]) {
+      const inserted = await engine.notebooks.insertCell(notebook.id, cell)
+      if (!inserted.ok) throw new Error(inserted.error.message)
+    }
+    const node = (cellId: string) => page.locator(`.notebook-flow .react-flow__node[data-id="${cellId}"] .cell-node`)
+    const inspector = page.locator('.generation-cell-inspector')
+    const scopes = inspector.locator('> .usage-cost-scopes')
+    const summary = inspector.locator('.usage-cost-details > summary')
+    await page.setViewportSize({ width: 1474, height: 810 })
+    await page.reload()
+
+    await node(unused.id).click({ timeout: testBudget(60_000) })
+    await expect.poll(() => scopes.count(), { timeout: testBudget(30_000) }).toBe(1)
+    expect(await scopes.isVisible()).toBe(false)
+    const bare = await page.evaluate(() => ({
+      panelBottom: document.querySelector('.generation-cell-inspector .generation-review-source-section')!.getBoundingClientRect().bottom,
+      bodyBottom: document.querySelector('.generation-cell-inspector')!.getBoundingClientRect().bottom,
+    }))
+    expect(bare.bodyBottom - bare.panelBottom).toBeLessThanOrEqual(8.5)
+
+    await node(priced.id).click()
+    let recorded = 0
+    for (const calls of [1, 3, 12]) {
+      recordCellCalls(engine, priced.id, recorded, calls)
+      recorded = calls
+      await expect.poll(() => summary.innerText(), { timeout: testBudget(15_000) }).toBe(calls === 1 ? '1 call' : `${calls} calls`)
+      for (const [width, height] of COST_VIEWPORTS) await expectCostLayoutAt(page, width, height, calls)
+    }
+    expect(await inspector.locator('.usage-cost-total').innerText()).toContain('Cell cost')
+    expect(await inspector.locator('.usage-cost-partial').innerText()).toBe('Partial: 0 of 12 calls settled')
+
+    await page.setViewportSize({ width: 1474, height: 810 })
+    await page.locator('.inspector').getByRole('button', { name: 'View source', exact: true }).click()
+    await inspector.locator('.confirm-generation[data-view="source"]').waitFor({ state: 'visible', timeout: testBudget(15_000) })
+    await summary.click()
+    expectPanelsClearOfCost(await page.evaluate(cellCostLayout), 'source view, opened')
+  }, testBudget(240_000))
 })
