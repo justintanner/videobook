@@ -18,6 +18,8 @@ export interface UsageTotalFigures {
   pending: string | null
 }
 
+const FAL_HISTORICAL_ESTIMATE_SOURCE = 'fal-historical-average'
+
 const STATE_LABELS: Record<UsageCallState, string> = {
   estimate: 'Estimate',
   stated: 'Billed',
@@ -65,14 +67,22 @@ function callNote(state: UsageCallState, entry: UsageEntry): string | null {
     case 'usage-only':
       return [usageAmount(entry), 'no rate to price it'].filter(Boolean).join(', ')
     case 'estimate':
-      if (entry.status === 'pending') return 'Waiting for the actual'
+      if (entry.status === 'pending') {
+        return entry.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE
+          ? 'Per-call average, not this request\'s price'
+          : 'Waiting for the actual'
+      }
       return entry.warnings.length > 0 ? entry.warnings.join(' ') : 'No billed or calculated figure'
     case 'stated':
       return entry.listUsd !== null && entry.costUsd !== null && Math.abs(entry.listUsd - entry.costUsd) >= 0.005
         ? `${formatUsageCost(entry.listUsd)} list price before credits`
         : 'As the provider billed it'
-    case 'derived':
-      return [usageAmount(entry), 'priced at the bundled rate'].filter(Boolean).join(', ')
+    case 'derived': {
+      const priced = [usageAmount(entry), 'priced at the bundled rate'].filter(Boolean).join(', ')
+      return entry.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE
+        ? `${priced}. est. is a per-call average, not this request's price`
+        : priced
+    }
   }
 }
 

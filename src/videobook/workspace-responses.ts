@@ -233,6 +233,9 @@ function asChainStepReview(value: unknown): ChainStepReviewValue | null {
     params: recordValue(item?.params) ?? {},
     estimateUsd: typeof item?.estimateUsd === 'number' ? item.estimateUsd : null,
     estimateUnavailable: item?.estimateUnavailable !== false,
+    estimateWarnings: Array.isArray(item?.estimateWarnings)
+      ? item.estimateWarnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
     reason,
   }
 }

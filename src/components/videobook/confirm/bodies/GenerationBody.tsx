@@ -42,6 +42,7 @@ import { recordValue } from '@/videobook/value-decoders'
 const emptyDoltArtifactAssets: DoltArtifactAssets = new Map()
 import {
   generationEstimate,
+  generationEstimateCaption,
   historicalAverageEstimate,
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
@@ -317,13 +318,15 @@ export function GenerationBody({
     : !previewError && estimate.usd !== null && !estimate.unknown
       ? `$${estimate.usd.toFixed(estimate.usd < 0.01 ? 4 : 2)}`
       : '—'
+  const estimateCaption = previewLoading || previewStale || previewError ? null : generationEstimateCaption(estimate)
   const estimateNote = previewLoading || previewStale
     ? 'Updating estimate…'
     : previewError || estimate.unknown || estimate.usd === null
       ? 'Cost estimate unavailable'
-      : historicalAverageEstimate(estimate.warnings)
-        ? 'Historical average per call; this request can differ'
-        : 'Estimated provider cost'
+      : estimateCaption
+        ?? (historicalAverageEstimate(estimate.warnings)
+          ? 'Historical average per call; this request can differ'
+          : 'Estimated provider cost')
   const promptLeaks = previewStale ? [] : providerPayloadPreviewMentions(preview).promptLeaks
   const previewJson = previewValue ?? {
     status: 'unresolved_draft',
@@ -546,6 +549,7 @@ export function GenerationBody({
           <span className="generation-review-estimate" aria-label="Estimate" title={estimateNote}>
             <strong>{estimateText}</strong>
             {estimateText !== '…' && estimateText !== '—' && <small>{estimate.currency}</small>}
+            {estimateCaption && <em>{estimateCaption}</em>}
           </span>
           {(previewStale || previewLoading) && <small className="generation-review-json-stale" role="status">Updating…</small>}
           {previewError && <button

@@ -170,6 +170,7 @@ const generationPlanSchema = z.object({
   model: z.string().min(1),
   estimated_cost_usd: z.number().nonnegative().optional(),
   estimate_unavailable: z.boolean().optional(),
+  estimate_historical: z.boolean().optional(),
   track_id: z.string().uuid(),
   timeline_start_frame: z.number().int().nonnegative(),
   duration_frames: z.number().int().positive().optional(),
@@ -1733,7 +1734,10 @@ export function buildGenerationInsertPlan(
       model: input.model,
       ...(input.estimated_cost_usd === undefined
         ? { estimateUnavailable: true }
-        : { estimatedCostUsd: input.estimated_cost_usd }),
+        : {
+            estimatedCostUsd: input.estimated_cost_usd,
+            ...(input.estimate_historical ? { estimateHistorical: true } : {}),
+          }),
       insertsOutput: true,
       continuation: {
         sequenceId: sequence.sequenceId,
@@ -1750,7 +1754,9 @@ export function buildGenerationInsertPlan(
     confirmation: {
       required: true,
       policy: "always",
-      reason: "This plan can incur provider spend",
+      reason: input.estimate_historical
+        ? "This plan can incur provider spend. The quoted figure is a per-call average, not this request's price."
+        : "This plan can incur provider spend",
     },
   };
 }

@@ -1,5 +1,5 @@
 import { Ban, TriangleAlert } from 'lucide-react'
-import type { CommandPlan } from '@/videobook/command-plan'
+import { perCallAverageCost, type CommandPlan } from '@/videobook/command-plan'
 
 interface CommandPlanStagePreview {
   valid: boolean
@@ -79,7 +79,9 @@ export function CommandPlanBody({
                     ? `${stage.provider} · ${stage.model}`
                     : stage.tool}
                   {stage.estimatedCostUsd !== undefined
-                    ? ` · ${stage.estimateForecast ? 'forecast' : 'estimated'} $${stage.estimatedCostUsd.toFixed(4)}`
+                    ? ` · ${stage.estimateHistorical
+                      ? perCallAverageCost(`$${stage.estimatedCostUsd.toFixed(4)}`)
+                      : `${stage.estimateForecast ? 'forecast' : 'estimated'} $${stage.estimatedCostUsd.toFixed(4)}`}`
                     : stage.estimateUnavailable
                       ? ' · cost estimate unavailable'
                       : ''}

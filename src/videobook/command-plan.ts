@@ -76,6 +76,7 @@ interface QueuedCommandStage extends CommandStageBase {
   estimatedCostUsd?: number
   estimateUnavailable?: boolean
   estimateForecast?: boolean
+  estimateHistorical?: boolean
   insertsOutput: boolean
   continuation?: {
     sequenceId: string
@@ -185,6 +186,10 @@ export function createCommandPlan(
   }
   validateCommandPlan(plan)
   return plan
+}
+
+export function perCallAverageCost(amount: string): string {
+  return `per-call average ${amount}, not this request's price`
 }
 
 export function validateCommandPlan(plan: CommandPlan): void {

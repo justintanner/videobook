@@ -4,6 +4,7 @@ import {
   logUnavailableCostEstimate,
 } from "./jobs/cost-estimate-assessment.js";
 import type { PinnedChainTarget } from "./chain-plan.js";
+import { historicalAverageWarnings } from "./media/cost.js";
 
 /** Keys whose values never belong on a review sheet or in a spoken line. */
 const SENSITIVE_KEY = /api.?key|secret|(?:^|[_-])token(?:$|[_-])|password|credential|authorization/iu;
@@ -57,12 +58,15 @@ function reviewReason(input: {
   total: number;
   address: string | null;
   estimateUsd: number | null;
+  warnings: readonly string[];
 }): string {
   const position = `Step ${input.index + 1} of ${input.total}`;
   const source = input.address ? ` from ${input.address}` : "";
   const cost = input.estimateUsd === null
     ? "I can't price this one"
-    : `about ${formatUsd(input.estimateUsd)}`;
+    : historicalAverageWarnings(input.warnings)
+      ? `a per-call average of ${formatUsd(input.estimateUsd)}, not this request's price`
+      : `about ${formatUsd(input.estimateUsd)}`;
   return `${position}: ${input.title.toLowerCase()}${source}, ${cost}. Apply to spend it, or cancel to stop the whole chain.`;
 }
 
@@ -105,6 +109,7 @@ export async function buildChainStepReview(
       total: input.total,
       address,
       estimateUsd,
+      warnings: assessment.warnings,
     }),
   };
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   generationEstimate,
+  generationEstimateCaption,
   historicalAverageEstimate,
+  PER_CALL_AVERAGE_CAPTION,
   providerPayloadPreviewMentions,
   providerPayloadPreviewReferenceError,
 } from '../../src/videobook/provider-payload-preview'
@@ -70,14 +72,17 @@ describe('generation cost preview', () => {
   it('keeps a historical fal average as a known price', () => {
     expect(historicalAverageEstimate([historical])).toBe(true)
     expect(historicalAverageEstimate([historical, 'model not found'])).toBe(false)
-    expect(generationEstimate({
+    const estimate = generationEstimate({
       estimate: { usd: 0.17, currency: 'USD', warnings: [historical] },
-    })).toEqual({
+    })
+    expect(estimate).toEqual({
       usd: 0.17,
       currency: 'USD',
       warnings: [historical],
       unknown: false,
     })
+    expect(generationEstimateCaption(estimate)).toBe(PER_CALL_AVERAGE_CAPTION)
+    expect(PER_CALL_AVERAGE_CAPTION).toBe('Per-call average, not this request\'s price')
   })
 
   it('treats an unknown model warning as an unavailable price', () => {

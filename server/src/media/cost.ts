@@ -70,6 +70,12 @@ function currentFalEstimator(): FalEstimator | null {
   return liveEstimator;
 }
 
+export function historicalAverageWarnings(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
+}
+
+export const FAL_HISTORICAL_ESTIMATE_SOURCE = "fal-historical-average";
+
 export async function estimateFalRequest(
   endpoint: string,
   payload: Record<string, unknown>,

@@ -5,7 +5,7 @@ import type { CostEstimate, EstimateRequest, ModelPricing, CostHints, CostActual
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
 import type { Media } from "./media/types.js";
-import { estimateFalRequest } from "./media/cost.js";
+import { estimateFalRequest, FAL_HISTORICAL_ESTIMATE_SOURCE, historicalAverageWarnings } from "./media/cost.js";
 import { falErrorDetail } from "./jobs/_fal-shared.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
@@ -74,30 +74,38 @@ function unknownPrice(warnings = ["Price unavailable for this model"]): Price {
   return { costUsd: null, basis: "unknown", rateSource: null, pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${PRICING_AS_OF}`, warnings, units: null, unit: null };
 }
 
-function historicalAverage(warnings: readonly string[]): boolean {
-  return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
+type PricedRequest = Price & { quote: UsageQuote | null };
+
+function historicalQuote(estimate: CostEstimate): UsageQuote | null {
+  if (!(estimate.usd > 0) || !historicalAverageWarnings(estimate.warnings)) return null;
+  return {
+    estimateUsd: estimate.usd,
+    estimateSource: FAL_HISTORICAL_ESTIMATE_SOURCE,
+    estimateRateAsOf: estimate.rateAsOf,
+  };
 }
 
-async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string | undefined, hints?: CostHints, baseURL?: string): Promise<Price> {
+async function priceRequest(provider: Provider, model: string, payload: RecordValue, endpoint: string | undefined, hints?: CostHints, baseURL?: string): Promise<PricedRequest> {
   try {
     const request: EstimateRequest = { provider, payload, baseURL, ...(endpoint ? { endpoint } : {}), ...(hints ? { costHints: hints } : {}) };
     const estimate = provider === "fal" && endpoint
       ? await estimateFalRequest(endpoint, payload, hints)
       : cost.estimate(request);
-    const historical = estimate.usd > 0 && historicalAverage(estimate.warnings);
-    if (!historical && (estimate.warnings.length || estimate.source === "tokens-heuristic+table")) {
-      return unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]);
+    const quote = historicalQuote(estimate);
+    if (!quote && (estimate.warnings.length || estimate.source === "tokens-heuristic+table")) {
+      return { ...unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]), quote: null };
     }
     return {
-      ...unknownPrice(historical ? estimate.warnings : []),
+      ...unknownPrice(quote ? estimate.warnings : []),
       costUsd: estimate.usd,
       basis: estimate.source === "free" ? "free" : "estimated",
       rateSource: (rateFor(provider, model) ?? (endpoint ? rateFor(provider, endpoint) : undefined))?.source.url ?? null,
-      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (historical ? "fal-historical" : PRICING_AS_OF)}`,
+      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (quote ? "fal-historical" : PRICING_AS_OF)}`,
       units: estimate.breakdown.units ?? null,
       unit: estimate.breakdown.unit ?? null,
+      quote,
     };
-  } catch { return unknownPrice(); }
+  } catch { return { ...unknownPrice(), quote: null }; }
 }
 
 const MEDIA_ACTIVITY: Record<Media, UsageEntry["activity"]> = { image: "images", video: "video", audio: "audio" };
@@ -356,14 +364,16 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         ...(quoteEndpoint ? { endpoint: quoteEndpoint } : {}),
         ...(hints ? { costHints: hints } : {}),
       });
+      const { quote: historical, ...price } = await priceRequest(provider, model, payload, quoteEndpoint, hints, url.href);
+      const quote = quoted.estimateUsd !== null ? quoted : historical ?? quoted;
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname),
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...await priceRequest(provider, model, payload, quoteEndpoint, hints, url.href),
-        estimateUsd: quoted.estimateUsd,
-        estimateSource: quoted.estimateSource,
-        estimateRateAsOf: quoted.estimateRateAsOf,
+        ...price,
+        estimateUsd: quote.estimateUsd,
+        estimateSource: quote.estimateSource,
+        estimateRateAsOf: quote.estimateRateAsOf,
         ...attributionIds(),
       };
       safeRecord(engine, entry);

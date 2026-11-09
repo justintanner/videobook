@@ -64,6 +64,13 @@ export function historicalAverageEstimate(warnings: readonly string[]): boolean 
     warning.includes('historical average per call'))
 }
 
+export const PER_CALL_AVERAGE_CAPTION = 'Per-call average, not this request\'s price'
+
+export function generationEstimateCaption(estimate: GenerationEstimate): string | null {
+  if (estimate.usd === null || estimate.usd <= 0 || estimate.unknown) return null
+  return historicalAverageEstimate(estimate.warnings) ? PER_CALL_AVERAGE_CAPTION : null
+}
+
 export function generationEstimate(preview: unknown): GenerationEstimate {
   const estimate = recordValue(recordValue(preview)?.estimate)
   const warnings = Array.isArray(estimate?.warnings)

@@ -564,6 +564,15 @@ local formula and remain $0 until the request supplies the missing field:
 without the draft's aspect ratio and duration. Those two are not historical
 averages.
 
+Update 2026-11-09 (vb-6bk9y): `minimax/h3-max/extend-video` still has no local
+rate. Its card bills generated seconds plus reference tokens the payload's URLs
+do not determine, so the quote remains fal's historical average per call. That
+quote is now stored on the usage row's `estimateUsd` (`estimateSource`
+`fal-historical-average`) and stays there after `x-fal-billable-units` replaces
+`costUsd`. The generation editor, command plan, chain review, and cell cost
+row state that the figure is a per-call average and not this request's price.
+A units-per-second model for the endpoint still belongs in `@apicity/cost`.
+
 ---
 
 ## 42. (quirk) Fal 0.15.0 request shapes Videobook adapts — CONSUMER REQUIREMENT

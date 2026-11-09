@@ -226,6 +226,21 @@ describe('GenerationBody voice picker', () => {
     expect(html).not.toContain('role="alert"')
     expect(html).not.toContain('class="confirm-sheet-apply" disabled=""')
   })
+
+  it('states that a fal historical quote is a per-call average in the payload header', () => {
+    const html = renderReview(speechDraft(), undefined, {
+      estimate: {
+        usd: 0.32,
+        currency: 'USD',
+        warnings: ["fal pricing estimate for 'minimax/h3-max/extend-video' is fal's historical average per call x 1; it ignores this request's payload"],
+      },
+    })
+
+    expect(html).toContain('aria-label="Estimate"')
+    expect(html).toContain('<strong>$0.32</strong>')
+    expect(html).toContain('<em>Per-call average, not this request&#x27;s price</em>')
+    expect(html).not.toContain('Updating')
+  })
 })
 
 describe('GenerationBody input editing', () => {

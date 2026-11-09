@@ -403,6 +403,36 @@ describe('CommandPlan edit tools', () => {
         continuation: { baseRevision: expect.any(String) },
       }],
     })
+    const averagePlan = resultJson(
+      await tools.get('plan_generation_insert')!.handler({
+        book_id: engine.book.get().bookId,
+        source_surface: 'ui',
+        actor: 'parity-fixture',
+        generation: {
+          tool: 'generate_video',
+          input: { prompt: 'Keep walking', duration: 15, resolution: '2K' },
+          provider: 'fal',
+          model: 'minimax/h3-max/extend-video',
+          estimated_cost_usd: 0.32,
+          estimate_historical: true,
+          track_id: videoTrack.trackId,
+          timeline_start_frame: 0,
+          duration_frames: 360,
+        },
+      }),
+    )
+    expect(averagePlan).toMatchObject({
+      confirmation: {
+        required: true,
+        reason: 'This plan can incur provider spend. The quoted figure is a per-call average, not this request\'s price.',
+      },
+      stages: [{
+        provider: 'fal',
+        model: 'minimax/h3-max/extend-video',
+        estimatedCostUsd: 0.32,
+        estimateHistorical: true,
+      }],
+    })
     const continued = resultJson(
       await tools.get('continue_queued_insert')!.handler({
         book_id: engine.book.get().bookId,

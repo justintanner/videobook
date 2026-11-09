@@ -23,6 +23,7 @@ import {
   assessToolCallEstimate,
   logUnavailableCostEstimate,
 } from "./jobs/cost-estimate-assessment.js";
+import { historicalAverageWarnings } from "./media/cost.js";
 
 type NotebookRunPlanStatus =
   | "planned"
@@ -50,6 +51,15 @@ interface CostEstimate {
   estimatedCostUsd?: number;
   estimateUnavailable: boolean;
   warnings: string[];
+}
+
+function stageEstimate(estimate: CostEstimate): Record<string, unknown> {
+  if (estimate.estimateUnavailable) return { estimateUnavailable: true };
+  return {
+    estimatedCostUsd: estimate.estimatedCostUsd,
+    estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")),
+    ...(historicalAverageWarnings(estimate.warnings) ? { estimateHistorical: true } : {}),
+  };
 }
 
 export function notebookRunPlanRecords(
@@ -308,9 +318,7 @@ export async function planSelectedNotebookSubgraph(
         model,
         requiresCoverage: true,
         cellDefinitionFingerprint: definitionFingerprint,
-        ...(estimate.estimateUnavailable
-          ? { estimateUnavailable: true }
-          : { estimatedCostUsd: estimate.estimatedCostUsd, estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")) }),
+        ...stageEstimate(estimate),
         insertsOutput: false,
       });
     } else {
@@ -458,9 +466,7 @@ export async function planNotebookRun(
       },
       provider: prepared.provider,
       model: prepared.model,
-      ...(estimate.estimateUnavailable
-        ? { estimateUnavailable: true }
-        : { estimatedCostUsd: estimate.estimatedCostUsd, estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")) }),
+      ...stageEstimate(estimate),
       insertsOutput: false,
     });
   }

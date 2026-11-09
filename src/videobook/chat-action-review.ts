@@ -1,4 +1,5 @@
 import { formatMediaTime } from './notebook-cell-presentation'
+import { historicalAverageEstimate } from './provider-payload-preview'
 import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { speedChangeDraftFromParams, speedChangeOutcome } from './speed-change-draft'
 
@@ -224,6 +225,7 @@ export interface ChainStepReviewValue {
   params: Record<string, unknown>
   estimateUsd: number | null
   estimateUnavailable: boolean
+  estimateWarnings?: readonly string[]
   reason: string
 }
 
@@ -256,6 +258,12 @@ export function chainStepReview(
   review: ChainStepReviewValue,
   remaining: number,
 ): RoutedActionReview {
+  const historical = historicalAverageEstimate(review.estimateWarnings ?? [])
+  const costLabel = review.estimateUnavailable
+    ? 'Cost unknown for this model'
+    : historical
+      ? `Per-call average ${formatEstimatedCost(review.estimateUsd)}, not this request's price`
+      : `Spends about ${formatEstimatedCost(review.estimateUsd)}`
   const settings = [
     setting('Step', `${review.index + 1} of ${review.total}`),
     ...(review.address ? [setting('Source', review.address)] : []),
@@ -268,8 +276,10 @@ export function chainStepReview(
       )),
     setting(
       'Estimated cost',
-      formatEstimatedCost(review.estimateUsd),
-      review.estimateUnavailable ? 'warning' : 'default',
+      historical
+        ? `Per-call average ${formatEstimatedCost(review.estimateUsd)}`
+        : formatEstimatedCost(review.estimateUsd),
+      review.estimateUnavailable || historical ? 'warning' : 'default',
     ),
     setting('Remaining steps', remaining > 0 ? String(remaining) : 'None'),
   ]
@@ -277,9 +287,7 @@ export function chainStepReview(
     title: `Step ${review.index + 1} of ${review.total} · ${review.title}`,
     settings,
     effect: {
-      label: review.estimateUnavailable
-        ? 'Cost unknown for this model'
-        : `Spends about ${formatEstimatedCost(review.estimateUsd)}`,
+      label: costLabel,
       tone: 'warning',
     },
     postText: typeof review.params.prompt === 'string'

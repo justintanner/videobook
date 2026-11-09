@@ -235,6 +235,14 @@ describe('buildJobsRows', () => {
     })
   })
 
+  it('labels a historical fal plan quote as a per-call average', () => {
+    const historical = plan({})
+    const stage = historical.plan.stages[0]
+    if (stage?.kind === 'queued') stage.estimateHistorical = true
+    const [row] = buildJobsRows({ jobs: [], plans: [historical], cells, assets: READY_ASSETS, now: NOW })
+    expect(row.note).toContain('per-call average $8.19, not this request\'s price')
+  })
+
   it.each([
     { assets: [] },
     { assets: [{ ...READY_ASSETS[0], status: 'generating', mediaUrl: null }] },

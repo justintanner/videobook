@@ -42,6 +42,31 @@ describe('a notebook cell call cost', () => {
     expect(renderToStaticMarkup(<ul><UsageCallRow entry={billed} /></ul>)).toContain('usage-cost-call-stated')
   })
 
+  it('labels a pending fal historical quote as a per-call average', () => {
+    expect(row(call({
+      provider: 'fal',
+      model: 'minimax/h3-max/extend-video',
+      status: 'pending',
+      basis: 'estimated',
+      costUsd: 0.32,
+      estimateUsd: 0.32,
+      estimateSource: 'fal-historical-average',
+    }))).toBe('minimax/h3-max/extend-video Estimate ~$0.32 Per-call average, not this request\'s price')
+  })
+
+  it('keeps a fal historical quote beside the calculated actual and says it is not this request', () => {
+    expect(row(call({
+      provider: 'fal',
+      model: 'minimax/h3-max/extend-video',
+      actualBasis: 'derived',
+      costUsd: 4.8,
+      estimateUsd: 0.32,
+      estimateSource: 'fal-historical-average',
+      units: 96,
+      unit: 'billable-units',
+    }))).toBe('minimax/h3-max/extend-video Calculated ~$4.80 est. $0.32 96 billable-units, priced at the bundled rate. est. is a per-call average, not this request\'s price')
+  })
+
   it('shows an actual calculated from usage as approximate, distinct from a billed one', () => {
     const derived = call({ actualBasis: 'derived', costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true })
     expect(row(derived)).toBe('gpt-5.6 Calculated ~$0.41 est. $0.42 1,500 tokens, priced at the bundled rate')

@@ -10,6 +10,7 @@ import {
   createEditCommandPlan,
   createSearchCommandPlan,
   equivalentEditOperations,
+  perCallAverageCost,
 } from './command-plan'
 
 describe('CommandPlan', () => {
@@ -102,5 +103,9 @@ describe('CommandPlan', () => {
       required: true,
       reason: 'This plan can incur provider spend',
     })
+  })
+
+  it('names a historical fal quote as a per-call average', () => {
+    expect(perCallAverageCost('$0.3200')).toBe('per-call average $0.3200, not this request\'s price')
   })
 })

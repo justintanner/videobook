@@ -225,6 +225,18 @@ describe('chainStepReview', () => {
     expect(settings['Remaining steps']).toBe('1')
   })
 
+  it('says a fal historical quote is a per-call average and not this request', () => {
+    const review = chainStepReview(stepReview({
+      estimateUsd: 0.32,
+      estimateWarnings: ["fal pricing estimate for 'minimax/h3-max/extend-video' is fal's historical average per call x 1; it ignores this request's payload"],
+    }), 0)
+    expect(review.effect?.label).toBe('Per-call average $0.32, not this request\'s price')
+    expect(review.settings.find((setting) => setting.label === 'Estimated cost')).toMatchObject({
+      value: 'Per-call average $0.32',
+      tone: 'warning',
+    })
+  })
+
   it('says a cost is unknown rather than showing it as free', () => {
     const review = chainStepReview(
       stepReview({ estimateUsd: null, estimateUnavailable: true }),
