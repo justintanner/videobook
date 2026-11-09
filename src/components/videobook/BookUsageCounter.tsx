@@ -14,6 +14,7 @@ type Props = {
 }
 
 function entryCost(entry: UsageEntry): string {
+  if (entry.basis === 'free') return entry.status === 'failed' ? 'Not billed' : formatUsageCost(0)
   if (entry.costUsd === null || (entry.status !== 'completed' && entry.basis !== 'reported' && entry.inputTokens === null && entry.outputTokens === null)) return 'Unpriced'
   return `${entry.basis === 'estimated' ? '~' : ''}${formatUsageCost(entry.costUsd)}`
 }

@@ -1,7 +1,7 @@
 import type { UsageEntry, UsageRollupTotals } from 'videobook-engine'
 import { formatUsageCost, formatUsageTokens } from './book-usage'
 
-export type UsageCallState = 'estimate' | 'stated' | 'derived' | 'usage-only' | 'free' | 'unavailable'
+export type UsageCallState = 'estimate' | 'stated' | 'derived' | 'usage-only' | 'free' | 'not-billed' | 'unavailable'
 
 export interface UsageCallFigures {
   state: UsageCallState
@@ -24,6 +24,7 @@ const STATE_LABELS: Record<UsageCallState, string> = {
   derived: 'Calculated',
   'usage-only': 'Usage only',
   free: 'Free',
+  'not-billed': 'Failed, not billed',
   unavailable: 'Unavailable',
 }
 
@@ -39,7 +40,7 @@ function usageAmount(entry: UsageEntry): string | null {
 }
 
 function callState(entry: UsageEntry): UsageCallState {
-  if (entry.basis === 'free') return 'free'
+  if (entry.basis === 'free') return entry.status === 'failed' ? 'not-billed' : 'free'
   if (entry.status === 'pending') return 'estimate'
   if (entry.costUsd !== null && (entry.actualBasis === 'stated' || (entry.actualBasis === null && entry.basis === 'reported'))) return 'stated'
   if (entry.costUsd !== null && entry.basis === 'estimated'
@@ -57,6 +58,8 @@ function callNote(state: UsageCallState, entry: UsageEntry): string | null {
   switch (state) {
     case 'free':
       return reason(entry, 'The provider charges nothing for this call')
+    case 'not-billed':
+      return reason(entry, 'The provider billed nothing for this failed call')
     case 'unavailable':
       return reason(entry, entry.status === 'uncertain' ? 'The provider outcome is unknown' : 'No price for this call')
     case 'usage-only':
@@ -78,7 +81,7 @@ export function usageCallFigures(entry: UsageEntry): UsageCallFigures {
   const quote = entry.estimateUsd ?? (state === 'estimate' && entry.basis === 'estimated' ? entry.costUsd : null)
   const amount = state === 'stated' ? formatUsageCost(entry.costUsd ?? 0)
     : state === 'derived' ? `~${formatUsageCost(entry.costUsd ?? 0)}`
-      : state === 'free' ? formatUsageCost(0)
+      : state === 'free' || state === 'not-billed' ? formatUsageCost(0)
         : state === 'estimate' && quote !== null ? `~${formatUsageCost(quote)}` : null
   return {
     state,
@@ -91,6 +94,13 @@ export function usageCallFigures(entry: UsageEntry): UsageCallFigures {
 
 export function usageCallCountLabel(count: number): string {
   return plural(count, 'call')
+}
+
+export function usageNotBilledNote(calls: readonly UsageEntry[]): string | null {
+  const failed = calls.filter((entry) => callState(entry) === 'not-billed')
+  if (failed.length === 0) return null
+  const reasons = [...new Set(failed.map((entry) => callNote('not-billed', entry)))]
+  return `${plural(failed.length, 'call')} failed, not billed: ${reasons.join('; ')}`
 }
 
 function partialNote(totals: UsageRollupTotals): string | null {

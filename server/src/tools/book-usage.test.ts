@@ -350,6 +350,54 @@ describe("provider usage through real HTTP and engine storage", () => {
     }
   });
 
+  it("settles a fal request whose result read states 0 billable units as not billed, with fal's reason, in cell, run, job and book totals", async () => {
+    const estimates: Record<string, unknown>[] = [];
+    const restore = installFalDynamicEstimator(async (request) => {
+      estimates.push(request);
+      return { total_cost: 0.32, currency: "USD" };
+    });
+    try {
+      const provider = createFal({ apiKey: "test", queueBaseURL: url });
+      const attribution = { cellId: "cell-extend", runId: "run-extend", jobId: "job-extend" };
+      const generation = <T>(operation: () => Promise<T>, name: string) =>
+        withBookContext({ bookId: engine.book.get().bookId, engine, operation: name, ...attribution }, operation);
+      for (const request_id of ["fal-oversized", "fal-unbilled"]) {
+        reply = { request_id, status: "IN_QUEUE" };
+        await generation(() => provider.post.v1.queue.submit({
+          endpoint_id: "minimax/h3-max/extend-video",
+          input: { prompt: "keep walking", video_url: "https://example.test/clip.mp4" },
+        }), "generate_media");
+        reply = { status: "COMPLETED", request_id };
+        await generation(() => provider.v1.queue.status({ endpoint_id: "minimax/h3-max", request_id }), "poll_pending_provider_tasks");
+      }
+      expect(engine.usage.rollup({ cellId: "cell-extend" }).totals).toMatchObject({ count: 2, unsettled: 2, estimatedUsd: 0.64 });
+      headers = { "x-fal-billable-units": "0" };
+      replyStatus = 422;
+      reply = { detail: [{ loc: ["body", "video_url"], msg: "File size exceeds 52428800 bytes", type: "value_error" }] };
+      await expect(generation(() => provider.v1.queue.result({ endpoint_id: "minimax/h3-max", request_id: "fal-oversized" }), "poll_pending_provider_tasks"))
+        .rejects.toMatchObject({ status: 422 });
+      replyStatus = undefined;
+      reply = { video: { url: "https://example.test/extended.mp4" } };
+      await generation(() => provider.v1.queue.result({ endpoint_id: "minimax/h3-max", request_id: "fal-unbilled" }), "poll_pending_provider_tasks");
+      expect(engine.usage.find("fal", "fal-oversized")).toMatchObject({
+        status: "failed", basis: "free", costUsd: 0, units: 0, unit: "billable-units", actualBasis: "derived",
+        warnings: ["fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes"],
+      });
+      expect(engine.usage.find("fal", "fal-unbilled")).toMatchObject({
+        status: "completed", basis: "free", costUsd: 0, units: 0, warnings: ["fal billed 0 units for this request"],
+      });
+      expect(estimates.map((request) => request.estimate_type)).toEqual(["historical_api_price"]);
+      for (const filter of [{ cellId: "cell-extend" }, { runId: "run-extend" }, { jobId: "job-extend" }, {}]) {
+        expect(engine.usage.rollup(filter).totals).toMatchObject({ count: 2, unsettled: 0, unpriced: 0, pendingCount: 0, actualUsd: 0, estimatedUsd: 0 });
+      }
+      const usage = JSON.parse((await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId, scope: { cell_id: "cell-extend" } })).content[0]!.text);
+      expect(usage.totals).toMatchObject({ count: 2, unpriced: 0, estimatedUsd: 0, reportedUsd: 0 });
+      expect(usage.cell.totals).toMatchObject({ count: 2, unsettled: 0, unpriced: 0 });
+    } finally {
+      restore();
+    }
+  });
+
   it("sends a Request intact and keeps its response readable when garbage collection runs while pricing is pending", async () => {
     const estimateTypes: string[] = [];
     const restore = installFalDynamicEstimator(async (request) => {

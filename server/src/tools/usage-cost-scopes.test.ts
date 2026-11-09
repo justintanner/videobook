@@ -66,11 +66,15 @@ describe("usage cost by notebook cell, run and job", () => {
     const waveform = engine.jobs.queue.enqueue({ type: "extract_waveform", payload: { type: "extract_waveform" } }).job;
     record({ id: "a", provider: "openai", model: "gpt-5.6", activity: "chat", status: "completed", basis: "estimated", actualBasis: "derived", costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true, jobId: generating.operationId });
     record({ id: "b", provider: "wavespeed", model: "runwayml/aleph-2", activity: "video", status: "pending", basis: "estimated", costUsd: 1.85, estimateUsd: 1.85, jobId: generating.operationId });
+    record({ id: "c", provider: "fal", model: "minimax/h3-max/extend-video", activity: "video", status: "failed", basis: "free", costUsd: 0, units: 0, unit: "billable-units", actualBasis: "derived", warnings: ["fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes"], jobId: generating.operationId });
     const listJobs = getAllToolDefs(engine).find((definition) => definition.name === "list_jobs")!;
-    const listed = JSON.parse((await listJobs.handler({ book_id: engine.book.get().bookId })).content[0]!.text!) as Array<{ id: number; usage?: Record<string, unknown> }>;
-    expect(listed.find((job) => job.id === generating.id)?.usage).toMatchObject({
-      id: generating.operationId, count: 2, pendingCount: 1, unsettled: 1, actualUsd: 0.41, settledEstimateUsd: 0.42, pendingEstimateUsd: 1.85,
+    const listed = JSON.parse((await listJobs.handler({ book_id: engine.book.get().bookId })).content[0]!.text!) as Array<{ id: number; usage?: Record<string, unknown>; notBilledCalls?: UsageEntry[] }>;
+    const job = listed.find((candidate) => candidate.id === generating.id);
+    expect(job?.usage).toMatchObject({
+      id: generating.operationId, count: 3, pendingCount: 1, unsettled: 1, actualUsd: 0.41, settledEstimateUsd: 0.42, pendingEstimateUsd: 1.85,
     });
-    expect(listed.find((job) => job.id === waveform.id)).not.toHaveProperty("usage");
+    expect(job?.notBilledCalls?.map((call) => [call.id, call.warnings])).toEqual([["c", ["fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes"]]]);
+    expect(listed.find((candidate) => candidate.id === waveform.id)).not.toHaveProperty("usage");
+    expect(listed.find((candidate) => candidate.id === waveform.id)).not.toHaveProperty("notBilledCalls");
   });
 });

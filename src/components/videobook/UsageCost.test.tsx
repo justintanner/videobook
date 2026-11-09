@@ -58,6 +58,17 @@ describe('a notebook cell call cost', () => {
       .toBe('auto-convert Free $0.00 auto_convert is false or absent: the content is stored, not converted')
   })
 
+  it('shows a call the provider failed without billing as failed and not billed, with the provider\'s reason', () => {
+    const rejected = call({
+      provider: 'fal', model: 'minimax/h3-max/extend-video', status: 'failed', basis: 'free', costUsd: 0, units: 0, unit: 'billable-units',
+      actualBasis: 'derived', estimateUsd: 0.32, warnings: ['fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes'],
+    })
+    expect(row(rejected)).toBe('minimax/h3-max/extend-video Failed, not billed $0.00 est. $0.32 fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes')
+    expect(renderToStaticMarkup(<ul><UsageCallRow entry={rejected} /></ul>)).toContain('usage-cost-call-not-billed')
+    expect(row(call({ ...rejected, status: 'completed', warnings: ['fal billed 0 units for this request'] })))
+      .toBe('minimax/h3-max/extend-video Free $0.00 est. $0.32 fal billed 0 units for this request')
+  })
+
   it('shows why a price is unavailable', () => {
     expect(row(call({ provider: 'machgen', model: 'Topaz-Video-Precision', basis: 'unknown', warnings: ["model 'Topaz-Video-Precision' not found in pricing table for provider 'machgen'"] })))
       .toBe("Topaz-Video-Precision Unavailable model 'Topaz-Video-Precision' not found in pricing table for provider 'machgen'")
@@ -111,6 +122,21 @@ describe('a notebook run total', () => {
     record({ id: 'a', provider: 'openai', model: 'gpt-5.6', activity: 'chat', status: 'completed', basis: 'estimated', actualBasis: 'derived', costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true })
     record({ id: 'b', provider: 'machgen', model: 'Topaz-Video-Precision', activity: 'video', status: 'completed', basis: 'unknown', warnings: ['Price unavailable for this model'] })
     expect(render()).toContain('Partial: 1 of 2 calls settled, 1 call unpriced')
+  })
+
+  it('settles the total once a failed call is recorded as not billed', () => {
+    const extend = { provider: 'fal', model: 'minimax/h3-max/extend-video', activity: 'video', estimateUsd: 0.32, createdAt: 2 } as const
+    record({ id: 'a', provider: 'machgen', model: 'Seedance-2.5', activity: 'video', status: 'completed', basis: 'reported', actualBasis: 'stated', costUsd: 0.4, estimateUsd: 0.45, createdAt: 1 })
+    record({ id: 'b', ...extend, status: 'completed', basis: 'estimated', costUsd: 0.32 })
+    const unsettled = render()
+    expect(unsettled).toContain('Partial: 1 of 2 calls settled')
+    expect(unsettled).toContain('minimax/h3-max/extend-video Estimate ~$0.32')
+
+    record({ id: 'b', ...extend, status: 'failed', basis: 'free', costUsd: 0, units: 0, unit: 'billable-units', actualBasis: 'derived', warnings: ['fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes'] })
+    const settled = render()
+    expect(settled).toContain('Run total $0.40 est. $0.77')
+    expect(settled).not.toContain('Partial')
+    expect(settled).toContain('minimax/h3-max/extend-video Failed, not billed $0.00 est. $0.32 fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes')
   })
 
   it('renders nothing before the run makes a call', () => {

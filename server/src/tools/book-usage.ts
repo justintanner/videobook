@@ -9,6 +9,15 @@ function scopeUsage(engine: Engine, filter: UsageRollupFilter, matches: (entry: 
   return { totals: engine.usage.rollup(filter).totals, calls: engine.usage.recent(SCOPE_CALLS).filter(matches).reverse() };
 }
 
+export function notBilledCallsByJob(engine: Engine): Map<string, UsageEntry[]> {
+  const calls = new Map<string, UsageEntry[]>();
+  for (const entry of engine.usage.recent(SCOPE_CALLS).reverse()) {
+    if (!entry.jobId || entry.basis !== "free" || entry.status !== "failed") continue;
+    calls.set(entry.jobId, [...(calls.get(entry.jobId) ?? []), entry]);
+  }
+  return calls;
+}
+
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }

@@ -66,6 +66,7 @@ import {
   logUnavailableCostEstimate,
 } from "../jobs/cost-estimate-assessment.js";
 import { estimateCostDef } from "./estimate-cost.js";
+import { notBilledCallsByJob } from "./book-usage.js";
 import { pairForCell } from "./list-cell-generations.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { advertisedAs } from "./tool-json-schema.js";
@@ -2483,7 +2484,7 @@ export function videobookDomainDefs(
     },
     {
       name: "list_jobs",
-      description: "List persistent jobs for a book, each with its usage cost totals (quoted estimate against actual) once it has made a provider call. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.",
+      description: "List persistent jobs for a book, each with its usage cost totals (quoted estimate against actual) once it has made a provider call, and notBilledCalls: its recent provider calls that failed without a charge, with the provider's reason. Filter by numeric job_ids, or by job_keys, the job_id strings other tools return while the server that queued them is running.",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -2494,11 +2495,14 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const jobs = selectJobs(engine, args);
         const usage = new Map(engine.usage.rollup().jobs.map((group) => [group.id, group]));
+        const notBilled = notBilledCallsByJob(engine);
         return json(await Promise.all(jobs.map(async ({ job, jobKey }) => {
           const cost = usage.get(job.operationId);
+          const notBilledCalls = notBilled.get(job.operationId);
           return {
             ...job, ...(jobKey ? { jobKey } : {}), providerTask: await jobProviderTaskStatus(engine, job),
             ...(cost ? { usage: cost } : {}),
+            ...(notBilledCalls ? { notBilledCalls } : {}),
           };
         })));
       },

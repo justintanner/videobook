@@ -6,6 +6,7 @@ import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
 import type { Media } from "./media/types.js";
 import { estimateFalRequest } from "./media/cost.js";
+import { falErrorDetail } from "./jobs/_fal-shared.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
 import { httpDotPath, usageQuote, type UsageQuote } from "./usage-quote.js";
@@ -256,8 +257,31 @@ function observedActual(engine: Engine, entry: UsageEntry | UsageInput, exchange
   }
 }
 
+function statedFalUnits(exchange: ProviderExchange): number | null {
+  const raw = exchange.responseHeaders["x-fal-billable-units"]?.trim();
+  const units = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(units) ? units : null;
+}
+
+function falNotBilledReason(exchange: ProviderExchange): string {
+  if (exchange.status < 400) return "fal billed 0 units for this request";
+  const detail = falErrorDetail(exchange.responseBody).slice(0, 500);
+  return `fal answered HTTP ${exchange.status} and billed 0 units${detail ? `: ${detail}` : ""}`;
+}
+
+function falNotBilledPatch(exchange: ProviderExchange, status: UsageEntry["status"]): Partial<UsageEntry> | null {
+  if (exchange.provider !== "fal" || status === "pending" || statedFalUnits(exchange) !== 0) return null;
+  if (/\/status$/u.test(new URL(exchange.url).pathname)) return null;
+  return {
+    status, costUsd: 0, basis: "free", units: 0, unit: "billable-units", actualBasis: "derived",
+    warnings: [falNotBilledReason(exchange)],
+  };
+}
+
 async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange, status: UsageEntry["status"]): Promise<Partial<UsageEntry>> {
   const actual = observedActual(engine, entry, exchange);
+  const notBilled = falNotBilledPatch(exchange, status);
+  if (notBilled) return notBilled;
   if (exchange.provider === "fal" && isFalDynamicPricingEndpoint(entry.model) && actual.usage.billableUnits !== undefined && actual.statedUsd === null) {
     const estimate = await estimateFalRequest(entry.model, {}, undefined, actual.usage.billableUnits);
     if (estimate.warnings.length === 0) {

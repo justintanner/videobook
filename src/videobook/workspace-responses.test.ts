@@ -17,4 +17,17 @@ describe('asJobs', () => {
     expect(malformed?.usage).toBeNull()
     expect(uncosted?.usage).toBeNull()
   })
+
+  it('keeps the not-billed calls list_jobs attaches to a job and drops malformed ones', () => {
+    const rejected = {
+      id: 'call-1', provider: 'fal', model: 'minimax/h3-max/extend-video', status: 'failed', basis: 'free', costUsd: 0,
+      warnings: ['fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes'],
+    }
+    const [job, plain] = asJobs([
+      { id: 1, operationId: 'generate-1', type: 'generate_media', state: 'failed', notBilledCalls: [rejected, { ...rejected, id: 'call-2', warnings: 'none' }, null] },
+      { id: 2, operationId: 'generate-2', type: 'generate_media', state: 'done' },
+    ])
+    expect(job?.notBilledCalls).toEqual([rejected])
+    expect(plain?.notBilledCalls).toEqual([])
+  })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NotebookCell } from 'videobook-engine'
+import type { NotebookCell, UsageEntry } from 'videobook-engine'
 import { createCommandPlan } from './command-plan'
 import {
   buildJobsRows,
@@ -146,6 +146,29 @@ describe('buildJobsRows', () => {
     expect(done?.note).toBe('~$2.66 actual · est. $2.72')
     const [free] = buildJobsRows({ jobs: [job({ state: 'done', usage: null })], plans: [], cells, now: NOW })
     expect(free?.note).toBeNull()
+  })
+
+  it('says which of a job\'s calls failed without a charge, with the provider\'s reason', () => {
+    const usage = {
+      id: 'op-1', count: 2, inputTokens: 0, outputTokens: 0, cachedTokens: 0, missingTokens: 0,
+      reportedUsd: 0.4, estimatedUsd: 0, unpriced: 0, pendingCount: 0, pendingUsd: 0,
+      actualUsd: 0.4, estimateUsd: 0.77, settledEstimateUsd: 0.77, pendingEstimateUsd: 0, unsettled: 0, unestimated: 0,
+    }
+    const rejected: UsageEntry = {
+      id: 'call-1', provider: 'fal', model: 'minimax/h3-max/extend-video', activity: 'video', status: 'failed', basis: 'free',
+      externalId: 'fal-oversized', inputTokens: null, outputTokens: null, cachedTokens: null, tokenBased: false, costUsd: 0,
+      units: 0, unit: 'billable-units', rateSource: null, pricingVersion: null, artifactId: null, operation: null,
+      warnings: ['fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes'],
+      estimateUsd: 0.32, estimateSource: null, estimateRateAsOf: null, actualBasis: 'derived', cacheWriteTokens: null,
+      listUsd: null, notebookId: null, cellId: null, jobId: 'op-1', runId: null, createdAt: 1, updatedAt: 1,
+    }
+    const [row] = buildJobsRows({
+      jobs: [job({ type: 'generate_media', state: 'done', usage, notBilledCalls: [rejected, { ...rejected, id: 'call-2', externalId: 'fal-again' }] })],
+      plans: [],
+      cells,
+      now: NOW,
+    })
+    expect(row?.note).toBe('$0.40 actual · est. $0.77 · 2 calls failed, not billed: fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes')
   })
 
   it('marks book-level jobs and surfaces the error code for failures', () => {

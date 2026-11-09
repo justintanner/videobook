@@ -1,7 +1,7 @@
-import type { NotebookCell, UsageRollupGroup } from 'videobook-engine'
+import type { NotebookCell, UsageEntry, UsageRollupGroup } from 'videobook-engine'
 import type { CommandPlan } from '@/videobook/command-plan'
 import { formatUsageCost } from '@/videobook/book-usage'
-import { usageTotalFigures } from '@/videobook/usage-cost'
+import { usageNotBilledNote, usageTotalFigures } from '@/videobook/usage-cost'
 import { notebookGridTag } from '@/videobook/notebook-grid'
 import { isPublishedPostCell } from '@/videobook/notebook-published-post'
 import type { ProviderTaskStatus } from '../../server/src/provider-status-link'
@@ -21,6 +21,7 @@ export interface JobsScreenJob {
   startedAt: number | null
   finishedAt: number | null
   usage?: UsageRollupGroup | null
+  notBilledCalls?: readonly UsageEntry[]
 }
 
 export interface JobsScreenPlan {
@@ -270,6 +271,7 @@ function jobCostNote(job: JobsScreenJob): string | null {
     figures.estimate ? `est. ${figures.estimate}` : null,
     job.usage.pendingCount > 0 ? `est. ${formatUsageCost(job.usage.pendingEstimateUsd)} in progress` : null,
     figures.partial?.toLowerCase() ?? null,
+    usageNotBilledNote(job.notBilledCalls ?? []),
   ].filter(Boolean)
   return parts.length > 0 ? parts.join(' · ') : null
 }
