@@ -3,12 +3,14 @@ import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveModel } from "./descriptor.js";
 import { inputLimitCap, inputLimitViolations, type InputCounts } from "./input-limits.js";
 import { previewGeneration } from "./preview.js";
+import type { RefParams } from "./request.js";
 import type { MediaRefs, RefRole } from "./types.js";
 
 interface LimitProbe {
   model: string;
   mode?: string;
   options: Record<string, unknown>;
+  refParams?: RefParams;
   within: InputCounts;
   beyond: InputCounts;
 }
@@ -19,6 +21,13 @@ const PROBES: readonly LimitProbe[] = [
   { model: "kie:bytedance/seedance-2-5", mode: "i2v", options: {}, within: { first_frame: 1, last_frame: 1 }, beyond: { last_frame: 1 } },
   { model: "kie:gemini-omni-video", mode: "v2v", options: {}, within: { image: 5, video: 1 }, beyond: { image: 6, video: 1 } },
   { model: "kie:kling-4.0/keyframe-to-video", options: { duration: 5 }, within: { first_frame: 1, image: 4, last_frame: 1 }, beyond: { first_frame: 1, image: 5, last_frame: 1 } },
+  {
+    model: "wavespeed:runwayml/aleph-2",
+    options: {},
+    refParams: { keyframe: [1, 2, 3, 4].map((timestamp_s) => ({ timestamp_s })) },
+    within: { video: 1, first_frame: 1, keyframe: 3, last_frame: 1 },
+    beyond: { video: 1, first_frame: 1, keyframe: 4, last_frame: 1 },
+  },
 ];
 
 const EXTENSIONS: Readonly<Record<RefRole, string>> = {
@@ -45,6 +54,7 @@ function preview(probe: LimitProbe, counts: InputCounts) {
     refs: refsFor(counts),
     options: probe.options,
     ...(probe.mode ? { mode: probe.mode } : {}),
+    ...(probe.refParams ? { ref_params: probe.refParams } : {}),
   });
 }
 

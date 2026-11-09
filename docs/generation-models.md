@@ -35,22 +35,13 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | googleflow:omni-flash | Google Flow is not a catalog provider. |
 | kie:wan/2-7-videoedit | This exact endpoint is not in the Videobook catalog. |
 | alibaba:wan2.7-videoedit | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.alibaba.happyhorse1p0.videoEdit | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.alibaba.happyhorse1p1.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.alibaba.wan2p7.videoEdit | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.bytedance.seedance2p0.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.bytedance.seedance2p0.videoEdit | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.google.geminiOmni1p1Flash.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.kwaivgi.klingVideoO3Pro.videoEdit | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.runwayml.aleph2 | This exact endpoint is not in the Videobook catalog. |
-| wavespeed:api.v3.xAi.grokImagineVideoV1p5.referenceToVideo | This exact endpoint is not in the Videobook catalog. |
 | openai:gpt-image-1.5 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2 | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-flare | OpenAI is not a catalog provider. |
 | openai:gpt-image-2.5-sunburst | OpenAI is not a catalog provider. |
 | google:gemini-3.1-flash-image | Google is not a catalog provider. |
 
-- Models: 337
+- Models: 346
 
 | Model | Title | Media | Operations | Refs | Modes | Picker |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -351,6 +342,8 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `wavespeed:bytedance/seedance-2.5/video-edit` | Seedance 2.5 Edit (WaveSpeed) | video | edit_video | image 0-30, video 1-1, audio 0-10 |  | visible |
 | `wavespeed:bytedance/seedance-2.0/text-to-video` | Seedance 2.0 (WaveSpeed) | video | text_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
 | `wavespeed:bytedance/seedance-2.0/image-to-video` | Seedance 2.0 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:bytedance/seedance-2.0/reference-to-video` | Seedance 2.0 References (WaveSpeed) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
+| `wavespeed:bytedance/seedance-2.0/video-edit` | Seedance 2.0 Edit (WaveSpeed) | video | edit_video | image 0-9, video 1-1, audio 0-3 |  | visible |
 | `wavespeed:minimax/h3/text-to-video` | MiniMax H3 (WaveSpeed) | video | text_to_video | none |  | visible |
 | `wavespeed:minimax/h3/image-to-video` | MiniMax H3 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
 | `wavespeed:minimax/h3/reference-to-video` | MiniMax H3 References (WaveSpeed) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
@@ -359,15 +352,22 @@ Top-10 coverage policy: every registry endpoint must map exactly to a catalog en
 | `wavespeed:alibaba/wan-3.0/image-to-video` | Wan 3.0 Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
 | `wavespeed:alibaba/wan-3.0/reference-to-video` | Wan 3.0 References (WaveSpeed) | video | reference_to_video | image 0-10, video 0-5, audio 0-5 |  | visible |
 | `wavespeed:alibaba/wan-3.0/video-edit` | Wan 3.0 Edit (WaveSpeed) | video | edit_video | image 0-10, video 1-1, audio 0-5 |  | visible |
+| `wavespeed:alibaba/wan-2.7/video-edit` | Wan 2.7 Edit (WaveSpeed) | video | edit_video | image 0-3, video 1-1 |  | visible |
 | `wavespeed:alibaba/happyhorse-1.1/image-to-video` | HappyHorse 1.1 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
+| `wavespeed:alibaba/happyhorse-1.1/reference-to-video` | HappyHorse 1.1 References (WaveSpeed) | video | reference_to_video | image 1-9 |  | visible |
+| `wavespeed:alibaba/happyhorse-1.0/video-edit` | HappyHorse 1.0 Edit (WaveSpeed) | video | edit_video | image 0-5, video 1-1 |  | visible |
 | `wavespeed:google/gemini-omni-1.1-flash/text-to-video` | Gemini Omni 1.1 Flash (WaveSpeed) | video | text_to_video | none |  | visible |
 | `wavespeed:google/gemini-omni-1.1-flash/image-to-video` | Gemini Omni 1.1 Flash Image (WaveSpeed) | video | image_to_video | first_frame 1-1, last_frame 0-1 |  | visible |
+| `wavespeed:google/gemini-omni-1.1-flash/reference-to-video` | Gemini Omni 1.1 Flash References (WaveSpeed) | video | reference_to_video | image 0-10, video 0-3 |  | visible |
 | `wavespeed:google/gemini-omni-1.1-flash/video-edit` | Gemini Omni 1.1 Flash Edit (WaveSpeed) | video | edit_video | video 1-1 |  | visible |
 | `wavespeed:black-forest-labs/flux-3/text-to-video` | FLUX 3 (WaveSpeed) | video | text_to_video | none |  | visible |
 | `wavespeed:black-forest-labs/flux-3/image-to-video` | FLUX 3 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
 | `wavespeed:heygen/video-1.0/text-to-video` | HeyGen Video (WaveSpeed) | video | text_to_video | none |  | visible |
 | `wavespeed:heygen/video-1.0/reference-to-video` | HeyGen Video References (WaveSpeed) | video | reference_to_video | image 0-9, video 0-3, audio 0-3 |  | visible |
 | `wavespeed:x-ai/grok-imagine-video-v1.5/image-to-video` | Grok Imagine Video 1.5 Image (WaveSpeed) | video | image_to_video | first_frame 1-1 |  | visible |
+| `wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video` | Grok Imagine Video 1.5 References (WaveSpeed) | video | reference_to_video | image 1-7 |  | visible |
+| `wavespeed:kwaivgi/kling-video-o3-pro/video-edit` | Kling o3 Pro Edit (WaveSpeed) | video | edit_video | image 0-4, video 1-1 |  | visible |
+| `wavespeed:runwayml/aleph-2` | Runway Aleph 2 Edit (WaveSpeed) | video | edit_video | first_frame 0-1, last_frame 0-1, video 1-1, keyframe 0-5 |  | visible |
 | `elevenlabs:text-to-speech` | ElevenLabs Text to Speech | audio | speech | none |  | visible |
 | `elevenlabs:sound-generation` | ElevenLabs Sound Effects | audio | sfx | none |  | visible |
 | `elevenlabs:music` | ElevenLabs Music | audio | music | none |  | visible |

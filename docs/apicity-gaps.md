@@ -1001,6 +1001,45 @@ The transcription fixture now prices the provider-reported one-second duration
 instead of the slightly longer local MP3 probe duration. Reported usage takes
 precedence over a pre-call duration hint.
 
-The nine WaveSpeed reference/edit endpoints introduced in 0.27.0 are listed
-as explicit frontier catalog gaps. Catalog integration is tracked in `vb-n2t2z`;
-this pricing adoption does not add new generation tools.
+The nine WaveSpeed reference/edit endpoints introduced in 0.27.0 were listed
+as explicit frontier catalog gaps by this pricing adoption, which added no
+generation tools. §50 catalogs them.
+
+## 50. (decision) Apicity 0.27 WaveSpeed reference and edit endpoints — DECIDED 2026-11-09
+
+`server/src/media/wavespeed.ts` now catalogs all 32 WaveSpeed submit methods
+`@apicity/wavespeed` 0.27.1 publishes (vb-n2t2z), and the nine WaveSpeed rows
+left `FRONTIER_CATALOG_GAPS`: HappyHorse 1.0 edit, HappyHorse 1.1 references,
+Wan 2.7 edit, Seedance 2.0 references and edit, Gemini Omni 1.1 Flash
+references, Kling o3 Pro edit, Runway Aleph 2 and Grok Imagine Video 1.5
+references. Catalog ids are `wavespeed:<pricing key>`, the path after
+`/api/v3/`.
+
+- `images` lists (HappyHorse, Gemini Omni references, Kling o3) fill the image
+  role like `reference_images`. HappyHorse 1.1 and Grok references require at
+  least one image, as their schemas do.
+- `runwayml/aleph-2` has no task segment, so its entry declares `edit_video`.
+  Videobook takes its keyframes as roles: a first frame, a last frame and up to
+  five keyframes with a `timestamp_s` item param, five in all. The request
+  sends them as `keyframe_images` with `keyframe_positions` `first`, the time
+  as a decimal string such as `2.5`, and `last`. A keyframe without a time is
+  refused, because the source length that would place it is unknown when the
+  request is built.
+- HappyHorse 1.1 references write `[Image N]` (`brackets`) and the HappyHorse
+  1.0 edit names the source video and reference images in words
+  (`happyhorse_edit`), as on KIE and fal. Seedance 2.0 uses the `seedance`
+  dialect. Gemini Omni (`<IMAGE_REF_0>`), Grok (`<IMAGE_0>`) and Kling o3
+  (`<<<image_1>>>`) document their own markers, but their fal siblings in the
+  catalog use plain-word references, so these entries do the same. Kling o3
+  uses the `kling30` prompt guide.
+- Edits bill the source clip's seconds and Seedance 2.0 references their
+  reference videos' seconds. Both come from `costHints.inputDurationSeconds`,
+  which estimates and jobs read from connected book videos; a remote URL leaves
+  the estimate unavailable with Apicity's warning.
+- Schema descriptions also give clip limits (Aleph 2-30 s, Kling o3 3-15 s,
+  Gemini Omni references at most 3 s each, Seedance 2.0 references 15 s in
+  all). Like the other WaveSpeed entries, Videobook leaves them to WaveSpeed's
+  own validation.
+
+The KIE Seedance 2, KIE Gemini Omni Flash 1.1, KIE Wan 2.7 video edit and
+Alibaba Wan 2.7 video edit frontier rows remain explicit gaps.

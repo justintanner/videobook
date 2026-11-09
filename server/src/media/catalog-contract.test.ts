@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createKie } from "@apicity/kie";
 import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveModel, UnknownModelError } from "./descriptor.js";
-import { buildWireRequest } from "./request.js";
+import { buildWireRequest, type RefParams } from "./request.js";
 import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
@@ -26,6 +26,10 @@ const SAMPLE_REFS: Record<string, MediaRefs> = {
   "kie:grok-imagine/image-to-video": { image: ["https://example.com/image0.png"] },
   "machgen:MiniMax-H3/upscale": { video: [machgenTaskUrl("task-1", 10)] },
   "machgen:MiniMax-H3/sharpen": { video: [machgenTaskUrl("task-1", 10)] },
+};
+
+const SAMPLE_REF_PARAMS: Record<string, RefParams> = {
+  "wavespeed:runwayml/aleph-2": { keyframe: [{ timestamp_s: 2 }] },
 };
 
 function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {
@@ -84,6 +88,7 @@ describe("media catalog contract", () => {
       const built = buildWireRequest(model, {
         prompt: model.promptField ? "a red fox in snow" : undefined,
         refUrls: sampleRefs(model, mode),
+        refParams: SAMPLE_REF_PARAMS[id],
         options: requiredOptions(model),
         mode: mode.id,
       });
@@ -97,6 +102,7 @@ describe("media catalog contract", () => {
     const result = await estimateGeneration(model, {
       prompt: model.promptField ? "a red fox in snow" : undefined,
       refUrls: sampleRefs(model, mode),
+      refParams: SAMPLE_REF_PARAMS[id],
       options: requiredOptions(model),
       mode: mode.id,
     });

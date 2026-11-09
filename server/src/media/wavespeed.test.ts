@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/client";
-import { computeEstimate } from "@apicity/cost";
+import { computeEstimate, type CostEstimate, type CostHints } from "@apicity/cost";
+import { createWaveSpeed } from "@apicity/wavespeed";
+import { WaveSpeedRunwaymlAleph2RequestSchema } from "@apicity/wavespeed/zod";
 import type { Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../engine.js";
@@ -14,17 +16,26 @@ import { runFfmpeg } from "../ffmpeg.js";
 import { pollPendingProviderTasks } from "../tools/reconcile-project-work.js";
 import { readProviderTaskStatus } from "../provider-task-status.js";
 import { MODEL_ENTRIES } from "./catalog.js";
+import { estimateGeneration } from "./cost.js";
 import { resolveModel } from "./descriptor.js";
+import { arrayBounds, propertyAt, toJsonSchema } from "./json-schema.js";
 import { buildWireRequest, type WireRequestInput } from "./request.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { previewGeneration } from "./preview.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
+import { wavespeedDotPath } from "./wavespeed.js";
+import type { SlotKind } from "./types.js";
 import { testBudget } from "../test-budget.js";
 
 const FRAME = "https://example.test/first.png";
 const LAST = "https://example.test/last.png";
+const KEYFRAME = "https://example.test/keyframe.png";
 const CLIP = "https://example.test/clip.mp4";
 const SONG = "https://example.test/song.mp3";
+const SAMPLE: Readonly<Record<SlotKind, string>> = { image: FRAME, video: CLIP, audio: SONG };
+const IMAGE_REF = "22222222-2222-4222-8222-222222222222";
+const VIDEO_REF = "33333333-3333-4333-8333-333333333333";
+const AUDIO_REF = "44444444-4444-4444-8444-444444444444";
 
 interface Recorded {
   method: string;
@@ -53,23 +64,117 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
   response.end(JSON.stringify(value));
 }
 
+function submitPaths(node: unknown, path: readonly string[]): string[] {
+  if (typeof node === "function") return "schema" in node ? [path.join(".")] : [];
+  if (node === null || typeof node !== "object") return [];
+  return Object.entries(node).flatMap(([key, child]) => submitPaths(child, [...path, key]));
+}
+
+async function estimateUnits(id: string, call: WireRequestInput, hints: CostHints = {}): Promise<number | undefined> {
+  const result = await estimateGeneration(resolveModel(id), call, hints);
+  if (!result.ok) throw new Error(result.error);
+  expect(result.estimate.warnings, id).toEqual([]);
+  return result.estimate.breakdown.units;
+}
+
 describe("WaveSpeed catalog", () => {
   const wavespeed = MODEL_ENTRIES.filter((entry) => entry.id.startsWith("wavespeed:"));
 
   it("catalogs every WaveSpeed video endpoint apicity publishes and prices each one", () => {
-    expect(wavespeed).toHaveLength(23);
+    const published = submitPaths(createWaveSpeed({ apiKey: "offline" }).api, ["api"]);
+    expect(wavespeed.map((entry) => wavespeedDotPath(entry.id.slice("wavespeed:".length))).sort()).toEqual(published.sort());
     for (const entry of wavespeed) {
       const model = resolveModel(entry.id);
       expect(model.title).toMatch(/\(WaveSpeed\)$/u);
       expect(model.media).toBe("video");
-      const roles = Object.fromEntries(model.slots.map((slot) => [slot.role, slot.field]));
       const refs: NonNullable<WireRequestInput["refUrls"]> = {};
-      if (roles.first_frame) refs.first_frame = [FRAME];
-      if (model.entry.operations.includes("edit_video")) refs.video = [CLIP];
+      for (const slot of model.slots) {
+        if (slot.min > 0) refs[slot.role] = Array.from({ length: slot.min }, () => SAMPLE[slot.kind]);
+      }
       const built = request(entry.id, { prompt: "a red boat", refUrls: refs });
       const estimate = computeEstimate({ provider: "wavespeed", payload: built, endpoint: model.apiId, costHints: { inputDurationSeconds: 5 } });
       expect(estimate.usd, entry.id).toBeGreaterThan(0);
     }
+  });
+
+  it("maps WaveSpeed's image lists, reference media and source videos onto roles", () => {
+    expect(request("wavespeed:alibaba/happyhorse-1.0/video-edit", { prompt: "make it night", refUrls: { video: [CLIP], image: [FRAME, LAST] } }))
+      .toMatchObject({ video: CLIP, images: [FRAME, LAST] });
+    expect(request("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", { prompt: "make it night", refUrls: { video: [CLIP], image: [FRAME] } }))
+      .toMatchObject({ video: CLIP, images: [FRAME] });
+    expect(request("wavespeed:alibaba/wan-2.7/video-edit", { prompt: "make it night", refUrls: { video: [CLIP], image: [FRAME] } }))
+      .toMatchObject({ video: CLIP, reference_images: [FRAME] });
+    expect(request("wavespeed:bytedance/seedance-2.0/video-edit", { prompt: "make it night", refUrls: { video: [CLIP], image: [FRAME], audio: [SONG] } }))
+      .toMatchObject({ video: CLIP, reference_images: [FRAME], reference_audios: [SONG] });
+    expect(request("wavespeed:bytedance/seedance-2.0/reference-to-video", { prompt: "a walk", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] } }))
+      .toMatchObject({ reference_images: [FRAME], reference_videos: [CLIP], reference_audios: [SONG] });
+    expect(request("wavespeed:google/gemini-omni-1.1-flash/reference-to-video", { prompt: "a walk", refUrls: { image: [FRAME], video: [CLIP] } }))
+      .toMatchObject({ images: [FRAME], reference_videos: [CLIP] });
+    expect(request("wavespeed:alibaba/happyhorse-1.1/reference-to-video", { prompt: "a walk", refUrls: { image: [FRAME, LAST] } }))
+      .toMatchObject({ images: [FRAME, LAST] });
+    expect(request("wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video", { prompt: "a walk", refUrls: { image: [FRAME] } }))
+      .toMatchObject({ reference_images: [FRAME] });
+    for (const id of ["wavespeed:alibaba/happyhorse-1.1/reference-to-video", "wavespeed:x-ai/grok-imagine-video-v1.5/reference-to-video"]) {
+      expect(buildWireRequest(resolveModel(id), { prompt: "a walk" })).toEqual({ ok: false, error: `${id} requires at least 1 image ref` });
+    }
+    expect(resolveModel("wavespeed:kwaivgi/kling-video-o3-pro/video-edit")).toMatchObject({ title: "Kling o3 Pro Edit (WaveSpeed)", entry: { operations: ["edit_video"], guide: "kling30" } });
+  });
+
+  it("places Runway Aleph 2 keyframes at the first frame, timed positions and the last frame", () => {
+    const aleph = resolveModel("wavespeed:runwayml/aleph-2");
+    const cap = arrayBounds(propertyAt(toJsonSchema(WaveSpeedRunwaymlAleph2RequestSchema), "keyframe_images")!).max;
+    expect(aleph).toMatchObject({ title: "Runway Aleph 2 Edit (WaveSpeed)", entry: { operations: ["edit_video"], inputLimits: [{ max: cap }] } });
+    expect(aleph.slots.map((slot) => [slot.role, slot.min, slot.max])).toEqual([["first_frame", 0, 1], ["last_frame", 0, 1], ["video", 1, 1], ["keyframe", 0, cap]]);
+    expect(aleph.slots.find((slot) => slot.role === "keyframe")?.itemParams.map((param) => param.name)).toEqual(["timestamp_s"]);
+    expect(request(aleph.id, {
+      prompt: "turn the street to snow",
+      refUrls: { video: [CLIP], first_frame: [FRAME], keyframe: [KEYFRAME, FRAME], last_frame: [LAST] },
+      refParams: { keyframe: [{ timestamp_s: 2 }, { timestamp_s: 4.5 }] },
+    })).toEqual({
+      prompt: "turn the street to snow",
+      video: CLIP,
+      keyframe_images: [FRAME, KEYFRAME, FRAME, LAST],
+      keyframe_positions: ["first", "2", "4.5", "last"],
+    });
+    expect(request(aleph.id, { prompt: "turn the street to snow", refUrls: { video: [CLIP] } })).toEqual({ prompt: "turn the street to snow", video: CLIP });
+    expect(buildWireRequest(aleph, { prompt: "snow", refUrls: { video: [CLIP], keyframe: [KEYFRAME] } }))
+      .toEqual({ ok: false, error: "Keyframes: set keyframe 1's time in seconds" });
+    expect(buildWireRequest(aleph, {
+      prompt: "snow",
+      refUrls: { video: [CLIP], first_frame: [FRAME], keyframe: Array.from({ length: cap! }, () => KEYFRAME) },
+      refParams: { keyframe: Array.from({ length: cap! }, (_, index) => ({ timestamp_s: index + 1 })) },
+    })).toEqual({ ok: false, error: `Keyframes: First, last and timed keyframes together can't exceed ${cap}` });
+    const preview = previewGeneration({ model: aleph.id, prompt: "snow", refs: { video: [CLIP] } });
+    expect(preview.ok && preview.preview.providerPath).toBe("wavespeed.api.v3.runwayml.aleph2(request)");
+  });
+
+  it("names connected references in each new endpoint's prompt syntax", () => {
+    const rewrite = (id: string, prompt: string, refs: Parameters<typeof applyPromptDialect>[2]) => applyPromptDialect(resolveModel(id).entry.dialect, prompt, refs);
+    expect(rewrite("wavespeed:alibaba/happyhorse-1.1/reference-to-video", "@image1 gallops", { image: [IMAGE_REF] })).toBe("[Image 1] gallops");
+    expect(rewrite("wavespeed:alibaba/happyhorse-1.0/video-edit", "dress @video1 like @image1", { video: [VIDEO_REF], image: [IMAGE_REF] }))
+      .toBe("dress the source video like reference image 1");
+    expect(rewrite("wavespeed:bytedance/seedance-2.0/reference-to-video", "@image1 dances to @audio1 like @video1", { image: [IMAGE_REF], video: [VIDEO_REF], audio: [AUDIO_REF] }))
+      .toBe("@Image1 dances to @Audio1 like @Video1");
+    expect(rewrite("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", "give @video1 the coat from @image1", { video: [VIDEO_REF], image: [IMAGE_REF] }))
+      .toBe("give the source video the coat from reference image 1");
+    expect(rewrite("wavespeed:runwayml/aleph-2", "@firstframe @keyframe1 turn @video1 to winter", { first_frame: [IMAGE_REF], keyframe: ["55555555-5555-4555-8555-555555555555"], video: [VIDEO_REF] }))
+      .toBe("turn the source video to winter");
+  });
+
+  it("bills the new edits by their source video and Seedance 2.0 references by their reference videos", async () => {
+    const edit = { prompt: "make it night", refUrls: { video: [CLIP] } };
+    expect(await estimateUnits("wavespeed:alibaba/happyhorse-1.0/video-edit", edit, { inputDurationSeconds: 4.2 })).toBe(5);
+    expect(await estimateUnits("wavespeed:alibaba/happyhorse-1.0/video-edit", edit, { inputDurationSeconds: 1 })).toBe(3);
+    expect(await estimateUnits("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", edit, { inputDurationSeconds: 20 })).toBe(15);
+    expect(await estimateUnits("wavespeed:runwayml/aleph-2", edit, { inputDurationSeconds: 40 })).toBe(30);
+    expect(await estimateUnits("wavespeed:alibaba/wan-2.7/video-edit", edit, { inputDurationSeconds: 4.2 })).toBe(5);
+    expect(await estimateUnits("wavespeed:alibaba/wan-2.7/video-edit", { ...edit, options: { duration: 8 } })).toBe(8);
+    expect(await estimateUnits("wavespeed:bytedance/seedance-2.0/video-edit", edit, { inputDurationSeconds: 6 })).toBe(12);
+    const references = { prompt: "a walk", refUrls: { video: [CLIP, CLIP] }, options: { duration: 5 } };
+    expect(await estimateUnits("wavespeed:bytedance/seedance-2.0/reference-to-video", references, { inputDurationSeconds: 7 })).toBe(12);
+    expect(await estimateUnits("wavespeed:google/gemini-omni-1.1-flash/reference-to-video", references)).toBe(5);
+    const unpriced = await estimateGeneration(resolveModel("wavespeed:runwayml/aleph-2"), edit);
+    expect(unpriced.ok && unpriced.estimate).toMatchObject({ usd: 0, warnings: [expect.stringContaining("inputDurationSeconds")] });
   });
 
   it("maps frames, references and the edited video onto WaveSpeed's fields", () => {
@@ -225,6 +330,36 @@ describe("WaveSpeed provider tasks", () => {
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ status: "completed" });
   });
 
+  it("submits a Runway Aleph 2 edit and its keyframes to WaveSpeed's task-less Aleph endpoint", async () => {
+    const bookId = engine.book.get().bookId;
+    const result = await client.callTool({
+      name: "generate_video",
+      arguments: {
+        book_id: bookId,
+        model: "wavespeed:runwayml/aleph-2",
+        prompt: "turn the street to snow",
+        refs: { video: [CLIP], first_frame: [FRAME], keyframe: [KEYFRAME] },
+        ref_params: { keyframe: [{ timestamp_s: 2.5 }] },
+      },
+    });
+    expect(result.isError, toolText(result)).toBeFalsy();
+    const enqueued = JSON.parse(toolText(result)) as { asset_id: string; job_id: string };
+    await resumeBookQueueForTests(bookId);
+    await waitForJob(enqueued.job_id, testBudget(30_000));
+    const submit = recorded.find((entry) => entry.method === "POST")!;
+    expect(submit.path).toBe("/api/v3/runwayml/aleph-2");
+    expect(JSON.parse(submit.body)).toEqual({
+      prompt: "turn the street to snow",
+      video: CLIP,
+      keyframe_images: [FRAME, KEYFRAME],
+      keyframe_positions: ["first", "2.5"],
+    });
+    expect(engine.jobs.pending.read(enqueued.asset_id)).toMatchObject({
+      ok: true,
+      value: { taskId: PREDICTION_ID, taskType: "wavespeed_media", meta: { model: "wavespeed:runwayml/aleph-2", wavespeedModel: "runwayml/aleph-2" } },
+    });
+  });
+
   it("fails a WaveSpeed prediction the provider reports as failed", async () => {
     const assetId = await submitted();
     prediction = predicted("failed", { error: "content policy violation" });
@@ -267,5 +402,59 @@ describe("WaveSpeed provider tasks", () => {
     expect(polled).toEqual({ pending: [], completed: [], failed: [] });
     expect(recorded).toEqual([]);
     expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: expect.objectContaining({ taskId: PREDICTION_ID }) });
+  });
+});
+
+describe("WaveSpeed cost hints from book videos", () => {
+  let root: string;
+  let engine: Engine;
+  let client: Client;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "videobook-wavespeed-cost-"));
+    engine = createEngineForTest(root);
+    client = await createTestClient(root);
+  });
+
+  afterEach(async () => {
+    await client.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function bookVideo(seconds: number): Promise<string> {
+    const asset = await engine.artifacts.create("video", `source-${seconds}`);
+    if (!asset.ok) throw new Error(asset.error.message);
+    await engine.metadata.artifacts.write(asset.value.artifactId, "original", { duration: seconds });
+    return `@${asset.value.artifactId}`;
+  }
+
+  async function estimate(model: string, refs: Record<string, string[]>, options: Record<string, unknown> = {}): Promise<CostEstimate> {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: { calls: [{ tool_name: "generate_video", input: { book_id: engine.book.get().bookId, model, prompt: "make it night", refs, options } }] },
+    });
+    return (JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as { estimate: CostEstimate }).estimate;
+  }
+
+  it("prices each new edit from its connected source video and Seedance 2.0 references from theirs", async () => {
+    const source = await bookVideo(4.2);
+    const edits: Array<[string, number]> = [
+      ["wavespeed:alibaba/happyhorse-1.0/video-edit", 5],
+      ["wavespeed:alibaba/wan-2.7/video-edit", 5],
+      ["wavespeed:bytedance/seedance-2.0/video-edit", 10],
+      ["wavespeed:kwaivgi/kling-video-o3-pro/video-edit", 5],
+      ["wavespeed:runwayml/aleph-2", 5],
+    ];
+    for (const [model, units] of edits) {
+      const priced = await estimate(model, { video: [source] });
+      expect(priced, model).toMatchObject({ warnings: [], breakdown: { units } });
+      expect(priced.usd, model).toBeGreaterThan(0);
+    }
+    const references = [await bookVideo(3), await bookVideo(4)];
+    expect(await estimate("wavespeed:bytedance/seedance-2.0/reference-to-video", { video: references }, { duration: 5 }))
+      .toMatchObject({ warnings: [], breakdown: { units: 12 } });
+    const remote = await estimate("wavespeed:kwaivgi/kling-video-o3-pro/video-edit", { video: [CLIP] });
+    expect(remote.usd).toBe(0);
+    expect(remote.warnings.join(" ")).toContain("inputDurationSeconds");
   });
 });
