@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { access, chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,7 +24,7 @@ afterEach(async () => {
 })
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'vb-ci-bins-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'vb-ci-bins-')))
   roots.push(root)
   return root
 }
