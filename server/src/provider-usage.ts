@@ -1,14 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { createCost, extractActual, mergeActuals, isFalDynamicPricingEndpoint, PRICING, PRICING_AS_OF } from "@apicity/cost";
-import type { EstimateRequest, ModelPricing, CostHints, CostActual, ProviderExchange } from "@apicity/cost";
+import type { CostEstimate, EstimateRequest, ModelPricing, CostHints, CostActual, ProviderExchange } from "@apicity/cost";
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
 import type { Media } from "./media/types.js";
 import { estimateFalRequest } from "./media/cost.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
-import { httpDotPath, usageQuote } from "./usage-quote.js";
+import { httpDotPath, usageQuote, type UsageQuote } from "./usage-quote.js";
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
@@ -18,6 +18,7 @@ type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersi
 const incomplete = new WeakSet<Engine>();
 const cost = createCost();
 const usageCostHints = new AsyncLocalStorage<CostHints>();
+const quotedEstimates = new AsyncLocalStorage<UsageQuote>();
 const clonesHeldForBody = new WeakMap<ReadableStream<Uint8Array>, Request | Response>();
 
 function object(value: unknown): RecordValue {
@@ -285,6 +286,14 @@ export function withUsageCostHints<T>(hints: CostHints, operation: () => Promise
   return usageCostHints.run(hints, operation);
 }
 
+export function withQuotedEstimate<T>(estimate: CostEstimate, operation: () => Promise<T>): Promise<T> {
+  return quotedEstimates.run({
+    estimateUsd: estimate.usd,
+    estimateSource: estimate.source,
+    estimateRateAsOf: estimate.rateAsOf,
+  }, operation);
+}
+
 function positiveSeconds(value: number | null): number | undefined {
   return value !== null && value > 0 ? value : undefined;
 }
@@ -318,7 +327,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       hints = mergeCostHints(hints, usageCostHints.getStore());
       const activity = provider === "machgen" ? machgenActivity(payload) : activityFor(provider, model, url.pathname, context.operation);
       const quoteEndpoint = provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname);
-      const quoted = usageQuote({
+      const quoted = quotedEstimates.getStore() ?? usageQuote({
         provider, method, dotPath: httpDotPath(url.pathname), payload,
         ...(quoteEndpoint ? { endpoint: quoteEndpoint } : {}),
         ...(hints ? { costHints: hints } : {}),

@@ -1,7 +1,10 @@
 import { createFal } from "../usage-providers.js";
+import { getApiKey } from "../api-key.js";
+import { quoteMachGenUpscale } from "./adapters/machgen.js";
 import {
   computeEstimate,
   createFalEstimateCache,
+  isMachGenQuotePriced,
   resolveFalDynamicEstimate,
   type CostEstimate,
   type CostHints,
@@ -116,6 +119,13 @@ export function generationCostHints(input: Record<string, unknown>, hints: CostH
     : combined;
 }
 
+function quotableMachGenUpscale(model: ResolvedModel, payload: Record<string, unknown>): boolean {
+  return model.provider === "machgen"
+    && isMachGenQuotePriced(payload)
+    && Array.isArray(payload.src_task_ids) && payload.src_task_ids.length > 0
+    && getApiKey("MACHGEN_API_KEY") !== null;
+}
+
 async function estimateWireRequest(
   model: ResolvedModel,
   request: Record<string, unknown>,
@@ -125,6 +135,7 @@ async function estimateWireRequest(
   const payload = costPayload(model, request, input);
   const costHints = generationCostHints(input, hints);
   if (model.provider === "fal") return estimateFalRequest(model.apiId, payload, costHints);
+  if (quotableMachGenUpscale(model, payload)) return quoteMachGenUpscale(payload, costHints);
   return computeEstimate({
     provider: costProvider(model),
     payload,

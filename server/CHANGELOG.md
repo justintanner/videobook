@@ -15,6 +15,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
   `<<<video_1>>>` for the Kling o3 edit on WaveSpeed, and `@Image1` and
   `@Video1` for Kling o3 on fal. Notebook prompts keep their `@image1` slot
   mentions.
+- MachGen Topaz upscales are priced with MachGen's free quote instead of
+  showing $0. `estimate_cost` and notebook plans quote an upscale of a MachGen
+  output when `MACHGEN_API_KEY` is set, and every Topaz job is quoted when it
+  submits, so its usage row keeps the quoted estimate beside the billed
+  charge. A video MachGen must upload is quoted only at submission, and a
+  failed quote leaves the estimate unpriced as before.
 
 ## [0.5.0] - 2026-11-09
 

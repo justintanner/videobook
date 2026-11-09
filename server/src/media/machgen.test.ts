@@ -23,6 +23,7 @@ import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { configureProviderEndpoints } from "./endpoints.js";
 import { adapterFor } from "./adapters/index.js";
+import { resetMachGenUpscaleQuotesForTests } from "./adapters/machgen.js";
 import { sourcedGenerationInput } from "./generation-source.js";
 import { MACHGEN_IMAGE_SPECS, MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
 import { previewGeneration } from "./preview.js";
@@ -576,6 +577,7 @@ describe("MachGen provider tasks", () => {
   let taskStatus: { code: number; body: Record<string, unknown> };
   let billingFailure: boolean;
   let uploadReply: { code: number; body: Record<string, unknown> };
+  let quoteReply: { code: number; body: Record<string, unknown> };
   let root: string;
   let engine: Engine;
   let client: Client;
@@ -584,6 +586,7 @@ describe("MachGen provider tasks", () => {
 
   function route(method: string, path: string, response: ServerResponse): void {
     if (method === "POST" && path === "/api/v0/upload") return sendJson(response, uploadReply.code, uploadReply.body);
+    if (method === "POST" && path === "/api/v0/upscale/quote") return sendJson(response, quoteReply.code, quoteReply.body);
     if (method === "POST" && path === "/api/v0/generate") {
       return sendJson(response, 200, { task_id: taskIds.shift() ?? TASK_ID, metadata: { model: "Seedance-2.5", task_type: "I2V" }, task_output: null, moderation: null });
     }
@@ -644,6 +647,8 @@ describe("MachGen provider tasks", () => {
     taskStatus = status("RUNNING");
     billingFailure = false;
     uploadReply = { code: 200, body: { artifact_path: ARTIFACT_PATH, duration_secs: 1, fps: 25, frame_count: 25 } };
+    quoteReply = { code: 200, body: { cost_micros: 149_000 } };
+    resetMachGenUpscaleQuotesForTests();
     asset = mp4;
     root = await mkdtemp(join(tmpdir(), "videobook-machgen-"));
     engine = createEngineForTest(root);
@@ -1011,7 +1016,9 @@ describe("MachGen provider tasks", () => {
     const direct = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, model: generation.model, prompt: "Unsupported instruction", refs: { video: [sourceId] } } });
     expect(direct.isError).toBe(true);
     expect(toolText(direct)).toContain("takes no prompt");
-    expect(recorded).toEqual([]);
+    expect(JSON.parse(toolText(plan))).toMatchObject({ stages: [expect.objectContaining({ kind: "queued", estimatedCostUsd: expect.closeTo(0.149, 6) })] });
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upscale/quote"]);
+    expect(JSON.parse(recorded[0]!.body)).toMatchObject({ model: "Topaz-Video-Precision", task_type: "UPSCALE", src_task_ids: ["seeded-task"] });
   });
 
   it("refuses a Topaz upscale of a URL or a video without a known length before any MachGen call", async () => {
@@ -1047,8 +1054,8 @@ describe("MachGen provider tasks", () => {
     expect(recorded).toEqual([]);
 
     const assetId = await generated(input);
-    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/generate"]);
-    const [upload, generate] = recorded;
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/upscale/quote", "/api/v0/generate"]);
+    const [upload, quote, generate] = recorded;
     expect(upload!.authorization).toBe("Bearer local-machgen-key");
     const file = await uploadedFile(upload!);
     expect(file.name).toBe(`${contentHash(mp4)}.mp4`);
@@ -1058,6 +1065,8 @@ describe("MachGen provider tasks", () => {
       model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
       video_config: { height: 2160, duration_secs: 13 }, src_video_urls: [`@input/${ARTIFACT_PATH}`],
     });
+    expect(JSON.parse(quote!.body)).toEqual(JSON.parse(generate!.body));
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ estimateUsd: expect.closeTo(0.149, 6) });
     const pending = engine.jobs.pending.read(assetId);
     expect(pending.ok && pending.value).toMatchObject({ taskId: TASK_ID, meta: { model: "machgen:Topaz-Video-Precision", sourceVideoIds: [sourceId] } });
   });
@@ -1121,9 +1130,57 @@ describe("MachGen provider tasks", () => {
       model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
       video_config: { height: 1080, duration_secs: 5 }, src_task_ids: ["seeded-task"], upscale_config: { engine: "proteus" },
     });
-    expect(recorded).toHaveLength(1);
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upscale/quote", "/api/v0/generate"]);
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ estimateUsd: expect.closeTo(0.149, 6) });
     const pending = engine.jobs.pending.read(assetId);
     expect(pending.ok && pending.value).toMatchObject({ meta: { sourceVideoIds: [sourceId] } });
+  });
+
+  it("prices an owned Topaz upscale with MachGen's quote and reuses it when the job submits", async () => {
+    const bookId = engine.book.get().bookId;
+    const sourceId = await seededVideo(h3Payload(768, 5));
+    await engine.metadata.artifacts.write(sourceId, "original", { width: 768, height: 1344, duration: 5, download_url_content_hash: contentHash(mp4) });
+    const input = { book_id: bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] }, options: { resolution: "1080p" } };
+    const estimate = await client.callTool({ name: "estimate_cost", arguments: { calls: [{ tool_name: "generate_video", input }] } });
+    expect(estimate.isError, toolText(estimate)).toBeFalsy();
+    expect(JSON.parse(toolText(estimate))).toMatchObject({ estimate: { usd: expect.closeTo(0.149, 6), warnings: [] } });
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upscale/quote"]);
+    expect(recorded[0]!.authorization).toBe("Bearer local-machgen-key");
+    expect(JSON.parse(recorded[0]!.body)).toEqual({
+      model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
+      video_config: { height: 1080, duration_secs: 5 }, src_task_ids: ["seeded-task"],
+    });
+
+    const assetId = await generated(input);
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upscale/quote", "/api/v0/generate"]);
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+      provider: "machgen", model: "Topaz-Video-Precision", estimateUsd: expect.closeTo(0.149, 6),
+    });
+  });
+
+  it("keeps a Topaz estimate unpriced without a key, for an upload source or when the quote fails", async () => {
+    const bookId = engine.book.get().bookId;
+    const owned = await seededVideo(h3Payload(768, 5));
+    await engine.metadata.artifacts.write(owned, "original", { width: 768, height: 1344, duration: 5, download_url_content_hash: contentHash(mp4) });
+    const uploaded = await seededVideo(null);
+    await engine.metadata.artifacts.write(uploaded, "original", { width: 768, height: 1344, duration: 5 });
+    const estimateFor = async (sourceId: string): Promise<{ usd: number; warnings: string[] }> => {
+      const result = await client.callTool({ name: "estimate_cost", arguments: { calls: [{ tool_name: "generate_video", input: { book_id: bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] } } }] } });
+      expect(result.isError, toolText(result)).toBeFalsy();
+      return (JSON.parse(toolText(result)) as { estimate: { usd: number; warnings: string[] } }).estimate;
+    };
+    const unpriced = expect.stringContaining("not found in pricing table");
+    expect(await estimateFor(uploaded)).toMatchObject({ usd: 0, warnings: [unpriced] });
+    delete process.env.MACHGEN_API_KEY;
+    expect(await estimateFor(owned)).toMatchObject({ usd: 0, warnings: [unpriced] });
+    expect(recorded).toEqual([]);
+
+    process.env.MACHGEN_API_KEY = "local-machgen-key";
+    quoteReply = { code: 503, body: { detail: "quote unavailable" } };
+    expect(await estimateFor(owned)).toMatchObject({ usd: 0, warnings: [unpriced, expect.stringContaining("MachGen upscale quote failed")] });
+    const assetId = await generated({ model: "machgen:Topaz-Video-Precision", refs: { video: [owned] } });
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upscale/quote", "/api/v0/upscale/quote", "/api/v0/generate"]);
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ provider: "machgen", estimateUsd: null });
   });
 
   it("uploads an edited MachGen video instead of upscaling its old task", async () => {
@@ -1132,9 +1189,9 @@ describe("MachGen provider tasks", () => {
     const edited = Buffer.concat([mp4, Buffer.from("edited")]);
     expect((await engine.files.write(sourceId, "original.mp4", edited)).ok).toBe(true);
     await generated({ model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] }, options: { resolution: "1080p" } });
-    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/generate"]);
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/upscale/quote", "/api/v0/generate"]);
     expect(Buffer.from(await (await uploadedFile(recorded[0]!)).arrayBuffer())).toEqual(edited);
-    expect(JSON.parse(recorded[1]!.body)).toEqual({
+    expect(JSON.parse(recorded[2]!.body)).toEqual({
       model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
       video_config: { height: 1080, duration_secs: 5 }, src_video_urls: [`@input/${ARTIFACT_PATH}`],
     });

@@ -1076,13 +1076,12 @@ refuses public URLs as Topaz sources (its free quote answered 400 and generate
   client switches to another method above 32 MiB, so the tool, estimates and
   previews refuse a source of 32 MiB or more before any MachGen call.
 - Previews show the source as a resolved-later placeholder in
-  `src_video_urls`. Topaz estimates stay unpriced as before: `@apicity/cost`
-  has no Topaz rates, and Videobook does not call MachGen's quote
-  (`resolveMachGenUpscaleEstimate`), which an upload source could only answer
-  after its upload. A completed upscale's usage row still takes MachGen's
-  billing receipt (see the usage notes at the top). Uploads are not recorded
-  as usage. MachGen states no upload price, and the upstream probe saw no
-  charge.
+  `src_video_urls`. `@apicity/cost` has no Topaz rates, so Topaz estimates
+  come from MachGen's free quote (§53); an upload source can only be quoted
+  after its upload, when the job submits. A completed upscale's usage row
+  still takes MachGen's billing receipt (see the usage notes at the top).
+  Uploads are not recorded as usage. MachGen states no upload price, and the
+  upstream probe saw no charge.
 
 Acceptance (2026-11-09, one authorized live check, no generation): a 2 s
 540×960 H.264 book video of 332,210 bytes went through the source resolver,
@@ -1147,3 +1146,33 @@ Notes:
   above, `server/src/media/prompt-dialects.test.ts`,
   `server/src/media/wavespeed.test.ts` and the regenerated generation-input
   goldens. No live generation was run.
+
+## 53. (decision) MachGen Topaz estimates from MachGen's upscale quote — DECIDED 2026-11-09
+
+`@apicity/cost` has no Topaz rates, so every MachGen Topaz upscale used to
+estimate at $0 with "model 'Topaz-Video-*' not found in pricing table for
+provider 'machgen'", and only the billing receipt recorded its charge.
+`resolveMachGenUpscaleEstimate` prices an UPSCALE the table lacks with
+MachGen's free `POST /api/v0/upscale/quote`, which creates no task (vb-jftuj).
+
+- Estimates and plans: `estimateGeneration` quotes a Topaz upscale whose
+  source is a MachGen output (`src_task_ids`) when `MACHGEN_API_KEY` is set.
+  That covers `estimate_cost` and the notebook generation and run plans, which
+  call it. A source MachGen must upload has no `@input/` path yet, so its
+  estimate stays unpriced with the table's warning.
+- Submission: the Topaz adapter quotes every UPSCALE request, owned or
+  uploaded, just before `api.v0.generate`, and a priced answer becomes the
+  generate call's stored usage quote (`estimateUsd`, beside the actual) through
+  `withQuotedEstimate`. The provisional price stays unknown until MachGen's
+  billing receipt arrives, as before.
+- Priced quotes are kept for five minutes by exact request body (at most 128),
+  so a plan's quote is reused when an owned source submits unchanged. Each
+  quote waits at most 15 s.
+- Failures degrade: without a usable key there is no quote call and the
+  warning is unchanged; a refused or malformed quote leaves the unpriced
+  warning plus one naming the failure, and the job still submits with the
+  stored quote it had before.
+- Tests answer the quote from the local MachGen server in
+  `server/src/media/machgen.test.ts`; no live quote ran for this change. The
+  2026-11-09 acceptance in §51 priced a 2 s 1080p `Topaz-Video-Precision`
+  upload source at 149,000 micro-USD, which the fixture reuses.
