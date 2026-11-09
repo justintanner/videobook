@@ -907,10 +907,12 @@ packages moved version only.
 | **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |
-| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | grid-derived specs plus a capability table in `server/src/media/machgen.ts`; Topaz upscalers uncatalogued; H3 2K regeneration from a connected source (vb-tutc, vb-s91f) |
+| **QUIRK**    | §44 MachGen 0.17.0 request shapes                                   | grid-derived specs plus a capability table in `server/src/media/machgen.ts`; H3 2K regeneration from a connected source (vb-tutc, vb-s91f); Topaz sources in §51 |
 | **RESOLVED** | §45 fal queue status/result catalog rows (`ac-8zeblu`, 0.18.1)      | none; captures keep the SDK dot paths (vb-7871); strict matching in 0.19.0 |
 | **DECIDED**  | §46 KIE 0.19.0 default changes                                      | Seedance 2.5 audio on through the catalog defaults     |
 | **DECIDED**  | §48 MachGen 0.24.0 edit caps and MiniMax H3 Omni                    | 9-image reference ceiling where an R2V grid has none; hidden H3 Omni entry |
+| **DECIDED**  | §50 WaveSpeed 0.27 reference and edit endpoints                     | Aleph 2 keyframe roles; plain-word references for Gemini Omni, Grok and Kling o3 |
+| **DECIDED**  | §51 MachGen native upload for local Topaz sources                   | owned outputs by task id, other book videos under 32 MiB by `@input/` upload |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -1051,3 +1053,42 @@ references. Catalog ids are `wavespeed:<pricing key>`, the path after
 
 The KIE Seedance 2, KIE Gemini Omni Flash 1.1, KIE Wan 2.7 video edit and
 Alibaba Wan 2.7 video edit frontier rows remain explicit gaps.
+
+## 51. (decision) MachGen native upload for local Topaz sources — DECIDED 2026-11-09
+
+`@apicity/machgen` 0.27.1 adds `api.v0.upload` (apicity `ac-e9c277`, PR #652):
+a multipart `POST /api/v0/upload` that answers an `artifact_path`, which an
+UPSCALE request names as `@input/<artifact_path>` in `src_video_urls`. MachGen
+refuses public URLs as Topaz sources (its free quote answered 400 and generate
+500 to them), so before vb-2fzbj Topaz upscaled only MachGen's own outputs.
+
+- A connected book video that MachGen generated and nobody has edited still
+  goes by `src_task_ids`, with no upload.
+- Any other book video, including a MachGen output edited since it was
+  generated, is uploaded by the Topaz adapter (`machgenAdapterFor` in
+  `server/src/media/adapters/machgen.ts`) when the job runs, and the request
+  sends `src_video_urls: ["@input/<artifact_path>"]`. The upload reuses the
+  shared upload preamble (video bytes unchanged, a SHA-256 file name), allows
+  five minutes and follows the job's abort signal. There is no free-host
+  fallback: a refused upload fails the job before any generate call. Other
+  MachGen models keep sending their image and reference media as public URLs.
+- Apicity's upload is small-file multipart only, and MachGen's own Python
+  client switches to another method above 32 MiB, so the tool, estimates and
+  previews refuse a source of 32 MiB or more before any MachGen call.
+- Previews show the source as a resolved-later placeholder in
+  `src_video_urls`. Topaz estimates stay unpriced as before: `@apicity/cost`
+  has no Topaz rates, and Videobook does not call MachGen's quote
+  (`resolveMachGenUpscaleEstimate`), which an upload source could only answer
+  after its upload. A completed upscale's usage row still takes MachGen's
+  billing receipt (see the usage notes at the top). Uploads are not recorded
+  as usage. MachGen states no upload price, and the upstream probe saw no
+  charge.
+
+Acceptance (2026-11-09, one authorized live check, no generation): a 2 s
+540×960 H.264 book video of 332,210 bytes went through the source resolver,
+the Topaz adapter's upload and the wire builder. MachGen answered an
+`@input/` artifact path, and its free quote priced the resulting 1080p
+`Topaz-Video-Precision` UPSCALE at 149,000 micro-USD.
+
+The MiniMax H3 2K re-render and sharpen still take only MachGen's own H3
+outputs (§44).

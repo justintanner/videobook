@@ -3,7 +3,7 @@ import { alibabaAdapterFor } from "./alibaba.js";
 import { elevenLabsAdapter } from "./elevenlabs.js";
 import { falAdapter } from "./fal.js";
 import { kieAdapter } from "./kie.js";
-import { machgenAdapter } from "./machgen.js";
+import { machgenAdapterFor } from "./machgen.js";
 import type { ProviderAdapter } from "./types.js";
 import { wavespeedAdapter } from "./wavespeed.js";
 import { xaiAdapter } from "./xai.js";
@@ -21,7 +21,7 @@ export function adapterFor(model: ResolvedModel): ProviderAdapter {
     case "elevenlabs":
       return elevenLabsAdapter;
     case "machgen":
-      return machgenAdapter;
+      return machgenAdapterFor(model.apiId);
     case "wavespeed":
       return wavespeedAdapter;
   }

@@ -1,5 +1,5 @@
 import type { CostHints } from "@apicity/cost";
-import type { Engine } from "videobook-engine";
+import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { readProviderTaskRecord } from "../provider-task-record.js";
 import { MEDIA_TASK_TYPES } from "./adapters/types.js";
 import { tryResolveModel } from "./descriptor.js";
@@ -11,6 +11,9 @@ import type { MediaRefs, ResolvedModel } from "./types.js";
 export type GenerationSource =
   | { ok: true; refs: MediaRefs; sourceVideoIds: string[]; costHints: CostHints; options: Record<string, unknown> }
   | { ok: false; error: string };
+
+const MEBIBYTE = 1024 * 1024;
+const MACHGEN_UPLOAD_LIMIT_BYTES = 32 * MEBIBYTE;
 
 interface MachGenOutput {
   taskId: string;
@@ -77,6 +80,12 @@ async function resolveMachGenUpscale(engine: Engine, model: ResolvedModel, upsca
   };
 }
 
+async function sourceFile(engine: Engine, raw: string, assetId: string): Promise<ArtifactManifestFile | undefined> {
+  const input = await resolveRefInput(engine, "video", raw);
+  const manifest = await engine.files.manifest(assetId);
+  return manifest.ok ? manifest.value.files.find((file) => file.name === input.filename) : undefined;
+}
+
 async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: MediaRefs, options: Record<string, unknown>): Promise<GenerationSource> {
   const raws = refs.video ?? [];
   if (raws.length !== 1) return refused(`${model.title} upscales one connected video`);
@@ -88,28 +97,26 @@ async function resolveMachGenTopaz(engine: Engine, model: ResolvedModel, refs: M
   if (seconds === undefined) return refused(`${raw} has no known duration yet; wait for it to finish`);
   const pending = engine.jobs.pending.read(assetId);
   if (pending.ok && pending.value) return refused(`${raw} is still generating; wait for it to finish`);
-  const output = await machgenOutput(engine, assetId);
-  if (!output) return refused(`${model.title} needs a completed MachGen video from this book; use Topaz Video Precision via fal for other videos`);
   const metadata = await engine.metadata.artifacts.read<{ width?: number; height?: number; download_url_content_hash?: string }>(assetId, "original");
-  const originalHash = metadata.ok ? metadata.value.download_url_content_hash : undefined;
-  if (originalHash) {
-    const input = await resolveRefInput(engine, "video", raw);
-    const manifest = await engine.files.manifest(assetId);
-    const currentHash = manifest.ok ? manifest.value.files.find((file) => file.name === input.filename)?.objectHash : undefined;
-    if (currentHash !== originalHash) return refused(`${raw} has changed since MachGen generated it; use Topaz Video Precision via fal to upscale the edited video`);
-  }
-  const { width, height } = metadata.ok ? metadata.value : {};
+  const { width, height, download_url_content_hash: originalHash } = metadata.ok ? metadata.value : {};
   const resolution = options.resolution ?? model.entry.defaults?.resolution ?? "2160p";
   const target = typeof resolution === "string" ? Number(/^(\d+)p$/u.exec(resolution)?.[1]) : NaN;
   if (typeof width === "number" && typeof height === "number" && width > 0 && height > 0 && target <= Math.min(width, height)) {
     return refused(`${model.title} target ${resolution} must exceed the source video's ${Math.min(width, height)}p short edge (${width}×${height})`);
   }
+  const file = await sourceFile(engine, raw, assetId);
+  const output = await machgenOutput(engine, assetId);
+  const ownedTaskId = output && (!originalHash || file?.objectHash === originalHash) ? output.taskId : null;
+  if (!ownedTaskId && file && file.sizeBytes >= MACHGEN_UPLOAD_LIMIT_BYTES) {
+    return refused(`${raw} is ${(file.sizeBytes / MEBIBYTE).toFixed(1)} MiB; MachGen uploads take videos under ${MACHGEN_UPLOAD_LIMIT_BYTES / MEBIBYTE} MiB, so use Topaz Video Precision via fal for it`);
+  }
+  const sourceSeconds = Math.max(1, Math.ceil(seconds));
   return {
     ok: true,
-    refs: { ...refs, video: [machgenTaskUrl(output.taskId, Math.max(1, Math.ceil(seconds)))] },
-    sourceVideoIds: [assetId],
+    refs: ownedTaskId ? { ...refs, video: [machgenTaskUrl(ownedTaskId, sourceSeconds)] } : refs,
+    sourceVideoIds: ownedTaskId ? [assetId] : [],
     costHints: { inputDurationSeconds: seconds, durationSeconds: seconds },
-    options: { source_seconds: Math.max(1, Math.ceil(seconds)) },
+    options: { source_seconds: sourceSeconds },
   };
 }
 

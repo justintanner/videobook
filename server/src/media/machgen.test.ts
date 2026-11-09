@@ -22,6 +22,7 @@ import { buildWireRequest, type WireRequestInput } from "./request.js";
 import { estimateGeneration } from "./cost.js";
 import { applyPromptDialect } from "./prompt-dialects.js";
 import { configureProviderEndpoints } from "./endpoints.js";
+import { adapterFor } from "./adapters/index.js";
 import { sourcedGenerationInput } from "./generation-source.js";
 import { MACHGEN_IMAGE_SPECS, MACHGEN_MODELS, MACHGEN_TOPAZ_MODELS, machgenTaskUrl } from "./machgen.js";
 import { previewGeneration } from "./preview.js";
@@ -542,13 +543,13 @@ describe("MachGen image catalog", () => {
   });
 });
 
-type Recorded = { method: string; path: string; authorization: string | undefined; body: string };
+type Recorded = { method: string; path: string; authorization: string | undefined; contentType: string | undefined; raw: Buffer; body: string };
 
-function readBody(incoming: IncomingMessage): Promise<string> {
+function readBody(incoming: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
-    incoming.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    incoming.on("end", () => resolve(Buffer.concat(chunks)));
     incoming.on("error", reject);
   });
 }
@@ -561,6 +562,7 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
 describe("MachGen provider tasks", () => {
   const TASK_ID = "a7b3c9d1-0000-4000-8000-000000000001";
   const UPSCALE_TASK_ID = "a7b3c9d1-0000-4000-8000-000000000002";
+  const ARTIFACT_PATH = "uploads/7f3e2a/source.mp4";
   let fixtures: string;
   let mp4: Buffer;
   let wav: Buffer;
@@ -573,6 +575,7 @@ describe("MachGen provider tasks", () => {
   let taskIds: string[];
   let taskStatus: { code: number; body: Record<string, unknown> };
   let billingFailure: boolean;
+  let uploadReply: { code: number; body: Record<string, unknown> };
   let root: string;
   let engine: Engine;
   let client: Client;
@@ -580,6 +583,7 @@ describe("MachGen provider tasks", () => {
   let originalKey: string | undefined;
 
   function route(method: string, path: string, response: ServerResponse): void {
+    if (method === "POST" && path === "/api/v0/upload") return sendJson(response, uploadReply.code, uploadReply.body);
     if (method === "POST" && path === "/api/v0/generate") {
       return sendJson(response, 200, { task_id: taskIds.shift() ?? TASK_ID, metadata: { model: "Seedance-2.5", task_type: "I2V" }, task_output: null, moderation: null });
     }
@@ -618,9 +622,9 @@ describe("MachGen provider tasks", () => {
     png = await readFile(join(fixtures, "still.png"));
     jpeg = await readFile(join(fixtures, "still.jpg"));
     server = createServer((incoming, response) => {
-      void readBody(incoming).then((body) => {
-        const authorization = incoming.headers.authorization;
-        recorded.push({ method: incoming.method ?? "", path: incoming.url ?? "", authorization, body });
+      void readBody(incoming).then((raw) => {
+        const { authorization, "content-type": contentType } = incoming.headers;
+        recorded.push({ method: incoming.method ?? "", path: incoming.url ?? "", authorization, contentType, raw, body: raw.toString() });
         route(incoming.method ?? "", incoming.url ?? "", response);
       });
     });
@@ -639,6 +643,7 @@ describe("MachGen provider tasks", () => {
     taskIds = [];
     taskStatus = status("RUNNING");
     billingFailure = false;
+    uploadReply = { code: 200, body: { artifact_path: ARTIFACT_PATH, duration_secs: 1, fps: 25, frame_count: 25 } };
     asset = mp4;
     root = await mkdtemp(join(tmpdir(), "videobook-machgen-"));
     engine = createEngineForTest(root);
@@ -1021,16 +1026,73 @@ describe("MachGen provider tasks", () => {
     expect(recorded).toEqual([]);
   });
 
-  it("refuses an external Topaz source before creating an artifact or uploading", async () => {
+  async function uploadedFile(entry: Recorded): Promise<File> {
+    const form = await new Response(new Uint8Array(entry.raw), { headers: { "content-type": entry.contentType ?? "" } }).formData();
+    return form.get("file") as File;
+  }
+
+  it("uploads a book video MachGen did not generate and upscales it as an @input source", async () => {
     const sourceId = await seededVideo(null);
     await engine.metadata.artifacts.write(sourceId, "original", { width: 1536, height: 2688, duration: 12.459 });
     const input = { book_id: engine.book.get().bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] }, options: { resolution: "2160p" } };
+    const sourced = await sourcedGenerationInput(engine, input);
+    expect(sourced).toEqual({ ok: true, input: { ...input, options: { resolution: "2160p", source_seconds: 13 } } });
+    if (!sourced.ok) return;
+    const preview = previewGeneration(sourced.input);
+    expect(preview.ok && preview.preview.payload).toEqual({
+      model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
+      video_config: { height: 2160, duration_secs: 13 }, src_video_urls: [expect.stringContaining(sourceId)],
+    });
+    expect(preview.ok && preview.preview.placeholders).toEqual([expect.objectContaining({ path: "src_video_urls[0]", reference: `@${sourceId}` })]);
+    expect(recorded).toEqual([]);
+
+    const assetId = await generated(input);
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/generate"]);
+    const [upload, generate] = recorded;
+    expect(upload!.authorization).toBe("Bearer local-machgen-key");
+    const file = await uploadedFile(upload!);
+    expect(file.name).toBe(`${contentHash(mp4)}.mp4`);
+    expect(file.type).toBe("video/mp4");
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(mp4);
+    expect(JSON.parse(generate!.body)).toEqual({
+      model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
+      video_config: { height: 2160, duration_secs: 13 }, src_video_urls: [`@input/${ARTIFACT_PATH}`],
+    });
+    const pending = engine.jobs.pending.read(assetId);
+    expect(pending.ok && pending.value).toMatchObject({ taskId: TASK_ID, meta: { model: "machgen:Topaz-Video-Precision", sourceVideoIds: [sourceId] } });
+  });
+
+  it("refuses a Topaz source too large for MachGen's upload before any MachGen call", async () => {
+    const sourceId = await seededVideo(null);
+    expect((await engine.files.write(sourceId, "original.mp4", Buffer.alloc(32 * 1024 * 1024))).ok).toBe(true);
+    await engine.metadata.artifacts.write(sourceId, "original", { width: 1536, height: 2688, duration: 12 });
     const before = engine.artifacts.list().length;
-    const result = await client.callTool({ name: "generate_video", arguments: input });
+    const result = await client.callTool({ name: "generate_video", arguments: {
+      book_id: engine.book.get().bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] },
+    } });
     expect(result.isError).toBe(true);
-    expect(toolText(result)).toContain("use Topaz Video Precision via fal for other videos");
-    expect(await sourcedGenerationInput(engine, input)).toMatchObject({ ok: false, error: expect.stringContaining("completed MachGen video") });
+    expect(toolText(result)).toBe(`${sourceId} is 32.0 MiB; MachGen uploads take videos under 32 MiB, so use Topaz Video Precision via fal for it`);
     expect(engine.artifacts.list()).toHaveLength(before);
+    expect(recorded).toEqual([]);
+  });
+
+  it("fails the upscale when MachGen refuses the upload, without generating or falling back to a public host", async () => {
+    const sourceId = await seededVideo(null);
+    await engine.metadata.artifacts.write(sourceId, "original", { width: 1536, height: 2688, duration: 12 });
+    uploadReply = { code: 413, body: { detail: "File too large" } };
+    const bookId = engine.book.get().bookId;
+    const result = await client.callTool({ name: "generate_video", arguments: { book_id: bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] } } });
+    expect(result.isError, toolText(result)).toBeFalsy();
+    const { job_id: jobId } = JSON.parse(toolText(result)) as { job_id: string };
+    await resumeBookQueueForTests(bookId);
+    await expect(waitForJob(jobId, testBudget(30_000))).rejects.toThrow("MachGen API error 413: File too large");
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload"]);
+  });
+
+  it("stops a MachGen upload the job has already cancelled before reading or sending the video", async () => {
+    const sourceId = await seededVideo(null);
+    const upload = adapterFor(resolveModel("machgen:Topaz-Video-Precision")).upload(engine, sourceId, "original.mp4", AbortSignal.abort());
+    await expect(upload).rejects.toThrow(/abort/iu);
     expect(recorded).toEqual([]);
   });
 
@@ -1064,16 +1126,18 @@ describe("MachGen provider tasks", () => {
     expect(pending.ok && pending.value).toMatchObject({ meta: { sourceVideoIds: [sourceId] } });
   });
 
-  it("does not upscale an old MachGen task when the connected video has been edited", async () => {
+  it("uploads an edited MachGen video instead of upscaling its old task", async () => {
     const sourceId = await seededVideo(h3Payload(768, 5));
     await engine.metadata.artifacts.write(sourceId, "original", { width: 768, height: 1344, duration: 5, download_url_content_hash: contentHash(mp4) });
-    expect((await engine.files.write(sourceId, "original.mp4", Buffer.concat([mp4, Buffer.from("edited")]))).ok).toBe(true);
-    const result = await client.callTool({ name: "generate_video", arguments: {
-      book_id: engine.book.get().bookId, model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] },
-    } });
-    expect(result.isError).toBe(true);
-    expect(toolText(result)).toContain("has changed since MachGen generated it");
-    expect(recorded).toEqual([]);
+    const edited = Buffer.concat([mp4, Buffer.from("edited")]);
+    expect((await engine.files.write(sourceId, "original.mp4", edited)).ok).toBe(true);
+    await generated({ model: "machgen:Topaz-Video-Precision", refs: { video: [sourceId] }, options: { resolution: "1080p" } });
+    expect(recorded.map((entry) => entry.path)).toEqual(["/api/v0/upload", "/api/v0/generate"]);
+    expect(Buffer.from(await (await uploadedFile(recorded[0]!)).arrayBuffer())).toEqual(edited);
+    expect(JSON.parse(recorded[1]!.body)).toEqual({
+      model: "Topaz-Video-Precision", task_type: "UPSCALE", prompt: "",
+      video_config: { height: 1080, duration_secs: 5 }, src_video_urls: [`@input/${ARTIFACT_PATH}`],
+    });
   });
 
   it.each([

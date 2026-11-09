@@ -1,14 +1,17 @@
 import type { CostHints } from "@apicity/cost";
 import type { MachGenGenerateRequest } from "@apicity/machgen";
+import type { Engine } from "videobook-engine";
 import { createMachGen } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
-import { uploadAssetFile } from "../../upload.js";
+import { prepareAssetForUpload, uploadAssetFile } from "../../upload.js";
 import { providerEndpoints } from "../endpoints.js";
+import { machgenTopaz } from "../machgen.js";
 import type { Media } from "../types.js";
 import { nonEmpty, record, writePendingTask } from "./pending.js";
 import { MEDIA_TASK_TYPES, type ProviderAdapter, type ProviderOutput, type SubmitContext, type SubmitResult } from "./types.js";
 
 const ASSET_DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 const JPEG_SIGNATURE = Buffer.from([0xff, 0xd8, 0xff]);
 
 export function machgenProvider(timeout = 60_000, baseURL = providerEndpoints().machgenBaseURL): ReturnType<typeof createMachGen> {
@@ -53,10 +56,26 @@ export async function downloadMachGenOutput(taskId: string, media: Media, url?: 
   return { bytes, extension: media === "image" ? imageExtension(bytes) : "mp4", ...(url ? { url } : {}) };
 }
 
-export const machgenAdapter: ProviderAdapter = {
+async function uploadAssetToMachGen(engine: Engine, assetId: string, filename: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
+  const { data, hashedFilename, contentType } = await prepareAssetForUpload(engine, assetId, filename);
+  const file = new Blob([new Uint8Array(data)], { type: contentType });
+  const uploaded = await machgenProvider(UPLOAD_TIMEOUT_MS).api.v0.upload({ file, filename: hashedFilename }, signal);
+  const artifactPath = nonEmpty(uploaded.artifact_path);
+  if (!artifactPath) throw new Error("MachGen accepted the upload without an artifact path");
+  return `@input/${artifactPath}`;
+}
+
+const machgenAdapter: ProviderAdapter = {
   provider: "machgen",
   envKey: "MACHGEN_API_KEY",
   upload: uploadAssetFile,
   uploadUrl: async (url) => url,
   submit,
 };
+
+const machgenTopazAdapter: ProviderAdapter = { ...machgenAdapter, upload: uploadAssetToMachGen };
+
+export function machgenAdapterFor(apiId: string): ProviderAdapter {
+  return machgenTopaz(apiId) ? machgenTopazAdapter : machgenAdapter;
+}
