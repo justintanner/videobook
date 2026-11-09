@@ -83,14 +83,39 @@ async function provideFfmpeg(dest, env, run) {
   await provideFile(source, dest)
 }
 
-function resolvePackage(root, name) {
+async function packageName(dir) {
+  try {
+    const parsed = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
+    return typeof parsed.name === 'string' ? parsed.name : null
+  } catch {
+    return null
+  }
+}
+
+async function packageDirFromEntry(entry, name) {
+  let dir = dirname(entry)
+  for (;;) {
+    if (await packageName(dir) === name) return dir
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+async function resolvePackage(root, name) {
   const manifests = [join(root, 'package.json'), join(root, 'server', 'package.json')]
   for (const manifest of manifests) {
     try {
-      return dirname(createRequire(manifest).resolve(`${name}/package.json`))
+      const entry = createRequire(manifest).resolve(name)
+      const dir = await packageDirFromEntry(entry, name)
+      if (dir) return dir
     } catch {
       continue
     }
+  }
+  const direct = [join(root, 'node_modules', name), join(root, 'server', 'node_modules', name)]
+  for (const dir of direct) {
+    if (await packageName(dir) === name) return dir
   }
   throw new Error(`Could not resolve ${name} from ${root}`)
 }
@@ -99,6 +124,8 @@ async function commandOutput(file, args) {
   const { stdout } = await execFileAsync(file, args)
   return stdout
 }
+
+export { resolvePackage }
 
 export async function installWorkspace({ root, env = process.env, run, fetchImpl }) {
   const platform = env.VIDEOBOOK_CI_PLATFORM ?? process.platform
@@ -134,8 +161,8 @@ export async function installWorkspace({ root, env = process.env, run, fetchImpl
     fallback: (dest) => provideFfmpeg(dest, env, run),
   })
 
-  const ytdlpTarget = join(resolvePackage(root, 'ytdlp-nodejs'), 'bin', asset)
-  const ffmpegTarget = join(resolvePackage(root, 'ffmpeg-static'), ffmpegName)
+  const ytdlpTarget = join(await resolvePackage(root, 'ytdlp-nodejs'), 'bin', asset)
+  const ffmpegTarget = join(await resolvePackage(root, 'ffmpeg-static'), ffmpegName)
   await place(ytdlp.path, ytdlpTarget)
   await place(ffmpeg.path, ffmpegTarget)
   const ytdlpHash = sha256(await readFile(ytdlpTarget))

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
-import { installWorkspace } from './ci-install.mjs'
+import { installWorkspace, resolvePackage } from './ci-install.mjs'
 import {
   FFMPEG_RELEASE,
   YTDLP_VERSION,
@@ -156,10 +156,25 @@ describe('pinned CI media binaries', () => {
   })
 })
 
+function hiddenPackageJson(name: string): string {
+  return `${JSON.stringify({
+    name,
+    main: './dist/index.js',
+    exports: { '.': './dist/index.js' },
+  })}\n`
+}
+
 describe('CI install with release downloads blocked', () => {
   async function script(path: string, body: string): Promise<void> {
     await writeFile(path, body)
     await chmod(path, 0o755)
+  }
+
+  async function installedPackage(root: string, name: string): Promise<void> {
+    const dir = join(root, 'node_modules', name, 'dist')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'index.js'), 'module.exports = {}\n')
+    await writeFile(join(root, 'node_modules', name, 'package.json'), hiddenPackageJson(name))
   }
 
   function blockedEnv(root: string, ytdlpBin: string, ffmpegBin: string): NodeJS.ProcessEnv {
@@ -197,10 +212,8 @@ describe('CI install with release downloads blocked', () => {
       run: async (command, args) => {
         events.push([command, ...args])
         if (args[0] !== 'ci') return
-        await mkdir(join(root, 'node_modules', 'ffmpeg-static'), { recursive: true })
-        await mkdir(join(root, 'node_modules', 'ytdlp-nodejs'), { recursive: true })
-        await writeFile(join(root, 'node_modules', 'ffmpeg-static', 'package.json'), '{"name":"ffmpeg-static"}\n')
-        await writeFile(join(root, 'node_modules', 'ytdlp-nodejs', 'package.json'), '{"name":"ytdlp-nodejs"}\n')
+        await installedPackage(root, 'ffmpeg-static')
+        await installedPackage(root, 'ytdlp-nodejs')
       },
     })
     expect(urls).toEqual([])
@@ -230,14 +243,25 @@ describe('CI install with release downloads blocked', () => {
       },
       run: async (_command, args) => {
         if (args[0] === 'ci') {
-          await mkdir(join(root, 'node_modules', 'ffmpeg-static'), { recursive: true })
-          await mkdir(join(root, 'node_modules', 'ytdlp-nodejs'), { recursive: true })
-          await writeFile(join(root, 'node_modules', 'ffmpeg-static', 'package.json'), '{"name":"ffmpeg-static"}\n')
-          await writeFile(join(root, 'node_modules', 'ytdlp-nodejs', 'package.json'), '{"name":"ytdlp-nodejs"}\n')
+          await installedPackage(root, 'ffmpeg-static')
+          await installedPackage(root, 'ytdlp-nodejs')
           return
         }
         await writeFile(join(root, 'node_modules', 'ytdlp-nodejs', 'bin', 'yt-dlp_linux'), 'replaced')
       },
     })).rejects.toThrow('yt-dlp binary was replaced during rebuild')
+  })
+
+  it('resolves a package whose exports omit package.json', async () => {
+    const root = await tempRoot()
+    await writeFile(join(root, 'package.json'), '{"name":"fixture"}\n')
+    await installedPackage(root, 'ytdlp-nodejs')
+    const serverPkg = join(root, 'server', 'node_modules', 'ffmpeg-static')
+    await mkdir(join(serverPkg, 'dist'), { recursive: true })
+    await writeFile(join(serverPkg, 'dist', 'index.js'), 'module.exports = {}\n')
+    await writeFile(join(serverPkg, 'package.json'), hiddenPackageJson('ffmpeg-static'))
+    await writeFile(join(root, 'server', 'package.json'), '{"name":"server"}\n')
+    await expect(resolvePackage(root, 'ytdlp-nodejs')).resolves.toBe(join(root, 'node_modules', 'ytdlp-nodejs'))
+    await expect(resolvePackage(root, 'ffmpeg-static')).resolves.toBe(serverPkg)
   })
 })
