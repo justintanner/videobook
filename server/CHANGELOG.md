@@ -6,6 +6,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Video edits, lip sync, upscale and motion control no longer default to a
+  9:16 aspect. Those models leave aspect unset, so a provider that follows an
+  omitted aspect keeps the source framing. An explicit setting or a remembered
+  notebook aspect still wins. Text, image and reference generation, and the
+  explicit reframe models, still default to 9:16.
+
 ## [0.4.3] - 2026-11-07
 
 ### Added

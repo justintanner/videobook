@@ -45,6 +45,20 @@ describe("preferred generation defaults", () => {
     expect(defaultsOf("kie:gemini-omni-video")).toMatchObject({ duration: "10", aspect_ratio: "9:16", resolution: "4k" });
   });
 
+  it("leaves aspect unset on source-shaped video edits and keeps 9:16 for generation and reframe", () => {
+    for (const id of [
+      "wavespeed:wavespeed-ai/minimax-h3/video-edit",
+      "wavespeed:bytedance/seedance-2.0/video-edit",
+      "fal:fal-ai/wan/v2.7/edit-video",
+    ]) {
+      expect(defaultsOf(id).aspect_ratio, id).toBeUndefined();
+    }
+    expect(defaultsOf("wavespeed:bytedance/seedance-2.0/text-to-video").aspect_ratio).toBe("9:16");
+    expect(defaultsOf("fal:minimax/h3-max/reframe-video").aspect_ratio).toBe("9:16");
+    expect(defaultsOf("fal:luma/agent/ray/v3.2/reframe").aspect_ratio).toBe("9:16");
+    expect(defaultsOf("kie:nano-banana-pro").aspect_ratio).toBe("9:16");
+  });
+
   it("defaults image models to 9:16, 2K and their highest quality without touching edit-only durations", () => {
     expect(defaultsOf("kie:nano-banana-pro")).toMatchObject({ aspect_ratio: "9:16", resolution: "2K" });
     expect(defaultsOf("fal:blackforestlabs/flux-3/text-to-image")).toMatchObject({ resolution: "2k" });
@@ -165,6 +179,26 @@ describe("notebook generation settings memory", () => {
     const seedance = await invoke("create_notebook_cell", { notebook_id: id, cell: videoCell(2, "kie:veo3") }) as CellJson;
     await invoke("update_notebook_cell", { notebook_id: id, cell_id: seedance.id, cell: { model: "kie:bytedance/seedance-2-5" } });
     expect(await settingsOf(id, seedance.id)).toEqual({ aspect_ratio: "21:9", duration: 20 });
+  });
+
+  it("applies a remembered aspect to a video edit and leaves a fresh edit unset", async () => {
+    const id = await notebookId();
+    await invoke("create_notebook_cell", {
+      notebook_id: id,
+      cell: videoCell(0, "kie:bytedance/seedance-2-5", { aspect_ratio: "16:9" }),
+    });
+    const edit = await invoke("create_notebook_cell", {
+      notebook_id: id,
+      cell: { ...videoCell(1, "wavespeed:wavespeed-ai/minimax-h3/video-edit"), operation: "edit_video" },
+    }) as CellJson;
+    expect(await settingsOf(id, edit.id)).toEqual({ aspect_ratio: "16:9" });
+
+    const fresh = await invoke("create_notebook", { name: "Fresh edits" }) as { id: string };
+    const unset = await invoke("create_notebook_cell", {
+      notebook_id: fresh.id,
+      cell: { ...videoCell(0, "wavespeed:bytedance/seedance-2.0/video-edit"), operation: "edit_video" },
+    }) as CellJson;
+    expect(await settingsOf(fresh.id, unset.id)).toBeUndefined();
   });
 
   it("keeps each notebook's memory separate", async () => {

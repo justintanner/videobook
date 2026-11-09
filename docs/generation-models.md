@@ -6,6 +6,8 @@ Image and video pickers rank exact catalog endpoints using the committed top-10 
 
 Configured frontier models appear first; other models retain their existing order in a separate group. Providers without credentials are marked unavailable. Saved selections and defaults stay unchanged. Catalog variants on a frontier board are included even if previously hidden; non-frontier hidden variants remain hidden. A model version or lite variant never inherits another endpoint's score.
 
+Video generation defaults to a 9:16 aspect. Edit, lip sync, upscale and motion-control models leave aspect unset, so a provider that follows an omitted aspect keeps the source framing, including a 16:9 source. An explicit setting or a remembered notebook aspect still wins. Explicit reframe models still default to 9:16.
+
 Kling 4 supports text, frames, references and video editing; it appears in the unranked group. Multi-shot requests use the sum of shot durations for billing. HeyGen Video text-to-video and reference-to-video use their exact frontier rankings; image-to-video remains unranked. HeyGen Video endpoint IDs start with `fal:heygen/heygen-video/`.
 
 HeyGen Avatar 3 and 4 digital twins are text-to-video with a stock avatar (Abigail Office Front) and voice (Ivy); the prompt is the spoken script. Avatar 5 uses the SDK defaults Abigail Sofa Front and Warm Pro Narrator. Avatar 4 image-to-video animates an image with the script and defaults to Ivy. Connected audio overrides speech synthesis. Video Agent v2 and v3 accept a production prompt. HeyGen lipsync, translation, filler-word removal, HeyGen Voice TTS and Ideogram vector endpoints are outside this catalog addition.

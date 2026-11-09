@@ -22,6 +22,10 @@ const QUALITY_RANK: readonly string[] = ["very_low", "low", "basic", "standard",
 
 const UNTIMED_VIDEO_OPERATIONS = new Set(["edit_video", "lip_sync", "upscale_video", "motion_control"]);
 
+function isExplicitReframe(entry: ModelEntry): boolean {
+  return entry.id.includes("/reframe");
+}
+
 export function stickySettingGroup(name: string): StickySettingGroup | null {
   const entry = Object.entries(GROUP_FIELDS).find(([, fields]) => fields.includes(name));
   return entry ? entry[0] as StickySettingGroup : null;
@@ -107,11 +111,15 @@ export function takesDuration(entry: ModelEntry): boolean {
   return entry.media === "video" && entry.operations.some((operation) => !UNTIMED_VIDEO_OPERATIONS.has(operation));
 }
 
+function followsSourceShape(entry: ModelEntry): boolean {
+  return entry.media === "video" && !takesDuration(entry) && !isExplicitReframe(entry);
+}
+
 function preferredValue(entry: ModelEntry, option: OptionSpec): string | number | undefined {
   if (option.name !== option.path || entry.pinnedDefaults?.includes(option.name)) return undefined;
   const group = stickySettingGroup(option.name);
   if (group === "duration") return takesDuration(entry) ? preferredDuration(option) : undefined;
-  if (group === "aspect") return preferredAspect(entry, option);
+  if (group === "aspect") return followsSourceShape(entry) ? undefined : preferredAspect(entry, option);
   if (group === "resolution") return preferredResolution(entry, option);
   if (group === "quality" || group === "bitrate") return preferredQuality(option);
   return undefined;

@@ -120,6 +120,20 @@ describe("WaveSpeed catalog", () => {
     expect(resolveModel("wavespeed:kwaivgi/kling-video-o3-pro/video-edit")).toMatchObject({ title: "Kling o3 Pro Edit (WaveSpeed)", entry: { operations: ["edit_video"], guide: "kling30" } });
   });
 
+  it("keeps a 16:9 edit source's framing unless an aspect is chosen", () => {
+    const landscape = { prompt: "keep the wide frame", refUrls: { video: ["https://example.test/landscape-16x9.mp4"] } };
+    for (const id of ["wavespeed:wavespeed-ai/minimax-h3/video-edit", "wavespeed:bytedance/seedance-2.0/video-edit"]) {
+      const built = buildWireRequest(resolveModel(id), landscape);
+      expect(built.ok, id).toBe(true);
+      if (!built.ok) continue;
+      expect(built.input, id).not.toHaveProperty("aspect_ratio");
+      expect(built.request, id).not.toHaveProperty("aspect_ratio");
+      const chosen = buildWireRequest(resolveModel(id), { ...landscape, options: { aspect_ratio: "1:1" } });
+      expect(chosen.ok && chosen.input, id).toMatchObject({ aspect_ratio: "1:1" });
+    }
+    expect(request("wavespeed:bytedance/seedance-2.0/text-to-video", { prompt: "a wide street" }).aspect_ratio).toBe("9:16");
+  });
+
   it("places Runway Aleph 2 keyframes at the first frame, timed positions and the last frame", () => {
     const aleph = resolveModel("wavespeed:runwayml/aleph-2");
     const cap = arrayBounds(propertyAt(toJsonSchema(WaveSpeedRunwaymlAleph2RequestSchema), "keyframe_images")!).max;
