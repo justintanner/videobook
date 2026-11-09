@@ -40,6 +40,7 @@
     "install:acestep": "tsx scripts/install-acestep.ts",
     "mint:x-token": "op run --no-masking --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
     "test": "vitest run",
+    "ci:install": "node scripts/ci-install.mjs",
     "test:ci": "vitest run --exclude=server/src/jobs/smooth-scene-concat.test.ts --exclude=server/src/tools/smooth-scene-concat.test.ts && vitest run --maxWorkers=1 server/src/jobs/smooth-scene-concat.test.ts server/src/tools/smooth-scene-concat.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:pack-install": "node tools/pack-install-smoke.mjs",

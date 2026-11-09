@@ -103,6 +103,7 @@ export default defineConfig({
       'scripts/search-benchmark-corpus.test.ts',
       'scripts/benchmark-startup.test.ts',
       'scripts/changelog-section.test.ts',
+      'scripts/ci-media-bins.test.ts',
       'src/videobook/watermark-target.test.ts',
       'src/videobook/watermark-burn.test.ts',
       'src/videobook/watermark-review.test.ts',

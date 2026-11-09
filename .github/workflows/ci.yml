@@ -22,8 +22,13 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Cache pinned ffmpeg and yt-dlp binaries
+        uses: actions/cache@v4
+        with:
+          path: ci/media-bins
+          key: media-bins-${{ hashFiles('scripts/ci-media-bins.mjs', 'scripts/ci-install.mjs') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Install application and server workspace dependencies
-        run: npm ci
+        run: node scripts/ci-install.mjs
       - name: Check dead code and dependencies
         run: npm run check:dead-code
       - name: Typecheck test projects
@@ -34,3 +39,23 @@ jobs:
         run: npm run build:server
       - name: Run maintained unit tests
         run: npm run test:ci
+
+  install-without-release-downloads:
+    name: Install with GitHub release downloads blocked
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install application and server workspace dependencies
+        run: node scripts/ci-install.mjs
+        env:
+          VIDEOBOOK_CI_BLOCK_RELEASES: "1"
+          FFMPEG_BINARIES_URL: https://bogus.invalid/ffmpeg
+          VIDEOBOOK_CI_YTDLP_RELEASE_BASE: https://bogus.invalid/yt-dlp
+          VIDEOBOOK_CI_CACHE_DIR: ${{ runner.temp }}/empty-media-bins
