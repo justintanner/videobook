@@ -73,6 +73,7 @@ export interface RefDurationWindowMs {
 export interface InputRules {
   maxPromptChars?: number;
   refDurationMs?: Partial<Record<"video" | "audio", RefDurationWindowMs>>;
+  maxVideoRefBytes?: number;
 }
 
 export type SlotKind = "image" | "video" | "audio";

@@ -1,5 +1,4 @@
 import type { AlibabaMultimodalGenerationRequest } from "@apicity/alibaba/zod";
-import type { Engine } from "videobook-engine";
 import { createAlibaba } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
 import { uploadAssetToAlibaba } from "../../jobs/_alibaba-upload.js";
@@ -20,7 +19,7 @@ export function alibabaAdapterFor(apiId: string): ProviderAdapter {
   return {
     provider: "alibaba",
     envKey: "DASHSCOPE_API_KEY",
-    upload: (engine: Engine, assetId: string, filename: string) => uploadAssetToAlibaba(engine, assetId, filename, apiId),
+    upload: (engine, assetId, filename, signal, limits) => uploadAssetToAlibaba(engine, assetId, filename, apiId, signal, limits),
     uploadUrl: async (url) => url,
     submit,
   };

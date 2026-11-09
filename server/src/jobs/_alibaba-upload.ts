@@ -1,6 +1,6 @@
 import { uploadAlibabaFile } from "../usage-providers.js";
 import type { Engine } from "videobook-engine";
-import { prepareAssetForUpload, uploadBytesToFreeHost } from "../upload.js";
+import { prepareAssetForUpload, uploadBytesToFreeHost, type UploadLimits } from "../upload.js";
 import { getApiKey } from "../api-key.js";
 import { logger } from "../logger.js";
 
@@ -12,11 +12,15 @@ export async function uploadAssetToAlibaba(
   assetId: string,
   filename: string,
   model: string,
+  signal?: AbortSignal,
+  limits?: UploadLimits,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     engine,
     assetId,
     filename,
+    signal,
+    limits,
   );
 
   const apiKey = getApiKey("DASHSCOPE_API_KEY");

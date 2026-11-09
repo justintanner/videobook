@@ -119,6 +119,8 @@ function machgenModes(tasks: MachGenTasks): readonly ModeSpec[] | undefined {
   return modes.length === 1 && !references ? undefined : modes;
 }
 
+const FAL_H3_MAX_SOURCE_VIDEO: InputRules = { maxVideoRefBytes: 50 * 1024 * 1024 };
+
 function machgenClips(maximumSeconds: number): InputRules {
   const window = { minimum: 2000, maximum: maximumSeconds * 1000, maximumTotal: maximumSeconds * 1000 };
   return { refDurationMs: { video: window, audio: window } };
@@ -368,11 +370,11 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:blackforestlabs/flux-3-max/text-to-video", media: "video", operations: ["text_to_video"], title: "FLUX 3 Max", defaults: FLUX_3_MAX_DEFAULTS },
   { id: "fal:blackforestlabs/flux-3-max/image-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Image", refs: { first_frame: "image_url" }, modes: FRAME_MODES, defaults: FLUX_3_MAX_DEFAULTS },
   { id: "fal:blackforestlabs/flux-3-max/keyframes-to-video", media: "video", operations: ["image_to_video"], title: "FLUX 3 Max Keyframes", refs: { image: "keyframes" }, keyframeFps: 24, defaults: FLUX_3_MAX_DEFAULTS },
-  { id: "fal:minimax/h3-max/reframe-video", media: "video", operations: ["edit_video"], description: H3_REFRAME_DESCRIPTION },
-  { id: "fal:minimax/h3-max/insert-video", media: "video", operations: ["edit_video"], refs: { video: ["video_url", "reference_video_urls"] } },
-  { id: "fal:minimax/h3-max/recast", media: "video", operations: ["edit_video"] },
+  { id: "fal:minimax/h3-max/reframe-video", media: "video", operations: ["edit_video"], description: H3_REFRAME_DESCRIPTION, rules: FAL_H3_MAX_SOURCE_VIDEO },
+  { id: "fal:minimax/h3-max/insert-video", media: "video", operations: ["edit_video"], refs: { video: ["video_url", "reference_video_urls"] }, rules: FAL_H3_MAX_SOURCE_VIDEO },
+  { id: "fal:minimax/h3-max/recast", media: "video", operations: ["edit_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max-turbo/extend-video", media: "video", operations: ["extend_video"] },
-  { id: "fal:minimax/h3-max/relight", media: "video", operations: ["edit_video"] },
+  { id: "fal:minimax/h3-max/relight", media: "video", operations: ["edit_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   h3MaxStyle("16bit-pixel"),
   h3MaxStyle("hand-drawn"),
   h3MaxStyle("low-poly"),
@@ -476,8 +478,8 @@ export const MODEL_ENTRIES: readonly ModelEntry[] = [
   { id: "fal:minimax/h3-max/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:minimax/h3-max/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" }, modes: FRAME_MODES },
   { id: "fal:minimax/h3-max/reference-to-video", media: "video", operations: ["reference_to_video"], dialect: "natural", refs: { image: "reference_image_urls", first_frame: "image_url" } },
-  { id: "fal:minimax/h3-max/extend-video", media: "video", operations: ["extend_video"] },
-  { id: "fal:minimax/h3-max/3d-to-video", media: "video", operations: ["edit_video"] },
+  { id: "fal:minimax/h3-max/extend-video", media: "video", operations: ["extend_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
+  { id: "fal:minimax/h3-max/3d-to-video", media: "video", operations: ["edit_video"], rules: FAL_H3_MAX_SOURCE_VIDEO },
   { id: "fal:minimax/h3-max/lip-sync/image-to-video", media: "video", operations: ["lip_sync"], refs: { first_frame: "image_url" } },
   { id: "fal:minimax/h3-max-turbo/text-to-video", media: "video", operations: ["text_to_video"] },
   { id: "fal:minimax/h3-max-turbo/image-to-video", media: "video", operations: ["image_to_video"], dialect: "strip_frames", refs: { first_frame: "image_url" }, modes: FRAME_MODES },

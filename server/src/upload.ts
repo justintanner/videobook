@@ -3,12 +3,17 @@ import { uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
 import type { Engine } from "videobook-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
+import { fitVideoUnderByteCap } from "./video-fit.js";
 
 const FREE_HOST_UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
 interface UploadOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+}
+
+export interface UploadLimits {
+  maxVideoBytes?: number;
 }
 
 export function contentHash(data: Buffer | Uint8Array): string {
@@ -90,13 +95,27 @@ export async function uploadBytesToFreeHost(
   }
 }
 
+async function fitVideoWithinLimits(
+  data: Uint8Array,
+  filename: string,
+  limits: UploadLimits,
+  signal?: AbortSignal,
+): Promise<{ data: Uint8Array; filename: string }> {
+  const maxBytes = limits.maxVideoBytes;
+  if (maxBytes === undefined || !inferMimeType(filename).startsWith("video/")) return { data, filename };
+  return fitVideoUnderByteCap(data, filename, maxBytes, signal);
+}
+
 async function prepareBytesForUpload(
   bytes: Uint8Array | Buffer,
   filename: string,
+  limits: UploadLimits,
+  signal?: AbortSignal,
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
   const raw = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const reencoded = await maybeReencodeImage(raw, filename);
-  const { data, filename: outName } = await maybeUpscaleSmallImage(reencoded.data, reencoded.filename);
+  const upscaled = await maybeUpscaleSmallImage(reencoded.data, reencoded.filename);
+  const { data, filename: outName } = await fitVideoWithinLimits(upscaled.data, upscaled.filename, limits, signal);
 
   const ext = outName.split(".").pop() ?? "bin";
   const hashedFilename = `${contentHash(data)}.${ext}`;
@@ -112,10 +131,12 @@ export async function prepareAssetForUpload(
   engine: Engine,
   assetId: string,
   filename: string,
+  signal?: AbortSignal,
+  limits: UploadLimits = {},
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
   const readResult = await engine.files.read(assetId, filename);
   if (!readResult.ok) throw new Error(readResult.error.message);
-  return prepareBytesForUpload(new Uint8Array(readResult.value), filename);
+  return prepareBytesForUpload(new Uint8Array(readResult.value), filename, limits, signal);
 }
 
 // Upload an asset file via the free-host rotation. Kept for
@@ -127,8 +148,9 @@ export async function uploadAssetFile(
   assetId: string,
   filename: string,
   signal?: AbortSignal,
+  limits?: UploadLimits,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const { data, hashedFilename } = await prepareAssetForUpload(engine, assetId, filename);
+  const { data, hashedFilename } = await prepareAssetForUpload(engine, assetId, filename, signal, limits);
   return uploadBytesToFreeHost(data, hashedFilename, { signal });
 }

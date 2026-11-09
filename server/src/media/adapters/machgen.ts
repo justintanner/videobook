@@ -3,7 +3,7 @@ import type { MachGenGenerateRequest } from "@apicity/machgen";
 import type { Engine } from "videobook-engine";
 import { createMachGen } from "../../usage-providers.js";
 import { requireApiKey } from "../../api-key.js";
-import { prepareAssetForUpload, uploadAssetFile } from "../../upload.js";
+import { prepareAssetForUpload, uploadAssetFile, type UploadLimits } from "../../upload.js";
 import { providerEndpoints } from "../endpoints.js";
 import { machgenTopaz } from "../machgen.js";
 import type { Media } from "../types.js";
@@ -56,9 +56,9 @@ export async function downloadMachGenOutput(taskId: string, media: Media, url?: 
   return { bytes, extension: media === "image" ? imageExtension(bytes) : "mp4", ...(url ? { url } : {}) };
 }
 
-async function uploadAssetToMachGen(engine: Engine, assetId: string, filename: string, signal?: AbortSignal): Promise<string> {
+async function uploadAssetToMachGen(engine: Engine, assetId: string, filename: string, signal?: AbortSignal, limits?: UploadLimits): Promise<string> {
   signal?.throwIfAborted();
-  const { data, hashedFilename, contentType } = await prepareAssetForUpload(engine, assetId, filename);
+  const { data, hashedFilename, contentType } = await prepareAssetForUpload(engine, assetId, filename, signal, limits);
   const file = new Blob([new Uint8Array(data)], { type: contentType });
   const uploaded = await machgenProvider(UPLOAD_TIMEOUT_MS).api.v0.upload({ file, filename: hashedFilename }, signal);
   const artifactPath = nonEmpty(uploaded.artifact_path);

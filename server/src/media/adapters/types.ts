@@ -1,6 +1,7 @@
 import type { Engine } from "videobook-engine";
 import type { CostHints } from "@apicity/cost";
 import type { JobHandlerContext } from "../../queue.js";
+import type { UploadLimits } from "../../upload.js";
 import type { ProviderId, ResolvedModel } from "../types.js";
 
 export type ProviderOutput = { url: string } | { bytes: Buffer; extension: string; url?: string };
@@ -23,7 +24,7 @@ export type SubmitResult =
 export interface ProviderAdapter {
   provider: ProviderId;
   envKey: string;
-  upload(engine: Engine, assetId: string, filename: string, signal?: AbortSignal): Promise<string>;
+  upload(engine: Engine, assetId: string, filename: string, signal?: AbortSignal, limits?: UploadLimits): Promise<string>;
   uploadUrl(url: string): Promise<string>;
   submit(request: Record<string, unknown>, context: SubmitContext): Promise<SubmitResult>;
 }

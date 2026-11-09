@@ -1,18 +1,35 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine } from "videobook-engine";
-import { runFfmpeg } from "./ffmpeg.js";
+import { probeVideo, runFfmpeg } from "./ffmpeg.js";
 import { runGenerateMedia, type GenerateMediaJob } from "./jobs/generate-media.js";
 import { configureProviderEndpoints } from "./media/endpoints.js";
 import type { JobHandlerContext, LeaseToken } from "./queue.js";
 import { testBudget } from "./test-budget.js";
 import { contentHash, uploadBytesToFreeHost } from "./upload.js";
+import { fitVideoUnderByteCap } from "./video-fit.js";
 
 const UPLOAD_HOSTS = new Set(["litterbox.catbox.moe", "uguu.se", "tmpfile.link"]);
+const FAL_STORAGE_HOST = "rest.fal.ai";
+const LOCAL_HOSTS = new Set([...UPLOAD_HOSTS, FAL_STORAGE_HOST]);
+const FAL_SOURCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const TASK_ID = "local-upscale-task";
+const FAL_TASK_ID = "local-extend-task";
+
+interface SourceVideo {
+  bytes: Buffer;
+  duration: number;
+  width: number;
+  height: number;
+}
+
+type GenerationRequest = Pick<GenerateMediaJob, "model" | "mode" | "options">;
+
+const MACHGEN_REFERENCE: GenerationRequest = { model: "machgen:MiniMax-H3", mode: "r2v", options: { resolution: "768p", duration: 5 } };
+const FAL_EXTEND: GenerationRequest = { model: "fal:minimax/h3-max/extend-video", options: { aspect_ratio: "16:9", duration: 5, resolution: "768P" } };
 
 type Upload = { host: string; filename: string; contentType: string; bytes: Buffer };
 
@@ -31,6 +48,7 @@ describe("free-host media uploads", () => {
   let baseURL: string;
   let originalFetch: typeof fetch;
   let originalKey: string | undefined;
+  let originalFalKey: string | undefined;
   let originalHarMode: string | undefined;
   let restoreEndpoints: () => void;
   let uploads: Upload[];
@@ -47,6 +65,23 @@ describe("free-host media uploads", () => {
       submissions.push(JSON.parse(body.toString()) as Record<string, unknown>);
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ task_id: TASK_ID }));
+      return;
+    }
+    if (request.url === "/minimax/h3-max/extend-video") {
+      submissions.push(JSON.parse(body.toString()) as Record<string, unknown>);
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ request_id: FAL_TASK_ID, status: "IN_QUEUE" }));
+      return;
+    }
+    if (request.url === `/${FAL_STORAGE_HOST}/storage/upload/initiate`) {
+      const { file_name: filename } = JSON.parse(body.toString()) as { file_name: string };
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ file_url: `${baseURL}/files/${filename}`, upload_url: `${baseURL}/fal-storage/${filename}` }));
+      return;
+    }
+    if (request.method === "PUT" && request.url?.startsWith("/fal-storage/")) {
+      uploads.push({ host: FAL_STORAGE_HOST, filename: request.url.slice("/fal-storage/".length), contentType: request.headers["content-type"] ?? "", bytes: body });
+      response.end();
       return;
     }
     const form = await new Request(baseURL, {
@@ -106,15 +141,17 @@ describe("free-host media uploads", () => {
     originalFetch = globalThis.fetch;
     globalThis.fetch = (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
-      return UPLOAD_HOSTS.has(url.hostname)
+      return LOCAL_HOSTS.has(url.hostname)
         ? originalFetch(`${baseURL}/${url.hostname}${url.pathname}`, init)
         : originalFetch(input, init);
     };
     originalKey = process.env.MACHGEN_API_KEY;
+    originalFalKey = process.env.FAL_API_KEY;
     originalHarMode = process.env.VIDEOBOOK_HAR_CAPTURE;
     process.env.MACHGEN_API_KEY = "local-upload-key";
+    process.env.FAL_API_KEY = "local-fal-key";
     process.env.VIDEOBOOK_HAR_CAPTURE = "off";
-    restoreEndpoints = configureProviderEndpoints({ machgenBaseURL: baseURL });
+    restoreEndpoints = configureProviderEndpoints({ machgenBaseURL: baseURL, falQueueBaseURL: baseURL });
   });
 
   afterEach(async () => {
@@ -126,6 +163,8 @@ describe("free-host media uploads", () => {
     restoreEndpoints();
     if (originalKey === undefined) delete process.env.MACHGEN_API_KEY;
     else process.env.MACHGEN_API_KEY = originalKey;
+    if (originalFalKey === undefined) delete process.env.FAL_API_KEY;
+    else process.env.FAL_API_KEY = originalFalKey;
     if (originalHarMode === undefined) delete process.env.VIDEOBOOK_HAR_CAPTURE;
     else process.env.VIDEOBOOK_HAR_CAPTURE = originalHarMode;
     engine.close();
@@ -133,13 +172,18 @@ describe("free-host media uploads", () => {
     expect(errors).toEqual([]);
   });
 
-  async function generation(signal: AbortSignal): Promise<{ job: GenerateMediaJob; context: JobHandlerContext; sourceId: string }> {
+  async function generation(
+    signal: AbortSignal,
+    request: GenerationRequest = MACHGEN_REFERENCE,
+    sourceVideo: SourceVideo = { bytes: video, duration: 2, width: 64, height: 64 },
+  ): Promise<{ job: GenerateMediaJob; context: JobHandlerContext; sourceId: string }> {
     const source = await engine.artifacts.create("video", "source");
     const output = await engine.artifacts.create("video", "upscale");
     if (!source.ok || !output.ok) throw new Error("Could not create video artifacts");
     const sourceId = source.value.artifactId;
-    expect((await engine.files.write(sourceId, "original.mp4", video)).ok).toBe(true);
-    expect((await engine.metadata.artifacts.write(sourceId, "original", { duration: 2, width: 64, height: 64 })).ok).toBe(true);
+    const { bytes, ...original } = sourceVideo;
+    expect((await engine.files.write(sourceId, "original.mp4", bytes)).ok).toBe(true);
+    expect((await engine.metadata.artifacts.write(sourceId, "original", original)).ok).toBe(true);
     const assetId = output.value.artifactId;
     const manifest = await engine.files.manifest(assetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
@@ -148,8 +192,8 @@ describe("free-host media uploads", () => {
     let token: LeaseToken = { kind: "owner", ownerId: lease.ownerId };
     return {
       sourceId,
-      job: { type: "generate_media", model: "machgen:MiniMax-H3", bookId: engine.book.get().bookId,
-        assetId, assetDir: manifest.value.path, prompt: "Continue the scene", refs: { video: [sourceId] }, mode: "r2v", options: { resolution: "768p", duration: 5 } },
+      job: { type: "generate_media", bookId: engine.book.get().bookId,
+        assetId, assetDir: manifest.value.path, prompt: "Continue the scene", refs: { video: [sourceId] }, ...request },
       context: {
         jobId: 1, signal,
         setLease: (next) => { token = next; },
@@ -174,6 +218,41 @@ describe("free-host media uploads", () => {
     const task = engine.jobs.pending.read(job.assetId);
     expect(task.ok && task.value).toMatchObject({ taskId: TASK_ID, taskType: "machgen_media" });
   }, testBudget(70_000));
+
+  it("re-encodes a source video over the model's byte cap before uploading it to Fal", async () => {
+    const path = join(fixtures, "oversized.mp4");
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i", "color=c=gray:s=1280x720:r=30:d=1.2,noise=alls=100:allf=t+u",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1.2",
+      "-c:v", "libx264", "-preset", "ultrafast", "-qp", "0", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", path,
+    ]);
+    const oversized = await readFile(path);
+    expect(oversized.byteLength).toBeGreaterThan(FAL_SOURCE_VIDEO_MAX_BYTES);
+    const { job, context, sourceId } = await generation(new AbortController().signal, FAL_EXTEND, { bytes: oversized, duration: 1.2, width: 1280, height: 720 });
+    await expect(runGenerateMedia(engine, job, context)).resolves.toMatchObject({ status: "pending", taskId: FAL_TASK_ID });
+    expect(uploads).toHaveLength(1);
+    const sent = uploads[0]!;
+    expect(sent).toMatchObject({ host: FAL_STORAGE_HOST, filename: `${contentHash(sent.bytes)}.mp4`, contentType: "video/mp4" });
+    expect(sent.bytes.byteLength).toBeLessThanOrEqual(FAL_SOURCE_VIDEO_MAX_BYTES);
+    const sentPath = join(fixtures, "sent.mp4");
+    await writeFile(sentPath, sent.bytes);
+    const probe = await probeVideo(sentPath);
+    expect(probe).toMatchObject({ width: 1280, height: 720, hasAudio: true, videoCodec: "h264" });
+    expect(probe.duration).toBeCloseTo(1.2, 1);
+    expect(submissions).toEqual([expect.objectContaining({ video_url: `${baseURL}/files/${sent.filename}`, prompt: "Continue the scene" })]);
+    const source = await engine.files.read(sourceId, "original.mp4");
+    expect(source.ok && Buffer.from(source.value).equals(oversized)).toBe(true);
+    const task = engine.jobs.pending.read(job.assetId);
+    expect(task.ok && task.value).toMatchObject({ taskId: FAL_TASK_ID, taskType: "fal_media" });
+  });
+
+  it("keeps a video within the cap byte-for-byte and explains when a clip is too long to fit", async () => {
+    const within = await fitVideoUnderByteCap(video, "source.mp4", video.byteLength);
+    expect(within.data).toBe(video);
+    expect(within.filename).toBe("source.mp4");
+    await expect(fitVideoUnderByteCap(video, "source.mp4", video.byteLength - 1))
+      .rejects.toThrow(/2\.0 s long\. This model accepts source videos up to .* MB, and a clip this long cannot be re-encoded under that at usable quality\. Trim it and try again\./u);
+  });
 
   it("rotates to another host after an HTTP failure without changing the video", async () => {
     failures = 1;

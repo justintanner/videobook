@@ -3,6 +3,7 @@ import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
   uploadBytesToFreeHost,
+  type UploadLimits,
 } from "../upload.js";
 import { getApiKey } from "../api-key.js";
 import { logger } from "../logger.js";
@@ -39,11 +40,15 @@ export async function uploadAssetToKie(
   engine: Engine,
   assetId: string,
   filename: string,
+  signal?: AbortSignal,
+  limits?: UploadLimits,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     engine,
     assetId,
     filename,
+    signal,
+    limits,
   );
   return uploadPreparedToKie(data, hashedFilename, contentType);
 }
