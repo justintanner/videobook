@@ -18,6 +18,7 @@ type Price = Pick<UsageEntry, "costUsd" | "basis" | "rateSource" | "pricingVersi
 const incomplete = new WeakSet<Engine>();
 const cost = createCost();
 const usageCostHints = new AsyncLocalStorage<CostHints>();
+const clonesHeldForBody = new WeakMap<ReadableStream<Uint8Array>, Request | Response>();
 
 function object(value: unknown): RecordValue {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
@@ -144,6 +145,12 @@ function isBillable(provider: Provider, path: string, method: string): boolean {
   return /\/(videos|images)(\/|$)/u.test(path);
 }
 
+function cloneHeldForBody<T extends Request | Response>(original: T): T {
+  const copy = original.clone() as T;
+  if (original.body) clonesHeldForBody.set(original.body, copy);
+  return copy;
+}
+
 async function payloadOf(input: RequestInfo | URL, init?: RequestInit): Promise<RecordValue> {
   const body = init?.body;
   if (typeof body === "string") {
@@ -151,7 +158,7 @@ async function payloadOf(input: RequestInfo | URL, init?: RequestInit): Promise<
   }
   if (body instanceof FormData) return Object.fromEntries([...body.entries()].filter((entry): entry is [string, string] => typeof entry[1] === "string"));
   if (input instanceof Request && input.headers.get("content-type")?.includes("application/json")) {
-    try { return object(await input.clone().json()); } catch { return {}; }
+    try { return object(await cloneHeldForBody(input).json()); } catch { return {}; }
   }
   return {};
 }
@@ -325,7 +332,7 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
     }
     try {
       const json = response.headers.get("content-type")?.includes("json");
-      const body = json ? object(await response.clone().json()) : {};
+      const body = json ? object(await cloneHeldForBody(response).json()) : {};
       const externalId = remoteId(body, url, method);
       const exchange: ProviderExchange = {
         provider, method, url: url.href, status: response.status,

@@ -3,6 +3,9 @@ import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setImmediate as nextEventLoopTurn } from "node:timers/promises";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeEstimate } from "@apicity/cost";
 import { createEngine } from "videobook-engine";
@@ -18,6 +21,17 @@ import { bookUsageDef } from "./book-usage.js";
 
 const SUNO_PATHS: Record<string, string> = { "suno/generate": "/api/v1/generate", "suno/sounds-generate": "/api/v1/generate/sounds" };
 
+setFlagsFromString("--expose-gc");
+const forceGarbageCollection = runInNewContext("gc") as () => void;
+
+async function collectDiscardedObjects(): Promise<void> {
+  for (let pass = 0; pass < 3; pass += 1) {
+    forceGarbageCollection();
+    await nextEventLoopTurn();
+    await nextEventLoopTurn();
+  }
+}
+
 describe("provider usage through real HTTP and engine storage", () => {
   let root: string;
   let engine: Engine;
@@ -28,6 +42,7 @@ describe("provider usage through real HTTP and engine storage", () => {
   let reply: Record<string, unknown> | undefined;
   let headers: Record<string, string>;
   let pricingRequests: Record<string, unknown>[];
+  let receivedBodies: string[];
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "vb-book-usage-"));
@@ -38,6 +53,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     reply = undefined;
     headers = {};
     pricingRequests = [];
+    receivedBodies = [];
     server = createServer((request, response) => {
       const chunks: Buffer[] = [];
       request.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -49,6 +65,7 @@ describe("provider usage through real HTTP and engine storage", () => {
           response.end(JSON.stringify({ total_cost: pricing.estimate_type === "unit_price" ? 0.21 : 0.42, currency: "USD" }));
           return;
         }
+        receivedBodies.push(Buffer.concat(chunks).toString());
         if (mode === "disconnect") { request.socket.destroy(); return; }
         if (request.url?.includes("text-to-speech")) {
           response.writeHead(200, { "content-type": "audio/mpeg", ...headers });
@@ -290,6 +307,32 @@ describe("provider usage through real HTTP and engine storage", () => {
         basis: "estimated",
         status: "completed",
       });
+    } finally {
+      restore();
+    }
+  });
+
+  it("sends a Request intact and keeps its response readable when garbage collection runs while pricing is pending", async () => {
+    const estimateTypes: string[] = [];
+    const restore = installFalDynamicEstimator(async (request) => {
+      estimateTypes.push(request.estimate_type);
+      await collectDiscardedObjects();
+      return { total_cost: 0.42, currency: "USD" };
+    });
+    try {
+      const transport = providerUsageFetch("fal");
+      const body = JSON.stringify({ prompt: "a fox" });
+      reply = { request_id: "fal-collected", status: "IN_QUEUE" };
+      headers = { "x-fal-billable-units": "7" };
+      const response = await scoped(() => transport(new Request(`${url}/fal-ai/flux-2-flex`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      })));
+      expect(await response.json()).toEqual(reply);
+      expect(receivedBodies).toEqual([body]);
+      expect(estimateTypes).toEqual(["historical_api_price", "unit_price"]);
+      expect(engine.usage.find("fal", "fal-collected")).toMatchObject({ model: "fal-ai/flux-2-flex", status: "pending" });
     } finally {
       restore();
     }
