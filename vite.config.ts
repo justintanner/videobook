@@ -36,7 +36,10 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/')) {
     return 'ui'
   }
-  if (id.includes('/src/videobook/') || id.includes('/server/src/')) {
+  if (id.includes('/server/src/')) {
+    return 'shared'
+  }
+  if (id.includes('/src/videobook/')) {
     return 'videobook'
   }
   if (!id.includes('/node_modules/')) return undefined
