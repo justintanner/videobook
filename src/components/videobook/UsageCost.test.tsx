@@ -67,6 +67,20 @@ describe('a notebook cell call cost', () => {
     }))).toBe('minimax/h3-max/extend-video Calculated ~$4.80 est. $0.32 96 billable-units, priced at the bundled rate. est. is a per-call average, not this request\'s price')
   })
 
+  it('flags a completed fal result that omitted billable units as awaiting the bill', () => {
+    expect(row(call({
+      provider: 'fal',
+      model: 'minimax/h3-max/extend-video',
+      status: 'completed',
+      basis: 'estimated',
+      costUsd: 0.32,
+      estimateUsd: 0.32,
+      estimateSource: 'fal-historical-average',
+      actualBasis: 'none',
+      warnings: ['Awaiting fal\'s billed units; the result omitted x-fal-billable-units'],
+    }))).toBe('minimax/h3-max/extend-video Awaiting bill ~$0.32 Awaiting fal\'s billed units; the result omitted x-fal-billable-units')
+  })
+
   it('shows an actual calculated from usage as approximate, distinct from a billed one', () => {
     const derived = call({ actualBasis: 'derived', costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true })
     expect(row(derived)).toBe('gpt-5.6 Calculated ~$0.41 est. $0.42 1,500 tokens, priced at the bundled rate')

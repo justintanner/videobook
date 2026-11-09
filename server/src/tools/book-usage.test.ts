@@ -13,7 +13,7 @@ import type { Engine } from "videobook-engine";
 import { createOpenAi, createFal, createElevenLabs } from "../usage-providers.js";
 import { withBookContext, scopedBookEngine } from "../book-context.js";
 import { installFalDynamicEstimator } from "../media/cost.js";
-import { providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage, withUsageCostHints } from "../provider-usage.js";
+import { FAL_RESULT_OMITTED_UNITS_WARNING, providerUsageFetch, recordVoiceUsage, recordTranscriptionUsage, withUsageCostHints } from "../provider-usage.js";
 import { MODEL_ENTRIES } from "../media/catalog.js";
 import { parseModelId } from "../media/model-id.js";
 import { isKieVeoModel } from "../media/wire.js";
@@ -367,6 +367,65 @@ describe("provider usage through real HTTP and engine storage", () => {
         { estimate_type: "historical_api_price", quantity: 1 },
       ]);
       expect(requests).toContainEqual({ estimate_type: "unit_price", quantity: 96 });
+    } finally {
+      restore();
+      headers = {};
+    }
+  });
+
+  it("flags a completed fal result that omits billable units as awaiting the bill, then prices a later result that carries them", async () => {
+    const requests: Array<{ estimate_type: string; quantity: number }> = [];
+    const restore = installFalDynamicEstimator(async (request) => {
+      const priced = request.endpoints["minimax/h3-max/extend-video"];
+      const quantity = priced && "unit_quantity" in priced ? priced.unit_quantity : priced && "call_quantity" in priced ? priced.call_quantity : 0;
+      requests.push({ estimate_type: request.estimate_type, quantity });
+      return { total_cost: request.estimate_type === "unit_price" ? quantity * 0.05 : 0.32, currency: "USD" };
+    });
+    try {
+      const provider = createFal({ apiKey: "test", queueBaseURL: url });
+      reply = { request_id: "fal-late", status: "IN_QUEUE" };
+      headers = {};
+      await scoped(() => provider.post.v1.queue.submit({
+        endpoint_id: "minimax/h3-max/extend-video",
+        input: { prompt: "keep walking", video_url: "https://example.test/clip.mp4", duration: 10, resolution: "2K" },
+      }), engine, "generate_media");
+      reply = { video: { url: "https://example.test/extended.mp4" } };
+      await scoped(() => provider.v1.queue.result({
+        endpoint_id: "minimax/h3-max",
+        request_id: "fal-late",
+      }), engine, "poll_pending_provider_tasks");
+      expect(engine.usage.find("fal", "fal-late")).toMatchObject({
+        status: "completed",
+        basis: "estimated",
+        costUsd: 0.32,
+        estimateUsd: 0.32,
+        estimateSource: "fal-historical-average",
+        actualBasis: "none",
+        warnings: [FAL_RESULT_OMITTED_UNITS_WARNING],
+      });
+      expect(engine.usage.rollup().totals).toMatchObject({ count: 1, unsettled: 1, unestimated: 0 });
+      headers = { "x-fal-billable-units": "64" };
+      await scoped(() => provider.v1.queue.result({
+        endpoint_id: "minimax/h3-max",
+        request_id: "fal-late",
+      }), engine, "poll_pending_provider_tasks");
+      const settled = engine.usage.find("fal", "fal-late");
+      expect(settled).toMatchObject({
+        status: "completed",
+        actualBasis: "derived",
+        estimateUsd: 0.32,
+        estimateSource: "fal-historical-average",
+        units: 64,
+        unit: "billable-units",
+      });
+      expect(settled?.costUsd).toBeCloseTo(3.2, 5);
+      expect(settled?.warnings ?? []).not.toContain(FAL_RESULT_OMITTED_UNITS_WARNING);
+      expect(engine.usage.rollup().totals).toMatchObject({ unsettled: 0, unestimated: 0 });
+      expect(engine.usage.rollup().totals.settledEstimateUsd).toBeCloseTo(0.32, 5);
+      expect(requests.filter((request) => request.estimate_type === "historical_api_price")).toEqual([
+        { estimate_type: "historical_api_price", quantity: 1 },
+      ]);
+      expect(requests).toContainEqual({ estimate_type: "unit_price", quantity: 64 });
     } finally {
       restore();
       headers = {};

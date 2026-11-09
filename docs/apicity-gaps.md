@@ -573,6 +573,12 @@ quote is now stored on the usage row's `estimateUsd` (`estimateSource`
 row state that the figure is a per-call average and not this request's price.
 A units-per-second model for the endpoint still belongs in `@apicity/cost`.
 
+Update 2026-11-09 (vb-mx0nj): a completed fal queue result that omits
+`x-fal-billable-units` no longer closes a dynamic call as a finished estimate.
+The usage row keeps the historical quote on `estimateUsd` and records that it
+is awaiting fal's billed units. A later result that carries the header still
+replaces `costUsd`. A status poll that omits the header is unchanged.
+
 ---
 
 ## 42. (quirk) Fal 0.15.0 request shapes Videobook adapts — CONSUMER REQUIREMENT

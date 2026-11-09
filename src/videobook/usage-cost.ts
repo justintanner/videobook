@@ -1,7 +1,7 @@
 import type { UsageEntry, UsageRollupTotals } from 'videobook-engine'
 import { formatUsageCost, formatUsageTokens } from './book-usage'
 
-export type UsageCallState = 'estimate' | 'stated' | 'derived' | 'usage-only' | 'free' | 'not-billed' | 'unavailable'
+export type UsageCallState = 'estimate' | 'awaiting-bill' | 'stated' | 'derived' | 'usage-only' | 'free' | 'not-billed' | 'unavailable'
 
 export interface UsageCallFigures {
   state: UsageCallState
@@ -22,6 +22,7 @@ const FAL_HISTORICAL_ESTIMATE_SOURCE = 'fal-historical-average'
 
 const STATE_LABELS: Record<UsageCallState, string> = {
   estimate: 'Estimate',
+  'awaiting-bill': 'Awaiting bill',
   stated: 'Billed',
   derived: 'Calculated',
   'usage-only': 'Usage only',
@@ -41,8 +42,17 @@ function usageAmount(entry: UsageEntry): string | null {
   return null
 }
 
+function awaitingFalBill(entry: UsageEntry): boolean {
+  return entry.status === 'completed'
+    && entry.actualBasis !== 'stated'
+    && entry.actualBasis !== 'derived'
+    && entry.actualBasis !== 'usage-only'
+    && entry.warnings.some((warning) => warning.includes('omitted x-fal-billable-units'))
+}
+
 function callState(entry: UsageEntry): UsageCallState {
   if (entry.basis === 'free') return entry.status === 'failed' ? 'not-billed' : 'free'
+  if (awaitingFalBill(entry)) return 'awaiting-bill'
   if (entry.status === 'pending') return 'estimate'
   if (entry.costUsd !== null && (entry.actualBasis === 'stated' || (entry.actualBasis === null && entry.basis === 'reported'))) return 'stated'
   if (entry.costUsd !== null && entry.basis === 'estimated'
@@ -66,6 +76,8 @@ function callNote(state: UsageCallState, entry: UsageEntry): string | null {
       return reason(entry, entry.status === 'uncertain' ? 'The provider outcome is unknown' : 'No price for this call')
     case 'usage-only':
       return [usageAmount(entry), 'no rate to price it'].filter(Boolean).join(', ')
+    case 'awaiting-bill':
+      return reason(entry, 'Awaiting fal\'s billed units')
     case 'estimate':
       if (entry.status === 'pending') {
         return entry.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE
@@ -92,12 +104,12 @@ export function usageCallFigures(entry: UsageEntry): UsageCallFigures {
   const amount = state === 'stated' ? formatUsageCost(entry.costUsd ?? 0)
     : state === 'derived' ? `~${formatUsageCost(entry.costUsd ?? 0)}`
       : state === 'free' || state === 'not-billed' ? formatUsageCost(0)
-        : state === 'estimate' && quote !== null ? `~${formatUsageCost(quote)}` : null
+        : (state === 'estimate' || state === 'awaiting-bill') && quote !== null ? `~${formatUsageCost(quote)}` : null
   return {
     state,
     label: STATE_LABELS[state],
     amount,
-    estimate: state !== 'estimate' && quote !== null ? formatUsageCost(quote) : null,
+    estimate: state !== 'estimate' && state !== 'awaiting-bill' && quote !== null ? formatUsageCost(quote) : null,
     note: callNote(state, entry),
   }
 }

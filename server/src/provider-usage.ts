@@ -224,6 +224,7 @@ function actualPatch(actual: CostActual, status: UsageEntry["status"]): Partial<
 
 const MACHGEN_BILLING_PATH = /\/api\/v0\/tasks\/([^/]+)\/billing$/u;
 const FAL_QUEUE_RESULT_PATH = /\/requests\/[^/]+$/u;
+export const FAL_RESULT_OMITTED_UNITS_WARNING = "Awaiting fal's billed units; the result omitted x-fal-billable-units";
 
 function machgenBillingTaskId(provider: Provider, url: URL): string | null {
   if (provider !== "machgen") return null;
@@ -286,6 +287,13 @@ function falNotBilledPatch(exchange: ProviderExchange, status: UsageEntry["statu
   };
 }
 
+function falResultOmittedUnits(exchange: ProviderExchange, status: UsageEntry["status"], entry: UsageEntry | UsageInput, actual: CostActual): Partial<UsageEntry> | null {
+  if (exchange.provider !== "fal" || status !== "completed" || actual.basis !== "none") return null;
+  if (!FAL_QUEUE_RESULT_PATH.test(new URL(exchange.url).pathname) || statedFalUnits(exchange) !== null) return null;
+  if (!isFalDynamicPricingEndpoint(entry.model)) return null;
+  return { status, actualBasis: "none", warnings: [FAL_RESULT_OMITTED_UNITS_WARNING] };
+}
+
 async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange, status: UsageEntry["status"]): Promise<Partial<UsageEntry>> {
   const actual = observedActual(engine, entry, exchange);
   const notBilled = falNotBilledPatch(exchange, status);
@@ -301,6 +309,8 @@ async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exc
       engine.settings.set(`provider-actual:${entry.id}`, actual);
     }
   }
+  const omitted = falResultOmittedUnits(exchange, status, entry, actual);
+  if (omitted) return omitted;
   return actualPatch(actual, status);
 }
 
