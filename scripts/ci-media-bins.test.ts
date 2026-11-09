@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
-import { installWorkspace, resolvePackage } from './ci-install.mjs'
+import { ensureFfmpegBin, installWorkspace, resolvePackage } from './ci-install.mjs'
 import {
   FFMPEG_RELEASE,
   YTDLP_VERSION,
@@ -263,5 +263,37 @@ describe('CI install with release downloads blocked', () => {
     await writeFile(join(root, 'server', 'package.json'), '{"name":"server"}\n')
     await expect(resolvePackage(root, 'ytdlp-nodejs')).resolves.toBe(join(root, 'node_modules', 'ytdlp-nodejs'))
     await expect(resolvePackage(root, 'ffmpeg-static')).resolves.toBe(serverPkg)
+  })
+
+  it('copies a provided ffmpeg into the release-check path when GitHub releases are blocked', async () => {
+    const root = await tempRoot()
+    const provided = join(root, 'provided', 'ffmpeg.exe')
+    const dest = join(root, 'active', 'ffmpeg.exe')
+    await mkdir(join(root, 'provided'), { recursive: true })
+    await writeFile(provided, 'windows-ffmpeg')
+    const urls: string[] = []
+    const resolved = await ensureFfmpegBin({
+      root,
+      dest,
+      env: {
+        ...process.env,
+        VIDEOBOOK_CI_PLATFORM: 'win32',
+        VIDEOBOOK_CI_ARCH: 'x64',
+        VIDEOBOOK_CI_BLOCK_RELEASES: '1',
+        FFMPEG_BINARIES_URL: 'https://bogus.invalid/ffmpeg',
+        VIDEOBOOK_CI_CACHE_DIR: join(root, 'empty-cache'),
+        VIDEOBOOK_CI_FFMPEG_BIN: provided,
+      },
+      fetchImpl: async (url: string) => {
+        urls.push(url)
+        throw new Error(`release download attempted: ${url}`)
+      },
+      run: async () => {
+        throw new Error('package install attempted')
+      },
+    })
+    expect(urls).toEqual([])
+    expect(resolved).toEqual({ path: dest, source: 'fallback' })
+    expect(await readFile(dest, 'utf8')).toBe('windows-ffmpeg')
   })
 })

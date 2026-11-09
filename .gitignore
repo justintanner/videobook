@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 ci/media-bins/
 ci/media-bins-fallback/
+ci/media-bins-active/
 dist
 dist-extension
 dist-ssr

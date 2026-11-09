@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
@@ -148,6 +148,39 @@ function withPath(env, pathValue) {
   return next
 }
 
+const cachedFfmpeg = process.env.FFMPEG_BIN
+delete process.env.FFMPEG_BIN
+
+function installEnv() {
+  return cachedFfmpeg ? isolatedEnvironment({ FFMPEG_BIN: cachedFfmpeg }) : isolatedEnvironment()
+}
+
+async function runReleaseInstall(command, args, cwd, env) {
+  const attempts = 4
+  let last
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await run(command, args, cwd, env)
+      return
+    } catch (error) {
+      last = error
+      if (attempt === attempts) break
+      log(`install attempt ${attempt} failed; retrying in ${5 * attempt}s`)
+      await new Promise((resolveRetry) => setTimeout(resolveRetry, 5000 * attempt))
+    }
+  }
+  throw last
+}
+
+async function placeCachedFfmpeg(packageDir) {
+  if (!cachedFfmpeg || !existsSync(cachedFfmpeg)) return
+  const target = join(packageDir, 'node_modules', 'ffmpeg-static', WINDOWS ? 'ffmpeg.exe' : 'ffmpeg')
+  if (existsSync(target)) return
+  await mkdir(dirname(target), { recursive: true })
+  await copyFile(cachedFfmpeg, target)
+  if (!WINDOWS) await chmod(target, 0o755)
+}
+
 function run(command, args, cwd, env = isolatedEnvironment()) {
   log(`${command === process.execPath ? 'node' : command} ${args.join(' ')}`)
   return new Promise((resolveRun, rejectRun) => {
@@ -264,9 +297,9 @@ function verifyTarball(pack) {
   log(`${pack.filename}: ${(pack.size / 1048576).toFixed(2)} MiB packed, ${(pack.unpackedSize / 1048576).toFixed(2)} MiB unpacked, ${pack.entryCount} files`)
 }
 
-async function globalInstall(npmCommand, tarball, prefix, extraArgs) {
+async function globalInstall(npmCommand, tarball, prefix, extraArgs, env = isolatedEnvironment()) {
   await mkdir(globalModulesDir(prefix), { recursive: true })
-  await run(npmCommand[0], [...npmCommand.slice(1), 'install', '-g', tarball, '--prefix', prefix, '--no-audit', '--no-fund', ...extraArgs], runtimeRoot)
+  await runReleaseInstall(npmCommand[0], [...npmCommand.slice(1), 'install', '-g', tarball, '--prefix', prefix, '--no-audit', '--no-fund', ...extraArgs], runtimeRoot, env)
   const packageDir = join(globalModulesDir(prefix), 'videobook')
   expect(existsSync(join(packageDir, 'package.json')), `global install did not create ${packageDir}`)
   return packageDir
@@ -547,7 +580,7 @@ async function verifyNpm12(tarball) {
   const strictOutput = `${strict.stdout}${strict.stderr}`
   expect(strict.code !== 0, 'npm 12 --strict-allow-scripts accepted unapproved install scripts')
   expect(/allow-?scripts|install scripts?|lifecycle scripts?/i.test(strictOutput) && ALLOW_SCRIPTS.some((name) => strictOutput.includes(name)), `npm 12 strict install failed for another reason:\n${strictOutput}`)
-  await globalInstall(npm12, tarball, join(temporaryRoot, 'approved'), ['--strict-allow-scripts', `--allow-scripts=${[...ALLOW_SCRIPTS, FFPROBE_PLATFORM_PACKAGE].join(',')}`])
+  await globalInstall(npm12, tarball, join(temporaryRoot, 'approved'), ['--strict-allow-scripts', `--allow-scripts=${[...ALLOW_SCRIPTS, FFPROBE_PLATFORM_PACKAGE].join(',')}`], installEnv())
   log(`npm 12: strict install fails without the list and succeeds with the documented --allow-scripts list plus ${FFPROBE_PLATFORM_PACKAGE}`)
   await verifyBlockedScripts(npm12, tarball, 'npm12', [])
 }
@@ -558,7 +591,7 @@ try {
   await writeFile(join(runtimeRoot, 'npmrc'), '', 'utf8')
   if (options.worktree) await exportWorktree(appRoot)
   else await exportCommitted(appRoot)
-  await run(NPM[0], [...NPM.slice(1), 'ci', '--no-audit', '--no-fund'], appRoot)
+  await runReleaseInstall(NPM[0], [...NPM.slice(1), 'ci', '--no-audit', '--no-fund'], appRoot, installEnv())
   await verifyWorkspaceLock()
   const { pack, tarball } = await packPackage()
   verifyTarball(pack)
@@ -567,7 +600,8 @@ try {
     await copyFile(tarball, join(options.artifactDir, pack.filename))
   }
   const prefix = join(temporaryRoot, 'prefix')
-  const packageDir = await globalInstall(NPM, tarball, prefix, [`--allow-scripts=${ALLOW_SCRIPTS.join(',')}`])
+  const packageDir = await globalInstall(NPM, tarball, prefix, [`--allow-scripts=${ALLOW_SCRIPTS.join(',')}`], installEnv())
+  await placeCachedFfmpeg(packageDir)
   const tree = await verifyInstalledTree(packageDir)
   expect(tree.ffmpegBundled, 'ffmpeg-static did not download its binary during the global install')
   await reportFootprint(packageDir)

@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -68,9 +68,34 @@ async function provideYtdlp(dest, env, run) {
   await provideFile(join(venv, 'bin', 'yt-dlp'), dest)
 }
 
+async function whereCommand(command) {
+  try {
+    const { stdout } = await execFileAsync('where.exe', [command])
+    const found = stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean)
+    return found || null
+  } catch {
+    return null
+  }
+}
+
 async function provideFfmpeg(dest, env, run) {
   if (env.VIDEOBOOK_CI_FFMPEG_BIN) {
     await provideFile(env.VIDEOBOOK_CI_FFMPEG_BIN, dest)
+    return
+  }
+  const platform = env.VIDEOBOOK_CI_PLATFORM ?? process.platform
+  if (platform === 'win32') {
+    let source = await whereCommand('ffmpeg')
+    if (!source) {
+      await run('choco.exe', ['install', 'ffmpeg', '-y', '--no-progress'], env)
+      source = await whereCommand('ffmpeg')
+    }
+    if (!source) {
+      const chocoBin = join(env.ProgramData ?? 'C:\\ProgramData', 'chocolatey', 'bin', 'ffmpeg.exe')
+      if (existsSync(chocoBin)) source = chocoBin
+    }
+    if (!source) throw new Error('ffmpeg was not found after the package install')
+    await provideFile(source, dest)
     return
   }
   let source = await which('ffmpeg')
@@ -81,6 +106,27 @@ async function provideFfmpeg(dest, env, run) {
   }
   if (!source) throw new Error('ffmpeg was not found after the package install')
   await provideFile(source, dest)
+}
+
+export async function ensureFfmpegBin({ root, dest, env = process.env, run, fetchImpl }) {
+  const platform = env.VIDEOBOOK_CI_PLATFORM ?? process.platform
+  const arch = env.VIDEOBOOK_CI_ARCH ?? process.arch
+  const name = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+  const cacheDir = env.VIDEOBOOK_CI_CACHE_DIR ?? join(root, 'ci', 'media-bins')
+  const resolved = await resolveBinary({
+    cachePath: join(cacheDir, name),
+    fallbackPath: join(root, 'ci', 'media-bins-fallback', name),
+    url: ffmpegReleaseUrl(platform, arch, env),
+    gzip: true,
+    sha256: platform === 'linux' && arch === 'x64' ? FFMPEG_LINUX_X64_SHA256 : null,
+    blocked: releasesBlocked(env),
+    fetchImpl,
+    fallback: (path) => provideFfmpeg(path, env, run),
+  })
+  await mkdir(dirname(dest), { recursive: true })
+  await copyFile(resolved.path, dest)
+  await chmod(dest, 0o755)
+  return { path: dest, source: resolved.source }
 }
 
 async function packageName(dir) {

@@ -23,8 +23,13 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: package-lock.json
+      - name: Cache pinned ffmpeg and yt-dlp binaries
+        uses: actions/cache@v4
+        with:
+          path: ci/media-bins
+          key: media-bins-${{ hashFiles('scripts/ci-media-bins.mjs', 'scripts/ci-install.mjs') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Install application and server workspace dependencies
-        run: npm ci
+        run: node scripts/ci-install.mjs
       - name: Check that the tag matches the package version and changelog
         if: github.event_name == 'push'
         run: |
@@ -46,6 +51,8 @@ jobs:
         run: npm run test:ci
       - name: Pack, install globally, and smoke-test the CLI under npm 12
         run: npm run test:pack-install -- --npm12 --artifact-dir "$RUNNER_TEMP/pack"
+        env:
+          FFMPEG_BIN: ${{ github.workspace }}/node_modules/ffmpeg-static/ffmpeg
       - name: Upload the tested package
         uses: actions/upload-artifact@v4
         with:
@@ -63,5 +70,18 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Cache pinned ffmpeg and yt-dlp binaries
+        uses: actions/cache@v4
+        with:
+          path: ci/media-bins
+          key: media-bins-${{ hashFiles('scripts/ci-media-bins.mjs', 'scripts/ci-install.mjs') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide pinned ffmpeg for package install scripts
+        shell: bash
+        run: node scripts/ci-ffmpeg-bin.mjs
+        env:
+          VIDEOBOOK_CI_FFMPEG_DEST: ${{ github.workspace }}/ci/media-bins-active/ffmpeg.exe
       - name: Pack, install globally, and smoke-test the CLI under npm 12
+        shell: bash
         run: npm run test:pack-install -- --npm12
+        env:
+          FFMPEG_BIN: ${{ github.workspace }}/ci/media-bins-active/ffmpeg.exe
