@@ -213,11 +213,22 @@ function actualPatch(actual: CostActual, status: UsageEntry["status"]): Partial<
 }
 
 const MACHGEN_BILLING_PATH = /\/api\/v0\/tasks\/([^/]+)\/billing$/u;
+const FAL_QUEUE_RESULT_PATH = /\/requests\/[^/]+$/u;
 
 function machgenBillingTaskId(provider: Provider, url: URL): string | null {
   if (provider !== "machgen") return null;
   const match = MACHGEN_BILLING_PATH.exec(url.pathname);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function falResultFailed(provider: Provider, url: URL, response: Response): boolean {
+  return provider === "fal" && !response.ok && response.status !== 429 && FAL_QUEUE_RESULT_PATH.test(url.pathname);
+}
+
+function polledStatus(existing: UsageEntry, body: RecordValue, url: URL, response: Response, billingId: string | null): UsageEntry["status"] {
+  if (!response.ok) return "failed";
+  if (billingId) return existing.status === "failed" || existing.status === "cancelled" ? existing.status : "completed";
+  return responseStatus(body, /\/status$/u.test(url.pathname));
 }
 
 function attributionIds(): Pick<UsageInput, "notebookId" | "cellId" | "jobId" | "runId"> {
@@ -343,15 +354,13 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...await observedPatch(engine, entry, exchange, status) });
-      } else if (method === "GET" && response.ok) {
+      } else if (method === "GET" && (response.ok || falResultFailed(provider, url, response))) {
         const billingId = machgenBillingTaskId(provider, url);
         const linkedId = billingId ?? externalId;
         if (linkedId) {
           const existing = engine.usage.find(provider, linkedId);
           if (existing) {
-            const status = billingId
-              ? (existing.status === "failed" || existing.status === "cancelled" ? existing.status : "completed")
-              : responseStatus(body, /\/status$/u.test(url.pathname));
+            const status = polledStatus(existing, body, url, response, billingId);
             safeRecord(engine, { ...existing, ...await observedPatch(engine, existing, exchange, status) });
           }
         }

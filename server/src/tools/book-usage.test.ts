@@ -40,6 +40,7 @@ describe("provider usage through real HTTP and engine storage", () => {
   let responseId: string;
   let mode: "normal" | "failure" | "disconnect";
   let reply: Record<string, unknown> | undefined;
+  let replyStatus: number | undefined;
   let headers: Record<string, string>;
   let pricingRequests: Record<string, unknown>[];
   let receivedBodies: string[];
@@ -51,6 +52,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     responseId = "response-one";
     mode = "normal";
     reply = undefined;
+    replyStatus = undefined;
     headers = {};
     pricingRequests = [];
     receivedBodies = [];
@@ -72,7 +74,7 @@ describe("provider usage through real HTTP and engine storage", () => {
           response.end(Buffer.from([1, 2, 3]));
           return;
         }
-        response.writeHead(mode === "failure" ? 500 : 200, { "content-type": "application/json", ...headers });
+        response.writeHead(replyStatus ?? (mode === "failure" ? 500 : 200), { "content-type": "application/json", ...headers });
         const body = request.url?.includes("recordInfo")
           ? { code: 200, data: { taskId: "kie-one", state: "success" } }
           : request.url?.includes("createTask")
@@ -307,6 +309,42 @@ describe("provider usage through real HTTP and engine storage", () => {
         basis: "estimated",
         status: "completed",
       });
+    } finally {
+      restore();
+    }
+  });
+
+  it("records a completed fal queue request as failed, without its estimate as spend, when its result read answers an error", async () => {
+    const restore = installFalDynamicEstimator(async () => ({ total_cost: 0.32, currency: "USD" }));
+    try {
+      const provider = createFal({ apiKey: "test", queueBaseURL: url });
+      const requests = ["fal-rejected", "fal-throttled"];
+      for (const request_id of requests) {
+        reply = { request_id, status: "IN_QUEUE" };
+        await scoped(() => provider.post.v1.queue.submit({
+          endpoint_id: "minimax/h3-max/extend-video",
+          input: { prompt: "keep walking", video_url: "https://example.test/clip.mp4" },
+        }), engine, "generate_media");
+        reply = { status: "COMPLETED", request_id };
+        await scoped(() => provider.v1.queue.status({ endpoint_id: "minimax/h3-max", request_id }), engine, "poll_pending_provider_tasks");
+      }
+      expect(requests.map((id) => engine.usage.find("fal", id))).toMatchObject([
+        { status: "completed", basis: "estimated", costUsd: 0.32 },
+        { status: "completed", basis: "estimated", costUsd: 0.32 },
+      ]);
+      expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, estimatedUsd: 0.64 });
+      replyStatus = 422;
+      reply = { detail: [{ loc: ["body", "video_url"], msg: "Video is longer than the model accepts", type: "value_error" }] };
+      await expect(scoped(() => provider.v1.queue.result({ endpoint_id: "minimax/h3-max", request_id: "fal-rejected" }), engine, "poll_pending_provider_tasks"))
+        .rejects.toMatchObject({ status: 422 });
+      replyStatus = 429;
+      reply = { detail: "Too many requests" };
+      await expect(scoped(() => provider.v1.queue.result({ endpoint_id: "minimax/h3-max", request_id: "fal-throttled" }), engine, "poll_pending_provider_tasks"))
+        .rejects.toMatchObject({ status: 429 });
+      expect(requests.map((id) => engine.usage.find("fal", id)?.status)).toEqual(["failed", "completed"]);
+      expect(engine.usage.summary().totals).toMatchObject({ count: 2, pendingCount: 0, estimatedUsd: 0.32 });
+      const usage = await bookUsageDef(engine).handler({ book_id: engine.book.get().bookId });
+      expect(JSON.parse(usage.content[0]!.text).totals).toMatchObject({ estimatedUsd: 0.32, reportedUsd: 0 });
     } finally {
       restore();
     }
