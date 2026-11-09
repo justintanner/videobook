@@ -135,10 +135,13 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
   const jobId = `generate-${model.media}-${artifactId}-${Date.now()}`;
   const refParams = normalizeRefParams(args.ref_params);
   const fieldRefs = normalizeFieldRefs(args.field_refs);
+  const context = currentBookContext();
   const job: GenerateMediaJob = {
     type: "generate_media",
-    runId: currentBookContext()?.runId,
-    generationId: currentBookContext()?.attemptId,
+    ...(context?.runId ? { runId: context.runId } : {}),
+    ...(context?.attemptId ? { generationId: context.attemptId } : {}),
+    ...(context?.notebookId ? { notebookId: context.notebookId } : {}),
+    ...(context?.cellId ? { cellId: context.cellId } : {}),
     model: model.id,
     bookId: String(args.book_id),
     assetId: artifactId,

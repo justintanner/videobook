@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Engine } from "videobook-engine";
 
-interface BookContext {
+export interface BookContext {
   bookId: string;
   engine: Engine;
   operation?: string;
@@ -10,6 +10,9 @@ interface BookContext {
   providerTaskId?: string;
   runId?: string;
   model?: string;
+  notebookId?: string;
+  cellId?: string;
+  jobId?: string;
 }
 
 const contexts = new AsyncLocalStorage<BookContext>();
@@ -42,8 +45,15 @@ export async function withBookContext<T>(
   context: BookContext,
   operation: () => Promise<T>,
 ): Promise<T> {
+  const parent = contexts.getStore();
+  const inherited: Partial<BookContext> = {};
+  if (context.runId === undefined && parent?.runId !== undefined) inherited.runId = parent.runId;
+  if (context.notebookId === undefined && parent?.notebookId !== undefined) inherited.notebookId = parent.notebookId;
+  if (context.cellId === undefined && parent?.cellId !== undefined) inherited.cellId = parent.cellId;
+  if (context.jobId === undefined && parent?.jobId !== undefined) inherited.jobId = parent.jobId;
+  const defined = Object.fromEntries(Object.entries(context).filter(([, value]) => value !== undefined)) as BookContext;
   return contexts.run(
-    { ...context, engine: concreteEngine(context.engine) },
+    { ...inherited, ...defined, engine: concreteEngine(context.engine) },
     operation,
   );
 }

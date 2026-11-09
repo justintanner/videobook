@@ -659,6 +659,7 @@ export async function enqueueNotebookRunPlan(
       actor: options.actor,
       jobId,
       force: claimed.force,
+      ...(cellIds?.length === 1 ? { cellId: cellIds[0] } : {}),
       ...(cellIds ? { cellIds } : {}),
     });
   } catch (cause) {

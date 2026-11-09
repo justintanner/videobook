@@ -8,6 +8,7 @@ import type { Media } from "./media/types.js";
 import { estimateFalRequest } from "./media/cost.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
+import { httpDotPath, usageQuote } from "./usage-quote.js";
 
 const COST_PACKAGE_VERSION = installedPackageVersion("@apicity/cost");
 
@@ -184,6 +185,7 @@ function actualPatch(actual: CostActual, status: UsageEntry["status"]): Partial<
   const units = usage.billableUnits ?? usage.credits ?? usage.seconds ?? usage.characters ?? usage.images;
   const unit = usage.billableUnits !== undefined ? "billable-units" : usage.credits !== undefined ? "credits"
     : usage.seconds !== undefined ? "seconds" : usage.characters !== undefined ? "characters" : "images";
+  const listUsd = actual.statedListUsd;
   return {
     status,
     ...(usage.inputTokens !== undefined || usage.outputTokens !== undefined ? { tokenBased: true } : {}),
@@ -192,12 +194,32 @@ function actualPatch(actual: CostActual, status: UsageEntry["status"]): Partial<
     ...(usage.cacheReadInputTokens !== undefined ? { cachedTokens: usage.cacheReadInputTokens } : {}),
     ...(usage.cacheWriteInputTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteInputTokens } : {}),
     ...(units !== undefined ? { units, unit } : {}),
+    ...(typeof listUsd === "number" ? { listUsd } : {}),
     ...(actual.basis !== "none" ? {
       costUsd: actual.usd,
-      basis: actual.basis === "stated" ? "reported" : actual.basis === "derived" ? "estimated" : "unknown",
+      basis: actual.basis === "stated" ? "reported" as const : actual.basis === "derived" ? "estimated" as const : "unknown" as const,
       warnings: actual.warnings,
       pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${actual.rateAsOf ?? PRICING_AS_OF}`,
-    } : {}),
+      actualBasis: actual.basis,
+    } : { actualBasis: actual.basis }),
+  };
+}
+
+const MACHGEN_BILLING_PATH = /\/api\/v0\/tasks\/([^/]+)\/billing$/u;
+
+function machgenBillingTaskId(provider: Provider, url: URL): string | null {
+  if (provider !== "machgen") return null;
+  const match = MACHGEN_BILLING_PATH.exec(url.pathname);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function attributionIds(): Pick<UsageInput, "notebookId" | "cellId" | "jobId" | "runId"> {
+  const context = currentBookContext();
+  return {
+    notebookId: context?.notebookId ?? null,
+    cellId: context?.cellId ?? null,
+    jobId: context?.jobId ?? null,
+    runId: context?.runId ?? null,
   };
 }
 
@@ -277,11 +299,21 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
       try { hints = await costHints(engine, context.artifactId); } catch { void 0; }
       hints = mergeCostHints(hints, usageCostHints.getStore());
       const activity = provider === "machgen" ? machgenActivity(payload) : activityFor(provider, model, url.pathname, context.operation);
+      const quoteEndpoint = provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname);
+      const quoted = usageQuote({
+        provider, method, dotPath: httpDotPath(url.pathname), payload,
+        ...(quoteEndpoint ? { endpoint: quoteEndpoint } : {}),
+        ...(hints ? { costHints: hints } : {}),
+      });
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname),
         operation: context.operation ?? null, artifactId: context.artifactId ?? null,
-        ...await priceRequest(provider, model, payload, provider === "fal" ? endpoint : provider === "wavespeed" ? model : kieSunoApiId(provider, url.pathname), hints, url.href),
+        ...await priceRequest(provider, model, payload, quoteEndpoint, hints, url.href),
+        estimateUsd: quoted.estimateUsd,
+        estimateSource: quoted.estimateSource,
+        estimateRateAsOf: quoted.estimateRateAsOf,
+        ...attributionIds(),
       };
       safeRecord(engine, entry);
     }
@@ -304,11 +336,17 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         const accepted = !!externalId && (provider === "kie" || provider === "fal" || provider === "machgen" || provider === "wavespeed" || /videos|tasks/u.test(url.pathname) || !!object(body.output).task_id);
         const status = response.ok ? responseStatus(body, accepted) : "failed";
         safeRecord(engine, { ...entry, ...(externalId ? { externalId } : {}), ...await observedPatch(engine, entry, exchange, status) });
-      } else if (method === "GET" && externalId && response.ok) {
-        const existing = engine.usage.find(provider, externalId);
-        if (existing) {
-          const status = responseStatus(body, /\/status$/u.test(url.pathname));
-          safeRecord(engine, { ...existing, ...await observedPatch(engine, existing, exchange, status) });
+      } else if (method === "GET" && response.ok) {
+        const billingId = machgenBillingTaskId(provider, url);
+        const linkedId = billingId ?? externalId;
+        if (linkedId) {
+          const existing = engine.usage.find(provider, linkedId);
+          if (existing) {
+            const status = billingId
+              ? (existing.status === "failed" || existing.status === "cancelled" ? existing.status : "completed")
+              : responseStatus(body, /\/status$/u.test(url.pathname));
+            safeRecord(engine, { ...existing, ...await observedPatch(engine, existing, exchange, status) });
+          }
         }
       }
     } catch {
@@ -338,6 +376,7 @@ export function recordVoiceUsage(engine: Engine, provider: "openai" | "xai", mod
     id: `voice:${sessionId}:${responseId}`, externalId: `voice:${sessionId}:${responseId}`,
     provider, model, activity: "voice", tokenBased: true,
     ...unknownPrice(),
+    ...attributionIds(),
   };
   recordEventUsage(engine, entry, provider === "openai" ? "https://api.openai.com/v1/realtime" : "https://api.x.ai/v1/realtime", response);
 }
@@ -346,6 +385,7 @@ export function recordTranscriptionUsage(engine: Engine, model: string, sessionI
   const entry: UsageInput = {
     id: `transcription:${sessionId}:${itemId}`, externalId: `transcription:${sessionId}:${itemId}`,
     provider: "openai", model, activity: "analysis", tokenBased: true, ...unknownPrice(),
+    ...attributionIds(),
   };
   recordEventUsage(engine, entry, "https://api.openai.com/v1/audio/transcriptions", event);
 }

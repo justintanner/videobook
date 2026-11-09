@@ -226,7 +226,10 @@ describe("trending day-book retention", () => {
     const { run, day } = await cutDay(control, "2026-09-26", ["clip"]);
     const finished = day.engine.jobs.queue.dequeue(process.pid, testBudget(60_000))!;
     await day.engine.jobs.queue.complete(finished.id);
-    const request = { provider: "elevenlabs", model: "scribe_v2", activity: "analysis", operation: "archive_clip", artifactId: run.downloads[0].artifactId! } as const;
+    const request = {
+      provider: "elevenlabs", model: "scribe_v2", activity: "analysis", operation: "archive_clip",
+      artifactId: run.downloads[0].artifactId!, notebookId: "day-notebook", cellId: "day-cell", jobId: "day-job", runId: "day-run",
+    } as const;
     const rows: UsageInput[] = [
       { ...request, id: "archive-completed", status: "completed", basis: "estimated", costUsd: 0.0123, units: 41, unit: "second" },
       { ...request, id: "archive-pending", status: "pending", basis: "estimated", costUsd: 0.5 },
@@ -252,7 +255,8 @@ describe("trending day-book retention", () => {
       expect.objectContaining({ id: "archive-pending", status: "pending", basis: "estimated", costUsd: 0.5 }),
     ]);
     expect(kept.every((row) => row.provider === "elevenlabs" && row.model === "scribe_v2" && row.activity === "analysis"
-      && row.operation === "archive_clip" && row.artifactId === null)).toBe(true);
+      && row.operation === "archive_clip" && row.artifactId === null && row.notebookId === null
+      && row.cellId === null && row.jobId === null && row.runId === null)).toBe(true);
     const usage = JSON.parse((await bookUsageDef(control.engine).handler({ book_id: control.bookId })).content[0]!.text);
     expect(usage.totals).toMatchObject({ count: 3, estimatedUsd: 0.0123, reportedUsd: 0, pendingCount: 1, pendingUsd: 0.5, unpriced: 1 });
     const [entry] = readHistory(control.engine);

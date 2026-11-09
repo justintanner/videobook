@@ -2,7 +2,7 @@ import { ENGINE_ERROR_CODES, type Engine } from "videobook-engine";
 
 const EVENTS = [
   "mcp", "server-listening", "shutdown-complete", "shutdown-failed", "startup-failed",
-  "book-open", "book-open-slow", "book-catalog-gc", "provider-poll-failed",
+  "book-open", "book-open-slow", "book-catalog-gc", "provider-poll-failed", "machgen-billing-failed",
   "ace-server-exited", "scheduled-post-failed", "scheduled-post-rearm-failed",
   "generation-record-failed", "generation-update-failed", "generation-list-failed",
   "provider-task-record-failed", "har-capture-failed",

@@ -572,6 +572,7 @@ describe("MachGen provider tasks", () => {
   let recorded: Recorded[];
   let taskIds: string[];
   let taskStatus: { code: number; body: Record<string, unknown> };
+  let billingFailure: boolean;
   let root: string;
   let engine: Engine;
   let client: Client;
@@ -581,6 +582,17 @@ describe("MachGen provider tasks", () => {
   function route(method: string, path: string, response: ServerResponse): void {
     if (method === "POST" && path === "/api/v0/generate") {
       return sendJson(response, 200, { task_id: taskIds.shift() ?? TASK_ID, metadata: { model: "Seedance-2.5", task_type: "I2V" }, task_output: null, moderation: null });
+    }
+    const billing = method === "GET" ? /^\/api\/v0\/tasks\/([^/]+)\/billing$/u.exec(path.split("?")[0] ?? path) : null;
+    if (billing) {
+      if (billingFailure) return sendJson(response, 503, { detail: "billing unavailable" });
+      const taskId = decodeURIComponent(billing[1] ?? TASK_ID);
+      return sendJson(response, 200, {
+        task_id: taskId,
+        generation_cost_micros: 6_823_440,
+        generation_credit_micros: 0,
+        net_cost_micros: 6_000_000,
+      });
     }
     if (method === "GET" && path.startsWith("/api/v0/tasks/")) return sendJson(response, taskStatus.code, taskStatus.body);
     if (method === "GET" && path.startsWith("/api/v0/assets/")) {
@@ -626,6 +638,7 @@ describe("MachGen provider tasks", () => {
     recorded = [];
     taskIds = [];
     taskStatus = status("RUNNING");
+    billingFailure = false;
     asset = mp4;
     root = await mkdtemp(join(tmpdir(), "videobook-machgen-"));
     engine = createEngineForTest(root);
@@ -728,6 +741,34 @@ describe("MachGen provider tasks", () => {
     expect(manifest.ok && manifest.value.files.map((file) => file.name)).toContain("original.mp4");
     expect(engine.jobs.pending.read(assetId)).toMatchObject({ ok: true, value: null });
     expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({ status: "completed" });
+  });
+
+  it("records the MachGen billing receipt as the stated charge", async () => {
+    const assetId = await submitted();
+    await completeTasks();
+    expect(recorded.some((entry) => entry.path === `/api/v0/tasks/${TASK_ID}/billing`)).toBe(true);
+    expect(engine.usage.recent(10).find((entry) => entry.artifactId === assetId)).toMatchObject({
+      status: "completed",
+      basis: "reported",
+      actualBasis: "stated",
+      costUsd: 6,
+      listUsd: expect.closeTo(6.82344, 6),
+      estimateUsd: expect.closeTo(6.82344, 6),
+    });
+  });
+
+  it("leaves the MachGen quote in place when the billing read fails", async () => {
+    const assetId = await submitted();
+    billingFailure = true;
+    await completeTasks();
+    const row = engine.usage.recent(10).find((entry) => entry.artifactId === assetId);
+    expect(row).toMatchObject({
+      status: "completed",
+      basis: "estimated",
+      costUsd: expect.closeTo(6.82344, 6),
+    });
+    expect(row?.actualBasis === "stated" || row?.actualBasis === "derived").toBe(false);
+    expect(engine.logs.read("machgen-billing-failed")).toHaveLength(1);
   });
 
   async function storedFile(assetId: string, name: string): Promise<Buffer | null> {

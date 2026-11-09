@@ -38,7 +38,14 @@ function keepArchiveUsage(control: Engine, day: ManagedBook): number {
   let spendNanos = 0;
   for (const entry of day.engine.usage.recent(200)) {
     if (entry.operation !== "archive_clip") continue;
-    const kept = control.usage.record({ ...entry, artifactId: null });
+    const kept = control.usage.record({
+      ...entry,
+      artifactId: null,
+      notebookId: null,
+      cellId: null,
+      jobId: null,
+      runId: null,
+    });
     if (!kept.ok) throw new Error(`Kept book ${day.name}: its archive usage could not be copied: ${kept.error.message}`);
     if (kept.value.status === "completed") spendNanos += Math.round((kept.value.costUsd ?? 0) * 1e9);
   }

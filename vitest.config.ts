@@ -122,6 +122,7 @@ export default defineConfig({
       'server/src/jobs/_image-edit-adapter.test.ts',
       'server/src/artifact-label.test.ts',
       'server/src/book-context.test.ts',
+      'server/src/usage-attribution.test.ts',
       'server/src/archive-b2.test.ts',
       'server/src/asset-tag-extraction.test.ts',
       'server/src/tag-editorial-fixtures.test.ts',

@@ -25,6 +25,7 @@ import {
   type AssetTagSummary,
 } from "../asset-tags.js";
 import { logger } from "../logger.js";
+import { appendDiagnostic } from "../diagnostics.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -1006,6 +1007,21 @@ async function pollWaveSpeedTasks(
   })));
 }
 
+async function readMachGenReceipt(
+  engine: Engine,
+  bookId: string,
+  task: PendingTask,
+  provider: ReturnType<typeof machgenProvider>,
+): Promise<void> {
+  if (engine.usage.find("machgen", task.taskId)?.actualBasis === "stated") return;
+  try {
+    await provider.api.v0.tasks.billing(task.taskId);
+  } catch (error) {
+    logger.warn("machgen-billing-failed", { assetId: task.artifactId, bookId, error });
+    await appendDiagnostic(engine, "machgen-billing-failed", { assetId: task.artifactId, bookId, error }).catch(() => undefined);
+  }
+}
+
 function withProviderTaskContext<T>(engine: Engine, bookId: string, task: PendingTask, operation: () => Promise<T>): Promise<T> {
   return withBookContext({ bookId, engine, operation: "poll_pending_provider_tasks", artifactId: task.artifactId,
     providerTaskId: task.taskId, attemptId: typeof task.meta.attemptId === "string" ? task.meta.attemptId : task.artifactId,
@@ -1025,7 +1041,9 @@ async function pollMachGenTasks(
   const provider = machgenProvider(30_000, baseURL);
   await Promise.all(machgenTasks.map(async (task) => withProviderTaskContext(engine, bookId, task, async () => {
     try {
-      await processMachGenTaskStatus(engine, task, await provider.api.v0.tasks(task.taskId), result, bookId);
+      const status = await provider.api.v0.tasks(task.taskId);
+      if (status.status === "COMPLETED") await readMachGenReceipt(engine, bookId, task, provider);
+      await processMachGenTaskStatus(engine, task, status, result, bookId);
     } catch (error) {
       const failMsg = error instanceof Error ? error.message : "Poll failed";
       const prompt = metaPrompt(task.meta);

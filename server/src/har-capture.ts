@@ -4,6 +4,7 @@ import { createHarCapture, type HarCallMeta } from "@apicity/har";
 import { currentBookContext } from "./book-context.js";
 import { harDirectory, readHarSettings } from "./har-settings.js";
 import { logger } from "./logger.js";
+import { quoteCaptureInput } from "./usage-quote.js";
 
 const localFailures = new AsyncLocalStorage<Set<unknown>>();
 
@@ -114,7 +115,8 @@ async function runCapture<T>(meta: HarCallMeta, operation: (fetch: typeof global
   pending.add(done);
   void done.finally(() => pending.delete(done));
   try {
-    return await capture.call({ ...meta, input }, () => operation(host.fetch));
+    const estimate = meta.estimate ?? quoteCaptureInput(meta.provider, meta.endpoint, input);
+    return await capture.call({ ...meta, input, ...(estimate ? { estimate } : {}) }, () => operation(host.fetch));
   } finally {
     finish();
   }

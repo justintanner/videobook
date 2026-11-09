@@ -30,11 +30,19 @@ output-only quote.
 
 Book usage uses Apicity's `extractActual` and `mergeActuals` for provider
 responses, including terminal result headers. Provider-stated charges are
-reported; prices derived from measured usage are estimated. Usage without a
-supported rate stays unpriced with the upstream warning. The tables now price
-GPT-5.6 Sol, GPT-6 Astra and transcription seconds. Realtime WebSocket events
-use the same extraction path but never reach HTTP HAR capture. Accounting
-starts at rollout and does not reconstruct older usage.
+reported; prices derived from measured usage are estimated. Each billable call
+also stores the strict `estimateEndpoint` quote beside that actual
+(`estimateUsd`, its source, and the rate date). The quote remains when the
+actual arrives. Rows record the notebook, cell, and job that made the call. A
+call with no cell counts only toward the book total. A job that makes several
+calls writes one row per call, and those rows share that job and cell. MachGen
+completion reads `GET /api/v0/tasks/{id}/billing` once. That read is free. It
+records the stated charge. A failed read leaves the quote in place and logs
+one `machgen-billing-failed` diagnostic. Usage without a supported rate stays
+unpriced with the upstream warning. The tables now price GPT-5.6 Sol, GPT-6
+Astra and transcription seconds. Realtime WebSocket events use the same
+extraction path but never reach HTTP HAR capture. Accounting starts at rollout
+and does not reconstruct older usage.
 
 Sections written before 2026-10-16 name per-model tools (`generate_kie_*`,
 `generate_fal_*`), `payload-builders.ts`, `cost-adapters.ts` and similar

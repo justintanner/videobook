@@ -1,6 +1,6 @@
 import { withHarLocalFailure } from "../har-capture.js";
 import { generationHarEndpoint } from "../media/har-endpoint.js";
-import { withBookContext } from "../book-context.js";
+import { currentBookContext, withBookContext } from "../book-context.js";
 import { isSeedanceEdit } from "../media/seedance-edit.js";
 import type { Engine } from "videobook-engine";
 import type { CostHints } from "@apicity/cost";
@@ -23,6 +23,8 @@ export type GenerateMediaJob = {
   model: string;
   runId?: string;
   generationId?: string;
+  notebookId?: string;
+  cellId?: string;
   bookId: string;
   assetId: string;
   assetDir: string;
@@ -125,9 +127,18 @@ async function generateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHand
 }
 
 export async function runGenerateMedia(engine: Engine, job: GenerateMediaJob, ctx: JobHandlerContext): Promise<Record<string, unknown>> {
-  return withBookContext({ bookId: job.bookId, engine, operation: "generate_media", artifactId: job.assetId,
-    attemptId: job.generationId ?? job.assetId, runId: job.runId, model: job.model }, () =>
-    withHarLocalFailure({ provider: resolveModel(job.model).provider, endpoint: generationHarEndpoint(resolveModel(job.model), job.refs), input: job }, () => generateMedia(engine, job, ctx)));
+  const parent = currentBookContext();
+  const runId = job.runId ?? parent?.runId;
+  const notebookId = job.notebookId ?? parent?.notebookId;
+  const cellId = job.cellId ?? parent?.cellId;
+  return withBookContext({
+    bookId: job.bookId, engine, operation: "generate_media", artifactId: job.assetId,
+    attemptId: job.generationId ?? job.assetId, model: job.model,
+    ...(runId ? { runId } : {}),
+    ...(notebookId ? { notebookId } : {}),
+    ...(cellId ? { cellId } : {}),
+    ...(parent?.jobId ? { jobId: parent.jobId } : {}),
+  }, () => withHarLocalFailure({ provider: resolveModel(job.model).provider, endpoint: generationHarEndpoint(resolveModel(job.model), job.refs), input: job }, () => generateMedia(engine, job, ctx)));
 }
 
 export function registerGenerateMediaJob(engine: Engine): void {

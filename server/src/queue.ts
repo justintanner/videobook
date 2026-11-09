@@ -365,10 +365,14 @@ function makeWrappedResolver(
     const handler = handlers.get(type);
     if (!handler) return null;
     return async (job: Job, queueSignal?: AbortSignal) => withBookContext(
-      { bookId, engine, operation: type, ...(job.artifactId ? { artifactId: job.artifactId } : {}),
+      { bookId, engine, operation: type, jobId: job.operationId,
+        ...(job.artifactId ? { artifactId: job.artifactId } : {}),
         ...(typeof job.payload.runId === "string" ? { runId: job.payload.runId } : {}),
         ...(typeof job.payload.generationId === "string" ? { attemptId: job.payload.generationId } : {}),
-        ...(typeof job.payload.model === "string" ? { model: job.payload.model } : {}) },
+        ...(typeof job.payload.model === "string" ? { model: job.payload.model } : {}),
+        ...(typeof job.payload.notebookId === "string" ? { notebookId: job.payload.notebookId } : {}),
+        ...(typeof job.payload.cellId === "string" ? { cellId: job.payload.cellId }
+          : typeof job.payload.producerCellId === "string" ? { cellId: job.payload.producerCellId } : {}) },
       () => runWithJobDeadline(type, async (signal) => {
         const jobSignal = queueSignal
           ? AbortSignal.any([signal, queueSignal])

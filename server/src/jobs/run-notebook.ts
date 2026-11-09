@@ -1444,8 +1444,12 @@ async function generationTool(
       });
       response = { content: [{ type: "text", text: JSON.stringify({ image_asset_id: imageAssetId }) }] };
     } else {
-      response = await withBookContext({ bookId, engine, operation: prepared.tool, runId: options.runId,
-        attemptId: generationId ?? undefined, model: prepared.model }, () => definition.handler(prepared.input));
+      response = await withBookContext({
+        bookId, engine, operation: prepared.tool, notebookId: document.id, cellId: cell.id,
+        ...(options.runId ? { runId: options.runId } : {}),
+        ...(generationId ? { attemptId: generationId } : {}),
+        model: prepared.model,
+      }, () => definition.handler(prepared.input));
     }
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -2496,13 +2500,20 @@ export async function runNotebookCell(
     throw new Error(`Notebook cell not found: ${normalizedCell.id}`);
   }
   try {
-    const output = await executeLocalOrGeneration(
+    const output = await withBookContext({
+      bookId,
+      engine,
+      notebookId,
+      cellId: activeCell.id,
+      operation: activeCell.operation ?? activeCell.type,
+      ...(options.runId ? { runId: options.runId } : {}),
+    }, () => executeLocalOrGeneration(
       engine,
       bookId,
       activeDocument,
       activeCell,
       options,
-    );
+    ));
     const updatedAt = new Date().toISOString();
     const status = output.awaitingOutput ? "awaiting-output" : "completed";
     const state: CellExecution = {
