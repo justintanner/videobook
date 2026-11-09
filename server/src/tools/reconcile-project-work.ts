@@ -949,6 +949,14 @@ function wavespeedOutputUrls(prediction: WaveSpeedPrediction): string[] {
   return (prediction.outputs ?? []).filter((output): output is string => typeof output === "string" && /^https?:\/\//u.test(output));
 }
 
+const FAL_RETRYABLE_STATUSES = new Set([408, 429, 499]);
+
+function falPollFailureIsFinal(error: unknown): boolean {
+  if (!(error instanceof FalError)) return false;
+  const status = (error as FalError).status;
+  return status >= 400 && status < 500 && !FAL_RETRYABLE_STATUSES.has(status);
+}
+
 async function processWaveSpeedPrediction(
   engine: Engine,
   task: PendingTask,
@@ -1433,11 +1441,8 @@ export async function pollPendingProviderTasks(
       } catch (e) {
         const failMsg = reframeVideoFailure(task.meta?.model ?? task.meta?.falEndpointId, describeFalError(e));
         result.failed.push({ assetId: task.artifactId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        if (e instanceof FalError) {
-          const falErr = e as FalError;
-          if (falErr.status >= 400 && falErr.status < 500) {
-            await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
-          }
+        if (falPollFailureIsFinal(e)) {
+          await failPendingTaskAndLog(engine, task.artifactId, task.taskId, { message: failMsg, prompt });
         }
       }
     })));

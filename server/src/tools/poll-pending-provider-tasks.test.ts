@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import type { Server } from "node:http";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -51,6 +51,34 @@ async function seedPendingTask(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withFalQueue(
+  respond: (request: IncomingMessage, response: ServerResponse) => void,
+  run: (baseURL: string) => Promise<void>,
+): Promise<void> {
+  const server = createServer((request, response) => {
+    request.resume();
+    respond(request, response);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Missing HTTP address");
+  const previousKey = process.env.FAL_API_KEY;
+  process.env.FAL_API_KEY = "local-poll-key";
+  try {
+    await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    if (previousKey === undefined) delete process.env.FAL_API_KEY;
+    else process.env.FAL_API_KEY = previousKey;
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+function falHttp(code: number, body: unknown, response: ServerResponse): void {
+  response.writeHead(code, { "content-type": "application/json" });
+  response.end(JSON.stringify(body));
 }
 
 describe("pollPendingProviderTasks", () => {
@@ -114,6 +142,82 @@ describe("pollPendingProviderTasks", () => {
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+
+  it.each([
+    { phase: "status", code: 408 },
+    { phase: "status", code: 429 },
+    { phase: "status", code: 499 },
+    { phase: "result", code: 408 },
+    { phase: "result", code: 429 },
+    { phase: "result", code: 499 },
+  ])("leaves a fal task pending when the $phase poll answers $code", async ({ phase, code }) => {
+    const { assetSlug } = await seedPendingTask(fs, "fal_media", "fal-throttled", { falEndpointId: "minimax/h3-max/extend-video" });
+    await withFalQueue((request, response) => {
+      const isStatus = request.url?.endsWith("/status") ?? false;
+      if (phase === "status" && isStatus) {
+        falHttp(code, { message: "throttled" }, response);
+        return;
+      }
+      if (phase === "result" && !isStatus) {
+        falHttp(code, { message: "throttled" }, response);
+        return;
+      }
+      falHttp(200, { status: "COMPLETED" }, response);
+    }, async (baseURL) => {
+      const result = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: baseURL });
+      expect(result.completed).toEqual([]);
+      expect(result.failed).toEqual([expect.objectContaining({ assetId: assetSlug, failMsg: `Fal API error: ${code}` })]);
+      expect(fs.jobs.pending.read(assetSlug)).toMatchObject({ ok: true, value: expect.objectContaining({ taskId: "fal-throttled" }) });
+      expect(fs.jobs.failures.read(assetSlug)).toMatchObject({ ok: true, value: null });
+    });
+  });
+
+  it.each([
+    { phase: "status", code: 400 },
+    { phase: "result", code: 404 },
+  ])("fails a fal task when the $phase poll answers $code", async ({ phase, code }) => {
+    const { assetSlug } = await seedPendingTask(fs, "fal_media", "fal-rejected", { falEndpointId: "minimax/h3-max/extend-video" });
+    await withFalQueue((request, response) => {
+      const isStatus = request.url?.endsWith("/status") ?? false;
+      if ((phase === "status" && isStatus) || (phase === "result" && !isStatus)) {
+        falHttp(code, { message: "rejected" }, response);
+        return;
+      }
+      falHttp(200, { status: "COMPLETED" }, response);
+    }, async (baseURL) => {
+      const result = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: baseURL });
+      const expected = `Fal API error: ${code}`;
+      expect(result.failed).toEqual([expect.objectContaining({ assetId: assetSlug, failMsg: expected })]);
+      expect(fs.jobs.pending.read(assetSlug)).toMatchObject({ ok: true, value: null });
+      const failure = fs.jobs.failures.read(assetSlug);
+      expect(failure.ok && failure.value?.message).toBe(expected);
+    });
+  });
+
+  it("polls a throttled fal result again on the next reconcile pass", async () => {
+    const { assetSlug } = await seedPendingTask(fs, "fal_media", "fal-retry", { falEndpointId: "minimax/h3-max/extend-video" });
+    let resultCode = 429;
+    await withFalQueue((request, response) => {
+      if (request.url?.endsWith("/status")) {
+        falHttp(200, { status: "COMPLETED" }, response);
+        return;
+      }
+      falHttp(resultCode, { detail: [{ loc: ["body", "video_url"], msg: "Invalid video" }] }, response);
+    }, async (baseURL) => {
+      const throttled = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: baseURL });
+      expect(throttled.failed).toEqual([expect.objectContaining({ assetId: assetSlug, failMsg: expect.stringContaining("Fal API error: 429") })]);
+      expect(fs.jobs.pending.read(assetSlug)).toMatchObject({ ok: true, value: expect.objectContaining({ taskId: "fal-retry" }) });
+      expect(fs.jobs.failures.read(assetSlug)).toMatchObject({ ok: true, value: null });
+
+      resultCode = 422;
+      const rejected = await pollPendingProviderTasks(fs, bookId, { falQueueBaseURL: baseURL });
+      const expected = "Fal API error: 422: video_url: Invalid video";
+      expect(rejected.failed).toEqual([expect.objectContaining({ assetId: assetSlug, failMsg: expected })]);
+      expect(fs.jobs.pending.read(assetSlug)).toMatchObject({ ok: true, value: null });
+      const failure = fs.jobs.failures.read(assetSlug);
+      expect(failure.ok && failure.value?.message).toBe(expected);
+    });
   });
 
   it.each([
