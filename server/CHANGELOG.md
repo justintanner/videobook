@@ -6,6 +6,18 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `video_graphics` takes `op: render` with `expected_revision`, `source_hash`,
+  `request_id` and `output` and burns the reviewed graphics into the video in
+  the background. `output: new` (the default) writes a copy into a new video
+  cell below the source, and a later render adds a version to that cell;
+  `output: replace` rewrites the source video, keeps its earlier version in
+  history and clears the saved graphics. Each layer shows only inside its time
+  window with its fades. A retry with the same `request_id` returns the same
+  render, and `get` reports the latest render and any graphics already burned
+  into the video.
+
 ## [0.5.1] - 2026-11-10
 
 ### Added

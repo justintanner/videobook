@@ -1,8 +1,18 @@
-import { createHash, randomUUID } from "node:crypto";
-import type { Engine, Job, NotebookCell, NotebookDocument } from "videobook-engine";
+import { randomUUID } from "node:crypto";
+import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { withNotebookMutation } from "../notebook-mutations.js";
-import { slotBelowArtifactOrFirstFree } from "../notebook-placement.js";
 import { queue } from "../queue.js";
+import type { RenderOutput, RenderRequestStatus } from "../render-requests.js";
+import {
+  indexedRenderRequests,
+  indexRenderRequest,
+  renderDestination,
+  renderOutput,
+  renderRequestFingerprint,
+  renderRequestRunning,
+  renderRequestStatus,
+  writeRenderSetting,
+} from "../render-requests.js";
 import { captionAnalysisStateFor } from "./analysis.js";
 import type { CaptionRegionFrame } from "./layout.js";
 import type { CaptionDocument } from "./model.js";
@@ -12,14 +22,12 @@ import { captionMediaSource } from "./source.js";
 
 export const CAPTION_RENDER_JOB = "render_captions";
 export const CAPTION_SOURCE_OPERATION = "caption_video";
-export const CAPTION_RENDER_OUTPUTS = ["new", "replace"] as const;
-export type CaptionRenderOutput = typeof CAPTION_RENDER_OUTPUTS[number];
 const FULL_NOTEBOOK = "The notebook needs one empty cell for the subtitled copy.";
 
 export interface CaptionRenderRequest {
   requestId: string;
   fingerprint: string;
-  output: CaptionRenderOutput;
+  output: RenderOutput;
   sourceArtifactId: string;
   outputArtifactId: string;
   notebookId: string | null;
@@ -30,16 +38,6 @@ export interface CaptionRenderRequest {
   regions: CaptionRegionFrame[];
   jobId: number | null;
   createdAt: string;
-}
-
-export interface CaptionRenderStatus {
-  request_id: string;
-  status: "queued" | "running" | "completed" | "failed";
-  job_id: number | null;
-  output_asset_id: string;
-  cell_id: string | null;
-  address: string | null;
-  error: string | null;
 }
 
 function requestKey(requestId: string): string {
@@ -55,27 +53,15 @@ export function readCaptionRenderRequest(engine: Engine, requestId: string): Cap
   if (!value || typeof value.outputArtifactId !== "string") return null;
   const document = captionDocumentSchema.safeParse(value.document);
   if (!document.success) return null;
-  return { ...value, output: value.output === "replace" ? "replace" : "new", document: document.data };
+  return { ...value, output: renderOutput(value.output), document: document.data };
 }
 
 function requestIndexKey(artifactId: string): string {
   return `captions.requests.${artifactId}`;
 }
 
-function indexedRequests(engine: Engine, artifactId: string): string[] {
-  const value = engine.settings.get<unknown>(requestIndexKey(artifactId));
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function indexRequest(engine: Engine, artifactId: string, requestId: string): void {
-  const ids = indexedRequests(engine, artifactId);
-  if (ids.includes(requestId)) return;
-  const stored = engine.settings.set(requestIndexKey(artifactId), [...ids, requestId]);
-  if (!stored.ok) throw new Error(stored.error.message);
-}
-
 export function forgetCaptionRenders(engine: Engine, artifactId: string): void {
-  for (const requestId of indexedRequests(engine, artifactId)) {
+  for (const requestId of indexedRenderRequests(engine, requestIndexKey(artifactId))) {
     const request = readCaptionRenderRequest(engine, requestId);
     if (request) engine.settings.delete(latestKey(request.sourceArtifactId, request.language));
     engine.settings.delete(requestKey(requestId));
@@ -83,49 +69,14 @@ export function forgetCaptionRenders(engine: Engine, artifactId: string): void {
   engine.settings.delete(requestIndexKey(artifactId));
 }
 
-function writeRequest(engine: Engine, request: CaptionRenderRequest): void {
-  const stored = engine.settings.set(requestKey(request.requestId), request);
-  if (!stored.ok) throw new Error(stored.error.message);
+function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string, output: RenderOutput): string {
+  return renderRequestFingerprint([sourceArtifactId, notebookId, sourceHash, language, revision, ...(output === "replace" ? [output] : [])]);
 }
 
-function fingerprint(sourceArtifactId: string, notebookId: string | null, sourceHash: string, language: string, revision: string, output: CaptionRenderOutput): string {
-  const fields = [sourceArtifactId, notebookId, sourceHash, language, revision, ...(output === "replace" ? [output] : [])];
-  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
-}
-
-function jobStatus(job: Job | null): CaptionRenderStatus["status"] {
-  if (!job) return "failed";
-  if (job.state === "queued") return "queued";
-  if (job.state === "done") return "completed";
-  if (job.state === "failed" || job.state === "aborted") return "failed";
-  return "running";
-}
-
-function resultString(job: Job | null, key: string): string | null {
-  const result = job?.result;
-  if (!result || typeof result !== "object") return null;
-  const value = (result as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : null;
-}
-
-function captionRenderStatus(engine: Engine, request: CaptionRenderRequest): CaptionRenderStatus {
-  const job = request.jobId ? engine.jobs.queue.get(request.jobId) : null;
-  const status = jobStatus(job);
-  return {
-    request_id: request.requestId,
-    status,
-    job_id: request.jobId,
-    output_asset_id: request.outputArtifactId,
-    cell_id: resultString(job, "cell_id"),
-    address: resultString(job, "address"),
-    error: status === "failed" ? job?.error?.message ?? "The render did not start." : null,
-  };
-}
-
-export function latestCaptionRender(engine: Engine, artifactId: string, language: string): CaptionRenderStatus | null {
+export function latestCaptionRender(engine: Engine, artifactId: string, language: string): RenderRequestStatus | null {
   const requestId = engine.settings.get<string>(latestKey(artifactId, language));
   const request = typeof requestId === "string" ? readCaptionRenderRequest(engine, requestId) : null;
-  return request ? captionRenderStatus(engine, request) : null;
+  return request ? renderRequestStatus(engine, request) : null;
 }
 
 function isCaptionOutputCell(cell: NotebookCell, sourceArtifactId: string, language: string): boolean {
@@ -136,8 +87,7 @@ function isCaptionOutputCell(cell: NotebookCell, sourceArtifactId: string, langu
 }
 
 export function captionRenderDestination(notebook: NotebookDocument, sourceArtifactId: string, language: string) {
-  const existing = notebook.cells.find((cell) => isCaptionOutputCell(cell, sourceArtifactId, language));
-  return existing ? { existing, slot: existing.slot } : { existing: null, slot: slotBelowArtifactOrFirstFree(notebook, sourceArtifactId, FULL_NOTEBOOK) };
+  return renderDestination(notebook, sourceArtifactId, (cell) => isCaptionOutputCell(cell, sourceArtifactId, language), FULL_NOTEBOOK);
 }
 
 function checkDestination(engine: Engine, notebookId: string | null, sourceArtifactId: string, language: string): void {
@@ -162,15 +112,14 @@ async function outputArtifact(engine: Engine, label: string | null, language: st
   return created.value.artifactId;
 }
 
-function reusable(engine: Engine, existing: CaptionRenderRequest, expected: string): CaptionRenderStatus | null {
+function reusable(engine: Engine, existing: CaptionRenderRequest, expected: string): RenderRequestStatus | null {
   if (existing.fingerprint !== expected) {
     throw new CaptionServiceError("invalid", "This request ID belongs to a different render. Start a new request.");
   }
   if (!engine.artifacts.get(existing.outputArtifactId).ok) {
     throw new CaptionServiceError("invalid", "The subtitled copy was deleted. Start a new request.");
   }
-  const job = existing.jobId ? engine.jobs.queue.get(existing.jobId) : null;
-  return job && ["queued", "running", "completing", "done"].includes(job.state) ? captionRenderStatus(engine, existing) : null;
+  return renderRequestRunning(engine, existing) ? renderRequestStatus(engine, existing) : null;
 }
 
 export interface CaptionRenderInput {
@@ -178,10 +127,10 @@ export interface CaptionRenderInput {
   expectedRevision: string;
   sourceHash: string;
   notebookId: string | null;
-  output: CaptionRenderOutput;
+  output: RenderOutput;
 }
 
-export async function requestCaptionRender(engine: Engine, bookId: string, artifactId: string, language: string, input: CaptionRenderInput): Promise<CaptionRenderStatus> {
+export async function requestCaptionRender(engine: Engine, bookId: string, artifactId: string, language: string, input: CaptionRenderInput): Promise<RenderRequestStatus> {
   return withNotebookMutation(`captions-render:${bookId}:${input.requestId}`, async () => {
     const expected = fingerprint(artifactId, input.notebookId, input.sourceHash, language, input.expectedRevision, input.output);
     const existing = readCaptionRenderRequest(engine, input.requestId);
@@ -216,11 +165,10 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
       jobId: null,
       createdAt: new Date().toISOString(),
     };
-    writeRequest(engine, request);
-    indexRequest(engine, artifactId, input.requestId);
-    indexRequest(engine, request.outputArtifactId, input.requestId);
-    const latest = engine.settings.set(latestKey(artifactId, language), input.requestId);
-    if (!latest.ok) throw new Error(latest.error.message);
+    writeRenderSetting(engine, requestKey(request.requestId), request);
+    indexRenderRequest(engine, requestIndexKey(artifactId), input.requestId);
+    indexRenderRequest(engine, requestIndexKey(request.outputArtifactId), input.requestId);
+    writeRenderSetting(engine, latestKey(artifactId, language), input.requestId);
     const job = await queue.enqueue(`caption-render-${input.requestId}-${randomUUID()}`, {
       type: CAPTION_RENDER_JOB,
       bookId,
@@ -228,7 +176,7 @@ export async function requestCaptionRender(engine: Engine, bookId: string, artif
       requestId: input.requestId,
     });
     const queued = { ...request, jobId: job.id };
-    writeRequest(engine, queued);
-    return captionRenderStatus(engine, queued);
+    writeRenderSetting(engine, requestKey(queued.requestId), queued);
+    return renderRequestStatus(engine, queued);
   });
 }

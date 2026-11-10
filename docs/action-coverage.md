@@ -279,7 +279,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.update_sequence_rhythm` | `/update-sequence-rhythm` |  | sequence | none | `update_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.validate_sequence_export` | `/validate-sequence-export` |  | book | none | `validate_sequence_export` | slash, launcher | dialog | none |
 | `tool.verify_x_mentions` | `/verify-x-mentions` |  | book | none | `verify_x_mentions` | slash, launcher | dialog | generation |
-| `tool.video_graphics` | `/video-graphics` |  | book | asset: asset_id | `video_graphics` | slash, launcher, cell-menu | dialog | none |
+| `tool.video_graphics` | `/video-graphics` |  | book | asset: asset_id | `video_graphics` | slash, launcher, cell-menu | dialog | destructive |
 | `tool.wait_for_asset_ready` | `/wait-for-asset-ready` |  | book | asset: asset_id | `wait_for_asset_ready` | slash, launcher, cell-menu | dialog | none |
 
 ## Transport and workflow ownership

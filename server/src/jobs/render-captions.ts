@@ -1,17 +1,13 @@
 import { copyFile, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
-import { notebookGridTag } from "videobook-engine/notebook-grid";
+import type { Engine } from "videobook-engine";
 import { publishCaptionCorrections } from "../captions/publish.js";
 import type { CaptionRenderRequest } from "../captions/render.js";
 import { CAPTION_RENDER_JOB, CAPTION_SOURCE_OPERATION, captionRenderDestination, readCaptionRenderRequest } from "../captions/render.js";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
-import { probeVideo } from "../ffmpeg.js";
 import { logger } from "../logger.js";
-import { registerMediaProbe } from "../notebook-media-ops.js";
-import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { renderBrowserExecutable } from "../remotion/browser.js";
@@ -19,10 +15,11 @@ import type { CaptionCompositionProps } from "../remotion/captions/CaptionCompos
 import { captionDurationInFrames } from "../remotion/captions/composition-meta.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 import { renderWithEncoderFallback } from "../remotion-encoding.js";
-import { extractVideoPoster } from "../video-poster.js";
 import type { JobHandlerContext } from "../queue.js";
 import { withLocalLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
+import type { RenderedCellPlacement } from "./_render-output.js";
+import { placeRenderedCell, sourceCellPlacement, writeRenderedVideo } from "./_render-output.js";
 
 interface RenderCaptionsPayload {
   bookId: string;
@@ -108,59 +105,20 @@ async function renderComposition(input: {
   }
 }
 
-function versionedCell(cell: NotebookCell, artifactId: string): NotebookCell {
-  const previous = Array.isArray(cell.inputs?.outputVersionArtifactIds)
-    ? cell.inputs.outputVersionArtifactIds.filter((value): value is string => typeof value === "string")
-    : [];
-  const versions = [...new Set([...previous, ...(cell.outputArtifactId ? [cell.outputArtifactId] : []), artifactId])];
-  return { ...cell, outputArtifactId: artifactId, inputs: { ...cell.inputs, outputVersionArtifactIds: versions, state: "completed" } };
-}
-
-function placeOutput(engine: Engine, notebook: NotebookDocument, request: CaptionRenderRequest, label: string): { notebook: NotebookDocument; cell: NotebookCell } {
-  const placed = notebook.cells.find((cell) => cell.outputArtifactId === request.outputArtifactId);
-  if (placed) return { notebook, cell: placed };
-  const destination = captionRenderDestination(notebook, request.sourceArtifactId, request.language);
-  if (destination.existing) {
-    const cell = versionedCell(destination.existing, request.outputArtifactId);
-    return { notebook: { ...notebook, cells: notebook.cells.map((candidate) => (candidate.id === cell.id ? cell : candidate)) }, cell };
-  }
-  const cell = engine.notebooks.createCell({
-    type: "video",
-    label,
-    slot: destination.slot,
+function placeCell(engine: Engine, request: CaptionRenderRequest): Promise<RenderedCellPlacement> {
+  return placeRenderedCell(engine, {
+    notebookId: request.notebookId,
+    operation: CAPTION_RENDER_JOB,
+    sourceArtifactId: request.sourceArtifactId,
     outputArtifactId: request.outputArtifactId,
-    inputs: {
-      sourceOperation: CAPTION_SOURCE_OPERATION,
-      sourceArtifactId: request.sourceArtifactId,
-      language: request.language,
-      state: "completed",
-    },
+    fallbackLabel: "Subtitles",
+    destination: (notebook) => captionRenderDestination(notebook, request.sourceArtifactId, request.language),
+    inputs: { sourceOperation: CAPTION_SOURCE_OPERATION, sourceArtifactId: request.sourceArtifactId, language: request.language },
   });
-  return { notebook: { ...notebook, cells: [...notebook.cells, cell] }, cell };
-}
-
-async function placeCell(engine: Engine, request: CaptionRenderRequest): Promise<{ cellId: string | null; address: string | null }> {
-  if (!request.notebookId) return { cellId: null, address: null };
-  const artifact = engine.artifacts.get(request.outputArtifactId);
-  const label = artifact.ok ? artifact.value.label ?? "Subtitles" : "Subtitles";
-  const placement = { cellId: null as string | null, address: null as string | null };
-  const written = await mutateNotebook(engine, request.notebookId, CAPTION_RENDER_JOB, (notebook) => {
-    const result = placeOutput(engine, notebook, request, label);
-    placement.cellId = result.cell.id;
-    placement.address = notebookGridTag(result.cell.slot);
-    return result.notebook;
-  }, { sourceArtifactId: request.sourceArtifactId, outputArtifactId: request.outputArtifactId }, { artifactId: request.outputArtifactId });
-  if (!written.ok) throw new Error(written.error.message);
-  return placement;
 }
 
 async function writeOutput(engine: Engine, request: CaptionRenderRequest, outputPath: string, signal: AbortSignal): Promise<number> {
-  const probe = await probeVideo(outputPath, { signal });
-  const written = await engine.files.writeFromPath(request.outputArtifactId, "original.mp4", outputPath);
-  if (!written.ok) throw new Error(written.error.message);
-  await registerMediaProbe(engine, request.outputArtifactId, "original.mp4", probe);
-  const poster = await engine.files.write(request.outputArtifactId, "original.jpg", await extractVideoPoster(outputPath, probe.videoDuration, signal));
-  if (!poster.ok) throw new Error(poster.error.message);
+  const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, signal);
   const snapshot = await engine.files.write(request.outputArtifactId, "captions.json", JSON.stringify(request.document, null, 2));
   if (!snapshot.ok) throw new Error(snapshot.error.message);
   await writeProvenance(engine, request);
@@ -210,12 +168,6 @@ async function renderCaptions(engine: Engine, payload: RenderCaptionsPayload, ct
   }
 }
 
-function sourcePlacement(engine: Engine, request: CaptionRenderRequest): { cellId: string | null; address: string | null } {
-  const notebook = request.notebookId ? engine.notebooks.read(request.notebookId) : null;
-  const cell = notebook?.ok ? notebook.value.cells.find((entry) => entry.outputArtifactId === request.sourceArtifactId) : undefined;
-  return cell ? { cellId: cell.id, address: notebookGridTag(cell.slot) } : { cellId: null, address: null };
-}
-
 async function burnIntoSource(engine: Engine, bookId: string, request: CaptionRenderRequest, source: CaptionMediaSource, signal: AbortSignal): Promise<string> {
   await reviewedSource(engine, request);
   const outputPath = join(source.directory, RENDER_NAME);
@@ -255,7 +207,7 @@ async function renderCaptionsInPlace(engine: Engine, bookId: string, request: Ca
     skipDownstreamJobs: true,
     preserveAudioArtifacts: true,
   });
-  const placement = sourcePlacement(engine, request);
+  const placement = sourceCellPlacement(engine, request.notebookId, request.sourceArtifactId);
   return { output_asset_id: source.artifactId, cell_id: placement.cellId, address: placement.address };
 }
 

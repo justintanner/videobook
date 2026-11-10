@@ -24,7 +24,7 @@ import type { GraphicsStarterId } from "./starters.js";
 import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS } from "./starters.js";
 import { watermarkSlotValues } from "./watermark-profile.js";
 
-type GraphicsServiceErrorCode = "conflict" | "invalid";
+type GraphicsServiceErrorCode = "conflict" | "invalid" | "not_ready" | "stale_source";
 
 type GraphicsErrorDetails = {
   revision?: string;
@@ -70,6 +70,8 @@ type GraphicsContext = {
   values: GraphicsSlotValues;
   starters: GraphicsStarterDocument[];
 };
+
+type ReviewedGraphics = { source: CaptionMediaSource; revision: string; document: GraphicsDocument };
 
 type GraphicsUpdateInput = {
   expectedRevision: string;
@@ -235,4 +237,18 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
     requireBookImages(engine, current.document, next);
     return writeGraphicsDraft(engine, artifactId, next);
   });
+}
+
+export async function reviewedGraphics(
+  engine: Engine,
+  artifactId: string,
+  platform: WatermarkPlatform,
+  expectedRevision: string,
+): Promise<ReviewedGraphics> {
+  const context = await graphicsContext(engine, artifactId, platform);
+  const current = context.saved ?? context.fallback;
+  if (current.revision !== expectedRevision) {
+    throw new GraphicsServiceError("conflict", "These graphics changed after review. Review the latest version, then render.", { revision: current.revision });
+  }
+  return { source: context.source, revision: current.revision, document: current.document };
 }

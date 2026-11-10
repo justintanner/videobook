@@ -15,7 +15,10 @@ import {
   GRAPHICS_SPACES,
   GRAPHICS_TEXT_SLOTS,
 } from "../graphics/model.js";
+import { graphicsBurned, latestGraphicsRender, requestGraphicsRender } from "../graphics/render.js";
 import { GraphicsServiceError, readGraphics, updateGraphics } from "../graphics/service.js";
+import type { RenderOutput } from "../render-requests.js";
+import { RENDER_OUTPUTS } from "../render-requests.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
 import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -112,11 +115,15 @@ const schema = {
   book_id: z.string().describe("Book id"),
   asset_id: z.string().min(1).describe("Video artifact UUID or notebook address such as @a1"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address and reports the video's cell address"),
-  op: z.enum(["get", "update"]).optional()
-    .describe("get (default) reads the saved graphics, or the default look for a video without any, with fill values and starters, and never writes; update saves edits or a replacement document against expected_revision"),
+  op: z.enum(["get", "update", "render"]).optional()
+    .describe("get (default) reads the saved graphics, or the default look for a video without any, with fill values, starters, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once"),
   platform: z.enum(WATERMARK_PLATFORMS).optional()
     .describe("Watermark profile whose handle and profile URL fill the handle and QR slots of the default look and starters (default tiktok)"),
-  expected_revision: z.string().optional().describe("update: the revision from get that these changes apply to"),
+  expected_revision: z.string().optional().describe("update and render: the revision from get that these changes apply to or that was reviewed"),
+  source_hash: z.string().optional().describe("render: source.source_hash from the get that was reviewed"),
+  request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
+  output: z.enum(RENDER_OUTPUTS).optional()
+    .describe("render: new (default) writes a copy with the graphics into a new video cell below the source, a version of the earlier copy when one exists; replace burns the graphics into the source video itself, keeping its earlier version in history, and clears the saved graphics"),
   edits: z.array(editSchema).max(200).optional()
     .describe("update: edits applied in order. Sizes, gaps and paddings are fractions of the frame's short side, text width a fraction of the positioning space, positions 0..1 inside the space, times in seconds"),
   document: advertisedAs(z.unknown(), {
@@ -129,9 +136,12 @@ type VideoGraphicsArgs = {
   book_id: string;
   asset_id: string;
   notebook_id?: string;
-  op?: "get" | "update";
+  op?: "get" | "update" | "render";
   platform?: WatermarkPlatform;
   expected_revision?: string;
+  source_hash?: string;
+  request_id?: string;
+  output?: RenderOutput;
   edits?: GraphicsEdit[];
   document?: unknown;
 };
@@ -160,21 +170,41 @@ async function update(engine: Engine, args: VideoGraphicsArgs, artifactId: strin
   return { asset_id: artifactId, status: "saved", saved: true, revision: draft.revision, updated_at: draft.updatedAt, document: draft.document };
 }
 
+async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: string, platform: WatermarkPlatform) {
+  if (!args.expected_revision || !args.source_hash || !args.request_id) {
+    throw new GraphicsServiceError("invalid", "render needs expected_revision, source_hash and request_id from the reviewed get.");
+  }
+  const status = await requestGraphicsRender(engine, args.book_id, artifactId, {
+    requestId: args.request_id,
+    expectedRevision: args.expected_revision,
+    sourceHash: args.source_hash,
+    notebookId: args.notebook_id ?? null,
+    output: args.output ?? "new",
+    platform,
+  });
+  return { asset_id: artifactId, job_id: status.job_id, status: status.status, output_artifact_id: status.output_asset_id, render: status };
+}
+
+async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string, platform: WatermarkPlatform) {
+  const model = await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, platform });
+  return { ...model, render: latestGraphicsRender(engine, artifactId), burned: await graphicsBurned(engine, artifactId) };
+}
+
 export function videoGraphicsDef(engine: Engine): ToolDef {
   return {
     name: "video_graphics",
     description:
-      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the default look (the TikTok handle, an empty Thai title and an English line, no QR code) for a video without any, with the handle, profile URL and source credit to fill slots and the starter layouts; update saves edits or a replacement document against the revision from get. Videos only; nothing is rendered.",
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the default look (the TikTok handle, an empty Thai title and an English line, no QR code) for a video without any, with the handle, profile URL and source credit to fill slots, the starter layouts, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place. Videos only.",
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     schema,
     handler: async (input) => {
       const args = input as unknown as VideoGraphicsArgs;
       try {
         const artifactId = resolveVideoAssetReference(engine, args.asset_id, args.notebook_id);
         const platform = args.platform ?? "tiktok";
-        if ((args.op ?? "get") === "get") {
-          return json(await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, platform }));
-        }
+        const op = args.op ?? "get";
+        if (op === "get") return json(await read(engine, args, artifactId, platform));
+        if (op === "render") return json(await render(engine, args, artifactId, platform));
         return json(await update(engine, args, artifactId, platform));
       } catch (error) {
         return failure(error);

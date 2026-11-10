@@ -57,6 +57,7 @@ import { registerAnalyzeKeywordPlacementJob } from "./analyze-keyword-placement.
 import { registerAnalyzeAliveCaptionsJob } from "./analyze-alive-captions.js";
 import { registerCaptionAnalysisJobs } from "./caption-analysis.js";
 import { registerRenderCaptionsJob } from "./render-captions.js";
+import { registerRenderGraphicsJob } from "./render-graphics.js";
 import { registerOsgPlacementJob } from "./osg-placement.js";
 import { registerBurnWatermarkJob } from "./burn-watermark.js";
 import { registerSuggestCutsJob } from "./suggest-cuts.js";
@@ -144,6 +145,7 @@ export function registerAllJobHandlers(
   registerAnalyzeAliveCaptionsJob(engine);
   registerCaptionAnalysisJobs(engine);
   registerRenderCaptionsJob(engine);
+  registerRenderGraphicsJob(engine);
   registerOsgPlacementJob(engine);
   registerBurnWatermarkJob(engine);
   registerSuggestCutsJob(engine);

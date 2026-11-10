@@ -26,14 +26,22 @@ import { analyzeOsgPlacement } from "./osg-placement.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
 import { effectiveWatermarkTiming } from "../watermark-timing.js";
+import type { BurnFades } from "../graphics/burn.js";
+import {
+  burnWatermarkEnable,
+  burnWatermarkFadeFilters,
+  burnWatermarkFrameRate,
+  burnWatermarkInputArgs,
+  burnWatermarkLoopSeconds,
+} from "../graphics/burn.js";
+
+export { burnWatermarkEnable, burnWatermarkInputArgs, burnWatermarkLoopSeconds };
 
 const LOCK_DURATION_MS = 600_000;
 
 /** Fade applied at a watermark edge that falls inside the clip. */
 const DEFAULT_WATERMARK_FADE_SECONDS = 0.5;
 export const MAX_WATERMARK_FADE_SECONDS = 2;
-/** Extra looped badge frames past the last fade so overlay never runs dry mid-ramp. */
-const LOOP_MARGIN_SECONDS = 0.25;
 /** Ends this close to the clip end count as "whole clip": no fade out. */
 const CLIP_END_TOLERANCE_SECONDS = 0.001;
 
@@ -84,12 +92,7 @@ export type BurnWatermarkResult = {
   placementSource: WatermarkPlacementSource;
 };
 
-type BurnWatermarkFades = {
-  fadeIn: number;
-  fadeOut: number;
-};
-
-const NO_FADES: BurnWatermarkFades = { fadeIn: 0, fadeOut: 0 };
+const NO_FADES: BurnFades = { fadeIn: 0, fadeOut: 0 };
 
 function roundSeconds(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -111,17 +114,6 @@ function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string;
   return { x, y };
 }
 
-export function burnWatermarkEnable(
-  startSeconds?: number,
-  endSeconds?: number,
-): string {
-  if (startSeconds === undefined && endSeconds === undefined) return "";
-  const start = startSeconds ?? 0;
-  return endSeconds === undefined
-    ? `:enable='gte(t,${start})'`
-    : `:enable='between(t,${start},${endSeconds})'`;
-}
-
 /**
  * Fade lengths for one watermark window. A watermark fades in only when it
  * starts after the clip start and out only when it ends before the clip end,
@@ -133,7 +125,7 @@ export function burnWatermarkFades(
   endSeconds: number | undefined,
   durationSeconds: number,
   fadeSeconds: number,
-): BurnWatermarkFades {
+): BurnFades {
   const start = Math.max(0, startSeconds ?? 0);
   const clipEnd = endSeconds === undefined
     ? durationSeconds
@@ -147,64 +139,6 @@ export function burnWatermarkFades(
     fadeIn: start > 0 ? fade : 0,
     fadeOut: endsEarly ? fade : 0,
   };
-}
-
-/**
- * Alpha fades appended to a badge input chain. The badge input must be a
- * timed stream (see `burnWatermarkInputArgs`) for the fade timestamps to
- * line up with the main video.
- */
-function burnWatermarkFadeFilters(
-  fades: BurnWatermarkFades,
-  startSeconds: number | undefined,
-  endSeconds: number | undefined,
-): string {
-  const parts: string[] = [];
-  if (fades.fadeIn > 0) {
-    parts.push(`fade=t=in:st=${startSeconds ?? 0}:d=${fades.fadeIn}:alpha=1`);
-  }
-  if (fades.fadeOut > 0 && endSeconds !== undefined) {
-    parts.push(`fade=t=out:st=${roundSeconds(endSeconds - fades.fadeOut)}:d=${fades.fadeOut}:alpha=1`);
-  }
-  return parts.map((part) => `,${part}`).join("");
-}
-
-/**
- * How long the looped badge stream must run for its fades to complete: past
- * the last ramp the badge is static, and overlay repeats the final frame for
- * the rest of the clip. Null when the badge needs no fades and a single still
- * frame does.
- */
-export function burnWatermarkLoopSeconds(
-  fades: BurnWatermarkFades,
-  startSeconds: number | undefined,
-  endSeconds: number | undefined,
-  durationSeconds: number,
-): number | null {
-  if (fades.fadeIn === 0 && fades.fadeOut === 0) return null;
-  const settledAt = fades.fadeOut > 0 && endSeconds !== undefined
-    ? endSeconds
-    : (startSeconds ?? 0) + fades.fadeIn;
-  return roundSeconds(Math.min(durationSeconds, settledAt + LOOP_MARGIN_SECONDS));
-}
-
-/** Input args for one badge image: a still frame, or a timed loop when it fades. */
-export function burnWatermarkInputArgs(
-  path: string,
-  loopSeconds: number | null,
-  frameRate: string,
-): string[] {
-  return loopSeconds === null
-    ? ["-i", path]
-    : ["-loop", "1", "-framerate", frameRate, "-t", String(loopSeconds), "-i", path];
-}
-
-function burnWatermarkFrameRate(probe: ProbeResult): string {
-  const nominal = probe.videoStream?.video?.nominalFrameRate;
-  if (nominal && nominal.numerator > 0 && nominal.denominator > 0) {
-    return `${nominal.numerator}/${nominal.denominator}`;
-  }
-  return String(roundSeconds(probe.fps > 0 ? probe.fps : 30));
 }
 
 export function buildBurnWatermarkFilter(options: {
@@ -272,7 +206,7 @@ export function buildBurnWatermarkFilter(options: {
   const qrEnd = options.qrEndSeconds ?? options.endSeconds;
   const handleStart = options.handleStartSeconds ?? options.startSeconds;
   const handleEnd = options.handleEndSeconds ?? options.endSeconds;
-  const fadesFor = (start?: number, end?: number): BurnWatermarkFades =>
+  const fadesFor = (start?: number, end?: number): BurnFades =>
     options.durationSeconds !== undefined && options.fadeSeconds !== undefined
       ? burnWatermarkFades(start, end, options.durationSeconds, options.fadeSeconds)
       : NO_FADES;

@@ -3,9 +3,11 @@ import { z } from "zod";
 import { CAPTION_COMPONENTS } from "../captions/analysis.js";
 import type { CaptionEdit } from "../captions/edits.js";
 import { CAPTION_ASPECTS, CAPTION_BACKGROUNDS, CAPTION_MOTIONS, CAPTION_PRESETS, ORIGINAL_CAPTION_LANGUAGE } from "../captions/model.js";
-import { CAPTION_RENDER_OUTPUTS, latestCaptionRender, requestCaptionRender, type CaptionRenderOutput } from "../captions/render.js";
+import { latestCaptionRender, requestCaptionRender } from "../captions/render.js";
 import type { CaptionReadModel, CaptionResolution } from "../captions/service.js";
 import { CaptionServiceError, prepareCaptions, readCaptions, updateCaptions } from "../captions/service.js";
+import type { RenderOutput } from "../render-requests.js";
+import { RENDER_OUTPUTS } from "../render-requests.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { advertisedAs } from "./tool-json-schema.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
@@ -59,7 +61,7 @@ const schema = {
   expected_revision: z.string().optional().describe("update and render: the draft revision from get that these edits apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.media_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
-  output: z.enum(CAPTION_RENDER_OUTPUTS).optional()
+  output: z.enum(RENDER_OUTPUTS).optional()
     .describe("render: new (default) writes a subtitled copy into a new video cell below the source, a version of the earlier copy when one exists; replace burns the subtitles into the source video itself, keeping its earlier version in history"),
   edits: z.array(editSchema).max(500).optional()
     .describe("update: edit operations applied in order (word text/timing, hide/insert/reset words, split/merge phrases, positions 0..1 of the frame height, style, aspect)"),
@@ -78,7 +80,7 @@ type CaptionVideoArgs = {
   op?: "get" | "prepare" | "update" | "render";
   source_hash?: string;
   request_id?: string;
-  output?: CaptionRenderOutput;
+  output?: RenderOutput;
   language?: string;
   detail?: "summary" | "full";
   regions?: boolean;

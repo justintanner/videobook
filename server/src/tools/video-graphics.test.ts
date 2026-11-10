@@ -45,6 +45,7 @@ type Read = {
   images: Record<string, { label: string | null; url: string | null; width: number | null; height: number | null }>;
 };
 type Saved = { asset_id: string; status: string; saved: boolean; revision: string; updated_at: string; document: GraphicsDocument };
+type Rendered = Read & { render: unknown; burned: unknown };
 type Failure = { status: string; message: string; revision?: string; edit?: { code: string; index: number | null; op: string | null }; issues?: string[]; layer_id?: string };
 
 function textLayers(document: GraphicsDocument): GraphicsTextLayer[] {
@@ -286,16 +287,54 @@ describe("video_graphics", () => {
     expect(engine.settings.get(`graphics.draft.${assetId}`)).toBeNull();
   });
 
+  it("refuses a render it cannot do with a structured error and queues nothing", async () => {
+    const assetId = await video();
+    const fresh = await ok<Rendered>({ asset_id: assetId });
+    expect(fresh).toMatchObject({ render: null, burned: null });
+    const titled = await save(assetId, { expected_revision: fresh.revision, edits: [{ op: "set_slot_text", slot: "headline", text: THAI_TITLE }] });
+    const render = { asset_id: assetId, op: "render", source_hash: fresh.source.source_hash, request_id: randomUUID() };
+    expect(await fails({ asset_id: assetId, op: "render", expected_revision: titled.revision })).toMatchObject({
+      status: "invalid",
+      message: expect.stringMatching(/expected_revision, source_hash and request_id/u),
+    });
+    expect(await fails({ ...render, expected_revision: fresh.revision })).toMatchObject({ status: "conflict", revision: titled.revision });
+    expect(await fails({ ...render, expected_revision: titled.revision, source_hash: "changed" })).toMatchObject({ status: "stale_source" });
+
+    const hidden = await save(assetId, {
+      expected_revision: titled.revision,
+      document: { ...titled.document, layers: titled.document.layers.map((layer) => ({ ...layer, visible: false })) },
+    });
+    expect(await fails({ ...render, expected_revision: hidden.revision })).toMatchObject({ status: "invalid", message: expect.stringMatching(/nothing to draw/u) });
+
+    const logo = await image();
+    const withLogo = await save(assetId, { expected_revision: hidden.revision, edits: [{ op: "add_layer", layer: { kind: "image", artifactId: logo } }] });
+    const logoLayer = withLogo.document.layers.at(-1);
+    const removed = await engine.files.delete(logo, "original.png");
+    expect(removed.ok).toBe(true);
+    expect(await fails({ ...render, expected_revision: withLogo.revision })).toMatchObject({ status: "invalid", layer_id: logoLayer?.id });
+
+    const created = await engine.artifacts.create("video", "still processing");
+    if (!created.ok) throw new Error(created.error.message);
+    const written = await engine.files.write(created.value.artifactId, "original.mp4", await clipBytes(360, 640));
+    if (!written.ok) throw new Error(written.error.message);
+    expect(await fails({ ...render, asset_id: created.value.artifactId, expected_revision: "any" })).toMatchObject({
+      status: "not_ready",
+      message: expect.stringMatching(/still processing/u),
+    });
+    expect(engine.jobs.queue.list({ type: "render_graphics", limit: 50 })).toEqual([]);
+  });
+
   it("is a free, internal, editor-only video tool", () => {
     const definitions = getAllToolDefs(engine);
     expect(definitions.map((definition) => definition.name)).toContain("video_graphics");
     expect(buildRoutableTools(definitions).map((tool) => tool.name)).not.toContain("video_graphics");
     expect(toolSpendsMoney("video_graphics")).toBe(false);
     expect(toolSpendsMoney("video_graphics", { op: "update" })).toBe(false);
+    expect(toolSpendsMoney("video_graphics", { op: "render" })).toBe(false);
     expect(VIDEO_EDITING_TOOL_CONTRACTS.find((contract) => contract.tool === "video_graphics")).toEqual({
       tool: "video_graphics",
       exposure: "internal",
-      purpose: "Read and save a video's on-screen graphics layers",
+      purpose: "Read, save and render a video's on-screen graphics layers",
     });
   });
 });
