@@ -16,9 +16,10 @@ import {
   writeRenderSetting,
 } from "../render-requests.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
+import { GraphicsServiceError } from "./errors.js";
 import type { GraphicsDocument, GraphicsImageLayer, GraphicsLayerKind } from "./model.js";
 import { parseGraphicsDocument } from "./model.js";
-import { GraphicsServiceError, reviewedGraphics } from "./service.js";
+import { reviewedGraphics } from "./service.js";
 import { graphicsStillGroups } from "./stills.js";
 
 export const GRAPHICS_RENDER_JOB = "render_graphics";

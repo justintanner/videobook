@@ -6,6 +6,7 @@ import {
   editGraphicsHistory,
   graphicsOpenEdits,
   graphicsRenderQueuedMessage,
+  graphicsTemplateMessage,
   graphicsToolError,
   parseGraphicsRead,
   parseGraphicsRender,
@@ -14,6 +15,8 @@ import {
   type GraphicsRead,
   type GraphicsRenderOutput,
   type GraphicsTarget,
+  type GraphicsTemplateChoice,
+  type GraphicsTemplateOp,
 } from './graphics-model'
 
 type GraphicsCall = (tool: string, args: Record<string, unknown>, options?: { background?: boolean; chat?: ChatExecution }) => Promise<unknown>
@@ -41,6 +44,8 @@ export interface GraphicsRenderOutcome {
   ok: boolean
   message: string
 }
+
+export type GraphicsTemplateOutcome = GraphicsRenderOutcome
 
 const EMPTY: GraphicsEditorState = {
   target: null,
@@ -295,8 +300,41 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     }
   }, [awaitStart, baseArgs, call, commit, flush, ready])
 
+  const templateAction = useCallback(async (op: GraphicsTemplateOp, args: () => Record<string, unknown>, message: { name?: string; overwrite?: boolean } = {}): Promise<GraphicsTemplateOutcome> => {
+    const ticket = epoch.current
+    if (!ready || !stateRef.current.target) return { ok: false, message: 'The graphics are not ready yet.' }
+    if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the graphics first.' }
+    try {
+      const result = await call('video_graphics', { ...baseArgs(), op, ...args() }, { background: true })
+      const read = await fetchRead().catch(() => null)
+      if (read && ticket === epoch.current) commit((current) => withRead(current, read))
+      return { ok: true, message: graphicsTemplateMessage(op, result, message) }
+    } catch (error) {
+      return { ok: false, message: graphicsToolError(error).message }
+    }
+  }, [baseArgs, call, commit, fetchRead, flush, ready])
+
+  const saveTemplate = useCallback((name: string | null, templateId: string | null = null) => templateAction(
+    'save_template',
+    () => ({ expected_revision: stateRef.current.revision, ...(name === null ? {} : { name }), ...(templateId ? { template_id: templateId } : {}) }),
+    { overwrite: templateId !== null },
+  ), [templateAction])
+
+  const renameTemplate = useCallback((templateId: string, name: string) => templateAction('rename_template', () => ({ template_id: templateId, name })), [templateAction])
+
+  const deleteTemplate = useCallback((templateId: string) => templateAction('delete_template', () => ({ template_id: templateId })), [templateAction])
+
+  const setDefaultTemplate = useCallback((choice: Pick<GraphicsTemplateChoice, 'id' | 'name'>) => templateAction(
+    'set_default_template',
+    () => ({ template_id: choice.id }),
+    { name: choice.name },
+  ), [templateAction])
+
+  const copyTemplates = useCallback((fromBookId: string) => templateAction('copy_templates', () => ({ from_book: fromBookId })), [templateAction])
+
   return {
     state,
+    bookId,
     open,
     close,
     edit,
@@ -307,6 +345,11 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     setOutput,
     render,
     flush,
+    saveTemplate,
+    renameTemplate,
+    deleteTemplate,
+    setDefaultTemplate,
+    copyTemplates,
   }
 }
 

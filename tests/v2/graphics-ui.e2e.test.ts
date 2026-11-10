@@ -10,6 +10,8 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
+import { graphicsDocumentFromLayers } from '../../server/src/graphics/model.js'
+import { saveGraphicsTemplate } from '../../server/src/graphics/templates.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
 import { extractVideoPoster } from '../../server/src/video-poster.js'
 import { testBudget } from '../../server/src/test-budget.js'
@@ -51,6 +53,9 @@ type Read = {
   saved: boolean
   revision: string
   document: { layers: Layer[] }
+  templates: Array<{ id: string; name: string; document: { layers: Layer[] }; missing_layer_ids: string[] }>
+  default_template_id: string
+  images: Record<string, { url: string | null }>
   render: { request_id: string; status: string; output_asset_id: string; address: string | null; error: string | null } | null
   burned: { request_id: string; output: string } | null
   source: { source_hash: string }
@@ -90,6 +95,7 @@ describe('graphics editor in the composer', () => {
   let thirdCellId = ''
   let logoId = ''
   let logoCellId = ''
+  let kitLogoId = ''
   let squareId = ''
   let wideId = ''
   const renders: Record<string, unknown>[] = []
@@ -193,6 +199,22 @@ describe('graphics editor in the composer', () => {
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
+    const kit = await manager.create('brand-kit')
+    if (!kit.ok) throw new Error(kit.error.message)
+    const kitBook = manager.get(kit.value.bookId)
+    if (!kitBook.ok) throw new Error(kitBook.error.message)
+    const kitLogo = await kitBook.value.engine.artifacts.create({ kind: 'image', label: 'Kit logo' })
+    if (!kitLogo.ok) throw new Error(kitLogo.error.message)
+    kitLogoId = kitLogo.value.artifactId
+    await kitBook.value.engine.files.write(kitLogoId, 'original.png', await sharp({ create: { width: 120, height: 60, channels: 4, background: '#22C55E' } }).png().toBuffer())
+    await kitBook.value.engine.metadata.artifacts.write(kitLogoId, 'original', { origin: 'upload', width: 120, height: 60 })
+    await saveGraphicsTemplate(kitBook.value.engine, {
+      name: 'Brand kit',
+      document: graphicsDocumentFromLayers([
+        { kind: 'image', name: 'Kit logo', artifactId: kitLogoId, position: { anchor: 'top-right', x: 1, y: 0, space: 'safe' }, size: 0.2 },
+        { kind: 'text', name: 'Kit title', position: { anchor: 'bottom-left', x: 0, y: 1, space: 'safe' }, align: 'left', items: [{ slot: 'headline', text: '', size: 0.07 }] },
+      ]),
+    })
     await manager.close()
     const port = await availablePort()
     origin = `http://127.0.0.1:${port}`
@@ -748,5 +770,67 @@ describe('graphics editor in the composer', () => {
     } finally {
       await context.close()
     }
+  })
+
+  it('saves a look as a template, applies it keeping the typed headline, makes it the default and copies a template from another book', async () => {
+    const templates = () => sheet().getByRole('region', { name: 'Templates', exact: true })
+    const notice = () => templates().getByRole('status')
+    const layerNames = (read: Read) => read.document.layers.map((layer) => layer.name)
+    const close = async () => {
+      await sheet().getByRole('button', { name: /^Close/ }).click()
+      await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    }
+    const open = async (address: string) => {
+      await command(`/osg ${address}`)
+      await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    }
+
+    await open('@a1')
+    await templates().getByLabel('Template name', { exact: true }).fill('Brand look')
+    await templates().getByRole('button', { name: 'Save as template', exact: true }).click()
+    await expect.poll(() => notice().textContent(), { timeout: testBudget(15_000) }).toBe('Saved “Brand look” as a template.')
+    const brand = (await read()).templates.find((template) => template.name === 'Brand look')!
+    expect(brand.document.layers.map((layer) => layer.name)).toEqual(layerNames(await read()))
+    expect(brand.document.layers.flatMap((layer) => layer.items ?? []).filter((item) => item.slot === 'headline').map((item) => item.text)).toEqual([''])
+    await close()
+
+    await open('@a3')
+    await field('Headline').fill('Typed on a3')
+    await saved()
+    await templates().getByRole('button', { name: 'Brand look', exact: true }).click()
+    await expect.poll(() => field('Headline').inputValue()).toBe('Typed on a3')
+    await saved()
+    const applied = await read(thirdId)
+    expect(layerNames(applied)).toEqual(brand.document.layers.map((layer) => layer.name))
+    expect(slotText(applied, 'headline')).toBe('Typed on a3')
+
+    await templates().getByRole('button', { name: 'Manage templates', exact: true }).click()
+    await templates().getByRole('button', { name: 'Make Brand look the default', exact: true }).click()
+    await expect.poll(() => notice().textContent(), { timeout: testBudget(15_000) }).toBe('Brand look is now the look for videos in this book that have no graphics yet.')
+    await close()
+
+    await open('@a2')
+    const fresh = await read(secondId)
+    expect(fresh).toMatchObject({ saved: false, default_template_id: brand.id })
+    expect(layerNames(fresh)).toEqual(brand.document.layers.map((layer) => layer.name))
+    expect(await templates().getByRole('button', { name: 'Brand look', exact: true }).getAttribute('data-default')).toBe('true')
+    await shot('graphics-templates')
+
+    await templates().getByRole('button', { name: 'Manage templates', exact: true }).click()
+    await templates().getByLabel('Book to copy templates from', { exact: true }).selectOption({ label: 'brand-kit' })
+    await templates().getByRole('button', { name: 'Copy templates', exact: true }).click()
+    await expect.poll(() => notice().textContent(), { timeout: testBudget(60_000) }).toBe('Copied 1 template from brand-kit.')
+    await templates().getByRole('button', { name: 'Brand kit', exact: true }).click()
+    const layers = sheet().getByRole('region', { name: 'Layers' })
+    await expect.poll(() => layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).toContain('Kit logo')
+    expect(await layers.getByRole('button', { name: 'Select layer Kit logo', exact: true }).textContent()).not.toContain('not loaded')
+    await saved()
+    const copied = await read(secondId)
+    const image = copied.document.layers.find((layer) => layer.kind === 'image')!
+    expect(image.artifactId).not.toBe(kitLogoId)
+    expect(copied.images[image.artifactId!]?.url).toMatch(new RegExp(`^/files/${bookId}/${image.artifactId}/`))
+    await close()
+    expect(errors).toEqual([])
   })
 })

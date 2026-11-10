@@ -132,7 +132,7 @@ import { withLogging } from "./log-wrapper.js";
 import { toolInputSchema } from "./tool-json-schema.js";
 import { listChatModelsDef } from "../chat-models.js";
 
-export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
+export function getVideoEditingToolDefs(engine: Engine, books?: BookManager): ToolDef[] {
   return [
     ...coldOpenDefs(engine),
     trimVideoDef(engine),
@@ -144,7 +144,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     setVideoOverlayDef(engine),
     animateKeywordsDef(engine),
     captionVideoDef(engine),
-    videoGraphicsDef(engine),
+    videoGraphicsDef(engine, books),
     detectScenesDef(engine),
     suggestCutsDef(engine),
     suggestSfxDef(engine),
@@ -299,7 +299,7 @@ export function getAllToolDefs(
     restoreAssetVersionDef(engine),
     readFileAtCommitDef(engine),
     readAssetMetadataDef(engine),
-    ...getVideoEditingToolDefs(engine),
+    ...getVideoEditingToolDefs(engine, books),
     downloadVideoDef(engine),
     archiveClipDef(engine),
     searchArchiveDef(),

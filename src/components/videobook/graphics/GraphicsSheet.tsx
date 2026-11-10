@@ -2,6 +2,7 @@ import { lazy } from 'react'
 import { Redo2, Undo2 } from 'lucide-react'
 import { ConfirmSheet } from '../confirm/ConfirmSheet'
 import type { ConfirmSheetEffect } from '../confirm/ConfirmSheetHints'
+import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor, GraphicsSaveState } from '@/videobook/useGraphicsEditor'
 import { graphicsRenderBlocker, type GraphicsEditorAsset, type GraphicsEditorMention, type GraphicsRenderOutput } from '@/videobook/graphics-model'
 
@@ -32,10 +33,11 @@ function OutputChoice({ editor }: { editor: GraphicsEditor }) {
   )
 }
 
-export function GraphicsSheet({ editor, assets, mentions, applyFormId, onClose, onOpenSource }: {
+export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, onClose, onOpenSource }: {
   editor: GraphicsEditor
   assets: readonly GraphicsEditorAsset[]
   mentions: readonly GraphicsEditorMention[]
+  books: readonly BookProjectSummary[]
   applyFormId: string
   onClose: () => void
   onOpenSource: (artifactId: string) => void
@@ -66,7 +68,7 @@ export function GraphicsSheet({ editor, assets, mentions, applyFormId, onClose, 
         </div>
       )}
     >
-      <GraphicsBody key={state.target?.artifactId ?? 'none'} editor={editor} assets={assets} mentions={mentions} onOpenSource={onOpenSource} />
+      <GraphicsBody key={state.target?.artifactId ?? 'none'} editor={editor} assets={assets} mentions={mentions} books={books} onOpenSource={onOpenSource} />
     </ConfirmSheet>
   )
 }

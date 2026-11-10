@@ -26,6 +26,17 @@ and the package uses [Semantic Versioning](https://semver.org/).
   Thai title and an English line under it. `/overlay @a1 @b2` adds the image
   as a layer at the top left of the safe area. Opening the editor on a copy
   that already has graphics drawn in offers its source instead.
+- Graphics templates, saved per book. The editor's template row lists the
+  starters and the book's saved templates: save the current look under a name
+  (its headline, second line, credit and handle are left empty, so each video
+  keeps its own), apply it to another video while keeping the text typed
+  there, update, rename or delete it, and make a template or a starter the
+  look that videos without graphics start from. Templates can be copied from
+  another book together with the images their layers use; a template whose
+  image was deleted stays usable and reports that layer as missing.
+  `video_graphics` takes `op: save_template`, `rename_template`,
+  `delete_template`, `set_default_template` and `copy_templates`, and `get`
+  returns the book's templates and `default_template_id`.
 
 ### Changed
 

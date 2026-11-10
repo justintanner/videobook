@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactN
 import type { PlayerRef } from '@remotion/player'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
+import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor } from '@/videobook/useGraphicsEditor'
 import {
   graphicsBurnedNotice,
@@ -12,13 +13,14 @@ import {
   graphicsSelectionAfterRemove,
   type GraphicsEditorAsset,
   type GraphicsEditorMention,
-  type GraphicsStarterChoice,
+  type GraphicsTemplateChoice,
 } from '@/videobook/graphics-model'
 import { graphicsNudgePosition, graphicsShortcut, type GraphicsPoint } from '@/videobook/graphics-pointer'
 import { GraphicsInspector } from './GraphicsInspector'
 import { GraphicsLayers } from './GraphicsLayers'
 import { GraphicsPreview } from './GraphicsPreview'
-import { GraphicsQuickFields, GraphicsStarterRow, GraphicsWarnings } from './GraphicsQuickFields'
+import { GraphicsQuickFields, GraphicsWarnings } from './GraphicsQuickFields'
+import { GraphicsTemplates } from './GraphicsTemplates'
 import './Graphics.css'
 
 function Banner({ tone = 'info', children }: { tone?: 'info' | 'warning' | 'error'; children: ReactNode }) {
@@ -64,10 +66,11 @@ function isStage(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.classList.contains('graphics-stage')
 }
 
-export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
+export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: {
   editor: GraphicsEditor
   assets: readonly GraphicsEditorAsset[]
   mentions: readonly GraphicsEditorMention[]
+  books: readonly BookProjectSummary[]
   onOpenSource: (artifactId: string) => void
 }) {
   const { state } = editor
@@ -89,8 +92,9 @@ export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
   const onLayout = useCallback((next: GraphicsLayerLayout[]) => setLayout(next), [])
   const edit = useCallback((edits: GraphicsEdit[], coalesce: string | null = null) => editor.edit(edits, coalesce), [editor])
   const playhead = useCallback(() => (playerRef.current?.getCurrentFrame() ?? 0) / (source?.fps || 1), [source?.fps])
-  const applyStarter = useCallback((starter: GraphicsStarterChoice) => {
-    editor.edit([{ op: 'apply_template', template: starter.document }])
+  const otherBooks = useMemo(() => books.filter((book) => book.bookId !== editor.bookId), [books, editor.bookId])
+  const applyTemplate = useCallback((template: GraphicsTemplateChoice) => {
+    editor.edit([{ op: 'apply_template', template: template.document }])
   }, [editor])
 
   const nudge = (delta: GraphicsPoint, repeat: boolean) => {
@@ -152,7 +156,7 @@ export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
       {document && read && (
         <div className="graphics-controls">
           <GraphicsQuickFields document={document} read={read} disabled={!editable} onEdit={edit} />
-          <GraphicsStarterRow starters={read.starters} disabled={!editable} onApply={applyStarter} />
+          <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
           <GraphicsWarnings warnings={warnings} />
           <GraphicsLayers
             document={document}

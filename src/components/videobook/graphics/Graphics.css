@@ -348,9 +348,108 @@ label.graphics-field > span:first-child {
   text-overflow: ellipsis;
 }
 
-.graphics-starters {
+.graphics-templates {
   display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.graphics-starter-row button[data-default='true'] {
+  border-color: var(--green);
+}
+
+.graphics-template-save,
+.graphics-template-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+.graphics-template-save input,
+.graphics-template-copy select {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.graphics-template-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graphics-template-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 3px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.graphics-template-item .graphics-layer-rename {
+  flex: 1 1 160px;
+  width: auto;
+}
+
+.graphics-template-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.graphics-template-kind,
+.graphics-template-badge {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.graphics-template-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--green);
+  color: var(--ink);
+}
+
+.graphics-template-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #f0a860;
+  font-size: 11px;
+}
+
+.graphics-template-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.graphics-template-notice {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.graphics-template-notice[data-tone='error'] {
+  color: #f3c5c5;
 }
 
 .graphics-starter-row {

@@ -60,3 +60,7 @@ export function fillGraphicsSlots(
 export function writeGraphicsSlot(document: GraphicsDocument, slot: GraphicsSlot, value: string): GraphicsDocument {
   return writeSlots(document, (holder, current) => (holder === slot ? value : current));
 }
+
+export function clearGraphicsSlots(document: GraphicsDocument): GraphicsDocument {
+  return writeSlots(document, () => "");
+}

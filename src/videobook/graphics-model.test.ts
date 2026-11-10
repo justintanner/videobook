@@ -21,6 +21,8 @@ import {
   graphicsRenderQueuedMessage,
   graphicsSelectionAfterRemove,
   graphicsSlotText,
+  graphicsTemplateChoices,
+  graphicsTemplateMessage,
   graphicsTextEdits,
   graphicsToolError,
   parseGraphicsRead,
@@ -111,6 +113,42 @@ describe('graphics read model', () => {
   it('draws only the images it can size', () => {
     expect(graphicsOverlayImages(read())).toEqual({ logo: { src: '/files/book/logo/original.png', width: 40, height: 20 } })
     expect(graphicsOverlayImages(null)).toEqual({})
+  })
+})
+
+describe('graphics templates', () => {
+  const brand = { id: 'saved-1', name: 'Brand look', updated_at: '2026-11-10T00:00:00Z', document: lowerThird(), missing_layer_ids: [] }
+  const logo = { id: 'saved-2', name: 'With logo', updated_at: '2026-11-10T00:00:00Z', document: titled(), missing_layer_ids: ['l4', 'l5'] }
+
+  it('lists the starters, then the saved templates, and marks the book default', () => {
+    const parsed = read({ templates: [brand, logo], default_template_id: 'saved-1' })
+    expect(parsed.templates[0].document).toEqual(lowerThird())
+    expect(graphicsTemplateChoices(parsed).map(({ id, saved, isDefault, missingImages }) => ({ id, saved, isDefault, missingImages }))).toEqual([
+      { id: 'tiktok-title', saved: false, isDefault: false, missingImages: 0 },
+      { id: 'lower-third', saved: false, isDefault: false, missingImages: 0 },
+      { id: 'saved-1', saved: true, isDefault: true, missingImages: 0 },
+      { id: 'saved-2', saved: true, isDefault: false, missingImages: 2 },
+    ])
+    const older = read()
+    expect(older.templates).toEqual([])
+    expect(graphicsTemplateChoices(older).filter((choice) => choice.isDefault).map((choice) => choice.id)).toEqual(['tiktok-title'])
+    expect(() => read({ templates: [{ ...brand, document: { version: 2 } }] })).toThrow()
+  })
+
+  it('says what each template operation did', () => {
+    const template = { template: { id: 'saved-1', name: 'Brand look', updated_at: 'now' }, templates: [], default_template_id: 'tiktok-title' }
+    expect(graphicsTemplateMessage('save_template', template)).toBe('Saved “Brand look” as a template.')
+    expect(graphicsTemplateMessage('save_template', template, { overwrite: true })).toBe('Updated “Brand look” with this look.')
+    expect(graphicsTemplateMessage('rename_template', template)).toBe('Renamed the template to “Brand look”.')
+    expect(graphicsTemplateMessage('delete_template', template)).toBe('Deleted “Brand look”.')
+    expect(graphicsTemplateMessage('set_default_template', { templates: [], default_template_id: 'lower-third' }, { name: 'Lower third' }))
+      .toBe('Lower third is now the look for videos in this book that have no graphics yet.')
+    const copy = { from_book_name: 'daily-1109', copied: [{ name: 'Brand' }, { name: 'Promo' }], skipped: [], images: [], missing_images: [] }
+    expect(graphicsTemplateMessage('copy_templates', copy)).toBe('Copied 2 templates from daily-1109.')
+    expect(graphicsTemplateMessage('copy_templates', { ...copy, copied: [{ name: 'Brand' }], skipped: [{ name: 'Promo' }], missing_images: ['logo'] }))
+      .toBe('Copied 1 template from daily-1109. Skipped Promo: that name is already used here. 1 image was missing in daily-1109, so its layer is kept and marked missing.')
+    expect(graphicsTemplateMessage('copy_templates', { ...copy, copied: [], skipped: [{ name: 'Brand' }, { name: 'Promo' }] }))
+      .toBe('No new templates to copy from daily-1109. Skipped Brand, Promo: that name is already used here.')
   })
 })
 

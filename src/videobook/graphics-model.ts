@@ -40,6 +40,14 @@ const imageSchema = z.object({
   height: z.number().nullable(),
 })
 
+const templateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  updated_at: z.string(),
+  document: z.unknown(),
+  missing_layer_ids: z.array(z.string()),
+})
+
 const readSchema = z.object({
   asset_id: z.string(),
   address: z.string().nullable(),
@@ -51,14 +59,21 @@ const readSchema = z.object({
   document: z.unknown(),
   fill: z.object({ handle: z.string().nullable(), profile_url: z.string().nullable(), credit: z.string().nullable() }),
   starters: z.array(z.object({ id: z.string(), name: z.string(), document: z.unknown() })),
+  templates: z.array(templateSchema).default([]),
+  default_template_id: z.string().default('tiktok-title'),
   images: z.record(z.string(), imageSchema),
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
 })
 
 type ReadWire = z.infer<typeof readSchema>
-export type GraphicsStarterChoice = { id: string; name: string; document: GraphicsDocument }
-export type GraphicsRead = Omit<ReadWire, 'document' | 'starters'> & { document: GraphicsDocument; starters: GraphicsStarterChoice[] }
+type GraphicsStarterChoice = { id: string; name: string; document: GraphicsDocument }
+type GraphicsSavedTemplate = Omit<z.infer<typeof templateSchema>, 'document'> & { document: GraphicsDocument }
+export type GraphicsRead = Omit<ReadWire, 'document' | 'starters' | 'templates'> & {
+  document: GraphicsDocument
+  starters: GraphicsStarterChoice[]
+  templates: GraphicsSavedTemplate[]
+}
 export type GraphicsRenderStatus = z.infer<typeof renderSchema>
 export type GraphicsBurned = z.infer<typeof burnedSchema>
 export type GraphicsRenderOutput = 'new' | 'replace'
@@ -76,7 +91,57 @@ export function parseGraphicsRead(value: unknown): GraphicsRead {
     ...read,
     document: documentOf(read.document),
     starters: read.starters.map((starter) => ({ id: starter.id, name: starter.name, document: documentOf(starter.document) })),
+    templates: read.templates.map((template) => ({ ...template, document: documentOf(template.document) })),
   }
+}
+
+export interface GraphicsTemplateChoice {
+  id: string
+  name: string
+  document: GraphicsDocument
+  saved: boolean
+  isDefault: boolean
+  missingImages: number
+}
+
+export function graphicsTemplateChoices(read: GraphicsRead): GraphicsTemplateChoice[] {
+  const starters = read.starters.map((starter) => ({ ...starter, saved: false, missingImages: 0 }))
+  const saved = read.templates.map((template) => ({ id: template.id, name: template.name, document: template.document, saved: true, missingImages: template.missing_layer_ids.length }))
+  return [...starters, ...saved].map((choice) => ({ ...choice, isDefault: choice.id === read.default_template_id }))
+}
+
+export type GraphicsTemplateOp = 'save_template' | 'rename_template' | 'delete_template' | 'set_default_template' | 'copy_templates'
+
+const templateResultSchema = z.object({ template: z.object({ name: z.string() }).optional() })
+
+const copyResultSchema = z.object({
+  from_book_name: z.string(),
+  copied: z.array(z.object({ name: z.string() })),
+  skipped: z.array(z.object({ name: z.string() })),
+  missing_images: z.array(z.string()),
+})
+
+function counted(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+function copyMessage(value: unknown): string {
+  const copy = copyResultSchema.parse(value)
+  const parts = [copy.copied.length > 0 ? `Copied ${counted(copy.copied.length, 'template')} from ${copy.from_book_name}.` : `No new templates to copy from ${copy.from_book_name}.`]
+  if (copy.skipped.length > 0) parts.push(`Skipped ${copy.skipped.map((template) => template.name).join(', ')}: that name is already used here.`)
+  if (copy.missing_images.length > 0) {
+    parts.push(`${counted(copy.missing_images.length, 'image')} ${copy.missing_images.length === 1 ? 'was' : 'were'} missing in ${copy.from_book_name}, so ${copy.missing_images.length === 1 ? 'its layer is' : 'their layers are'} kept and marked missing.`)
+  }
+  return parts.join(' ')
+}
+
+export function graphicsTemplateMessage(op: GraphicsTemplateOp, value: unknown, options: { name?: string; overwrite?: boolean } = {}): string {
+  if (op === 'copy_templates') return copyMessage(value)
+  const name = templateResultSchema.parse(value).template?.name ?? options.name ?? 'The template'
+  if (op === 'save_template') return options.overwrite ? `Updated “${name}” with this look.` : `Saved “${name}” as a template.`
+  if (op === 'rename_template') return `Renamed the template to “${name}”.`
+  if (op === 'delete_template') return `Deleted “${name}”.`
+  return `${name} is now the look for videos in this book that have no graphics yet.`
 }
 
 export function parseGraphicsRender(value: unknown): GraphicsRenderStatus {

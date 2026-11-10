@@ -14,38 +14,22 @@ import type { GraphicsCredit } from "./credit.js";
 import { sourceCredit } from "./credit.js";
 import type { GraphicsDraft } from "./drafts.js";
 import { readGraphicsDraft, writeGraphicsDraft } from "./drafts.js";
-import type { GraphicsEdit, GraphicsEditError } from "./edits.js";
+import type { GraphicsEdit } from "./edits.js";
 import { applyGraphicsEdits } from "./edits.js";
+import { GraphicsServiceError } from "./errors.js";
 import type { GraphicsDocument, GraphicsFrame } from "./model.js";
 import { parseGraphicsDocument } from "./model.js";
 import type { GraphicsSlotValues } from "./slots.js";
 import { fillGraphicsSlots } from "./slots.js";
 import type { GraphicsStarterId } from "./starters.js";
 import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS } from "./starters.js";
+import type { GraphicsTemplateStore } from "./templates.js";
+import { graphicsTemplateImageIds, readGraphicsTemplates } from "./templates.js";
 import { watermarkSlotValues } from "./watermark-profile.js";
-
-type GraphicsServiceErrorCode = "conflict" | "invalid" | "not_ready" | "stale_source";
-
-type GraphicsErrorDetails = {
-  revision?: string;
-  edit?: Omit<GraphicsEditError, "message">;
-  issues?: string[];
-  layer_id?: string;
-};
-
-export class GraphicsServiceError extends Error {
-  readonly code: GraphicsServiceErrorCode;
-  readonly details: GraphicsErrorDetails;
-
-  constructor(code: GraphicsServiceErrorCode, message: string, details: GraphicsErrorDetails = {}) {
-    super(message);
-    this.code = code;
-    this.details = details;
-  }
-}
 
 type GraphicsImage = { label: string | null; url: string | null; width: number | null; height: number | null };
 type GraphicsStarterDocument = { id: GraphicsStarterId; name: string; document: GraphicsDocument };
+type GraphicsSavedTemplate = { id: string; name: string; updated_at: string; document: GraphicsDocument; missing_layer_ids: string[] };
 type Revisioned = { revision: string; document: GraphicsDocument };
 
 export type GraphicsReadModel = {
@@ -59,6 +43,8 @@ export type GraphicsReadModel = {
   document: GraphicsDocument;
   fill: { handle: string | null; profile_url: string | null; credit: string | null };
   starters: GraphicsStarterDocument[];
+  templates: GraphicsSavedTemplate[];
+  default_template_id: string;
   images: Record<string, GraphicsImage>;
 };
 
@@ -69,6 +55,7 @@ type GraphicsContext = {
   credit: GraphicsCredit | null;
   values: GraphicsSlotValues;
   starters: GraphicsStarterDocument[];
+  templates: GraphicsTemplateStore;
 };
 
 type ReviewedGraphics = { source: CaptionMediaSource; revision: string; document: GraphicsDocument };
@@ -98,10 +85,23 @@ function starterDocuments(frame: GraphicsFrame, profile: LightningWatermarkProfi
   }));
 }
 
-function defaultDocument(starters: readonly GraphicsStarterDocument[]): Revisioned {
-  const starter = starters.find((candidate) => candidate.id === DEFAULT_GRAPHICS_STARTER_ID) ?? starters[0];
-  const digest = createHash("sha256").update(JSON.stringify(starter.document)).digest("hex").slice(0, 32);
-  return { revision: `default:${digest}`, document: starter.document };
+function defaultTemplateDocument(
+  templates: GraphicsTemplateStore,
+  starters: readonly GraphicsStarterDocument[],
+  values: GraphicsSlotValues,
+): GraphicsDocument {
+  const id = templates.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID;
+  const saved = templates.templates.find((template) => template.id === id);
+  if (saved) return fillGraphicsSlots(saved.document, values, { overwrite: false });
+  const starter = starters.find((candidate) => candidate.id === id)
+    ?? starters.find((candidate) => candidate.id === DEFAULT_GRAPHICS_STARTER_ID)
+    ?? starters[0];
+  return starter.document;
+}
+
+function defaultDocument(document: GraphicsDocument): Revisioned {
+  const digest = createHash("sha256").update(JSON.stringify(document)).digest("hex").slice(0, 32);
+  return { revision: `default:${digest}`, document };
 }
 
 async function bookWatermarkProfile(engine: Engine, platform: WatermarkPlatform): Promise<LightningWatermarkProfile> {
@@ -119,7 +119,9 @@ async function graphicsContext(engine: Engine, artifactId: string, platform: Wat
   const credit = await sourceCredit(engine, artifactId);
   const values: GraphicsSlotValues = { ...watermarkSlotValues(profile), ...(credit ? { credit: credit.text } : {}) };
   const starters = starterDocuments({ width: source.width, height: source.height }, profile, values);
-  return { source, saved: readGraphicsDraft(engine, artifactId), fallback: defaultDocument(starters), credit, values, starters };
+  const templates = readGraphicsTemplates(engine);
+  const fallback = defaultDocument(defaultTemplateDocument(templates, starters, values));
+  return { source, saved: readGraphicsDraft(engine, artifactId), fallback, credit, values, starters, templates };
 }
 
 function notebooksFor(engine: Engine, notebookId: string | null): NotebookDocument[] {
@@ -158,13 +160,23 @@ async function imageInfo(engine: Engine, artifactId: string): Promise<GraphicsIm
   return { label: artifact.value.label ?? null, url: urls.media_url, width: positive(size.width), height: positive(size.height) };
 }
 
-function imageIds(document: GraphicsDocument): string[] {
-  return [...new Set(document.layers.flatMap((layer) => (layer.kind === "image" ? [layer.artifactId] : [])))];
+function templateImageIds(templates: GraphicsTemplateStore): string[] {
+  return templates.templates.flatMap((template) => graphicsTemplateImageIds(template.document));
 }
 
-async function documentImages(engine: Engine, document: GraphicsDocument): Promise<Record<string, GraphicsImage>> {
-  const entries = await Promise.all(imageIds(document).map(async (id) => [id, await imageInfo(engine, id)] as const));
+async function bookImages(engine: Engine, ids: readonly string[]): Promise<Record<string, GraphicsImage>> {
+  const entries = await Promise.all([...new Set(ids)].map(async (id) => [id, await imageInfo(engine, id)] as const));
   return Object.fromEntries(entries.filter((entry): entry is readonly [string, GraphicsImage] => entry[1] !== null));
+}
+
+function savedTemplates(context: GraphicsContext, images: Record<string, GraphicsImage>): GraphicsSavedTemplate[] {
+  return context.templates.templates.map((template) => ({
+    id: template.id,
+    name: template.name,
+    updated_at: template.updatedAt,
+    document: fillGraphicsSlots(template.document, context.values, { overwrite: false }),
+    missing_layer_ids: template.document.layers.flatMap((layer) => (layer.kind === "image" && !images[layer.artifactId]?.url ? [layer.id] : [])),
+  }));
 }
 
 export async function readGraphics(
@@ -174,6 +186,7 @@ export async function readGraphics(
 ): Promise<GraphicsReadModel> {
   const context = await graphicsContext(engine, artifactId, options.platform);
   const current = context.saved ?? context.fallback;
+  const images = await bookImages(engine, [...graphicsTemplateImageIds(current.document), ...templateImageIds(context.templates)]);
   return {
     asset_id: artifactId,
     address: videoAddress(engine, artifactId, options.notebookId),
@@ -195,7 +208,9 @@ export async function readGraphics(
       credit: context.credit?.text ?? null,
     },
     starters: context.starters,
-    images: await documentImages(engine, current.document),
+    templates: savedTemplates(context, images),
+    default_template_id: context.templates.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID,
+    images,
   };
 }
 
@@ -211,8 +226,8 @@ function nextDocument(current: GraphicsDocument, input: GraphicsUpdateInput): Gr
   throw new GraphicsServiceError("invalid", message, { edit });
 }
 
-function requireBookImages(engine: Engine, before: GraphicsDocument, after: GraphicsDocument): void {
-  const known = new Set(imageIds(before));
+function requireBookImages(engine: Engine, before: GraphicsDocument, after: GraphicsDocument, templates: GraphicsTemplateStore): void {
+  const known = new Set([...graphicsTemplateImageIds(before), ...templateImageIds(templates)]);
   for (const layer of after.layers) {
     if (layer.kind !== "image" || known.has(layer.artifactId)) continue;
     const artifact = engine.artifacts.get(layer.artifactId);
@@ -234,9 +249,23 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
       throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before editing.", { revision: current.revision });
     }
     const next = nextDocument(current.document, input);
-    requireBookImages(engine, current.document, next);
+    requireBookImages(engine, current.document, next, context.templates);
     return writeGraphicsDraft(engine, artifactId, next);
   });
+}
+
+export async function graphicsForTemplate(
+  engine: Engine,
+  artifactId: string,
+  platform: WatermarkPlatform,
+  expectedRevision: string | undefined,
+): Promise<GraphicsDocument> {
+  const context = await graphicsContext(engine, artifactId, platform);
+  const current = context.saved ?? context.fallback;
+  if (expectedRevision !== undefined && current.revision !== expectedRevision) {
+    throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before saving a template.", { revision: current.revision });
+  }
+  return current.document;
 }
 
 export async function reviewedGraphics(

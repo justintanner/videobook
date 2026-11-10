@@ -10309,7 +10309,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return <SubtitlesSheet editor={subtitles} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
     }
     if (pendingChatAction.kind === 'graphics') {
-      return <GraphicsSheet editor={graphics} assets={assets} mentions={commandMentionAssets} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openGraphicsFor} />
+      return <GraphicsSheet editor={graphics} assets={assets} mentions={commandMentionAssets} books={books} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openGraphicsFor} />
     }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction
