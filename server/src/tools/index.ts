@@ -49,6 +49,7 @@ import { invertImageDef } from "./invert-image.js";
 import { setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
 import { captionVideoDef } from "./caption-video.js";
+import { videoGraphicsDef } from "./video-graphics.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
 import { searchArchiveDef } from "./search-archive.js";
@@ -143,6 +144,7 @@ export function getVideoEditingToolDefs(engine: Engine): ToolDef[] {
     setVideoOverlayDef(engine),
     animateKeywordsDef(engine),
     captionVideoDef(engine),
+    videoGraphicsDef(engine),
     detectScenesDef(engine),
     suggestCutsDef(engine),
     suggestSfxDef(engine),

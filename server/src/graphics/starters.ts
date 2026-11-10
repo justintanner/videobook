@@ -1,3 +1,4 @@
+import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type {
   GraphicsAccent,
@@ -18,7 +19,7 @@ export type GraphicsStarterId = "tiktok-title" | "lower-third" | "headline" | "c
 export type GraphicsStarter = {
   id: GraphicsStarterId;
   name: string;
-  build: (frame: GraphicsFrame) => GraphicsDocument;
+  build: (frame: GraphicsFrame, profile?: LightningWatermarkProfile) => GraphicsDocument;
 };
 
 export const DEFAULT_GRAPHICS_STARTER_ID: GraphicsStarterId = "tiktok-title";
@@ -67,14 +68,14 @@ function bottomLeftBlock(
   };
 }
 
-function tiktokTitle(frame: GraphicsFrame): GraphicsDocument {
+function tiktokTitle(frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
   return graphicsDocumentFromLayers([
     edgeShade("bottom", 0.5, 0.75),
     bottomLeftBlock("Title", 0.02, [
       slotItem("headline", 0.09, { maxLines: 3, accent: HEADLINE_ACCENT }),
       slotItem("secondary", 0.045, { maxLines: 2 }),
     ]),
-    ...watermarkLayerInputs(LIGHTNING_WATERMARK_PROFILE, frame, { includeQr: false }),
+    ...watermarkLayerInputs(profile, frame, { includeQr: false }),
   ]);
 }
 
@@ -112,8 +113,8 @@ function credit(): GraphicsDocument {
   ]);
 }
 
-function watermark(frame: GraphicsFrame): GraphicsDocument {
-  return watermarkDocumentFromProfile(LIGHTNING_WATERMARK_PROFILE, frame, { includeQr: true });
+function watermark(frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
+  return watermarkDocumentFromProfile(profile, frame, { includeQr: true });
 }
 
 export const GRAPHICS_STARTERS: readonly GraphicsStarter[] = [

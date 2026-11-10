@@ -13,28 +13,28 @@ const MAX_GRAPHICS_LINES = 6;
 const MAX_FRAME_SIDE = 16_384;
 
 export const GRAPHICS_LAYER_KINDS = ["text", "image", "qr", "scrim"] as const;
-const ANCHORS = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
-const SPACES = ["safe", "inset", "frame"] as const;
-const TEXT_SLOTS = ["headline", "secondary", "credit", "handle"] as const;
-const QR_SLOTS = ["profile"] as const;
-const FONT_PRESETS = ["heavy", "display", "text"] as const;
-const ICONS = ["camera", "link", "music", "pin", "tiktok", "x"] as const;
-const ACCENTS = ["none", "underline", "brush"] as const;
-const ALIGNS = ["left", "center", "right"] as const;
-const CASES = ["none", "upper"] as const;
-const QR_STYLES = ["plain", "tile"] as const;
-const QR_LEVELS = ["L", "M", "Q", "H"] as const;
-const SCRIM_EDGES = ["top", "bottom"] as const;
+export const GRAPHICS_ANCHORS = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
+export const GRAPHICS_SPACES = ["safe", "inset", "frame"] as const;
+export const GRAPHICS_TEXT_SLOTS = ["headline", "secondary", "credit", "handle"] as const;
+export const GRAPHICS_QR_SLOTS = ["profile"] as const;
+export const GRAPHICS_FONT_PRESETS = ["heavy", "display", "text"] as const;
+export const GRAPHICS_ICONS = ["camera", "link", "music", "pin", "tiktok", "x"] as const;
+export const GRAPHICS_ACCENTS = ["none", "underline", "brush"] as const;
+export const GRAPHICS_ALIGNS = ["left", "center", "right"] as const;
+export const GRAPHICS_CASES = ["none", "upper"] as const;
+export const GRAPHICS_QR_STYLES = ["plain", "tile"] as const;
+export const GRAPHICS_QR_LEVELS = ["L", "M", "Q", "H"] as const;
+export const GRAPHICS_SCRIM_EDGES = ["top", "bottom"] as const;
 
 export type GraphicsLayerKind = typeof GRAPHICS_LAYER_KINDS[number];
-export type GraphicsAnchor = typeof ANCHORS[number];
-export type GraphicsSpace = typeof SPACES[number];
-export type GraphicsTextSlot = typeof TEXT_SLOTS[number];
-export type GraphicsQrSlot = typeof QR_SLOTS[number];
+export type GraphicsAnchor = typeof GRAPHICS_ANCHORS[number];
+export type GraphicsSpace = typeof GRAPHICS_SPACES[number];
+export type GraphicsTextSlot = typeof GRAPHICS_TEXT_SLOTS[number];
+export type GraphicsQrSlot = typeof GRAPHICS_QR_SLOTS[number];
 export type GraphicsSlot = GraphicsTextSlot | GraphicsQrSlot;
-export type GraphicsFontPreset = typeof FONT_PRESETS[number];
-export type GraphicsIcon = typeof ICONS[number];
-export type GraphicsAccent = typeof ACCENTS[number];
+export type GraphicsFontPreset = typeof GRAPHICS_FONT_PRESETS[number];
+export type GraphicsIcon = typeof GRAPHICS_ICONS[number];
+export type GraphicsAccent = typeof GRAPHICS_ACCENTS[number];
 
 const COLOR_MESSAGE = "Colours are #RRGGBB hex strings.";
 
@@ -80,10 +80,10 @@ export function isGraphicsUrl(value: string): boolean {
 const hexColor = z.string({ error: COLOR_MESSAGE }).regex(/^#[0-9a-fA-F]{6}$/u, COLOR_MESSAGE);
 
 const positionSchema = z.object({
-  anchor: oneOf(ANCHORS, "Anchor"),
+  anchor: oneOf(GRAPHICS_ANCHORS, "Anchor"),
   x: between(0, 1, "x must be between 0 and 1 of the positioning space."),
   y: between(0, 1, "y must be between 0 and 1 of the positioning space."),
-  space: oneOf(SPACES, "Space"),
+  space: oneOf(GRAPHICS_SPACES, "Space"),
 }).strict();
 
 const timingSchema = z.object({
@@ -105,14 +105,14 @@ const plateSchema = z.object({
 const textItemSchema = z.object({
   id: z.string({ error: "Item ids look like t1." }).regex(/^t\d+$/u, "Item ids look like t1."),
   text: text("Text", MAX_GRAPHICS_TEXT_LENGTH),
-  slot: oneOf(TEXT_SLOTS, "Text slot").nullable(),
-  font: oneOf(FONT_PRESETS, "Font preset"),
+  slot: oneOf(GRAPHICS_TEXT_SLOTS, "Text slot").nullable(),
+  font: oneOf(GRAPHICS_FONT_PRESETS, "Font preset"),
   size: between(0.01, 0.3, "Text size must be between 0.01 and 0.3 of the frame's short side."),
   color: hexColor,
-  case: oneOf(CASES, "Case"),
+  case: oneOf(GRAPHICS_CASES, "Case"),
   maxLines: wholeBetween(1, MAX_GRAPHICS_LINES, `Max lines must be a whole number from 1 to ${MAX_GRAPHICS_LINES}.`),
-  icon: oneOf(ICONS, "Icon").nullable(),
-  accent: oneOf(ACCENTS, "Accent"),
+  icon: oneOf(GRAPHICS_ICONS, "Icon").nullable(),
+  accent: oneOf(GRAPHICS_ACCENTS, "Accent"),
   outline: flag("Outline"),
   shadow: flag("Shadow"),
 }).strict();
@@ -132,7 +132,7 @@ const textLayerSchema = z.object({
   kind: z.literal("text"),
   position: positionSchema,
   width: between(0.1, 1, "Text width must be between 0.1 and 1 of the positioning space's width."),
-  align: oneOf(ALIGNS, "Align"),
+  align: oneOf(GRAPHICS_ALIGNS, "Align"),
   gap: between(0, 0.1, "Gap must be between 0 and 0.1 of the frame's short side."),
   plate: plateSchema.nullable(),
   items: z.array(textItemSchema).min(1, itemsMessage).max(MAX_GRAPHICS_ITEMS, itemsMessage),
@@ -152,13 +152,13 @@ const qrLayerSchema = z.object({
   ...layerFields,
   kind: z.literal("qr"),
   url: z.string({ error: urlMessage }).refine((url) => url === "" || isGraphicsUrl(url), urlMessage),
-  slot: oneOf(QR_SLOTS, "QR slot").nullable(),
+  slot: oneOf(GRAPHICS_QR_SLOTS, "QR slot").nullable(),
   position: positionSchema,
   size: between(0.05, 0.6, "QR size must be between 0.05 and 0.6 of the frame's short side."),
-  style: oneOf(QR_STYLES, "QR style"),
+  style: oneOf(GRAPHICS_QR_STYLES, "QR style"),
   dark: hexColor,
   light: hexColor,
-  level: oneOf(QR_LEVELS, "QR level"),
+  level: oneOf(GRAPHICS_QR_LEVELS, "QR level"),
 }).strict().superRefine((layer, context) => {
   if (layer.url === "" && layer.slot === null) {
     context.addIssue({ code: "custom", path: ["url"], message: "A QR code needs an http or https URL unless it fills the profile slot." });
@@ -168,7 +168,7 @@ const qrLayerSchema = z.object({
 const scrimLayerSchema = z.object({
   ...layerFields,
   kind: z.literal("scrim"),
-  edge: oneOf(SCRIM_EDGES, "Scrim edge"),
+  edge: oneOf(GRAPHICS_SCRIM_EDGES, "Scrim edge"),
   height: between(0.05, 1, "Scrim height must be between 0.05 and 1 of the frame height."),
   color: hexColor,
   strength: between(0, 1, "Scrim strength must be between 0 and 1."),

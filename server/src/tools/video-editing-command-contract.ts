@@ -177,6 +177,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "set_video_overlay", exposure: "ui", command: "/overlay", purpose: "Configure an on-screen graphic" },
   { tool: "animate_keywords", exposure: "direct", command: "/keywords", purpose: "Configure transcript-timed keyword graphics" },
   { tool: "caption_video", exposure: "ui", command: "/subs", purpose: "Prepare, edit and render TikTok-style subtitles in the composer" },
+  { tool: "video_graphics", exposure: "internal", purpose: "Read and save a video's on-screen graphics layers" },
   { tool: "detect_scenes", exposure: "direct", command: "/detect-scenes", purpose: "Detect visual scene boundaries" },
   { tool: "suggest_cuts", exposure: "direct", command: "/suggest-cuts", purpose: "Suggest removable video ranges" },
   { tool: "analyze_jokes", exposure: "direct", command: "/analyze-jokes", purpose: "Analyze edit points around jokes" },

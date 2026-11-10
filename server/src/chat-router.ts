@@ -134,7 +134,7 @@ function constraintsForTool(definition: RoutableDefinition): string[] {
   });
 }
 
-const EDITOR_ONLY_TOOL_NAMES = new Set(["caption_video"]);
+const EDITOR_ONLY_TOOL_NAMES = new Set(["caption_video", "video_graphics"]);
 
 function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
   const tools = definitions

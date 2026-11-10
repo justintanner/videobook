@@ -18,6 +18,7 @@ import type {
   GraphicsSpace,
   GraphicsTiming,
 } from "./model.js";
+import type { GraphicsSlotValues } from "./slots.js";
 import {
   definedFields,
   GRAPHICS_ANCHOR_POINTS,
@@ -235,6 +236,12 @@ function qrLayer(profile: LightningWatermarkProfile, corner: OsgPosition, timing
     light: QR_LIGHT,
     level: "H",
   };
+}
+
+export function watermarkSlotValues(profile: LightningWatermarkProfile): GraphicsSlotValues {
+  const handle = handleLabel(profile.handle);
+  const url = profileUrl(profile);
+  return { ...(handle ? { handle } : {}), ...(url ? { profile: url } : {}) };
 }
 
 export function watermarkLayerInputs(

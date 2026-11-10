@@ -8,7 +8,7 @@ Image, video and audio generation runs through `generate_image`, `generate_video
 
 Routine pointer actions return focus to chat. Editing fields, open dialogs, keyboard navigation and native playback retain focus. Closing a dialog restores its opener when appropriate; delayed work cannot take focus from a newer edit.
 
-## MCP endpoints (214)
+## MCP endpoints (215)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `analyze_editing_moments` — Analyze footage for editing in a background job: shot boundaries, per-shot motion, subject changes, usable ranges and ranked source moments, reused for unchanged sources. Read the results with get_editing_moments.
@@ -223,9 +223,10 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `video_goal` — Run Goal mode on a notebook: create a goal from image and video references (by default one scene image, then one Seedance video with audio), then list, status, update, approve (required before paid generation), regenerate, select, revise, cancel, retry, assemble, combine, finish (cold open plus watermark) or dismiss it by goal_id.
+- `video_graphics` — On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the default look (the TikTok handle, an empty Thai title and an English line, no QR code) for a video without any, with the handle, profile URL and source credit to fill slots and the starter layouts; update saves edits or a replacement document against the revision from get. Videos only; nothing is rendered.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 
-## Slash actions (263; 106 dedicated command routes)
+## Slash actions (264; 106 dedicated command routes)
 
 - `/actions` — Search and run every workspace action.; UI: `open_actions`
 - `/activity` (aliases: `/status`, `/revisions`) — View project activity log; UI: `open_status`
@@ -487,6 +488,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/upload` — Upload a file; UI: `open_upload`
 - `/validate-sequence-export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs; MCP: `validate_sequence_export`
 - `/verify-x-mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.; MCP: `verify_x_mentions`
+- `/video-graphics` — On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the default look (the TikTok handle, an empty Thai title and an English line, no QR code) for a video without any, with the handle, profile URL and source credit to fill slots and the starter layouts; update saves edits or a replacement document against the revision from get. Videos only; nothing is rendered.; MCP: `video_graphics`
 - `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
 - `/wait-for-asset-ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.; MCP: `wait_for_asset_ready`
 - `/watermark` — Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls; UI: `open_watermark`
