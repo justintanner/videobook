@@ -6,6 +6,7 @@ import type { OsgPosition } from "../remotion/subtitles/types.js";
 import { watermarkHandleOverlayPosition } from "../watermark-handle-position.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsPosition, GraphicsQrLayer, GraphicsTextLayer, GraphicsTiming } from "./model.js";
 import { GRAPHICS_ANCHOR_POINTS, GRAPHICS_INSET_FRACTION, parseGraphicsDocument } from "./model.js";
+import { resolveLayerTiming } from "./timing.js";
 import { watermarkDocumentFromProfile } from "./watermark-profile.js";
 
 const PROFILES = [["tiktok", LIGHTNING_WATERMARK_PROFILE], ["x", X_WATERMARK_PROFILE]] as const;
@@ -90,12 +91,13 @@ function burnedCornerPadding(profile: LightningWatermarkProfile, frame: Graphics
   return { x: Number(match[1]), y: Number(match[2]) };
 }
 
-function resolvedWindow(timing: GraphicsTiming, duration: number): { start: number; end: number } {
-  const explicit = timing.start !== null || timing.end !== null;
-  const start = explicit ? timing.start ?? 0 : timing.tail === null ? 0 : duration - timing.tail;
-  const end = explicit ? timing.end ?? duration : duration;
-  const clampedStart = Math.min(Math.max(0, start), duration);
-  return { start: clampedStart, end: Math.min(Math.max(clampedStart, end), duration) };
+function resolvedWindow(timing: GraphicsTiming, duration: number): { start: number; end: number } | null {
+  const resolved = resolveLayerTiming(timing, duration);
+  return resolved && { start: resolved.start, end: resolved.end };
+}
+
+function profileWindow(start: number, end: number): { start: number; end: number } | null {
+  return end > start ? { start, end } : null;
 }
 
 describe("watermark documents from a saved profile", () => {
@@ -122,8 +124,8 @@ describe("watermark documents from a saved profile", () => {
     const document = built(profile, { width: 1080, height: 1920 }, { includeQr: true });
     for (const duration of [0.5, 2, 2.3, 3, 8, 12, 30]) {
       const windows = watermarkWindowsFor(profile, duration);
-      expect(resolvedWindow(qrOf(document).timing, duration)).toEqual({ start: windows.qrStartSeconds, end: windows.qrEndSeconds });
-      expect(resolvedWindow(handleOf(document).timing, duration)).toEqual({ start: windows.handleStartSeconds, end: windows.handleEndSeconds });
+      expect(resolvedWindow(qrOf(document).timing, duration)).toEqual(profileWindow(windows.qrStartSeconds, windows.qrEndSeconds));
+      expect(resolvedWindow(handleOf(document).timing, duration)).toEqual(profileWindow(windows.handleStartSeconds, windows.handleEndSeconds));
     }
     expect(qrOf(document).timing.fade).toBe(profile.fadeSeconds);
     expect(handleOf(document).timing.fade).toBe(profile.fadeSeconds);
@@ -138,8 +140,8 @@ describe("watermark documents from a saved profile", () => {
       const document = built(profile, { width: 1920, height: 1080 }, { includeQr: true });
       for (const duration of [1, 3, 6, 10]) {
         const windows = watermarkWindowsFor(profile, duration);
-        expect(resolvedWindow(handleOf(document).timing, duration)).toEqual({ start: windows.handleStartSeconds, end: windows.handleEndSeconds });
-        expect(resolvedWindow(qrOf(document).timing, duration)).toEqual({ start: windows.qrStartSeconds, end: windows.qrEndSeconds });
+        expect(resolvedWindow(handleOf(document).timing, duration)).toEqual(profileWindow(windows.handleStartSeconds, windows.handleEndSeconds));
+        expect(resolvedWindow(qrOf(document).timing, duration)).toEqual(profileWindow(windows.qrStartSeconds, windows.qrEndSeconds));
       }
     }
   });

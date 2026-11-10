@@ -62,7 +62,17 @@ describe("browser-safe graphics files", () => {
   const entries = BROWSER_SAFE_FILES.map((name) => join(HERE, name)).filter((file) => existsSync(file));
 
   it("covers the files this step adds", () => {
-    expect(entries.map((file) => relative(HERE, file))).toEqual(expect.arrayContaining(["model.ts", "edits.ts", "slots.ts", "starters.ts", "watermark-profile.ts"]));
+    expect(entries.map((file) => relative(HERE, file))).toEqual(expect.arrayContaining([
+      "model.ts",
+      "edits.ts",
+      "slots.ts",
+      "starters.ts",
+      "watermark-profile.ts",
+      "layout.ts",
+      "timing.ts",
+      "stills.ts",
+      "fonts.ts",
+    ]));
   });
 
   it.each(entries.map((file) => [relative(HERE, file), file] as const))("%s reaches no node:, sharp or engine value import", (_name, file) => {
