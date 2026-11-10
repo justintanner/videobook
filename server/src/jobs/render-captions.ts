@@ -18,6 +18,7 @@ import { renderBrowserExecutable } from "../remotion/browser.js";
 import type { CaptionCompositionProps } from "../remotion/captions/CaptionComposition.js";
 import { captionDurationInFrames } from "../remotion/captions/composition-meta.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
+import { renderWithEncoderFallback } from "../remotion-encoding.js";
 import { extractVideoPoster } from "../video-poster.js";
 import type { JobHandlerContext } from "../queue.js";
 import { withLocalLease, withLockedLocalLease } from "./_lease.js";
@@ -90,7 +91,7 @@ async function renderComposition(input: {
       ...(browserExecutable ? { browserExecutable } : {}),
     });
     input.signal.throwIfAborted();
-    await withRemotionCancellation(input.signal, (cancelSignal) => renderMedia({
+    await withRemotionCancellation(input.signal, (cancelSignal) => renderWithEncoderFallback((hardwareAcceleration) => renderMedia({
       composition,
       serveUrl: bundleDir,
       codec: "h264",
@@ -98,10 +99,10 @@ async function renderComposition(input: {
       inputProps,
       videoBitrate: "8M",
       concurrency: 1,
-      hardwareAcceleration: "if-possible",
+      hardwareAcceleration,
       cancelSignal,
       ...(browserExecutable ? { browserExecutable } : {}),
-    }));
+    })));
   } finally {
     await rm(videoPath, { force: true });
   }

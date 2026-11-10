@@ -6,6 +6,7 @@ import { logger } from "../logger.js";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
+import { renderWithEncoderFallback } from "../remotion-encoding.js";
 import { renderBrowserExecutable } from "../remotion/browser.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
@@ -470,7 +471,7 @@ export function registerRenderProjectJob(engine: Engine): void {
               ctx.signal.throwIfAborted();
 
               await withRemotionCancellation(ctx.signal, (cancelSignal) =>
-                renderMedia({
+                renderWithEncoderFallback((hardwareAcceleration) => renderMedia({
                   composition,
                   serveUrl: bundleDir,
                   codec: "h264",
@@ -478,10 +479,10 @@ export function registerRenderProjectJob(engine: Engine): void {
                   inputProps: inputProps as unknown as Record<string, unknown>,
                   videoBitrate: "8M",
                   concurrency: 1,
-                  hardwareAcceleration: "if-possible",
+                  hardwareAcceleration,
                   cancelSignal,
                   ...(browserExecutable ? { browserExecutable } : {}),
-                }),
+                })),
               );
 
               // Extract first frame as {orientation}.jpg

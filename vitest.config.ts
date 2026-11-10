@@ -173,6 +173,7 @@ export default defineConfig({
       'server/src/openai-intelligence.test.ts',
       'server/src/osg-placement-cache.test.ts',
       'server/src/remotion-cancellation.test.ts',
+      'server/src/remotion-encoding.test.ts',
       'server/src/remotion/constants.test.ts',
       'server/src/remotion/browser.test.ts',
       'server/src/remotion/keyword-graphics.test.ts',
