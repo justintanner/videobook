@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { isFalDynamicPricingEndpoint, type FalEstimator } from "@apicity/cost";
 import { MODEL_ENTRIES } from "./catalog.js";
 import { resolveModel } from "./descriptor.js";
-import { estimateGeneration, installFalDynamicEstimator } from "./cost.js";
+import { estimateFalRequest, estimateGeneration, installFalDynamicEstimator, lowerBoundWarnings } from "./cost.js";
 import type { MediaRefs, ModeSpec, ResolvedModel } from "./types.js";
 
 const HISTORICAL_USD = 0.17;
@@ -26,6 +26,13 @@ const FORMULA_GAPS = [
   "fal:bytedance/seedance-2.0/us/reference-to-video",
   "fal:bytedance/seedance-2.5/draft/complete",
 ] as const;
+
+const PER_SECOND_FLOORS = new Set([
+  "fal:minimax/h3-max/extend-video",
+  "fal:minimax/h3-max/insert-video",
+  "fal:minimax/h3-max/reference-to-video",
+  "fal:minimax/h3-max-turbo/reference-to-video",
+]);
 
 function sampleRefs(model: ResolvedModel, mode: ModeSpec): MediaRefs {
   const refs: MediaRefs = {};
@@ -74,7 +81,7 @@ describe("fal dynamic cost", () => {
     restores.push(installFalDynamicEstimator(estimator));
   }
 
-  it("prices each dynamic fal catalog endpoint with one historical call and never calls fal for a static endpoint", async () => {
+  it("prices each dynamic fal catalog endpoint with one historical call, or its per-second floor with none, and never calls fal for a static endpoint", async () => {
     const calls: unknown[] = [];
     install(historicalEstimator(calls));
     const seen = new Set<string>();
@@ -93,7 +100,12 @@ describe("fal dynamic cost", () => {
       if (!result.ok) continue;
       const dynamic = isFalDynamicPricingEndpoint(model.apiId);
       const added = calls.slice(before);
-      if (dynamic) {
+      if (PER_SECOND_FLOORS.has(entry.id)) {
+        expect(dynamic, entry.id).toBe(true);
+        expect(added, entry.id).toEqual([]);
+        expect(result.estimate.usd, entry.id).toBeGreaterThan(0);
+        expect(lowerBoundWarnings(result.estimate.warnings), entry.id).toBe(true);
+      } else if (dynamic) {
         expect(added, entry.id).toEqual([{
           estimate_type: "historical_api_price",
           endpoints: { [model.apiId]: { call_quantity: 1 } },
@@ -114,6 +126,45 @@ describe("fal dynamic cost", () => {
       expect(seen.has(id), id).toBe(true);
       expect(isFalDynamicPricingEndpoint(resolveModel(id).apiId), id).toBe(false);
     }
+    for (const id of PER_SECOND_FLOORS) expect(seen.has(id), id).toBe(true);
+  });
+
+  it("quotes a 2K H3 Max Extend as the requested seconds at the card rate, a lower bound, with the estimator or without, and never asks fal", async () => {
+    const calls: unknown[] = [];
+    const model = resolveModel("fal:minimax/h3-max/extend-video");
+    const extend = (duration: number) => estimateGeneration(model, {
+      prompt: "keep walking",
+      refUrls: { video: ["https://example.com/clip.mp4"] },
+      options: { duration, resolution: "2K" },
+    });
+    for (const estimator of [historicalEstimator(calls), null]) {
+      install(estimator);
+      for (const [duration, usd] of [[5, 1.6], [15, 4.8]] as const) {
+        const result = await extend(duration);
+        expect(result.ok).toBe(true);
+        if (!result.ok) continue;
+        expect(result.estimate.usd).toBeCloseTo(usd, 6);
+        expect(result.estimate.breakdown).toEqual({ units: duration, unit: "seconds", perUnitUsd: 0.32 });
+        expect(result.estimate.warnings).toEqual([
+          "fal 'minimax/h3-max/extend-video': prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted, so this estimate is a lower bound",
+        ]);
+        expect(lowerBoundWarnings(result.estimate.warnings)).toBe(true);
+      }
+      restores.pop()?.();
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("prices a call fal billed 0 units at 0 USD through the library, without asking fal or needing the admin key", async () => {
+    const calls: unknown[] = [];
+    for (const estimator of [historicalEstimator(calls), null]) {
+      install(estimator);
+      const nothing = await estimateFalRequest("minimax/h3-max/extend-video", {}, undefined, 0);
+      expect(nothing).toMatchObject({ usd: 0, source: "free", warnings: [] });
+      expect(nothing.zeroReason).toContain("reported no billed units");
+      restores.pop()?.();
+    }
+    expect(calls).toEqual([]);
   });
 
   it("reuses one historical answer for a repeated dynamic endpoint", async () => {

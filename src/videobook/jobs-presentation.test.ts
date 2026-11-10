@@ -243,6 +243,14 @@ describe('buildJobsRows', () => {
     expect(row.note).toContain('per-call average $8.19, not this request\'s price')
   })
 
+  it('labels a lower-bound plan quote as at least the figure', () => {
+    const floor = plan({})
+    const stage = floor.plan.stages[0]
+    if (stage?.kind === 'queued') stage.estimateLowerBound = true
+    const [row] = buildJobsRows({ jobs: [], plans: [floor], cells, assets: READY_ASSETS, now: NOW })
+    expect(row.note).toBe('at least $8.19 · output 01a04918')
+  })
+
   it.each([
     { assets: [] },
     { assets: [{ ...READY_ASSETS[0], status: 'generating', mediaUrl: null }] },

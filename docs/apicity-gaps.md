@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.27.1 (2026-11-07). Image, video and audio
+Videobook now uses Apicity 0.27.2 (2026-11-09). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -564,19 +564,37 @@ local formula and remain $0 until the request supplies the missing field:
 without the draft's aspect ratio and duration. Those two are not historical
 averages.
 
-Update 2026-11-09 (vb-6bk9y): `minimax/h3-max/extend-video` still has no local
-rate. Its card bills generated seconds plus reference tokens the payload's URLs
-do not determine, so the quote remains fal's historical average per call. That
-quote is now stored on the usage row's `estimateUsd` (`estimateSource`
-`fal-historical-average`) and stays there after `x-fal-billable-units` replaces
-`costUsd`. The generation editor, command plan, chain review, and cell cost
-row state that the figure is a per-call average and not this request's price.
-A units-per-second model for the endpoint still belongs in `@apicity/cost`.
+Update 2026-11-09 (vb-6bk9y, refreshed for vb-vlrsh): `@apicity/cost` 0.27.2
+(apicity `ac-vo9l4a`, PR 656) gives `minimax/h3-max/extend-video` a local
+per-second floor. The quote is the requested seconds times the card rate:
+$0.05, $0.08, $0.16 or $0.32 per second at 480P, 768P, 1080P or 2K. A 2K
+extend of 5 s quotes $1.60 and one of 15 s quotes $4.80, which is what fal
+billed for those two requests. The card also bills reference tokens beyond the
+included 4,096, which the payload's URLs do not determine. So the quote is a
+lower bound, and its warning says so. Insert-video, reference-to-video and
+turbo reference-to-video get the same floor from the payload's duration and
+resolution. 3d-to-video and lip-sync get it from a duration hint.
+`resolveFalDynamicEstimate` returns the floor without calling fal's pricing
+API, with or without `FAL_ADMIN_API_KEY`. That holds even though Videobook
+still passes `callQuantity: 1` for dynamic endpoints with no floor.
+
+Usage rows store the floor on `estimateUsd` with `estimateSource`
+`lower-bound` and keep it after `x-fal-billable-units` replaces `costUsd`. The
+generation editor, command and run plans, Jobs rows, chain review and cell
+cost rows show it as "at least" the figure, with the warning's reason. A
+dynamic endpoint with no floor still quotes fal's historical average per call
+(`estimateSource` `fal-historical-average`), labelled as a per-call average and
+not this request's price.
+
+For a dynamic endpoint, a result that states `x-fal-billable-units: 0` now
+takes its 0 USD from the library's `unitQuantity: 0` answer. A statically
+priced endpoint still records 0 USD locally, because the library ignores
+`unitQuantity` there.
 
 Update 2026-11-09 (vb-mx0nj): a completed fal queue result that omits
 `x-fal-billable-units` no longer closes a dynamic call as a finished estimate.
-The usage row keeps the historical quote on `estimateUsd` and records that it
-is awaiting fal's billed units. A later result that carries the header still
+The usage row keeps its quote on `estimateUsd` and records that it is awaiting
+fal's billed units. A later result that carries the header still
 replaces `costUsd`. A status poll that omits the header is unchanged.
 
 ---
@@ -918,7 +936,7 @@ packages moved version only.
 | **RESOLVED** | §38 KIE Qwen 2.1 cost slugs/pricing                                 | catalog defaults and rates read from apicity           |
 | **RESOLVED** | §39 xAI realtime force_message / audio.output.speed                  | typed activation event; xAI speed pinned to 1          |
 | **RESOLVED** | §40 Seedance 2.5 frame aspect ratio                                 | adaptive `frameOptions` and mode-aware controls        |
-| **RESOLVED** | §41 dynamically billed fal endpoints                                | historical average per call when `FAL_ADMIN_API_KEY` is set (vb-x1xh) |
+| **RESOLVED** | §41 dynamically billed fal endpoints                                | historical average per call when `FAL_ADMIN_API_KEY` is set (vb-x1xh); H3 Max per-second floors shown as "at least" (vb-vlrsh) |
 | **BY DESIGN**| §41 Seedance requests the local formula cannot fix                  | 2.0 US r2v without `video_urls`; 2.5 draft completion without the draft's ratio and duration |
 | **QUIRK**    | §42 fal 0.15.0 request shapes                                       | catalog modes, refs, defaults, `vidu` dialect          |
 | **DECIDED**  | §43 hidden fal twins and draft completion                           | `hidden` catalog entries                               |

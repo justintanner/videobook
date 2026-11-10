@@ -65,7 +65,7 @@ import {
   assessToolCallEstimate,
   logUnavailableCostEstimate,
 } from "../jobs/cost-estimate-assessment.js";
-import { historicalAverageWarnings } from "../media/cost.js";
+import { historicalAverageWarnings, lowerBoundWarnings } from "../media/cost.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { notBilledCallsByJob } from "./book-usage.js";
 import { pairForCell } from "./list-cell-generations.js";
@@ -527,6 +527,7 @@ async function notebookGenerationPlan(
   const estimatedCost = assessment.available ? assessment.usd : undefined;
   const estimateUnavailable = !assessment.available;
   const estimateHistorical = assessment.available && historicalAverageWarnings(assessment.warnings);
+  const estimateLowerBound = assessment.available && lowerBoundWarnings(assessment.warnings);
   const cellDefinitionFingerprint = notebookCellDefinitionFingerprint(
     notebook,
     cell,
@@ -561,7 +562,11 @@ async function notebookGenerationPlan(
         model: prepared.model,
         ...(estimateUnavailable
           ? { estimateUnavailable: true }
-          : { estimatedCostUsd: estimatedCost, ...(estimateHistorical ? { estimateHistorical: true } : {}) }),
+          : {
+              estimatedCostUsd: estimatedCost,
+              ...(estimateHistorical ? { estimateHistorical: true } : {}),
+              ...(estimateLowerBound ? { estimateLowerBound: true } : {}),
+            }),
         insertsOutput: false,
       }],
       confirmation: {
@@ -612,7 +617,11 @@ async function notebookGenerationPlan(
     model: prepared.model,
     ...(estimateUnavailable
       ? { estimate_unavailable: true }
-      : { estimated_cost_usd: estimatedCost, ...(estimateHistorical ? { estimate_historical: true } : {}) }),
+      : {
+          estimated_cost_usd: estimatedCost,
+          ...(estimateHistorical ? { estimate_historical: true } : {}),
+          ...(estimateLowerBound ? { estimate_lower_bound: true } : {}),
+        }),
     track_id: track.trackId,
     timeline_start_frame: destination.timelineStartFrame,
     ...(destination.durationFrames === undefined

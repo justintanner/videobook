@@ -168,7 +168,7 @@ export function estimateCostDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "estimate_cost",
     description:
-      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.",
+      "Estimate the USD cost of one or more generate_image, generate_video or generate_audio calls, given as {tool_name, input}, before running them. Rewrite, chat and analysis use text-call forecasts that exclude media, tools and history. Dynamically billed fal models use fal's historical average per call when FAL_ADMIN_API_KEY is set, and that estimate warns that it ignores the request. MiniMax H3 Max models whose duration and resolution are known quote those seconds at the published per-second rate instead, as a lower bound with a warning, with or without the key. A MachGen Topaz upscale of a MachGen output uses MachGen's free quote when MACHGEN_API_KEY is set; a video MachGen must upload is quoted when its job submits. Without those keys, or without a published rate, the estimate is $0 with a warning.",
     schema,
     handler: async (args): Promise<ToolResult> => {
       const calls = args.calls as Array<{ tool_name: string; input: Record<string, unknown> }>;

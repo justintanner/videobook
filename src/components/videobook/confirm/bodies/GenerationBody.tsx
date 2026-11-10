@@ -44,6 +44,7 @@ import {
   generationEstimate,
   generationEstimateCaption,
   historicalAverageEstimate,
+  lowerBoundEstimate,
   providerPayloadPreviewMentions,
 } from '@/videobook/provider-payload-preview'
 
@@ -319,6 +320,7 @@ export function GenerationBody({
       ? `$${estimate.usd.toFixed(estimate.usd < 0.01 ? 4 : 2)}`
       : '—'
   const estimateCaption = previewLoading || previewStale || previewError ? null : generationEstimateCaption(estimate)
+  const estimateAtLeast = estimateCaption !== null && lowerBoundEstimate(estimate.warnings)
   const estimateNote = previewLoading || previewStale
     ? 'Updating estimate…'
     : previewError || estimate.unknown || estimate.usd === null
@@ -547,6 +549,7 @@ export function GenerationBody({
         <div className="confirm-section-heading">
           <span>{sourceVisible ? 'MCP payload' : 'Payload'}</span>
           <span className="generation-review-estimate" aria-label="Estimate" title={estimateNote}>
+            {estimateAtLeast && <small>at least</small>}
             <strong>{estimateText}</strong>
             {estimateText !== '…' && estimateText !== '—' && <small>{estimate.currency}</small>}
             {estimateCaption && <em>{estimateCaption}</em>}

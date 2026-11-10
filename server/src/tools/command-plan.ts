@@ -171,6 +171,7 @@ const generationPlanSchema = z.object({
   estimated_cost_usd: z.number().nonnegative().optional(),
   estimate_unavailable: z.boolean().optional(),
   estimate_historical: z.boolean().optional(),
+  estimate_lower_bound: z.boolean().optional(),
   track_id: z.string().uuid(),
   timeline_start_frame: z.number().int().nonnegative(),
   duration_frames: z.number().int().positive().optional(),
@@ -1737,6 +1738,7 @@ export function buildGenerationInsertPlan(
         : {
             estimatedCostUsd: input.estimated_cost_usd,
             ...(input.estimate_historical ? { estimateHistorical: true } : {}),
+            ...(input.estimate_lower_bound ? { estimateLowerBound: true } : {}),
           }),
       insertsOutput: true,
       continuation: {
@@ -1756,7 +1758,9 @@ export function buildGenerationInsertPlan(
       policy: "always",
       reason: input.estimate_historical
         ? "This plan can incur provider spend. The quoted figure is a per-call average, not this request's price."
-        : "This plan can incur provider spend",
+        : input.estimate_lower_bound
+          ? "This plan can incur provider spend. The quoted figure is a lower bound, so the bill can be higher."
+          : "This plan can incur provider spend",
     },
   };
 }

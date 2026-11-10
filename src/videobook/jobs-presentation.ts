@@ -1,5 +1,5 @@
 import type { NotebookCell, UsageEntry, UsageRollupGroup } from 'videobook-engine'
-import { perCallAverageCost, type CommandPlan } from '@/videobook/command-plan'
+import { qualifiedStageCost, type CommandPlan } from '@/videobook/command-plan'
 import { formatUsageCost } from '@/videobook/book-usage'
 import { usageNotBilledNote, usageTotalFigures } from '@/videobook/usage-cost'
 import { notebookGridTag } from '@/videobook/notebook-grid'
@@ -337,7 +337,7 @@ function planCostNote(plan: JobsScreenPlan): string | null {
   const parts: string[] = []
   if (stage?.estimatedCostUsd !== undefined) {
     const amount = `$${stage.estimatedCostUsd.toFixed(2)}`
-    parts.push(stage.estimateHistorical ? perCallAverageCost(amount) : `est. ${amount}`)
+    parts.push(qualifiedStageCost(stage, amount) ?? `est. ${amount}`)
   }
   if (plan.outputArtifactId) parts.push(`output ${shortArtifactId(plan.outputArtifactId)}`)
   return parts.length > 0 ? parts.join(' · ') : null

@@ -4,7 +4,7 @@ import {
   logUnavailableCostEstimate,
 } from "./jobs/cost-estimate-assessment.js";
 import type { PinnedChainTarget } from "./chain-plan.js";
-import { historicalAverageWarnings } from "./media/cost.js";
+import { historicalAverageWarnings, lowerBoundWarnings } from "./media/cost.js";
 
 /** Keys whose values never belong on a review sheet or in a spoken line. */
 const SENSITIVE_KEY = /api.?key|secret|(?:^|[_-])token(?:$|[_-])|password|credential|authorization/iu;
@@ -66,7 +66,9 @@ function reviewReason(input: {
     ? "I can't price this one"
     : historicalAverageWarnings(input.warnings)
       ? `a per-call average of ${formatUsd(input.estimateUsd)}, not this request's price`
-      : `about ${formatUsd(input.estimateUsd)}`;
+      : lowerBoundWarnings(input.warnings)
+        ? `at least ${formatUsd(input.estimateUsd)}`
+        : `about ${formatUsd(input.estimateUsd)}`;
   return `${position}: ${input.title.toLowerCase()}${source}, ${cost}. Apply to spend it, or cancel to stop the whole chain.`;
 }
 

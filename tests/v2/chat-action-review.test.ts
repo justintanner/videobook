@@ -237,6 +237,18 @@ describe('chainStepReview', () => {
     })
   })
 
+  it('says an H3 Max per-second floor spends at least its figure', () => {
+    const review = chainStepReview(stepReview({
+      estimateUsd: 4.8,
+      estimateWarnings: ["fal 'minimax/h3-max/extend-video': prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted, so this estimate is a lower bound"],
+    }), 0)
+    expect(review.effect?.label).toBe('Spends at least $4.80')
+    expect(review.settings.find((setting) => setting.label === 'Estimated cost')).toMatchObject({
+      value: 'At least $4.80',
+      tone: 'warning',
+    })
+  })
+
   it('says a cost is unknown rather than showing it as free', () => {
     const review = chainStepReview(
       stepReview({ estimateUsd: null, estimateUnavailable: true }),

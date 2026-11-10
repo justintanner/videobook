@@ -273,6 +273,7 @@ import {
   generationEstimate,
   historicalAverageEstimate,
   providerPayloadPreviewMentions,
+  workspaceEstimateCost,
 } from '@/videobook/provider-payload-preview'
 import {
   reviseXPostParams,
@@ -9132,10 +9133,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const estimate = recordValue(result?.estimate)
       const warnings = Array.isArray(estimate?.warnings) ? estimate.warnings.filter((value): value is string => typeof value === 'string') : []
       const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
-      const historical = historicalAverageEstimate(warnings)
-      const priced = usd !== null && usd > 0 && (warnings.length === 0 || historical)
       return {
-        cost: priced ? `Estimated cost: $${usd.toFixed(4)}` : 'Cost estimate unavailable',
+        cost: workspaceEstimateCost(usd, warnings),
         message: `Running this sends your prompt and selected media to a generation provider and may incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''}`,
       }
     }

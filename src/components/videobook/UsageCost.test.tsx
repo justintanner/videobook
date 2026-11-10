@@ -81,6 +81,37 @@ describe('a notebook cell call cost', () => {
     }))).toBe('minimax/h3-max/extend-video Awaiting bill ~$0.32 Awaiting fal\'s billed units; the result omitted x-fal-billable-units')
   })
 
+  it('shows an H3 Max per-second floor as at least the quote, with the reason fal can bill more, through to the actual', () => {
+    const floor = {
+      provider: 'fal',
+      model: 'minimax/h3-max/extend-video',
+      estimateUsd: 1.6,
+      estimateSource: 'lower-bound',
+    } satisfies Partial<UsageEntry>
+    const lowerBound = 'fal \'minimax/h3-max/extend-video\': prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted, so this estimate is a lower bound'
+    expect(row(call({ ...floor, status: 'pending', costUsd: 1.6, units: 5, unit: 'seconds', warnings: [lowerBound] })))
+      .toBe('minimax/h3-max/extend-video Estimate at least $1.60 Prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted')
+    expect(row(call({
+      ...floor,
+      status: 'completed',
+      costUsd: 1.6,
+      actualBasis: 'none',
+      warnings: ['Awaiting fal\'s billed units; the result omitted x-fal-billable-units'],
+    }))).toBe('minimax/h3-max/extend-video Awaiting bill at least $1.60 Awaiting fal\'s billed units; the result omitted x-fal-billable-units')
+    expect(row(call({ ...floor, actualBasis: 'derived', costUsd: 1.6, units: 32, unit: 'billable-units' })))
+      .toBe('minimax/h3-max/extend-video Calculated ~$1.60 est. at least $1.60 32 billable-units, priced at the bundled rate')
+    expect(row(call({
+      ...floor,
+      status: 'failed',
+      basis: 'free',
+      costUsd: 0,
+      units: 0,
+      unit: 'billable-units',
+      actualBasis: 'derived',
+      warnings: ['fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes'],
+    }))).toBe('minimax/h3-max/extend-video Failed, not billed $0.00 est. at least $1.60 fal answered HTTP 422 and billed 0 units: video_url: File size exceeds 52428800 bytes')
+  })
+
   it('shows an actual calculated from usage as approximate, distinct from a billed one', () => {
     const derived = call({ actualBasis: 'derived', costUsd: 0.41, estimateUsd: 0.42, inputTokens: 1200, outputTokens: 300, tokenBased: true })
     expect(row(derived)).toBe('gpt-5.6 Calculated ~$0.41 est. $0.42 1,500 tokens, priced at the bundled rate')

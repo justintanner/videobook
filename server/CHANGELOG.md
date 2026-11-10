@@ -21,6 +21,15 @@ and the package uses [Semantic Versioning](https://semver.org/).
   submits, so its usage row keeps the quoted estimate beside the billed
   charge. A video MachGen must upload is quoted only at submission, and a
   failed quote leaves the estimate unpriced as before.
+- Every @apicity package moves to 0.27.2. MiniMax H3 Max extend, insert and
+  reference videos are quoted from their duration and resolution at the
+  published per-second rate instead of fal's per-call average, so a 2K extend
+  of 5 seconds quotes $1.60 and one of 15 seconds $4.80 instead of $0.32.
+  Reference tokens are not counted, so the generation editor, plans, Jobs
+  rows, chain steps and cell costs show the quote as "at least" the figure
+  with the reason. H3 Max 3D and lip sync are quoted the same way when the
+  source length is known. FLUX 3 Max video estimates follow fal's current
+  promotion: $0.085 a second at 720p and $0.145 at 1080p.
 
 ### Fixed
 

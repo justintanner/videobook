@@ -410,14 +410,14 @@ describe('CommandPlan edit tools', () => {
         actor: 'parity-fixture',
         generation: {
           tool: 'generate_video',
-          input: { prompt: 'Keep walking', duration: 15, resolution: '2K' },
+          input: { prompt: 'A fox in snow' },
           provider: 'fal',
-          model: 'minimax/h3-max/extend-video',
+          model: 'fal-ai/kandinsky6-pro/text-to-video',
           estimated_cost_usd: 0.32,
           estimate_historical: true,
           track_id: videoTrack.trackId,
           timeline_start_frame: 0,
-          duration_frames: 360,
+          duration_frames: 120,
         },
       }),
     )
@@ -428,11 +428,42 @@ describe('CommandPlan edit tools', () => {
       },
       stages: [{
         provider: 'fal',
-        model: 'minimax/h3-max/extend-video',
+        model: 'fal-ai/kandinsky6-pro/text-to-video',
         estimatedCostUsd: 0.32,
         estimateHistorical: true,
       }],
     })
+    const floorPlan = resultJson(
+      await tools.get('plan_generation_insert')!.handler({
+        book_id: engine.book.get().bookId,
+        source_surface: 'ui',
+        actor: 'parity-fixture',
+        generation: {
+          tool: 'generate_video',
+          input: { prompt: 'Keep walking', duration: 15, resolution: '2K' },
+          provider: 'fal',
+          model: 'minimax/h3-max/extend-video',
+          estimated_cost_usd: 4.8,
+          estimate_lower_bound: true,
+          track_id: videoTrack.trackId,
+          timeline_start_frame: 0,
+          duration_frames: 360,
+        },
+      }),
+    )
+    expect(floorPlan).toMatchObject({
+      confirmation: {
+        required: true,
+        reason: 'This plan can incur provider spend. The quoted figure is a lower bound, so the bill can be higher.',
+      },
+      stages: [{
+        provider: 'fal',
+        model: 'minimax/h3-max/extend-video',
+        estimatedCostUsd: 4.8,
+        estimateLowerBound: true,
+      }],
+    })
+    expect((floorPlan as { stages: unknown[] }).stages[0]).not.toHaveProperty('estimateHistorical')
     const continued = resultJson(
       await tools.get('continue_queued_insert')!.handler({
         book_id: engine.book.get().bookId,

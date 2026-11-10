@@ -20,6 +20,7 @@ import { isKieVeoModel } from "../media/wire.js";
 import { bookUsageDef } from "./book-usage.js";
 
 const SUNO_PATHS: Record<string, string> = { "suno/generate": "/api/v1/generate", "suno/sounds-generate": "/api/v1/generate/sounds" };
+const H3_EXTEND_LOWER_BOUND = "fal 'minimax/h3-max/extend-video': prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted, so this estimate is a lower bound";
 
 setFlagsFromString("--expose-gc");
 const forceGarbageCollection = runInNewContext("gc") as () => void;
@@ -319,7 +320,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     }
   });
 
-  it("keeps the H3 Max Extend historical quote in estimateUsd after billable units replace the pending cost", async () => {
+  it("quotes H3 Max Extend at its per-second floor as a lower bound and keeps that quote in estimateUsd after billable units replace the pending cost", async () => {
     const requests: Array<{ estimate_type: string; quantity: number }> = [];
     const restore = installFalDynamicEstimator(async (request) => {
       const priced = request.endpoints["minimax/h3-max/extend-video"];
@@ -329,7 +330,7 @@ describe("provider usage through real HTTP and engine storage", () => {
     });
     try {
       const provider = createFal({ apiKey: "test", queueBaseURL: url });
-      for (const duration of [5, 15]) {
+      for (const [duration, usd] of [[5, 1.6], [15, 4.8]] as const) {
         const requestId = `fal-extend-${duration}`;
         reply = { request_id: requestId, status: "IN_QUEUE" };
         headers = {};
@@ -337,15 +338,20 @@ describe("provider usage through real HTTP and engine storage", () => {
           endpoint_id: "minimax/h3-max/extend-video",
           input: { prompt: "keep walking", video_url: "https://example.test/clip.mp4", duration, resolution: "2K" },
         }), engine, "generate_media");
-        expect(engine.usage.find("fal", requestId)).toMatchObject({
+        const pending = engine.usage.find("fal", requestId);
+        expect(pending).toMatchObject({
           model: "minimax/h3-max/extend-video",
-          costUsd: 0.32,
-          estimateUsd: 0.32,
-          estimateSource: "fal-historical-average",
+          estimateSource: "lower-bound",
           basis: "estimated",
           status: "pending",
+          units: duration,
+          unit: "seconds",
+          warnings: [H3_EXTEND_LOWER_BOUND],
         });
+        expect(pending?.costUsd).toBeCloseTo(usd, 6);
+        expect(pending?.estimateUsd).toBeCloseTo(usd, 6);
       }
+      expect(engine.usage.summary().totals.unpriced).toBe(0);
       headers = { "x-fal-billable-units": "96" };
       reply = { status: "COMPLETED", request_id: "fal-extend-15" };
       await scoped(() => provider.v1.queue.result({
@@ -355,18 +361,18 @@ describe("provider usage through real HTTP and engine storage", () => {
       const settled = engine.usage.find("fal", "fal-extend-15");
       expect(settled).toMatchObject({
         status: "completed",
-        estimateUsd: 0.32,
-        estimateSource: "fal-historical-average",
+        estimateSource: "lower-bound",
         actualBasis: "derived",
+        units: 96,
+        unit: "billable-units",
+        warnings: [],
       });
       expect(settled?.costUsd).toBeCloseTo(4.8, 5);
+      expect(settled?.estimateUsd).toBeCloseTo(4.8, 5);
       expect(engine.usage.rollup().totals.unestimated).toBe(0);
-      expect(engine.usage.rollup().totals.settledEstimateUsd).toBeCloseTo(0.32, 5);
-      expect(engine.usage.rollup().totals.pendingEstimateUsd).toBeCloseTo(0.32, 5);
-      expect(requests.filter((request) => request.estimate_type === "historical_api_price")).toEqual([
-        { estimate_type: "historical_api_price", quantity: 1 },
-      ]);
-      expect(requests).toContainEqual({ estimate_type: "unit_price", quantity: 96 });
+      expect(engine.usage.rollup().totals.settledEstimateUsd).toBeCloseTo(4.8, 5);
+      expect(engine.usage.rollup().totals.pendingEstimateUsd).toBeCloseTo(1.6, 5);
+      expect(requests).toEqual([{ estimate_type: "unit_price", quantity: 96 }]);
     } finally {
       restore();
       headers = {};
@@ -394,15 +400,16 @@ describe("provider usage through real HTTP and engine storage", () => {
         endpoint_id: "minimax/h3-max",
         request_id: "fal-late",
       }), engine, "poll_pending_provider_tasks");
-      expect(engine.usage.find("fal", "fal-late")).toMatchObject({
+      const awaiting = engine.usage.find("fal", "fal-late");
+      expect(awaiting).toMatchObject({
         status: "completed",
         basis: "estimated",
-        costUsd: 0.32,
-        estimateUsd: 0.32,
-        estimateSource: "fal-historical-average",
+        estimateSource: "lower-bound",
         actualBasis: "none",
         warnings: [FAL_RESULT_OMITTED_UNITS_WARNING],
       });
+      expect(awaiting?.costUsd).toBeCloseTo(3.2, 6);
+      expect(awaiting?.estimateUsd).toBeCloseTo(3.2, 6);
       expect(engine.usage.rollup().totals).toMatchObject({ count: 1, unsettled: 1, unestimated: 0 });
       headers = { "x-fal-billable-units": "64" };
       await scoped(() => provider.v1.queue.result({
@@ -413,19 +420,16 @@ describe("provider usage through real HTTP and engine storage", () => {
       expect(settled).toMatchObject({
         status: "completed",
         actualBasis: "derived",
-        estimateUsd: 0.32,
-        estimateSource: "fal-historical-average",
+        estimateSource: "lower-bound",
         units: 64,
         unit: "billable-units",
       });
       expect(settled?.costUsd).toBeCloseTo(3.2, 5);
+      expect(settled?.estimateUsd).toBeCloseTo(3.2, 5);
       expect(settled?.warnings ?? []).not.toContain(FAL_RESULT_OMITTED_UNITS_WARNING);
       expect(engine.usage.rollup().totals).toMatchObject({ unsettled: 0, unestimated: 0 });
-      expect(engine.usage.rollup().totals.settledEstimateUsd).toBeCloseTo(0.32, 5);
-      expect(requests.filter((request) => request.estimate_type === "historical_api_price")).toEqual([
-        { estimate_type: "historical_api_price", quantity: 1 },
-      ]);
-      expect(requests).toContainEqual({ estimate_type: "unit_price", quantity: 64 });
+      expect(engine.usage.rollup().totals.settledEstimateUsd).toBeCloseTo(3.2, 5);
+      expect(requests).toEqual([{ estimate_type: "unit_price", quantity: 64 }]);
     } finally {
       restore();
       headers = {};
@@ -513,6 +517,54 @@ describe("provider usage through real HTTP and engine storage", () => {
       expect(usage.cell.totals).toMatchObject({ count: 2, unsettled: 0, unpriced: 0 });
     } finally {
       restore();
+    }
+  });
+
+  it("settles 0 billable units as not billed without fal's admin key, for a dynamically and a statically priced endpoint", async () => {
+    const restore = installFalDynamicEstimator(null);
+    try {
+      const provider = createFal({ apiKey: "test", queueBaseURL: url });
+      const submissions = [
+        {
+          request_id: "fal-floor",
+          endpoint_id: "minimax/h3-max/extend-video",
+          resultEndpoint: "minimax/h3-max",
+          input: { prompt: "keep walking", video_url: "https://example.test/clip.mp4", duration: 5, resolution: "2K" },
+        },
+        {
+          request_id: "fal-static",
+          endpoint_id: "bytedance/seedance-2.0/us/text-to-video",
+          resultEndpoint: "bytedance/seedance-2.0",
+          input: { prompt: "a fox", duration: "5", aspect_ratio: "16:9", resolution: "720p" },
+        },
+      ];
+      for (const { request_id, endpoint_id, input } of submissions) {
+        reply = { request_id, status: "IN_QUEUE" };
+        await scoped(() => provider.post.v1.queue.submit({ endpoint_id, input }), engine, "generate_media");
+      }
+      const floor = engine.usage.find("fal", "fal-floor");
+      expect(floor).toMatchObject({ basis: "estimated", estimateSource: "lower-bound", warnings: [H3_EXTEND_LOWER_BOUND] });
+      expect(floor?.estimateUsd).toBeCloseTo(1.6, 6);
+      expect(engine.usage.find("fal", "fal-static")).toMatchObject({ basis: "estimated", costUsd: expect.any(Number) });
+      headers = { "x-fal-billable-units": "0" };
+      replyStatus = 422;
+      reply = { detail: [{ loc: ["body", "prompt"], msg: "Prompt was flagged", type: "value_error" }] };
+      for (const { request_id, resultEndpoint } of submissions) {
+        await expect(scoped(() => provider.v1.queue.result({ endpoint_id: resultEndpoint, request_id }), engine, "poll_pending_provider_tasks"))
+          .rejects.toMatchObject({ status: 422 });
+      }
+      for (const { request_id } of submissions) {
+        expect(engine.usage.find("fal", request_id)).toMatchObject({
+          status: "failed", basis: "free", costUsd: 0, units: 0, unit: "billable-units", actualBasis: "derived",
+          warnings: ["fal answered HTTP 422 and billed 0 units: prompt: Prompt was flagged"],
+        });
+      }
+      expect(engine.usage.find("fal", "fal-floor")?.estimateUsd).toBeCloseTo(1.6, 6);
+      expect(engine.usage.rollup().totals).toMatchObject({ count: 2, unsettled: 0, unpriced: 0, actualUsd: 0 });
+    } finally {
+      restore();
+      headers = {};
+      replyStatus = undefined;
     }
   });
 

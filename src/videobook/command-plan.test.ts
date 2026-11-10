@@ -10,7 +10,9 @@ import {
   createEditCommandPlan,
   createSearchCommandPlan,
   equivalentEditOperations,
+  lowerBoundCost,
   perCallAverageCost,
+  qualifiedStageCost,
 } from './command-plan'
 
 describe('CommandPlan', () => {
@@ -107,5 +109,12 @@ describe('CommandPlan', () => {
 
   it('names a historical fal quote as a per-call average', () => {
     expect(perCallAverageCost('$0.3200')).toBe('per-call average $0.3200, not this request\'s price')
+  })
+
+  it('names a lower-bound quote as at least the figure, and leaves an exact quote to the caller', () => {
+    expect(lowerBoundCost('$1.6000')).toBe('at least $1.6000')
+    expect(qualifiedStageCost({ estimateLowerBound: true }, '$1.60')).toBe('at least $1.60')
+    expect(qualifiedStageCost({ estimateHistorical: true }, '$0.32')).toBe('per-call average $0.32, not this request\'s price')
+    expect(qualifiedStageCost({}, '$0.32')).toBeNull()
   })
 })

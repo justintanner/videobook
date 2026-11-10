@@ -1,5 +1,5 @@
 import { formatMediaTime } from './notebook-cell-presentation'
-import { historicalAverageEstimate } from './provider-payload-preview'
+import { historicalAverageEstimate, lowerBoundEstimate } from './provider-payload-preview'
 import { scanNotebookMentions } from 'videobook-engine/notebook-mentions'
 import { speedChangeDraftFromParams, speedChangeOutcome } from './speed-change-draft'
 
@@ -259,11 +259,14 @@ export function chainStepReview(
   remaining: number,
 ): RoutedActionReview {
   const historical = historicalAverageEstimate(review.estimateWarnings ?? [])
+  const lowerBound = lowerBoundEstimate(review.estimateWarnings ?? [])
   const costLabel = review.estimateUnavailable
     ? 'Cost unknown for this model'
     : historical
       ? `Per-call average ${formatEstimatedCost(review.estimateUsd)}, not this request's price`
-      : `Spends about ${formatEstimatedCost(review.estimateUsd)}`
+      : lowerBound
+        ? `Spends at least ${formatEstimatedCost(review.estimateUsd)}`
+        : `Spends about ${formatEstimatedCost(review.estimateUsd)}`
   const settings = [
     setting('Step', `${review.index + 1} of ${review.total}`),
     ...(review.address ? [setting('Source', review.address)] : []),
@@ -278,8 +281,10 @@ export function chainStepReview(
       'Estimated cost',
       historical
         ? `Per-call average ${formatEstimatedCost(review.estimateUsd)}`
-        : formatEstimatedCost(review.estimateUsd),
-      review.estimateUnavailable || historical ? 'warning' : 'default',
+        : lowerBound
+          ? `At least ${formatEstimatedCost(review.estimateUsd)}`
+          : formatEstimatedCost(review.estimateUsd),
+      review.estimateUnavailable || historical || lowerBound ? 'warning' : 'default',
     ),
     setting('Remaining steps', remaining > 0 ? String(remaining) : 'None'),
   ]

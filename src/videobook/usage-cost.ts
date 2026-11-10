@@ -1,5 +1,7 @@
 import type { UsageEntry, UsageRollupTotals } from 'videobook-engine'
 import { formatUsageCost, formatUsageTokens } from './book-usage'
+import { lowerBoundCost } from './command-plan'
+import { lowerBoundCaption, lowerBoundEstimate } from './provider-payload-preview'
 
 export type UsageCallState = 'estimate' | 'awaiting-bill' | 'stated' | 'derived' | 'usage-only' | 'free' | 'not-billed' | 'unavailable'
 
@@ -19,6 +21,7 @@ export interface UsageTotalFigures {
 }
 
 const FAL_HISTORICAL_ESTIMATE_SOURCE = 'fal-historical-average'
+const LOWER_BOUND_ESTIMATE_SOURCE = 'lower-bound'
 
 const STATE_LABELS: Record<UsageCallState, string> = {
   estimate: 'Estimate',
@@ -66,6 +69,11 @@ function reason(entry: UsageEntry, fallback: string): string {
   return entry.warnings.length > 0 ? entry.warnings.join(' ') : fallback
 }
 
+function pendingNote(entry: UsageEntry): string {
+  if (entry.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE) return 'Per-call average, not this request\'s price'
+  return lowerBoundEstimate(entry.warnings) ? lowerBoundCaption(entry.warnings) : 'Waiting for the actual'
+}
+
 function callNote(state: UsageCallState, entry: UsageEntry): string | null {
   switch (state) {
     case 'free':
@@ -79,11 +87,7 @@ function callNote(state: UsageCallState, entry: UsageEntry): string | null {
     case 'awaiting-bill':
       return reason(entry, 'Awaiting fal\'s billed units')
     case 'estimate':
-      if (entry.status === 'pending') {
-        return entry.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE
-          ? 'Per-call average, not this request\'s price'
-          : 'Waiting for the actual'
-      }
+      if (entry.status === 'pending') return pendingNote(entry)
       return entry.warnings.length > 0 ? entry.warnings.join(' ') : 'No billed or calculated figure'
     case 'stated':
       return entry.listUsd !== null && entry.costUsd !== null && Math.abs(entry.listUsd - entry.costUsd) >= 0.005
@@ -98,18 +102,25 @@ function callNote(state: UsageCallState, entry: UsageEntry): string | null {
   }
 }
 
+function quoteFigure(entry: UsageEntry, quote: number, approximate: boolean): string {
+  const amount = formatUsageCost(quote)
+  if (entry.estimateSource === LOWER_BOUND_ESTIMATE_SOURCE) return lowerBoundCost(amount)
+  return approximate ? `~${amount}` : amount
+}
+
 export function usageCallFigures(entry: UsageEntry): UsageCallFigures {
   const state = callState(entry)
   const quote = entry.estimateUsd ?? (state === 'estimate' && entry.basis === 'estimated' ? entry.costUsd : null)
+  const quoted = state === 'estimate' || state === 'awaiting-bill'
   const amount = state === 'stated' ? formatUsageCost(entry.costUsd ?? 0)
     : state === 'derived' ? `~${formatUsageCost(entry.costUsd ?? 0)}`
       : state === 'free' || state === 'not-billed' ? formatUsageCost(0)
-        : (state === 'estimate' || state === 'awaiting-bill') && quote !== null ? `~${formatUsageCost(quote)}` : null
+        : quoted && quote !== null ? quoteFigure(entry, quote, true) : null
   return {
     state,
     label: STATE_LABELS[state],
     amount,
-    estimate: state !== 'estimate' && state !== 'awaiting-bill' && quote !== null ? formatUsageCost(quote) : null,
+    estimate: !quoted && quote !== null ? quoteFigure(entry, quote, false) : null,
     note: callNote(state, entry),
   }
 }

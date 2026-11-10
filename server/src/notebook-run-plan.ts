@@ -23,7 +23,7 @@ import {
   assessToolCallEstimate,
   logUnavailableCostEstimate,
 } from "./jobs/cost-estimate-assessment.js";
-import { historicalAverageWarnings } from "./media/cost.js";
+import { historicalAverageWarnings, lowerBoundWarnings } from "./media/cost.js";
 
 type NotebookRunPlanStatus =
   | "planned"
@@ -59,7 +59,15 @@ function stageEstimate(estimate: CostEstimate): Record<string, unknown> {
     estimatedCostUsd: estimate.estimatedCostUsd,
     estimateForecast: estimate.warnings.some((warning) => warning.startsWith("Forecast:")),
     ...(historicalAverageWarnings(estimate.warnings) ? { estimateHistorical: true } : {}),
+    ...(lowerBoundWarnings(estimate.warnings) ? { estimateLowerBound: true } : {}),
   };
+}
+
+function runCostFigure(stages: ReadonlyArray<Record<string, unknown>>, knownCostUsd: number): string {
+  const amount = `$${knownCostUsd.toFixed(4)}`;
+  const lowerBound = stages.some((stage) => stage.estimateLowerBound === true)
+    && !stages.some((stage) => stage.estimateHistorical === true);
+  return lowerBound ? `at least ${amount}` : amount;
 }
 
 export function notebookRunPlanRecords(
@@ -363,7 +371,7 @@ export async function planSelectedNotebookSubgraph(
       reason: confirmationRequired
         ? unknownCostCount > 0
           ? `This selected run has ${paidCellIds.length} provider calls; ${unknownCostCount} cannot be priced`
-          : `This selected run has an estimated provider cost of $${knownCostUsd.toFixed(4)}; actual spend may differ`
+          : `This selected run has an estimated provider cost of ${runCostFigure(stages, knownCostUsd)}; actual spend may differ`
         : "Only local reversible processing will run",
     },
     notebookRun: {
@@ -510,7 +518,7 @@ export async function planNotebookRun(
       reason: paid.length > 0
         ? unknownCostCount > 0
           ? `This run has ${paid.length} provider calls; ${unknownCostCount} cannot be priced`
-          : `This run has an estimated provider cost of $${knownCostUsd.toFixed(4)}; actual spend may differ`
+          : `This run has an estimated provider cost of ${runCostFigure(stages, knownCostUsd)}; actual spend may differ`
         : runnable.length === 0
           ? "No cells need to run"
           : "Only local reversible processing will run",

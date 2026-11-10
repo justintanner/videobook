@@ -74,7 +74,14 @@ export function historicalAverageWarnings(warnings: readonly string[]): boolean 
   return warnings.length > 0 && warnings.every((warning) => warning.includes("historical average per call"));
 }
 
+export function lowerBoundWarnings(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) => warning.includes("this estimate is a lower bound"));
+}
+
 export const FAL_HISTORICAL_ESTIMATE_SOURCE = "fal-historical-average";
+export const LOWER_BOUND_ESTIMATE_SOURCE = "lower-bound";
+
+const unconfiguredFalPricing: FalEstimator = () => Promise.reject(new Error("FAL_ADMIN_API_KEY is not set"));
 
 export async function estimateFalRequest(
   endpoint: string,
@@ -83,7 +90,7 @@ export async function estimateFalRequest(
   unitQuantity?: number,
 ): Promise<CostEstimate> {
   const estimator = currentFalEstimator();
-  if (!estimator) {
+  if (!estimator && unitQuantity === undefined) {
     return computeEstimate({
       provider: "fal",
       payload,
@@ -91,7 +98,7 @@ export async function estimateFalRequest(
       ...(hints ? { costHints: hints } : {}),
     });
   }
-  return resolveFalDynamicEstimate(endpoint, payload, estimator, {
+  return resolveFalDynamicEstimate(endpoint, payload, estimator ?? unconfiguredFalPricing, {
     ...(hints ? { hints } : {}),
     ...(unitQuantity !== undefined ? { unitQuantity } : { callQuantity: 1 }),
     cache: falEstimateCache,

@@ -5,7 +5,13 @@ import type { CostEstimate, EstimateRequest, ModelPricing, CostHints, CostActual
 import type { Engine, UsageEntry, UsageInput } from "videobook-engine";
 import { modelEntry } from "./media/catalog.js";
 import type { Media } from "./media/types.js";
-import { estimateFalRequest, FAL_HISTORICAL_ESTIMATE_SOURCE, historicalAverageWarnings } from "./media/cost.js";
+import {
+  estimateFalRequest,
+  FAL_HISTORICAL_ESTIMATE_SOURCE,
+  historicalAverageWarnings,
+  LOWER_BOUND_ESTIMATE_SOURCE,
+  lowerBoundWarnings,
+} from "./media/cost.js";
 import { falErrorDetail } from "./jobs/_fal-shared.js";
 import { currentBookContext } from "./book-context.js";
 import { installedPackageVersion } from "./package-version.js";
@@ -76,11 +82,17 @@ function unknownPrice(warnings = ["Price unavailable for this model"]): Price {
 
 type PricedRequest = Price & { quote: UsageQuote | null };
 
-function historicalQuote(estimate: CostEstimate): UsageQuote | null {
-  if (!(estimate.usd > 0) || !historicalAverageWarnings(estimate.warnings)) return null;
+function warnedQuoteSource(warnings: readonly string[]): string | null {
+  if (historicalAverageWarnings(warnings)) return FAL_HISTORICAL_ESTIMATE_SOURCE;
+  return lowerBoundWarnings(warnings) ? LOWER_BOUND_ESTIMATE_SOURCE : null;
+}
+
+function warnedQuote(estimate: CostEstimate): UsageQuote | null {
+  const source = estimate.usd > 0 ? warnedQuoteSource(estimate.warnings) : null;
+  if (!source) return null;
   return {
     estimateUsd: estimate.usd,
-    estimateSource: FAL_HISTORICAL_ESTIMATE_SOURCE,
+    estimateSource: source,
     estimateRateAsOf: estimate.rateAsOf,
   };
 }
@@ -91,16 +103,17 @@ async function priceRequest(provider: Provider, model: string, payload: RecordVa
     const estimate = provider === "fal" && endpoint
       ? await estimateFalRequest(endpoint, payload, hints)
       : cost.estimate(request);
-    const quote = historicalQuote(estimate);
+    const quote = warnedQuote(estimate);
     if (!quote && (estimate.warnings.length || estimate.source === "tokens-heuristic+table")) {
       return { ...unknownPrice(estimate.warnings.length ? estimate.warnings : ["Waiting for reported token usage"]), quote: null };
     }
+    const historical = quote?.estimateSource === FAL_HISTORICAL_ESTIMATE_SOURCE;
     return {
       ...unknownPrice(quote ? estimate.warnings : []),
       costUsd: estimate.usd,
       basis: estimate.source === "free" ? "free" : "estimated",
       rateSource: (rateFor(provider, model) ?? (endpoint ? rateFor(provider, endpoint) : undefined))?.source.url ?? null,
-      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (quote ? "fal-historical" : PRICING_AS_OF)}`,
+      pricingVersion: `apicity-${COST_PACKAGE_VERSION}:${estimate.rateAsOf ?? (historical ? "fal-historical" : PRICING_AS_OF)}`,
       units: estimate.breakdown.units ?? null,
       unit: estimate.breakdown.unit ?? null,
       quote,
@@ -278,11 +291,19 @@ function falNotBilledReason(exchange: ProviderExchange): string {
   return `fal answered HTTP ${exchange.status} and billed 0 units${detail ? `: ${detail}` : ""}`;
 }
 
-function falNotBilledPatch(exchange: ProviderExchange, status: UsageEntry["status"]): Partial<UsageEntry> | null {
+async function nothingBilledUsd(model: string): Promise<number | null> {
+  if (!isFalDynamicPricingEndpoint(model)) return 0;
+  const estimate = await estimateFalRequest(model, {}, undefined, 0);
+  return estimate.source === "free" ? estimate.usd : null;
+}
+
+async function falNotBilledPatch(exchange: ProviderExchange, status: UsageEntry["status"], model: string): Promise<Partial<UsageEntry> | null> {
   if (exchange.provider !== "fal" || status === "pending" || statedFalUnits(exchange) !== 0) return null;
   if (/\/status$/u.test(new URL(exchange.url).pathname)) return null;
+  const costUsd = await nothingBilledUsd(model);
+  if (costUsd === null) return null;
   return {
-    status, costUsd: 0, basis: "free", units: 0, unit: "billable-units", actualBasis: "derived",
+    status, costUsd, basis: "free", units: 0, unit: "billable-units", actualBasis: "derived",
     warnings: [falNotBilledReason(exchange)],
   };
 }
@@ -296,7 +317,7 @@ function falResultOmittedUnits(exchange: ProviderExchange, status: UsageEntry["s
 
 async function observedPatch(engine: Engine, entry: UsageEntry | UsageInput, exchange: ProviderExchange, status: UsageEntry["status"]): Promise<Partial<UsageEntry>> {
   const actual = observedActual(engine, entry, exchange);
-  const notBilled = falNotBilledPatch(exchange, status);
+  const notBilled = await falNotBilledPatch(exchange, status, entry.model);
   if (notBilled) return notBilled;
   if (exchange.provider === "fal" && isFalDynamicPricingEndpoint(entry.model) && actual.usage.billableUnits !== undefined && actual.statedUsd === null) {
     const estimate = await estimateFalRequest(entry.model, {}, undefined, actual.usage.billableUnits);
@@ -374,8 +395,8 @@ export function providerUsageFetch(provider: Provider, transport: typeof fetch =
         ...(quoteEndpoint ? { endpoint: quoteEndpoint } : {}),
         ...(hints ? { costHints: hints } : {}),
       });
-      const { quote: historical, ...price } = await priceRequest(provider, model, payload, quoteEndpoint, hints, url.href);
-      const quote = quoted.estimateUsd !== null ? quoted : historical ?? quoted;
+      const { quote: warned, ...price } = await priceRequest(provider, model, payload, quoteEndpoint, hints, url.href);
+      const quote = quoted.estimateUsd !== null ? quoted : warned ?? quoted;
       entry = {
         id: randomUUID(), provider, model, activity, status: "pending",
         tokenBased: /\/(responses|completions|embeddings)$/u.test(url.pathname),

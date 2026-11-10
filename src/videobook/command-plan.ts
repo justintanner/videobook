@@ -77,6 +77,7 @@ interface QueuedCommandStage extends CommandStageBase {
   estimateUnavailable?: boolean
   estimateForecast?: boolean
   estimateHistorical?: boolean
+  estimateLowerBound?: boolean
   insertsOutput: boolean
   continuation?: {
     sequenceId: string
@@ -190,6 +191,18 @@ export function createCommandPlan(
 
 export function perCallAverageCost(amount: string): string {
   return `per-call average ${amount}, not this request's price`
+}
+
+export function lowerBoundCost(amount: string): string {
+  return `at least ${amount}`
+}
+
+export function qualifiedStageCost(
+  stage: Pick<QueuedCommandStage, 'estimateHistorical' | 'estimateLowerBound'>,
+  amount: string,
+): string | null {
+  if (stage.estimateHistorical) return perCallAverageCost(amount)
+  return stage.estimateLowerBound ? lowerBoundCost(amount) : null
 }
 
 export function validateCommandPlan(plan: CommandPlan): void {

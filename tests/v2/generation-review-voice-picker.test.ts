@@ -239,7 +239,22 @@ describe('GenerationBody voice picker', () => {
     expect(html).toContain('aria-label="Estimate"')
     expect(html).toContain('<strong>$0.32</strong>')
     expect(html).toContain('<em>Per-call average, not this request&#x27;s price</em>')
+    expect(html).not.toContain('at least')
     expect(html).not.toContain('Updating')
+  })
+
+  it('shows an H3 Max per-second floor as at least the quote, with the reason fal can bill more, in the payload header', () => {
+    const html = renderReview(speechDraft(), undefined, {
+      estimate: {
+        usd: 1.6,
+        currency: 'USD',
+        warnings: ["fal 'minimax/h3-max/extend-video': prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted, so this estimate is a lower bound"],
+      },
+    })
+
+    expect(html).toContain('<small>at least</small><strong>$1.60</strong><small>USD</small>')
+    expect(html).toContain('<em>Prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted</em>')
+    expect(html).toContain('title="Prices the requested seconds only; reference tokens beyond the included 4,096 ($0.02 per 1,000) are not counted"')
   })
 })
 

@@ -1,3 +1,4 @@
+import { lowerBoundCost } from './command-plan'
 import { nonBlankStringValue, recordValue } from './value-decoders'
 
 interface ProviderPromptLeak {
@@ -64,11 +65,37 @@ export function historicalAverageEstimate(warnings: readonly string[]): boolean 
     warning.includes('historical average per call'))
 }
 
+export function lowerBoundEstimate(warnings: readonly string[]): boolean {
+  return warnings.length > 0 && warnings.every((warning) =>
+    warning.includes('this estimate is a lower bound'))
+}
+
+const LOWER_BOUND_WARNING = /^(?:\w+ '[^']+': )?(.+?),? so this estimate is a lower bound\.?$/u
+
+function lowerBoundReason(warning: string): string {
+  const reason = LOWER_BOUND_WARNING.exec(warning)?.[1] ?? warning
+  return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}`
+}
+
+export function lowerBoundCaption(warnings: readonly string[]): string {
+  return warnings.map(lowerBoundReason).join(' ')
+}
+
+export function workspaceEstimateCost(usd: number | null, warnings: readonly string[]): string {
+  const lowerBound = lowerBoundEstimate(warnings)
+  if (usd === null || usd <= 0 || (warnings.length > 0 && !lowerBound && !historicalAverageEstimate(warnings))) {
+    return 'Cost estimate unavailable'
+  }
+  const amount = `$${usd.toFixed(4)}`
+  return `Estimated cost: ${lowerBound ? lowerBoundCost(amount) : amount}`
+}
+
 export const PER_CALL_AVERAGE_CAPTION = 'Per-call average, not this request\'s price'
 
 export function generationEstimateCaption(estimate: GenerationEstimate): string | null {
   if (estimate.usd === null || estimate.usd <= 0 || estimate.unknown) return null
-  return historicalAverageEstimate(estimate.warnings) ? PER_CALL_AVERAGE_CAPTION : null
+  if (historicalAverageEstimate(estimate.warnings)) return PER_CALL_AVERAGE_CAPTION
+  return lowerBoundEstimate(estimate.warnings) ? lowerBoundCaption(estimate.warnings) : null
 }
 
 export function generationEstimate(preview: unknown): GenerationEstimate {
