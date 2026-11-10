@@ -181,6 +181,7 @@ export default defineConfig({
       'server/src/remotion/qr-outro-spec.test.ts',
       'server/src/remotion/subtitles/chunker.test.ts',
       'server/src/captions/**/*.test.ts',
+      'server/src/graphics/**/*.test.ts',
       'server/src/frame-regions.test.ts',
       'server/src/remotion/subtitles/segments.test.ts',
       'server/src/remotion/util.test.ts',
