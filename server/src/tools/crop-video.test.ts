@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createTestClient } from "../test-client.js";
-import { queue } from "../queue.js";
+import { createEngineForTest } from "../engine.js";
+import { queue, waitForBookQueuesIdleForTests } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import type { Client } from "@modelcontextprotocol/client";
@@ -150,6 +151,39 @@ describe("crop_video tool", () => {
     const dims = await probeDims(join(uploaded.path, "original.mp4"));
     expect(dims.width).toBe(1920);
     expect(dims.height).toBe(1080);
+  }, testBudget(60_000));
+
+  it("keeps the download source of a cropped video, so its graphics credit survives", async () => {
+    const uploaded = await uploadVideo(client, "crop-proj", videoPath);
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+    const engine = createEngineForTest(tempDir);
+    const source = {
+      source_url: "https://www.tiktok.com/@pomkondeena/video/7432100000000000000",
+      webpage_url: "https://www.tiktok.com/@pomkondeena/video/7432100000000000000",
+      platform: "TikTok",
+      uploader: "pomkondeena",
+      title: "red light",
+      downloaded_at: "2026-11-10T00:00:00.000Z",
+    };
+    const before = await engine.metadata.artifacts.read<Record<string, unknown>>(uploaded.assetId, "original");
+    if (!before.ok) throw new Error(before.error.message);
+    const written = await engine.metadata.artifacts.write(uploaded.assetId, "original", { ...before.value, origin: "download", ...source });
+    if (!written.ok) throw new Error(written.error.message);
+
+    const result = await client.callTool({
+      name: "crop_asset",
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x: 0.21875, y: 0, w: 0.5625, h: 1.0 },
+    });
+    expect(result.isError).toBeFalsy();
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(60_000) });
+
+    const after = await engine.metadata.artifacts.read<Record<string, unknown>>(uploaded.assetId, "original");
+    if (!after.ok) throw new Error(after.error.message);
+    expect(after.value).toMatchObject({ ...source, origin: "crop", ratio: "1:1", width: 1080, height: 1080 });
+    expect(after.value?.cropped_at).toEqual(expect.any(String));
+    const graphics = await client.callTool({ name: "video_graphics", arguments: { book_id: "crop-proj", asset_id: uploaded.assetId } });
+    expect(graphics.isError).toBeFalsy();
+    expect(JSON.parse((graphics.content as TextContent)[0].text)).toMatchObject({ fill: { credit: "TikTok/@pomkondeena" } });
   }, testBudget(60_000));
 
   it("returns error for out-of-bounds rect", async () => {

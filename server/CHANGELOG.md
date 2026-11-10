@@ -18,6 +18,14 @@ and the package uses [Semantic Versioning](https://semver.org/).
   render, and `get` reports the latest render and any graphics already burned
   into the video.
 
+### Fixed
+
+- A downloaded video keeps its source URL, platform, uploader, title and
+  description after an in-place edit such as a trim, crop, watermark burn,
+  in-place subtitles or graphics. The graphics credit is still filled for it,
+  and its source link still reaches chat. The edit is still recorded as the
+  video's latest origin.
+
 ## [0.5.1] - 2026-11-10
 
 ### Added

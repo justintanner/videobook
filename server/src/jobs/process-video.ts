@@ -290,6 +290,24 @@ export async function processVideoFiles(
   }
 }
 
+const RETAINED_SOURCE_FIELDS = [
+  "source_url",
+  "webpage_url",
+  "platform",
+  "uploader",
+  "title",
+  "description",
+  "thumbnail",
+  "downloaded_at",
+] as const;
+
+async function retainedSourceFields(engine: Engine, assetId: string): Promise<Record<string, unknown>> {
+  const previous = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+  const value = previous.ok ? previous.value : null;
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(RETAINED_SOURCE_FIELDS.flatMap((field) => (value[field] === undefined ? [] : [[field, value[field]]])));
+}
+
 async function processVideoSnapshot(
   engine: Engine,
   payload: ProcessVideoPayload,
@@ -362,7 +380,8 @@ async function processVideoSnapshot(
     let frameCount = 0;
     {
 
-    await engine.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, fps: probe.fps, hasAudio: probe.hasAudio });
+    const retained = await retainedSourceFields(engine, assetId);
+    await engine.metadata.artifacts.write(assetId, "original", { ...retained, ...provenance, width, height, duration, fps: probe.fps, hasAudio: probe.hasAudio });
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
