@@ -6,6 +6,21 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-10
+
+### Added
+
+- `video_graphics` MCP tool with `op: get | update` for the on-screen
+  graphics drawn over a video: text blocks, images, QR codes and shades, each
+  with a position, size, opacity and time window. `get` reads the saved
+  layers, or for a video without any the default look (the book's TikTok
+  handle, an empty Thai title and an English line, no QR code), with the
+  handle, profile URL and source credit that fill its slots and the starter
+  layouts. `update` saves edits or a replacement document against
+  `expected_revision` from `get`, and a stale revision comes back as a
+  conflict that carries the current one. Saved graphics are not drawn into
+  the video yet.
+
 ### Changed
 
 - Gemini Omni references, Grok Imagine Video 1.5 references and Kling o3
@@ -30,6 +45,13 @@ and the package uses [Semantic Versioning](https://semver.org/).
   with the reason. H3 Max 3D and lip sync are quoted the same way when the
   source length is known. FLUX 3 Max video estimates follow fal's current
   promotion: $0.085 a second at 720p and $0.145 at 1080p.
+- fal models quoted from fal's historical per-call average keep that quote
+  beside the billed charge once fal reports the call's billable units, so cell
+  and run totals set the estimate against the actual. The generation payload,
+  plans, chain review and usage rows say the figure is a per-call average, not
+  this request's price.
+- Thai subtitles use a bundled Noto Sans Thai (OFL) instead of a subset
+  downloaded from Google Fonts, so they render without network access.
 
 ### Fixed
 
@@ -44,6 +66,18 @@ and the package uses [Semantic Versioning](https://semver.org/).
   The editor keeps its minimum height, and the per-call list is folded behind
   an "N calls" disclosure that scrolls inside the dock when opened. A cell
   with no recorded calls no longer shows an empty separator.
+- A fal call that fal reports as 0 billable units, such as a request it
+  rejects when the result is read, settles at $0.00 instead of staying at its
+  quote for good, so cell, run and book totals are no longer left partial. A
+  failed call shows as "Failed, not billed" with fal's reason, the book usage
+  list says "Not billed", and `list_jobs` returns each job's `notBilledCalls`.
+- A fal result that comes back without its billable units, as when it is read
+  hours after the job finished, labels that call "Awaiting bill" instead of
+  "Estimate". A later read that carries the units still sets the actual
+  charge.
+- A fal generation no longer fails for good when a status or result check
+  answers 408, 429 or 499. The task stays pending for the next check, as
+  MachGen and WaveSpeed tasks already did; other 4xx answers still fail it.
 
 ## [0.5.0] - 2026-11-09
 
