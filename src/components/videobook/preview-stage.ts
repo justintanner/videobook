@@ -39,7 +39,7 @@ export function usePlayerFrame(playerRef: RefObject<PlayerRef | null>, onFrameCh
   return { frame, playing, muted }
 }
 
-export function useStageSize(containerRef: RefObject<HTMLDivElement | null>, aspect: { width: number; height: number }, gridSelector: string) {
+export function useStageSize(containerRef: RefObject<HTMLDivElement | null>, aspect: { width: number; height: number }, gridSelector: string, reserve = 0) {
   const [box, setBox] = useState({ width: 0, height: 0, stacked: false })
   useEffect(() => {
     const element = containerRef.current
@@ -47,7 +47,7 @@ export function useStageSize(containerRef: RefObject<HTMLDivElement | null>, asp
     if (!element || !grid) return
     const measure = () => {
       const stacked = grid.clientWidth < STACKED_BREAKPOINT
-      const availableHeight = Math.max(80, element.clientHeight - TRANSPORT_HEIGHT)
+      const availableHeight = Math.max(80, element.clientHeight - TRANSPORT_HEIGHT - reserve)
       const availableWidth = stacked ? element.clientWidth : grid.clientWidth * DESKTOP_PREVIEW_FRACTION
       const scale = Math.min(availableWidth / aspect.width, availableHeight / aspect.height)
       const next = { width: Math.floor(aspect.width * scale), height: Math.floor(aspect.height * scale), stacked }
@@ -57,6 +57,6 @@ export function useStageSize(containerRef: RefObject<HTMLDivElement | null>, asp
     observer.observe(element)
     observer.observe(grid)
     return () => observer.disconnect()
-  }, [aspect.height, aspect.width, containerRef, gridSelector])
+  }, [aspect.height, aspect.width, containerRef, gridSelector, reserve])
   return box
 }

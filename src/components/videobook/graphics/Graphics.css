@@ -105,6 +105,8 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .graphics-guide-safe {
@@ -121,10 +123,86 @@
   cursor: pointer;
 }
 
+.graphics-layer-box[data-draggable='true'] {
+  cursor: move;
+  touch-action: none;
+}
+
 .graphics-layer-box[data-selected='true'] {
+  z-index: 1;
   border-style: solid;
   border-color: var(--green);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.graphics-layer-box:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+.graphics-handle {
+  position: absolute;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid #04110a;
+  background: var(--green);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.75);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.graphics-handle::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.graphics-anchor-mark {
+  position: absolute;
+  z-index: 2;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  background: #04110a;
+  pointer-events: none;
+}
+
+.graphics-text-column {
+  position: absolute;
+  border-right: 1px dashed rgba(114, 231, 170, 0.7);
+  border-left: 1px dashed rgba(114, 231, 170, 0.7);
+  pointer-events: none;
+}
+
+.graphics-scrim-box {
+  position: absolute;
+  border: 1px dashed var(--green);
+  pointer-events: none;
+}
+
+.graphics-snap-guide {
+  position: absolute;
+  z-index: 2;
+  background: #ff5ad8;
+  pointer-events: none;
+}
+
+.graphics-snap-guide[data-axis='x'] {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+}
+
+.graphics-snap-guide[data-axis='y'] {
+  right: 0;
+  left: 0;
+  height: 1px;
+  margin-top: -0.5px;
 }
 
 .graphics-item-box {
@@ -140,9 +218,55 @@
   display: grid;
   grid-template-columns: auto minmax(60px, 1fr) auto auto;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   width: 100%;
-  height: 28px;
+  min-height: 28px;
+}
+
+.graphics-timing-strip {
+  position: relative;
+  display: grid;
+  grid-column: 2;
+  grid-row: 2;
+  grid-auto-rows: 6px;
+  row-gap: 2px;
+  overflow-y: auto;
+}
+
+.confirm-graphics button.graphics-timing-row {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.graphics-timing-bar {
+  --timing-color: rgba(114, 231, 170, 0.5);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(to right, transparent 0, var(--timing-color) var(--fade-in), var(--timing-color) var(--fade-out), transparent 100%);
+}
+
+.graphics-timing-row[data-selected='true'] .graphics-timing-bar {
+  --timing-color: var(--green);
+}
+
+.graphics-timing-row[data-hidden='true'] .graphics-timing-bar {
+  opacity: 0.35;
+}
+
+.graphics-timing-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
 }
 
 .graphics-seek {
@@ -243,12 +367,55 @@ label.graphics-field > span:first-child {
   font-size: 12px;
 }
 
+.graphics-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
 .graphics-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--ink);
   font-size: 12px;
+}
+
+.graphics-seconds {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.graphics-seconds-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.graphics-seconds input {
+  width: 72px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graphics-seconds input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.graphics-timing-bounds {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: end;
+  gap: 6px 8px;
 }
 
 .graphics-segmented {
@@ -504,6 +671,12 @@ label.graphics-field > span:first-child {
   gap: 3px;
 }
 
+.graphics-place-fields {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .confirm-graphics .graphics-place button {
   position: relative;
   width: 20px;
@@ -529,8 +702,21 @@ label.graphics-field > span:first-child {
   background: var(--green);
 }
 
+@media (pointer: coarse) {
+  .graphics-handle {
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+  }
+
+  .graphics-handle::before {
+    inset: -10px;
+  }
+}
+
 @media (max-width: 900px) {
   .confirm-graphics {
+    min-height: auto;
     height: auto;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;

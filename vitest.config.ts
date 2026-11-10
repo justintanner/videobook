@@ -112,6 +112,8 @@ export default defineConfig({
       'src/videobook/x-post-thread.test.ts',
       'src/videobook/subtitles-model.test.ts',
       'src/videobook/graphics-model.test.ts',
+      'src/videobook/graphics-pointer.test.ts',
+      'src/videobook/graphics-timing.test.ts',
       'server/src/app-state.test.ts',
       'server/src/har-capture.test.ts',
       'server/src/har-export.test.ts',

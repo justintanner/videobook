@@ -1,14 +1,16 @@
-import { useMemo, useRef, type CSSProperties, type KeyboardEvent, type RefObject } from 'react'
+import { useMemo, useRef, type KeyboardEvent, type RefObject } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
-import { graphicsSpaceRect, type GraphicsLayerLayout, type GraphicsRect } from '../../../../server/src/graphics/layout'
-import type { GraphicsDocument, GraphicsLayer } from '../../../../server/src/graphics/model'
-import { layerOpacityAt, resolveLayerTiming } from '../../../../server/src/graphics/timing'
+import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
+import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
+import type { GraphicsDocument } from '../../../../server/src/graphics/model'
 import { GraphicsPreviewComposition, type GraphicsPreviewProps } from '../../../../server/src/remotion/graphics/GraphicsPreviewComposition'
 import { CAPTION_FONT_URLS } from '@/remotion/caption-font-urls'
 import type { GraphicsOverlayImages } from '@/videobook/graphics-model'
 import { formatCaptionTime } from '@/videobook/subtitles-model'
 import { usePlayerFrame, useStageSize } from '../preview-stage'
+import { GraphicsStageLayers } from './GraphicsStageLayers'
+import { GRAPHICS_TIMING_MAX_ROWS, GRAPHICS_TIMING_ROW_PX, GraphicsTimingStrip } from './GraphicsTiming'
 
 type GraphicsPreviewSource = { width: number; height: number; durationSeconds: number; fps: number }
 
@@ -20,80 +22,16 @@ type GraphicsPreviewStageProps = {
   layout: GraphicsLayerLayout[] | null
   playerRef: RefObject<PlayerRef | null>
   guides: boolean
+  snapping: boolean
+  editable: boolean
   selectedLayerId: string | null
   onLayout: (layout: GraphicsLayerLayout[]) => void
   onSelectLayer: (layerId: string) => void
+  onEdit: (edits: GraphicsEdit[], coalesceKey: string) => boolean
 }
 
 const NO_FRAME_CHANGE = () => undefined
-
-function percent(value: number): string {
-  return `${(value * 100).toFixed(3)}%`
-}
-
-function boxStyle(box: GraphicsRect, source: GraphicsPreviewSource): CSSProperties {
-  return {
-    left: percent(box.x / source.width),
-    top: percent(box.y / source.height),
-    width: percent(box.width / source.width),
-    height: percent(box.height / source.height),
-  }
-}
-
-function boxData(box: GraphicsRect): string {
-  return [box.x, box.y, box.width, box.height].map((value) => Math.round(value)).join(',')
-}
-
-function shownAt(layer: GraphicsLayer, seconds: number, durationSeconds: number): boolean {
-  return layerOpacityAt(resolveLayerTiming(layer.timing, durationSeconds), seconds) > 0
-}
-
-function LayerBoxes({ document, layout, source, seconds, selectedLayerId, onSelectLayer }: {
-  document: GraphicsDocument
-  layout: GraphicsLayerLayout[]
-  source: GraphicsPreviewSource
-  seconds: number
-  selectedLayerId: string | null
-  onSelectLayer: (layerId: string) => void
-}) {
-  const layers = new Map(document.layers.map((layer) => [layer.id, layer]))
-  return layout.flatMap((entry) => {
-    const layer = layers.get(entry.layerId)
-    if (!layer || entry.kind === 'scrim') return []
-    const selected = entry.layerId === selectedLayerId
-    if (!selected && !shownAt(layer, seconds, source.durationSeconds)) return []
-    return [(
-      <button
-        key={entry.layerId}
-        type="button"
-        className="graphics-layer-box"
-        data-layer-id={entry.layerId}
-        data-box={boxData(entry.box)}
-        data-selected={selected ? 'true' : undefined}
-        aria-label={`Select ${layer.name}`}
-        aria-pressed={selected}
-        style={boxStyle(entry.box, source)}
-        onClick={() => onSelectLayer(entry.layerId)}
-      >
-        {entry.kind === 'text' && entry.items.map((item) => {
-          const slot = layer.kind === 'text' ? layer.items.find((candidate) => candidate.id === item.itemId)?.slot ?? undefined : undefined
-          const relative = { x: item.box.x - entry.box.x, y: item.box.y - entry.box.y, width: item.box.width, height: item.box.height }
-          return (
-            <span
-              key={item.itemId}
-              className="graphics-item-box"
-              data-item-id={item.itemId}
-              data-slot={slot}
-              data-box={boxData(item.box)}
-              data-overflow={item.overflow ? 'true' : undefined}
-              style={boxStyle(relative, { ...source, width: entry.box.width, height: entry.box.height })}
-            />
-          )
-        })}
-      </button>
-    )]
-  })
-}
+const STRIP_GAP_PX = 4
 
 export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const { document, mediaUrl, source, images, layout, playerRef, guides } = props
@@ -102,8 +40,8 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const time = frame / source.fps
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aspect = useMemo(() => ({ width: source.width, height: source.height }), [source.height, source.width])
-  const stage = useStageSize(containerRef, aspect, '.confirm-graphics')
-  const safe = useMemo(() => graphicsSpaceRect(aspect, 'safe'), [aspect])
+  const stripRows = Math.min(document.layers.length, GRAPHICS_TIMING_MAX_ROWS)
+  const stage = useStageSize(containerRef, aspect, '.confirm-graphics', stripRows > 0 ? stripRows * GRAPHICS_TIMING_ROW_PX + STRIP_GAP_PX : 0)
   const { onLayout } = props
 
   const inputProps = useMemo<GraphicsPreviewProps>(() => ({
@@ -155,15 +93,18 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
           doubleClickToFullscreen={false}
         />
         <div className="graphics-overlay" data-frame={`${source.width}x${source.height}`}>
-          {guides && <div className="graphics-guide-safe" style={boxStyle(safe, source)} />}
           {layout && (
-            <LayerBoxes
+            <GraphicsStageLayers
               document={document}
               layout={layout}
               source={source}
               seconds={time}
               selectedLayerId={props.selectedLayerId}
+              editable={props.editable}
+              snapping={props.snapping}
+              guides={guides}
               onSelectLayer={props.onSelectLayer}
+              onEdit={props.onEdit}
             />
           )}
         </div>
@@ -192,6 +133,13 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
         >
           {muted ? <VolumeX size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
         </button>
+        <GraphicsTimingStrip
+          document={document}
+          durationSeconds={source.durationSeconds}
+          seconds={time}
+          selectedLayerId={props.selectedLayerId}
+          onSelectLayer={props.onSelectLayer}
+        />
       </div>
     </div>
   )

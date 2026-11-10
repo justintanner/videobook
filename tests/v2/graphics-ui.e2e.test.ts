@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
@@ -56,6 +56,13 @@ type Read = {
   source: { source_hash: string }
 }
 type NotebookWire = { cells: Array<{ id: string; output_artifact_id?: string; slot: { row: number; column: number } }> }
+type Size = { width: number; height: number }
+type Point = { x: number; y: number }
+
+const PORTRAIT: Size = { width: WIDTH, height: HEIGHT }
+const SQUARE: Size = { width: 720, height: 720 }
+const WIDE: Size = { width: 1280, height: 720 }
+const WIDE_DURATION = 6
 
 function slotText(read: Read, slot: string): string | undefined {
   return read.document.layers.flatMap((layer) => layer.items ?? []).find((item) => item.slot === slot)?.text
@@ -74,6 +81,7 @@ describe('graphics editor in the composer', () => {
   let browser: Browser | undefined
   let client: Client | undefined
   let page: Page
+  let appUrl = ''
   let bookId = ''
   let notebookId = ''
   let sourceId = ''
@@ -82,6 +90,8 @@ describe('graphics editor in the composer', () => {
   let thirdCellId = ''
   let logoId = ''
   let logoCellId = ''
+  let squareId = ''
+  let wideId = ''
   const renders: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
@@ -104,22 +114,22 @@ describe('graphics editor in the composer', () => {
     if (SHOTS) await page.screenshot({ path: join(SHOTS, `${name}.png`) })
   }
 
-  async function frame(assetId: string, seconds: number): Promise<Buffer> {
+  async function frame(assetId: string, seconds: number, size: Size = PORTRAIT): Promise<Buffer> {
     const path = join(root, `${assetId}-${Date.now()}.mp4`)
     const response = await fetch(`${origin}/files/${bookId}/${assetId}/original.mp4`)
     expect(response.status).toBe(200)
     await writeFile(path, Buffer.from(await response.arrayBuffer()))
-    const { stdout } = await exec(FFMPEG, ['-v', 'error', '-ss', seconds.toFixed(3), '-i', path, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { encoding: 'buffer', maxBuffer: WIDTH * HEIGHT * 4 })
+    const { stdout } = await exec(FFMPEG, ['-v', 'error', '-ss', seconds.toFixed(3), '-i', path, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { encoding: 'buffer', maxBuffer: size.width * size.height * 4 })
     return stdout
   }
 
-  function inkBox(pixels: Buffer, band: Box, tolerance: number): Box & { count: number } {
-    const box = { minX: WIDTH, maxX: -1, minY: HEIGHT, maxY: -1, count: 0 }
+  function inkBox(pixels: Buffer, band: Box, tolerance: number, size: Size = PORTRAIT): Box & { count: number } {
+    const box = { minX: size.width, maxX: -1, minY: size.height, maxY: -1, count: 0 }
     const top = Math.max(0, Math.floor(band.y - tolerance))
-    const bottom = Math.min(HEIGHT, Math.ceil(band.y + band.height + tolerance))
+    const bottom = Math.min(size.height, Math.ceil(band.y + band.height + tolerance))
     for (let y = top; y < bottom; y += 1) {
-      for (let x = 0; x < WIDTH; x += 1) {
-        const offset = (y * WIDTH + x) * 3
+      for (let x = 0; x < size.width; x += 1) {
+        const offset = (y * size.width + x) * 3
         if (pixels[offset] < 225 || pixels[offset + 1] < 225 || pixels[offset + 2] < 225) continue
         box.count += 1
         box.minX = Math.min(box.minX, x)
@@ -131,9 +141,9 @@ describe('graphics editor in the composer', () => {
     return { x: box.minX, y: box.minY, width: box.maxX - box.minX + 1, height: box.maxY - box.minY + 1, count: box.count }
   }
 
-  async function video(path: string, label: string, original?: Record<string, unknown>) {
-    await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x2060a0:s=${WIDTH}x${HEIGHT}:r=30:d=${DURATION}`, '-f', 'lavfi', '-i', `sine=frequency=440:duration=${DURATION}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', path])
-    return { path, label, original }
+  async function video(path: string, label: string, original?: Record<string, unknown>, size: Size = PORTRAIT, duration = DURATION) {
+    await exec(FFMPEG, ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x2060a0:s=${size.width}x${size.height}:r=30:d=${duration}`, '-f', 'lavfi', '-i', `sine=frequency=440:duration=${duration}`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', path])
+    return { path, label, original, duration }
   }
 
   beforeAll(async () => {
@@ -145,7 +155,13 @@ describe('graphics editor in the composer', () => {
     const found = manager.get(bookId)
     if (!found.ok) throw new Error(found.error.message)
     const engine = found.value.engine
-    const fixtures = [await video(join(root, 'red-light.mp4'), 'Red light', TIKTOK_SOURCE), await video(join(root, 'second.mp4'), 'Second take'), await video(join(root, 'third.mp4'), 'Third take')]
+    const fixtures = [
+      await video(join(root, 'red-light.mp4'), 'Red light', TIKTOK_SOURCE),
+      await video(join(root, 'second.mp4'), 'Second take'),
+      await video(join(root, 'third.mp4'), 'Third take'),
+      await video(join(root, 'square.mp4'), 'Square take', undefined, SQUARE),
+      await video(join(root, 'wide.mp4'), 'Wide take', undefined, WIDE, WIDE_DURATION),
+    ]
     const ids: string[] = []
     for (const fixture of fixtures) {
       const artifact = await engine.artifacts.create({ kind: 'video', label: fixture.label })
@@ -156,10 +172,10 @@ describe('graphics editor in the composer', () => {
         const current = await engine.metadata.artifacts.read<Record<string, unknown>>(artifact.value.artifactId, 'original')
         await engine.metadata.artifacts.write(artifact.value.artifactId, 'original', { ...(current.ok ? current.value : {}), ...fixture.original })
       }
-      await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, DURATION))
+      await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, fixture.duration))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId, thirdId] = ids
+    ;[sourceId, secondId, thirdId, squareId, wideId] = ids
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
     if (!logo.ok) throw new Error(logo.error.message)
     logoId = logo.value.artifactId
@@ -172,6 +188,8 @@ describe('graphics editor in the composer', () => {
     const thirdCell = engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 2 }, outputArtifactId: thirdId })
     thirdCellId = thirdCell.id
     await engine.notebooks.insertCell(notebook.id, thirdCell)
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 3 }, outputArtifactId: squareId }))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 4 }, outputArtifactId: wideId }))
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
@@ -184,7 +202,7 @@ describe('graphics editor in the composer', () => {
     client = new Client({ name: 'graphics-ui', version: '1' }, { capabilities: {}, supportedProtocolVersions: ['2026-07-28'], versionNegotiation: { mode: { pin: '2026-07-28' } } })
     await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`)))
     const vitePort = await availablePort()
-    const appUrl = `http://127.0.0.1:${vitePort}`
+    appUrl = `http://127.0.0.1:${vitePort}`
     vite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], { ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0' })
     await waitForHttp(appUrl, vite, 200)
     browser = await chromium.launch({ headless: true })
@@ -318,7 +336,7 @@ describe('graphics editor in the composer', () => {
     await expect.poll(async () => (await read(secondId)).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
     await expect.poll(async () => (await read(secondId)).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(before)
     expect((await read(secondId)).saved).toBe(false)
-    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(5)
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(7)
     expect(errors).toEqual([])
   })
 
@@ -482,5 +500,253 @@ describe('graphics editor in the composer', () => {
       await page.unroute('**/mcp')
     }
     expect(errors).toEqual([])
+  })
+
+  const layerBox = (name: string) => sheet().locator(`.graphics-layer-box[aria-label="Select ${name}"]`)
+  const boxOf = async (locator: Locator) => parseBox(await locator.getAttribute('data-box'))
+  const centreOf = (box: Box): Point => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+  const undoButton = () => sheet().getByRole('button', { name: 'Undo', exact: true })
+  const redoButton = () => sheet().getByRole('button', { name: 'Redo', exact: true })
+  const openEditor = async (address: string) => {
+    await command(`/osg ${address}`)
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+  }
+  const closeEditor = async () => {
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+  }
+  const shownBox = async (locator: Locator) => {
+    await expect.poll(async () => (await boxOf(locator)).width, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
+    return boxOf(locator)
+  }
+  async function stage(size: Size) {
+    const overlay = (await sheet().locator('.graphics-overlay').boundingBox())!
+    const scale = size.width / overlay.width
+    return { scale, toScreen: (point: Point): Point => ({ x: overlay.x + point.x / scale, y: overlay.y + point.y / scale }) }
+  }
+  async function pointerDrag(from: Point, to: Point, free: boolean): Promise<string[]> {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    if (free) await page.keyboard.down('Alt')
+    await page.mouse.move(to.x, to.y, { steps: 12 })
+    const guides = await sheet().locator('.graphics-snap-guide').evaluateAll((nodes) => nodes.map((node) => `${(node as HTMLElement).dataset.axis}:${(node as HTMLElement).dataset.at}`))
+    await page.mouse.up()
+    if (free) await page.keyboard.up('Alt')
+    return guides
+  }
+  async function dragLayerTo(locator: Locator, size: Size, target: Point, free: boolean) {
+    const { scale, toScreen } = await stage(size)
+    const guides = await pointerDrag(toScreen(centreOf(await boxOf(locator))), toScreen(target), free)
+    return { scale, guides }
+  }
+  async function dragHandle(handle: string, by: Point) {
+    const point = (await sheet().locator(`.graphics-handle[data-handle="${handle}"]`).boundingBox())!
+    const from = { x: point.x + point.width / 2, y: point.y + point.height / 2 }
+    await pointerDrag(from, { x: from.x + by.x, y: from.y + by.y }, false)
+  }
+
+  it('drags a layer to where the pointer goes on 9:16, 1:1 and 16:9 videos, one undo step per drag, and keeps it after a reload', async () => {
+    const cases = [
+      { address: '@a1', assetId: sourceId, size: PORTRAIT, layer: 'Image' },
+      { address: '@a4', assetId: squareId, size: SQUARE, layer: 'Handle' },
+      { address: '@a5', assetId: wideId, size: WIDE, layer: 'Handle' },
+    ]
+    const placed: Array<{ address: string; layerId: string; box: Box }> = []
+    for (const entry of cases) {
+      await openEditor(entry.address)
+      const locator = layerBox(entry.layer)
+      const before = await shownBox(locator)
+      const layerId = (await locator.getAttribute('data-layer-id'))!
+      const stored = (await read(entry.assetId)).document.layers.find((layer) => layer.id === layerId)!.position
+      const target = { x: Math.round(entry.size.width * 0.3), y: Math.round(entry.size.height * 0.62) }
+      const { scale, guides } = await dragLayerTo(locator, entry.size, target, true)
+      expect(guides).toEqual([])
+      const tolerance = Math.max(2, scale * 1.5)
+      await expect.poll(async () => Math.abs(centreOf(await boxOf(locator)).x - target.x), { timeout: testBudget(15_000) }).toBeLessThanOrEqual(tolerance)
+      const after = await boxOf(locator)
+      expect(Math.abs(centreOf(after).y - target.y)).toBeLessThanOrEqual(tolerance)
+      expect(after.width).toBe(before.width)
+      await saved()
+      const moved = (await read(entry.assetId)).document.layers.find((layer) => layer.id === layerId)!.position
+      expect(moved).toMatchObject({ anchor: stored!.anchor, space: stored!.space })
+      expect(moved).not.toEqual(stored)
+      await undoButton().click()
+      await expect.poll(() => boxOf(locator), { timeout: testBudget(15_000) }).toEqual(before)
+      await redoButton().click()
+      await expect.poll(() => boxOf(locator), { timeout: testBudget(15_000) }).toEqual(after)
+      await saved()
+      placed.push({ address: entry.address, layerId, box: after })
+      await closeEditor()
+    }
+    await page.reload()
+    for (const entry of placed) {
+      await openEditor(entry.address)
+      await expect.poll(() => boxOf(sheet().locator(`.graphics-layer-box[data-layer-id="${entry.layerId}"]`)), { timeout: testBudget(15_000) }).toEqual(entry.box)
+      await closeEditor()
+    }
+    expect(errors).toEqual([])
+  })
+
+  it('snaps to the centre line near it unless Alt is held, resizes with handles and nudges from the keyboard, each one undo step', async () => {
+    await openEditor('@a4')
+    const handle = layerBox('Handle')
+    await shownBox(handle)
+    const near = { x: SQUARE.width / 2 + 5, y: Math.round(SQUARE.height * 0.3) }
+    const snapped = await dragLayerTo(handle, SQUARE, near, false)
+    expect(snapped.guides).toEqual([`x:${SQUARE.width / 2}`])
+    await expect.poll(async () => centreOf(await boxOf(handle)).x, { timeout: testBudget(15_000) }).toBe(SQUARE.width / 2)
+    await saved()
+    const free = await dragLayerTo(handle, SQUARE, { x: SQUARE.width / 2 + 5, y: Math.round(SQUARE.height * 0.32) }, true)
+    expect(free.guides).toEqual([])
+    await expect.poll(async () => Math.abs(centreOf(await boxOf(handle)).x - (SQUARE.width / 2 + 5)), { timeout: testBudget(15_000) }).toBeLessThanOrEqual(Math.max(2, free.scale * 1.5))
+    await saved()
+
+    const placed = await boxOf(handle)
+    await handle.focus()
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(async () => (await boxOf(handle)).x, { timeout: testBudget(15_000) }).toBe(placed.x + 4)
+    await page.keyboard.press('Shift+ArrowDown')
+    await expect.poll(async () => (await boxOf(handle)).y, { timeout: testBudget(15_000) }).toBe(placed.y + 40)
+    await page.keyboard.press('Control+z')
+    await expect.poll(async () => (await boxOf(handle)).y, { timeout: testBudget(15_000) }).toBe(placed.y)
+    expect((await boxOf(handle)).x).toBe(placed.x + 4)
+    await page.keyboard.press('Control+Shift+z')
+    await expect.poll(async () => (await boxOf(handle)).y, { timeout: testBudget(15_000) }).toBe(placed.y + 40)
+    const count = async () => (await read(squareId)).document.layers.length
+    await saved()
+    const layers = await count()
+    await handle.focus()
+    await page.keyboard.press('Control+d')
+    await expect.poll(() => sheet().getByRole('region', { name: 'Layers' }).locator('.graphics-layer-row').count(), { timeout: testBudget(15_000) }).toBe(layers + 1)
+    await sheet().locator('.graphics-layer-box[data-selected="true"]').focus()
+    await page.keyboard.press('Delete')
+    await expect.poll(() => sheet().getByRole('region', { name: 'Layers' }).locator('.graphics-layer-row').count(), { timeout: testBudget(15_000) }).toBe(layers)
+    await saved()
+    expect(await count()).toBe(layers)
+    await closeEditor()
+
+    await openEditor('@a1')
+    const image = layerBox('Image')
+    await image.click()
+    const small = await shownBox(image)
+    await dragHandle('size', { x: 30, y: 15 })
+    await expect.poll(async () => (await boxOf(image)).width, { timeout: testBudget(15_000) }).toBeGreaterThan(small.width)
+    const grown = await boxOf(image)
+    expect([grown.x, grown.y]).toEqual([small.x, small.y])
+    await saved()
+    await undoButton().click()
+    await expect.poll(() => boxOf(image), { timeout: testBudget(15_000) }).toEqual(small)
+    await saved()
+    await closeEditor()
+
+    await openEditor('@a3')
+    const title = layerBox('Title')
+    await title.click()
+    const wide = await shownBox(title)
+    const widthBefore = (await read(thirdId)).document.layers.find((layer) => layer.name === 'Title')!
+    await dragHandle('width-end', { x: -60, y: 0 })
+    await expect.poll(async () => (await boxOf(title)).width, { timeout: testBudget(15_000) }).toBeLessThan(wide.width)
+    await saved()
+    const narrowed = (await read(thirdId)).document.layers.find((layer) => layer.name === 'Title') as Layer & { width?: number }
+    expect(narrowed.width).toBeLessThan((widthBefore as Layer & { width?: number }).width!)
+    await undoButton().click()
+    await expect.poll(() => boxOf(title), { timeout: testBudget(15_000) }).toEqual(wide)
+    await sheet().getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Select layer Shade', exact: true }).click()
+    const shade = sheet().locator('.graphics-scrim-box')
+    const low = parseBox(await shade.getAttribute('data-box'))
+    await dragHandle('height', { x: 0, y: -30 })
+    await expect.poll(async () => parseBox(await shade.getAttribute('data-box')).y, { timeout: testBudget(15_000) }).toBeLessThan(low.y)
+    await saved()
+    await undoButton().click()
+    await expect.poll(async () => parseBox(await shade.getAttribute('data-box')).y, { timeout: testBudget(15_000) }).toBe(low.y)
+    await saved()
+    await closeEditor()
+    expect(errors).toEqual([])
+  })
+
+  it('shows a layer limited to the last 3 seconds only then, in the preview and in the render', async () => {
+    await openEditor('@a5')
+    await field('Headline').fill('Late title')
+    const layers = sheet().getByRole('region', { name: 'Layers' })
+    await layers.getByRole('button', { name: 'Hide Handle', exact: true }).click()
+    await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    const timing = sheet().getByRole('region', { name: 'Timing' })
+    await timing.getByRole('group', { name: 'Show', exact: true }).getByRole('button', { name: 'Last', exact: true }).click()
+    await expect.poll(() => timing.getByLabel('Last seconds', { exact: true }).inputValue(), { timeout: testBudget(15_000) }).toBe('3')
+    const titleId = (await layerBox('Title').getAttribute('data-layer-id'))!
+    await expect.poll(() => sheet().locator(`.graphics-timing-row[data-layer-id="${titleId}"]`).getAttribute('data-window'), { timeout: testBudget(15_000) }).toBe('3,6')
+    expect(await timing.locator('.graphics-timing-summary').textContent()).toBe('Shows 3–6 s of 6 s')
+    await timing.getByLabel('Last seconds', { exact: true }).fill('3')
+    await timing.getByLabel('Last seconds', { exact: true }).press('Enter')
+    expect(await sheet().isVisible()).toBe(true)
+    await saved()
+    expect((await read(wideId)).document.layers.find((layer) => layer.id === titleId)).toMatchObject({ timing: { start: null, end: null, tail: 3 } })
+
+    await layers.getByRole('button', { name: 'Select layer Shade', exact: true }).click()
+    const seek = sheet().getByLabel('Playback position', { exact: true })
+    await seek.fill('30')
+    await expect.poll(() => sheet().locator('.graphics-time').textContent(), { timeout: testBudget(15_000) }).toContain('0:01.00')
+    await expect.poll(() => layerBox('Title').count(), { timeout: testBudget(15_000) }).toBe(0)
+    await seek.fill('135')
+    await expect.poll(() => layerBox('Title').count(), { timeout: testBudget(15_000) }).toBe(1)
+    const previewed = await shownBox(layerBox('Title'))
+    await shot('graphics-last-three-seconds')
+
+    await sheet().getByRole('button', { name: /^Render/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 30_000 })
+    expect(renders.at(-1)).toMatchObject({ op: 'render', output: 'new', asset_id: wideId })
+    await expect.poll(async () => (await read(wideId)).render?.status, { timeout: testBudget(180_000) }).toBe('completed')
+    const output = (await read(wideId)).render!.output_asset_id
+    const tolerance = Math.min(WIDE.width, WIDE.height) * 0.01
+    expect(inkBox(await frame(output, 1, WIDE), previewed, tolerance, WIDE).count).toBe(0)
+    expect(inkBox(await frame(output, 2.9, WIDE), previewed, tolerance, WIDE).count).toBe(0)
+    const late = inkBox(await frame(output, 4.5, WIDE), previewed, tolerance, WIDE)
+    expect(late.count).toBeGreaterThan(300)
+    expect(late.x).toBeGreaterThanOrEqual(previewed.x - tolerance)
+    expect(late.x + late.width).toBeLessThanOrEqual(previewed.x + previewed.width + tolerance)
+    expect(errors).toEqual([])
+  })
+
+  it('stacks the editor at 390 px wide and moves a layer with a touch drag', async () => {
+    const context = await browser!.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })
+    const phone = await context.newPage()
+    const phoneErrors: string[] = []
+    phone.on('pageerror', (error) => phoneErrors.push(error.message))
+    try {
+      await phone.addInitScript((id) => localStorage.setItem('videobook.active-book', id), bookId)
+      await phone.goto(appUrl)
+      const input = phone.getByLabel('Videobook command input', { exact: true })
+      await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
+      await input.fill('/osg @a4')
+      await phone.getByRole('button', { name: 'Send command', exact: true }).click()
+      const editor = phone.getByRole('dialog', { name: 'Graphics editor', exact: true })
+      await editor.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(() => editor.getByLabel('Headline', { exact: true }).isEnabled(), { timeout: 30_000 }).toBe(true)
+      expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+      const preview = (await editor.locator('.graphics-preview').boundingBox())!
+      const controls = (await editor.locator('.graphics-controls').boundingBox())!
+      expect(controls.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1)
+      expect(controls.height).toBeGreaterThan(200)
+      const locator = editor.locator('.graphics-layer-box[aria-label="Select Handle"]')
+      await expect.poll(async () => parseBox(await locator.getAttribute('data-box')).width, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
+      await locator.scrollIntoViewIfNeeded()
+      const before = parseBox(await locator.getAttribute('data-box'))
+      const overlay = (await editor.locator('.graphics-overlay').boundingBox())!
+      const scale = SQUARE.width / overlay.width
+      const from = { x: overlay.x + centreOf(before).x / scale, y: overlay.y + centreOf(before).y / scale }
+      const cdp = await context.newCDPSession(phone)
+      const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', point: Point | null) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: point ? [{ x: point.x, y: point.y, id: 1 }] : [] })
+      await touch('touchStart', from)
+      for (let step = 1; step <= 10; step += 1) await touch('touchMove', { x: from.x, y: from.y - 4 * step })
+      await touch('touchEnd', null)
+      await expect.poll(async () => before.y - parseBox(await locator.getAttribute('data-box')).y, { timeout: testBudget(15_000) }).toBeGreaterThan(40 * scale - Math.max(2, scale * 1.5))
+      const after = parseBox(await locator.getAttribute('data-box'))
+      expect(Math.abs(before.y - after.y - 40 * scale)).toBeLessThanOrEqual(Math.max(2, scale * 1.5))
+      expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+      expect(phoneErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
   })
 })

@@ -4,7 +4,7 @@ import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { LIGHTNING_WATERMARK_PROFILE, X_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
 import type { GraphicsLayerLayout, GraphicsMeasure, GraphicsRect, GraphicsTextItemLayout, GraphicsTextLayout } from "./layout.js";
-import { graphicsSpaceRect, layoutGraphics } from "./layout.js";
+import { graphicsPlaceBox, graphicsPositionForBox, graphicsSpaceRect, layoutGraphics } from "./layout.js";
 import type {
   GraphicsAnchor,
   GraphicsDocument,
@@ -128,6 +128,42 @@ describe("graphicsSpaceRect", () => {
     expect(graphicsSpaceRect({ width: 1080, height: 1350 }, "safe")).toEqual({ x: 54, y: 81, width: 940, height: 1107 });
     expect(graphicsSpaceRect({ width: 1440, height: 1080 }, "safe")).toEqual({ x: 72, y: 65, width: 1296, height: 907 });
     expect(() => graphicsSpaceRect({ width: 0, height: 1080 }, "safe")).toThrow(/Frame sides/u);
+  });
+});
+
+describe("graphicsPositionForBox", () => {
+  const SIZE = { width: 300, height: 120 };
+  const ANCHORS = Object.keys(GRAPHICS_ANCHOR_POINTS) as GraphicsAnchor[];
+  const SPACES: GraphicsSpace[] = ["safe", "inset", "frame"];
+
+  it.each([PORTRAIT, SQUARE, LANDSCAPE])("inverts graphicsPlaceBox for every anchor and space at %j", (frame) => {
+    for (const anchor of ANCHORS) {
+      for (const space of SPACES) {
+        const target = { x: 0.37 * frame.width, y: 0.41 * frame.height, ...SIZE };
+        const position = graphicsPositionForBox(frame, { anchor, x: 0.5, y: 0.5, space }, target);
+        expect(position).toMatchObject({ anchor, space });
+        const placed = graphicsPlaceBox(frame, position, SIZE);
+        expect(Math.abs(placed.x - target.x)).toBeLessThan(0.05);
+        expect(Math.abs(placed.y - target.y)).toBeLessThan(0.05);
+      }
+    }
+  });
+
+  it("keeps a box inside its space and the anchor point where the box puts it", () => {
+    const safe = graphicsSpaceRect(PORTRAIT, "safe");
+    const corner = graphicsPositionForBox(PORTRAIT, { anchor: "bottom-left", x: 0.5, y: 0.5, space: "safe" }, { x: -500, y: 5000, ...SIZE });
+    expect(corner).toEqual({ anchor: "bottom-left", x: 0, y: 1, space: "safe" });
+    const centre = graphicsPositionForBox(PORTRAIT, { anchor: "center", x: 0, y: 0, space: "frame" }, { x: 390, y: 900, ...SIZE });
+    expect(centre).toEqual({ anchor: "center", x: 0.5, y: 0.5, space: "frame" });
+    const placed = graphicsPlaceBox(PORTRAIT, corner, SIZE);
+    expect(placed.x).toBeCloseTo(safe.x, 0);
+    expect(placed.y + placed.height).toBeCloseTo(safe.y + safe.height, 0);
+  });
+
+  it("leaves an axis alone when the box is larger than its space", () => {
+    const position = graphicsPositionForBox(SQUARE, { anchor: "top", x: 0.3, y: 0.2, space: "safe" }, { x: 10, y: 400, width: 2000, height: 100 });
+    expect(position.x).toBe(0.3);
+    expect(position.y).not.toBe(0.2);
   });
 });
 

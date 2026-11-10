@@ -1,4 +1,5 @@
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
+import type { GraphicsRect } from '../../../../server/src/graphics/layout'
 import {
   GRAPHICS_ANCHOR_POINTS,
   GRAPHICS_ANCHORS,
@@ -8,6 +9,7 @@ import {
   isGraphicsUrl,
   type GraphicsAnchor,
   type GraphicsDocument,
+  type GraphicsFrame,
   type GraphicsImageLayer,
   type GraphicsLayer,
   type GraphicsQrLayer,
@@ -15,8 +17,10 @@ import {
   type GraphicsSpace,
 } from '../../../../server/src/graphics/model'
 import { graphicsPercent, type GraphicsImageChoice, type GraphicsRead } from '@/videobook/graphics-model'
+import { graphicsRepositionEdits } from '@/videobook/graphics-pointer'
 import { CheckedText, Choice, Color, Range, Section, Select } from './GraphicsFields'
 import { GraphicsTextInspector } from './GraphicsTextInspector'
+import { GraphicsTimingSection } from './GraphicsTiming'
 
 type Edit = (edits: GraphicsEdit[], coalesceKey?: string | null) => boolean
 
@@ -25,6 +29,8 @@ type InspectorProps = {
   layer: GraphicsLayer
   read: GraphicsRead
   imageChoices: readonly GraphicsImageChoice[]
+  box: GraphicsRect | null
+  playhead: () => number
   disabled: boolean
   onEdit: Edit
 }
@@ -45,6 +51,11 @@ const ANCHOR_NAMES: Record<GraphicsAnchor, string> = {
   'bottom-right': 'bottom right',
 }
 
+const ANCHOR_OPTIONS: ReadonlyArray<{ value: GraphicsAnchor; label: string }> = GRAPHICS_ANCHORS.map((anchor) => ({
+  value: anchor,
+  label: ANCHOR_NAMES[anchor].charAt(0).toUpperCase() + ANCHOR_NAMES[anchor].slice(1),
+}))
+
 const SPACE_OPTIONS: ReadonlyArray<{ value: GraphicsSpace; label: string }> = [
   { value: 'safe', label: 'Safe area' },
   { value: 'inset', label: 'Frame, inset 2%' },
@@ -53,7 +64,7 @@ const SPACE_OPTIONS: ReadonlyArray<{ value: GraphicsSpace; label: string }> = [
 
 const KIND_TITLES: Record<GraphicsLayer['kind'], string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade' }
 
-function Place({ layer, disabled, onEdit }: { layer: PlacedLayer; disabled: boolean; onEdit: Edit }) {
+function Place({ layer, frame, box, disabled, onEdit }: { layer: PlacedLayer; frame: GraphicsFrame; box: GraphicsRect | null; disabled: boolean; onEdit: Edit }) {
   const { position } = layer
   const place = (anchor: GraphicsAnchor) => {
     const point = GRAPHICS_ANCHOR_POINTS[anchor]
@@ -79,14 +90,19 @@ function Place({ layer, disabled, onEdit }: { layer: PlacedLayer; disabled: bool
             )
           })}
         </div>
-        <Select label="Within" value={position.space} options={SPACE_OPTIONS} disabled={disabled}
-          onChange={(space) => onEdit([{ op: 'set_position', layer_id: layer.id, position: { space } }])} />
+        <div className="graphics-place-fields">
+          <Select label="Anchor" value={position.anchor} options={ANCHOR_OPTIONS} disabled={disabled}
+            onChange={(anchor) => onEdit(graphicsRepositionEdits(frame, layer, box, { anchor }))} />
+          <Select label="Within" value={position.space} options={SPACE_OPTIONS} disabled={disabled}
+            onChange={(space) => onEdit(graphicsRepositionEdits(frame, layer, box, { space }))} />
+        </div>
       </div>
+      <p className="graphics-muted">Drag the layer in the preview, or nudge it with the arrow keys. The anchor stays put when the layer grows.</p>
     </Section>
   )
 }
 
-function ImageFields({ layer, read, imageChoices, disabled, onEdit }: Omit<InspectorProps, 'layer' | 'document'> & { layer: GraphicsImageLayer }) {
+function ImageFields({ layer, read, imageChoices, disabled, onEdit }: Pick<InspectorProps, 'read' | 'imageChoices' | 'disabled' | 'onEdit'> & { layer: GraphicsImageLayer }) {
   const listed = imageChoices.some((choice) => choice.artifactId === layer.artifactId)
   const options = [
     ...(listed ? [] : [{ value: layer.artifactId, label: read.images[layer.artifactId]?.label ?? 'Current image' }]),
@@ -102,7 +118,7 @@ function ImageFields({ layer, read, imageChoices, disabled, onEdit }: Omit<Inspe
   )
 }
 
-function QrFields({ layer, read, disabled, onEdit }: Omit<InspectorProps, 'layer' | 'document' | 'imageChoices'> & { layer: GraphicsQrLayer }) {
+function QrFields({ layer, read, disabled, onEdit }: Pick<InspectorProps, 'read' | 'disabled' | 'onEdit'> & { layer: GraphicsQrLayer }) {
   const set = (qr: QrPatch, coalesce: string | null = null) => onEdit([{ op: 'set_qr', layer_id: layer.id, qr }], coalesce)
   const profileUrl = read.fill.profile_url
   const useLink = (source: 'profile' | 'custom') => set(source === 'profile' ? { slot: 'profile', ...(profileUrl ? { url: profileUrl } : {}) } : { slot: null })
@@ -143,7 +159,7 @@ function ScrimFields({ layer, disabled, onEdit }: { layer: GraphicsScrimLayer; d
 function KindFields(props: InspectorProps) {
   const { layer, disabled, onEdit } = props
   if (layer.kind === 'text') return <GraphicsTextInspector document={props.document} layer={layer} disabled={disabled} onEdit={onEdit} />
-  if (layer.kind === 'image') return <ImageFields {...props} layer={layer} />
+  if (layer.kind === 'image') return <ImageFields read={props.read} imageChoices={props.imageChoices} disabled={disabled} onEdit={onEdit} layer={layer} />
   if (layer.kind === 'qr') return <QrFields read={props.read} layer={layer} disabled={disabled} onEdit={onEdit} />
   return <ScrimFields layer={layer} disabled={disabled} onEdit={onEdit} />
 }
@@ -157,8 +173,9 @@ export function GraphicsInspector(props: InspectorProps) {
           onChange={(opacity) => onEdit([{ op: 'set_layer', layer_id: layer.id, layer: { opacity } }], `${layer.id}:opacity`)} />
         {!layer.visible && <p className="graphics-muted">This layer is hidden, so it is not drawn or rendered.</p>}
       </Section>
-      {layer.kind !== 'scrim' && <Place layer={layer} disabled={disabled} onEdit={onEdit} />}
+      {layer.kind !== 'scrim' && <Place layer={layer} frame={props.read.source} box={props.box} disabled={disabled} onEdit={onEdit} />}
       <KindFields {...props} />
+      <GraphicsTimingSection layer={layer} durationSeconds={props.read.source.duration_seconds} playhead={props.playhead} disabled={disabled} onEdit={onEdit} />
     </div>
   )
 }

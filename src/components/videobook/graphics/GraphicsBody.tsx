@@ -7,11 +7,14 @@ import {
   graphicsBurnedNotice,
   graphicsImageChoices,
   graphicsLayoutWarnings,
+  graphicsNextLayerId,
   graphicsOverlayImages,
+  graphicsSelectionAfterRemove,
   type GraphicsEditorAsset,
   type GraphicsEditorMention,
   type GraphicsStarterChoice,
 } from '@/videobook/graphics-model'
+import { graphicsNudgePosition, graphicsShortcut, type GraphicsPoint } from '@/videobook/graphics-pointer'
 import { GraphicsInspector } from './GraphicsInspector'
 import { GraphicsLayers } from './GraphicsLayers'
 import { GraphicsPreview } from './GraphicsPreview'
@@ -53,6 +56,14 @@ function StatusBanners({ editor, onOpenSource }: { editor: GraphicsEditor; onOpe
   )
 }
 
+function isTextEntry(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
+}
+
+function isStage(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.classList.contains('graphics-stage')
+}
+
 export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
   editor: GraphicsEditor
   assets: readonly GraphicsEditorAsset[]
@@ -61,29 +72,61 @@ export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
 }) {
   const { state } = editor
   const playerRef = useRef<PlayerRef | null>(null)
+  const nudges = useRef(0)
   const [layout, setLayout] = useState<GraphicsLayerLayout[] | null>(null)
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
   const [guides, setGuides] = useState(true)
+  const [snapping, setSnapping] = useState(true)
   const read = state.read
   const document = state.document
   const images = useMemo(() => graphicsOverlayImages(read), [read])
   const imageChoices = useMemo(() => graphicsImageChoices(assets, mentions), [assets, mentions])
   const selectedLayer = document?.layers.find((layer) => layer.id === selectedLayerId) ?? null
+  const selectedBox = layout?.find((entry) => entry.layerId === selectedLayer?.id)?.box ?? null
   const warnings = useMemo(() => (document ? graphicsLayoutWarnings(document, layout) : []), [document, layout])
   const source = useMemo(() => (read ? { width: read.source.width, height: read.source.height, durationSeconds: read.source.duration_seconds, fps: read.source.fps } : null), [read])
   const editable = document !== null && state.save !== 'conflict' && !state.rendering
   const onLayout = useCallback((next: GraphicsLayerLayout[]) => setLayout(next), [])
   const edit = useCallback((edits: GraphicsEdit[], coalesce: string | null = null) => editor.edit(edits, coalesce), [editor])
+  const playhead = useCallback(() => (playerRef.current?.getCurrentFrame() ?? 0) / (source?.fps || 1), [source?.fps])
   const applyStarter = useCallback((starter: GraphicsStarterChoice) => {
     editor.edit([{ op: 'apply_template', template: starter.document }])
   }, [editor])
 
+  const nudge = (delta: GraphicsPoint, repeat: boolean) => {
+    if (!source || !selectedLayer || selectedLayer.kind === 'scrim' || !selectedBox) return
+    if (!repeat) nudges.current += 1
+    const position = graphicsNudgePosition(source, selectedLayer.position, selectedBox, delta)
+    edit([{ op: 'set_position', layer_id: selectedLayer.id, position }], `nudge:${selectedLayer.id}:${nudges.current}`)
+  }
+
+  const removeSelected = () => {
+    if (!document || !selectedLayer) return
+    const next = graphicsSelectionAfterRemove(document, selectedLayer.id)
+    if (edit([{ op: 'remove_layer', layer_id: selectedLayer.id }])) setSelectedLayerId(next)
+  }
+
+  const duplicateSelected = () => {
+    if (!document || !selectedLayer) return
+    const copyId = graphicsNextLayerId(document)
+    if (edit([{ op: 'duplicate_layer', layer_id: selectedLayer.id }])) setSelectedLayerId(copyId)
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
-    if ((event.target as HTMLElement).closest('input, textarea, select')) return
+    if (event.defaultPrevented || !source || isTextEntry(event.target)) return
+    const shortcut = graphicsShortcut(event, source)
+    if (!shortcut) return
+    if (shortcut.kind === 'undo' || shortcut.kind === 'redo') {
+      event.preventDefault()
+      if (shortcut.kind === 'undo') editor.undo()
+      else editor.redo()
+      return
+    }
+    if (!selectedLayer || !editable || (shortcut.kind === 'nudge' && isStage(event.target))) return
     event.preventDefault()
-    if (event.shiftKey) editor.redo()
-    else editor.undo()
+    if (shortcut.kind === 'nudge') nudge(shortcut.delta, event.repeat)
+    else if (shortcut.kind === 'delete') removeSelected()
+    else duplicateSelected()
   }
 
   return (
@@ -98,9 +141,12 @@ export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
           layout={layout}
           playerRef={playerRef}
           guides={guides}
+          snapping={snapping}
+          editable={editable}
           selectedLayerId={selectedLayerId}
           onLayout={onLayout}
           onSelectLayer={setSelectedLayerId}
+          onEdit={edit}
         />
       )}
       {document && read && (
@@ -118,12 +164,30 @@ export function GraphicsBody({ editor, assets, mentions, onOpenSource }: {
             onSelect={setSelectedLayerId}
           />
           {selectedLayer
-            ? <GraphicsInspector key={selectedLayer.id} document={document} layer={selectedLayer} read={read} imageChoices={imageChoices} disabled={!editable} onEdit={edit} />
+            ? (
+              <GraphicsInspector
+                key={selectedLayer.id}
+                document={document}
+                layer={selectedLayer}
+                read={read}
+                imageChoices={imageChoices}
+                box={selectedBox}
+                playhead={playhead}
+                disabled={!editable}
+                onEdit={edit}
+              />
+            )
             : <p className="graphics-muted">Select a layer in the list or the preview to edit it.</p>}
-          <label className="graphics-toggle">
-            <input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} />
-            Safe-area guides
-          </label>
+          <div className="graphics-toggles">
+            <label className="graphics-toggle">
+              <input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} />
+              Safe-area guides
+            </label>
+            <label className="graphics-toggle" title="Hold Alt (Option), Ctrl or Command while dragging to move freely once.">
+              <input type="checkbox" checked={snapping} onChange={(event) => setSnapping(event.target.checked)} />
+              Snap to guides
+            </label>
+          </div>
         </div>
       )}
     </div>

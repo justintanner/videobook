@@ -95,6 +95,7 @@ const ACCENT_HEIGHT_SCALE: Record<Exclude<GraphicsAccent, "none">, number> = { u
 const QR_TILE_PADDING = 0.1;
 const QR_TILE_RADIUS = 1 / 12;
 const SIZE_EPSILON = 1e-6;
+const POSITION_SCALE = 100_000;
 const SPACE_RUN = /([ \t]*)([^ \t]+)/gu;
 const ALIGN_FRACTIONS: Record<GraphicsTextLayer["align"], number> = { left: 0, center: 0.5, right: 1 };
 
@@ -158,6 +159,27 @@ function placeBox(space: GraphicsRect, position: GraphicsPosition, size: Size): 
     y: alignedStart(space.y, space.height, position.y, anchor.y, size.height),
     width: size.width,
     height: size.height,
+  };
+}
+
+export function graphicsPlaceBox(frame: GraphicsFrame, position: GraphicsPosition, size: { width: number; height: number }): GraphicsRect {
+  return placeBox(spaceRect(graphicsFrame(frame), position.space), position, size);
+}
+
+function anchorFraction(start: number, extent: number, at: number, anchor: number, size: number, current: number): number {
+  if (!(extent > 0) || size > extent + SIZE_EPSILON) return current;
+  const placed = Math.min(Math.max(at, start), start + extent - size);
+  const fraction = Math.min(1, Math.max(0, (placed - start + anchor * size) / extent));
+  return Math.round(fraction * POSITION_SCALE) / POSITION_SCALE;
+}
+
+export function graphicsPositionForBox(frame: GraphicsFrame, position: GraphicsPosition, box: GraphicsRect): GraphicsPosition {
+  const space = spaceRect(graphicsFrame(frame), position.space);
+  const anchor = GRAPHICS_ANCHOR_POINTS[position.anchor];
+  return {
+    ...position,
+    x: anchorFraction(space.x, space.width, box.x, anchor.x, box.width, position.x),
+    y: anchorFraction(space.y, space.height, box.y, anchor.y, box.height, position.y),
   };
 }
 
