@@ -55,7 +55,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `command.notebook` | `/notebook` |  | book | none | `open_notebook` | slash, launcher | dialog | none |
 | `command.open` | `/open` |  | book | asset: asset_id | `open_asset` | slash, launcher | dialog | none |
 | `command.original` | `/original` |  | book | asset: asset_id | `viewer_set_original` | slash, launcher | dialog | none |
-| `command.overlay` | `/overlay` | /osg | book | asset: asset_id | `open_osg` | slash, launcher | dialog | none |
+| `command.overlay` | `/overlay` | /osg, /graphics | book | asset: asset_id | `open_osg` | slash, launcher | dialog | none |
 | `command.overwrite` | `/overwrite` |  | sequence | asset: asset_id | `/overwrite` | slash, launcher | composer | none |
 | `command.play` | `/play` |  | book | none | `open_slot_player` | slash, launcher | dialog | none |
 | `command.portrait` | `/portrait` |  | book | asset: asset_id | `viewer_set_portrait` | slash, launcher | dialog | none |

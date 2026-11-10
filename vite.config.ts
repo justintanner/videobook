@@ -24,6 +24,14 @@ function clientManualChunk(id: string): string | undefined {
   if (id.includes('/src/components/videobook/subtitles/SubtitlesBody') || id.includes('/src/components/videobook/subtitles/SubtitlesPreview') || id.includes('/server/src/remotion/captions/')) {
     return 'subtitles-editor'
   }
+  if (
+    id.includes('/src/components/videobook/graphics/GraphicsBody')
+    || id.includes('/src/components/videobook/graphics/GraphicsPreview')
+    || id.includes('/src/components/videobook/graphics/GraphicsQuickFields')
+    || id.includes('/server/src/remotion/graphics/')
+  ) {
+    return 'graphics-editor'
+  }
   if (id.includes('/src/components/videobook/confirm/bodies/')) {
     return 'confirm-bodies'
   }

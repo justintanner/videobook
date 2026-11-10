@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
+import { useMemo, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { activeCaptionBlock, CAPTION_SAFE_ZONES, type CaptionRegionFrame } from '../../../../server/src/captions/layout'
@@ -8,6 +8,7 @@ import { useCaptionLayout } from '../../../../server/src/remotion/captions/capti
 import { captionDurationInFrames } from '../../../../server/src/remotion/captions/composition-meta'
 import { CAPTION_FONT_URLS } from '@/remotion/caption-font-urls'
 import { formatCaptionTime } from '@/videobook/subtitles-model'
+import { usePlayerFrame, useStageSize } from '../preview-stage'
 
 export type SubtitlePositionTarget = 'all' | 'phrase'
 
@@ -26,66 +27,6 @@ type SubtitlesPreviewProps = {
 
 type Drag = { pointerId: number; startY: number; startCenter: number; height: number; phraseId: string }
 
-function useFrame(playerRef: RefObject<PlayerRef | null>, onFrameChange: (frame: number) => void) {
-  const [frame, setFrame] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const callback = useRef(onFrameChange)
-  useLayoutEffect(() => {
-    callback.current = onFrameChange
-  }, [onFrameChange])
-  useEffect(() => {
-    const player = playerRef.current
-    if (!player) return
-    const onFrame = (event: { detail: { frame: number } }) => {
-      setFrame(event.detail.frame)
-      callback.current(event.detail.frame)
-    }
-    const onPlay = () => setPlaying(true)
-    const onPause = () => setPlaying(false)
-    const onMute = (event: { detail: { isMuted: boolean } }) => setMuted(event.detail.isMuted)
-    player.addEventListener('frameupdate', onFrame)
-    player.addEventListener('seeked', onFrame)
-    player.addEventListener('play', onPlay)
-    player.addEventListener('pause', onPause)
-    player.addEventListener('mutechange', onMute)
-    return () => {
-      player.removeEventListener('frameupdate', onFrame)
-      player.removeEventListener('seeked', onFrame)
-      player.removeEventListener('play', onPlay)
-      player.removeEventListener('pause', onPause)
-      player.removeEventListener('mutechange', onMute)
-    }
-  }, [playerRef])
-  return { frame, playing, muted }
-}
-
-const TRANSPORT_HEIGHT = 34
-const DESKTOP_PREVIEW_FRACTION = 0.42
-const STACKED_BREAKPOINT = 900
-
-function useStageSize(containerRef: RefObject<HTMLDivElement | null>, aspect: { width: number; height: number }) {
-  const [box, setBox] = useState({ width: 0, height: 0, stacked: false })
-  useEffect(() => {
-    const element = containerRef.current
-    const grid = element?.closest<HTMLElement>('.confirm-subtitles')
-    if (!element || !grid) return
-    const measure = () => {
-      const stacked = grid.clientWidth < STACKED_BREAKPOINT
-      const availableHeight = Math.max(80, element.clientHeight - TRANSPORT_HEIGHT)
-      const availableWidth = stacked ? element.clientWidth : grid.clientWidth * DESKTOP_PREVIEW_FRACTION
-      const scale = Math.min(availableWidth / aspect.width, availableHeight / aspect.height)
-      const next = { width: Math.floor(aspect.width * scale), height: Math.floor(aspect.height * scale), stacked }
-      setBox((current) => (current.width === next.width && current.height === next.height && current.stacked === next.stacked ? current : next))
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    observer.observe(grid)
-    return () => observer.disconnect()
-  }, [aspect.height, aspect.width, containerRef])
-  return box
-}
-
 function percent(value: number): string {
   return `${(value * 100).toFixed(3)}%`
 }
@@ -95,7 +36,7 @@ export function SubtitlesPreview(props: SubtitlesPreviewProps) {
   const size = CAPTION_ASPECT_SIZES[document.aspect]
   const fps = document.source.fps
   const durationInFrames = captionDurationInFrames(source.durationSeconds, fps)
-  const { frame, playing, muted } = useFrame(playerRef, props.onFrameChange)
+  const { frame, playing, muted } = usePlayerFrame(playerRef, props.onFrameChange)
   const time = frame / fps
   const layout = useCaptionLayout(document, regions, CAPTION_FONT_URLS)
   const block = activeCaptionBlock(layout.blocks, time)
@@ -103,7 +44,7 @@ export function SubtitlesPreview(props: SubtitlesPreviewProps) {
   const dragRef = useRef<Drag | null>(null)
   const zone = CAPTION_SAFE_ZONES[document.aspect]
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const stage = useStageSize(containerRef, size)
+  const stage = useStageSize(containerRef, size, '.confirm-subtitles')
 
   const inputProps = useMemo<CaptionCompositionProps>(() => ({
     videoSrc: mediaUrl,

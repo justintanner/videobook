@@ -17,6 +17,20 @@ and the package uses [Semantic Versioning](https://semver.org/).
   window with its fades. A retry with the same `request_id` returns the same
   render, and `get` reports the latest render and any graphics already burned
   into the video.
+- `/overlay @a1` (also `/osg` and `/graphics`) opens a graphics editor in the
+  composer: a live preview of the video with its graphics, quick fields for
+  the headline, second line and credit (the downloaded clip's credit is
+  offered), starter looks that keep the text already typed, autosave with
+  undo and redo, and Render into a new video cell or in place. A video
+  without graphics starts from the default look: the TikTok handle, a big
+  Thai title and an English line under it. `/overlay @a1 @b2` adds the image
+  as a layer at the top left of the safe area. Opening the editor on a copy
+  that already has graphics drawn in offers its source instead.
+
+### Changed
+
+- `/overlay` no longer opens the render-time overlay form. The
+  `set_video_overlay` tool still works for `render_video` outputs.
 
 ### Fixed
 

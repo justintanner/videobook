@@ -1174,6 +1174,15 @@ describe("slash command parse/normalize/dispatch", () => {
       expect(args.asset_id).toBe("a1");
       expect(args.image).toBe("b2");
     });
+
+    it("/overlay, /osg and /graphics open the graphics editor with the same arguments", () => {
+      for (const name of ["/overlay", "/osg", "/graphics"]) {
+        expect(findCommand(name).uiAction).toBe("open_osg");
+        const args = simulateParse(name, "@a1 @b2");
+        expect(args.asset_id).toBe("a1");
+        expect(args.image).toBe("b2");
+      }
+    });
   });
 
   // -----------------------------------------------------------------------

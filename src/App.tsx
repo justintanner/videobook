@@ -344,6 +344,8 @@ import { parseExportSequenceCommand } from '@/videobook/export-sequence-command'
 import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
+import { useGraphicsEditor } from '@/videobook/useGraphicsEditor'
+import { graphicsEditorTarget } from '@/videobook/graphics-model'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
   notebookFollowUpLabels,
@@ -358,6 +360,7 @@ import {
   type ContextMenuGenerationCellType,
 } from '@/videobook/notebook-selection-generation'
 import { SubtitlesSheet } from '@/components/videobook/subtitles/SubtitlesSheet'
+import { GraphicsSheet } from '@/components/videobook/graphics/GraphicsSheet'
 import {
   changedNotebookGridNodes,
   notebookCreationPlacement,
@@ -752,6 +755,7 @@ type PendingChatAction =
       remaining: number
     }
   | { kind: 'subtitles'; assetId: string }
+  | { kind: 'graphics'; assetId: string }
   | {
       kind: 'transcribe'
       assetId: string | null
@@ -1841,6 +1845,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [setMediaLibraryPicker])
 
   const subtitles = useSubtitleEditor({ bookId, ready: mcp.state === 'ready', call })
+  const graphics = useGraphicsEditor({ bookId, ready: mcp.state === 'ready', call })
   const selectCanvasCell = useCallback((cellId: string | null, chat?: ChatExecution, initialPreview?: unknown) => {
     if (chat && !chat.isCurrent()) return
     setPreviewTurnId(cellId ? chat?.id ?? null : null)
@@ -2743,11 +2748,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         .catch(() => undefined)
     }
     if (pendingChatAction?.kind === 'subtitles') subtitles.close()
+    if (pendingChatAction?.kind === 'graphics') graphics.close()
     setPendingCommandPlan(null)
     setPendingChatAction(null)
     setPendingWatermarkReview(null)
     focusCommandComposer()
-  }, [bookId, call, cancelChatReview, focusCommandComposer, pendingChatAction, subtitles])
+  }, [bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles])
   const updatePendingSpliceOverlap = useCallback((value: string) => {
     const overlap = Number(value)
     if (value.trim() === '' || !Number.isFinite(overlap) || overlap < 0) return
@@ -6397,6 +6403,24 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const presentEditorSheet = (action: PendingChatAction, chat?: ChatExecution) => {
+    presentChat(chat, () => setMediaFullscreen(null))
+    setTimelinePreview(null)
+    setMusicVideoSession(null)
+    reviewChat(chat, false, () => setPendingCommandPlan(null))
+    reviewChat(chat, false, () => setPendingWatermarkReview(null))
+    reviewChat(chat, true, () => setPendingChatAction(action))
+    setComposerDockOpen(true)
+  }
+
+  const openGraphics = (reference: string | undefined, image: string | undefined, chat?: ChatExecution): ComposerOutcome => {
+    const resolved = graphicsEditorTarget({ reference, image, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
+    if (!resolved.ok) return resolved
+    presentEditorSheet({ kind: 'graphics', assetId: resolved.target.artifactId }, chat)
+    graphics.open(resolved.target)
+    return { ok: true, message: `Graphics opened for ${resolved.target.label}` }
+  }
+
   const openSubtitles = (artifactId: string, chat?: ChatExecution): ComposerOutcome => {
     const holder = notebook?.cells.find((cell) => cell.outputArtifactId === artifactId)
     const sourceId = holder?.inputs?.sourceOperation === 'caption_video' && typeof holder.inputs.sourceArtifactId === 'string'
@@ -6405,13 +6429,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const asset = assets.find((entry) => entry.artifactId === sourceId)
     if (!asset || (asset.type !== 'video' && asset.type !== 'final')) return { ok: false, message: 'Subtitles need a video. Choose a video cell.' }
     if (asset.status !== 'ready' || !asset.mediaUrl) return { ok: false, message: 'Wait for the video to finish processing before adding subtitles.' }
-    presentChat(chat, () => setMediaFullscreen(null))
-    setTimelinePreview(null)
-    setMusicVideoSession(null)
-    reviewChat(chat, false, () => setPendingCommandPlan(null))
-    reviewChat(chat, false, () => setPendingWatermarkReview(null))
-    reviewChat(chat, true, () => setPendingChatAction({ kind: 'subtitles', assetId: sourceId }))
-    setComposerDockOpen(true)
+    presentEditorSheet({ kind: 'subtitles', assetId: sourceId }, chat)
     subtitles.open({
       artifactId: sourceId,
       kind: asset.type === 'final' ? 'final' : 'video',
@@ -8216,6 +8234,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       subtitles.close()
       return { ok: true, message: outcome.message }
     }
+    if (pendingChatAction.kind === 'graphics') {
+      const outcome = await graphics.render(chat)
+      if (!outcome.ok) return { ok: false, message: outcome.message }
+      reviewChat(chat, false, () => setPendingChatAction(null))
+      graphics.close()
+      return { ok: true, message: outcome.message }
+    }
     if (pendingChatAction.kind === 'post-delivery') {
       const review = pendingChatAction.review
       const post = notebookPosts.find(item => item.id === review.postId) ?? null
@@ -8572,6 +8597,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ?? workspacePreview?.media?.assetId ?? mediaFullscreen?.asset.artifactId ?? selectedNotebookCell?.outputArtifactId
     const asset = assets.find((entry) => entry.artifactId === reference)
       ?? assets.find((entry) => commandMentionAssets.some((mention) => mention.artifactId === entry.artifactId && mention.cellAddress.toLowerCase() === reference?.replace(/^@/u, '').toLowerCase()))
+    if (route.kind === 'graphics') return openGraphics(asset?.artifactId ?? reference, asString(values.image) ?? undefined, chat)
     if (route.kind === 'search') {
       await openWorkspaceActions(undefined, undefined, route.query, undefined, chat)
       return { ok: true, message: 'Actions opened' }
@@ -10271,6 +10297,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!pendingChatAction) return null
     if (pendingChatAction.kind === 'subtitles') {
       return <SubtitlesSheet editor={subtitles} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
+    }
+    if (pendingChatAction.kind === 'graphics') {
+      const openSource = (artifactId: string) => {
+        const result = openGraphics(artifactId, undefined)
+        if (!result.ok) setNotice(result.message, 'error')
+      }
+      return <GraphicsSheet editor={graphics} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openSource} />
     }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction

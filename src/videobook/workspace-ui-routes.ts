@@ -7,6 +7,7 @@ type UiRoute =
   | { kind: 'library' }
   | { kind: 'special'; action: 'upload' | 'copy' | 'history' | 'open' | 'original' | 'landscape' | 'portrait' | 'close' | 'collapse' | 'expand' | 'save' | 'notebook' | 'play' | 'skeleton' }
   | { kind: 'existing' }
+  | { kind: 'graphics' }
 
 export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_actions: { kind: 'existing' },
@@ -28,7 +29,7 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
   open_archive: { kind: 'form', tool: 'search_archive' },
   open_rename_all: { kind: 'form', tool: 'rename_all' },
   open_crop: { kind: 'form', tool: 'crop_asset' },
-  open_osg: { kind: 'form', tool: 'set_video_overlay' },
+  open_osg: { kind: 'graphics' },
   settings_osg: { kind: 'form', tool: 'set_video_overlay' },
   settings_audio: { kind: 'form', tool: 'render_video' },
   settings_subs: { kind: 'form', tool: 'render_video' },
@@ -61,7 +62,6 @@ export const WORKSPACE_UI_ROUTES: Readonly<Record<UiActionId, UiRoute>> = {
 
 export function workspaceUiFormValues(action: UiActionId, values: Record<string, unknown>): Record<string, unknown> {
   const result = { ...values }
-  if (action === 'open_osg' && values.image) result.osg_asset_id = values.image
   if (action === 'open_crop' && values.ratio !== undefined && values.ratio !== null && String(values.ratio).trim() !== '') {
     result.ratio = cropRatio(values.ratio)
   }

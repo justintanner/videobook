@@ -374,7 +374,7 @@ Routine pointer actions return focus to chat. Editing fields, open dialogs, keyb
 - `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
 - `/open` — Open asset in viewer; UI: `open_asset`
 - `/original` — Show original uncropped image; UI: `viewer_set_original`
-- `/overlay` (aliases: `/osg`) — Place an on-screen graphic overlay on a video; UI: `open_osg`
+- `/overlay` (aliases: `/osg`, `/graphics`) — Edit a video's on-screen graphics: headline, second line, credit, logo and QR layers with a live preview, then render them in; UI: `open_osg`
 - `/overwrite` — Preview overwriting sequence content with media; preview or workspace operation
 - `/pad` — Add a whole-second video tail with black frames and silence; MCP: `pad_video`
 - `/pin-search-moment` — Pin a revision-stable search moment into a notebook media selection cell; MCP: `pin_search_moment`
