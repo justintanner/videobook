@@ -72,6 +72,8 @@ describe("browser-safe graphics files", () => {
       "timing.ts",
       "stills.ts",
       "fonts.ts",
+      "qr.ts",
+      "icons.ts",
     ]));
   });
 

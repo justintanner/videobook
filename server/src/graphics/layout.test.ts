@@ -28,8 +28,9 @@ const HEADLINE = "How can you look this cool while waiting at a red light?";
 const THAI_LINE = "ติดไฟแดงยังไงให้เท่ได้ขนาดนี้";
 const THAI_TITLE = "ติดไฟแดงยังไงให้เท่ได้ขนาดนี้ ใครเห็นก็ต้องหันมามองทุกคน แม้แต่ตำรวจจราจรยังยิ้ม";
 const CREDIT = "TikTok/@pomkondeena";
-const THAI_INK_ABOVE = 1009 / 1000;
-const THAI_INK_BELOW = 433 / 1000;
+const THAI_INK_ABOVE = 1046 / 1000;
+const THAI_INK_BELOW = 445 / 1000;
+const ROUNDING = 1;
 const RECT_KEYS = ["x", "y", "width", "height"] as const;
 const WORD_BOUNDARIES = new Intl.Segmenter(undefined, { granularity: "word" });
 
@@ -274,8 +275,8 @@ describe("layoutGraphics", () => {
     expect(headline.font.size).toBeLessThanOrEqual(0.09 * short);
     expect(headline.font.size).toBeGreaterThanOrEqual(0.09 * short * 0.6);
     for (const line of headline.lines) {
-      expect(line.baseline - line.y).toBeGreaterThanOrEqual(headline.font.size * THAI_INK_ABOVE);
-      expect(line.y + line.height - line.baseline).toBeGreaterThanOrEqual(headline.font.size * THAI_INK_BELOW);
+      expect(line.baseline - line.y).toBeGreaterThanOrEqual(headline.font.size * THAI_INK_ABOVE - ROUNDING);
+      expect(line.y + line.height - line.baseline).toBeGreaterThanOrEqual(headline.font.size * THAI_INK_BELOW - ROUNDING);
     }
     headline.lines.slice(1).forEach((line, index) => expect(line.y).toBe(headline.lines[index].y + headline.lines[index].height));
     expect(secondary.box.y).toBeGreaterThan(headline.box.y + headline.box.height);

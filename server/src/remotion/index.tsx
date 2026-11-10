@@ -9,6 +9,9 @@ import { CaptionComposition } from "./captions/CaptionComposition.js";
 import { captionCompositionSize } from "./captions/composition-meta.js";
 import type { CaptionCompositionProps } from "./captions/CaptionComposition.js";
 import { CAPTION_DOCUMENT_VERSION, DEFAULT_CAPTION_STYLE } from "../captions/model.js";
+import { GraphicsOverlay } from "./graphics/GraphicsOverlay.js";
+import type { GraphicsStillProps } from "./graphics/GraphicsOverlay.js";
+import { emptyGraphicsDocument } from "../graphics/model.js";
 
 const defaultProps: RenderInputProps = {
   videoSrc: "",
@@ -70,6 +73,15 @@ const defaultCaptionProps: CaptionCompositionProps = {
   },
 };
 
+const defaultGraphicsStillProps: GraphicsStillProps = {
+  document: emptyGraphicsDocument(),
+  frame: { width: 1080, height: 1920 },
+  durationSeconds: 1,
+  images: {},
+  fontUrls: null,
+  groupIndex: 0,
+};
+
 const defaultQrOutroProps: QrOutroInputProps = {
   qrSrcs: [""],
   audioSrc: null,
@@ -109,6 +121,19 @@ const RemotionRoot: React.FC = () => {
           const input = props as CaptionCompositionProps;
           const size = captionCompositionSize(input.document);
           return { durationInFrames: input.durationInFrames, fps: input.fps, width: size.width, height: size.height };
+        }}
+      />
+      <Composition
+        id="graphics-still"
+        component={GraphicsOverlay as unknown as React.FC<Record<string, unknown>>}
+        durationInFrames={1}
+        fps={30}
+        width={defaultGraphicsStillProps.frame.width}
+        height={defaultGraphicsStillProps.frame.height}
+        defaultProps={defaultGraphicsStillProps}
+        calculateMetadata={({ props }) => {
+          const input = props as GraphicsStillProps;
+          return { durationInFrames: 1, fps: 30, width: input.frame.width, height: input.frame.height };
         }}
       />
       <Composition

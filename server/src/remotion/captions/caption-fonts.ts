@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cancelRender, continueRender, delayRender, getRemotionEnvironment, staticFile } from "remotion";
-import { BUNDLED_CAPTION_FONTS, CAPTION_FALLBACK_WEIGHT, captionScriptFamilies, googleTextSubsetUrl } from "../../captions/fonts.js";
+import { BUNDLED_CAPTION_FONTS, CAPTION_FALLBACK_WEIGHT, googleTextSubsetUrl, remoteCaptionFamilies } from "../../captions/fonts.js";
 import type { CaptionFontSpec } from "../../captions/layout.js";
 import type { CaptionScript } from "../../captions/script.js";
 
@@ -30,7 +30,7 @@ function bundledUrl(file: string, urls: CaptionFontUrls): string {
 }
 
 function loadBundledFonts(urls: CaptionFontUrls): Promise<void> {
-  return Promise.all(BUNDLED_CAPTION_FONTS.map((font) => remember(`bundled:${font.file}`, () => addFace(new FontFace(
+  return Promise.all(BUNDLED_CAPTION_FONTS.map((font) => remember(`bundled:${font.family}:${font.weight}:${font.file}`, () => addFace(new FontFace(
     font.family,
     `url(${bundledUrl(font.file, urls)}) format("woff2")`,
     { weight: String(font.weight), unicodeRange: font.unicodeRange, display: "block" },
@@ -64,16 +64,15 @@ async function loadTextSubset(family: string, text: string): Promise<void> {
 
 async function loadCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<CaptionScript>, text: string): Promise<void> {
   await loadBundledFonts(urls);
-  await Promise.all(captionScriptFamilies(scripts).map((family) => loadTextSubset(family, text)));
+  await Promise.all(remoteCaptionFamilies(scripts).map((family) => loadTextSubset(family, text)));
 }
 
-export function useCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<CaptionScript>, text: string): boolean {
-  const key = `${[...scripts].sort().join(",")}|${text}`;
+function useFontLoad(key: string, label: string, load: () => Promise<void>): boolean {
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    const handle = delayRender("Loading subtitle fonts", { timeoutInMilliseconds: FONT_TIMEOUT_MS });
-    loadCaptionFonts(urls, scripts, text)
+    const handle = delayRender(label, { timeoutInMilliseconds: FONT_TIMEOUT_MS });
+    load()
       .then(() => {
         if (active) setLoadedKey(key);
         continueRender(handle);
@@ -89,8 +88,19 @@ export function useCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<Capt
     return () => {
       active = false;
     };
-  }, [key, scripts, text, urls]);
+  }, [key, label, load]);
   return loadedKey === key;
+}
+
+export function useCaptionFonts(urls: CaptionFontUrls, scripts: ReadonlySet<CaptionScript>, text: string): boolean {
+  const key = `${[...scripts].sort().join(",")}|${text}`;
+  const load = useCallback(() => loadCaptionFonts(urls, scripts, text), [urls, scripts, text]);
+  return useFontLoad(key, "Loading subtitle fonts", load);
+}
+
+export function useBundledFonts(urls: CaptionFontUrls): boolean {
+  const load = useCallback(() => loadBundledFonts(urls), [urls]);
+  return useFontLoad("bundled", "Loading graphics fonts", load);
 }
 
 let canvas: HTMLCanvasElement | null = null;
