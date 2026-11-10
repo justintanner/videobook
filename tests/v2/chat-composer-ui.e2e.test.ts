@@ -5086,6 +5086,7 @@ describe('chat composer browser flow', () => {
       'Post…',
       'Open media',
       'Subtitles',
+      'Graphics',
       'Edit cold open',
       'Download video',
       'Extract frame',

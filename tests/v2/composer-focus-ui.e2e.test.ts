@@ -689,6 +689,7 @@ describe('composer focus through real workspace interactions', () => {
       'Copy video',
       'Download video',
       'Transcribe',
+      'Open graphics for @a1',
     ])
 
     await dock.getByRole('button', { name: `Back to ${imageAddress}`, exact: true }).click()

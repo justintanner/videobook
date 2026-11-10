@@ -149,7 +149,7 @@ import type { GenerationCellPreview } from '@/videobook/use-generation-cell-prev
 import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { PublishedPostInspectorDetails } from './PublishedPostChrome'
 import { MediaInsightsPanel } from './MediaInsightsPanel'
-import { MediaDockActions, type MediaDockTranscribeAction } from './MediaDockActions'
+import { MediaDockActions, type MediaDockGraphicsAction, type MediaDockTranscribeAction } from './MediaDockActions'
 import { SplicePreview, type SplicePreviewClip } from './SplicePreview'
 import { useSplicePreview } from '@/videobook/use-splice-preview'
 import { AssetTagEditor } from './AssetTagEditor'
@@ -494,6 +494,7 @@ type NotebookCellInspectorProps = {
   onRun: (cellId: string) => Promise<unknown>
   onDelete: () => Promise<void>
   onTranscribeAsset?: (artifactId: string) => void
+  onOpenGraphics?: (artifactId: string) => void
   onLoadTranscriptJson?: (
     artifactId: string,
     source: TranscriptSidecarSource,
@@ -1881,6 +1882,16 @@ function mediaTranscribeAction(
   }
 }
 
+function mediaGraphicsAction(
+  asset: NotebookCellInspectorAsset | undefined,
+  address: string,
+  busy: boolean,
+  onOpenGraphics: ((artifactId: string) => void) | undefined,
+): MediaDockGraphicsAction | undefined {
+  if (!asset || !onOpenGraphics || (asset.type !== 'video' && asset.type !== 'final')) return undefined
+  return { address, disabled: busy || !asset.mediaUrl, onOpen: () => onOpenGraphics(asset.artifactId) }
+}
+
 function MediaCellInspector({
   kind,
   cell,
@@ -1902,6 +1913,7 @@ function MediaCellInspector({
   onDelete,
   onOpenFullscreen,
   onTranscribeAsset,
+  onOpenGraphics,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   bookId,
@@ -1928,6 +1940,7 @@ function MediaCellInspector({
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'onTranscribeAsset'
+  | 'onOpenGraphics'
   | 'onLoadTranscriptJson'
   | 'onDownloadTranscriptSrt'
   | 'bookId'
@@ -2170,6 +2183,7 @@ function MediaCellInspector({
                     busy,
                     onTranscribeAsset,
                   )}
+                  graphics={mediaGraphicsAction(asset, address, busy || deleting, onOpenGraphics)}
                 />
               )}
               {previewAsset && (
@@ -4136,6 +4150,7 @@ export function NotebookCellInspector({
   onDownloadGenerationHar,
   onOpenSettings,
   onTranscribeAsset,
+  onOpenGraphics,
   onLoadTranscriptJson,
   onDownloadTranscriptSrt,
   generations,
@@ -4254,6 +4269,7 @@ export function NotebookCellInspector({
         onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
         onTranscribeAsset={onTranscribeAsset}
+        onOpenGraphics={onOpenGraphics}
         onLoadTranscriptJson={onLoadTranscriptJson}
         onDownloadTranscriptSrt={onDownloadTranscriptSrt}
         bookId={bookId}

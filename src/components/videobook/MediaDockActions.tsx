@@ -1,4 +1,4 @@
-import { Captions, ClipboardCopy, Download, Maximize2 } from 'lucide-react'
+import { Captions, ClipboardCopy, Download, Layers, Maximize2 } from 'lucide-react'
 import type { MediaDockKind } from '@/videobook/media-dock'
 import { useMediaFileActions, type MediaFileToolCall } from '@/videobook/use-media-file-actions'
 
@@ -12,6 +12,12 @@ export type MediaDockTranscribeAction = {
   running: boolean
   disabled: boolean
   onRun: () => void
+}
+
+export type MediaDockGraphicsAction = {
+  address: string
+  disabled: boolean
+  onOpen: () => void
 }
 
 function FullscreenAction({ address, onOpen }: MediaDockFullscreenAction) {
@@ -47,6 +53,16 @@ function TranscribeAction({ label, running, disabled, onRun }: MediaDockTranscri
   )
 }
 
+function GraphicsAction({ address, disabled, onOpen }: MediaDockGraphicsAction) {
+  const label = `Open graphics for @${address}`
+  return (
+    <button type="button" className="inspector-media-file-action" aria-label={label} title={label} disabled={disabled} onClick={onOpen}>
+      <Layers size={13} aria-hidden="true" />
+      <span>Graphics</span>
+    </button>
+  )
+}
+
 export function MediaDockActions({
   bookId,
   artifactId,
@@ -55,6 +71,7 @@ export function MediaDockActions({
   call,
   fullscreen,
   transcribe,
+  graphics,
 }: {
   bookId: string
   artifactId: string
@@ -63,6 +80,7 @@ export function MediaDockActions({
   call: MediaFileToolCall | undefined
   fullscreen?: MediaDockFullscreenAction
   transcribe?: MediaDockTranscribeAction
+  graphics?: MediaDockGraphicsAction
 }) {
   const { state, available, run } = useMediaFileActions({ call, bookId, artifactId })
   const running = state.phase === 'running'
@@ -97,6 +115,7 @@ export function MediaDockActions({
           <span>{running && state.action === 'download' ? 'Downloading…' : 'Download'}</span>
         </button>
         {transcribe && <TranscribeAction {...transcribe} />}
+        {graphics && <GraphicsAction {...graphics} />}
       </div>
       {state.phase === 'done' && <p role="status">{state.message}</p>}
       {state.phase === 'failed' && (

@@ -13,7 +13,7 @@ import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
 import { extractVideoPoster } from '../../server/src/video-poster.js'
 import { testBudget } from '../../server/src/test-budget.js'
-import { availablePort, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
+import { availablePort, record, requestBody, resultValue, startProcess, stopProcess, toolCalls, waitForHttp } from './e2e-harness.js'
 import type { StartedProcess } from './e2e-harness.js'
 
 const exec = promisify(execFile)
@@ -33,7 +33,20 @@ const TIKTOK_SOURCE = {
 }
 
 type Box = { x: number; y: number; width: number; height: number }
-type Layer = { id: string; kind: string; artifactId?: string; items?: Array<{ slot: string | null; text: string }> }
+type Item = { id: string; slot: string | null; text: string; accent: string; icon: string | null }
+type Layer = {
+  id: string
+  kind: string
+  name: string
+  visible: boolean
+  opacity: number
+  artifactId?: string
+  edge?: string
+  align?: string
+  size?: number
+  position?: { anchor: string; x: number; y: number; space: string }
+  items?: Item[]
+}
 type Read = {
   saved: boolean
   revision: string
@@ -65,7 +78,10 @@ describe('graphics editor in the composer', () => {
   let notebookId = ''
   let sourceId = ''
   let secondId = ''
+  let thirdId = ''
+  let thirdCellId = ''
   let logoId = ''
+  let logoCellId = ''
   const renders: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
@@ -129,7 +145,7 @@ describe('graphics editor in the composer', () => {
     const found = manager.get(bookId)
     if (!found.ok) throw new Error(found.error.message)
     const engine = found.value.engine
-    const fixtures = [await video(join(root, 'red-light.mp4'), 'Red light', TIKTOK_SOURCE), await video(join(root, 'second.mp4'), 'Second take')]
+    const fixtures = [await video(join(root, 'red-light.mp4'), 'Red light', TIKTOK_SOURCE), await video(join(root, 'second.mp4'), 'Second take'), await video(join(root, 'third.mp4'), 'Third take')]
     const ids: string[] = []
     for (const fixture of fixtures) {
       const artifact = await engine.artifacts.create({ kind: 'video', label: fixture.label })
@@ -143,7 +159,7 @@ describe('graphics editor in the composer', () => {
       await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, DURATION))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId] = ids
+    ;[sourceId, secondId, thirdId] = ids
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
     if (!logo.ok) throw new Error(logo.error.message)
     logoId = logo.value.artifactId
@@ -153,7 +169,12 @@ describe('graphics editor in the composer', () => {
     notebookId = notebook.id
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 0 }, outputArtifactId: sourceId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 1 }, outputArtifactId: secondId }))
-    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId }))
+    const thirdCell = engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 2 }, outputArtifactId: thirdId })
+    thirdCellId = thirdCell.id
+    await engine.notebooks.insertCell(notebook.id, thirdCell)
+    const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
+    logoCellId = logoCell.id
+    await engine.notebooks.insertCell(notebook.id, logoCell)
     await manager.close()
     const port = await availablePort()
     origin = `http://127.0.0.1:${port}`
@@ -297,7 +318,169 @@ describe('graphics editor in the composer', () => {
     await expect.poll(async () => (await read(secondId)).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
     await expect.poll(async () => (await read(secondId)).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(before)
     expect((await read(secondId)).saved).toBe(false)
-    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(4)
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(5)
+    expect(errors).toEqual([])
+  })
+
+  it('opens from the cell menu and the media dock for videos only', async () => {
+    const cell = (id: string) => page.locator(`.react-flow__node[data-id="${id}"] .cell-node`)
+    await cell(thirdCellId).click({ button: 'right', timeout: 30_000 })
+    await page.getByRole('menuitem', { name: 'Graphics', exact: true }).click()
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await sheet().textContent()).toContain('Third take')
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    await cell(logoCellId).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Open media', exact: true }).waitFor()
+    expect(await page.getByRole('menuitem', { name: 'Graphics', exact: true }).count()).toBe(0)
+    await page.keyboard.press('Escape')
+
+    const dock = page.locator('.composer-notebook-dock.inspector')
+    await cell(thirdCellId).click({ position: { x: 20, y: 20 } })
+    await dock.getByRole('button', { name: 'Open graphics for @a3', exact: true }).click()
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await sheet().textContent()).toContain('Third take')
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    await cell(logoCellId).click({ position: { x: 20, y: 20 } })
+    await dock.getByRole('region', { name: 'Media actions' }).getByRole('button', { name: 'Copy image', exact: true }).waitFor()
+    expect(await dock.getByRole('button', { name: /^Open graphics/ }).count()).toBe(0)
+    expect(errors).toEqual([])
+  })
+
+  it('rebuilds the reference frame from the layer list and inspector, and every change previews, autosaves and undoes', async () => {
+    const layers = sheet().getByRole('region', { name: 'Layers' })
+    const layer = async (name: string) => (await read(thirdId)).document.layers.find((entry) => entry.name === name)
+    const box = async (layerId: string) => parseBox(await sheet().locator(`.graphics-layer-box[data-layer-id="${layerId}"]`).getAttribute('data-box'))
+    const undo = () => sheet().getByRole('button', { name: 'Undo', exact: true }).click()
+
+    await command('/osg @a3')
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect((await read(thirdId)).document.layers.map((entry) => entry.name)).toEqual(['Shade', 'Title', 'Handle'])
+
+    await layers.getByRole('button', { name: 'Select layer Handle', exact: true }).click()
+    await layers.getByRole('button', { name: 'Delete Handle', exact: true }).click()
+    await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    await sheet().getByLabel('Item text', { exact: true }).fill('How can you look this cool while waiting at a red light?')
+    await sheet().getByRole('button', { name: 'Edit item 2, Second line', exact: true }).click()
+    await sheet().getByLabel('Item text', { exact: true }).fill(THAI_TITLE)
+    await sheet().getByRole('button', { name: 'Add text item', exact: true }).click()
+    await sheet().getByLabel('Item text', { exact: true }).fill(CREDIT)
+    await sheet().getByLabel('Slot', { exact: true }).selectOption('credit')
+    await sheet().getByLabel('Icon', { exact: true }).selectOption('camera')
+    await layers.getByRole('button', { name: 'Add image layer', exact: true }).click()
+    await sheet().getByRole('group', { name: 'Choose an image', exact: true }).getByRole('button', { name: '@b2 Logo', exact: true }).click()
+    await saved()
+
+    const rebuilt = (await read(thirdId)).document.layers
+    expect(rebuilt.map((entry) => entry.kind)).toEqual(['scrim', 'text', 'image'])
+    expect(rebuilt[0]).toMatchObject({ edge: 'bottom' })
+    expect(rebuilt[1]!.items).toMatchObject([
+      { slot: 'headline', text: 'How can you look this cool while waiting at a red light?', accent: 'brush' },
+      { slot: 'secondary', text: THAI_TITLE },
+      { slot: 'credit', text: CREDIT, icon: 'camera' },
+    ])
+    expect(rebuilt[2]).toMatchObject({ kind: 'image', name: 'Logo', artifactId: logoId, position: { anchor: 'top-left', x: 0, y: 0, space: 'safe' } })
+    const logo = rebuilt[2]!
+    await expect.poll(async () => (await box(logo.id)).width, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
+    const logoBox = await box(logo.id)
+    expect(logoBox.x).toBeLessThan(WIDTH / 3)
+    expect(logoBox.y).toBeLessThan(HEIGHT / 4)
+    const credit = await itemBox('credit')
+    expect(credit.y).toBeGreaterThan((await itemBox('secondary')).y)
+    await shot('graphics-reference-frame')
+
+    await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    await sheet().getByRole('group', { name: 'Align', exact: true }).getByRole('button', { name: 'Center', exact: true }).click()
+    await expect.poll(async () => (await itemBox('credit')).x).toBeGreaterThan(credit.x)
+    await saved()
+    expect((await layer('Title'))?.align).toBe('center')
+    await undo()
+    await expect.poll(async () => (await itemBox('credit')).x).toBe(credit.x)
+    await saved()
+    expect((await layer('Title'))?.align).toBe('left')
+
+    await layers.getByRole('button', { name: 'Select layer Logo', exact: true }).click()
+    const width = sheet().getByLabel('Width', { exact: true })
+    await width.focus()
+    await width.press('End')
+    await expect.poll(async () => (await box(logo.id)).width).toBeGreaterThan(logoBox.width * 2)
+    await saved()
+    expect((await layer('Logo'))?.size).toBe(1)
+    await undo()
+    await expect.poll(async () => (await box(logo.id)).width).toBe(logoBox.width)
+    await saved()
+
+    await layers.getByRole('button', { name: 'Hide Logo', exact: true }).click()
+    await expect.poll(() => sheet().locator(`.graphics-layer-box[data-layer-id="${logo.id}"]`).count()).toBe(0)
+    await saved()
+    expect((await layer('Logo'))?.visible).toBe(false)
+    await layers.getByRole('button', { name: 'Show Logo', exact: true }).click()
+    await layers.getByRole('button', { name: 'Duplicate Logo', exact: true }).click()
+    await layers.getByRole('button', { name: 'Delete Logo copy', exact: true }).click()
+    await layers.getByRole('button', { name: 'Select layer Shade', exact: true }).click()
+    await layers.getByRole('button', { name: 'Move Shade up', exact: true }).click()
+    await saved()
+    expect((await read(thirdId)).document.layers.map((entry) => entry.name)).toEqual(['Title', 'Shade', 'Logo'])
+    await undo()
+    await layers.getByRole('button', { name: 'Select layer Logo', exact: true }).click()
+    await layers.getByRole('button', { name: 'Rename Logo', exact: true }).click()
+    await layers.getByLabel('Name of Logo', { exact: true }).fill('Brand logo')
+    await layers.getByLabel('Name of Logo', { exact: true }).press('Enter')
+    await saved()
+    const final = (await read(thirdId)).document.layers
+    expect(final.map((entry) => [entry.name, entry.visible])).toEqual([['Shade', true], ['Title', true], ['Brand logo', true]])
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    expect(errors).toEqual([])
+  })
+
+  it('opens from typed chat with the headline filled and renders nothing until Render is pressed', async () => {
+    const typed = 'add a headline saying Red light legends to @a3'
+    const rendersBefore = renders.length
+    const plan = {
+      kind: 'chat-action-plan',
+      planId: crypto.randomUUID(),
+      bookId,
+      prompt: typed,
+      routedTool: 'show_graphics',
+      tool: 'show_graphics',
+      params: { asset_id: thirdId, cell_id: thirdCellId, headline: 'Red light legends' },
+      message: 'Opening the graphics editor for @a3',
+      summary: 'Opening the graphics editor for @a3',
+      effect: 'view',
+      confirmation: { required: false, reason: 'Opening a view changes nothing in the book' },
+    }
+    await page.route('**/mcp', async (route) => {
+      const body = await requestBody(route)
+      const envelope = (Array.isArray(body) ? body : [body]).map(record).find((entry) => {
+        const params = record(entry?.params)
+        return entry?.method === 'tools/call' && params?.name === 'chat' && String(record(params.arguments)?.prompt ?? '').includes('Red light legends')
+      })
+      if (!envelope) return route.continue()
+      const response = { jsonrpc: '2.0', id: envelope.id, result: { resultType: 'complete', content: [{ type: 'text', text: JSON.stringify(plan) }], isError: false } }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(Array.isArray(body) ? [response] : response) })
+    })
+    try {
+      await command(typed)
+      await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(() => field('Headline').inputValue(), { timeout: 30_000 }).toBe('Red light legends')
+      await saved()
+      const current = await read(thirdId)
+      expect(slotText(current, 'headline')).toBe('Red light legends')
+      expect(slotText(current, 'secondary')).toBe(THAI_TITLE)
+      expect(current.render).toBeNull()
+      expect(current.burned).toBeNull()
+      expect(renders.length).toBe(rendersBefore)
+      await sheet().getByRole('button', { name: /^Close/ }).click()
+      await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+      expect((await read(thirdId)).render).toBeNull()
+    } finally {
+      await page.unroute('**/mcp')
+    }
     expect(errors).toEqual([])
   })
 })

@@ -79,15 +79,31 @@ function tiktokTitle(frame: GraphicsFrame, profile: LightningWatermarkProfile = 
   ]);
 }
 
+export type GraphicsBlockSlot = "headline" | "secondary" | "credit";
+export type GraphicsBlockText = Partial<Record<GraphicsBlockSlot, string>>;
+
+export const GRAPHICS_BLOCK_SLOTS: readonly GraphicsBlockSlot[] = ["headline", "secondary", "credit"];
+const LOWER_THIRD_GAP = 0.016;
+
+const LOWER_THIRD_ITEMS: Record<GraphicsBlockSlot, GraphicsTextItemInput> = {
+  headline: slotItem("headline", 0.068, { maxLines: 4, accent: HEADLINE_ACCENT }),
+  secondary: slotItem("secondary", 0.044, { maxLines: 2 }),
+  credit: slotItem("credit", 0.03, { maxLines: 1, icon: "camera" }),
+};
+
 function lowerThird(): GraphicsDocument {
   return graphicsDocumentFromLayers([
     edgeShade("bottom", 0.45, 0.75),
-    bottomLeftBlock("Lower third", 0.016, [
-      slotItem("headline", 0.068, { maxLines: 4, accent: HEADLINE_ACCENT }),
-      slotItem("secondary", 0.044, { maxLines: 2 }),
-      slotItem("credit", 0.03, { maxLines: 1, icon: "camera" }),
-    ]),
+    bottomLeftBlock("Lower third", LOWER_THIRD_GAP, GRAPHICS_BLOCK_SLOTS.map((slot) => LOWER_THIRD_ITEMS[slot])),
   ]);
+}
+
+export function graphicsSlotBlock(text: GraphicsBlockText): GraphicsTextLayerInput | null {
+  const items = GRAPHICS_BLOCK_SLOTS.flatMap((slot) => {
+    const value = text[slot];
+    return value === undefined ? [] : [{ ...LOWER_THIRD_ITEMS[slot], text: value }];
+  });
+  return items.length > 0 ? bottomLeftBlock("Title", LOWER_THIRD_GAP, items) : null;
 }
 
 function headline(): GraphicsDocument {

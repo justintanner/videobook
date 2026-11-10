@@ -1,7 +1,17 @@
 import { z } from 'zod'
 import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
-import { parseGraphicsDocument, type GraphicsDocument, type GraphicsTextSlot } from '../../server/src/graphics/model'
+import {
+  isGraphicsUrl,
+  MAX_GRAPHICS_NAME_LENGTH,
+  nextGraphicsId,
+  parseGraphicsDocument,
+  type GraphicsDocument,
+  type GraphicsLayer,
+  type GraphicsLayerKind,
+  type GraphicsTextSlot,
+} from '../../server/src/graphics/model'
+import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, type GraphicsBlockText } from '../../server/src/graphics/starters'
 import { graphicsStillGroups } from '../../server/src/graphics/stills'
 
 const renderSchema = z.object({
@@ -103,13 +113,29 @@ export interface GraphicsTarget {
   address: string | null
   notebookId: string | null
   image: string | null
+  text: GraphicsBlockText | null
 }
 
-type EditorAsset = { id: string; artifactId: string; label: string; type: string; status: string; mediaUrl: string | null }
-type EditorMention = { artifactId: string; cellAddress: string }
-type TargetInput = { reference: string | undefined; image: string | undefined; assets: readonly EditorAsset[]; mentions: readonly EditorMention[]; notebookId: string | null }
+export type GraphicsEditorAsset = { id: string; artifactId: string; label: string; type: string; status: string; mediaUrl: string | null }
+export type GraphicsEditorMention = { artifactId: string; cellAddress: string }
+type TargetInput = {
+  reference: string | undefined
+  image: string | undefined
+  text?: GraphicsBlockText | null
+  assets: readonly GraphicsEditorAsset[]
+  mentions: readonly GraphicsEditorMention[]
+  notebookId: string | null
+}
 
-function resolveAsset(reference: string | undefined, assets: readonly EditorAsset[], mentions: readonly EditorMention[]): EditorAsset | undefined {
+export function graphicsBlockText(params: Record<string, unknown>): GraphicsBlockText | null {
+  const entries = GRAPHICS_BLOCK_SLOTS.flatMap((slot) => {
+    const value = params[slot]
+    return typeof value === 'string' && value.trim() ? [[slot, value.trim()] as const] : []
+  })
+  return entries.length > 0 ? Object.fromEntries(entries) : null
+}
+
+function resolveAsset(reference: string | undefined, assets: readonly GraphicsEditorAsset[], mentions: readonly GraphicsEditorMention[]): GraphicsEditorAsset | undefined {
   const key = reference?.trim().replace(/^@/u, '').toLowerCase()
   if (!key) return undefined
   const mention = mentions.find((entry) => entry.cellAddress.toLowerCase() === key)
@@ -132,6 +158,7 @@ export function graphicsEditorTarget(input: TargetInput): { ok: true; target: Gr
       address: input.mentions.find((mention) => mention.artifactId === asset.artifactId)?.cellAddress ?? null,
       notebookId: input.notebookId,
       image: image?.artifactId ?? null,
+      text: input.text ?? null,
     },
   }
 }
@@ -139,6 +166,77 @@ export function graphicsEditorTarget(input: TargetInput): { ok: true; target: Gr
 export function graphicsImageEdits(document: GraphicsDocument, image: string | null): GraphicsEdit[] {
   if (!image || document.layers.some((layer) => layer.kind === 'image' && layer.artifactId === image)) return []
   return [{ op: 'add_layer', layer: { kind: 'image', artifactId: image } }]
+}
+
+export function graphicsTextEdits(document: GraphicsDocument, text: GraphicsBlockText | null): GraphicsEdit[] {
+  const given = GRAPHICS_BLOCK_SLOTS.flatMap((slot) => {
+    const value = text?.[slot]
+    return value === undefined ? [] : [{ slot, value }]
+  })
+  const held = given.filter((entry) => graphicsSlotText(document, entry.slot) !== null)
+  const block = graphicsSlotBlock(Object.fromEntries(given.filter((entry) => !held.includes(entry)).map((entry) => [entry.slot, entry.value])))
+  const edits: GraphicsEdit[] = held.map((entry) => ({ op: 'set_slot_text', slot: entry.slot, text: entry.value }))
+  return block ? [...edits, { op: 'add_layer', layer: block }] : edits
+}
+
+export function graphicsOpenEdits(document: GraphicsDocument, target: Pick<GraphicsTarget, 'image' | 'text'>): GraphicsEdit[] {
+  return [...graphicsImageEdits(document, target.image), ...graphicsTextEdits(document, target.text)]
+}
+
+export type GraphicsImageChoice = { artifactId: string; address: string; label: string }
+
+export function graphicsImageChoices(assets: readonly GraphicsEditorAsset[], mentions: readonly GraphicsEditorMention[]): GraphicsImageChoice[] {
+  const images = new Map(assets.filter((asset) => asset.type === 'image').map((asset) => [asset.artifactId, asset]))
+  return mentions.flatMap((mention, index) => {
+    const asset = images.get(mention.artifactId)
+    if (!asset || mentions.findIndex((entry) => entry.artifactId === mention.artifactId) !== index) return []
+    return [{ artifactId: asset.artifactId, address: mention.cellAddress, label: asset.label }]
+  })
+}
+
+export type GraphicsAddKind = GraphicsLayerKind
+
+export function graphicsNextLayerId(document: GraphicsDocument): string {
+  return nextGraphicsId(document.nextId, 'l').id
+}
+
+export function graphicsAddLayer(
+  document: GraphicsDocument,
+  kind: GraphicsAddKind,
+  options: { image?: GraphicsImageChoice; profileUrl?: string | null } = {},
+): { edit: GraphicsEdit; layerId: string } | null {
+  const layerId = graphicsNextLayerId(document)
+  if (kind === 'text') return { layerId, edit: { op: 'add_layer', layer: { kind: 'text', items: [{ text: 'Your text', size: 0.06 }] } } }
+  if (kind === 'scrim') return { layerId, edit: { op: 'add_layer', layer: { kind: 'scrim' }, index: 0 } }
+  if (kind === 'qr') {
+    const url = options.profileUrl && isGraphicsUrl(options.profileUrl) ? options.profileUrl : ''
+    return { layerId, edit: { op: 'add_layer', layer: { kind: 'qr', slot: 'profile', url } } }
+  }
+  if (!options.image) return null
+  const name = (options.image.label.trim() || 'Image').slice(0, MAX_GRAPHICS_NAME_LENGTH)
+  return { layerId, edit: { op: 'add_layer', layer: { kind: 'image', name, artifactId: options.image.artifactId } } }
+}
+
+export function graphicsSelectionAfterRemove(document: GraphicsDocument, layerId: string): string | null {
+  const index = document.layers.findIndex((layer) => layer.id === layerId)
+  if (index < 0) return null
+  return document.layers[index - 1]?.id ?? document.layers[index + 1]?.id ?? null
+}
+
+export const GRAPHICS_SLOT_LABELS: Record<GraphicsTextSlot, string> = { headline: 'Headline', secondary: 'Second line', credit: 'Credit', handle: 'Handle' }
+
+export function graphicsLayerSummary(layer: GraphicsLayer, images: GraphicsRead['images'], choices: readonly GraphicsImageChoice[] = []): string {
+  if (layer.kind === 'image') {
+    const address = choices.find((choice) => choice.artifactId === layer.artifactId)?.address
+    if (address) return `@${address}`
+    return images[layer.artifactId] ? images[layer.artifactId].label ?? 'Image' : 'Image not loaded yet'
+  }
+  if (layer.kind === 'qr') return layer.slot === 'profile' ? 'Profile link' : clipped(layer.url)
+  if (layer.kind === 'scrim') return `${layer.edge === 'top' ? 'Top' : 'Bottom'} shade`
+  const typed = layer.items.find((item) => item.text.trim())
+  if (typed) return clipped(typed.text)
+  const slots = layer.items.flatMap((item) => (item.slot ? [GRAPHICS_SLOT_LABELS[item.slot]] : []))
+  return slots.length > 0 ? `Empty ${slots.join(', ').toLowerCase()}` : 'Empty text'
 }
 
 export function graphicsRenderQueuedMessage(output: GraphicsRenderOutput, target: { label: string; address: string | null }): string {
@@ -243,4 +341,8 @@ export function graphicsOverlayImages(read: GraphicsRead | null): GraphicsOverla
   return Object.fromEntries(Object.entries(read.images).flatMap(([id, image]) => (
     image.url && image.width && image.height ? [[id, { src: image.url, width: image.width, height: image.height }]] : []
   )))
+}
+
+export function graphicsPercent(value: number): string {
+  return `${Math.round(value * 1000) / 10}%`
 }

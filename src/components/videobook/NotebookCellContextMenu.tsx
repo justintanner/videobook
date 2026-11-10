@@ -10,6 +10,7 @@ import {
   History,
   Image,
   Images,
+  Layers,
   Library,
   Maximize2,
   PanelRightOpen,
@@ -40,6 +41,7 @@ type NotebookCellContextActionIcon =
   | 'generate-image'
   | 'generate-video'
   | 'generations'
+  | 'graphics'
   | 'group-images'
   | 'inspect'
   | 'library'
@@ -87,6 +89,7 @@ const actionIcons: Record<NotebookCellContextActionIcon, LucideIcon> = {
   'generate-image': Image,
   'generate-video': Video,
   generations: History,
+  graphics: Layers,
   'group-images': Images,
   inspect: PanelRightOpen,
   library: Library,

@@ -4,6 +4,7 @@ import { isCompatibleLibraryAsset, useMediaLibrarySearch } from '@/videobook/use
 import { PostInspector } from '@/components/videobook/PostInspector'
 import { insertVideoReviewError } from '@/videobook/insert-video-review'
 import type { PostView } from '../server/src/posts/post-contract'
+import type { GraphicsBlockText } from '../server/src/graphics/starters'
 import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
@@ -345,7 +346,7 @@ import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { useGraphicsEditor } from '@/videobook/useGraphicsEditor'
-import { graphicsEditorTarget } from '@/videobook/graphics-model'
+import { graphicsBlockText, graphicsEditorTarget } from '@/videobook/graphics-model'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
   notebookFollowUpLabels,
@@ -6413,12 +6414,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setComposerDockOpen(true)
   }
 
-  const openGraphics = (reference: string | undefined, image: string | undefined, chat?: ChatExecution): ComposerOutcome => {
-    const resolved = graphicsEditorTarget({ reference, image, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
+  const openGraphics = (reference: string | undefined, image: string | undefined, chat?: ChatExecution, text?: GraphicsBlockText | null): ComposerOutcome => {
+    const resolved = graphicsEditorTarget({ reference, image, text, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
     if (!resolved.ok) return resolved
     presentEditorSheet({ kind: 'graphics', assetId: resolved.target.artifactId }, chat)
     graphics.open(resolved.target)
     return { ok: true, message: `Graphics opened for ${resolved.target.label}` }
+  }
+  const openGraphicsFor = (artifactId: string) => {
+    const result = openGraphics(artifactId, undefined)
+    if (!result.ok) setNotice(result.message, 'error')
   }
 
   const openSubtitles = (artifactId: string, chat?: ChatExecution): ComposerOutcome => {
@@ -7552,13 +7557,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const reference = asString(plan.params.post_cell_id) ?? asString(plan.params.source_cell_id) ?? asString(plan.params.asset_id) ?? undefined
       return openSourceDeliveryReview(reference, plan.params.to === 'download' ? 'download' : 'icloud', chat, asString(plan.params.text) ?? undefined)
     }
-    if (plan.tool === 'show_subtitles') {
+    if (plan.tool === 'show_subtitles' || plan.tool === 'show_graphics') {
       const assetId = asString(plan.params.asset_id)
-      if (!assetId) return { ok: false, message: 'Name the video to caption.' }
+      if (!assetId) return { ok: false, message: plan.tool === 'show_graphics' ? 'Name the video for the graphics.' : 'Name the video to caption.' }
       if (isCurrent?.() === false || chat?.isCurrent() === false) {
         return { ok: false, message: 'Workspace changed. Repeat the command in the current workspace.' }
       }
-      return openSubtitles(assetId, chat)
+      return plan.tool === 'show_graphics' ? openGraphics(assetId, undefined, chat, graphicsBlockText(plan.params)) : openSubtitles(assetId, chat)
     }
     if (plan.tool === 'show_media_fullscreen') {
       const target = resolveFullscreenTarget(plan.params, notebook?.cells ?? [], assets)
@@ -9783,6 +9788,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         || contextMenuVisualAsset.type === 'final')
     ) {
       contextMenuActions.push({ id: 'subtitles', label: 'Subtitles', icon: 'subtitles', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
+      contextMenuActions.push({ id: 'graphics', label: 'Graphics', icon: 'graphics', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({ id: 'cold-open', label: 'Edit cold open', icon: 'split', disabled: busy || mcp.state !== 'ready' || !contextMenuVisualAsset.mediaUrl })
       contextMenuActions.push({
         id: 'download',
@@ -9959,6 +9965,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (actionId === 'subtitles' && contextMenuVisualAsset) {
       const result = openSubtitles(contextMenuVisualAsset.artifactId)
       if (!result.ok) setNotice(result.message, 'error')
+      return
+    }
+    if (actionId === 'graphics' && contextMenuVisualAsset) {
+      openGraphicsFor(contextMenuVisualAsset.artifactId)
       return
     }
     if (actionId === 'cold-open' && contextMenuVisualAsset) {
@@ -10299,11 +10309,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return <SubtitlesSheet editor={subtitles} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} />
     }
     if (pendingChatAction.kind === 'graphics') {
-      const openSource = (artifactId: string) => {
-        const result = openGraphics(artifactId, undefined)
-        if (!result.ok) setNotice(result.message, 'error')
-      }
-      return <GraphicsSheet editor={graphics} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openSource} />
+      return <GraphicsSheet editor={graphics} assets={assets} mentions={commandMentionAssets} applyFormId={COMMAND_COMPOSER_FORM_ID} onClose={dismissPendingCommandPlan} onOpenSource={openGraphicsFor} />
     }
     if (pendingChatAction.kind === 'transcribe') {
       const action = pendingChatAction
@@ -11134,6 +11140,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           onOpenSettings={() => navigate('settings')}
           mediaInsightWork={mediaInsightWork}
           onTranscribeAsset={transcribeAsset}
+          onOpenGraphics={openGraphicsFor}
           onLoadTranscriptJson={loadTranscriptJson}
           onDownloadTranscriptSrt={exportTranscriptSrt}
         />

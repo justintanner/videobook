@@ -25,9 +25,7 @@ function clientManualChunk(id: string): string | undefined {
     return 'subtitles-editor'
   }
   if (
-    id.includes('/src/components/videobook/graphics/GraphicsBody')
-    || id.includes('/src/components/videobook/graphics/GraphicsPreview')
-    || id.includes('/src/components/videobook/graphics/GraphicsQuickFields')
+    (id.includes('/src/components/videobook/graphics/') && !/\/graphics\/(GraphicsSheet\.tsx|Graphics\.css)/u.test(id))
     || id.includes('/server/src/remotion/graphics/')
   ) {
     return 'graphics-editor'

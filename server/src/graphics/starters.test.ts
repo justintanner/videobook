@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsLayer, GraphicsTextLayer } from "./model.js";
 import { parseGraphicsDocument } from "./model.js";
-import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS } from "./starters.js";
+import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS, graphicsSlotBlock } from "./starters.js";
 
 const FRAMES: GraphicsFrame[] = [
   { width: 1080, height: 1920 },
@@ -81,5 +81,16 @@ describe("graphics starters", () => {
     const watermark = starter("watermark")(frame);
     expect(kinds(watermark)).toEqual(["qr", "text"]);
     expect(watermark.layers[0]).toMatchObject({ slot: "profile", url: LIGHTNING_WATERMARK_PROFILE.profileUrl, style: "tile" });
+  });
+
+  it("builds a bottom-left title block from the slots it is given, styled like the lower third", () => {
+    const lower = textLayers(starter("lower-third")({ width: 1080, height: 1920 }))[0];
+    const block = graphicsSlotBlock({ headline: "Red light legends", credit: "TikTok/@pomkondeena" });
+    expect(block).toMatchObject({ kind: "text", name: "Title", position: lower.position, width: lower.width, align: lower.align, gap: lower.gap, plate: null });
+    expect(block?.items).toMatchObject([
+      { slot: "headline", text: "Red light legends", size: 0.068, maxLines: 4, accent: "brush" },
+      { slot: "credit", text: "TikTok/@pomkondeena", size: 0.03, icon: "camera" },
+    ]);
+    expect(graphicsSlotBlock({})).toBeNull();
   });
 });

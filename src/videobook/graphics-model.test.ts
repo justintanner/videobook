@@ -1,17 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
 import { graphicsDocumentFromLayers, type GraphicsDocument } from '../../server/src/graphics/model'
+import type { GraphicsEdit } from '../../server/src/graphics/edits'
 import {
   editGraphicsHistory,
+  graphicsAddLayer,
+  graphicsBlockText,
   graphicsBurnedNotice,
   graphicsEditorTarget,
   graphicsFillSuggestion,
+  graphicsImageChoices,
   graphicsImageEdits,
+  graphicsLayerSummary,
   graphicsLayoutWarnings,
+  graphicsNextLayerId,
+  graphicsOpenEdits,
   graphicsOverlayImages,
+  graphicsPercent,
   graphicsRenderBlocker,
   graphicsRenderQueuedMessage,
+  graphicsSelectionAfterRemove,
   graphicsSlotText,
+  graphicsTextEdits,
   graphicsToolError,
   parseGraphicsRead,
   parseGraphicsRender,
@@ -115,8 +125,9 @@ describe('graphics editor target', () => {
   it('resolves cell addresses and ids, with an optional image', () => {
     expect(graphicsEditorTarget({ reference: '@a1', image: '@b2', assets, mentions, notebookId: 'nb' })).toEqual({
       ok: true,
-      target: { artifactId: 'video-1', kind: 'video', label: 'red light', mediaUrl: '/files/b/video-1/original.mp4', address: 'a1', notebookId: 'nb', image: 'logo-1' },
+      target: { artifactId: 'video-1', kind: 'video', label: 'red light', mediaUrl: '/files/b/video-1/original.mp4', address: 'a1', notebookId: 'nb', image: 'logo-1', text: null },
     })
+    expect(graphicsEditorTarget({ reference: '@a1', image: undefined, text: { headline: 'Red light' }, assets, mentions, notebookId: null })).toMatchObject({ ok: true, target: { text: { headline: 'Red light' } } })
     expect(graphicsEditorTarget({ reference: 'video-1', image: undefined, assets, mentions, notebookId: null })).toMatchObject({ ok: true, target: { image: null, address: 'a1' } })
   })
 
@@ -199,5 +210,152 @@ describe('graphics render guidance', () => {
     expect(graphicsBurnedNotice(null, 'video')).toBeNull()
     expect(graphicsRenderQueuedMessage('new', { label: 'red light', address: 'a1' })).toMatch(/@a1/u)
     expect(graphicsRenderQueuedMessage('replace', { label: 'red light', address: null })).toMatch(/Burning graphics into red light/u)
+  })
+})
+
+function apply(document: GraphicsDocument, edits: GraphicsEdit[]): GraphicsDocument {
+  return edited(history(document), edits, null).document
+}
+
+describe('graphics text from chat and voice', () => {
+  it('keeps the headline, second line and credit a routed plan carries', () => {
+    expect(graphicsBlockText({ asset_id: 'video-1', cell_id: 'c1', headline: '  Red light  ', secondary: '', credit: 'TikTok/@pomkondeena', extra: 'x' }))
+      .toEqual({ headline: 'Red light', credit: 'TikTok/@pomkondeena' })
+    expect(graphicsBlockText({ asset_id: 'video-1', headline: 7 })).toBeNull()
+  })
+
+  it('fills the slots the look holds and adds a title block for the ones it lacks', () => {
+    const titledDocument = titled()
+    const filled = apply(titledDocument, graphicsTextEdits(titledDocument, { headline: THAI_TITLE, secondary: 'How can you look this cool?' }))
+    expect(graphicsSlotText(filled, 'headline')).toBe(THAI_TITLE)
+    expect(graphicsSlotText(filled, 'secondary')).toBe('How can you look this cool?')
+    expect(filled.layers).toHaveLength(titledDocument.layers.length)
+
+    const edits = graphicsTextEdits(titledDocument, { headline: THAI_TITLE, credit: 'TikTok/@pomkondeena' })
+    expect(edits.map((edit) => edit.op)).toEqual(['set_slot_text', 'add_layer'])
+    const withCredit = apply(titledDocument, edits)
+    expect(withCredit.layers.at(-1)).toMatchObject({ kind: 'text', name: 'Title', position: { anchor: 'bottom-left', space: 'safe' }, items: [{ slot: 'credit', text: 'TikTok/@pomkondeena', icon: 'camera' }] })
+    expect(graphicsTextEdits(titledDocument, null)).toEqual([])
+  })
+
+  it('applies an opened image and text as one undo step', () => {
+    const start = history(titled())
+    const opened = edited(start, graphicsOpenEdits(start.document, { image: 'logo-1', text: { headline: THAI_TITLE } }), null)
+    expect(opened.past).toHaveLength(1)
+    expect(opened.document.layers.filter((layer) => layer.kind === 'image')).toHaveLength(1)
+    expect(graphicsSlotText(opened.document, 'headline')).toBe(THAI_TITLE)
+    expect(graphicsSlotText(stepGraphicsHistory(opened, 'undo')!.document, 'headline')).toBe('')
+  })
+})
+
+describe('graphics layer list', () => {
+  const assets = [
+    { id: 'vid-1', artifactId: 'video-1', label: 'red light', type: 'video', status: 'ready', mediaUrl: '/v.mp4' },
+    { id: 'img-1', artifactId: 'logo-1', label: 'Logo', type: 'image', status: 'ready', mediaUrl: '/l.png' },
+    { id: 'img-2', artifactId: 'badge-1', label: 'Badge', type: 'image', status: 'ready', mediaUrl: '/b.png' },
+  ]
+
+  it('offers the image cells of the book once each, in grid order', () => {
+    const mentions = [{ artifactId: 'video-1', cellAddress: 'a1' }, { artifactId: 'badge-1', cellAddress: 'a2' }, { artifactId: 'logo-1', cellAddress: 'b2' }, { artifactId: 'badge-1', cellAddress: 'c3' }]
+    expect(graphicsImageChoices(assets, mentions)).toEqual([
+      { artifactId: 'badge-1', address: 'a2', label: 'Badge' },
+      { artifactId: 'logo-1', address: 'b2', label: 'Logo' },
+    ])
+  })
+
+  it('adds each kind of layer under the id it predicts, a shade at the bottom and others on top', () => {
+    const document = titled()
+    const read = parseGraphicsRead(wire())
+    for (const kind of ['text', 'qr', 'scrim'] as const) {
+      const added = graphicsAddLayer(document, kind, { profileUrl: read.fill.profile_url })!
+      const next = apply(document, [added.edit])
+      const index = next.layers.findIndex((layer) => layer.id === added.layerId)
+      expect(next.layers[index]?.kind).toBe(kind)
+      expect(index).toBe(kind === 'scrim' ? 0 : next.layers.length - 1)
+    }
+    const qr = apply(document, [graphicsAddLayer(document, 'qr', { profileUrl: 'https://www.tiktok.com/@jtbkk' })!.edit]).layers.at(-1)
+    expect(qr).toMatchObject({ kind: 'qr', slot: 'profile', url: 'https://www.tiktok.com/@jtbkk' })
+    expect(apply(document, [graphicsAddLayer(document, 'qr', { profileUrl: 'not a link' })!.edit]).layers.at(-1)).toMatchObject({ url: '' })
+    const image = graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo' } })!
+    expect(apply(document, [image.edit]).layers.at(-1)).toMatchObject({ id: image.layerId, kind: 'image', name: 'Logo', artifactId: 'logo-1', position: { anchor: 'top-left', space: 'safe' } })
+    expect(graphicsAddLayer(document, 'image')).toBeNull()
+  })
+
+  it('renames, hides, reorders, duplicates and deletes layers, each as one undo step', () => {
+    const start = history(titled())
+    const [shade, title, handle] = start.document.layers
+    const renamed = edited(start, [{ op: 'set_layer', layer_id: title.id, layer: { name: 'Big title' } }], null)
+    const hidden = edited(renamed, [{ op: 'set_layer', layer_id: handle.id, layer: { visible: false } }], null)
+    const moved = edited(hidden, [{ op: 'move_layer', layer_id: shade.id, index: 1 }], null)
+    expect(moved.document.layers.map((layer) => layer.id)).toEqual([title.id, shade.id, handle.id])
+    const copyId = graphicsNextLayerId(moved.document)
+    const duplicated = edited(moved, [{ op: 'duplicate_layer', layer_id: title.id }], null)
+    expect(duplicated.document.layers[1]).toMatchObject({ id: copyId, name: 'Big title copy' })
+    expect(graphicsSelectionAfterRemove(duplicated.document, copyId)).toBe(title.id)
+    expect(graphicsSelectionAfterRemove(duplicated.document, title.id)).toBe(copyId)
+    const removed = edited(duplicated, [{ op: 'remove_layer', layer_id: title.id }], null)
+    expect(removed.document.layers.map((layer) => layer.id)).toEqual([copyId, shade.id, handle.id])
+    expect(removed.document.layers.find((layer) => layer.id === handle.id)?.visible).toBe(false)
+    expect(removed.past).toHaveLength(5)
+    expect(stepGraphicsHistory(removed, 'undo')!.document).toEqual(duplicated.document)
+    expect(graphicsSelectionAfterRemove(removed.document, 'l99')).toBeNull()
+  })
+
+  it('summarizes each row for the list', () => {
+    const document = graphicsDocumentFromLayers([
+      { kind: 'text', items: [{ text: '', slot: 'headline' }, { text: '', slot: 'secondary' }] },
+      { kind: 'text', items: [{ text: 'How can you look\nthis cool while waiting at a red light?' }] },
+      { kind: 'image', artifactId: 'logo' },
+      { kind: 'image', artifactId: 'gone' },
+      { kind: 'qr', url: 'https://example.com/a', slot: null },
+      { kind: 'qr' },
+      { kind: 'scrim', edge: 'top' },
+    ])
+    const images = parseGraphicsRead(wire()).images
+    expect(document.layers.map((layer) => graphicsLayerSummary(layer, images))).toEqual([
+      'Empty headline, second line',
+      'How can you look this cool whil…',
+      'logo',
+      'Image not loaded yet',
+      'https://example.com/a',
+      'Profile link',
+      'Top shade',
+    ])
+    expect(graphicsLayerSummary(document.layers[2]!, images, [{ artifactId: 'logo', address: 'b2', label: 'logo' }])).toBe('@b2')
+    expect(graphicsPercent(0.045)).toBe('4.5%')
+    expect(graphicsPercent(1)).toBe('100%')
+  })
+
+  it('rebuilds the reference frame from the list and inspector without dragging', () => {
+    let document = graphicsDocumentFromLayers([])
+    const step = (edits: GraphicsEdit[]) => {
+      document = apply(document, edits)
+    }
+    step([graphicsAddLayer(document, 'scrim')!.edit])
+    const text = graphicsAddLayer(document, 'text')!
+    step([text.edit])
+    const block = document.layers.find((layer) => layer.id === text.layerId)
+    if (block?.kind !== 'text') throw new Error('expected the added text layer')
+    const [headline] = block.items
+    step([
+      { op: 'set_position', layer_id: text.layerId, position: { anchor: 'bottom-left', x: 0, y: 1 } },
+      { op: 'set_text_block', layer_id: text.layerId, block: { align: 'left' } },
+      { op: 'set_item', layer_id: text.layerId, item_id: headline.id, item: { text: 'How can you look this cool while waiting at a red light?', slot: 'headline', accent: 'brush', maxLines: 3 } },
+      { op: 'add_item', layer_id: text.layerId, item: { text: THAI_TITLE, slot: 'secondary', size: 0.045 } },
+      { op: 'add_item', layer_id: text.layerId, item: { text: 'TikTok/@pomkondeena', slot: 'credit', icon: 'camera', size: 0.03 } },
+    ])
+    step([graphicsAddLayer(document, 'image', { image: { artifactId: 'logo-1', address: 'b2', label: 'Logo' } })!.edit])
+    expect(document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'image'])
+    expect(document.layers[0]).toMatchObject({ edge: 'bottom' })
+    expect(document.layers[1]).toMatchObject({
+      position: { anchor: 'bottom-left', x: 0, y: 1, space: 'safe' },
+      align: 'left',
+      items: [
+        { slot: 'headline', accent: 'brush' },
+        { slot: 'secondary', text: THAI_TITLE },
+        { slot: 'credit', icon: 'camera' },
+      ],
+    })
+    expect(document.layers[2]).toMatchObject({ artifactId: 'logo-1', position: { anchor: 'top-left', x: 0, y: 0, space: 'safe' } })
   })
 })

@@ -242,4 +242,40 @@ describe("voice chat action policy", () => {
     const unnamed = await prepare(spoken, { tool: "show_media_fullscreen", params: {}, message: spoken });
     expect(unnamed.content[0]?.text).toContain("Invalid parameters for show_media_fullscreen");
   });
+
+  it("plans graphics for a video with the words given for its slots, and refuses a still", async () => {
+    const video = await engine.artifacts.create("video", "red light");
+    const still = await engine.artifacts.create("image", "logo");
+    if (!video.ok || !still.ok) throw new Error("Could not create graphics fixtures");
+    const videoCell = engine.notebooks.createCell({ type: "video", slot: { row: 6, column: 6 }, outputArtifactId: video.value.artifactId });
+    const stillCell = engine.notebooks.createCell({ type: "image", slot: { row: 7, column: 6 }, outputArtifactId: still.value.artifactId });
+    for (const cell of [videoCell, stillCell]) {
+      const inserted = await engine.notebooks.insertCell(notebookId, cell);
+      if (!inserted.ok) throw new Error(inserted.error.message);
+    }
+    const typed = "Add a headline saying Red light legends to G7";
+    const graphics = (params: Record<string, unknown>) => prepare(typed, { tool: "show_graphics", params, message: typed });
+
+    const plan = chatActionPlanSchema.parse(value(await graphics({ asset_id: "g7", headline: " Red light legends ", secondary: " ", credit: "TikTok/@pomkondeena" })));
+    expect(plan).toMatchObject({
+      tool: "show_graphics",
+      routedTool: "show_graphics",
+      effect: "view",
+      prompt: "Add a headline saying Red light legends to @g7",
+      params: { asset_id: video.value.artifactId, cell_id: videoCell.id, headline: "Red light legends", credit: "TikTok/@pomkondeena" },
+      confirmation: { required: false },
+    });
+    expect(plan.params).not.toHaveProperty("secondary");
+    const applied = await withBookContext({ bookId, engine }, () => chatDef(engine).handler({ book_id: bookId, action_plan: plan }));
+    expect(applied.content[0]?.text).toContain("View actions open in the app");
+
+    expect((await graphics({ asset_id: still.value.artifactId, headline: "Logo" })).content[0]?.text).toBe("@h7 holds image; graphics go on a video");
+    expect((await graphics({ asset_id: "g7", headline: "x".repeat(281) })).content[0]?.text).toContain("Invalid parameters for show_graphics");
+    expect(discoverVoiceActions(engine, "graphics")).toContainEqual(expect.objectContaining({
+      name: "show_graphics",
+      effect: "view",
+      requiresReview: false,
+      parameters: expect.objectContaining({ required: ["asset_id"] }),
+    }));
+  });
 });

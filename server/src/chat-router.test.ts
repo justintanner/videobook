@@ -79,6 +79,14 @@ describe("chat routing catalog", () => {
     const prompt = buildChatRoutingPrompt("my-book", tools);
     expect(prompt).toContain("- show_media_fullscreen: Show, open, view or enlarge");
     expect(prompt).toContain("- For show_media_fullscreen: use when the user asks to show, open, view, or enlarge");
+    expect(getRoutableTool(tools, "show_graphics")).toMatchObject({
+      effect: "view",
+      autoApply: true,
+      params: ["asset_id", "headline", "secondary", "credit"],
+      requiredParams: ["asset_id"],
+    });
+    expect(prompt).toContain("- show_graphics: Open the on-screen graphics editor");
+    expect(prompt).toContain("- For show_graphics: use when the user asks to add, edit, style or move on-screen graphics");
   });
 
   it("includes registered destructive and administrative tools", () => {

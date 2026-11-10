@@ -4,7 +4,7 @@ import type { GraphicsDocument } from '../../server/src/graphics/model'
 import type { ChatExecution } from './chat-turns'
 import {
   editGraphicsHistory,
-  graphicsImageEdits,
+  graphicsOpenEdits,
   graphicsRenderQueuedMessage,
   graphicsToolError,
   parseGraphicsRead,
@@ -213,8 +213,8 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
       const read = await fetchRead()
       if (ticket !== epoch.current) return
       const loaded = commit((current) => withRead(current, read))
-      const imageEdits = loaded.document ? graphicsImageEdits(loaded.document, loaded.target?.image ?? null) : []
-      if (imageEdits.length > 0) edit(imageEdits)
+      const openEdits = loaded.document && loaded.target ? graphicsOpenEdits(loaded.document, loaded.target) : []
+      if (openEdits.length > 0) edit(openEdits)
     } catch (error) {
       if (ticket === epoch.current) commit((current) => ({ ...current, loading: false, error: graphicsToolError(error).message }))
     }
@@ -238,7 +238,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const reload = useCallback(async () => {
     const ticket = epoch.current
-    commit((current) => ({ ...current, target: current.target ? { ...current.target, image: null } : null, save: 'saved', conflictRevision: null, saveError: null, past: [], future: [], loading: true }))
+    commit((current) => ({ ...current, target: current.target ? { ...current.target, image: null, text: null } : null, save: 'saved', conflictRevision: null, saveError: null, past: [], future: [], loading: true }))
     await load(ticket)
   }, [commit, load])
 
