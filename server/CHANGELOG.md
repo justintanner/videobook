@@ -33,6 +33,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Subtitle renders, `render_video` and QR outros no longer fail on Linux hosts
+  without an NVIDIA GPU. Remotion picked the `h264_nvenc` encoder there even
+  without `libcuda`, so every render job failed; a render now falls back to
+  software encoding when a hardware encoder cannot open and stays in software
+  for the rest of the process, while hosts where hardware encoding works keep
+  using it.
 - A generation cell's cost breakdown no longer covers the Inputs, Model and
   Payload panels of its editor once the cell has three or more provider calls.
   The editor keeps its minimum height, and the per-call list is folded behind
