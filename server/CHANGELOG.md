@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-11
+
 ### Changed
 
 - The graphics editor takes less room and shows more of itself at once. One
@@ -33,6 +35,11 @@ and the package uses [Semantic Versioning](https://semver.org/).
   watermark placement and analysis can read it and `doctor` with `fix: true`
   reports it healthy instead of rebuilding it. Renders made before this change
   get the same files from `doctor` with `fix: true` and their `asset_id`.
+- Regen post in the post sheet (`draft_post_copy`) no longer fails with "No
+  frames to analyze" on a graphics or subtitle render made as a new video.
+  `analyze_video` now extracts and keeps the frames of a video that has none
+  stored before it analyzes it, so renders made before this release can be
+  analyzed without a `doctor` fix first.
 - The Actions sheet reviews `video_graphics` and `caption_video` by the
   operation chosen in the form instead of warning about charges for every
   one. Only the paid operations (`suggest` and `detect_regions` for graphics,
