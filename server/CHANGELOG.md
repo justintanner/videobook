@@ -37,11 +37,58 @@ and the package uses [Semantic Versioning](https://semver.org/).
   `video_graphics` takes `op: save_template`, `rename_template`,
   `delete_template`, `set_default_template` and `copy_templates`, and `get`
   returns the book's templates and `default_template_id`.
+- The graphics editor lists the layers and edits the selected one in an
+  inspector: add text, an image from the book, a QR code or a shade; rename,
+  show or hide, reorder, duplicate or delete a layer; place it on a
+  nine-point grid inside the safe area, the inset frame or the whole frame;
+  and set its opacity, its size and, for text, the width, alignment, backing
+  plate and each line's text, slot, icon, font, size, colour, case, line
+  limit, accent stroke, outline and shadow. Graphics also opens from the
+  video cell menu, the media dock and typed or spoken chat, which can fill
+  the headline, second line and credit; nothing renders until Render is
+  pressed.
+- Layers drag, resize and snap to the safe area, the centre lines and the
+  other layers on the preview (Alt, Ctrl or Command moves freely). Arrow
+  keys nudge, Delete removes and Ctrl or Command+D duplicates, each as one
+  undo step. Each layer has a time window (the whole clip, the first or last
+  N seconds, or a custom window from the playhead) with a fade, shown on a
+  strip under the transport, and the render shows the layer only then.
+  Under 900 px the editor stacks and takes touch drags.
+- Suggest on the headline field offers 3 to 5 headlines (Thai by default)
+  written from the video's existing analysis, transcript and download text,
+  and Translate on the second line offers translations of the headline
+  (English by default). Each press is one paid model call; it never starts
+  transcription or analysis, and nothing is applied until an option is
+  picked. `video_graphics` takes `op: suggest`.
+- The layer list warns when a layer covers a face or on-screen text already
+  found in the video while it is shown, and Find clear spot in the inspector
+  moves the layer to the clearest of its nine spots as one undoable step. It
+  is free when the layer's frames were already checked and says when it
+  needs a paid vision check first. `video_graphics` takes
+  `op: check_placement` and `op: detect_regions`.
 
 ### Changed
 
 - `/overlay` no longer opens the render-time overlay form. The
   `set_video_overlay` tool still works for `render_video` outputs.
+- `/watermark @a1` and chat watermark plans open the graphics editor in
+  watermark mode: the platform's watermark (for TikTok the handle, an empty
+  Thai title and an English line, no QR code), a TikTok/X switch, Replace
+  video as the default output, and Save as default watermark, which
+  `apply_watermark` and goal finishing then burn. A chat plan's platform,
+  handle and QR choice open in the editor, where position, opacity and
+  timing are set. The separate watermark review is gone. `video_graphics`
+  takes `watermark: true`, `op: save_watermark` and
+  `op: set_watermark_template`.
+- `apply_watermark` burns and goal finishing draw the watermark with the
+  graphics renderer, and `include_qr` defaults to false: the default TikTok
+  watermark is the handle alone until a title is typed or a saved watermark
+  template adds more. `include_qr: true`, or a saved watermark template with
+  a QR code, adds the QR code back, and it still decodes to the profile URL.
+  A saved watermark template can carry a headline, a credit
+  (`source_asset_id` fills it from another video) or a logo, and
+  `card_asset_id` draws as an image layer. `wait: false`, `position: auto`
+  and the saved profiles behave as before.
 
 ### Fixed
 
