@@ -172,7 +172,7 @@ describe('composition endpoints over HTTP MCP', () => {
   it('burns a timed QR overlay while preserving video and audio duration', async () => {
     const id = await video()
     const badge = await picture('white', 64, 64)
-    await call('apply_watermark', { asset_id: id, card_asset_id: badge, include_handle: false, position: 'bottom-right', qr_start_seconds: 1, qr_end_seconds: 2, qr_opacity: 1, fade_seconds: 0 })
+    await call('apply_watermark', { asset_id: id, card_asset_id: badge, include_qr: true, include_handle: false, position: 'bottom-right', qr_start_seconds: 1, qr_end_seconds: 2, qr_opacity: 1, fade_seconds: 0 })
     await idle()
     const probe = await probeVideo(await localFile(id, 'original.mp4'))
     expect(probe.videoDuration).toBeCloseTo(3, 1)
@@ -186,13 +186,13 @@ describe('composition endpoints over HTTP MCP', () => {
 
   it.each([3, 5])('rejects watermark windows past the picture end with %s seconds of audio', async (audioDuration) => {
     const id = await video('black', 3, audioDuration)
-    await rejectWithoutChanges('apply_watermark', id, { include_handle: false, position: 'bottom-right', qr_start_seconds: 3.5, qr_end_seconds: 4.5 })
+    await rejectWithoutChanges('apply_watermark', id, { include_qr: true, include_handle: false, position: 'bottom-right', qr_start_seconds: 3.5, qr_end_seconds: 4.5 })
   })
 
   it('uses the picture duration for watermark fades when audio lasts longer', async () => {
     const id = await video('black', 3, 5)
     const badge = await picture('white', 64, 64)
-    await call('apply_watermark', { asset_id: id, card_asset_id: badge, include_handle: false, position: 'bottom-right', qr_start_seconds: 1, qr_end_seconds: 10, qr_opacity: 1, fade_seconds: 0.5 })
+    await call('apply_watermark', { asset_id: id, card_asset_id: badge, include_qr: true, include_handle: false, position: 'bottom-right', qr_start_seconds: 1, qr_end_seconds: 10, qr_opacity: 1, fade_seconds: 0.5 })
     await idle()
     const probe = await probeVideo(await localFile(id, 'original.mp4'))
     expect(probe.videoDuration).toBeCloseTo(3, 1)
@@ -210,7 +210,7 @@ describe('composition endpoints over HTTP MCP', () => {
 
   it('rejects independent windows on a combined render overlay before creating badges', async () => {
     const id = await video()
-    await rejectWithoutChanges('apply_watermark', id, { mode: 'overlay', position: 'top-right', qr_start_seconds: 1, qr_end_seconds: 2 })
+    await rejectWithoutChanges('apply_watermark', id, { mode: 'overlay', include_qr: true, position: 'top-right', qr_start_seconds: 1, qr_end_seconds: 2 })
   })
 
   it('preserves and accurately reports overlay settings across partial updates and clearing', async () => {

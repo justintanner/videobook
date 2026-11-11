@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { buildBurnWatermarkFilter } from "../jobs/burn-watermark.js";
 import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { LIGHTNING_WATERMARK_PROFILE, X_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
@@ -97,20 +96,13 @@ function labelledRects(layer: GraphicsLayerLayout): Array<{ label: string; rect:
   return [...box, ...plate, ...items];
 }
 
-function burnOffset(expression: string, main: number, side: number): number {
-  const inset = /^main_[wh]-overlay_[wh]-(\d+)$/u.exec(expression);
-  if (inset) return main - side - Number(inset[1]);
-  if (/^\(main_[wh]-overlay_[wh]\)\/2$/u.test(expression)) return (main - side) / 2;
-  if (/^\d+$/u.test(expression)) return Number(expression);
-  throw new Error(`unexpected overlay expression ${expression}`);
-}
-
 function burnedQrRect(profile: LightningWatermarkProfile, frame: GraphicsFrame, corner: OsgPosition): GraphicsRect {
-  const filter = buildBurnWatermarkFilter({ width: frame.width, height: frame.height, corner, userScale: profile.scale, includeQr: true, includeHandle: false });
-  const side = Number(/\[1:v\]scale=-2:(\d+),/u.exec(filter)?.[1]);
-  const overlay = /\[0:v\]\[qr\]overlay=([^:]+):([^:]+):format/u.exec(filter);
-  if (!overlay) throw new Error(`no QR overlay in ${filter}`);
-  return { x: burnOffset(overlay[1], frame.width, side), y: burnOffset(overlay[2], frame.height, side), width: side, height: side };
+  const side = Math.max(2, 2 * Math.round((Math.min(frame.width, frame.height) * 0.16 * profile.scale) / 2));
+  const padding = Math.round(frame.width * 0.02);
+  const [vertical, horizontal] = corner.split("-");
+  const x = horizontal === "left" ? padding : horizontal === "right" ? frame.width - side - padding : (frame.width - side) / 2;
+  const y = vertical === "top" ? padding : vertical === "bottom" ? frame.height - side - padding : (frame.height - side) / 2;
+  return { x, y, width: side, height: side };
 }
 
 describe("graphicsSpaceRect", () => {

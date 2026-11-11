@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
@@ -6,6 +7,7 @@ import { coldOpenDestination, coldOpenSource } from "../cold-open.js";
 import { coldOpenRangeError } from "../cold-open-model.js";
 import { probeVideo } from "../ffmpeg.js";
 import { readGoal, saveGoal, type GoalFinish, type GoalRecord } from "../goal-store.js";
+import { watermarkGraphicsTemplate } from "../graphics/templates.js";
 import { goalAssemblyStale } from "../goal-state.js";
 import { finishingIdentityKey, watermarkProfileFor } from "../lightning-defaults.js";
 import { mutateNotebook } from "../notebook-mutations.js";
@@ -98,11 +100,12 @@ async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, 
   return artifactId;
 }
 
-async function burnSavedWatermark(engine: Engine, artifactId: string): Promise<void> {
+async function burnSavedWatermark(engine: Engine, artifactId: string, sourceArtifactId: string): Promise<void> {
   const apply = applyWatermarkDef(engine);
   const result = await apply.handler({
     book_id: engine.book.get().bookId,
     asset_id: artifactId,
+    source_asset_id: sourceArtifactId,
     platform: "tiktok",
     mode: "burn",
     wait: true,
@@ -133,7 +136,7 @@ async function runFinish(engine: Engine, payload: FinishPayload, signal: AbortSi
   const running = currentFinish(engine, payload.goalId, payload.identity);
   if (!running?.finish) return { finalArtifactId: "", coldOpenArtifactId };
   const finalArtifactId = await duplicatePlayableVideo(engine, coldOpenArtifactId, "Finished");
-  await burnSavedWatermark(engine, finalArtifactId);
+  await burnSavedWatermark(engine, finalArtifactId, running.finish.sourceArtifactId);
   const manifest = await engine.files.manifest(finalArtifactId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const file = findPrimaryMediaFile(manifest.value.files, "video");
@@ -195,6 +198,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord, args: Re
   if (rangeError) throw new Error(rangeError);
   const config = await readWatermarkConfig(engine, "tiktok");
   const profile = effectiveWatermarkProfile(config, "tiktok");
+  const template = watermarkGraphicsTemplate(engine, "tiktok");
   const identity = finishingIdentityKey({
     sourceObjectHash: source.file.objectHash,
     startSeconds: start,
@@ -202,6 +206,7 @@ export async function queueGoalFinish(engine: Engine, goal: GoalRecord, args: Re
     profile: watermarkProfileFor(profile.platform, profile),
     qrStartSeconds: config.profile?.qrStartSeconds,
     qrEndSeconds: config.profile?.qrEndSeconds,
+    watermarkTemplate: template ? createHash("sha256").update(JSON.stringify(template.document)).digest("hex") : null,
   });
   const same = goal.finish?.identity === identity;
   if (same && goal.finish?.status === "completed" && goal.finish.finalArtifactId && engine.artifacts.get(goal.finish.finalArtifactId).ok) {

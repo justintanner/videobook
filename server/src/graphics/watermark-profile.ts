@@ -8,12 +8,16 @@ import {
 } from "../watermark-handle-position.js";
 import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
 import { watermarkProfileUrl } from "../watermark-platform.js";
+import { graphicsLineMetrics } from "./fonts.js";
+import { GRAPHICS_ICON_SPACE } from "./layout.js";
 import type {
   GraphicsAnchor,
   GraphicsDocument,
+  GraphicsFontPreset,
   GraphicsFrame,
   GraphicsIcon,
   GraphicsLayerInput,
+  GraphicsPlateInput,
   GraphicsPosition,
   GraphicsSpace,
   GraphicsTiming,
@@ -66,9 +70,14 @@ const PILL_OPACITY = 0.92;
 const HANDLE_TEXT_COLOR = "#FFFFFF";
 const BADGE_WIDTH_UNITS = 480;
 const BADGE_HANDLE_HEIGHT_UNITS = 88;
-const HANDLE_FONT_UNITS = 28;
-const HANDLE_PILL_INSET_UNITS = 2;
-const MIN_HANDLE_PADDING_Y_UNITS = 1;
+const BADGE_PILL_UNITS = 88;
+const BADGE_PILL_PADDING_UNITS = 32;
+const MIN_BADGE_PILL_UNITS = 30;
+const MAX_BADGE_PADDING_UNITS = 96;
+const BADGE_ICON_SPACE_UNITS = 40;
+const BADGE_STROKE_UNITS = 1;
+const HANDLE_FONT: GraphicsFontPreset = "text";
+const HANDLE_FONT_UNITS = 25.6;
 const ATTACHED_GAP_FRACTION = 0.06;
 const MIN_ATTACHED_GAP_PIXELS = 2;
 const DEFAULT_CORNER: OsgPosition = "bottom-right";
@@ -111,6 +120,10 @@ function profileUrl(profile: LightningWatermarkProfile): string {
 
 function qrSideFraction(scale: number): number {
   return WATERMARK_MIN_DIM_FRACTION * clamp(scale, 0, Number.MAX_VALUE, 1);
+}
+
+function qrSize(scale: number): number {
+  return clamp(qrSideFraction(scale), 0.05, 0.6);
 }
 
 function spaceRect(frame: GraphicsFrame, space: Exclude<GraphicsSpace, "safe">): Rect {
@@ -159,7 +172,7 @@ function attachedHandlePosition(
   placement: Exclude<WatermarkHandlePlacement, "center">,
 ): GraphicsPosition {
   const space = spaceRect(frame, "inset");
-  const side = qrSideFraction(scale) * Math.min(frame.width, frame.height);
+  const side = qrSidePixels(frame, scale);
   const point = GRAPHICS_ANCHOR_POINTS[CORNER_ANCHORS[corner]];
   const left = space.x + point.x * (space.width - side);
   const top = space.y + point.y * (space.height - side);
@@ -176,6 +189,56 @@ function handleWidth(frame: GraphicsFrame, unit: number, space: Rect): number {
   return clamp((BADGE_WIDTH_UNITS * unit * Math.min(frame.width, frame.height)) / space.width, 0.1, 1);
 }
 
+function badgePadding(value: number): number {
+  return Math.round(clamp(value, 0, MAX_BADGE_PADDING_UNITS, BADGE_PILL_PADDING_UNITS));
+}
+
+function badgePillUnits(paddingY: number): number {
+  return Math.max(MIN_BADGE_PILL_UNITS, BADGE_PILL_UNITS + 2 * (badgePadding(paddingY) - BADGE_PILL_PADDING_UNITS));
+}
+
+function handleLineUnits(label: string, fontUnits: number): number {
+  const metrics = graphicsLineMetrics(HANDLE_FONT, label);
+  return fontUnits * (metrics.ascent + metrics.descent);
+}
+
+function handlePlate(profile: LightningWatermarkProfile, unit: number, label: string, fontSize: number): GraphicsPlateInput {
+  const fontUnits = fontSize / unit;
+  const stroke = profile.includeHandleBorder ? BADGE_STROKE_UNITS : 0;
+  const outerUnits = badgePillUnits(profile.handlePaddingY) - 2 * BADGE_STROKE_UNITS + 2 * stroke;
+  const iconUnits = profile.includePlatformIcon ? (BADGE_ICON_SPACE_UNITS - fontUnits * GRAPHICS_ICON_SPACE) / 2 : 0;
+  return {
+    color: PILL_COLOR,
+    opacity: PILL_OPACITY,
+    paddingX: clamp((badgePadding(profile.handlePaddingX) + iconUnits + stroke) * unit, 0, MAX_GRAPHICS_PLATE_PADDING),
+    paddingY: clamp(((outerUnits - handleLineUnits(label, fontUnits)) / 2) * unit, 0, MAX_GRAPHICS_PLATE_PADDING),
+    radius: clamp(profile.handleRounding / 100, 0, 1, 1),
+    border: profile.includeHandleBorder,
+  };
+}
+
+function evenPixels(value: number): number {
+  return Math.max(2, 2 * Math.round(value / 2));
+}
+
+function qrSidePixels(frame: GraphicsFrame, scale: number): number {
+  return evenPixels(qrSize(scale) * Math.min(frame.width, frame.height));
+}
+
+function handlePixels(frame: GraphicsFrame, profile: LightningWatermarkProfile): number {
+  return evenPixels((qrSidePixels(frame, profile.scale) * badgePillUnits(profile.handlePaddingY)) / BADGE_HANDLE_HEIGHT_UNITS);
+}
+
+function badgeUnit(frame: GraphicsFrame, profile: LightningWatermarkProfile, attached: boolean): number {
+  const short = Math.min(frame.width, frame.height);
+  if (attached) return qrSidePixels(frame, profile.scale) / BADGE_WIDTH_UNITS / short;
+  return handlePixels(frame, profile) / badgePillUnits(profile.handlePaddingY) / short;
+}
+
+export function watermarkHandleHeight(profile: LightningWatermarkProfile, frame: GraphicsFrame): number {
+  return handlePixels(frame, profile) / Math.min(frame.width, frame.height);
+}
+
 function handleLayer(
   profile: LightningWatermarkProfile,
   frame: GraphicsFrame,
@@ -184,8 +247,9 @@ function handleLayer(
   timing: GraphicsTiming,
 ): GraphicsLayerInput {
   const attached = placement === "center" ? null : placement;
-  const unit = qrSideFraction(profile.scale) / (attached ? BADGE_WIDTH_UNITS : BADGE_HANDLE_HEIGHT_UNITS);
-  const paddingYUnits = Math.max(MIN_HANDLE_PADDING_Y_UNITS, profile.handlePaddingY - HANDLE_PILL_INSET_UNITS);
+  const unit = badgeUnit(frame, profile, attached !== null);
+  const label = handleLabel(profile.handle);
+  const fontSize = clamp(HANDLE_FONT_UNITS * unit, 0.01, 0.3);
   return {
     kind: "text",
     name: "Handle",
@@ -197,19 +261,12 @@ function handleLayer(
     width: handleWidth(frame, unit, spaceRect(frame, attached ? "inset" : "frame")),
     align: "center",
     gap: 0,
-    plate: {
-      color: PILL_COLOR,
-      opacity: PILL_OPACITY,
-      paddingX: clamp(profile.handlePaddingX * unit, 0, MAX_GRAPHICS_PLATE_PADDING),
-      paddingY: clamp(paddingYUnits * unit, 0, MAX_GRAPHICS_PLATE_PADDING),
-      radius: clamp(profile.handleRounding / 100, 0, 1, 1),
-      border: profile.includeHandleBorder,
-    },
+    plate: handlePlate(profile, unit, label, fontSize),
     items: [{
-      text: handleLabel(profile.handle),
+      text: label,
       slot: "handle",
-      font: "heavy",
-      size: clamp(HANDLE_FONT_UNITS * unit, 0.01, 0.3),
+      font: HANDLE_FONT,
+      size: fontSize,
       color: HANDLE_TEXT_COLOR,
       case: "none",
       maxLines: 1,
@@ -230,7 +287,7 @@ function qrLayer(profile: LightningWatermarkProfile, corner: OsgPosition, timing
     url: profileUrl(profile),
     slot: "profile",
     position: cornerPosition(corner),
-    size: clamp(qrSideFraction(profile.scale), 0.05, 0.6),
+    size: qrSize(profile.scale),
     style: "tile",
     dark: QR_DARK,
     light: QR_LIGHT,

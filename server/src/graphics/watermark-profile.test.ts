@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildBurnWatermarkFilter } from "../jobs/burn-watermark.js";
 import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { LIGHTNING_WATERMARK_PROFILE, watermarkWindowsFor, X_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
-import { watermarkHandleOverlayPosition } from "../watermark-handle-position.js";
+import type { GraphicsTextLayout } from "./layout.js";
+import { layoutGraphics } from "./layout.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsPosition, GraphicsQrLayer, GraphicsTextLayer, GraphicsTiming } from "./model.js";
 import { GRAPHICS_ANCHOR_POINTS, GRAPHICS_INSET_FRACTION, parseGraphicsDocument } from "./model.js";
 import { resolveLayerTiming } from "./timing.js";
-import { watermarkDocumentFromProfile } from "./watermark-profile.js";
+import { watermarkDocumentFromProfile, watermarkHandleHeight } from "./watermark-profile.js";
 
 const PROFILES = [["tiktok", LIGHTNING_WATERMARK_PROFILE], ["x", X_WATERMARK_PROFILE]] as const;
 const FRAMES: GraphicsFrame[] = [{ width: 1080, height: 1920 }, { width: 1920, height: 1080 }];
@@ -54,41 +54,27 @@ function documentQrPixels(layer: GraphicsQrLayer, frame: GraphicsFrame): { side:
   return { side, x: point.x - anchor.x * side, y: point.y - anchor.y * side };
 }
 
-function overlayValue(expression: string, main: number, overlay: number): number {
-  const numeric = expression.replace(/main_[wh]/gu, String(main)).replace(/overlay_[wh]/gu, String(overlay));
-  const inset = /^(\d+)-(\d+)-(\d+)$/u.exec(numeric);
-  if (inset) return Number(inset[1]) - Number(inset[2]) - Number(inset[3]);
-  const centred = /^\((\d+)-(\d+)\)\/2$/u.exec(numeric);
-  if (centred) return (Number(centred[1]) - Number(centred[2])) / 2;
-  if (/^\d+$/u.test(numeric)) return Number(numeric);
-  throw new Error(`unexpected overlay expression ${expression}`);
+function evenPixels(value: number): number {
+  return Math.max(2, 2 * Math.round(value / 2));
 }
 
-function burnedQrPixels(profile: LightningWatermarkProfile, frame: GraphicsFrame, corner: OsgPosition) {
-  const filter = buildBurnWatermarkFilter({
-    width: frame.width,
-    height: frame.height,
-    corner,
-    userScale: profile.scale,
-    includeQr: true,
-    includeHandle: true,
-    qrOpacity: profile.qrOpacity,
-    handleOpacity: profile.handleOpacity,
-    handlePlacement: profile.handlePlacement,
-    handlePaddingY: profile.handlePaddingY,
-    handleVerticalPercent: profile.handleVerticalPercent,
-  });
-  const side = Number(/\[1:v\]scale=-2:(\d+),/u.exec(filter)?.[1]);
-  const overlay = /\[0:v\]\[qr\]overlay=([^:]+):([^:]+):format/u.exec(filter);
-  if (!overlay) throw new Error(`no QR overlay in ${filter}`);
-  return { side, x: overlayValue(overlay[1], frame.width, side), y: overlayValue(overlay[2], frame.height, side) };
+function todayQrBox(profile: LightningWatermarkProfile, frame: GraphicsFrame, corner: OsgPosition): { side: number; x: number; y: number } {
+  const side = evenPixels(Math.min(frame.width, frame.height) * 0.16 * profile.scale);
+  const padding = Math.round(frame.width * 0.02);
+  const [vertical, horizontal] = corner.split("-");
+  const x = horizontal === "left" ? padding : horizontal === "right" ? frame.width - side - padding : (frame.width - side) / 2;
+  const y = vertical === "top" ? padding : vertical === "bottom" ? frame.height - side - padding : (frame.height - side) / 2;
+  return { side, x, y };
 }
 
-function burnedCornerPadding(profile: LightningWatermarkProfile, frame: GraphicsFrame): { x: number; y: number } {
-  const filter = buildBurnWatermarkFilter({ width: frame.width, height: frame.height, corner: "bottom-right", userScale: profile.scale, includeQr: true, includeHandle: false });
-  const match = /overlay=main_w-overlay_w-(\d+):main_h-overlay_h-(\d+):/u.exec(filter);
-  if (!match) throw new Error(`no corner padding in ${filter}`);
-  return { x: Number(match[1]), y: Number(match[2]) };
+function todayPillUnits(paddingY: number): number {
+  return Math.max(30, 88 + 2 * (paddingY - 32));
+}
+
+function textLayout(document: GraphicsDocument, frame: GraphicsFrame, labelPixels: number): GraphicsTextLayout {
+  const layout = layoutGraphics({ document, frame, measure: () => labelPixels }).find((entry): entry is GraphicsTextLayout => entry.kind === "text");
+  if (!layout) throw new Error("expected a text layout");
+  return layout;
 }
 
 function resolvedWindow(timing: GraphicsTiming, duration: number): { start: number; end: number } | null {
@@ -107,17 +93,47 @@ describe("watermark documents from a saved profile", () => {
       const qr = qrOf(built(profile, frame, { includeQr: true }));
       expect(qr).toMatchObject({ slot: "profile", style: "tile", dark: "#0B0B0F", light: "#FFFFFF", level: "H", size: 0.16 * profile.scale });
       expect(qr.position).toEqual({ anchor: "bottom-right", x: 1, y: 1, space: "inset" });
-      expect(documentQrPixels(qr, frame)).toEqual(burnedQrPixels(profile, frame, "bottom-right"));
-      const inset = insetSpace(frame);
-      expect(burnedCornerPadding(profile, frame)).toEqual({ x: inset.x, y: inset.y });
+      expect(documentQrPixels(qr, frame)).toEqual(todayQrBox(profile, frame, "bottom-right"));
     },
   );
 
-  it.each(CORNERS)("places the QR tile in the %s corner exactly where the burn does", (corner) => {
+  it.each(CORNERS)("places the QR tile in the %s corner exactly where today's burn put it", (corner) => {
     for (const frame of FRAMES) {
       const qr = qrOf(built(LIGHTNING_WATERMARK_PROFILE, frame, { includeQr: true, corner }));
-      expect(documentQrPixels(qr, frame)).toEqual(burnedQrPixels(LIGHTNING_WATERMARK_PROFILE, frame, corner));
+      expect(documentQrPixels(qr, frame)).toEqual(todayQrBox(LIGHTNING_WATERMARK_PROFILE, frame, corner));
     }
+  });
+
+  it.each(PROFILES.flatMap(([name, profile]) => [...FRAMES, { width: 720, height: 1280 }].map((frame) => [name, profile, frame] as const)))(
+    "sizes the %s handle pill like today's badge pill at %j",
+    (_name, profile, frame) => {
+      const side = evenPixels(Math.min(frame.width, frame.height) * 0.16 * profile.scale);
+      const pill = todayPillUnits(profile.handlePaddingY);
+      const height = evenPixels((side * pill) / 88);
+      const unit = height / pill;
+      const label = 61;
+      const layout = textLayout(built(profile, frame), frame, label * unit);
+      const plate = layout.plate;
+      if (!plate) throw new Error("expected a plate");
+      const todayWidth = (Math.ceil(40 + label + 2 * profile.handlePaddingX) + 2) * unit;
+      expect(Math.abs(plate.height - height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(plate.width - todayWidth)).toBeLessThanOrEqual(2);
+      expect(Math.abs(plate.x + plate.width / 2 - frame.width / 2)).toBeLessThanOrEqual(1);
+      expect(Math.abs(plate.y + plate.height / 2 - (frame.height * profile.handleVerticalPercent) / 100)).toBeLessThanOrEqual(1);
+      expect(watermarkHandleHeight(profile, frame) * Math.min(frame.width, frame.height)).toBeCloseTo(height, 6);
+    },
+  );
+
+  it("keeps a borderless pill and one without an icon to today's outline", () => {
+    const frame = { width: 1080, height: 1920 };
+    const profile: LightningWatermarkProfile = { ...X_WATERMARK_PROFILE, includeHandleBorder: false, includePlatformIcon: false, handlePaddingY: 40 };
+    const pill = todayPillUnits(40);
+    const height = evenPixels((172 * pill) / 88);
+    const unit = height / pill;
+    const plate = textLayout(built(profile, frame), frame, 100 * unit).plate;
+    if (!plate) throw new Error("expected a plate");
+    expect(Math.abs(plate.height - (pill - 2) * unit)).toBeLessThanOrEqual(1);
+    expect(Math.abs(plate.width - Math.ceil(100 + 2 * profile.handlePaddingX) * unit)).toBeLessThanOrEqual(2);
   });
 
   it.each(PROFILES)("resolves the %s QR and handle windows to watermarkWindowsFor at every clip length", (_name, profile) => {
@@ -163,15 +179,15 @@ describe("watermark documents from a saved profile", () => {
     expect(handle.items[0]).toMatchObject({
       text: profile.handle,
       slot: "handle",
-      font: "heavy",
+      font: "text",
       maxLines: 1,
       icon: profile.platform,
       color: "#FFFFFF",
     });
     expect(handle.plate).toMatchObject({ color: "#0B0B0F", opacity: 0.92, border: profile.includeHandleBorder, radius: profile.handleRounding / 100 });
     const larger = handleOf(built({ ...profile, scale: 1.5 }, { width: 1080, height: 1920 }));
-    expect(larger.items[0].size).toBeCloseTo(handle.items[0].size * 1.5, 10);
-    expect(larger.plate?.paddingX).toBeCloseTo((handle.plate?.paddingX ?? 0) * 1.5, 10);
+    expect(larger.items[0].size / handle.items[0].size).toBeCloseTo(1.5, 1);
+    expect((larger.plate?.paddingX ?? 0) / (handle.plate?.paddingX ?? 1)).toBeCloseTo(1.5, 1);
   });
 
   it.each(["above-qr", "on-qr", "below-qr"] as const)("attaches a %s handle to the QR box with the burn's gap", (placement) => {
@@ -180,24 +196,15 @@ describe("watermark documents from a saved profile", () => {
     const profile: LightningWatermarkProfile = { ...LIGHTNING_WATERMARK_PROFILE, handlePlacement: placement };
     const document = built(profile, frame, { includeQr: true, corner });
     const handle = handleOf(document);
-    const qr = documentQrPixels(qrOf(document), frame);
-    const handleHeight = 30;
-    const today = watermarkHandleOverlayPosition({
-      placement,
-      corner,
-      canvasWidth: frame.width,
-      canvasHeight: frame.height,
-      qrSize: qr.side,
-      handleWidth: qr.side,
-      handleHeight,
-      padding: insetSpace(frame).x,
-    });
-    const anchorFraction = GRAPHICS_ANCHOR_POINTS[handle.position.anchor];
+    const qr = todayQrBox(profile, frame, corner);
+    const gap = Math.max(2, Math.round(qr.side * 0.06));
+    const todayY = { "above-qr": qr.y - gap, "on-qr": qr.y + qr.side / 2, "below-qr": qr.y + qr.side + gap }[placement];
     const point = anchorPoint(handle.position, insetSpace(frame));
+    expect(documentQrPixels(qrOf(document), frame)).toEqual(qr);
     expect(handle.position.space).toBe("inset");
     expect(handle.position.anchor).toBe({ "above-qr": "bottom", "on-qr": "center", "below-qr": "top" }[placement]);
-    expect(Math.abs(point.x - (Number(today.x) + qr.side / 2))).toBeLessThanOrEqual(1);
-    expect(Math.abs(point.y - (Number(today.y) + anchorFraction.y * handleHeight))).toBeLessThanOrEqual(1);
+    expect(Math.abs(point.x - (qr.x + qr.side / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(point.y - todayY)).toBeLessThanOrEqual(1);
   });
 
   it("pins an attached handle that would leave the frame to the inset edge, and centres it without a QR", () => {

@@ -12,6 +12,7 @@ import type {
   GraphicsTextSlot,
 } from "./model.js";
 import { graphicsDocumentFromLayers } from "./model.js";
+import type { WatermarkDocumentOverrides } from "./watermark-profile.js";
 import { watermarkDocumentFromProfile, watermarkLayerInputs } from "./watermark-profile.js";
 
 export type GraphicsStarterId = "tiktok-title" | "lower-third" | "headline" | "credit" | "watermark";
@@ -68,15 +69,27 @@ function bottomLeftBlock(
   };
 }
 
-function tiktokTitle(frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
-  return graphicsDocumentFromLayers([
+function tiktokTitleLayers(): GraphicsLayerInput[] {
+  return [
     edgeShade("bottom", 0.5, 0.75),
     bottomLeftBlock("Title", 0.02, [
       slotItem("headline", 0.09, { maxLines: 3, accent: HEADLINE_ACCENT }),
       slotItem("secondary", 0.045, { maxLines: 2 }),
     ]),
-    ...watermarkLayerInputs(profile, frame, { includeQr: false }),
-  ]);
+  ];
+}
+
+function tiktokTitle(frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
+  return graphicsDocumentFromLayers([...tiktokTitleLayers(), ...watermarkLayerInputs(profile, frame, { includeQr: false })]);
+}
+
+export function platformWatermarkDocument(
+  profile: LightningWatermarkProfile,
+  frame: GraphicsFrame,
+  overrides: WatermarkDocumentOverrides,
+): GraphicsDocument {
+  const watermark = watermarkLayerInputs(profile, frame, overrides);
+  return graphicsDocumentFromLayers(profile.platform === "tiktok" ? [...tiktokTitleLayers(), ...watermark] : watermark);
 }
 
 export type GraphicsBlockSlot = "headline" | "secondary" | "credit";

@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
 import type { Engine } from "videobook-engine";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
@@ -15,6 +14,7 @@ import {
   GRAPHICS_RENDER_JOB,
   GRAPHICS_SOURCE_OPERATION,
   graphicsImagePath,
+  graphicsImageSize,
   graphicsRenderDestination,
   readGraphicsRenderRequest,
 } from "../graphics/render.js";
@@ -54,12 +54,9 @@ async function reviewedSource(engine: Engine, request: GraphicsRenderRequest): P
 async function stillImage(engine: Engine, layerId: string, artifactId: string): Promise<GraphicsStillImage> {
   const path = await graphicsImagePath(engine, artifactId);
   if (!path) throw new Error(`Layer ${layerId} shows an image that is no longer in this book. Choose another image or remove the layer, then render again.`);
-  const metadata = await sharp(path).metadata();
-  const width = metadata.width ?? 0;
-  const height = metadata.height ?? 0;
-  if (!(width > 0 && height > 0)) throw new Error(`Layer ${layerId} shows an image whose size cannot be read.`);
-  const turned = (metadata.orientation ?? 1) >= 5;
-  return { path, width: turned ? height : width, height: turned ? width : height };
+  const size = await graphicsImageSize(path);
+  if (!size) throw new Error(`Layer ${layerId} shows an image whose size cannot be read.`);
+  return { path, ...size };
 }
 
 async function stillImages(engine: Engine, request: GraphicsRenderRequest, durationSeconds: number): Promise<Record<string, GraphicsStillImage>> {

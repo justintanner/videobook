@@ -168,6 +168,17 @@ describe("lightning defaults", () => {
     })).not.toBe(qrWindow);
   });
 
+  it("adds the watermark template hash to the finishing identity only when a template exists", () => {
+    const input = { sourceObjectHash: "abc", startSeconds: 0, endSeconds: 2.3, profile: LIGHTNING_WATERMARK_PROFILE };
+    const base = finishingIdentityKey(input);
+    expect(finishingIdentityKey({ ...input, watermarkTemplate: null })).toBe(base);
+    expect(base).not.toContain("watermarkTemplate");
+    const templated = finishingIdentityKey({ ...input, watermarkTemplate: "f00d" });
+    expect(templated).not.toBe(base);
+    expect(JSON.parse(templated)).toMatchObject({ watermarkTemplate: "f00d" });
+    expect(finishingIdentityKey({ ...input, watermarkTemplate: "beef" })).not.toBe(templated);
+  });
+
   it("uses Thai and the lightning tags only for a fresh TikTok post", () => {
     expect(freshPostLanguage("tiktok", undefined)).toBe("th");
     expect(freshPostLanguage("tiktok", "en")).toBe("en");

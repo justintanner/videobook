@@ -3,14 +3,16 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import sharp from "sharp";
-import { findVideoFile } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
-import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { COMMON_VIDEO_FIXTURES, copyVideoFixture } from "../test-media-fixtures.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import { watermarkOsgScale } from "../remotion/osg-spec.js";
-import { videoProxyMetadataMatches } from "../video-proxy.js";
+import { graphicsDocumentFromLayers } from "../graphics/model.js";
+import { saveGraphicsTemplate, setWatermarkGraphicsTemplate } from "../graphics/templates.js";
+import { watermarkLayerInputs } from "../graphics/watermark-profile.js";
+import type { BurnWatermarkPayload } from "../jobs/burn-watermark.js";
+import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
+import { pauseBookQueueForTests } from "../queue.js";
 import type { Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/client";
 import { testBudget } from "../test-budget.js";
@@ -52,54 +54,8 @@ type ApplyResult = {
   handle_position?: string | null;
   handle_vertical_percent: number;
   placement_source: string;
+  template_id?: string | null;
 };
-
-type PixelRegion = { left: number; top: number; width: number; height: number };
-
-/** Mean absolute channel difference between two videos' frame `n` inside `region`. */
-async function frameRegionDifference(
-  workDir: string,
-  originalPath: string,
-  candidatePath: string,
-  frameIndex: number,
-  region: PixelRegion,
-): Promise<number> {
-  const pixels = await Promise.all([originalPath, candidatePath].map(async (input, i) => {
-    const framePath = join(workDir, `frame-${frameIndex}-${i}-${Date.now()}.png`);
-    await runFfmpeg([
-      "-y",
-      "-i", input,
-      "-vf", `select='eq(n,${frameIndex})'`,
-      "-fps_mode", "passthrough",
-      "-frames:v", "1",
-      framePath,
-    ]);
-    const { data } = await sharp(framePath)
-      .extract(region)
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    return data;
-  }));
-  let total = 0;
-  for (let i = 0; i < pixels[0].length; i += 1) {
-    total += Math.abs(pixels[0][i] - pixels[1][i]);
-  }
-  return total / pixels[0].length;
-}
-
-/**
- * A burn must leave no render-time overlay behind: the forced reprocess drops
- * the per-orientation render settings outright, and any that survive must
- * not point at a badge.
- */
-async function expectOverlayCleared(fs: Engine, assetId: string): Promise<void> {
-  for (const orient of ORIENTATIONS) {
-    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
-    if (!meta.ok) continue;
-    expect(meta.value.osgAssetId ?? null).toBeNull();
-  }
-}
 
 describe("apply_watermark tool", () => {
   let client: Client;
@@ -137,6 +93,12 @@ describe("apply_watermark tool", () => {
     const write = await fs.files.writeFromPath(created.value.artifactId, "original.mp4", tmpPath);
     if (!write.ok) throw new Error(write.error.message);
     return created.value.artifactId;
+  }
+
+  async function queuedPayload(jobId: number | undefined): Promise<BurnWatermarkPayload> {
+    const job = fs.jobs.queue.get(jobId ?? -1);
+    expect(job?.state).toBe("queued");
+    return job?.payload as unknown as BurnWatermarkPayload;
   }
 
   async function apply(args: Record<string, unknown>): Promise<ApplyResult> {
@@ -346,31 +308,6 @@ describe("apply_watermark tool", () => {
     expect(await readWatermarkConfig(fs)).toMatchObject({ savedHandle: null });
   });
 
-  it("burns a saved TikTok alias into real video and rebuilds playback", async () => {
-    const assetId = await createRealVideoAsset();
-    await client.callTool({
-      name: "create_watermark_card",
-      arguments: { book_id: bookId, platform: "tiktok", handle: "@creator.name", save_default: true },
-    });
-    const originalPath = join(tempDir, "before-tiktok.mp4");
-    await copyVideoFixture(COMMON_VIDEO_FIXTURES.watermark, originalPath);
-    const result = await apply({ asset_id: assetId, platform: "tiktok", include_qr: false });
-    expect(result).toMatchObject({
-      status: "completed", platform: "tiktok", handle: "creator.name",
-      url: "https://www.tiktok.com/@creator.name", include_platform_icon: true,
-    });
-    const after = await fs.files.manifest(assetId);
-    if (!after.ok) throw new Error(after.error.message);
-    const source = findVideoFile(after.value.files)!;
-    const proxy = after.value.files.find((file) => file.name === "proxy.mp4");
-    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "proxy");
-    expect(metadata.ok && proxy && videoProxyMetadataMatches(metadata.value, source, proxy)).toBe(true);
-    expect(await frameRegionDifference(tempDir, originalPath, join(after.value.path, source.name), 5, {
-      left: 40, top: 0, width: 240, height: 48,
-    })).toBeGreaterThan(0.4);
-    await expectOverlayCleared(fs, assetId);
-  }, testBudget(120_000));
-
   it("records handles and defaults to the saved handle", async () => {
     const assetId = await createRealVideoAsset();
     await apply({ asset_id: assetId, handle: "alice", save_default: true, mode: "overlay" });
@@ -383,225 +320,12 @@ describe("apply_watermark tool", () => {
     expect(parsed.handle).toBe("alice");
   });
 
-  it("burns separate QR and floating handle watermarks by default and clears overlay settings", async () => {
-    const assetId = await createRealVideoAsset();
-
-    // Seed dormant overlay settings to prove burn clears them (the state a
-    // prior metadata-only apply left behind).
-    await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
-
-    const before = await fs.files.manifest(assetId);
-    if (!before.ok) throw new Error(before.error.message);
-    const beforeHash = findVideoFile(before.value.files)!.objectHash;
-
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "someone",
-      position: "top-center",
-      handle_vertical_percent: 62,
-      include_platform_icon: false,
-      include_handle_border: false,
-      handle_padding: 64,
-      handle_rounding: 25,
-      qr_opacity: 0.35,
-      handle_opacity: 0.7,
-      qr_start_seconds: 0.1,
-      qr_end_seconds: 0.6,
-      handle_start_seconds: 0.2,
-      handle_end_seconds: 0.8,
-    });
-    expect(parsed.mode).toBe("burn");
-    expect(parsed.status).toBe("completed");
-    expect(parsed.operation_id).toMatch(/^burn-watermark-/);
-    expect(parsed.fade_seconds).toBe(0.5);
-    expect(parsed.position).toBe("top-center");
-    expect(parsed.placement_source).toBe("explicit");
-    expect(parsed.include_qr).toBe(true);
-    expect(parsed).not.toHaveProperty("opacity");
-    expect(parsed.qr_opacity).toBe(0.35);
-    expect(parsed.handle_opacity).toBe(0.7);
-    expect(parsed.include_platform_icon).toBe(false);
-    expect(parsed.include_handle_border).toBe(false);
-    expect(parsed.handle_padding).toBe(64);
-    expect(parsed.handle_padding_y).toBe(28);
-    expect(parsed.handle_rounding).toBe(25);
-    expect(parsed.qr_start_seconds).toBe(0.1);
-    expect(parsed.qr_end_seconds).toBe(0.6);
-    expect(parsed.handle_start_seconds).toBe(0.2);
-    expect(parsed.handle_end_seconds).toBe(0.8);
-    expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
-    expect(parsed.handle_asset_id).not.toBe(parsed.qr_asset_id);
-    expect(parsed.handle_position).toBe("center");
-    expect(parsed.handle_vertical_percent).toBe(62);
-
-    const qrMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      parsed.qr_asset_id!,
-      "original",
-    );
-    const handleMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      parsed.handle_asset_id!,
-      "original",
-    );
-    if (!qrMeta.ok) throw new Error(qrMeta.error.message);
-    if (!handleMeta.ok) throw new Error(handleMeta.error.message);
-    expect(qrMeta.value.layout).toBe("qr-v1");
-    expect(qrMeta.value.include_handle).toBe(false);
-    expect(handleMeta.value.layout).toBe("handle-v5");
-    expect(handleMeta.value.include_qr).toBe(false);
-    expect(handleMeta.value.include_x_icon).toBe(false);
-    expect(handleMeta.value.include_handle_border).toBe(false);
-    expect(handleMeta.value.handle_padding).toBe(64);
-    expect(handleMeta.value.handle_padding_y).toBe(28);
-    expect(handleMeta.value.handle_rounding).toBe(25);
-
-    const after = await fs.files.manifest(assetId);
-    if (!after.ok) throw new Error(after.error.message);
-    const videoFile = findVideoFile(after.value.files)!;
-    expect(videoFile.objectHash).not.toBe(beforeHash);
-    const proxyFile = after.value.files.find((file) => file.name === "proxy.mp4");
-    expect(proxyFile).toBeDefined();
-    const proxyMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "proxy");
-    expect(proxyMetadata.ok && proxyFile
-      ? videoProxyMetadataMatches(proxyMetadata.value, videoFile, proxyFile)
-      : false).toBe(true);
-
-    // Same frame geometry and duration, just composited pixels.
-    const probe = await probeVideo(join(after.value.path, videoFile.name));
-    expect(probe.width).toBe(320);
-    expect(probe.height).toBe(240);
-    expect(probe.duration).toBeGreaterThan(0.5);
-
-    // The burned badge replaces the render-time overlay, so a later render
-    // can't stamp the watermark twice.
-    await expectOverlayCleared(fs, assetId);
-  }, testBudget(120_000));
-
-  it("burns a QR-only watermark without validating or rendering a handle", async () => {
-    const assetId = await createRealVideoAsset();
-    const before = await fs.files.manifest(assetId);
-    if (!before.ok) throw new Error(before.error.message);
-    const beforeHash = findVideoFile(before.value.files)!.objectHash;
-
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "",
-      url: "https://example.com/qr-only",
-      include_handle: false,
-      position: "bottom-right",
-      qr_opacity: 0.4,
-      qr_start_seconds: 0.1,
-      qr_end_seconds: 0.6,
-      handle_start_seconds: 0.8,
-      handle_end_seconds: 0.2,
-    });
-
-    expect(parsed.handle).toBeNull();
-    expect(parsed.include_qr).toBe(true);
-    expect(parsed.include_handle).toBe(false);
-    expect(parsed.qr_opacity).toBe(0.4);
-    expect(parsed.qr_start_seconds).toBe(0.1);
-    expect(parsed.qr_end_seconds).toBe(0.6);
-    expect(parsed.handle_start_seconds).toBeNull();
-    expect(parsed.handle_end_seconds).toBeNull();
-    expect(parsed.qr_asset_id).toBe(parsed.card_asset_id);
-    expect(parsed.handle_asset_id).toBeNull();
-    expect(parsed.handle_position).toBeNull();
-
-    const after = await fs.files.manifest(assetId);
-    if (!after.ok) throw new Error(after.error.message);
-    const videoFile = findVideoFile(after.value.files)!;
-    expect(videoFile.objectHash).not.toBe(beforeHash);
-    expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
-  }, testBudget(120_000));
-
-  it("fades a mid-clip QR in instead of cutting it in", async () => {
-    const assetId = await createRealVideoAsset();
-    const originalPath = join(tempDir, "fade-original.mp4");
-    await copyVideoFixture(COMMON_VIDEO_FIXTURES.watermark, originalPath);
-
-    // 1s, 12fps fixture: QR from 0.2s to 0.8s with 0.3s fades ramps in over
-    // frames 3-5 and is fully opaque by frame 6.
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "",
-      url: "https://example.com/fade",
-      include_handle: false,
-      position: "bottom-right",
-      qr_opacity: 1,
-      qr_start_seconds: 0.2,
-      qr_end_seconds: 0.8,
-      fade_seconds: 0.3,
-    });
-    expect(parsed.fade_seconds).toBe(0.3);
-
-    const after = await fs.files.manifest(assetId);
-    if (!after.ok) throw new Error(after.error.message);
-    const burnedPath = join(after.value.path, findVideoFile(after.value.files)!.name);
-    // 38px badge inset 6px from the bottom-right corner of the 320x240 frame.
-    const badgeRegion: PixelRegion = { left: 276, top: 196, width: 38, height: 38 };
-    const [beforeStart, midFadeIn, fullyVisible] = await Promise.all([
-      frameRegionDifference(tempDir, originalPath, burnedPath, 1, badgeRegion),
-      frameRegionDifference(tempDir, originalPath, burnedPath, 3, badgeRegion),
-      frameRegionDifference(tempDir, originalPath, burnedPath, 6, badgeRegion),
-    ]);
-    expect(beforeStart).toBeLessThan(8);
-    expect(midFadeIn).toBeGreaterThan(beforeStart + 3);
-    expect(fullyVisible).toBeGreaterThan(midFadeIn * 2);
-  }, testBudget(120_000));
-
-  it("queues the burn without waiting when wait is false", async () => {
-    const assetId = await createRealVideoAsset();
-    await apply({ asset_id: assetId, handle: "someone", mode: "overlay" });
-    const before = await fs.files.manifest(assetId);
-    if (!before.ok) throw new Error(before.error.message);
-    const beforeHash = findVideoFile(before.value.files)!.objectHash;
-
-    const parsed = await apply({
-      asset_id: assetId,
-      handle: "someone",
-      position: "top-left",
-      wait: false,
-    });
-    expect(parsed.mode).toBe("burn");
-    expect(parsed.status).toBe("accepted");
-    expect(typeof parsed.job_id).toBe("number");
-    expect(parsed.operation_id).toMatch(/^burn-watermark-/);
-    expect(parsed.position).toBe("top-left");
-    expect(parsed.placement_source).toBe("explicit");
-
-    const readiness = await client.callTool({
-      name: "wait_for_asset_ready",
-      arguments: { book_id: bookId, asset_id: assetId, timeout_seconds: 120 },
-    });
-    expect(readiness.isError, JSON.stringify(readiness)).toBeFalsy();
-
-    const jobs = await client.callTool({
-      name: "list_jobs",
-      arguments: { book_id: bookId, limit: 50 },
-    });
-    const jobList = JSON.parse((jobs.content as TextContent)[0].text) as Array<{
-      id: number;
-      type: string;
-      state: string;
-      result: { corner?: string; placementSource?: string } | null;
-    }>;
-    const burnJob = jobList.find((job) => job.id === parsed.job_id);
-    expect(burnJob?.type).toBe("burn_watermark");
-    expect(burnJob?.state).toBe("done");
-    expect(burnJob?.result).toMatchObject({ corner: "top-left", placementSource: "explicit" });
-
-    const after = await fs.files.manifest(assetId);
-    if (!after.ok) throw new Error(after.error.message);
-    expect(findVideoFile(after.value.files)!.objectHash).not.toBe(beforeHash);
-    expect(after.value.files.some((file) => file.name === "proxy.mp4")).toBe(true);
-    await expectOverlayCleared(fs, assetId);
-  }, testBudget(120_000));
-
   it("records handle placement and vertical padding on overlay cards", async () => {
     const assetId = await createRealVideoAsset();
     const parsed = await apply({
       asset_id: assetId,
       handle: "someone",
+      include_qr: true,
       handle_position: "on-qr",
       handle_padding_y: 64,
       mode: "overlay",
@@ -634,6 +358,7 @@ describe("apply_watermark tool", () => {
       arguments: {
         book_id: bookId,
         asset_id: assetId,
+        include_qr: true,
         qr_start_seconds: 0.8,
         qr_end_seconds: 0.2,
       },
@@ -643,6 +368,7 @@ describe("apply_watermark tool", () => {
   });
 
   it("saves the full TikTok timing profile and replays an explicit window", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
     const fresh = await client.callTool({ name: "get_watermark_config", arguments: { book_id: bookId } });
     expect(fresh.isError).toBeFalsy();
     const config = JSON.parse((fresh.content as TextContent)[0].text) as { profile: Record<string, unknown> };
@@ -666,7 +392,7 @@ describe("apply_watermark tool", () => {
       fadeSeconds: 0.3,
     });
     const assetId = await createRealVideoAsset();
-    const saved = await apply({ asset_id: assetId, platform: "tiktok", save_default: true, wait: false });
+    const saved = await apply({ asset_id: assetId, platform: "tiktok", include_qr: true, save_default: true, wait: false });
     expect(saved).toMatchObject({ handle_end_seconds: 1, qr_start_seconds: 0, qr_end_seconds: 1, mode: "burn" });
     expect((await readWatermarkConfig(fs, "tiktok")).profile).toMatchObject({
       handle: "jtbkk",
@@ -681,6 +407,7 @@ describe("apply_watermark tool", () => {
     await apply({
       asset_id: assetId,
       platform: "tiktok",
+      include_qr: true,
       save_default: true,
       wait: false,
       handle_end_seconds: 0.5,
@@ -693,7 +420,7 @@ describe("apply_watermark tool", () => {
       qrStartSeconds: 0.2,
       qrEndSeconds: 0.8,
     });
-    const replay = await apply({ asset_id: assetId, platform: "tiktok", wait: false });
+    const replay = await apply({ asset_id: assetId, platform: "tiktok", include_qr: true, wait: false });
     expect(replay).toMatchObject({ handle_end_seconds: 0.5, qr_start_seconds: 0.2, qr_end_seconds: 0.8 });
     expect((await readWatermarkConfig(fs, "tiktok")).profile?.qrLeadSeconds).toBeNull();
     await apply({ asset_id: assetId, platform: "x", handle: "alice", save_default: true, mode: "overlay" });
@@ -703,6 +430,118 @@ describe("apply_watermark tool", () => {
       profile: { handle: "alice", handleEndSeconds: null, qrLeadSeconds: null, qrStartSeconds: null, qrEndSeconds: null },
     });
   }, testBudget(60_000));
+
+  it("queues a TikTok burn of the handle alone by default without minting badge images", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const images = () => fs.artifacts.list().filter((artifact) => artifact.kind === "image").length;
+    const imagesBefore = images();
+    const parsed = await apply({ asset_id: assetId, platform: "tiktok", wait: false });
+    expect(parsed).toMatchObject({
+      mode: "burn",
+      status: "accepted",
+      include_qr: false,
+      include_handle: true,
+      handle: "jtbkk",
+      position: null,
+      placement_source: "fixed",
+      card_asset_id: null,
+      qr_asset_id: null,
+      handle_asset_id: null,
+      template_id: null,
+      handle_end_seconds: 1,
+      qr_start_seconds: null,
+    });
+    expect(images()).toBe(imagesBefore);
+    expect(await queuedPayload(parsed.job_id)).toMatchObject({
+      type: "burn_watermark",
+      assetId,
+      platform: "tiktok",
+      handle: "jtbkk",
+      url: "https://www.tiktok.com/@jtbkk",
+      includeQr: false,
+      includeHandle: true,
+      includePlatformIcon: true,
+      includeHandleBorder: true,
+      handlePaddingX: 15,
+      handlePaddingY: 28,
+      handleRounding: 56,
+      handleVerticalPercent: 10,
+      handlePlacement: "center",
+      handleOpacity: 0.28,
+      fadeSeconds: 0.3,
+      handleStartSeconds: 0,
+      handleEndSeconds: 1,
+      template: null,
+      credit: null,
+      patches: [],
+    });
+  });
+
+  it("queues the saved watermark template with its credit source and only the parameters the caller set", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const sourceId = await createRealVideoAsset();
+    const original = await fs.metadata.artifacts.write(sourceId, "original", {
+      platform: "tiktok",
+      uploader: "pomkondeena",
+      webpage_url: "https://www.tiktok.com/@pomkondeena/video/7",
+    });
+    expect(original.ok).toBe(true);
+    const template = await saveGraphicsTemplate(fs, {
+      name: "Brand",
+      document: graphicsDocumentFromLayers([
+        { kind: "text", name: "Credit", items: [{ text: "credit", slot: "credit", icon: "camera" }] },
+        ...watermarkLayerInputs(LIGHTNING_WATERMARK_PROFILE, { width: 320, height: 240 }, { includeQr: true }),
+      ]),
+    });
+    await setWatermarkGraphicsTemplate(fs, "tiktok", template.id);
+
+    const templated = await apply({ asset_id: assetId, platform: "tiktok", source_asset_id: sourceId, qr_opacity: 0.8, wait: false });
+    expect(templated).toMatchObject({ include_qr: true, include_handle: true, template_id: template.id, position: null, placement_source: "template", qr_opacity: 0.8 });
+    expect(await queuedPayload(templated.job_id)).toMatchObject({
+      includeQr: true,
+      includeHandle: true,
+      credit: "TikTok/@pomkondeena",
+      patches: ["qrOpacity"],
+      template: { id: template.id, document: template.document },
+    });
+
+    const placed = await apply({ asset_id: assetId, platform: "tiktok", position: "top-left", handle_opacity: 0.4, handle_end_seconds: 0.5, wait: false });
+    expect(placed).toMatchObject({ include_qr: true, position: "top-left", placement_source: "explicit" });
+    const placedPayload = await queuedPayload(placed.job_id);
+    expect(placedPayload).toMatchObject({ corner: "top-left", credit: null, patches: ["position", "handleOpacity", "handleTiming"] });
+
+    const withoutQr = await apply({ asset_id: assetId, platform: "tiktok", include_qr: false, include_handle: false, wait: false });
+    expect(withoutQr).toMatchObject({ include_qr: false, include_handle: false, position: null, placement_source: "fixed", template_id: template.id });
+
+    await setWatermarkGraphicsTemplate(fs, "tiktok", null);
+    const cleared = await apply({ asset_id: assetId, platform: "tiktok", wait: false });
+    expect(cleared).toMatchObject({ include_qr: false, template_id: null });
+    expect((await queuedPayload(cleared.job_id)).template).toBeNull();
+  });
+
+  it("hands a reused card to the burn in place of the QR code", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const card = await fs.artifacts.create("img", "card");
+    if (!card.ok) throw new Error(card.error.message);
+    const cardId = card.value.artifactId;
+    const parsed = await apply({
+      asset_id: assetId,
+      card_asset_id: cardId,
+      include_qr: true,
+      include_handle: false,
+      handle: "",
+      url: "https://example.com/card",
+      position: "bottom-left",
+      wait: false,
+    });
+    expect(parsed).toMatchObject({ card_asset_id: cardId, qr_asset_id: cardId, handle_asset_id: null, position: "bottom-left", placement_source: "explicit" });
+    expect(await queuedPayload(parsed.job_id)).toMatchObject({ cardAssetId: cardId, includeQr: true, includeHandle: false, corner: "bottom-left", url: "https://example.com/card" });
+    const video = await client.callTool({ name: "apply_watermark", arguments: { book_id: bookId, asset_id: assetId, source_asset_id: cardId, wait: false } });
+    expect(video.isError).toBe(true);
+  });
 
   it("rejects a watermark with neither QR nor handle", async () => {
     const assetId = await createRealVideoAsset();

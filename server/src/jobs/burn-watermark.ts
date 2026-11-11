@@ -1,49 +1,41 @@
-import { rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Engine } from "videobook-engine";
-import { AUDIO_OPTS, H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { probeVideo } from "../ffmpeg.js";
 import type { ProbeResult } from "../ffmpeg.js";
+import { burnGraphics, graphicsBurnFrame } from "../graphics/burn.js";
+import type { GraphicsDocument, GraphicsFrame } from "../graphics/model.js";
+import { definedFields, parseGraphicsDocument } from "../graphics/model.js";
+import { graphicsImagePath, graphicsImageSize } from "../graphics/render.js";
+import type { GraphicsStillImage } from "../graphics/render-stills.js";
+import { renderGraphicsStills } from "../graphics/render-stills.js";
+import { bookWatermarkProfile } from "../graphics/service.js";
+import { graphicsStillGroups } from "../graphics/stills.js";
+import type { WatermarkCard, WatermarkPatch } from "../graphics/watermark-burn.js";
+import { watermarkBurnDocument } from "../graphics/watermark-burn.js";
+import type { WatermarkWindow } from "../graphics/watermark-profile.js";
+import { watermarkSlotValues } from "../graphics/watermark-profile.js";
+import type { LightningWatermarkProfile } from "../lightning-defaults.js";
+import { watermarkProfileFor } from "../lightning-defaults.js";
 import { logger } from "../logger.js";
 import { queue, registerJobHandler } from "../queue.js";
-import {
-  scoreWatermarkCornersForCanvas,
-  WATERMARK_MIN_DIM_FRACTION,
-  WATERMARK_OPACITY,
-} from "../remotion/osg-spec.js";
+import { scoreWatermarkCornersForCanvas, WATERMARK_OPACITY } from "../remotion/osg-spec.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
-import {
-  BADGE_WIDTH,
-  DEFAULT_HANDLE_PADDING_Y,
-  HANDLE_ONLY_BADGE_HEIGHT,
-  handlePillHeight,
-} from "../watermark-badge.js";
-import {
-  DEFAULT_HANDLE_VERTICAL_PERCENT,
-  watermarkHandleOverlayPosition,
-} from "../watermark-handle-position.js";
 import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
+import type { WatermarkPlatform } from "../watermark-platform.js";
+import { effectiveWatermarkTiming } from "../watermark-timing.js";
 import { analyzeOsgPlacement } from "./osg-placement.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
-import { effectiveWatermarkTiming } from "../watermark-timing.js";
-import type { BurnFades } from "../graphics/burn.js";
-import {
-  burnWatermarkEnable,
-  burnWatermarkFadeFilters,
-  burnWatermarkFrameRate,
-  burnWatermarkInputArgs,
-  burnWatermarkLoopSeconds,
-} from "../graphics/burn.js";
-
-export { burnWatermarkEnable, burnWatermarkInputArgs, burnWatermarkLoopSeconds };
 
 const LOCK_DURATION_MS = 600_000;
-
-/** Fade applied at a watermark edge that falls inside the clip. */
 const DEFAULT_WATERMARK_FADE_SECONDS = 0.5;
 export const MAX_WATERMARK_FADE_SECONDS = 2;
-/** Ends this close to the clip end count as "whole clip": no fade out. */
-const CLIP_END_TOLERANCE_SECONDS = 0.001;
+const SCRATCH_PREFIX = "videobook-watermark-burn-";
+const OUTPUT_NAME = "watermarked.mp4";
+const WHOLE_CLIP: WatermarkWindow = { startSeconds: null, endSeconds: null };
+const NOTHING_TO_DRAW = "This watermark draws nothing on this video. Include the handle or the QR code, or add them to the saved watermark template.";
 
 export type WatermarkPlacementSource =
   | "cached"
@@ -51,13 +43,15 @@ export type WatermarkPlacementSource =
   | "analysis"
   | "default"
   | "explicit"
-  | "fixed";
+  | "fixed"
+  | "template";
 
-/** Frame-aware corner pick deferred into the job so the tool can return early. */
 export type BurnWatermarkPlacementRequest = {
   fingerprint: string;
   badgeAspect: number;
 };
+
+export type BurnWatermarkTemplate = { id: string; document: GraphicsDocument };
 
 export type BurnWatermarkPayload = {
   type: "burn_watermark";
@@ -65,6 +59,11 @@ export type BurnWatermarkPayload = {
   assetDir: string;
   bookId: string;
   videoPath: string;
+  platform?: WatermarkPlatform;
+  handle?: string;
+  url?: string;
+  includeQr?: boolean;
+  includeHandle?: boolean;
   qrPath?: string;
   handlePath?: string;
   corner: OsgPosition;
@@ -74,9 +73,13 @@ export type BurnWatermarkPayload = {
   qrOpacity?: number;
   handleOpacity?: number;
   userScale: number;
+  includePlatformIcon?: boolean;
+  includeHandleBorder?: boolean;
+  handlePaddingX?: number;
+  handlePaddingY?: number;
+  handleRounding?: number;
   handleVerticalPercent?: number;
   handlePlacement?: WatermarkHandlePlacement;
-  handlePaddingY?: number;
   fadeSeconds?: number;
   startSeconds?: number;
   endSeconds?: number;
@@ -84,6 +87,10 @@ export type BurnWatermarkPayload = {
   qrEndSeconds?: number;
   handleStartSeconds?: number;
   handleEndSeconds?: number;
+  cardAssetId?: string;
+  credit?: string | null;
+  template?: BurnWatermarkTemplate | null;
+  patches?: WatermarkPatch[];
 };
 
 export type BurnWatermarkResult = {
@@ -92,175 +99,50 @@ export type BurnWatermarkResult = {
   placementSource: WatermarkPlacementSource;
 };
 
-const NO_FADES: BurnFades = { fadeIn: 0, fadeOut: 0 };
+type BurnPlacement = { corner: OsgPosition; placementSource: WatermarkPlacementSource };
+type BurnCard = { card: WatermarkCard; image: GraphicsStillImage };
 
-function roundSeconds(value: number): number {
-  return Math.round(value * 1000) / 1000;
-}
-
-/** ffmpeg overlay x/y expressions for a corner, inset by `padding` pixels. */
-function burnOverlayPosition(corner: OsgPosition, padding: number): { x: string; y: string } {
-  const [vertical, horizontal] = corner.split("-");
-  const x = horizontal === "left"
-    ? String(padding)
-    : horizontal === "right"
-      ? `main_w-overlay_w-${padding}`
-      : "(main_w-overlay_w)/2";
-  const y = vertical === "top"
-    ? String(padding)
-    : vertical === "bottom"
-      ? `main_h-overlay_h-${padding}`
-      : "(main_h-overlay_h)/2";
-  return { x, y };
-}
-
-/**
- * Fade lengths for one watermark window. A watermark fades in only when it
- * starts after the clip start and out only when it ends before the clip end,
- * so a whole-clip watermark keeps hard edges. Fades shrink to half the window
- * so a short window still reaches full opacity in the middle.
- */
-export function burnWatermarkFades(
-  startSeconds: number | undefined,
-  endSeconds: number | undefined,
-  durationSeconds: number,
-  fadeSeconds: number,
-): BurnFades {
-  const start = Math.max(0, startSeconds ?? 0);
-  const clipEnd = endSeconds === undefined
-    ? durationSeconds
-    : Math.min(endSeconds, durationSeconds);
-  const window = clipEnd - start;
-  if (!(fadeSeconds > 0) || !(window > 0)) return NO_FADES;
-  const fade = roundSeconds(Math.min(fadeSeconds, window / 2));
-  const endsEarly = endSeconds !== undefined
-    && endSeconds < durationSeconds - CLIP_END_TOLERANCE_SECONDS;
+async function burnProfile(engine: Engine, payload: BurnWatermarkPayload, platform: WatermarkPlatform): Promise<LightningWatermarkProfile> {
+  const base = payload.handle === undefined ? await bookWatermarkProfile(engine, platform) : watermarkProfileFor(platform, null);
   return {
-    fadeIn: start > 0 ? fade : 0,
-    fadeOut: endsEarly ? fade : 0,
+    ...base,
+    ...definedFields({
+      handle: payload.handle,
+      profileUrl: payload.url,
+      includePlatformIcon: payload.includePlatformIcon,
+      includeHandleBorder: payload.includeHandleBorder,
+      handlePaddingX: payload.handlePaddingX,
+      handlePaddingY: payload.handlePaddingY,
+      handleRounding: payload.handleRounding,
+      handlePlacement: payload.handlePlacement,
+      handleVerticalPercent: payload.handleVerticalPercent,
+    }),
+    scale: payload.userScale,
+    qrOpacity: payload.qrOpacity ?? payload.opacity ?? WATERMARK_OPACITY,
+    handleOpacity: payload.handleOpacity ?? payload.opacity ?? WATERMARK_OPACITY,
+    fadeSeconds: payload.fadeSeconds ?? DEFAULT_WATERMARK_FADE_SECONDS,
   };
 }
 
-export function buildBurnWatermarkFilter(options: {
-  width: number;
-  height: number;
-  corner: OsgPosition;
-  opacity?: number;
-  qrOpacity?: number;
-  handleOpacity?: number;
-  userScale: number;
-  includeQr: boolean;
-  includeHandle: boolean;
-  handleVerticalPercent?: number;
-  handlePlacement?: WatermarkHandlePlacement;
-  handlePaddingY?: number;
-  durationSeconds?: number;
-  fadeSeconds?: number;
-  startSeconds?: number;
-  endSeconds?: number;
-  qrStartSeconds?: number;
-  qrEndSeconds?: number;
-  handleStartSeconds?: number;
-  handleEndSeconds?: number;
-}): string {
-  const minDim = Math.min(options.width, options.height);
-  const badgeHeight = Math.max(
-    2,
-    2 * Math.round((minDim * WATERMARK_MIN_DIM_FRACTION * options.userScale) / 2),
-  );
-  const padding = Math.round(options.width * 0.02);
-  const { x, y } = burnOverlayPosition(options.corner, padding);
-  const handlePlacement = options.includeQr && options.handlePlacement
-    ? options.handlePlacement
-    : "center";
-  const attachedToQr = handlePlacement !== "center";
-  const handleBadgeHeight = handlePillHeight(options.handlePaddingY ?? DEFAULT_HANDLE_PADDING_Y);
-  const independentHandleHeight = Math.max(
-    2,
-    2 * Math.round((badgeHeight * handleBadgeHeight / HANDLE_ONLY_BADGE_HEIGHT) / 2),
-  );
-  const attachedHandleHeight = Math.max(
-    2,
-    Math.round(badgeHeight * handleBadgeHeight / BADGE_WIDTH),
-  );
-  const handleScale = attachedToQr
-    ? `${badgeHeight}:-2`
-    : `-2:${independentHandleHeight}`;
-  const handleOverlay = watermarkHandleOverlayPosition({
-    placement: handlePlacement,
-    corner: options.corner,
-    canvasWidth: options.width,
-    canvasHeight: options.height,
-    qrSize: badgeHeight,
-    handleWidth: attachedToQr
-      ? badgeHeight
-      : Math.round(independentHandleHeight * BADGE_WIDTH / handleBadgeHeight),
-    handleHeight: attachedToQr ? attachedHandleHeight : independentHandleHeight,
-    padding,
-    handleVerticalPercent: options.handleVerticalPercent ?? DEFAULT_HANDLE_VERTICAL_PERCENT,
-  });
-  const sharedOpacity = options.opacity ?? WATERMARK_OPACITY;
-  const qrOpacity = options.qrOpacity ?? sharedOpacity;
-  const handleOpacity = options.handleOpacity ?? sharedOpacity;
-  const qrStart = options.qrStartSeconds ?? options.startSeconds;
-  const qrEnd = options.qrEndSeconds ?? options.endSeconds;
-  const handleStart = options.handleStartSeconds ?? options.startSeconds;
-  const handleEnd = options.handleEndSeconds ?? options.endSeconds;
-  const fadesFor = (start?: number, end?: number): BurnFades =>
-    options.durationSeconds !== undefined && options.fadeSeconds !== undefined
-      ? burnWatermarkFades(start, end, options.durationSeconds, options.fadeSeconds)
-      : NO_FADES;
-  const qrFade = burnWatermarkFadeFilters(fadesFor(qrStart, qrEnd), qrStart, qrEnd);
-  const handleFade = burnWatermarkFadeFilters(
-    fadesFor(handleStart, handleEnd),
-    handleStart,
-    handleEnd,
-  );
-  const qrEnable = burnWatermarkEnable(qrStart, qrEnd);
-  const handleEnable = burnWatermarkEnable(handleStart, handleEnd);
-  const handleInput = options.includeQr ? 2 : 1;
-  if (!options.includeQr && !options.includeHandle) {
-    throw new Error("QR or handle watermark input is required");
-  }
-  const filters: string[] = [];
-  if (options.includeQr) {
-    filters.push(`[1:v]scale=-2:${badgeHeight},format=rgba,colorchannelmixer=aa=${qrOpacity}${qrFade}[qr]`);
-  }
-  if (options.includeHandle) {
-    filters.push(`[${handleInput}:v]scale=${handleScale},format=rgba,colorchannelmixer=aa=${handleOpacity}${handleFade}[handle]`);
-  }
-  if (options.includeQr) {
-    const output = options.includeHandle ? "withqr" : "vout";
-    filters.push(`[0:v][qr]overlay=${x}:${y}:format=auto${qrEnable}[${output}]`);
-  }
-  if (options.includeHandle) {
-    const base = options.includeQr ? "withqr" : "0:v";
-    filters.push(
-      `[${base}][handle]overlay=${handleOverlay.x}:${handleOverlay.y}:format=auto${handleEnable}[vout]`,
-    );
-  }
-  return filters.join(";");
+function burnWindow(label: string, duration: number, startSeconds?: number, endSeconds?: number): WatermarkWindow {
+  const timing = effectiveWatermarkTiming(label, duration, startSeconds, endSeconds);
+  return { startSeconds: timing.startSeconds ?? null, endSeconds: timing.endSeconds ?? null };
 }
 
-function badgeInputArgs(
-  path: string,
-  timing: ReturnType<typeof effectiveWatermarkTiming>,
-  probe: ProbeResult,
-  fadeSeconds: number,
-): string[] {
-  const fades = burnWatermarkFades(
-    timing.startSeconds,
-    timing.endSeconds,
-    probe.videoDuration,
-    fadeSeconds,
-  );
-  const loopSeconds = burnWatermarkLoopSeconds(
-    fades,
-    timing.startSeconds,
-    timing.endSeconds,
-    probe.videoDuration,
-  );
-  return burnWatermarkInputArgs(path, loopSeconds, burnWatermarkFrameRate(probe));
+function burnTemplate(template: BurnWatermarkTemplate | null | undefined): GraphicsDocument | null {
+  if (!template) return null;
+  const parsed = parseGraphicsDocument(template.document);
+  if (!parsed.ok) throw new Error(`The saved watermark template cannot be drawn: ${parsed.error}`);
+  return parsed.document;
+}
+
+async function burnCard(engine: Engine, artifactId: string | undefined): Promise<BurnCard | null> {
+  if (!artifactId) return null;
+  const path = await graphicsImagePath(engine, artifactId);
+  if (!path) throw new Error("The watermark card is no longer an image in this book. Choose another card, or apply the watermark without one.");
+  const size = await graphicsImageSize(path);
+  if (!size) throw new Error("The size of the watermark card cannot be read.");
+  return { card: { artifactId, aspect: size.width / size.height }, image: { path, ...size } };
 }
 
 /**
@@ -271,9 +153,9 @@ function badgeInputArgs(
 async function resolveBurnCorner(
   engine: Engine,
   payload: BurnWatermarkPayload,
-  probe: ProbeResult,
+  frame: GraphicsFrame,
   signal: AbortSignal,
-): Promise<{ corner: OsgPosition; placementSource: WatermarkPlacementSource }> {
+): Promise<BurnPlacement> {
   const fallback = {
     corner: payload.corner,
     placementSource: payload.placementSource ?? "explicit",
@@ -287,9 +169,7 @@ async function resolveBurnCorner(
       badgeAspect: payload.placement.badgeAspect,
       signal,
     });
-    // Score corners against the source frame itself — a burned watermark
-    // lives in source pixels, so one corner serves every orientation.
-    const corner = scoreWatermarkCornersForCanvas(probe.width, probe.height, analysis.regions, {
+    const corner = scoreWatermarkCornersForCanvas(frame.width, frame.height, analysis.regions, {
       aspect: payload.placement.badgeAspect,
       userScale: payload.userScale,
     }).position;
@@ -301,133 +181,90 @@ async function resolveBurnCorner(
   }
 }
 
-/**
- * Composite the watermark badge onto the source video: scaled to the min-dim
- * fraction the render-time overlay uses, faded to `opacity`, anchored at
- * `corner` with the standard edge padding, and faded in/out at any edge that
- * falls inside the clip. Mirrors the trim/crop shape: replace the canonical
- * file in place, drop stale visual analysis, reprocess.
- */
+async function burnDocument(
+  engine: Engine,
+  payload: BurnWatermarkPayload,
+  probe: ProbeResult,
+  frame: GraphicsFrame,
+  placement: BurnPlacement,
+  card: BurnCard | null,
+): Promise<GraphicsDocument> {
+  const platform = payload.platform ?? "tiktok";
+  const includeQr = payload.includeQr ?? payload.qrPath !== undefined;
+  const includeHandle = payload.includeHandle ?? payload.handlePath !== undefined;
+  const duration = probe.videoDuration;
+  const profile = await burnProfile(engine, payload, platform);
+  const document = watermarkBurnDocument({
+    profile,
+    frame,
+    includeQr,
+    includeHandle,
+    corner: placement.corner,
+    qrWindow: includeQr
+      ? burnWindow("QR watermark", duration, payload.qrStartSeconds ?? payload.startSeconds, payload.qrEndSeconds ?? payload.endSeconds)
+      : WHOLE_CLIP,
+    handleWindow: includeHandle
+      ? burnWindow("Handle watermark", duration, payload.handleStartSeconds ?? payload.startSeconds, payload.handleEndSeconds ?? payload.endSeconds)
+      : WHOLE_CLIP,
+    values: { ...watermarkSlotValues(profile), ...(payload.credit ? { credit: payload.credit } : {}) },
+    template: burnTemplate(payload.template),
+    patches: payload.patches ?? [],
+    card: card?.card ?? null,
+  });
+  if (graphicsStillGroups(document, duration).length === 0) throw new Error(NOTHING_TO_DRAW);
+  return document;
+}
+
+async function burnInto(
+  engine: Engine,
+  payload: BurnWatermarkPayload,
+  signal: AbortSignal,
+): Promise<{ videoPath: string; placement: BurnPlacement }> {
+  const probe = await probeVideo(payload.videoPath, { signal });
+  const frame = graphicsBurnFrame(probe);
+  const placement = await resolveBurnCorner(engine, payload, frame, signal);
+  const card = await burnCard(engine, payload.cardAssetId);
+  const document = await burnDocument(engine, payload, probe, frame, placement, card);
+  const scratch = await mkdtemp(join(tmpdir(), SCRATCH_PREFIX));
+  try {
+    const { groups } = await renderGraphicsStills({
+      document,
+      frame,
+      durationSeconds: probe.videoDuration,
+      images: card ? { [card.card.artifactId]: card.image } : {},
+      outputDir: scratch,
+      signal,
+    });
+    const outputPath = join(scratch, OUTPUT_NAME);
+    await burnGraphics({ videoPath: payload.videoPath, outputPath, stills: groups, probe, signal });
+    await replaceArtifactFileFromPath(engine, payload.assetId, basename(payload.videoPath), outputPath);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+  await engine.files.delete(payload.assetId, ".original.analysis.json");
+  return { videoPath: join(payload.assetDir, basename(payload.videoPath)), placement };
+}
+
 export function registerBurnWatermarkJob(engine: Engine): void {
   registerJobHandler("burn_watermark", async (rawPayload, ctx) => {
     const payload = rawPayload as BurnWatermarkPayload;
-    const {
-      assetId, assetDir, bookId, videoPath, qrPath, handlePath, opacity, userScale,
-      qrOpacity, handleOpacity, handleVerticalPercent = DEFAULT_HANDLE_VERTICAL_PERCENT,
-      handlePlacement = "center", handlePaddingY = DEFAULT_HANDLE_PADDING_Y,
-      fadeSeconds = DEFAULT_WATERMARK_FADE_SECONDS,
-      startSeconds, endSeconds, qrStartSeconds, qrEndSeconds,
-      handleStartSeconds, handleEndSeconds,
-    } = payload;
-
     const result = await withLockedLocalLease(
       engine,
-      assetId,
-      assetDir,
+      payload.assetId,
+      payload.assetDir,
       ctx,
       "process",
       { durationMs: LOCK_DURATION_MS, data: { state: "burning-watermark" } },
-      async () => {
-        const probe = await probeVideo(videoPath, { signal: ctx.signal });
-        const handleTiming = handlePath
-          ? effectiveWatermarkTiming(
-              "Handle watermark",
-              probe.videoDuration,
-              handleStartSeconds ?? startSeconds,
-              handleEndSeconds ?? endSeconds,
-            )
-          : {};
-        const qrTiming = qrPath
-          ? effectiveWatermarkTiming(
-              "QR watermark",
-              probe.videoDuration,
-              qrStartSeconds ?? startSeconds,
-              qrEndSeconds ?? endSeconds,
-            )
-          : {};
-        const placement = await resolveBurnCorner(engine, payload, probe, ctx.signal);
-
-        const outputPath = join(assetDir, "original_watermarked.mp4");
-        const filter = buildBurnWatermarkFilter({
-          width: probe.width,
-          height: probe.height,
-          corner: placement.corner,
-          opacity,
-          qrOpacity,
-          handleOpacity,
-          userScale,
-          includeQr: qrPath !== undefined,
-          includeHandle: handlePath !== undefined,
-          handleVerticalPercent,
-          handlePlacement,
-          handlePaddingY,
-          durationSeconds: probe.videoDuration,
-          fadeSeconds,
-          ...(qrTiming.startSeconds !== undefined
-            ? { qrStartSeconds: qrTiming.startSeconds }
-            : {}),
-          ...(qrTiming.endSeconds !== undefined
-            ? { qrEndSeconds: qrTiming.endSeconds }
-            : {}),
-          ...(handleTiming.startSeconds !== undefined
-            ? { handleStartSeconds: handleTiming.startSeconds }
-            : {}),
-          ...(handleTiming.endSeconds !== undefined
-            ? { handleEndSeconds: handleTiming.endSeconds }
-            : {}),
-        });
-        const watermarkInputs = [
-          ...(qrPath ? badgeInputArgs(qrPath, qrTiming, probe, fadeSeconds) : []),
-          ...(handlePath ? badgeInputArgs(handlePath, handleTiming, probe, fadeSeconds) : []),
-        ];
-        try {
-          await runFfmpeg([
-            "-y",
-            "-i", videoPath,
-            ...watermarkInputs,
-            "-filter_complex", filter,
-            "-map", "[vout]",
-            "-map", "0:a?",
-            ...H264_MEDIUM,
-            "-pix_fmt", "yuv420p",
-            ...AUDIO_OPTS,
-            outputPath,
-          ], { signal: ctx.signal });
-
-          const check = await probeVideo(outputPath, { signal: ctx.signal });
-          if (check.width !== probe.width || check.height !== probe.height
-            || Math.abs(check.duration - probe.duration) > 0.5) {
-            throw new Error(
-              `Watermarked output looks wrong: ${check.width}x${check.height} ${check.duration.toFixed(2)}s`
-              + ` from ${probe.width}x${probe.height} ${probe.duration.toFixed(2)}s`,
-            );
-          }
-        } catch (err) {
-          await rm(outputPath, { force: true });
-          throw err;
-        }
-
-        const inputFilename = basename(videoPath);
-        await replaceArtifactFileFromPath(engine, assetId, inputFilename, outputPath);
-
-        // Visual analysis now describes the un-watermarked frames; transcripts
-        // stay valid (audio and timing are untouched).
-        await engine.files.delete(assetId, ".original.analysis.json");
-
-        return { videoPath: join(assetDir, inputFilename), placement };
-      },
+      () => burnInto(engine, payload, ctx.signal),
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );
 
-    // The badge now lives in the pixels. The forced reprocess drops every
-    // stored render-time overlay setting, so a later render can't stamp it
-    // twice.
-    await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
+    await queue.enqueue(`process-video-${payload.assetId}-${Date.now()}`, {
       type: "process_video",
       videoPath: result.videoPath,
-      assetId,
-      assetDir,
-      bookId,
+      assetId: payload.assetId,
+      assetDir: payload.assetDir,
+      bookId: payload.bookId,
       provenance: { origin: "watermark", watermarked_at: new Date().toISOString() },
       force: true,
     } as unknown as Record<string, unknown>);

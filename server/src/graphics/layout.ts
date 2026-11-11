@@ -90,6 +90,7 @@ const MIN_FONT_SCALE = 0.6;
 const FIT_SLACK = 0.99;
 const ICON_SCALE = 26 / 28;
 const ICON_GAP_SCALE = 0.5;
+export const GRAPHICS_ICON_SPACE = ICON_SCALE + ICON_GAP_SCALE;
 const ACCENT_GAP_SCALE = 0.06;
 const ACCENT_HEIGHT_SCALE: Record<Exclude<GraphicsAccent, "none">, number> = { underline: 0.07, brush: 0.16 };
 const QR_TILE_PADDING = 0.1;
@@ -232,7 +233,7 @@ function shrinkingSizes(base: number): number[] {
 }
 
 function iconSpace(item: GraphicsTextItem, size: number): number {
-  return item.icon ? size * (ICON_SCALE + ICON_GAP_SCALE) : 0;
+  return item.icon ? size * GRAPHICS_ICON_SPACE : 0;
 }
 
 function fitAt(item: GraphicsTextItem, paragraphs: readonly WrapUnit[][], size: number, contentLimit: number, measure: GraphicsMeasure): FittedItem {

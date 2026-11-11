@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { burnWatermarkFades } from "../jobs/burn-watermark.js";
 import type { GraphicsTiming } from "./model.js";
 import { layerOpacityAt, resolveLayerTiming } from "./timing.js";
 
@@ -7,6 +6,15 @@ const CLIPS = [3, 8, 30];
 
 function timing(fields: Partial<GraphicsTiming>): GraphicsTiming {
   return { start: null, end: null, tail: null, fade: 0.5, ...fields };
+}
+
+function burnFades(startSeconds: number | undefined, endSeconds: number | undefined, duration: number, fadeSeconds: number): { fadeIn: number; fadeOut: number } {
+  const start = Math.max(0, startSeconds ?? 0);
+  const window = (endSeconds === undefined ? duration : Math.min(endSeconds, duration)) - start;
+  if (!(fadeSeconds > 0) || !(window > 0)) return { fadeIn: 0, fadeOut: 0 };
+  const fade = Math.round(Math.min(fadeSeconds, window / 2) * 1000) / 1000;
+  const endsEarly = endSeconds !== undefined && endSeconds < duration - 0.001;
+  return { fadeIn: start > 0 ? fade : 0, fadeOut: endsEarly ? fade : 0 };
 }
 
 function burnWindow(value: GraphicsTiming, duration: number): { start?: number; end?: number } {
@@ -30,11 +38,11 @@ const WINDOWS: Array<[string, GraphicsTiming]> = [
 ];
 
 describe("resolveLayerTiming", () => {
-  it.each(WINDOWS)("matches burnWatermarkFades for %s in clips of 3, 8 and 30 seconds", (_name, value) => {
+  it.each(WINDOWS)("matches today's watermark fades for %s in clips of 3, 8 and 30 seconds", (_name, value) => {
     for (const duration of CLIPS) {
       const resolved = resolveLayerTiming(value, duration);
       const burn = burnWindow(value, duration);
-      const fades = burnWatermarkFades(burn.start, burn.end, duration, value.fade);
+      const fades = burnFades(burn.start, burn.end, duration, value.fade);
       expect(resolved).not.toBeNull();
       expect({ fadeIn: resolved?.fadeIn, fadeOut: resolved?.fadeOut }).toEqual(fades);
       expect(resolved?.start).toBe(Math.min(burn.start ?? 0, duration));

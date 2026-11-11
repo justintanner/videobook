@@ -2,16 +2,21 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { v7 as uuidv7 } from "uuid";
 import type { Engine } from "videobook-engine";
+import { expect } from "vitest";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { compileFrameSteps, compileStoryboardSteps, compileVideoSteps, compileReviseStillStep, goalPlanSchema, type GoalGenerationStage, type GoalPlan } from "./goal-plan.js";
 import { requireGoalContent, readGoal, saveGoal, type GoalStageOutput, type GoalStageRun } from "./goal-store.js";
 import { currentGoalCharacters } from "./goal-characters.js";
 import { preflightChainPlan } from "./chain-plan.js";
 import type { ChainRunRecord } from "./chain-executor.js";
+import { getChainRun } from "./chain-executor.js";
 import { getAllToolDefs } from "./tools/index.js";
 import { placeChainGeneration } from "./chain-generation.js";
 import { copyVideoFixture } from "./test-media-fixtures.js";
 import { probeVideo } from "./ffmpeg.js";
+import { registerMediaProbe } from "./notebook-media-ops.js";
+import { pauseBookQueueForTests, resumeBookQueueForTests } from "./queue.js";
+import { testBudget } from "./test-budget.js";
 import { goalAttemptFingerprints, goalStillAttempts } from "./goal-stills.js";
 import { extractVideoPoster } from "./video-poster.js";
 
@@ -144,4 +149,56 @@ export async function seedGoalStage(engine: Engine, goalId: string, stage: GoalG
   };
   saveGoal(engine, { ...goal, status: "running", stage, chainId, stages: { ...goal.stages, [stage]: run }, ...(previous?.outputs.length && plan.storyboardLayout === "six-panel" ? { resumeStage: goal.stage, resumeStatus: goal.status === "completed" ? "completed" as const : "review" as const, resumeOutputs: previous.outputs } : {}), ...(stage === "videos" ? { clipIds: goal.clipIds.length === plan.shots.length ? goal.clipIds : plan.shots.map(() => uuidv7()), trackId: engine.sequences.getPrimary().tracks.find(track => track.kind === "video")!.trackId } : {}) });
   return chainId;
+}
+
+export function goalProviderJob(engine: Engine, artifactId: string) {
+  const job = engine.jobs.queue.list().find(item => item.artifactId === artifactId && item.type.startsWith("generate_"));
+  if (!job) {
+    const seen = engine.jobs.queue.list().map(item => `${item.type}:${item.state}:${item.artifactId ?? ""}`).join(", ");
+    throw new Error(`missing provider job for ${artifactId}; queued=[${seen}]`);
+  }
+  return job;
+}
+
+async function completeGoalProviderJob(engine: Engine, artifactId: string): Promise<void> {
+  const job = goalProviderJob(engine, artifactId);
+  let current = job;
+  if (current.state === "queued") {
+    let leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+    while (leased?.type === "process_image") {
+      await engine.jobs.queue.complete(leased.id, { result: { settled: true } });
+      leased = engine.jobs.queue.dequeue(process.pid, 60_000);
+    }
+    if (!leased || leased.id !== job.id) throw new Error(`leased ${leased?.type ?? "nothing"} instead of ${job.type}`);
+    current = leased;
+  }
+  const completed = await engine.jobs.queue.complete(current.id, { result: { settled: true } });
+  if (!completed) throw new Error(`could not complete ${job.type} from ${current.state}`);
+}
+
+export async function settleGoalChain(engine: Engine, root: string, chainId: string, kind: "image" | "video"): Promise<string> {
+  const bookId = engine.book.get().bookId;
+  await expect.poll(() => {
+    const step = getChainRun(engine, chainId)?.steps[0];
+    const artifactId = step?.outputs?.asset_id;
+    return step?.status === "running" && typeof artifactId === "string" && step.childJobIds.length > 0;
+  }, { timeout: testBudget(15_000) }).toBe(true);
+  const step = getChainRun(engine, chainId)!.steps[0]!;
+  const artifactId = String(step.outputs?.asset_id);
+  if (kind === "image") {
+    const written = await engine.files.write(artifactId, "original.jpg", await sharp({ create: { width: 96, height: 54, channels: 3, background: "#cf593b" } }).jpeg().toBuffer());
+    if (!written.ok) throw new Error(written.error.message);
+  } else {
+    const path = join(root, `${artifactId}.mp4`);
+    await copyVideoFixture({ width: 160, height: 90, durationSec: 4, fps: 12, source: "color", color: "blue", audio: { frequency: 440 } }, path);
+    const written = await engine.files.writeFromPath(artifactId, "original.mp4", path);
+    if (!written.ok) throw new Error(written.error.message);
+    await registerMediaProbe(engine, artifactId, "original.mp4", await probeVideo(path));
+  }
+  await completeGoalProviderJob(engine, artifactId);
+  await expect.poll(() => engine.jobs.queue.list().some(job => job.type === "await_notebook_output" && job.payload.providerArtifactId === artifactId), { timeout: testBudget(15_000) }).toBe(true);
+  await resumeBookQueueForTests(bookId);
+  await expect.poll(() => getChainRun(engine, chainId)?.status, { timeout: testBudget(20_000) }).toBe("completed");
+  await pauseBookQueueForTests(bookId);
+  return artifactId;
 }

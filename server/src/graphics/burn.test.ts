@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { burnGraphics } from "./burn.js";
+import { burnGraphics, burnWatermarkEnable, burnWatermarkInputArgs, burnWatermarkLoopSeconds } from "./burn.js";
 import type { ResolvedGraphicsTiming } from "./timing.js";
 
 const execFileAsync = promisify(execFile);
@@ -30,6 +30,25 @@ type Box = { left: number; top: number; width: number; height: number };
 function distance(color: Rgb, target: Rgb): number {
   return Math.abs(color[0] - target[0]) + Math.abs(color[1] - target[1]) + Math.abs(color[2] - target[2]);
 }
+
+describe("burn filter helpers", () => {
+  it("supports open-ended and whole-clip timing", () => {
+    expect(burnWatermarkEnable()).toBe("");
+    expect(burnWatermarkEnable(1.5)).toBe(":enable='gte(t,1.5)'");
+    expect(burnWatermarkEnable(undefined, 4)).toBe(":enable='between(t,0,4)'");
+  });
+
+  it("loops a still only while it fades, and never past the clip", () => {
+    expect(burnWatermarkLoopSeconds({ fadeIn: 0, fadeOut: 0 }, 2, 6, 10)).toBeNull();
+    expect(burnWatermarkLoopSeconds({ fadeIn: 0.5, fadeOut: 0 }, 2, undefined, 10)).toBe(2.75);
+    expect(burnWatermarkLoopSeconds({ fadeIn: 0.5, fadeOut: 0.5 }, 2, 6, 10)).toBe(6.25);
+    expect(burnWatermarkLoopSeconds({ fadeIn: 0.3, fadeOut: 0.3 }, 0.2, 0.8, 1)).toBe(1);
+    expect(burnWatermarkInputArgs("/badge.png", null, "12/1")).toEqual(["-i", "/badge.png"]);
+    expect(burnWatermarkInputArgs("/badge.png", 2.75, "30000/1001")).toEqual([
+      "-loop", "1", "-framerate", "30000/1001", "-t", "2.75", "-i", "/badge.png",
+    ]);
+  });
+});
 
 describe("burnGraphics", () => {
   let root: string;

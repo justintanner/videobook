@@ -30,7 +30,7 @@ export function burnWatermarkEnable(startSeconds?: number, endSeconds?: number):
     : `:enable='between(t,${start},${endSeconds})'`;
 }
 
-export function burnWatermarkFadeFilters(fades: BurnFades, startSeconds: number | undefined, endSeconds: number | undefined): string {
+function burnWatermarkFadeFilters(fades: BurnFades, startSeconds: number | undefined, endSeconds: number | undefined): string {
   const parts: string[] = [];
   if (fades.fadeIn > 0) parts.push(`fade=t=in:st=${startSeconds ?? 0}:d=${fades.fadeIn}:alpha=1`);
   if (fades.fadeOut > 0 && endSeconds !== undefined) {
@@ -56,13 +56,13 @@ export function burnWatermarkInputArgs(path: string, loopSeconds: number | null,
     : ["-loop", "1", "-framerate", frameRate, "-t", String(loopSeconds), "-i", path];
 }
 
-export function burnWatermarkFrameRate(probe: ProbeResult): string {
+function burnWatermarkFrameRate(probe: ProbeResult): string {
   const nominal = probe.videoStream?.video?.nominalFrameRate;
   if (nominal && nominal.numerator > 0 && nominal.denominator > 0) return `${nominal.numerator}/${nominal.denominator}`;
   return String(roundSeconds(probe.fps > 0 ? probe.fps : 30));
 }
 
-function videoFrame(probe: ProbeResult): Frame {
+export function graphicsBurnFrame(probe: ProbeResult): Frame {
   const video = probe.videoStream?.video;
   return video ? displayDimensions(video) : { width: probe.width, height: probe.height };
 }
@@ -143,7 +143,7 @@ function burnFilter(stills: readonly PlacedStill[], probe: ProbeResult, frame: F
 
 async function checkOutput(outputPath: string, probe: ProbeResult, frame: Frame, signal: AbortSignal): Promise<void> {
   const check = await probeVideo(outputPath, { signal });
-  const size = videoFrame(check);
+  const size = graphicsBurnFrame(check);
   if (size.width !== frame.width || size.height !== frame.height || Math.abs(check.duration - probe.duration) > DURATION_TOLERANCE_SECONDS) {
     throw new Error(
       `The video with graphics looks wrong: ${size.width}x${size.height} ${check.duration.toFixed(2)}s`
@@ -153,7 +153,7 @@ async function checkOutput(outputPath: string, probe: ProbeResult, frame: Frame,
 }
 
 export async function burnGraphics(input: GraphicsBurnInput): Promise<void> {
-  const frame = videoFrame(input.probe);
+  const frame = graphicsBurnFrame(input.probe);
   const placed = (await Promise.all(input.stills.map((still) => placeStill(still, frame, input.probe.videoDuration))))
     .filter((still): still is PlacedStill => still !== null);
   if (placed.length === 0) throw new Error("These graphics have nothing to draw.");

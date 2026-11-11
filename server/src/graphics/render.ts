@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import sharp from "sharp";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { withNotebookMutation } from "../notebook-mutations.js";
@@ -129,6 +130,15 @@ export async function graphicsImagePath(engine: Engine, artifactId: string): Pro
   if (!manifest.ok) return null;
   const file = findPrimaryMediaFile(manifest.value.files, "image");
   return file ? join(manifest.value.path, file.name) : null;
+}
+
+export async function graphicsImageSize(path: string): Promise<{ width: number; height: number } | null> {
+  const metadata = await sharp(path).metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (!(width > 0 && height > 0)) return null;
+  const turned = (metadata.orientation ?? 1) >= 5;
+  return { width: turned ? height : width, height: turned ? width : height };
 }
 
 export function burnedLayers(document: GraphicsDocument, durationSeconds: number): BurnedLayer[] {

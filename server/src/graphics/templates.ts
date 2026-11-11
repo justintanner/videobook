@@ -193,6 +193,22 @@ export async function setDefaultGraphicsTemplate(engine: Engine, templateId: str
   });
 }
 
+export function watermarkGraphicsTemplate(engine: Engine, platform: WatermarkPlatform): GraphicsTemplate | null {
+  const store = readGraphicsTemplates(engine);
+  const id = store.watermark[platform];
+  return id ? store.templates.find((template) => template.id === id) ?? null : null;
+}
+
+export async function setWatermarkGraphicsTemplate(engine: Engine, platform: WatermarkPlatform, templateId: string | null): Promise<string | null> {
+  return withTemplates(engine, async () => {
+    const store = readGraphicsTemplates(engine);
+    if (templateId !== null) requireTemplate(store, templateId);
+    const watermark = Object.fromEntries(Object.entries(store.watermark).filter(([key]) => key !== platform));
+    writeTemplates(engine, { ...store, watermark: templateId === null ? watermark : { ...watermark, [platform]: templateId } });
+    return templateId;
+  });
+}
+
 async function sourceBook(books: BookManager, reference: string, targetBookId: string): Promise<ManagedBook> {
   const book = await resolveBookReference(books, reference).catch(() => null);
   if (!book) throw new GraphicsServiceError("not_found", `Book ${reference} was not found.`);

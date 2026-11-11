@@ -12,6 +12,7 @@ const BROWSER_SAFE_FILES = [
   "slots.ts",
   "starters.ts",
   "watermark-profile.ts",
+  "watermark-burn.ts",
   "layout.ts",
   "timing.ts",
   "stills.ts",

@@ -104,7 +104,7 @@ function defaultDocument(document: GraphicsDocument): Revisioned {
   return { revision: `default:${digest}`, document };
 }
 
-async function bookWatermarkProfile(engine: Engine, platform: WatermarkPlatform): Promise<LightningWatermarkProfile> {
+export async function bookWatermarkProfile(engine: Engine, platform: WatermarkPlatform): Promise<LightningWatermarkProfile> {
   const config = await readWatermarkConfig(engine, platform);
   const profile = effectiveWatermarkProfile(config, platform);
   const handle = normalizeHandle(config.savedHandle ?? config.authenticatedHandle ?? config.recent[0] ?? profile.handle) ?? "";
