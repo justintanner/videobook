@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
+import type { GraphicsRect } from '../../server/src/graphics/layout'
 import type { GraphicsDocument, GraphicsTextSlot } from '../../server/src/graphics/model'
 import { GRAPHICS_SUGGEST_SLOTS, type GraphicsSuggestKind, type GraphicsSuggestLanguage } from '../../server/src/graphics/slots'
 import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { ChatExecution } from './chat-turns'
 import {
   editGraphicsHistory,
+  graphicsClearSpotMessage,
   graphicsOpenEdits,
   graphicsRenderQueuedMessage,
   graphicsSlotText,
   graphicsTemplateMessage,
   graphicsToolError,
   graphicsWatermarkSwitchEdits,
+  parseGraphicsPlacement,
   parseGraphicsRead,
   parseGraphicsRender,
   parseGraphicsSuggestions,
@@ -54,6 +57,14 @@ export interface GraphicsRenderOutcome {
 }
 
 export type GraphicsTemplateOutcome = GraphicsRenderOutcome
+
+interface GraphicsClearSpotRequest {
+  layerId: string
+  box: GraphicsRect
+  block: GraphicsRect
+  avoid: GraphicsRect[]
+  detect: boolean
+}
 
 const EMPTY: GraphicsEditorState = {
   target: null,
@@ -398,6 +409,27 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     }
   }, [baseArgs, call, commit, ready])
 
+  const findClearSpot = useCallback(async (request: GraphicsClearSpotRequest): Promise<GraphicsTemplateOutcome> => {
+    const ticket = epoch.current
+    if (!ready || !stateRef.current.target) return { ok: false, message: 'The graphics are not ready yet.' }
+    if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the graphics first.' }
+    try {
+      const args = { ...baseArgs(), op: request.detect ? 'detect_regions' : 'check_placement', layer_id: request.layerId, box: request.box, block: request.block, avoid: request.avoid }
+      const result = parseGraphicsPlacement(await call('video_graphics', args, request.detect ? undefined : { background: true }))
+      if (ticket !== epoch.current) return { ok: false, message: 'The editor moved on to other graphics.' }
+      const regions = result.regions
+      if (regions) commit((value) => (value.read ? { ...value, read: { ...value.read, regions } } : value))
+      const spot = result.clear_spot
+      if (!spot) return { ok: false, message: 'Some frames of this layer are not checked for faces and text yet.' }
+      if (spot.moved && !edit([{ op: 'set_position', layer_id: request.layerId, position: spot.position }])) {
+        return { ok: false, message: stateRef.current.error ?? 'The layer could not be moved.' }
+      }
+      return { ok: true, message: graphicsClearSpotMessage(spot) }
+    } catch (error) {
+      return { ok: false, message: graphicsToolError(error).message }
+    }
+  }, [baseArgs, call, commit, edit, flush, ready])
+
   const dismissSuggestions = useCallback((slot: GraphicsTextSlot) => {
     commit((value) => withSuggestions(value, slot, null))
   }, [commit])
@@ -441,6 +473,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     setPlatform,
     suggest,
     dismissSuggestions,
+    findClearSpot,
   }
 }
 

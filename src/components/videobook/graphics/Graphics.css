@@ -929,3 +929,23 @@ label.graphics-field > span:first-child {
 .confirm-graphics .graphics-suggestion-options button[aria-pressed='true'] {
   border-color: var(--green);
 }
+
+.graphics-layer-warning,
+.graphics-clear-spot-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #f0a860;
+  font-size: 11px;
+}
+
+.graphics-layer-warning {
+  grid-column: 2 / -1;
+  padding: 0 4px 2px;
+}
+
+.graphics-clear-spot {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}

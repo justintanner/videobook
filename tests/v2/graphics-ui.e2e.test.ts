@@ -9,7 +9,9 @@ import type { Browser, Locator, Page } from 'playwright'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
+import { captionMediaSource } from '../../server/src/captions/source.js'
 import { FFMPEG, probeVideo } from '../../server/src/ffmpeg.js'
+import { storeFrameRegions } from '../../server/src/frame-regions.js'
 import { graphicsDocumentFromLayers } from '../../server/src/graphics/model.js'
 import { saveGraphicsTemplate } from '../../server/src/graphics/templates.js'
 import { registerMediaProbe } from '../../server/src/notebook-media-ops.js'
@@ -30,6 +32,7 @@ const THAI_HEADLINES = ['ไฟแดงนี้ของเรา', 'ฝนต
 const ENGLISH_LINES = ['This red light is ours', 'Rain cannot stop the cool', 'A pink umbrella at the red light']
 const ENGLISH_HEADLINES = ['Red light, still cool', 'Too cool for the rain', 'Pink umbrella energy']
 const THAI_LINES = ['ไฟแดงก็ยังเท่', 'เท่เกินกว่าฝน', 'พลังร่มชมพู']
+const LOWER_LEFT_FACE = { kind: 'face' as const, confidence: 0.95, x: 0.05, y: 0.55, width: 0.5, height: 0.24 }
 const TIKTOK_SOURCE = {
   origin: 'download',
   source_url: 'https://www.tiktok.com/@pomkondeena/video/7432100000000000000',
@@ -105,8 +108,10 @@ describe('graphics editor in the composer', () => {
   let wideId = ''
   let watermarkId = ''
   let suggestId = ''
+  let placementId = ''
   const renders: Record<string, unknown>[] = []
   const suggests: Record<string, unknown>[] = []
+  const placements: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
   const read = (assetId = sourceId) => call<Read>('video_graphics', { asset_id: assetId })
@@ -177,6 +182,7 @@ describe('graphics editor in the composer', () => {
       await video(join(root, 'wide.mp4'), 'Wide take', undefined, WIDE, WIDE_DURATION),
       await video(join(root, 'watermark.mp4'), 'Watermark take'),
       await video(join(root, 'suggest.mp4'), 'Suggest take', TIKTOK_SOURCE),
+      await video(join(root, 'placement.mp4'), 'Placement take', undefined, PORTRAIT, DURATION + 1),
     ]
     const ids: string[] = []
     for (const fixture of fixtures) {
@@ -191,7 +197,9 @@ describe('graphics editor in the composer', () => {
       await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, fixture.duration))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId, suggestId] = ids
+    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId, suggestId, placementId] = ids
+    const placementSource = await captionMediaSource(engine, placementId)
+    storeFrameRegions(engine, placementId, placementSource.mediaHash, [0.5, 1.5, 2.5, 3.5].map((time) => ({ time, regions: [LOWER_LEFT_FACE] })))
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
     if (!logo.ok) throw new Error(logo.error.message)
     logoId = logo.value.artifactId
@@ -208,6 +216,7 @@ describe('graphics editor in the composer', () => {
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 4 }, outputArtifactId: wideId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 2 }, outputArtifactId: watermarkId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 7 }, outputArtifactId: suggestId }))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 6 }, outputArtifactId: placementId }))
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
@@ -250,6 +259,7 @@ describe('graphics editor in the composer', () => {
       const graphics = toolCalls(request.postDataJSON()).filter(item => item.name === 'video_graphics')
       renders.push(...graphics.filter(item => item.arguments.op === 'render').map(item => item.arguments))
       suggests.push(...graphics.filter(item => item.arguments.op === 'suggest').map(item => item.arguments))
+      placements.push(...graphics.filter(item => item.arguments.op === 'check_placement' || item.arguments.op === 'detect_regions').map(item => item.arguments))
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl, { timeout: testBudget(60_000) })
@@ -1049,6 +1059,56 @@ describe('graphics editor in the composer', () => {
     expect(slotText(current, 'headline')).toBe(ENGLISH_HEADLINES[0])
     expect(slotText(current, 'secondary')).toBe(THAI_LINES[2])
     expect(current.render).toBeNull()
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+    expect(errors).toEqual([])
+  })
+
+  it('warns when a layer covers a face found earlier, finds a clear spot for free, and says when finding one needs a paid check', async () => {
+    const titleWarning = sheet().getByRole('region', { name: 'Layers', exact: true }).getByRole('note', { name: 'Title: Covers a face', exact: true })
+    const inspector = () => sheet().getByRole('group', { name: 'Text layer Title', exact: true })
+    const clearSpot = () => inspector().getByRole('group', { name: 'Clear spot', exact: true })
+    const titleLayer = async (assetId: string) => (await read(assetId)).document.layers.find((layer) => layer.name === 'Title')
+    expect(placements).toEqual([])
+    await command('/osg @d7')
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await titleWarning.count()).toBe(0)
+    await field('Headline').fill(THAI_TITLE)
+    await saved()
+    await expect.poll(() => titleWarning.count(), { timeout: testBudget(15_000) }).toBe(1)
+    await sheet().getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    expect(await inspector().textContent()).toContain('Covers a face while it is shown.')
+    expect(await inspector().textContent()).not.toContain('paid model call')
+    await shot('graphics-placement-warning')
+
+    await inspector().getByRole('button', { name: 'Find clear spot', exact: true }).click()
+    await expect.poll(async () => (await clearSpot().getByRole('status').textContent()) ?? '', { timeout: testBudget(15_000) })
+      .toMatch(/^Moved to the [a-z ]+, clear of faces and on-screen text\.$/u)
+    await expect.poll(() => titleWarning.count()).toBe(0)
+    await saved()
+    expect((await titleLayer(placementId))?.position?.anchor).not.toBe('bottom-left')
+    await sheet().getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => titleWarning.count()).toBe(1)
+    await sheet().getByRole('button', { name: 'Redo', exact: true }).click()
+    await expect.poll(() => titleWarning.count()).toBe(0)
+    await saved()
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
+
+    await command('/osg @d8')
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    await sheet().getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    expect(await inspector().textContent()).toContain('Checks 3 frames for faces and on-screen text first, a paid model call.')
+    const before = (await titleLayer(suggestId))?.position
+    await inspector().getByRole('button', { name: 'Find clear spot', exact: true }).click()
+    await expect.poll(async () => (await clearSpot().getByRole('alert').textContent()) ?? '', { timeout: testBudget(15_000) }).toContain('needs an OpenAI API key')
+    expect((await titleLayer(suggestId))?.position).toEqual(before)
+    expect(placements.map((args) => [args.op, args.asset_id, args.layer_id])).toEqual([
+      ['check_placement', placementId, expect.any(String)],
+      ['detect_regions', suggestId, expect.any(String)],
+    ])
     await sheet().getByRole('button', { name: /^Close/ }).click()
     await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
     expect(errors).toEqual([])

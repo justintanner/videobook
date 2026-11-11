@@ -1,12 +1,15 @@
 import { z } from 'zod'
 import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
-import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
+import type { GraphicsLayerLayout, GraphicsRect } from '../../server/src/graphics/layout'
 import {
+  GRAPHICS_ANCHORS,
+  GRAPHICS_SPACES,
   graphicsDocumentFromLayers,
   isGraphicsUrl,
   MAX_GRAPHICS_NAME_LENGTH,
   nextGraphicsId,
   parseGraphicsDocument,
+  type GraphicsAnchor,
   type GraphicsDocument,
   type GraphicsLayer,
   type GraphicsLayerKind,
@@ -24,6 +27,15 @@ import {
   type GraphicsSuggestLanguage,
 } from '../../server/src/graphics/slots'
 import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, type GraphicsBlockText } from '../../server/src/graphics/starters'
+import {
+  graphicsDrawnBox,
+  graphicsLayerCovers,
+  graphicsLayerWindow,
+  graphicsPlacementTimes,
+  graphicsUncheckedTimes,
+  type GraphicsClearSpot,
+  type GraphicsCover,
+} from '../../server/src/graphics/placement'
 import { graphicsStillGroups } from '../../server/src/graphics/stills'
 import { watermarkDrawnDocument } from '../../server/src/graphics/watermark-burn'
 import { isWatermarkPlatform, WATERMARK_PLATFORM_LABELS, WATERMARK_PLATFORMS, type WatermarkPlatform } from '../../server/src/watermark-platform'
@@ -70,6 +82,18 @@ const watermarkSchema = z.object({
   qr: z.record(z.string(), z.unknown()).nullable(),
 })
 
+const regionFrameSchema = z.object({
+  time: z.number(),
+  regions: z.array(z.object({
+    kind: z.enum(['face', 'text', 'graphic']),
+    confidence: z.number(),
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  })),
+})
+
 const readSchema = z.object({
   asset_id: z.string(),
   address: z.string().nullable(),
@@ -87,6 +111,7 @@ const readSchema = z.object({
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
   watermark: watermarkSchema.nullable().default(null),
+  regions: z.array(regionFrameSchema).default([]),
 })
 
 type ReadWire = z.infer<typeof readSchema>
@@ -380,6 +405,79 @@ export function graphicsSelectionAfterRemove(document: GraphicsDocument, layerId
   const index = document.layers.findIndex((layer) => layer.id === layerId)
   if (index < 0) return null
   return document.layers[index - 1]?.id ?? document.layers[index + 1]?.id ?? null
+}
+
+const positionSchema = z.object({ anchor: z.enum(GRAPHICS_ANCHORS), x: z.number(), y: z.number(), space: z.enum(GRAPHICS_SPACES) })
+
+const coverSchema = z.object({ kind: z.enum(['face', 'text']), time: z.number() })
+
+const placementSchema = z.object({
+  covers: z.array(coverSchema),
+  unchecked_times: z.array(z.number()),
+  clear_spot: z.object({ position: positionSchema, moved: z.boolean(), covers: z.array(coverSchema) }).nullable(),
+  regions: z.array(regionFrameSchema).optional(),
+})
+
+export function parseGraphicsPlacement(value: unknown): z.infer<typeof placementSchema> {
+  return placementSchema.parse(value)
+}
+
+export const GRAPHICS_ANCHOR_NAMES: Record<GraphicsAnchor, string> = {
+  'top-left': 'top left',
+  top: 'top',
+  'top-right': 'top right',
+  left: 'left',
+  center: 'center',
+  right: 'right',
+  'bottom-left': 'bottom left',
+  bottom: 'bottom',
+  'bottom-right': 'bottom right',
+}
+
+export interface GraphicsLayerPlacement {
+  covers: GraphicsCover[]
+  unchecked: number
+  drawn: GraphicsRect | null
+  block: GraphicsRect
+}
+
+export function graphicsLayerPlacements(document: GraphicsDocument, layout: readonly GraphicsLayerLayout[] | null, read: GraphicsRead): Record<string, GraphicsLayerPlacement> {
+  if (!layout) return {}
+  const frame = { width: read.source.width, height: read.source.height }
+  const entries = new Map(layout.map((entry) => [entry.layerId, entry]))
+  return Object.fromEntries(document.layers.flatMap((layer) => {
+    const entry = entries.get(layer.id)
+    const window = graphicsLayerWindow(layer, read.source.duration_seconds)
+    if (layer.kind === 'scrim' || !layer.visible || !entry || !window) return []
+    const drawn = graphicsDrawnBox(entry)
+    const placement: GraphicsLayerPlacement = {
+      covers: drawn ? graphicsLayerCovers(drawn, frame, window, read.regions) : [],
+      unchecked: graphicsUncheckedTimes(graphicsPlacementTimes(window), read.regions).length,
+      drawn,
+      block: entry.box,
+    }
+    return [[layer.id, placement]]
+  }))
+}
+
+function coveredThings(covers: readonly GraphicsCover[]): string | null {
+  const face = covers.some((cover) => cover.kind === 'face')
+  const text = covers.some((cover) => cover.kind === 'text')
+  if (face && text) return 'a face and on-screen text'
+  if (face) return 'a face'
+  return text ? 'on-screen text' : null
+}
+
+export function graphicsCoverWarning(covers: readonly GraphicsCover[]): string | null {
+  const things = coveredThings(covers)
+  return things ? `Covers ${things}` : null
+}
+
+export function graphicsClearSpotMessage(spot: GraphicsClearSpot): string {
+  const things = coveredThings(spot.covers)
+  const place = GRAPHICS_ANCHOR_NAMES[spot.position.anchor]
+  if (spot.moved) return things ? `Moved to the ${place}, the clearest spot, but it still covers ${things}.` : `Moved to the ${place}, clear of faces and on-screen text.`
+  return things ? `No clearer spot: every place covers ${things}.` : 'Already clear of faces and on-screen text.'
 }
 
 export const GRAPHICS_SLOT_LABELS: Record<GraphicsTextSlot, string> = { headline: 'Headline', secondary: 'Second line', credit: 'Credit', handle: 'Handle' }

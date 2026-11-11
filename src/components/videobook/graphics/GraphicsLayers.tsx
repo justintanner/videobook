@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { ArrowDown, ArrowUp, Blend, Copy, Eye, EyeOff, Image, Pencil, Plus, QrCode, Trash2, Type, type LucideIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, Blend, Copy, Eye, EyeOff, Image, Pencil, Plus, QrCode, Trash2, TriangleAlert, Type, type LucideIcon } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import { MAX_GRAPHICS_LAYERS, MAX_GRAPHICS_NAME_LENGTH, type GraphicsDocument, type GraphicsLayer, type GraphicsLayerKind } from '../../../../server/src/graphics/model'
 import {
@@ -19,6 +19,7 @@ type LayersProps = {
   read: GraphicsRead
   imageChoices: readonly GraphicsImageChoice[]
   selectedLayerId: string | null
+  warnings: Readonly<Record<string, string>>
   disabled: boolean
   onEdit: Edit
   onSelect: (layerId: string | null) => void
@@ -94,9 +95,10 @@ function LayerActions({ layer, index, document, disabled, onEdit, onSelect, onRe
 }
 
 function LayerRow({ layer, index, props }: { layer: GraphicsLayer; index: number; props: LayersProps }) {
-  const { document, read, imageChoices, selectedLayerId, disabled, onEdit, onSelect } = props
+  const { document, read, imageChoices, selectedLayerId, warnings, disabled, onEdit, onSelect } = props
   const [renaming, setRenaming] = useState(false)
   const selected = layer.id === selectedLayerId
+  const warning = warnings[layer.id]
   const Icon = KIND_ICONS[layer.kind]
   const toggle = () => onEdit([{ op: 'set_layer', layer_id: layer.id, layer: { visible: !layer.visible } }])
   return (
@@ -129,6 +131,11 @@ function LayerRow({ layer, index, props }: { layer: GraphicsLayer; index: number
       )}
       {selected && !renaming && (
         <LayerActions layer={layer} index={index} document={document} disabled={disabled} onEdit={onEdit} onSelect={onSelect} onRename={() => setRenaming(true)} />
+      )}
+      {warning && (
+        <span className="graphics-layer-warning" role="note" aria-label={`${layer.name}: ${warning}`}>
+          <TriangleAlert size={12} aria-hidden="true" />{warning}
+        </span>
       )}
     </li>
   )

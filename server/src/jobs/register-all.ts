@@ -59,6 +59,7 @@ import { registerCaptionAnalysisJobs } from "./caption-analysis.js";
 import { registerRenderCaptionsJob } from "./render-captions.js";
 import { registerRenderGraphicsJob } from "./render-graphics.js";
 import { registerSuggestGraphicsJob } from "./suggest-graphics.js";
+import { registerGraphicsRegionsJob } from "./graphics-regions.js";
 import { registerOsgPlacementJob } from "./osg-placement.js";
 import { registerBurnWatermarkJob } from "./burn-watermark.js";
 import { registerSuggestCutsJob } from "./suggest-cuts.js";
@@ -148,6 +149,7 @@ export function registerAllJobHandlers(
   registerRenderCaptionsJob(engine);
   registerRenderGraphicsJob(engine);
   registerSuggestGraphicsJob(engine);
+  registerGraphicsRegionsJob(engine);
   registerOsgPlacementJob(engine);
   registerBurnWatermarkJob(engine);
   registerSuggestCutsJob(engine);

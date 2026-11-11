@@ -62,6 +62,12 @@ function storedFrames(engine: Engine, mediaHash: string): StoredFrames {
   return readAnalysisComponent(engine, FRAME_REGIONS, frameRegionsKey(mediaHash), valueSchema)?.value.frames ?? {};
 }
 
+export function cachedFrameRegions(engine: Engine, mediaHash: string): FrameRegionsAt[] {
+  return Object.entries(storedFrames(engine, mediaHash))
+    .map(([bucket, frame]) => ({ time: Number(bucket), regions: frame.regions }))
+    .sort((a, b) => a.time - b.time);
+}
+
 export function missingFrameTimes(engine: Engine, mediaHash: string, times: readonly number[]): number[] {
   const stored = storedFrames(engine, mediaHash);
   const missing = new Map<string, number>();

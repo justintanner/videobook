@@ -102,6 +102,7 @@ function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsR
     setPlatform: async () => undefined,
     suggest: async () => undefined,
     dismissSuggestions: () => undefined,
+    findClearSpot: done,
   }
 }
 

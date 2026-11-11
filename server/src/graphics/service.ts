@@ -5,6 +5,7 @@ import { notebookGridAddress } from "videobook-engine/notebook-grid";
 import { assetMediaUrls } from "../asset-media-projection.js";
 import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
+import { cachedFrameRegions } from "../frame-regions.js";
 import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import type { OsgPosition } from "../remotion/subtitles/types.js";
@@ -21,6 +22,7 @@ import { applyGraphicsEdits } from "./edits.js";
 import { GraphicsServiceError } from "./errors.js";
 import type { GraphicsDocument, GraphicsFrame, GraphicsLayerInput } from "./model.js";
 import { isGraphicsUrl, parseGraphicsDocument } from "./model.js";
+import type { GraphicsRegionFrame } from "./placement.js";
 import type { GraphicsSlotValues } from "./slots.js";
 import { fillGraphicsSlots, graphicsSlotValues } from "./slots.js";
 import type { GraphicsStarterId } from "./starters.js";
@@ -61,6 +63,7 @@ export type GraphicsReadModel = {
   default_template_id: string;
   images: Record<string, GraphicsImage>;
   watermark: GraphicsWatermarkLook | null;
+  regions: GraphicsRegionFrame[];
 };
 
 type GraphicsContext = {
@@ -286,6 +289,7 @@ export async function readGraphics(
     default_template_id: context.templates.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID,
     images,
     watermark: context.watermark,
+    regions: cachedFrameRegions(engine, context.source.mediaHash),
   };
 }
 
@@ -329,14 +333,19 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
   });
 }
 
+export async function currentGraphics(engine: Engine, artifactId: string, look: GraphicsLook): Promise<ReviewedGraphics> {
+  const context = await graphicsContext(engine, artifactId, look);
+  const current = context.saved ?? context.fallback;
+  return { source: context.source, revision: current.revision, document: current.document };
+}
+
 export async function graphicsForTemplate(
   engine: Engine,
   artifactId: string,
   look: GraphicsLook,
   expectedRevision: string | undefined,
 ): Promise<GraphicsDocument> {
-  const context = await graphicsContext(engine, artifactId, look);
-  const current = context.saved ?? context.fallback;
+  const current = await currentGraphics(engine, artifactId, look);
   if (expectedRevision !== undefined && current.revision !== expectedRevision) {
     throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before saving a template.", { revision: current.revision });
   }

@@ -2,13 +2,16 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactN
 import type { PlayerRef } from '@remotion/player'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
+import { graphicsAvoidBoxes } from '../../../../server/src/graphics/placement'
 import type { GraphicsSuggestKind, GraphicsSuggestLanguage } from '../../../../server/src/graphics/slots'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor } from '@/videobook/useGraphicsEditor'
 import {
   graphicsBurnedNotice,
+  graphicsCoverWarning,
   graphicsDrawnDocument,
   graphicsImageChoices,
+  graphicsLayerPlacements,
   graphicsLayoutWarnings,
   graphicsNextLayerId,
   graphicsOverlayImages,
@@ -93,6 +96,11 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const selectedLayer = document?.layers.find((layer) => layer.id === selectedLayerId) ?? null
   const selectedBox = layout?.find((entry) => entry.layerId === selectedLayer?.id)?.box ?? null
   const warnings = useMemo(() => (document ? graphicsLayoutWarnings(document, layout) : []), [document, layout])
+  const placements = useMemo(() => (drawn && read ? graphicsLayerPlacements(drawn, layout, read) : {}), [drawn, layout, read])
+  const coverWarnings = useMemo(() => Object.fromEntries(Object.entries(placements).flatMap(([layerId, placement]) => {
+    const warning = graphicsCoverWarning(placement.covers)
+    return warning ? [[layerId, warning]] : []
+  })), [placements])
   const source = useMemo(() => (read ? { width: read.source.width, height: read.source.height, durationSeconds: read.source.duration_seconds, fps: read.source.fps } : null), [read])
   const editable = document !== null && state.save !== 'conflict' && !state.rendering
   const onLayout = useCallback((next: GraphicsLayerLayout[]) => setLayout(next), [])
@@ -105,6 +113,17 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const suggest = useCallback((kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => {
     void editor.suggest(kind, language)
   }, [editor])
+  const selectedPlacement = selectedLayer ? placements[selectedLayer.id] ?? null : null
+  const findClearSpot = useCallback(async () => {
+    if (!selectedLayer || !selectedPlacement?.drawn || !drawn || !layout || !source) return { ok: false, message: 'This layer draws nothing yet.' }
+    return editor.findClearSpot({
+      layerId: selectedLayer.id,
+      box: selectedPlacement.drawn,
+      block: selectedPlacement.block,
+      avoid: graphicsAvoidBoxes(drawn, layout, selectedLayer.id, source.durationSeconds),
+      detect: selectedPlacement.unchecked > 0,
+    })
+  }, [drawn, editor, layout, selectedLayer, selectedPlacement, source])
 
   const nudge = (delta: GraphicsPoint, repeat: boolean) => {
     if (!source || !selectedLayer || selectedLayer.kind === 'scrim' || !selectedBox) return
@@ -181,6 +200,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
             read={read}
             imageChoices={imageChoices}
             selectedLayerId={selectedLayer?.id ?? null}
+            warnings={coverWarnings}
             disabled={!editable}
             onEdit={edit}
             onSelect={setSelectedLayerId}
@@ -194,9 +214,11 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
                 read={read}
                 imageChoices={imageChoices}
                 box={selectedBox}
+                placement={selectedPlacement}
                 playhead={playhead}
                 disabled={!editable}
                 onEdit={edit}
+                onFindClearSpot={findClearSpot}
               />
             )
             : <p className="graphics-muted">Select a layer in the list or the preview to edit it.</p>}

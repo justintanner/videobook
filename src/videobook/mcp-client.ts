@@ -6,9 +6,11 @@ import {
 
 const MCP_PROTOCOL_VERSION = '2026-07-28'
 const APPLY_WATERMARK_TIMEOUT_MS = 21 * 60_000
+const GRAPHICS_REGIONS_TIMEOUT_MS = 6 * 60_000
 
-export function mcpToolRequestTimeout(tool: string): number | undefined {
-  return tool === 'apply_watermark' ? APPLY_WATERMARK_TIMEOUT_MS : undefined
+export function mcpToolRequestTimeout(tool: string, args: Record<string, unknown> = {}): number | undefined {
+  if (tool === 'apply_watermark') return APPLY_WATERMARK_TIMEOUT_MS
+  return tool === 'video_graphics' && args.op === 'detect_regions' ? GRAPHICS_REGIONS_TIMEOUT_MS : undefined
 }
 
 export async function connectMcpClient(
@@ -37,7 +39,7 @@ export function callMcpTool(
   tool: string,
   args: Record<string, unknown>,
 ): Promise<CallToolResult> {
-  const timeout = mcpToolRequestTimeout(tool)
+  const timeout = mcpToolRequestTimeout(tool, args)
   return client.callTool(
     { name: tool, arguments: args },
     timeout === undefined ? undefined : { timeout },

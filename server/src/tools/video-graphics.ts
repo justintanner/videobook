@@ -2,6 +2,7 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { BookManager } from "../book-manager.js";
 import type { GraphicsEdit } from "../graphics/edits.js";
+import type { GraphicsRect } from "../graphics/layout.js";
 import { GraphicsServiceError } from "../graphics/errors.js";
 import {
   GRAPHICS_ACCENTS,
@@ -18,6 +19,8 @@ import {
   GRAPHICS_TEXT_SLOTS,
   MAX_GRAPHICS_TEXT_LENGTH,
 } from "../graphics/model.js";
+import type { GraphicsPlacementInput } from "../graphics/regions.js";
+import { checkGraphicsPlacement, detectGraphicsRegions } from "../graphics/regions.js";
 import { graphicsBurned, latestGraphicsRender, requestGraphicsRender } from "../graphics/render.js";
 import type { GraphicsLook } from "../graphics/service.js";
 import { graphicsForTemplate, readGraphics, rememberWatermarkSlots, updateGraphics } from "../graphics/service.js";
@@ -45,6 +48,7 @@ import { advertisedAs } from "./tool-json-schema.js";
 import { resolveVideoAssetReference } from "./video-source-reference.js";
 
 const seconds = z.number().nullable();
+const rect = z.object({ x: z.number(), y: z.number(), width: z.number().nonnegative(), height: z.number().nonnegative() }).strict();
 
 const positionPatch = z.object({
   anchor: z.enum(GRAPHICS_ANCHORS),
@@ -130,7 +134,7 @@ const editSchema = z.discriminatedUnion("op", [
   }).strict(),
 ]);
 
-const VIDEO_OPS = ["get", "update", "render", "suggest"] as const;
+const VIDEO_OPS = ["get", "update", "render", "suggest", "check_placement", "detect_regions"] as const;
 const TEMPLATE_OPS = ["save_template", "rename_template", "delete_template", "set_default_template", "copy_templates", "save_watermark", "set_watermark_template"] as const;
 
 type VideoOp = typeof VIDEO_OPS[number];
@@ -139,10 +143,10 @@ type TemplateOp = typeof TEMPLATE_OPS[number];
 const schema = {
   book_id: z.string().describe("Book id"),
   asset_id: z.string().min(1).optional()
-    .describe("Video artifact UUID or notebook address such as @a1. Required for get, update, render, suggest, save_template and save_watermark"),
+    .describe("Video artifact UUID or notebook address such as @a1. Required for get, update, render, suggest, check_placement, detect_regions, save_template and save_watermark"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address and reports the video's cell address"),
   op: z.enum([...VIDEO_OPS, ...TEMPLATE_OPS]).optional()
-    .describe("get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; suggest calls a paid language model once and returns 3 to 5 options for the operator to pick from without saving anything: kind headline writes headlines from the video's existing analysis, transcript and download title and description (it never starts transcription or analysis, and answers no_context when the video has none of them), kind translate translates the headline for the second line under it; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here; save_watermark saves the video's current graphics, read in watermark mode, as the platform's watermark template that apply_watermark and goal finishing burn (over the current one, named after the platform unless name is given; slot text such as the title is left empty) and remembers the handle and QR link drawn there; set_watermark_template makes template_id (a saved template) the platform's watermark template, or null goes back to the watermark profile's look"),
+    .describe("get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; suggest calls a paid language model once and returns 3 to 5 options for the operator to pick from without saving anything: kind headline writes headlines from the video's existing analysis, transcript and download title and description (it never starts transcription or analysis, and answers no_context when the video has none of them), kind translate translates the headline for the second line under it; check_placement answers for free, from faces and on-screen text already found in the video, whether layer_id's drawn box covers one during the layer's time window and, when every frame of that window was already checked, the clearest of the nine anchor spots (it never calls a model and never moves the layer); detect_regions first finds faces and on-screen text in the window's unchecked frames with a paid vision model call (none when all were checked), then answers as check_placement does and returns the found regions; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here; save_watermark saves the video's current graphics, read in watermark mode, as the platform's watermark template that apply_watermark and goal finishing burn (over the current one, named after the platform unless name is given; slot text such as the title is left empty) and remembers the handle and QR link drawn there; set_watermark_template makes template_id (a saved template) the platform's watermark template, or null goes back to the watermark profile's look"),
   platform: z.enum(WATERMARK_PLATFORMS).optional()
     .describe("Watermark profile whose handle and profile URL fill the handle and QR slots of the default look and starters, and the watermark that watermark mode works with (default tiktok)"),
   watermark: z.boolean().optional()
@@ -153,6 +157,10 @@ const schema = {
     .describe("suggest: the language of the options, th (Thai) or en (English). Headlines default to Thai; a translation defaults to English, or Thai when the headline has no Thai text"),
   text: z.string().max(MAX_GRAPHICS_TEXT_LENGTH).optional()
     .describe("suggest with kind translate: the headline to translate (default the headline in the saved graphics)"),
+  layer_id: z.string().optional().describe("check_placement and detect_regions: the layer, as saved, whose spot is checked"),
+  box: rect.optional().describe("check_placement (required) and detect_regions: the layer's drawn box in frame pixels, as laid out by the editor"),
+  block: rect.optional().describe("check_placement and detect_regions: the layer's whole block box in frame pixels when it is larger than the drawn box (default box)"),
+  avoid: z.array(rect).max(50).optional().describe("check_placement and detect_regions: drawn boxes of other layers shown at the same time, which the clearest spot keeps off"),
   expected_revision: z.string().optional().describe("update and render: the revision from get that these changes apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.source_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
@@ -181,6 +189,10 @@ type VideoGraphicsArgs = {
   kind?: GraphicsSuggestKind;
   language?: GraphicsSuggestLanguage;
   text?: string;
+  layer_id?: string;
+  box?: GraphicsRect;
+  block?: GraphicsRect;
+  avoid?: GraphicsRect[];
   expected_revision?: string;
   source_hash?: string;
   request_id?: string;
@@ -238,6 +250,16 @@ function suggest(engine: Engine, args: VideoGraphicsArgs, artifactId: string) {
     ...(args.language ? { language: args.language } : {}),
     ...(args.text === undefined ? {} : { text: args.text }),
   });
+}
+
+function placementInput(args: VideoGraphicsArgs, op: "check_placement" | "detect_regions"): GraphicsPlacementInput {
+  if (!args.layer_id) throw new GraphicsServiceError("invalid", `${op} needs layer_id, the layer whose spot is checked.`);
+  return {
+    layerId: args.layer_id,
+    ...(args.box ? { box: args.box } : {}),
+    ...(args.block ? { block: args.block } : {}),
+    ...(args.avoid ? { avoid: args.avoid } : {}),
+  };
 }
 
 async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
@@ -348,6 +370,8 @@ async function videoOperation(engine: Engine, args: VideoGraphicsArgs, op: Video
   if (op === "get") return read(engine, args, artifactId, look);
   if (op === "render") return render(engine, args, artifactId, look);
   if (op === "suggest") return suggest(engine, args, artifactId);
+  if (op === "check_placement") return checkGraphicsPlacement(engine, artifactId, look, placementInput(args, op));
+  if (op === "detect_regions") return detectGraphicsRegions(engine, args.book_id, artifactId, look, placementInput(args, op));
   return update(engine, args, artifactId, look);
 }
 
@@ -355,7 +379,7 @@ export function videoGraphicsDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "video_graphics",
     description:
-      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn, and save_template then saves it as their default. Videos only.",
+      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place; suggest (paid, one model call) offers headline options from the video's existing analysis, transcript and download text, or translations of the headline for the second line, for the operator to pick; check_placement says for free whether a layer covers a face or on-screen text already found in the video and where the clearest spot is, and detect_regions (paid when frames are unchecked) finds them first. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn, and save_template then saves it as their default. Videos only.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema,
     handler: async (input) => {

@@ -24,6 +24,9 @@ import {
   graphicsRenderBlocker,
   graphicsRenderQueuedMessage,
   graphicsSelectionAfterRemove,
+  graphicsClearSpotMessage,
+  graphicsCoverWarning,
+  graphicsLayerPlacements,
   graphicsSlotText,
   graphicsSuggestKind,
   graphicsTemplateChoices,
@@ -32,6 +35,7 @@ import {
   graphicsToolError,
   graphicsWatermarkSwitchEdits,
   graphicsWatermarkTarget,
+  parseGraphicsPlacement,
   parseGraphicsRead,
   parseGraphicsRender,
   parseGraphicsSuggestions,
@@ -509,5 +513,54 @@ describe('graphics suggestions', () => {
     expect(parseGraphicsSuggestions(result)).toEqual({ kind: 'translate', language: 'en', options: ['Red light', 'Stuck at a red light', 'Still cool'] })
     expect(() => parseGraphicsSuggestions({ ...result, options: [] })).toThrow()
     expect(() => parseGraphicsSuggestions({ ...result, language: 'fr' })).toThrow()
+  })
+})
+
+describe('graphics placement', () => {
+  const FACE = { kind: 'face' as const, confidence: 0.9, x: 0.05, y: 0.82, width: 0.15, height: 0.15 }
+  const document = graphicsDocumentFromLayers([
+    { kind: 'scrim', edge: 'bottom' },
+    { kind: 'image', name: 'Logo', artifactId: 'logo' },
+    { kind: 'image', name: 'Late logo', artifactId: 'logo', timing: { start: 6, end: 8 } },
+    { kind: 'image', name: 'Hidden logo', artifactId: 'logo', visible: false },
+  ])
+  const [shade, logo, late, hidden] = document.layers
+  const layout: GraphicsLayerLayout[] = [
+    { kind: 'scrim', layerId: shade.id, box: { x: 0, y: 960, width: 1080, height: 960 } },
+    { kind: 'image', layerId: logo.id, box: { x: 0, y: 1500, width: 400, height: 400 }, missing: false },
+    { kind: 'image', layerId: late.id, box: { x: 0, y: 1500, width: 400, height: 400 }, missing: false },
+    { kind: 'image', layerId: hidden.id, box: { x: 0, y: 1500, width: 400, height: 400 }, missing: false },
+  ]
+
+  it('reads cached regions with a get and defaults to none', () => {
+    expect(parseGraphicsRead(wire()).regions).toEqual([])
+    expect(parseGraphicsRead(wire({ regions: [{ time: 0.5, regions: [FACE] }] })).regions).toEqual([{ time: 0.5, regions: [FACE] }])
+  })
+
+  it('warns for drawn layers over a cached face in their window and counts the frames still unchecked', () => {
+    const placements = graphicsLayerPlacements(document, layout, parseGraphicsRead(wire({ regions: [{ time: 0.5, regions: [FACE] }, { time: 7.5, regions: [] }] })))
+    expect(Object.keys(placements)).toEqual([logo.id, late.id])
+    expect(placements[logo.id]).toEqual({ covers: [{ kind: 'face', time: 0.5 }], unchecked: 6, drawn: layout[1].box, block: layout[1].box })
+    expect(placements[late.id]).toEqual({ covers: [], unchecked: 1, drawn: layout[2].box, block: layout[2].box })
+    expect(graphicsLayerPlacements(document, null, parseGraphicsRead(wire()))).toEqual({})
+  })
+
+  it('names what a layer covers and what finding a clear spot did', () => {
+    expect(graphicsCoverWarning([])).toBeNull()
+    expect(graphicsCoverWarning([{ kind: 'face', time: 1 }, { kind: 'face', time: 2 }])).toBe('Covers a face')
+    expect(graphicsCoverWarning([{ kind: 'text', time: 1 }])).toBe('Covers on-screen text')
+    expect(graphicsCoverWarning([{ kind: 'text', time: 1 }, { kind: 'face', time: 2 }])).toBe('Covers a face and on-screen text')
+    const position = { anchor: 'top-right' as const, x: 1, y: 0, space: 'safe' as const }
+    expect(graphicsClearSpotMessage({ position, moved: true, covers: [] })).toBe('Moved to the top right, clear of faces and on-screen text.')
+    expect(graphicsClearSpotMessage({ position, moved: true, covers: [{ kind: 'text', time: 1 }] })).toBe('Moved to the top right, the clearest spot, but it still covers on-screen text.')
+    expect(graphicsClearSpotMessage({ position, moved: false, covers: [] })).toBe('Already clear of faces and on-screen text.')
+    expect(graphicsClearSpotMessage({ position, moved: false, covers: [{ kind: 'face', time: 1 }] })).toBe('No clearer spot: every place covers a face.')
+  })
+
+  it('parses a placement answer with or without detected regions', () => {
+    const answer = { asset_id: 'video-1', layer_id: 'l2', window: { start: 0, end: 8 }, times: [0.5], unchecked_times: [], covers: [{ kind: 'face', time: 0.5 }], clear_spot: { position: { anchor: 'bottom-right', x: 1, y: 1, space: 'safe' }, moved: true, covers: [] } }
+    expect(parseGraphicsPlacement(answer)).toMatchObject({ covers: [{ kind: 'face', time: 0.5 }], clear_spot: { moved: true } })
+    expect(parseGraphicsPlacement({ ...answer, clear_spot: null, detected: 1, regions: [{ time: 0.5, regions: [FACE] }] }).regions).toEqual([{ time: 0.5, regions: [FACE] }])
+    expect(() => parseGraphicsPlacement({ ...answer, clear_spot: { ...answer.clear_spot, position: { anchor: 'middle', x: 0, y: 0, space: 'safe' } } })).toThrow()
   })
 })

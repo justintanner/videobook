@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ScanFace } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsRect } from '../../../../server/src/graphics/layout'
 import {
@@ -16,7 +18,15 @@ import {
   type GraphicsScrimLayer,
   type GraphicsSpace,
 } from '../../../../server/src/graphics/model'
-import { graphicsPercent, type GraphicsImageChoice, type GraphicsRead } from '@/videobook/graphics-model'
+import {
+  GRAPHICS_ANCHOR_NAMES,
+  graphicsCoverWarning,
+  graphicsPercent,
+  type GraphicsImageChoice,
+  type GraphicsLayerPlacement,
+  type GraphicsRead,
+} from '@/videobook/graphics-model'
+import type { GraphicsTemplateOutcome } from '@/videobook/useGraphicsEditor'
 import { graphicsRepositionEdits } from '@/videobook/graphics-pointer'
 import { CheckedText, Choice, Color, Range, Section, Select } from './GraphicsFields'
 import { GraphicsTextInspector } from './GraphicsTextInspector'
@@ -30,30 +40,20 @@ type InspectorProps = {
   read: GraphicsRead
   imageChoices: readonly GraphicsImageChoice[]
   box: GraphicsRect | null
+  placement: GraphicsLayerPlacement | null
   playhead: () => number
   disabled: boolean
   onEdit: Edit
+  onFindClearSpot: () => Promise<GraphicsTemplateOutcome>
 }
 
 type PlacedLayer = Exclude<GraphicsLayer, GraphicsScrimLayer>
 type QrPatch = Extract<GraphicsEdit, { op: 'set_qr' }>['qr']
 type ScrimPatch = Extract<GraphicsEdit, { op: 'set_scrim' }>['scrim']
 
-const ANCHOR_NAMES: Record<GraphicsAnchor, string> = {
-  'top-left': 'top left',
-  top: 'top',
-  'top-right': 'top right',
-  left: 'left',
-  center: 'center',
-  right: 'right',
-  'bottom-left': 'bottom left',
-  bottom: 'bottom',
-  'bottom-right': 'bottom right',
-}
-
 const ANCHOR_OPTIONS: ReadonlyArray<{ value: GraphicsAnchor; label: string }> = GRAPHICS_ANCHORS.map((anchor) => ({
   value: anchor,
-  label: ANCHOR_NAMES[anchor].charAt(0).toUpperCase() + ANCHOR_NAMES[anchor].slice(1),
+  label: GRAPHICS_ANCHOR_NAMES[anchor].charAt(0).toUpperCase() + GRAPHICS_ANCHOR_NAMES[anchor].slice(1),
 }))
 
 const SPACE_OPTIONS: ReadonlyArray<{ value: GraphicsSpace; label: string }> = [
@@ -64,7 +64,51 @@ const SPACE_OPTIONS: ReadonlyArray<{ value: GraphicsSpace; label: string }> = [
 
 const KIND_TITLES: Record<GraphicsLayer['kind'], string> = { text: 'Text', image: 'Image', qr: 'QR code', scrim: 'Shade' }
 
-function Place({ layer, frame, box, disabled, onEdit }: { layer: PlacedLayer; frame: GraphicsFrame; box: GraphicsRect | null; disabled: boolean; onEdit: Edit }) {
+function framesLabel(count: number): string {
+  return count === 1 ? '1 frame' : `${count} frames`
+}
+
+function ClearSpot({ placement, disabled, onFind }: { placement: GraphicsLayerPlacement | null; disabled: boolean; onFind: () => Promise<GraphicsTemplateOutcome> }) {
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<GraphicsTemplateOutcome | null>(null)
+  const warning = placement ? graphicsCoverWarning(placement.covers) : null
+  const unchecked = placement?.unchecked ?? 0
+  const find = async () => {
+    setBusy(true)
+    setNotice(null)
+    try {
+      setNotice(await onFind())
+    } finally {
+      setBusy(false)
+    }
+  }
+  const paid = unchecked > 0 ? ` First finds faces and on-screen text in ${framesLabel(unchecked)} with one paid model call.` : ''
+  return (
+    <div className="graphics-clear-spot" role="group" aria-label="Clear spot">
+      <button
+        type="button"
+        disabled={disabled || busy || !placement?.drawn}
+        title={placement?.drawn ? `Move this layer to the anchor that covers the fewest faces and on-screen text.${paid}` : 'This layer draws nothing yet.'}
+        onClick={() => void find()}
+      >
+        <ScanFace size={12} aria-hidden="true" />{busy ? 'Finding a clear spot…' : 'Find clear spot'}
+      </button>
+      {warning && <span className="graphics-clear-spot-warning">{warning} while it is shown.</span>}
+      {unchecked > 0 && !busy && <span className="graphics-muted">Checks {framesLabel(unchecked)} for faces and on-screen text first, a paid model call.</span>}
+      {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
+    </div>
+  )
+}
+
+function Place({ layer, frame, box, placement, disabled, onEdit, onFindClearSpot }: {
+  layer: PlacedLayer
+  frame: GraphicsFrame
+  box: GraphicsRect | null
+  placement: GraphicsLayerPlacement | null
+  disabled: boolean
+  onEdit: Edit
+  onFindClearSpot: () => Promise<GraphicsTemplateOutcome>
+}) {
   const { position } = layer
   const place = (anchor: GraphicsAnchor) => {
     const point = GRAPHICS_ANCHOR_POINTS[anchor]
@@ -81,8 +125,8 @@ function Place({ layer, frame, box, disabled, onEdit }: { layer: PlacedLayer; fr
               <button
                 key={anchor}
                 type="button"
-                aria-label={`Place ${ANCHOR_NAMES[anchor]}`}
-                title={`Place ${ANCHOR_NAMES[anchor]}`}
+                aria-label={`Place ${GRAPHICS_ANCHOR_NAMES[anchor]}`}
+                title={`Place ${GRAPHICS_ANCHOR_NAMES[anchor]}`}
                 aria-pressed={active}
                 disabled={disabled}
                 onClick={() => place(anchor)}
@@ -98,6 +142,7 @@ function Place({ layer, frame, box, disabled, onEdit }: { layer: PlacedLayer; fr
         </div>
       </div>
       <p className="graphics-muted">Drag the layer in the preview, or nudge it with the arrow keys. The anchor stays put when the layer grows.</p>
+      <ClearSpot placement={placement} disabled={disabled} onFind={onFindClearSpot} />
     </Section>
   )
 }
@@ -173,7 +218,17 @@ export function GraphicsInspector(props: InspectorProps) {
           onChange={(opacity) => onEdit([{ op: 'set_layer', layer_id: layer.id, layer: { opacity } }], `${layer.id}:opacity`)} />
         {!layer.visible && <p className="graphics-muted">This layer is hidden, so it is not drawn or rendered.</p>}
       </Section>
-      {layer.kind !== 'scrim' && <Place layer={layer} frame={props.read.source} box={props.box} disabled={disabled} onEdit={onEdit} />}
+      {layer.kind !== 'scrim' && (
+        <Place
+          layer={layer}
+          frame={props.read.source}
+          box={props.box}
+          placement={props.placement}
+          disabled={disabled}
+          onEdit={onEdit}
+          onFindClearSpot={props.onFindClearSpot}
+        />
+      )}
       <KindFields {...props} />
       <GraphicsTimingSection layer={layer} durationSeconds={props.read.source.duration_seconds} playhead={props.playhead} disabled={disabled} onEdit={onEdit} />
     </div>
