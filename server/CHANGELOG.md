@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-11
+
 ### Added
 
 - fal GPT Image 2.6 Sunburst and Flare, for text-to-image and edits. Edits
