@@ -5,7 +5,6 @@ import { PostInspector } from '@/components/videobook/PostInspector'
 import { insertVideoReviewError } from '@/videobook/insert-video-review'
 import type { PostView } from '../server/src/posts/post-contract'
 import type { GraphicsBlockText } from '../server/src/graphics/starters'
-import { WATERMARK_PLATFORMS, isWatermarkPlatform } from '../server/src/watermark-platform'
 import { ColdOpenBody } from '@/components/videobook/confirm/bodies/ColdOpenBody'
 import { PostDeliveryBody } from '@/components/videobook/confirm/bodies/PostDeliveryBody'
 import { useIcloudSyncPoll } from '@/videobook/use-icloud-sync-poll'
@@ -169,7 +168,6 @@ import {
   type ImageSubjectEditInput,
 } from '@/components/videobook/NotebookMediaFullscreen'
 import type { MediaFullscreenMode } from '@/videobook/image-editor-copy'
-import type { WatermarkReviewPatch, WatermarkReviewState } from '@/components/videobook/confirm/bodies/WatermarkBody'
 import { materializeNotebookSpeakCommand } from './videobook/notebook-speak-command'
 import { useElevenLabsVoices } from './videobook/use-elevenlabs-voices'
 import { useImageEditModels } from './videobook/use-image-edit-models'
@@ -180,33 +178,6 @@ import {
   resolveSpeakVoiceId,
 } from './videobook/speak-preview'
 import { resolveFullscreenTarget } from './videobook/fullscreen-target'
-import { resolveWatermarkTarget } from './videobook/watermark-target'
-import {
-  fitWatermarkReviewTiming,
-  readWatermarkReviewPreferences,
-  resolveWatermarkReviewInputs,
-  saveWatermarkReviewPreferences,
-} from './videobook/watermark-review-preferences'
-import {
-  clampHandlePadding,
-  clampHandleRounding,
-  clampHandleVerticalPercent,
-  clampWatermarkFadeSeconds,
-  clampWatermarkOpacity,
-  DEFAULT_HANDLE_PADDING,
-  DEFAULT_HANDLE_PADDING_Y,
-  DEFAULT_HANDLE_ROUNDING,
-  DEFAULT_HANDLE_VERTICAL_PERCENT,
-  DEFAULT_WATERMARK_FADE_SECONDS,
-  DEFAULT_WATERMARK_OPACITY,
-  isWatermarkHandlePlacement,
-  isWatermarkPosition,
-} from './videobook/watermark-review'
-import {
-  watermarkAppliedMessage,
-  watermarkBurnWatchStep,
-  watermarkQueuedMessage,
-} from './videobook/watermark-burn'
 import {
   NotebookCellContextMenu,
   type NotebookCellContextAction,
@@ -267,7 +238,6 @@ import {
   generationValidation,
   splitValidation,
   VALID_CONFIRMATION,
-  watermarkValidation,
   xPostValidation,
 } from '@/videobook/confirm-validation'
 import {
@@ -346,7 +316,7 @@ import { parseTrackAddCommand } from '@/videobook/track-add-command'
 import { resolvePlaySlot } from '@/videobook/play-command'
 import { useSubtitleEditor } from '@/videobook/useSubtitleEditor'
 import { useGraphicsEditor } from '@/videobook/useGraphicsEditor'
-import { graphicsBlockText, graphicsEditorTarget } from '@/videobook/graphics-model'
+import { graphicsBlockText, graphicsEditorTarget, graphicsWatermarkTarget, type GraphicsWatermarkTarget } from '@/videobook/graphics-model'
 import { subtitlesCommandTarget } from '@/videobook/subtitles-model'
 import {
   notebookFollowUpLabels,
@@ -675,11 +645,6 @@ import {
   type CanvasNode,
 } from '@/videobook/notebook-canvas'
 
-const WatermarkBody = lazy(async () => {
-  const module = await import('@/components/videobook/confirm/bodies/WatermarkBody')
-  return { default: module.WatermarkBody }
-})
-
 const MusicVideoEditor = lazy(async () => {
   const module = await import('@/components/videobook/MusicVideoEditor')
   return { default: module.MusicVideoEditor }
@@ -822,9 +787,6 @@ const downloadWatchIntervalMs = 5_000
 const mediaInsightWatchIntervalMs = 3_000
 const mediaInsightWatchTimeoutMs = 20 * 60_000
 const mediaProcessWatchIntervalMs = 750
-// Polls a queued watermark burn may spend without its job in the listing
-// before the watch gives up (the job lands in list_jobs on the first poll).
-const watermarkBurnMissingPollLimit = 20
 const mediaAssetWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 const EMPTY_NOTEBOOK_CELLS: NotebookCell[] = []
@@ -1102,8 +1064,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     Record<string, MediaInsightWork>
   >({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
-  const [pendingWatermarkReview, setPendingWatermarkReview] =
-    useState<WatermarkReviewState | null>(null)
   const [mediaFullscreen, setMediaFullscreen] = useState<MediaFullscreenSession | null>(null)
   const imageEditInstructionsRef = useRef(new Map<string, string>())
   const [mediaFullscreenComposerTarget, setMediaFullscreenComposerTarget] =
@@ -1639,7 +1599,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     : undefined
   const timelinePreviewOpen = Boolean(timelinePreviewCell && sequence && screen === 'notebook')
   const composerClipPicker = timelinePreviewOpen || musicVideoSession ? null : timeline.picker
-  const composerReviewOpen = Boolean(pendingWatermarkReview || pendingCommandPlan || pendingChatAction || currentActionSheet || composerClipPicker)
+  const composerReviewOpen = Boolean(pendingCommandPlan || pendingChatAction || currentActionSheet || composerClipPicker)
 
   const { preview: generationCellPreview, select: selectGenerationCellPreview } = useGenerationCellPreview({
     bookId, notebook, ready: mcp.state === 'ready', call,
@@ -2752,7 +2712,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (pendingChatAction?.kind === 'graphics') graphics.close()
     setPendingCommandPlan(null)
     setPendingChatAction(null)
-    setPendingWatermarkReview(null)
     focusCommandComposer()
   }, [bookId, call, cancelChatReview, focusCommandComposer, graphics, pendingChatAction, subtitles])
   const updatePendingSpliceOverlap = useCallback((value: string) => {
@@ -4048,7 +4007,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const tagAudioEvents = input.tagAudioEvents ?? true
     actionCatalogRequestRef.current += 1
     reviewChat(input.chat, false, () => setPendingCommandPlan(null))
-    reviewChat(input.chat, false, () => setPendingWatermarkReview(null))
     reviewChat(input.chat, false, () => setActionSheet(null))
     reviewChat(input.chat, false, () => setActionDiscovery(null))
     reviewChat(input.chat, true, () => setPendingChatAction({
@@ -4104,7 +4062,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const request = ++actionCatalogRequestRef.current
     if (actionId) {
       setActionDiscovery(null)
-      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      if (pendingChatAction || pendingCommandPlan) dismissPendingCommandPlan()
       timeline.closePicker()
       reviewChat(chat, true, () => setActionSheet({ key: request, bookId, actionId, values, query, opener }))
     } else {
@@ -5329,266 +5287,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const openWatermarkReview = (
-    assetId: string,
-    targetLabel: string,
-    initial: WatermarkReviewPatch = {},
-    chat?: ChatExecution,
-  ) => {
-    const targetAsset = assets.find((asset) => asset.artifactId === assetId)
-    const inputs = resolveWatermarkReviewInputs(
-      readWatermarkReviewPreferences(bookId), initial, targetAsset?.duration ?? null,
-    )
-    reviewChat(chat, false, () => setPendingCommandPlan(null))
-    reviewChat(chat, false, () => setPendingChatAction(null))
-    reviewChat(chat, true, () => {
-      saveWatermarkReviewPreferences(bookId, inputs.platform, initial)
-      setPendingWatermarkReview({
-        assetId,
-        targetLabel,
-        mediaUrl: targetAsset?.mediaUrl ?? null,
-        thumbnailUrl: targetAsset?.thumbnailUrl ?? null,
-        width: targetAsset?.width ?? null,
-        height: targetAsset?.height ?? null,
-        durationSeconds: targetAsset?.duration ?? null,
-        platform: inputs.platform,
-        identities: {
-          x: { handle: inputs.handles?.x ?? '', recent: [] },
-          tiktok: { handle: inputs.handles?.tiktok ?? '', recent: [] },
-        },
-        url: inputs.url ?? '',
-        includeQr: inputs.includeQr ?? true,
-        includeHandle: inputs.includeHandle ?? true,
-        position: inputs.position ?? 'auto',
-        handleVerticalPercent: inputs.handleVerticalPercent === undefined
-          ? DEFAULT_HANDLE_VERTICAL_PERCENT
-          : clampHandleVerticalPercent(inputs.handleVerticalPercent),
-        handlePlacement: inputs.handlePlacement ?? 'center',
-        includePlatformIcon: inputs.includePlatformIcon ?? true,
-        includeHandleBorder: inputs.includeHandleBorder ?? true,
-        handlePadding: inputs.handlePadding === undefined
-          ? DEFAULT_HANDLE_PADDING
-          : clampHandlePadding(inputs.handlePadding),
-        handlePaddingY: inputs.handlePaddingY === undefined
-          ? DEFAULT_HANDLE_PADDING_Y
-          : clampHandlePadding(inputs.handlePaddingY),
-        handleRounding: inputs.handleRounding === undefined
-          ? DEFAULT_HANDLE_ROUNDING
-          : clampHandleRounding(inputs.handleRounding),
-        qrOpacity: inputs.qrOpacity === undefined
-          ? DEFAULT_WATERMARK_OPACITY
-          : clampWatermarkOpacity(inputs.qrOpacity),
-        handleOpacity: inputs.handleOpacity === undefined
-          ? DEFAULT_WATERMARK_OPACITY
-          : clampWatermarkOpacity(inputs.handleOpacity),
-        qrStartSeconds: inputs.qrStartSeconds ?? 0,
-        qrEndSeconds: inputs.qrEndSeconds ?? null,
-        handleStartSeconds: inputs.handleStartSeconds ?? 0,
-        handleEndSeconds: inputs.handleEndSeconds ?? null,
-        fadeSeconds: inputs.fadeSeconds === undefined
-          ? DEFAULT_WATERMARK_FADE_SECONDS
-          : clampWatermarkFadeSeconds(inputs.fadeSeconds),
-        saveDefault: inputs.saveDefault ?? false,
-        loadingConfig: true,
-        error: null,
-      })
-    })
-    void Promise.allSettled(WATERMARK_PLATFORMS.map(async (platform) => {
-      const config = recordValue(await call('get_watermark_config', {
-        book_id: bookId,
-        platform,
-      }, { background: true, chat }))
-      const savedHandle = asString(config?.savedHandle)
-      const authenticatedHandle = asString(config?.authenticatedHandle)
-      const recent = Array.isArray(config?.recent)
-        ? config.recent.filter((entry): entry is string => typeof entry === 'string')
-        : []
-      const profile = recordValue(config?.profile)
-      const profileHandle = asString(profile?.handle)
-      const profileUrl = asString(profile?.profileUrl)
-      const rememberedHandle = readWatermarkReviewPreferences(bookId).handles?.[platform]
-      presentChat(chat, () => setPendingWatermarkReview((current) =>
-        current && current.assetId === assetId
-          ? {
-              ...current,
-              url: current.url || (platform === current.platform ? profileUrl ?? '' : current.url),
-              identities: {
-                ...current.identities,
-                [platform]: {
-                  handle: rememberedHandle ?? (current.identities[platform].handle
-                    || (savedHandle ?? authenticatedHandle ?? recent[0] ?? profileHandle ?? '')),
-                  recent,
-                },
-              },
-            }
-          : current))
-    })).then(() => {
-      presentChat(chat, () => setPendingWatermarkReview((current) =>
-        current && current.assetId === assetId
-          ? { ...current, loadingConfig: false }
-          : current))
-    })
-  }
-
-  const submitWatermark = async (chat?: ChatExecution): Promise<ComposerOutcome> => {
-    if (!bookId || !pendingWatermarkReview) {
-      return { ok: false, message: 'There is no pending watermark to apply.' }
-    }
-    const {
-      assetId,
-      targetLabel,
-      platform,
-      identities,
-      url,
-      includeQr,
-      includeHandle,
-      position,
-      handleVerticalPercent,
-      handlePlacement,
-      includePlatformIcon,
-      includeHandleBorder,
-      handlePadding,
-      handlePaddingY,
-      handleRounding,
-      qrOpacity,
-      handleOpacity,
-      qrStartSeconds,
-      qrEndSeconds,
-      handleStartSeconds,
-      handleEndSeconds,
-      fadeSeconds,
-      saveDefault,
-    } = pendingWatermarkReview
-    const trimmedHandle = identities[platform].handle.trim().replace(/^@/, '').trim()
-    const trimmedUrl = url.trim()
-    if (!includeQr && !includeHandle) {
-      return {
-        ok: false,
-        message: 'Include a QR code, a handle, or both before applying the watermark.',
-        nextInput: '/apply',
-        selectInput: false,
-      }
-    }
-    if (includeHandle && !trimmedHandle) {
-      return {
-        ok: false,
-        message: 'Enter a handle before applying the watermark.',
-        nextInput: '/apply',
-        selectInput: false,
-      }
-    }
-    if (includeQr && !trimmedUrl && !trimmedHandle) {
-      return {
-        ok: false,
-        message: 'Enter a QR link before applying the watermark.',
-        nextInput: '/apply',
-        selectInput: false,
-      }
-    }
-    presentChat(chat, () => setPendingWatermarkReview((current) =>
-      current && current.assetId === assetId
-        ? { ...current, error: null }
-        : current))
-    setBusy(true)
-    try {
-      const result = recordValue(await call('apply_watermark', {
-        book_id: bookId,
-        asset_id: assetId,
-        platform,
-        ...(trimmedHandle && (includeHandle || !trimmedUrl) ? { handle: trimmedHandle } : {}),
-        include_qr: includeQr,
-        include_handle: includeHandle,
-        position,
-        ...(includeHandle ? { handle_vertical_percent: handleVerticalPercent } : {}),
-        ...(includeHandle && includeQr && handlePlacement !== 'center'
-          ? { handle_position: handlePlacement }
-          : {}),
-        ...(includeHandle ? { include_platform_icon: includePlatformIcon } : {}),
-        ...(includeHandle ? { include_handle_border: includeHandleBorder } : {}),
-        ...(includeHandle ? { handle_padding: handlePadding } : {}),
-        ...(includeHandle ? { handle_padding_y: handlePaddingY } : {}),
-        ...(includeHandle ? { handle_rounding: handleRounding } : {}),
-        ...(includeHandle ? { handle_opacity: handleOpacity } : {}),
-        ...(includeQr && trimmedUrl ? { url: trimmedUrl } : {}),
-        ...(includeQr ? { qr_opacity: qrOpacity } : {}),
-        ...(includeQr && qrStartSeconds > 0
-          ? { qr_start_seconds: qrStartSeconds }
-          : {}),
-        ...(includeQr && qrEndSeconds !== null
-          ? { qr_end_seconds: qrEndSeconds }
-          : {}),
-        ...(includeHandle && handleStartSeconds > 0
-          ? { handle_start_seconds: handleStartSeconds }
-          : {}),
-        ...(includeHandle && handleEndSeconds !== null
-          ? { handle_end_seconds: handleEndSeconds }
-          : {}),
-        fade_seconds: fadeSeconds,
-        ...(includeHandle && saveDefault ? { save_default: true } : {}),
-        wait: false,
-      }, { chat }))
-      const applied = {
-        includeQr,
-        includeHandle,
-        handle: trimmedHandle,
-        handlePlacement,
-        handleVerticalPercent,
-        handleOpacity,
-        qrOpacity,
-        requestedPosition: position,
-      }
-      const jobId = asNumber(result?.job_id)
-      if (asString(result?.status) === 'accepted' && jobId !== null) {
-        // The burn runs in the queue: hand the composer back now and watch
-        // the asset until the reprocess settles.
-        const message = watermarkQueuedMessage(
-          includeQr,
-          includeHandle,
-          trimmedHandle,
-          targetLabel,
-        )
-        presentChat(chat, () => setNotice(message))
-        reviewChat(chat, false, () => setPendingWatermarkReview(null))
-        void watchWatermarkBurn({
-          bookId,
-          artifactId: assetId,
-          jobId,
-          targetLabel,
-          describe: (burn) => watermarkAppliedMessage({
-            ...applied,
-            corner: asString(burn?.corner),
-            placementSource: asString(burn?.placementSource),
-          }),
-        }, chat)
-        return { ok: true, message }
-      }
-      await refreshBookData(bookId, notebook?.id, undefined, chat)
-      const message = watermarkAppliedMessage({
-        ...applied,
-        corner: asString(result?.position),
-        placementSource: asString(result?.placement_source),
-      })
-      presentChat(chat, () => setNotice(message))
-      reviewChat(chat, false, () => setPendingWatermarkReview(null))
-      return { ok: true, message }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      presentChat(chat, () => setPendingWatermarkReview((current) =>
-        current && current.assetId === assetId
-          ? { ...current, error: message }
-          : current))
-      presentChat(chat, () => setNotice(message, 'error'))
-      return {
-        ok: false,
-        message,
-        nextInput: '/apply',
-        selectInput: false,
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0 || !bookId) return
     if (uploading) {
@@ -5638,109 +5336,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     event.target.value = ''
     void uploadFiles(files)
   }
-
-  // A queued watermark burn (apply_watermark wait=false) is tracked here
-  // rather than by holding the composer: the burn job anchors the watch and
-  // the asset must settle back to ready after the reprocess it enqueues.
-  const watchWatermarkBurn = useCallback(async (params: {
-    bookId: string
-    artifactId: string
-    jobId: number
-    targetLabel: string
-    describe: (burn: Record<string, unknown> | null) => string
-  }, chat?: ChatExecution) => {
-    const deadline = Date.now() + mediaAssetWatchTimeoutMs
-    let consecutiveFailures = 0
-    let missingPolls = 0
-    const finish = async (message: string, tone: WorkspaceNoticeTone = 'info') => {
-      try {
-        await refreshBookData(
-          params.bookId,
-          watchScopeRef.current.notebookId ?? undefined, undefined, chat,
-        )
-      } catch {
-        void 0
-      }
-      presentChat(chat, () => setNotice(message, tone))
-    }
-    while (Date.now() < deadline) {
-      const scope = watchScopeRef.current
-      if (scope.bookId !== params.bookId) return
-      try {
-        const fetchedAt = performance.now()
-        const notebookId = scope.notebookId
-        const [assetValue, jobValue, notebookValue] = await Promise.all([
-          callRef.current('list_assets', {
-            book_id: params.bookId,
-            sort: 'newest',
-            limit: 200,
-            include_referenced: true,
-          }, { background: true }),
-          callRef.current('list_jobs', {
-            book_id: params.bookId,
-            limit: 200,
-          }, { background: true }),
-          notebookId
-            ? callRef.current('get_notebook', {
-                book_id: params.bookId,
-                notebook_id: notebookId,
-              }, { background: true })
-            : Promise.resolve(null),
-        ])
-        consecutiveFailures = 0
-        const afterScope = watchScopeRef.current
-        if (afterScope.bookId !== params.bookId) return
-        const nextAssets = asAssets(assetValue)
-        const nextJobs = asJobs(jobValue)
-        const nextNotebook = notebookId && afterScope.notebookId === notebookId
-          ? asNotebook(notebookValue)
-          : null
-        if (fetchedAt >= watchSnapshotClockRef.current) {
-          watchSnapshotClockRef.current = fetchedAt
-          setAssets((current) =>
-            jsonEqual(current, nextAssets) ? current : nextAssets)
-          applyJobsSnapshot(nextJobs)
-          // The cell's working badge comes from the canvas nodes, which only
-          // applyNotebook rebuilds.
-          if (nextNotebook) applyNotebook(nextNotebook, nextAssets, nextJobs)
-        }
-        const step = watermarkBurnWatchStep(
-          params.artifactId,
-          params.jobId,
-          nextAssets.find((asset) => asset.artifactId === params.artifactId),
-          nextJobs,
-        )
-        if (step.kind === 'completed') {
-          await finish(params.describe(step.result))
-          return
-        }
-        if (step.kind === 'failed') {
-          await finish(step.message, 'error')
-          return
-        }
-        missingPolls = step.kind === 'missing' ? missingPolls + 1 : 0
-        if (missingPolls >= watermarkBurnMissingPollLimit) {
-          presentChat(chat, () => setNotice(
-            `Lost track of the ${params.targetLabel} watermark job — check the Jobs screen`,
-            'error',
-          ))
-          return
-        }
-      } catch (error) {
-        consecutiveFailures += 1
-        if (consecutiveFailures >= 10) {
-          const detail = error instanceof Error ? error.message : String(error)
-          presentChat(chat, () => setNotice(
-            `Stopped watching the ${params.targetLabel} watermark: ${detail}. Check the Jobs screen.`,
-            'error',
-          ))
-          return
-        }
-      }
-      await delay(mediaProcessWatchIntervalMs)
-    }
-    presentChat(chat, () => setNotice(`${params.targetLabel} watermark is still processing — check the Jobs screen`))
-  }, [applyJobsSnapshot, applyNotebook, refreshBookData, setNotice])
 
   const cancelJob = async (jobId: number) => {
     if (!bookId) return
@@ -6409,18 +6004,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setTimelinePreview(null)
     setMusicVideoSession(null)
     reviewChat(chat, false, () => setPendingCommandPlan(null))
-    reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction(action))
     setComposerDockOpen(true)
   }
 
-  const openGraphics = (reference: string | undefined, image: string | undefined, chat?: ChatExecution, text?: GraphicsBlockText | null): ComposerOutcome => {
-    const resolved = graphicsEditorTarget({ reference, image, text, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
+  const openGraphics = (reference: string | undefined, image: string | undefined, chat?: ChatExecution, text?: GraphicsBlockText | null, watermark: GraphicsWatermarkTarget | null = null): ComposerOutcome => {
+    const resolved = graphicsEditorTarget({ reference, image, text, watermark, assets, mentions: commandMentionAssets, notebookId: notebook?.id ?? null })
     if (!resolved.ok) return resolved
     presentEditorSheet({ kind: 'graphics', assetId: resolved.target.artifactId }, chat)
     graphics.open(resolved.target)
-    return { ok: true, message: `Graphics opened for ${resolved.target.label}` }
+    return { ok: true, message: `${watermark ? 'Watermark' : 'Graphics'} opened for ${resolved.target.label}` }
   }
+  const openWatermark = (reference: string | undefined, chat?: ChatExecution, params?: Record<string, unknown>): ComposerOutcome => (
+    openGraphics(reference ?? selectedNotebookCell?.outputArtifactId, undefined, chat, null, graphicsWatermarkTarget(params))
+  )
   const openGraphicsFor = (artifactId: string) => {
     const result = openGraphics(artifactId, undefined)
     if (!result.ok) setNotice(result.message, 'error')
@@ -7400,7 +6997,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!asset || !['video', 'final'].includes(asset.type) || !asset.mediaUrl) return { ok: false, message: 'Select a playable video or use /edit-cold-open @a1.' }
     const mediaUrl = asset.mediaUrl
     reviewChat(chat, false, () => setPendingCommandPlan(null))
-    reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction({
       kind: 'cold-open',
       review: { bookId, notebookId: notebook.id, assetId: asset.artifactId,
@@ -7495,7 +7091,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const bookName = activeBook?.name ?? 'book'
     const copy = copyWithCaption(post, caption)
     reviewChat(chat, false, () => setPendingCommandPlan(null))
-    reviewChat(chat, false, () => setPendingWatermarkReview(null))
     reviewChat(chat, true, () => setPendingChatAction({
       kind: 'post-delivery',
       review: {
@@ -7577,98 +7172,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true, message: `Opened ${target.address} fullscreen` }
     }
     if (plan.tool === 'apply_watermark' || plan.routedTool === 'apply_watermark') {
-      const rawAssetId = asString(plan.params.asset_id)?.replace(/^@/, '')
-      const mention = rawAssetId
-        ? commandMentionAssets.find((candidate) =>
-            candidate.artifactId === rawAssetId
-            || candidate.cellAddress.toLowerCase() === rawAssetId.toLowerCase())
-        : undefined
-      const explicitAssetId = mention?.artifactId ?? rawAssetId
-      const target = resolveWatermarkTarget(
-        explicitAssetId,
-        selectedNotebookCell,
-        assets,
-        new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
-      )
-      if (!target.ok) return { ok: false, message: target.message }
-      const qrStartSeconds = asNumber(plan.params.qr_start_seconds)
-      const qrEndSeconds = asNumber(plan.params.qr_end_seconds)
-      const handleStartSeconds = asNumber(plan.params.handle_start_seconds)
-      const handleEndSeconds = asNumber(plan.params.handle_end_seconds)
-      const qrOpacity = asNumber(plan.params.qr_opacity)
-      const handleOpacity = asNumber(plan.params.handle_opacity)
-      const handleVerticalPercent = asNumber(plan.params.handle_vertical_percent)
-      const handlePadding = asNumber(plan.params.handle_padding)
-      const handlePaddingY = asNumber(plan.params.handle_padding_y)
-      const handleRounding = asNumber(plan.params.handle_rounding)
-      const fadeSeconds = asNumber(plan.params.fade_seconds)
-      const requestedPosition = plan.params.position
-      const requestedHandlePlacement = plan.params.handle_position
-      const requestedPlatformIcon = plan.params.include_platform_icon
-      openWatermarkReview(target.artifactId, target.label, {
-        ...(isWatermarkPlatform(plan.params.platform) ? { platform: plan.params.platform } : {}),
-        ...(asString(plan.params.handle)
-          ? { handle: asString(plan.params.handle) ?? undefined }
-          : {}),
-        ...(asString(plan.params.url)
-          ? { url: asString(plan.params.url) ?? undefined }
-          : {}),
-        ...(typeof plan.params.include_qr === 'boolean'
-          ? { includeQr: plan.params.include_qr }
-          : {}),
-        ...(typeof plan.params.include_handle === 'boolean'
-          ? { includeHandle: plan.params.include_handle }
-          : {}),
-        ...(isWatermarkPosition(requestedPosition)
-          ? { position: requestedPosition }
-          : {}),
-        ...(handleVerticalPercent !== null
-          ? { handleVerticalPercent: clampHandleVerticalPercent(handleVerticalPercent) }
-          : {}),
-        ...(isWatermarkHandlePlacement(requestedHandlePlacement)
-          ? { handlePlacement: requestedHandlePlacement }
-          : {}),
-        ...(typeof requestedPlatformIcon === 'boolean'
-          ? { includePlatformIcon: requestedPlatformIcon }
-          : {}),
-        ...(typeof plan.params.include_handle_border === 'boolean'
-          ? { includeHandleBorder: plan.params.include_handle_border }
-          : {}),
-        ...(handlePadding !== null
-          ? { handlePadding: clampHandlePadding(handlePadding) }
-          : {}),
-        ...(handlePaddingY !== null
-          ? { handlePaddingY: clampHandlePadding(handlePaddingY) }
-          : {}),
-        ...(handleRounding !== null
-          ? { handleRounding: clampHandleRounding(handleRounding) }
-          : {}),
-        ...(qrOpacity !== null
-          ? { qrOpacity: clampWatermarkOpacity(qrOpacity) }
-          : {}),
-        ...(handleOpacity !== null
-          ? { handleOpacity: clampWatermarkOpacity(handleOpacity) }
-          : {}),
-        ...(qrStartSeconds !== null && qrStartSeconds >= 0
-          ? { qrStartSeconds }
-          : {}),
-        ...(qrEndSeconds !== null && qrEndSeconds >= 0
-          ? { qrEndSeconds }
-          : {}),
-        ...(handleStartSeconds !== null && handleStartSeconds >= 0
-          ? { handleStartSeconds }
-          : {}),
-        ...(handleEndSeconds !== null && handleEndSeconds >= 0
-          ? { handleEndSeconds }
-          : {}),
-        ...(fadeSeconds !== null
-          ? { fadeSeconds: clampWatermarkFadeSeconds(fadeSeconds) }
-          : {}),
-        ...(typeof plan.params.save_default === 'boolean'
-          ? { saveDefault: plan.params.save_default }
-          : {}),
-      }, chat)
-      return applyReadyOutcome(`Watermark review ready for ${target.label}`)
+      return openWatermark(asString(plan.params.asset_id) ?? undefined, chat, plan.params)
     }
     if (plan.tool === 'transcribe' || plan.routedTool === 'transcribe') {
       return openTranscribeReview({
@@ -8747,10 +8251,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (applyCommand) {
         if (
           applyCommand.promptOverride
-          && (pendingWatermarkReview || (
-            pendingChatAction?.kind !== 'generation'
-            && pendingChatAction?.kind !== 'transcribe'
-          ))
+          && pendingChatAction?.kind !== 'generation'
+          && pendingChatAction?.kind !== 'transcribe'
         ) {
           return {
             ok: false,
@@ -8759,7 +8261,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             selectInput: false,
           }
         }
-        if (pendingWatermarkReview) return await submitWatermark(chat)
         if (pendingChatAction) {
           return await applyPendingChatAction(applyCommand.promptOverride, chat)
         }
@@ -8769,18 +8270,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: false, message: 'There is no pending action to apply.' }
       }
       if (normalizedInput === '/cancel') {
-        if (!pendingWatermarkReview && !pendingChatAction && !pendingCommandPlan) {
+        if (!pendingChatAction && !pendingCommandPlan) {
           if (!currentActionSheet && !composerClipPicker) return { ok: false, message: 'There is no pending action to cancel.' }
           if (currentActionSheet) actionCatalogRequestRef.current += 1
           reviewChat(chat, false, () => currentActionSheet ? setActionSheet(null) : timeline.closePicker())
           return { ok: true, message: 'Pending action cancelled' }
         }
-        reviewChat(chat, false, () => setPendingWatermarkReview(null))
         reviewChat(chat, false, () => setPendingChatAction(null))
         reviewChat(chat, false, () => setPendingCommandPlan(null))
         return { ok: true, message: 'Pending action cancelled' }
       }
-      if (pendingWatermarkReview) reviewChat(chat, false, () => setPendingWatermarkReview(null))
       if (!bookId && !input.startsWith('/')) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
         const routed = await call('chat', {
@@ -9055,15 +8554,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (command.uiAction === 'open_watermark') {
         const parsed = parseCommandArgs(resolvedRest, command.params)
-        const target = resolveWatermarkTarget(
-          asString(parsed.asset_ref) ?? undefined,
-          selectedNotebookCell,
-          assets,
-          new Map(commandMentionAssets.map((asset) => [asset.artifactId, asset.cellAddress])),
-        )
-        if (!target.ok) return { ok: false, message: target.message }
-        openWatermarkReview(target.artifactId, target.label, undefined, chat)
-        return applyReadyOutcome(`Watermark review ready for ${target.label}`)
+        return openWatermark(asString(parsed.asset_ref) ?? undefined, chat)
       }
       if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
       if (command.mcpTool.tool === 'download_video' && !notebook) {
@@ -9378,7 +8869,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const beginComposerTurn = (input: string): ChatExecution => {
     const continuingReview = /^\/(?:apply|cancel)(?:\s|$)/iu.test(input) && composerReviewOpen
     if (!continuingReview) {
-      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      if (pendingChatAction || pendingCommandPlan) dismissPendingCommandPlan()
       selectCanvasCell(null)
       setSourceViewCellId(null)
       setHistoryViewCellId(null)
@@ -10190,60 +9681,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   // One confirm sheet for every pending action. The body varies; the shell,
   // the keyboard model and the footer status slot do not.
   const confirmSheet = (() => {
-    if (pendingWatermarkReview) {
-      const review = pendingWatermarkReview
-      const title = review.includeQr && review.includeHandle
-        ? 'Add handle and QR to the video'
-        : review.includeQr
-          ? 'Add a QR code to the video'
-          : 'Add a handle to the video'
-      return (
-        <ConfirmSheet
-          kind="watermark"
-          ariaLabel="Watermark review"
-          tag="WATERMARK · CHAT"
-          title={title}
-          address={review.targetLabel}
-          effect={{ label: 'Rebuilds playable proxy', tone: 'default' }}
-          validation={watermarkValidation({ ...review, handle: review.identities[review.platform].handle })}
-          busy={busy}
-          applyFormId={COMMAND_COMPOSER_FORM_ID}
-          onCancel={dismissPendingCommandPlan}
-        >
-          <WatermarkBody
-            busy={busy}
-            state={review}
-            onChange={({ handle, ...patch }) => {
-              saveWatermarkReviewPreferences(bookId, review.platform, { handle, ...patch })
-              setPendingWatermarkReview((current) => {
-                if (!current) return current
-                return {
-                  ...current,
-                  ...patch,
-                  identities: handle === undefined ? current.identities : {
-                    ...current.identities,
-                    [current.platform]: { ...current.identities[current.platform], handle },
-                  },
-                  error: null,
-                }
-              })
-            }}
-            onMediaMetadata={(metadata) => setPendingWatermarkReview((current) =>
-              current
-                ? {
-                    ...current,
-                    ...(current.durationSeconds === null
-                      ? fitWatermarkReviewTiming(current, metadata.durationSeconds)
-                      : {}),
-                    durationSeconds: metadata.durationSeconds,
-                    width: metadata.width,
-                    height: metadata.height,
-                  }
-                : current)}
-          />
-        </ConfirmSheet>
-      )
-    }
     if (pendingCommandPlan) {
       const plan = pendingCommandPlan.plan
       const planEditorSchema = pendingCommandPlan.editor
@@ -10833,7 +10270,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
   const openTimelinePicker = (trackId: string) => {
     if (!timelinePreviewOpen && !musicVideoSession) {
-      if (pendingChatAction || pendingCommandPlan || pendingWatermarkReview) dismissPendingCommandPlan()
+      if (pendingChatAction || pendingCommandPlan) dismissPendingCommandPlan()
       else if (actionSheet) cancelChatReview()
       actionCatalogRequestRef.current += 1
       setActionSheet(null)
@@ -11721,9 +11158,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         inputSession={composerSession}
         portalTarget={workspacePreview && (currentActionComposer || workspaceChatPreview) ? previewComposerTarget
           : mediaFullscreen && currentActionComposer ? mediaFullscreenComposerTarget : null}
-        pendingInput={pendingWatermarkReview
-            ? '/apply'
-            : pendingChatAction?.kind === 'generation' || pendingChatAction?.kind === 'transcribe'
+        pendingInput={pendingChatAction?.kind === 'generation' || pendingChatAction?.kind === 'transcribe'
             ? '/apply '
             : pendingCommandPlan || pendingChatAction || currentActionSheet || composerClipPicker
               ? '/apply'
@@ -11735,11 +11170,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         outcomeSlot={confirmSheet || actionSheetElement || clipSheetElement ? 'sheet' : 'composer'}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
-        onDismissPanel={(
-          pendingWatermarkReview
-          || pendingCommandPlan
-          || pendingChatAction
-        )
+        onDismissPanel={(pendingCommandPlan || pendingChatAction)
           ? dismissPendingCommandPlan
           : currentActionSheet ? dismissActionSheet : composerClipPicker ? timeline.closePicker : undefined}
         onExecute={executeComposerCommand}

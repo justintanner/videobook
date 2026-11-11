@@ -7,9 +7,11 @@ import type { CaptionMediaSource } from "../captions/source.js";
 import { captionMediaSource } from "../captions/source.js";
 import type { LightningWatermarkProfile } from "../lightning-defaults.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
-import { effectiveWatermarkProfile, normalizeHandle, readWatermarkConfig } from "../watermark-config.js";
+import type { OsgPosition } from "../remotion/subtitles/types.js";
+import { effectiveWatermarkProfile, normalizeHandle, readWatermarkConfig, recordHandle, saveWatermarkProfile } from "../watermark-config.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
 import { watermarkProfileUrl } from "../watermark-platform.js";
+import { profileWatermarkTimes, watermarkWindow } from "../watermark-timing.js";
 import type { GraphicsCredit } from "./credit.js";
 import { sourceCredit } from "./credit.js";
 import type { GraphicsDraft } from "./drafts.js";
@@ -17,20 +19,32 @@ import { readGraphicsDraft, writeGraphicsDraft } from "./drafts.js";
 import type { GraphicsEdit } from "./edits.js";
 import { applyGraphicsEdits } from "./edits.js";
 import { GraphicsServiceError } from "./errors.js";
-import type { GraphicsDocument, GraphicsFrame } from "./model.js";
-import { parseGraphicsDocument } from "./model.js";
+import type { GraphicsDocument, GraphicsFrame, GraphicsLayerInput } from "./model.js";
+import { isGraphicsUrl, parseGraphicsDocument } from "./model.js";
 import type { GraphicsSlotValues } from "./slots.js";
-import { fillGraphicsSlots } from "./slots.js";
+import { fillGraphicsSlots, graphicsSlotValues } from "./slots.js";
 import type { GraphicsStarterId } from "./starters.js";
 import { DEFAULT_GRAPHICS_STARTER_ID, GRAPHICS_STARTERS } from "./starters.js";
-import type { GraphicsTemplateStore } from "./templates.js";
-import { graphicsTemplateImageIds, readGraphicsTemplates } from "./templates.js";
-import { watermarkSlotValues } from "./watermark-profile.js";
+import type { GraphicsTemplate, GraphicsTemplateStore } from "./templates.js";
+import { graphicsTemplateImageIds, readGraphicsTemplates, watermarkGraphicsTemplate } from "./templates.js";
+import { watermarkDrawnDocument, watermarkLookDocument, watermarkTemplateDraws } from "./watermark-burn.js";
+import type { WatermarkWindow } from "./watermark-profile.js";
+import { watermarkLayerInputs, watermarkSlotValues } from "./watermark-profile.js";
 
 type GraphicsImage = { label: string | null; url: string | null; width: number | null; height: number | null };
 type GraphicsStarterDocument = { id: GraphicsStarterId; name: string; document: GraphicsDocument };
 type GraphicsSavedTemplate = { id: string; name: string; updated_at: string; document: GraphicsDocument; missing_layer_ids: string[] };
 type Revisioned = { revision: string; document: GraphicsDocument };
+
+export type GraphicsLook = { platform: WatermarkPlatform; watermark: boolean };
+
+type GraphicsWatermarkLook = {
+  platform: WatermarkPlatform;
+  template_id: string | null;
+  template_name: string | null;
+  look: GraphicsDocument;
+  qr: GraphicsLayerInput | null;
+};
 
 export type GraphicsReadModel = {
   asset_id: string;
@@ -46,6 +60,7 @@ export type GraphicsReadModel = {
   templates: GraphicsSavedTemplate[];
   default_template_id: string;
   images: Record<string, GraphicsImage>;
+  watermark: GraphicsWatermarkLook | null;
 };
 
 type GraphicsContext = {
@@ -56,18 +71,21 @@ type GraphicsContext = {
   values: GraphicsSlotValues;
   starters: GraphicsStarterDocument[];
   templates: GraphicsTemplateStore;
+  watermark: GraphicsWatermarkLook | null;
 };
 
 type ReviewedGraphics = { source: CaptionMediaSource; revision: string; document: GraphicsDocument };
 
 type GraphicsUpdateInput = {
   expectedRevision: string;
-  platform: WatermarkPlatform;
+  look: GraphicsLook;
   edits?: readonly GraphicsEdit[];
   document?: unknown;
 };
 
 const VIDEO_KINDS: ReadonlySet<string> = new Set(["video", "final"]);
+const WATERMARK_CORNER: OsgPosition = "bottom-right";
+const WHOLE_CLIP: WatermarkWindow = { startSeconds: null, endSeconds: null };
 
 function requireVideo(engine: Engine, artifactId: string): void {
   const artifact = engine.artifacts.get(artifactId);
@@ -112,16 +130,72 @@ export async function bookWatermarkProfile(engine: Engine, platform: WatermarkPl
   return { ...profile, handle, profileUrl: storedUrl || (handle ? watermarkProfileUrl(handle, platform) : "") };
 }
 
-async function graphicsContext(engine: Engine, artifactId: string, platform: WatermarkPlatform): Promise<GraphicsContext> {
+function lookWindow(included: boolean, label: string, durationSeconds: number, startSeconds?: number, endSeconds?: number): WatermarkWindow {
+  if (!included) return WHOLE_CLIP;
+  try {
+    return watermarkWindow(label, durationSeconds, startSeconds, endSeconds);
+  } catch {
+    return WHOLE_CLIP;
+  }
+}
+
+function profileCorner(profile: LightningWatermarkProfile): OsgPosition {
+  return profile.qrPosition === "auto" ? WATERMARK_CORNER : profile.qrPosition;
+}
+
+type WatermarkLookInput = {
+  source: CaptionMediaSource;
+  profile: LightningWatermarkProfile;
+  values: GraphicsSlotValues;
+  template: GraphicsTemplate | null;
+};
+
+async function watermarkLook(engine: Engine, platform: WatermarkPlatform, input: WatermarkLookInput): Promise<GraphicsWatermarkLook> {
+  const { source, profile, template } = input;
+  const config = await readWatermarkConfig(engine, platform);
+  const draws = template ? watermarkTemplateDraws(template.document) : null;
+  const includeQr = draws?.qr ?? false;
+  const includeHandle = draws?.handle ?? true;
+  const frame = { width: source.width, height: source.height };
+  const duration = source.durationSeconds;
+  const times = profileWatermarkTimes(config.profile, profile, duration);
+  const qrWindow = lookWindow(includeQr, "QR watermark", duration, times.qrStartSeconds, times.qrEndSeconds);
+  const handleWindow = lookWindow(includeHandle, "Handle watermark", duration, times.handleStartSeconds, times.handleEndSeconds);
+  const look = watermarkLookDocument({
+    profile,
+    frame,
+    includeQr,
+    includeHandle,
+    corner: WATERMARK_CORNER,
+    qrWindow,
+    handleWindow,
+    values: input.values,
+    template: template?.document ?? null,
+    patches: [],
+    card: null,
+  });
+  const qr = watermarkLayerInputs(profile, frame, {
+    includeQr: true,
+    includeHandle: false,
+    corner: profileCorner(profile),
+    qrWindow: lookWindow(true, "QR watermark", duration, times.qrStartSeconds, times.qrEndSeconds),
+  })[0] ?? null;
+  return { platform, template_id: template?.id ?? null, template_name: template?.name ?? null, look, qr };
+}
+
+async function graphicsContext(engine: Engine, artifactId: string, look: GraphicsLook): Promise<GraphicsContext> {
   requireVideo(engine, artifactId);
   const source = await captionMediaSource(engine, artifactId);
-  const profile = await bookWatermarkProfile(engine, platform);
+  const profile = await bookWatermarkProfile(engine, look.platform);
   const credit = await sourceCredit(engine, artifactId);
   const values: GraphicsSlotValues = { ...watermarkSlotValues(profile), ...(credit ? { credit: credit.text } : {}) };
   const starters = starterDocuments({ width: source.width, height: source.height }, profile, values);
   const templates = readGraphicsTemplates(engine);
-  const fallback = defaultDocument(defaultTemplateDocument(templates, starters, values));
-  return { source, saved: readGraphicsDraft(engine, artifactId), fallback, credit, values, starters, templates };
+  const watermark = look.watermark
+    ? await watermarkLook(engine, look.platform, { source, profile, values, template: watermarkGraphicsTemplate(engine, look.platform) })
+    : null;
+  const fallback = defaultDocument(watermark?.look ?? defaultTemplateDocument(templates, starters, values));
+  return { source, saved: readGraphicsDraft(engine, artifactId), fallback, credit, values, starters, templates, watermark };
 }
 
 function notebooksFor(engine: Engine, notebookId: string | null): NotebookDocument[] {
@@ -182,9 +256,9 @@ function savedTemplates(context: GraphicsContext, images: Record<string, Graphic
 export async function readGraphics(
   engine: Engine,
   artifactId: string,
-  options: { notebookId: string | null; platform: WatermarkPlatform },
+  options: { notebookId: string | null; look: GraphicsLook },
 ): Promise<GraphicsReadModel> {
-  const context = await graphicsContext(engine, artifactId, options.platform);
+  const context = await graphicsContext(engine, artifactId, options.look);
   const current = context.saved ?? context.fallback;
   const images = await bookImages(engine, [...graphicsTemplateImageIds(current.document), ...templateImageIds(context.templates)]);
   return {
@@ -211,6 +285,7 @@ export async function readGraphics(
     templates: savedTemplates(context, images),
     default_template_id: context.templates.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID,
     images,
+    watermark: context.watermark,
   };
 }
 
@@ -243,7 +318,7 @@ function requireBookImages(engine: Engine, before: GraphicsDocument, after: Grap
 
 export async function updateGraphics(engine: Engine, artifactId: string, input: GraphicsUpdateInput): Promise<GraphicsDraft> {
   return withNotebookMutation(`graphics:${artifactId}`, async () => {
-    const context = await graphicsContext(engine, artifactId, input.platform);
+    const context = await graphicsContext(engine, artifactId, input.look);
     const current = context.saved ?? context.fallback;
     if (current.revision !== input.expectedRevision) {
       throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before editing.", { revision: current.revision });
@@ -257,10 +332,10 @@ export async function updateGraphics(engine: Engine, artifactId: string, input: 
 export async function graphicsForTemplate(
   engine: Engine,
   artifactId: string,
-  platform: WatermarkPlatform,
+  look: GraphicsLook,
   expectedRevision: string | undefined,
 ): Promise<GraphicsDocument> {
-  const context = await graphicsContext(engine, artifactId, platform);
+  const context = await graphicsContext(engine, artifactId, look);
   const current = context.saved ?? context.fallback;
   if (expectedRevision !== undefined && current.revision !== expectedRevision) {
     throw new GraphicsServiceError("conflict", "These graphics changed somewhere else. Reload them before saving a template.", { revision: current.revision });
@@ -271,13 +346,23 @@ export async function graphicsForTemplate(
 export async function reviewedGraphics(
   engine: Engine,
   artifactId: string,
-  platform: WatermarkPlatform,
+  look: GraphicsLook,
   expectedRevision: string,
 ): Promise<ReviewedGraphics> {
-  const context = await graphicsContext(engine, artifactId, platform);
+  const context = await graphicsContext(engine, artifactId, look);
   const current = context.saved ?? context.fallback;
   if (current.revision !== expectedRevision) {
     throw new GraphicsServiceError("conflict", "These graphics changed after review. Review the latest version, then render.", { revision: current.revision });
   }
-  return { source: context.source, revision: current.revision, document: current.document };
+  const document = look.watermark ? watermarkDrawnDocument(current.document) : current.document;
+  return { source: context.source, revision: current.revision, document };
+}
+
+export async function rememberWatermarkSlots(engine: Engine, platform: WatermarkPlatform, document: GraphicsDocument): Promise<void> {
+  const profile = await bookWatermarkProfile(engine, platform);
+  const slots = graphicsSlotValues(document);
+  const handle = normalizeHandle(slots.handle ?? "");
+  if (handle && handle !== profile.handle) await recordHandle(handle, { saveDefault: true, platform }, engine);
+  const url = slots.profile?.trim() ?? "";
+  if (url && isGraphicsUrl(url) && url !== profile.profileUrl) await saveWatermarkProfile({ profileUrl: url }, platform, engine);
 }

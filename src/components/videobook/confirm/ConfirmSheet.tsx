@@ -18,7 +18,7 @@ import { ConfirmSheetInitialFocus, useConfirmSheetKeys } from './useConfirmSheet
 interface ConfirmSheetProps {
   address?: string | null
   applyFormId: string
-  // Stable accessible name for the dialog ("Watermark review"); the visible
+  // Stable accessible name for the dialog ("Graphics editor"); the visible
   // title is the sheet's first heading and changes with the draft.
   ariaLabel: string
   applyLabel?: string

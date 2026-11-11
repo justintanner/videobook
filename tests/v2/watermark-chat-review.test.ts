@@ -1,229 +1,182 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ConfirmSheet } from '../../src/components/videobook/confirm/ConfirmSheet'
+import { graphicsDocumentFromLayers, type GraphicsDocument } from '../../server/src/graphics/model'
+import { platformWatermarkDocument } from '../../server/src/graphics/starters'
+import { watermarkLayerInputs } from '../../server/src/graphics/watermark-profile'
+import { LIGHTNING_WATERMARK_PROFILE, watermarkProfileFor } from '../../server/src/lightning-defaults'
+import type { WatermarkPlatform } from '../../server/src/watermark-platform'
+import { GraphicsSheet } from '../../src/components/videobook/graphics/GraphicsSheet'
+import { GraphicsWatermark } from '../../src/components/videobook/graphics/GraphicsWatermark'
 import {
-  WatermarkBody,
-  type WatermarkReviewState,
-} from '../../src/components/videobook/confirm/bodies/WatermarkBody'
-import { watermarkValidation } from '../../src/videobook/confirm-validation'
+  graphicsEditorTarget,
+  graphicsWatermarkTarget,
+  parseGraphicsRead,
+  type GraphicsRead,
+  type GraphicsRenderOutput,
+  type GraphicsTarget,
+} from '../../src/videobook/graphics-model'
+import type { GraphicsEditor, GraphicsEditorState } from '../../src/videobook/useGraphicsEditor'
 
-function renderWatermark(overrides: Partial<WatermarkReviewState> & { handle?: string } = {}): string {
-  const state: WatermarkReviewState = {
-    assetId: 'vid-1',
-    targetLabel: '@a1',
-    mediaUrl: '/files/book/vid-1/proxy.mp4',
-    thumbnailUrl: '/files/book/vid-1/original.jpg',
-    width: 1920,
-    height: 1080,
-    durationSeconds: 12,
-    platform: 'x',
-    identities: {
-      x: { handle: overrides.handle ?? 'someone', recent: ['someone'] },
-      tiktok: { handle: 'creator.name', recent: ['creator.name'] },
+const FRAME = { width: 1080, height: 1920 }
+const X_PROFILE = { ...watermarkProfileFor('x', null), handle: 'someone', profileUrl: 'https://example.com/profile' }
+const LOOKS: Record<WatermarkPlatform, GraphicsDocument> = {
+  tiktok: platformWatermarkDocument(LIGHTNING_WATERMARK_PROFILE, FRAME, { includeQr: false }),
+  x: platformWatermarkDocument(X_PROFILE, FRAME, { includeQr: false }),
+}
+const ASSETS = [{ id: 'vid-1', artifactId: 'video-1', label: 'red light', type: 'video', status: 'ready', mediaUrl: '/files/book/video-1/proxy.mp4' }]
+const MENTIONS = [{ artifactId: 'video-1', cellAddress: 'a1' }]
+
+function watermarkRead(platform: WatermarkPlatform, overrides: { document?: GraphicsDocument; templateName?: string | null } = {}): GraphicsRead {
+  const document = overrides.document ?? LOOKS[platform]
+  const handle = platform === 'tiktok' ? 'jtbkk' : 'someone'
+  return parseGraphicsRead({
+    asset_id: 'video-1',
+    address: '@a1',
+    label: 'red light',
+    source: { ...FRAME, duration_seconds: 12, fps: 30, source_hash: 'hash' },
+    saved: false,
+    revision: 'default:watermark',
+    updated_at: null,
+    document,
+    fill: { handle, profile_url: platform === 'tiktok' ? 'https://www.tiktok.com/@jtbkk' : 'https://example.com/profile', credit: null },
+    starters: [],
+    images: {},
+    render: null,
+    burned: null,
+    watermark: {
+      platform,
+      template_id: overrides.templateName ? 'saved-1' : null,
+      template_name: overrides.templateName ?? null,
+      look: LOOKS[platform],
+      qr: watermarkLayerInputs(LIGHTNING_WATERMARK_PROFILE, FRAME, { includeQr: true, includeHandle: false })[0],
     },
-    url: 'https://example.com/profile',
-    includeQr: true,
-    includeHandle: true,
-    position: 'middle-center',
-    handleVerticalPercent: 33,
-    handlePlacement: 'center',
-    includePlatformIcon: true,
-    includeHandleBorder: true,
-    handlePadding: 48,
-    handlePaddingY: 24,
-    handleRounding: 60,
-    qrOpacity: 0.35,
-    handleOpacity: 0.7,
-    qrStartSeconds: 0,
-    qrEndSeconds: 4,
-    handleStartSeconds: 0,
-    handleEndSeconds: 8,
-    fadeSeconds: 0.5,
-    saveDefault: false,
-    loadingConfig: false,
+  })
+}
+
+function watermarkTarget(params: Record<string, unknown> = {}): GraphicsTarget {
+  const resolved = graphicsEditorTarget({ reference: '@a1', image: undefined, watermark: graphicsWatermarkTarget(params), assets: ASSETS, mentions: MENTIONS, notebookId: 'nb' })
+  if (!resolved.ok) throw new Error(resolved.message)
+  return resolved.target
+}
+
+function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsRenderOutput = 'replace'): GraphicsEditor {
+  const state: GraphicsEditorState = {
+    target,
+    loading: false,
+    read,
+    document: read.document,
+    revision: read.revision,
+    save: 'saved',
+    saveError: null,
+    conflictRevision: null,
     error: null,
-    ...overrides,
+    past: [],
+    future: [],
+    coalesceKey: null,
+    rendering: false,
+    output,
   }
-  // Rendered inside the shared confirm sheet, exactly as App does: the Apply
-  // button and the status line come from the shell, the validation from the
-  // pure validator.
-  return renderToStaticMarkup(createElement(ConfirmSheet, {
-    address: state.targetLabel,
+  const done = async () => ({ ok: true, message: '' })
+  return {
+    state,
+    bookId: 'book-1',
+    open: () => undefined,
+    close: () => undefined,
+    edit: () => true,
+    undo: () => undefined,
+    redo: () => undefined,
+    reload: async () => undefined,
+    keepMine: async () => undefined,
+    setOutput: () => undefined,
+    render: done,
+    flush: async () => true,
+    saveTemplate: done,
+    renameTemplate: done,
+    deleteTemplate: done,
+    setDefaultTemplate: done,
+    copyTemplates: done,
+    saveWatermark: done,
+    resetWatermark: done,
+    setPlatform: async () => undefined,
+  }
+}
+
+function renderSheet(editor: GraphicsEditor): string {
+  return renderToStaticMarkup(createElement(GraphicsSheet, {
+    editor,
+    assets: ASSETS,
+    mentions: MENTIONS,
+    books: [],
     applyFormId: 'command-composer-form',
-    ariaLabel: 'Watermark review',
-    busy: false,
-    children: createElement(WatermarkBody, {
-      busy: false,
-      state,
-      onChange: () => undefined,
-      onMediaMetadata: () => undefined,
-    }),
-    effect: { label: 'Rebuilds playable proxy', tone: 'default' },
-    kind: 'watermark',
-    tag: 'WATERMARK · CHAT',
-    title: 'Add handle and QR to the video',
-    validation: watermarkValidation({ ...state, handle: state.identities[state.platform].handle }),
-    onCancel: () => undefined,
+    onClose: () => undefined,
+    onOpenSource: () => undefined,
   }))
 }
 
-describe('watermark chat review', () => {
-  it('renders one composer review with live placement and timing controls', () => {
-    const html = renderWatermark()
-    expect(html).toContain('confirm-sheet confirm-sheet-watermark')
+function renderPanel(editor: GraphicsEditor, platform: WatermarkPlatform): string {
+  return renderToStaticMarkup(createElement(GraphicsWatermark, { editor, read: editor.state.read!, platform, disabled: false }))
+}
+
+describe('watermark in the graphics editor', () => {
+  it('opens /watermark as the graphics editor in watermark mode that burns into the video in place', () => {
+    const editor = editorFor(watermarkTarget(), watermarkRead('tiktok'))
+    const html = renderSheet(editor)
+    expect(html).toContain('confirm-sheet confirm-sheet-graphics')
     expect(html).toContain('role="dialog"')
-    expect(html).toContain('WATERMARK · CHAT')
-    expect(html).toContain('Rebuilds playable proxy')
+    expect(html).toContain('aria-label="Watermark editor"')
+    expect(html).toContain('>WATERMARK<')
+    expect(html).toContain('Watermark · red light')
+    expect(html).toContain('@a1')
+    expect(html).toContain('Replaces the video · earlier version kept')
     expect(html).toContain('form="command-composer-form"')
-    expect(html).toContain('src="/files/book/vid-1/proxy.mp4"')
-    expect(html).toContain('controls')
-    expect(html).toContain('watermark-preview-overlay watermark-preview-qr')
-    expect(html).toContain('watermark-preview-overlay watermark-preview-handle')
-    expect(html).toContain('watermark-preview-handle-pill')
-    expect(html).toContain('top:33%;left:50%;transform:translate(-50%, -50%)')
-    const qrPath = html.match(/class="watermark-preview-qr-modules"[^>]*>\s*<path d="([^"]+)"/)?.[1]
-    expect(qrPath?.match(/M/g)).toHaveLength(541)
-    expect(html).toContain('>someone</span>')
-    expect(html).not.toContain('>@someone</span>')
-    expect(html).toContain('watermark-preview-x-icon')
-    expect(html).not.toContain('lucide-qr-code')
-    expect(html).toContain('aria-label="Middle center" aria-pressed="true"')
-    expect(html).toContain('type="range" min="10" max="90" step="1" value="33"')
-    expect(html).toContain('id="watermark-handle-padding-x" type="range" min="0" max="96" step="1" value="48"')
-    expect(html).toContain('id="watermark-handle-padding-y" type="range" min="0" max="96" step="1" value="24"')
-    expect(html).toContain('id="watermark-handle-rounding" type="range" min="0" max="100" step="1" value="60"')
-    expect(html).toContain('33% from top')
-    expect(html).toContain('aria-label="Handle placement"')
-    expect(html).toContain('>Above QR</button>')
-    expect(html).toContain('>On QR</button>')
-    expect(html).toContain('>Below QR</button>')
-    expect(html).toContain('<output for="watermark-qr-opacity">35%</output>')
-    expect(html).toContain('<output for="watermark-handle-opacity">70%</output>')
-    expect(html).toContain('id="watermark-fade" type="range" min="0" max="20" step="1" value="5"')
-    expect(html).toContain('<output for="watermark-fade">0.5s</output>')
-    // QR runs 0–4s of 12s: no fade in at the clip start, so the playhead at
-    // 0s previews the full set opacity.
-    expect(html).toContain('opacity:0.35')
-    expect(html.match(/type="number"/g)).toHaveLength(6)
-    expect(html).toContain('aria-label="QR start"')
-    expect(html).toContain('aria-label="QR end"')
-    expect(html).toContain('aria-label="Handle end"')
-    expect(html).toContain('aria-label="QR duration"')
-    expect(html).toContain('aria-label="Handle duration"')
-    expect(html).toContain('>Include handle</strong>')
-    expect(html).toContain('aria-label="Set QR start from playhead"')
-    expect(html).toContain('aria-label="Use whole clip for Handle"')
-    // A ready sheet has nothing to report, so it draws no footer: the effect
-    // chip and the shortcut hints sit in the header beside the buttons they
-    // drive, and the description still points at whichever element has them.
-    expect(html).not.toContain('confirm-sheet-foot')
-    expect(html).toContain('aria-describedby="_R_0_-status"')
-    expect(html).toContain('<span id="_R_0_-status" class="confirm-sheet-head-hints">')
-    expect(html).toContain('<div class="confirm-sheet-decisions"><span class="confirm-sheet-effect confirm-sheet-effect-default">Rebuilds playable proxy</span>')
-    expect(html).toContain('class="confirm-sheet-apply">Apply <kbd>↵</kbd>')
+    expect(html).toContain('class="confirm-sheet-apply">Render <kbd>↵</kbd>')
+    expect(html).toContain('aria-pressed="true">Replace video</button>')
+    expect(html).toContain('aria-pressed="false">New video</button>')
+    expect(html).not.toContain('confirm-sheet-foot-blocking')
+    expect(html).not.toContain('Rebuilds playable proxy')
   })
 
-  it('previews a TikTok alias with its own icon and profile link', () => {
-    const html = renderWatermark({ platform: 'tiktok', url: '' })
-    expect(html).toContain('TikTok handle')
-    expect(html).toContain('Show TikTok icon')
-    expect(html).toContain('watermark-preview-tiktok-icon')
-    expect(html).not.toContain('watermark-preview-x-icon')
-    expect(html).toContain('https://www.tiktok.com/@creator.name')
-    expect(html).toContain('>creator.name</span>')
-    expect(html).toContain('value="tiktok" selected=""')
-    const duration = html.match(/<input[^>]+aria-label="Handle duration"[^>]*>/)?.[0]
-    expect(duration).toContain('value="8"')
-    expect(html.indexOf('aria-label="Handle duration"')).toBeLessThan(html.indexOf('<video'))
+  it('offers the platform switch and saving the look as the default watermark', () => {
+    const tiktok = renderPanel(editorFor(watermarkTarget(), watermarkRead('tiktok')), 'tiktok')
+    expect(tiktok).toContain('aria-label="Watermark"')
+    expect(tiktok).toContain('aria-label="Watermark platform"')
+    expect(tiktok).toContain('aria-pressed="true">TikTok</button>')
+    expect(tiktok).toContain('aria-pressed="false">X</button>')
+    expect(tiktok).toContain('>Save as default watermark</button>')
+    expect(tiktok).toContain('Goal finishing and apply_watermark burn the TikTok profile’s watermark.')
+    expect(tiktok).not.toContain('Use the profile’s look')
+
+    const x = renderPanel(editorFor(watermarkTarget({ platform: 'x' }), watermarkRead('x', { templateName: 'Brand' })), 'x')
+    expect(x).toContain('aria-pressed="true">X</button>')
+    expect(x).toContain('Goal finishing and apply_watermark burn your saved X watermark, “Brand”.')
+    expect(x).toContain('>Use the profile’s look</button>')
   })
 
-  it('gives the footer back the moment the sheet cannot apply', () => {
-    const html = renderWatermark({ includeQr: false, includeHandle: false })
+  it('keeps the TikTok look on the handle, an empty Thai title and an English line with no QR', () => {
+    const read = watermarkRead('tiktok')
+    expect(read.document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    const items = read.document.layers.flatMap((layer) => (layer.kind === 'text' ? layer.items : []))
+    expect(items.map((item) => [item.slot, item.text, item.icon])).toEqual([['headline', '', null], ['secondary', '', null], ['handle', 'jtbkk', 'tiktok']])
+    const x = watermarkRead('x')
+    expect(x.document.layers.flatMap((layer) => (layer.kind === 'text' ? layer.items : [])).map((item) => [item.slot, item.text, item.icon])).toEqual([['handle', 'someone', 'x']])
+  })
+
+  it('gives the footer back the moment the watermark would burn nothing', () => {
+    const shadeOnly = graphicsDocumentFromLayers([{ kind: 'scrim', edge: 'bottom' }])
+    const html = renderSheet(editorFor(watermarkTarget(), watermarkRead('tiktok', { document: shadeOnly })))
     expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
     expect(html).toContain('<strong>Can’t apply — </strong>')
-    expect(html).not.toContain('confirm-sheet-head-hints')
-    expect(html).not.toContain('confirm-sheet-head-divider')
-    expect(html.indexOf('Rebuilds playable proxy')).toBeLessThan(html.indexOf('</header>'))
-    expect(html).not.toContain('confirm-sheet-aside')
-    expect(html).toContain('disabled=""')
-  })
-
-  it('previews and configures a handle-only watermark', () => {
-    const html = renderWatermark({
-      includeQr: false,
-      position: 'top-left',
-      handleVerticalPercent: 68,
-      handlePlacement: 'center',
-      includePlatformIcon: false,
-      includeHandleBorder: false,
-      handlePadding: 0,
-      handlePaddingY: 0,
-      handleRounding: 0,
-      handleOpacity: 0.6,
-      handleStartSeconds: 1,
-      handleEndSeconds: null,
-    })
-    expect(html).toContain('watermark-preview-overlay watermark-preview-handle')
-    expect(html).not.toContain('watermark-preview-qr-modules')
-    expect(html).not.toContain('watermark-preview-overlay watermark-preview-qr')
-    expect(html).not.toContain('QR link')
-    expect(html).toContain('aria-label="Top left" aria-pressed="true"')
-    expect(html).toContain('top:68%;left:50%;transform:translate(-50%, -50%)')
-    expect(html).toContain('68% from top')
-    expect(html).toContain('watermark-preview-handle-pill without-border')
-    expect(html).toContain('padding-inline:0em;border-radius:0em')
-    expect(html).toContain('>Above QR</button>')
-    expect(html).toContain('disabled=""')
-    expect(html).not.toContain('watermark-preview-x-icon')
-    expect(html).toContain('<output for="watermark-handle-opacity">60%</output>')
-    expect(html.match(/type="number"/g)).toHaveLength(3)
-    const duration = html.match(/<input[^>]+aria-label="Handle duration"[^>]*>/)?.[0]
-    expect(duration).toContain('value="11"')
-  })
-
-  it('previews the handle sitting on the QR', () => {
-    const html = renderWatermark({
-      position: 'bottom-right',
-      handlePlacement: 'on-qr',
-      handlePadding: 32,
-      handlePaddingY: 32,
-    })
-    expect(html).toContain('aria-pressed="true">On QR</button>')
-    expect(html).not.toContain('id="watermark-handle-vertical"')
-    expect(html).toContain('The handle sits with the QR.')
-    expect(html).toContain('width:9%;height:auto;top:')
-    expect(html).toContain('left:89%')
-    expect(html).not.toContain('top:33%;left:50%;transform:translate(-50%, -50%)')
-  })
-
-  it('allows a QR-only watermark with invalid handle timing', () => {
-    const html = renderWatermark({
-      handle: '',
-      url: 'https://example.com/qr-only',
-      includeHandle: false,
-      handleStartSeconds: 0,
-      handleEndSeconds: 0,
-      fadeSeconds: 0,
-    })
-    expect(html).toContain('<output for="watermark-fade">Off</output>')
-    const applyButton = html.match(/<button type="submit"[^>]*>/)?.[0]
-    expect(applyButton).not.toContain('disabled')
-    expect(html).toContain('watermark-preview-overlay watermark-preview-qr')
-    expect(html).not.toContain('watermark-preview-overlay watermark-preview-handle')
-    expect(html).not.toContain('aria-label="Handle end"')
-    expect(html).not.toContain('Handle end time must be after its start time.')
-    expect(html).not.toContain('id="watermark-handle-opacity"')
-    expect(html.match(/type="number"/g)).toHaveLength(3)
-  })
-
-  it('explains a missing handle in the footer and marks the field', () => {
-    const html = renderWatermark({ handle: '' })
-    expect(html).toContain('confirm-sheet-foot confirm-sheet-foot-blocking')
-    expect(html).toContain('Can’t apply')
-    expect(html).toContain('no handle is set')
+    expect(html).toContain('Add the handle, a title, an image or a QR code to render.')
     expect(html).toContain('class="confirm-sheet-apply" disabled=""')
-    expect(html).toContain('aria-invalid="true"')
-    expect(html).toContain('Required while Include handle is on')
+  })
+
+  it('keeps the graphics editor itself for /osg', () => {
+    const resolved = graphicsEditorTarget({ reference: '@a1', image: undefined, assets: ASSETS, mentions: MENTIONS, notebookId: 'nb' })
+    if (!resolved.ok) throw new Error(resolved.message)
+    const html = renderSheet(editorFor(resolved.target, { ...watermarkRead('tiktok'), watermark: null }, 'new'))
+    expect(html).toContain('aria-label="Graphics editor"')
+    expect(html).toContain('>GRAPHICS<')
+    expect(html).toContain('New video cell · source kept')
   })
 })

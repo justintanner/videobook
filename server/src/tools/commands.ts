@@ -489,7 +489,7 @@ const CANONICAL_COMMANDS: Command[] = [
   },
   {
     command: "/watermark",
-    description: "Open the chat watermark review with a positioned QR plus a centered floating handle, live preview, and timing controls",
+    description: "Open the graphics editor in watermark mode: the platform's watermark (for TikTok the handle, a big Thai title and an English line, no QR) with a live preview, a platform switch, an in-place render and save as default watermark",
     example: "/watermark @a1",
     category: "viewer",
     icon: "QrCode",

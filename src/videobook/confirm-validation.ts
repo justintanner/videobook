@@ -25,62 +25,6 @@ function notice(message: string | null): ConfirmValidation {
   return { blocking: null, notice: message }
 }
 
-// ---- watermark ----
-
-export function watermarkTimingValid(
-  startSeconds: number,
-  endSeconds: number | null,
-  durationSeconds: number,
-): boolean {
-  return endSeconds !== null
-    ? endSeconds > startSeconds
-    : durationSeconds <= 0 || startSeconds < durationSeconds
-}
-
-export interface WatermarkValidationInput {
-  includeHandle: boolean
-  includeQr: boolean
-  handle: string
-  url: string
-  durationSeconds: number | null
-  qrStartSeconds: number
-  qrEndSeconds: number | null
-  handleStartSeconds: number
-  handleEndSeconds: number | null
-}
-
-export function watermarkHandleValue(handle: string): string {
-  return handle.trim().replace(/^@/, '').trim()
-}
-
-export function watermarkValidation(input: WatermarkValidationInput): ConfirmValidation {
-  const handle = watermarkHandleValue(input.handle)
-  const url = input.url.trim()
-  const duration = input.durationSeconds ?? 0
-  if (!input.includeHandle && !input.includeQr) {
-    return blocking('Include a handle, a QR code, or both.')
-  }
-  if (input.includeHandle && !handle) {
-    return blocking('Include handle is on but no handle is set. Type a handle, or turn Include handle off.')
-  }
-  if (input.includeQr && !url && !handle) {
-    return blocking('Include QR code is on but there is nothing to link. Enter a QR link, or a handle it can point to.')
-  }
-  if (
-    input.includeQr
-    && !watermarkTimingValid(input.qrStartSeconds, input.qrEndSeconds, duration)
-  ) {
-    return blocking('QR end time must be after its start time.')
-  }
-  if (
-    input.includeHandle
-    && !watermarkTimingValid(input.handleStartSeconds, input.handleEndSeconds, duration)
-  ) {
-    return blocking('Handle end time must be after its start time.')
-  }
-  return VALID_CONFIRMATION
-}
-
 // ---- generation ----
 
 interface GenerationValidationInput {

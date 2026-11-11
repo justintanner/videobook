@@ -43,13 +43,14 @@ export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, on
   onOpenSource: (artifactId: string) => void
 }) {
   const { state } = editor
-  const blocking = graphicsRenderBlocker(state.document, state.read?.source.duration_seconds ?? null, state.save === 'conflict')
+  const watermark = Boolean(state.target?.watermark)
+  const blocking = graphicsRenderBlocker(state.document, state.read?.source.duration_seconds ?? null, state.save === 'conflict', watermark)
   return (
     <ConfirmSheet
       kind="graphics"
-      ariaLabel="Graphics editor"
-      tag="GRAPHICS"
-      title={`Graphics · ${state.target?.label ?? 'video'}`}
+      ariaLabel={watermark ? 'Watermark editor' : 'Graphics editor'}
+      tag={watermark ? 'WATERMARK' : 'GRAPHICS'}
+      title={`${watermark ? 'Watermark' : 'Graphics'} · ${state.target?.label ?? 'video'}`}
       address={state.target?.address ? `@${state.target.address}` : null}
       applyLabel="Render"
       cancelLabel="Close"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsDocument } from '../../server/src/graphics/model'
+import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { ChatExecution } from './chat-turns'
 import {
   editGraphicsHistory,
@@ -8,6 +9,7 @@ import {
   graphicsRenderQueuedMessage,
   graphicsTemplateMessage,
   graphicsToolError,
+  graphicsWatermarkSwitchEdits,
   parseGraphicsRead,
   parseGraphicsRender,
   stepGraphicsHistory,
@@ -90,6 +92,21 @@ function historyOf(state: GraphicsEditorState): GraphicsHistory | null {
   return state.document ? { document: state.document, past: state.past, future: state.future, coalesceKey: state.coalesceKey } : null
 }
 
+function defaultOutput(target: GraphicsTarget): GraphicsRenderOutput {
+  return target.watermark && target.kind === 'video' ? 'replace' : 'new'
+}
+
+function onceOnly(target: GraphicsTarget | null): GraphicsTarget | null {
+  if (!target) return null
+  return { ...target, image: null, text: null, watermark: target.watermark && { ...target.watermark, handle: null, includeQr: null } }
+}
+
+function withPlatform(state: GraphicsEditorState, platform: WatermarkPlatform): GraphicsEditorState {
+  const target = state.target
+  if (!target?.watermark) return state
+  return { ...state, target: { ...target, watermark: { ...target.watermark, platform } }, loading: true }
+}
+
 function missingImages(state: GraphicsEditorState): boolean {
   const known = state.read?.images ?? {}
   return Boolean(state.document?.layers.some((layer) => layer.kind === 'image' && !known[layer.artifactId]))
@@ -118,7 +135,12 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const baseArgs = useCallback(() => {
     const target = stateRef.current.target
-    return { book_id: bookId, asset_id: target?.artifactId, ...(target?.notebookId ? { notebook_id: target.notebookId } : {}) }
+    return {
+      book_id: bookId,
+      asset_id: target?.artifactId,
+      ...(target?.notebookId ? { notebook_id: target.notebookId } : {}),
+      ...(target?.watermark ? { watermark: true, platform: target.watermark.platform } : {}),
+    }
   }, [bookId])
 
   const fetchRead = useCallback(async (): Promise<GraphicsRead> => {
@@ -218,7 +240,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
       const read = await fetchRead()
       if (ticket !== epoch.current) return
       const loaded = commit((current) => withRead(current, read))
-      const openEdits = loaded.document && loaded.target ? graphicsOpenEdits(loaded.document, loaded.target) : []
+      const openEdits = loaded.document && loaded.target ? graphicsOpenEdits(loaded.document, loaded.target, loaded.read) : []
       if (openEdits.length > 0) edit(openEdits)
     } catch (error) {
       if (ticket === epoch.current) commit((current) => ({ ...current, loading: false, error: graphicsToolError(error).message }))
@@ -230,7 +252,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = null
     renderRequest.current = null
-    commit(() => ({ ...EMPTY, target, loading: true }))
+    commit(() => ({ ...EMPTY, target, loading: true, output: defaultOutput(target) }))
     void load(epoch.current)
   }, [commit, load])
 
@@ -243,7 +265,7 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const reload = useCallback(async () => {
     const ticket = epoch.current
-    commit((current) => ({ ...current, target: current.target ? { ...current.target, image: null, text: null } : null, save: 'saved', conflictRevision: null, saveError: null, past: [], future: [], loading: true }))
+    commit((current) => ({ ...current, target: onceOnly(current.target), save: 'saved', conflictRevision: null, saveError: null, past: [], future: [], loading: true }))
     await load(ticket)
   }, [commit, load])
 
@@ -304,11 +326,12 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     const ticket = epoch.current
     if (!ready || !stateRef.current.target) return { ok: false, message: 'The graphics are not ready yet.' }
     if (!(await flush())) return { ok: false, message: stateRef.current.saveError ?? 'Save the graphics first.' }
+    const platform = stateRef.current.target?.watermark?.platform
     try {
       const result = await call('video_graphics', { ...baseArgs(), op, ...args() }, { background: true })
       const read = await fetchRead().catch(() => null)
       if (read && ticket === epoch.current) commit((current) => withRead(current, read))
-      return { ok: true, message: graphicsTemplateMessage(op, result, message) }
+      return { ok: true, message: graphicsTemplateMessage(op, result, { ...message, ...(platform ? { platform } : {}) }) }
     } catch (error) {
       return { ok: false, message: graphicsToolError(error).message }
     }
@@ -332,6 +355,26 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const copyTemplates = useCallback((fromBookId: string) => templateAction('copy_templates', () => ({ from_book: fromBookId })), [templateAction])
 
+  const saveWatermark = useCallback(() => templateAction('save_watermark', () => ({ expected_revision: stateRef.current.revision })), [templateAction])
+
+  const resetWatermark = useCallback(() => templateAction('set_watermark_template', () => ({ template_id: null })), [templateAction])
+
+  const setPlatform = useCallback(async (platform: WatermarkPlatform) => {
+    const current = stateRef.current
+    if (!current.target?.watermark || current.target.watermark.platform === platform || current.rendering || current.save === 'conflict') return
+    if (!(await flush())) return
+    const ticket = epoch.current
+    commit((value) => withPlatform(value, platform))
+    try {
+      const read = await fetchRead()
+      if (ticket !== epoch.current) return
+      const loaded = commit((value) => withRead(value, read))
+      if (read.saved && loaded.document) edit(graphicsWatermarkSwitchEdits(loaded.document, read))
+    } catch (error) {
+      if (ticket === epoch.current) commit((value) => ({ ...value, loading: false, error: graphicsToolError(error).message }))
+    }
+  }, [commit, edit, fetchRead, flush])
+
   return {
     state,
     bookId,
@@ -350,6 +393,9 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     deleteTemplate,
     setDefaultTemplate,
     copyTemplates,
+    saveWatermark,
+    resetWatermark,
+    setPlatform,
   }
 }
 

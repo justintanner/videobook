@@ -50,6 +50,7 @@ type Layer = {
   items?: Item[]
 }
 type Read = {
+  watermark?: { platform: string; template_id: string | null; template_name: string | null } | null
   saved: boolean
   revision: string
   document: { layers: Layer[] }
@@ -98,6 +99,7 @@ describe('graphics editor in the composer', () => {
   let kitLogoId = ''
   let squareId = ''
   let wideId = ''
+  let watermarkId = ''
   const renders: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
@@ -167,6 +169,7 @@ describe('graphics editor in the composer', () => {
       await video(join(root, 'third.mp4'), 'Third take'),
       await video(join(root, 'square.mp4'), 'Square take', undefined, SQUARE),
       await video(join(root, 'wide.mp4'), 'Wide take', undefined, WIDE, WIDE_DURATION),
+      await video(join(root, 'watermark.mp4'), 'Watermark take'),
     ]
     const ids: string[] = []
     for (const fixture of fixtures) {
@@ -181,7 +184,7 @@ describe('graphics editor in the composer', () => {
       await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, fixture.duration))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId, thirdId, squareId, wideId] = ids
+    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId] = ids
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
     if (!logo.ok) throw new Error(logo.error.message)
     logoId = logo.value.artifactId
@@ -196,6 +199,7 @@ describe('graphics editor in the composer', () => {
     await engine.notebooks.insertCell(notebook.id, thirdCell)
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 3 }, outputArtifactId: squareId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 4 }, outputArtifactId: wideId }))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 2 }, outputArtifactId: watermarkId }))
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
@@ -227,7 +231,10 @@ describe('graphics editor in the composer', () => {
     appUrl = `http://127.0.0.1:${vitePort}`
     vite = startProcess(['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(vitePort), '--strictPort'], { ...env, VIDEOBOOK_SERVER_URL: origin, VIDEOBOOK_VITE_CACHE_DIR: join(root, 'vite-cache'), VIDEOBOOK_VITE_HMR: '0' })
     await waitForHttp(appUrl, vite, 200)
-    browser = await chromium.launch({ headless: true })
+    browser = await chromium.launch({
+      headless: true,
+      ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {}),
+    })
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     page.on('pageerror', error => errors.push(error.message))
     page.on('request', request => {
@@ -235,8 +242,8 @@ describe('graphics editor in the composer', () => {
       renders.push(...toolCalls(request.postDataJSON()).filter(item => item.name === 'video_graphics' && item.arguments.op === 'render').map(item => item.arguments))
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
-    await page.goto(appUrl)
-  }, 90_000)
+    await page.goto(appUrl, { timeout: testBudget(60_000) })
+  }, testBudget(120_000))
 
   afterAll(async () => {
     await browser?.close()
@@ -358,7 +365,7 @@ describe('graphics editor in the composer', () => {
     await expect.poll(async () => (await read(secondId)).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
     await expect.poll(async () => (await read(secondId)).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(before)
     expect((await read(secondId)).saved).toBe(false)
-    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(7)
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(8)
     expect(errors).toEqual([])
   })
 
@@ -737,7 +744,7 @@ describe('graphics editor in the composer', () => {
     phone.on('pageerror', (error) => phoneErrors.push(error.message))
     try {
       await phone.addInitScript((id) => localStorage.setItem('videobook.active-book', id), bookId)
-      await phone.goto(appUrl)
+      await phone.goto(appUrl, { timeout: testBudget(30_000) })
       const input = phone.getByLabel('Videobook command input', { exact: true })
       await expect.poll(() => input.isEnabled(), { timeout: 30_000 }).toBe(true)
       await input.fill('/osg @a4')
@@ -831,6 +838,115 @@ describe('graphics editor in the composer', () => {
     expect(image.artifactId).not.toBe(kitLogoId)
     expect(copied.images[image.artifactId!]?.url).toMatch(new RegExp(`^/files/${bookId}/${image.artifactId}/`))
     await close()
+    expect(errors).toEqual([])
+  })
+
+  it('opens /watermark and a routed watermark plan as the editor in watermark mode, burns in place by default and saves the default watermark', async () => {
+    const editor = () => page.getByRole('dialog', { name: 'Watermark editor', exact: true })
+    const editorField = (label: string) => editor().getByLabel(label, { exact: true })
+    const panel = () => editor().getByRole('region', { name: 'Watermark', exact: true })
+    const platform = (name: string) => panel().getByRole('group', { name: 'Watermark platform', exact: true }).getByRole('button', { name, exact: true })
+    const layers = () => editor().getByRole('region', { name: 'Layers' })
+    const readWatermark = (name = 'tiktok') => call<Read>('video_graphics', { asset_id: watermarkId, watermark: true, platform: name })
+    const close = async () => {
+      await editor().getByRole('button', { name: /^Close/ }).click()
+      await editor().waitFor({ state: 'hidden', timeout: 10_000 })
+    }
+    const changed = (pixels: Buffer, from: number, to: number) => {
+      let count = 0
+      for (let y = Math.round(from); y < Math.round(to); y += 1) {
+        for (let x = 0; x < WIDTH; x += 1) {
+          const offset = (y * WIDTH + x) * 3
+          if (Math.abs(pixels[offset] - 0x20) + Math.abs(pixels[offset + 1] - 0x60) + Math.abs(pixels[offset + 2] - 0xa0) > 30) count += 1
+        }
+      }
+      return count
+    }
+
+    await command('/watermark @b3')
+    await editor().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => platform('TikTok').getAttribute('aria-pressed'), { timeout: 30_000 }).toBe('true')
+    expect(await editor().getByRole('group', { name: 'Render output', exact: true }).getByRole('button', { name: 'Replace video', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    const fresh = await readWatermark()
+    expect(fresh).toMatchObject({ saved: false, watermark: { platform: 'tiktok', template_id: null } })
+    expect(fresh.document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    const shades = () => editor().locator(`.graphics-timing-row[data-layer-id="${fresh.document.layers[0].id}"]`)
+    const handleItem = editor().locator('.graphics-item-box[data-slot="handle"]').first()
+    await expect.poll(async () => parseBox(await handleItem.getAttribute('data-box')).height, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
+    expect(await shades().count()).toBe(0)
+    await editorField('Headline').fill(THAI_TITLE)
+    await expect.poll(() => shades().count(), { timeout: testBudget(15_000) }).toBe(1)
+    await shot('watermark-editor')
+    await editorField('Headline').fill('')
+    await expect.poll(() => shades().count(), { timeout: testBudget(15_000) }).toBe(0)
+    await expect.poll(() => editor().locator('.graphics-save-state').textContent(), { timeout: testBudget(15_000) }).toBe('Saved')
+    await editor().getByRole('button', { name: /^Render/ }).click()
+    await editor().waitFor({ state: 'hidden', timeout: 30_000 })
+    expect(renders.at(-1)).toMatchObject({ op: 'render', output: 'replace', asset_id: watermarkId, watermark: true, platform: 'tiktok' })
+    await expect.poll(async () => (await readWatermark()).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
+    await expect.poll(async () => (await readWatermark()).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(fresh.source.source_hash)
+    const burned = await frame(watermarkId, 1)
+    expect(changed(burned, 0, HEIGHT * 0.25)).toBeGreaterThan(300)
+    expect(changed(burned, HEIGHT * 0.5, HEIGHT)).toBe(0)
+    const ready = await client!.callTool({ name: 'wait_for_asset_ready', arguments: { book_id: bookId, asset_id: watermarkId, timeout_seconds: 180 } })
+    expect(ready.isError).not.toBe(true)
+
+    const typed = 'watermark @b3 for X with a QR code'
+    const plan = {
+      kind: 'chat-action-plan',
+      planId: crypto.randomUUID(),
+      bookId,
+      prompt: typed,
+      routedTool: 'apply_watermark',
+      tool: 'apply_watermark',
+      params: { asset_id: '@b3', platform: 'x', include_qr: true },
+      message: 'Applying watermark.',
+      summary: 'Applying watermark.',
+      effect: 'mutation',
+      confirmation: { required: true, reason: 'This request changes the current book' },
+    }
+    await page.route('**/mcp', async (route) => {
+      const body = await requestBody(route)
+      const envelope = (Array.isArray(body) ? body : [body]).map(record).find((entry) => {
+        const params = record(entry?.params)
+        return entry?.method === 'tools/call' && params?.name === 'chat' && String(record(params.arguments)?.prompt ?? '').includes('for X with a QR code')
+      })
+      if (!envelope) return route.continue()
+      const response = { jsonrpc: '2.0', id: envelope.id, result: { resultType: 'complete', content: [{ type: 'text', text: JSON.stringify(plan) }], isError: false } }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(Array.isArray(body) ? [response] : response) })
+    })
+    const rendersBefore = renders.length
+    try {
+      await expect.poll(async () => {
+        await command(typed)
+        return editor().waitFor({ state: 'visible', timeout: 5_000 }).then(() => true, () => false)
+      }, { timeout: testBudget(60_000), interval: 1_000 }).toBe(true)
+    } finally {
+      await page.unroute('**/mcp')
+    }
+    await expect.poll(() => platform('X').getAttribute('aria-pressed'), { timeout: 30_000 }).toBe('true')
+    await expect.poll(async () => (await layers().textContent()) ?? '', { timeout: testBudget(15_000) }).toContain('Profile link')
+    expect(await layers().textContent()).toContain('justinwtanner')
+    await expect.poll(() => editor().locator('.graphics-save-state').textContent(), { timeout: testBudget(15_000) }).toBe('Saved')
+    expect((await readWatermark('x')).document.layers.map((layer) => layer.kind)).toEqual(['text', 'qr'])
+
+    await panel().getByRole('button', { name: 'Save as default watermark', exact: true }).click()
+    await expect.poll(() => panel().getByRole('status').textContent(), { timeout: testBudget(15_000) })
+      .toBe('Saved as the default X watermark (“X watermark”). Goal finishing and apply_watermark burn it from now on.')
+    expect((await readWatermark('x')).watermark).toMatchObject({ template_name: 'X watermark' })
+    await expect.poll(async () => (await panel().textContent()) ?? '').toContain('burn your saved X watermark, “X watermark”.')
+    await panel().getByRole('button', { name: 'Use the profile’s look', exact: true }).click()
+    await expect.poll(() => panel().getByRole('status').textContent(), { timeout: testBudget(15_000) }).toBe('Goal finishing and apply_watermark burn the X profile’s watermark again.')
+    expect((await readWatermark('x')).watermark?.template_id).toBeNull()
+
+    await platform('TikTok').click()
+    await expect.poll(() => platform('TikTok').getAttribute('aria-pressed'), { timeout: testBudget(15_000) }).toBe('true')
+    await expect.poll(async () => (await layers().textContent()) ?? '', { timeout: testBudget(15_000) }).not.toContain('Profile link')
+    expect(await layers().textContent()).toContain('Empty headline, second line')
+    await expect.poll(() => editor().locator('.graphics-save-state').textContent(), { timeout: testBudget(15_000) }).toBe('Saved')
+    expect((await readWatermark()).document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    await close()
+    expect(renders.length).toBe(rendersBefore)
     expect(errors).toEqual([])
   })
 })

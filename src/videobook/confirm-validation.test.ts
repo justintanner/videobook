@@ -5,60 +5,8 @@ import {
   generationValidation,
   splitValidation,
   VALID_CONFIRMATION,
-  watermarkValidation,
   xPostValidation,
-  type WatermarkValidationInput,
 } from './confirm-validation'
-
-function watermark(overrides: Partial<WatermarkValidationInput> = {}): WatermarkValidationInput {
-  return {
-    includeHandle: true,
-    includeQr: true,
-    handle: '@catsleep',
-    url: '',
-    durationSeconds: 26,
-    qrStartSeconds: 0,
-    qrEndSeconds: null,
-    handleStartSeconds: 0,
-    handleEndSeconds: null,
-    ...overrides,
-  }
-}
-
-describe('watermark validation', () => {
-  it('accepts a handle-backed QR with whole-clip timing', () => {
-    expect(watermarkValidation(watermark())).toEqual(VALID_CONFIRMATION)
-  })
-
-  it('names the missing handle and the way out', () => {
-    expect(watermarkValidation(watermark({ handle: ' @ ' })).blocking)
-      .toBe('Include handle is on but no handle is set. Type a handle, or turn Include handle off.')
-  })
-
-  it('needs something for the QR to link to', () => {
-    expect(watermarkValidation(watermark({ includeHandle: false, handle: '' })).blocking)
-      .toContain('nothing to link')
-    expect(watermarkValidation(watermark({ includeHandle: false, handle: '', url: 'https://x.com/a' })))
-      .toEqual(VALID_CONFIRMATION)
-  })
-
-  it('requires at least one badge', () => {
-    expect(watermarkValidation(watermark({ includeHandle: false, includeQr: false })).blocking)
-      .toBe('Include a handle, a QR code, or both.')
-  })
-
-  it('checks the timing of whichever badges are on', () => {
-    expect(watermarkValidation(watermark({ qrStartSeconds: 4, qrEndSeconds: 2 })).blocking)
-      .toBe('QR end time must be after its start time.')
-    expect(watermarkValidation(watermark({ handleStartSeconds: 30, handleEndSeconds: null })).blocking)
-      .toBe('Handle end time must be after its start time.')
-    expect(watermarkValidation(watermark({
-      includeQr: false,
-      qrStartSeconds: 4,
-      qrEndSeconds: 2,
-    }))).toEqual(VALID_CONFIRMATION)
-  })
-})
 
 describe('generation validation', () => {
   const base = {

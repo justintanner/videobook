@@ -241,7 +241,6 @@ describe('chat composer browser flow', () => {
     prompt: string
     value: Record<string, unknown>
   } | null = null
-  let mockedWatermarkApply = false
   let mockedFullscreenSubjectEditor = false
   let mockedSubjectEditCompletions = 0
   let mockedSubjectEditDelays: number[] = []
@@ -251,13 +250,11 @@ describe('chat composer browser flow', () => {
     mockedSubjectEditCompletions = 0
     mockedSubjectEditDelays = []
     delayChatResponses = false
-    mockedWatermarkApply = false
   })
 
   afterEach(async () => {
     mockedFullscreenSubjectEditor = false
     mockedSubjectEditDelays = []
-    mockedWatermarkApply = false
     await page?.setViewportSize({ width: 1440, height: 1000 })
   })
 
@@ -705,42 +702,6 @@ describe('chat composer browser flow', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify(Array.isArray(body) ? [response] : response),
-        })
-        return
-      }
-      const mockedWatermarkCall = mockedWatermarkApply
-        ? calls.find((call) => call.name === 'apply_watermark')
-        : null
-      if (mockedWatermarkCall) {
-        const envelopes = Array.isArray(body) ? body : [body]
-        const response = envelopes.flatMap((entry) => {
-          const envelope = record(entry)
-          const params = record(envelope?.params)
-          if (
-            envelope?.method !== 'tools/call'
-            || params?.name !== 'apply_watermark'
-            || (typeof envelope.id !== 'number' && typeof envelope.id !== 'string')
-          ) return []
-          return [{
-            jsonrpc: '2.0',
-            id: envelope.id,
-            result: {
-              resultType: 'complete',
-              content: [{
-                type: 'text',
-                text: JSON.stringify({
-                  placement_source: 'manual',
-                  position: mockedWatermarkCall.arguments.position,
-                }),
-              }],
-              isError: false,
-            },
-          }]
-        })
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(Array.isArray(body) ? response : response[0]),
         })
         return
       }
@@ -2841,7 +2802,6 @@ describe('chat composer browser flow', () => {
       },
     }
     try {
-      mockedWatermarkApply = true
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
@@ -3135,7 +3095,7 @@ describe('chat composer browser flow', () => {
     }
   }, 60_000)
 
-  it('uses one composer watermark review for routed and direct commands', async () => {
+  it('opens the graphics editor in watermark mode for routed and direct watermark commands', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     const prompt = 'watermark @a1 with @justinwtanner'
     mockedChatActionPlan = {
@@ -3151,15 +3111,9 @@ describe('chat composer browser flow', () => {
           asset_id: '@a1',
           platform: 'x',
           handle: 'justinwtanner',
-          include_handle: true,
+          include_qr: true,
           handle_vertical_percent: 41,
-          include_platform_icon: true,
-          include_handle_border: true,
-          handle_padding: 25,
-          handle_padding_y: 18,
-          handle_rounding: 41,
           qr_opacity: 0.45,
-          handle_opacity: 0.55,
         },
         message: 'Applying watermark.',
         summary: 'Applying watermark.',
@@ -3171,272 +3125,49 @@ describe('chat composer browser flow', () => {
       },
     }
     try {
-      // The fixture video is shared; a real burn would change it for later tests.
-      mockedWatermarkApply = true
       await openApp()
       const input = page.getByLabel('Videobook command input')
       await input.waitFor({ state: 'visible', timeout: 30_000 })
       await expect.poll(async () => await input.isEnabled(), {
-      timeout: MCP_ROUNDTRIP_MS,
-    }).toBe(true)
-      const initialApplyCalls = observedCalls.filter((call) =>
-        call.name === 'apply_watermark').length
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe(true)
+      const toolCallCount = (name: string) => observedCalls.filter((call) => call.name === name).length
+      const initialApplyCalls = toolCallCount('apply_watermark')
 
       await input.fill(prompt)
       await page.getByLabel('Send command').click()
-
-      const review = page.getByLabel('Watermark review')
-      await review.waitFor({ state: 'visible', timeout: 30_000 })
-      await review.locator('.confirm-watermark').waitFor({ state: 'visible', timeout: 30_000 })
+      const editor = page.getByRole('dialog', { name: 'Watermark editor', exact: true })
+      await editor.waitFor({ state: 'visible', timeout: 30_000 })
       expect(await page.getByLabel('Chat action review').count()).toBe(0)
-      expect(await page.locator('.confirm-sheet-watermark').count()).toBe(1)
-      expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
-      expect(await review.locator('video').count()).toBe(1)
-      expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
-      const previewHandle = review.locator('.watermark-preview-handle')
-      const previewHandlePill = previewHandle.locator('.watermark-preview-handle-pill')
-      const previewHandleLabel = previewHandlePill.locator(':scope > span')
-      expect((await previewHandle.textContent())?.trim()).toBe('justinwtanner')
-      expect(await previewHandleLabel.evaluate((element) => {
-        const style = window.getComputedStyle(element)
-        const label = element.getBoundingClientRect()
-        const pill = element.parentElement?.getBoundingClientRect()
-        return {
-          clipped: element.scrollWidth > element.clientWidth,
-          overflow: style.overflow,
-          textOverflow: style.textOverflow,
-          withinPill: pill !== undefined
-            && label.left >= pill.left
-            && label.right <= pill.right,
-        }
-      })).toEqual({
-        clipped: false,
-        overflow: 'visible',
-        textOverflow: 'clip',
-        withinPill: true,
-      })
-      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(1)
-      expect(await previewHandle.evaluate((element) => {
-        const style = window.getComputedStyle(element)
-        return {
-          alignItems: style.alignItems,
-          justifyContent: style.justifyContent,
-          fontSize: Number.parseFloat(style.fontSize),
-          opacity: Number.parseFloat(style.opacity),
-        }
-      })).toEqual({
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 15,
-        opacity: 0.55,
-      })
-      expect(await previewHandlePill.evaluate((element) => {
-        const icon = element.querySelector('.watermark-preview-x-icon')?.getBoundingClientRect()
-        const label = element.querySelector('span')?.getBoundingClientRect()
-        return icon && label
-          ? Math.abs((icon.top + icon.bottom) / 2 - (label.top + label.bottom) / 2)
-          : null
-      })).toBeLessThanOrEqual(1)
-      const previewQrPath = await review.locator('.watermark-preview-qr-modules path')
-        .getAttribute('d')
-      expect(previewQrPath?.match(/M/g)).toHaveLength(541)
-      expect(await review.getByRole('checkbox', { name: 'Include QR code' }).isChecked()).toBe(true)
-      expect(await review.getByRole('checkbox', { name: 'Include handle' }).isChecked()).toBe(true)
-      expect(await review.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true')
-      expect(await review.getByRole('button', { name: 'Top left' }).count()).toBe(1)
-      const handleVerticalPosition = review.getByRole('slider', {
-        name: 'Handle vertical position',
-      })
-      expect(await handleVerticalPosition.inputValue()).toBe('41')
-      expect(await previewHandle.evaluate((element) => element.style.top)).toBe('41%')
-      expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('45')
-      expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('55')
-      expect(await review.getByRole('slider', { name: 'Handle padding X' }).inputValue()).toBe('25')
-      expect(await review.getByRole('slider', { name: 'Handle padding Y' }).inputValue()).toBe('18')
-      expect(await review.getByRole('button', { name: 'On QR' }).count()).toBe(1)
-      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('41')
-      expect(await review.locator('input[type="number"]').count()).toBe(6)
-      expect(await review.getByRole('spinbutton', { name: 'Handle duration' }).evaluate((element) => {
-        const field = element.getBoundingClientRect()
-        const body = element.closest('.confirm-sheet-body')?.getBoundingClientRect()
-        return body !== undefined && field.top >= body.top && field.bottom <= body.bottom
-      })).toBe(true)
-      await expect.poll(async () => await input.textContent()).toBe('/apply')
-
-      await review.getByRole('button', { name: 'Bottom left' }).click()
-      expect(await review.getByRole('button', { name: 'Bottom left' })
-        .getAttribute('aria-pressed')).toBe('true')
-      await handleVerticalPosition.fill('62')
-      expect(await previewHandle.evaluate((element) => element.style.top)).toBe('62%')
-      expect(await review.getByText('62% from top').count()).toBeGreaterThan(0)
-      const initialPillWidth = await previewHandlePill.evaluate((element) =>
-        element.getBoundingClientRect().width)
-      const handlePadding = review.getByRole('slider', { name: 'Handle padding X' })
-      await handlePadding.fill('96')
-      expect(await previewHandleLabel.evaluate((element) => {
-        const label = element.getBoundingClientRect()
-        const pill = element.parentElement?.getBoundingClientRect()
-        return element.scrollWidth <= element.clientWidth
-          && pill !== undefined
-          && label.left >= pill.left
-          && label.right <= pill.right
-      })).toBe(true)
-      await handlePadding.fill('64')
-      await expect.poll(async () => await previewHandlePill.evaluate((element) =>
-        element.getBoundingClientRect().width)).toBeGreaterThan(initialPillWidth)
-      const handlePaddingY = review.getByRole('slider', { name: 'Handle padding Y' })
-      const initialPillHeight = await previewHandlePill.evaluate((element) =>
-        element.getBoundingClientRect().height)
-      await handlePaddingY.fill('96')
-      await expect.poll(async () => await previewHandlePill.evaluate((element) =>
-        element.getBoundingClientRect().height)).toBeGreaterThan(initialPillHeight)
-      await handlePaddingY.fill('40')
-      await review.getByRole('button', { name: 'On QR' }).click()
-      expect(await review.getByRole('button', { name: 'On QR' })
-        .getAttribute('aria-pressed')).toBe('true')
-      expect(await review.getByRole('slider', { name: 'Handle vertical position' }).count()).toBe(0)
-      await review.getByRole('button', { name: 'Centered' }).click()
-      expect(await handleVerticalPosition.inputValue()).toBe('62')
-      await review.getByRole('slider', { name: 'Corner rounding' }).fill('25')
-      await review.getByRole('checkbox', { name: 'Show X icon' }).uncheck()
-      await review.getByRole('checkbox', { name: 'Handle border' }).uncheck()
-      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(0)
-      expect(await previewHandlePill.getAttribute('class')).toContain('without-border')
-      await review.getByRole('slider', { name: 'QR opacity' }).fill('35')
-      await review.getByRole('slider', { name: 'Handle opacity' }).fill('70')
-      await review.getByRole('spinbutton', { name: 'QR start' }).fill('0.1')
-      await review.getByRole('spinbutton', { name: 'QR end' }).fill('0.6')
-      expect(await review.getByRole('spinbutton', { name: 'QR duration' }).inputValue()).toBe('0.5')
-      await review.getByRole('spinbutton', { name: 'Handle start' }).fill('0.2')
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
-      await review.getByLabel('TikTok handle').fill('creator.name')
-      await review.getByRole('spinbutton', { name: 'Handle duration' }).fill('0.6')
-      expect(await review.getByRole('spinbutton', { name: 'Handle end' }).inputValue()).toBe('0.8')
-      await expect.poll(async () => {
-        await dismissConfirmStatus(page)
-        return await review.getByRole('button', { name: 'Apply' }).isEnabled()
-      }, {
+      expect(await page.getByLabel('Watermark review').count()).toBe(0)
+      const platforms = editor.getByRole('group', { name: 'Watermark platform', exact: true })
+      await expect.poll(() => platforms.getByRole('button', { name: 'X', exact: true }).getAttribute('aria-pressed'), {
         timeout: MCP_ROUNDTRIP_MS,
-      }).toBe(true)
-      await review.getByRole('button', { name: 'Apply' }).click()
-      await expect.poll(() => observedCalls.filter((call) =>
-        call.name === 'apply_watermark').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(initialApplyCalls + 1)
-      await review.waitFor({ state: 'detached' })
-      const applyCalls = observedCalls.filter((call) => call.name === 'apply_watermark')
-      expect(applyCalls).toHaveLength(initialApplyCalls + 1)
-      expect(applyCalls.at(-1)?.arguments).toMatchObject({
-        book_id: bookId,
-        asset_id: videoArtifactId,
-        handle: 'creator.name',
-        include_qr: true,
-        include_handle: true,
-        position: 'bottom-left',
-        handle_vertical_percent: 62,
-        platform: 'tiktok',
-        include_platform_icon: false,
-        include_handle_border: false,
-        handle_padding: 64,
-        handle_padding_y: 40,
-        handle_rounding: 25,
-        qr_opacity: 0.35,
-        handle_opacity: 0.7,
-        qr_start_seconds: 0.1,
-        qr_end_seconds: 0.6,
-        handle_start_seconds: 0.2,
-        handle_end_seconds: 0.8,
-      })
+      }).toBe('true')
+      expect(await editor.getByRole('group', { name: 'Render output', exact: true })
+        .getByRole('button', { name: 'Replace video', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      const layers = editor.getByRole('region', { name: 'Layers' })
+      await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).toContain('justinwtanner')
+      expect(await layers.textContent()).toContain('Profile link')
+      expect(await editor.getByRole('button', { name: 'Save as default watermark', exact: true }).count()).toBe(1)
+      await platforms.getByRole('button', { name: 'TikTok', exact: true }).click()
+      await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).not.toContain('Profile link')
+      expect(await layers.textContent()).toContain('Empty headline, second line')
+      await editor.getByRole('button', { name: /^Close/ }).click()
+      await editor.waitFor({ state: 'detached' })
 
       await input.fill('/watermark @a1')
       await page.getByLabel('Send command').click()
-      await review.waitFor({ state: 'visible', timeout: 30_000 })
-      expect(await page.locator('.confirm-sheet-watermark').count()).toBe(1)
-      expect(await page.locator('.watermark-backdrop, .watermark-dialog').count()).toBe(0)
-      expect(await review.getByRole('button', { name: 'Top right' }).count()).toBe(1)
-      expect(await review.getByRole('slider', {
-        name: 'Handle vertical position',
-      }).inputValue()).toBe('62')
-      expect(await review.getByRole('combobox', { name: 'Platform' }).inputValue()).toBe('tiktok')
-      expect(await review.getByRole('checkbox', { name: 'Show TikTok icon' }).isChecked()).toBe(false)
-      expect(await review.getByRole('checkbox', { name: 'Handle border' }).isChecked()).toBe(false)
-      expect(await review.getByRole('slider', { name: 'Handle padding X' }).inputValue()).toBe('64')
-      expect(await review.getByRole('slider', { name: 'Handle padding Y' }).inputValue()).toBe('40')
-      expect(await review.getByRole('slider', { name: 'Corner rounding' }).inputValue()).toBe('25')
-      expect(await review.getByRole('slider', { name: 'QR opacity' }).inputValue()).toBe('35')
-      expect(await review.getByRole('slider', { name: 'Handle opacity' }).inputValue()).toBe('70')
-      expect(await review.getByRole('spinbutton', { name: 'Handle start' }).inputValue()).toBe('0.2')
-      expect(await review.getByRole('spinbutton', { name: 'Handle duration' }).inputValue()).toBe('0.6')
-      await review.getByRole('checkbox', { name: 'Show TikTok icon' }).check()
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('x')
-      expect(await review.getByLabel('X handle').inputValue()).toBe('justinwtanner')
-      await review.getByLabel('X handle').fill('temporary')
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
-      const tiktokHandle = review.getByLabel('TikTok handle')
-      expect(await tiktokHandle.inputValue()).toBe('creator.name')
-      await tiktokHandle.fill('creator.long_tiktok.name')
-      expect(await review.getByLabel('QR link').getAttribute('placeholder')).toBe('https://www.tiktok.com/@creator.long_tiktok.name')
-      expect(await previewHandle.locator('.watermark-preview-tiktok-icon').count()).toBe(1)
-      expect(await previewHandle.locator('.watermark-preview-x-icon').count()).toBe(0)
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('x')
-      expect(await review.getByLabel('X handle').inputValue()).toBe('temporary')
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('tiktok')
-      expect(await tiktokHandle.inputValue()).toBe('creator.long_tiktok.name')
-      await review.getByRole('slider', { name: 'Handle padding X' }).fill('96')
-      expect(await previewHandleLabel.evaluate((element) => {
-        const label = element.getBoundingClientRect()
-        const pill = element.parentElement?.getBoundingClientRect()
-        return pill !== undefined && label.left >= pill.left && label.right <= pill.right
-      })).toBe(true)
-      await review.getByRole('checkbox', { name: 'Show TikTok icon' }).uncheck()
-      expect(await previewHandle.locator('.watermark-preview-tiktok-icon').count()).toBe(0)
-      await review.getByRole('spinbutton', { name: 'Handle duration' }).fill('0.5')
-      await review.getByRole('button', { name: 'Cancel' }).click()
-      await review.waitFor({ state: 'detached' })
-      await input.fill('/watermark @a1')
-      await page.getByLabel('Send command').click()
-      await review.waitFor({ state: 'visible' })
-      expect(await tiktokHandle.inputValue()).toBe('creator.long_tiktok.name')
-      expect(await review.getByRole('spinbutton', { name: 'Handle duration' }).inputValue()).toBe('0.5')
-      await openApp({ cold: true })
-      await input.waitFor({ state: 'visible', timeout: 30_000 })
-      await expect.poll(async () => await input.isEnabled(), { timeout: MCP_ROUNDTRIP_MS }).toBe(true)
-      await input.fill('/watermark @a1')
-      await page.getByLabel('Send command').click()
-      await review.waitFor({ state: 'visible' })
-      expect(await review.getByRole('combobox', { name: 'Platform' }).inputValue()).toBe('tiktok')
-      expect(await tiktokHandle.inputValue()).toBe('creator.long_tiktok.name')
-      expect(await review.getByRole('spinbutton', { name: 'Handle start' }).inputValue()).toBe('0.2')
-      expect(await review.getByRole('spinbutton', { name: 'Handle end' }).inputValue()).toBe('0.7')
-      expect(await review.getByRole('spinbutton', { name: 'Handle duration' }).inputValue()).toBe('0.5')
-      await review.getByRole('combobox', { name: 'Platform' }).selectOption('x')
-      expect(await review.getByLabel('X handle').inputValue()).toBe('temporary')
-      await review.getByLabel('QR link').fill('https://example.com/qr-only')
-      await review.getByRole('spinbutton', { name: 'Handle end' }).fill('0')
-      expect(await review.getByText('Handle end time must be after its start time.', { exact: true }).count()).toBe(1)
-      expect(await review.getByRole('button', { name: 'Apply' }).isDisabled()).toBe(true)
-      await review.getByRole('checkbox', { name: 'Include handle' }).uncheck()
-      expect(await review.locator('.watermark-preview-handle').count()).toBe(0)
-      expect(await review.getByRole('spinbutton', { name: 'Handle end' }).count()).toBe(0)
-      expect(await review.getByText('Handle end time must be after its start time.', { exact: true }).count()).toBe(0)
-      expect(await review.locator('input[type="number"]').count()).toBe(3)
-      expect(await review.getByRole('button', { name: 'Apply' }).isEnabled()).toBe(true)
-      await review.getByRole('button', { name: 'Apply' }).click()
-      await expect.poll(() => observedCalls.filter((call) =>
-        call.name === 'apply_watermark').length, { timeout: MCP_ROUNDTRIP_MS }).toBe(initialApplyCalls + 2)
-      await review.waitFor({ state: 'detached' })
-      const qrOnlyCall = observedCalls.filter((call) => call.name === 'apply_watermark').at(-1)
-      expect(qrOnlyCall?.arguments).toMatchObject({
-        book_id: bookId,
-        asset_id: videoArtifactId,
-        include_qr: true,
-        include_handle: false,
-        url: 'https://example.com/qr-only',
-      })
-      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle')
-      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_start_seconds')
-      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_end_seconds')
-      expect(qrOnlyCall?.arguments).not.toHaveProperty('handle_opacity')
+      await editor.waitFor({ state: 'visible', timeout: 30_000 })
+      await expect.poll(() => platforms.getByRole('button', { name: 'TikTok', exact: true }).getAttribute('aria-pressed'), {
+        timeout: MCP_ROUNDTRIP_MS,
+      }).toBe('true')
+      await expect.poll(async () => (await layers.textContent()) ?? '', { timeout: MCP_ROUNDTRIP_MS }).toContain('Empty headline, second line')
+      await editor.getByRole('button', { name: /^Close/ }).click()
+      await editor.waitFor({ state: 'detached' })
+      expect(toolCallCount('apply_watermark')).toBe(initialApplyCalls)
+      expect(observedCalls.some((call) => call.name === 'video_graphics' && call.arguments.op === 'render')).toBe(false)
     } finally {
-      mockedWatermarkApply = false
       mockedChatActionPlan = null
     }
   }, 60_000)

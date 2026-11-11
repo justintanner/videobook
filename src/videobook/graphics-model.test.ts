@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
-import { graphicsDocumentFromLayers, type GraphicsDocument } from '../../server/src/graphics/model'
+import { graphicsDocumentFromLayers, type GraphicsDocument, type GraphicsQrLayerInput } from '../../server/src/graphics/model'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
+import { platformWatermarkDocument } from '../../server/src/graphics/starters'
+import { watermarkLayerInputs } from '../../server/src/graphics/watermark-profile'
+import { LIGHTNING_WATERMARK_PROFILE, watermarkProfileFor } from '../../server/src/lightning-defaults'
 import {
   editGraphicsHistory,
   graphicsAddLayer,
   graphicsBlockText,
   graphicsBurnedNotice,
+  graphicsDrawnDocument,
   graphicsEditorTarget,
   graphicsFillSuggestion,
   graphicsImageChoices,
@@ -25,6 +29,8 @@ import {
   graphicsTemplateMessage,
   graphicsTextEdits,
   graphicsToolError,
+  graphicsWatermarkSwitchEdits,
+  graphicsWatermarkTarget,
   parseGraphicsRead,
   parseGraphicsRender,
   stepGraphicsHistory,
@@ -163,7 +169,7 @@ describe('graphics editor target', () => {
   it('resolves cell addresses and ids, with an optional image', () => {
     expect(graphicsEditorTarget({ reference: '@a1', image: '@b2', assets, mentions, notebookId: 'nb' })).toEqual({
       ok: true,
-      target: { artifactId: 'video-1', kind: 'video', label: 'red light', mediaUrl: '/files/b/video-1/original.mp4', address: 'a1', notebookId: 'nb', image: 'logo-1', text: null },
+      target: { artifactId: 'video-1', kind: 'video', label: 'red light', mediaUrl: '/files/b/video-1/original.mp4', address: 'a1', notebookId: 'nb', image: 'logo-1', text: null, watermark: null },
     })
     expect(graphicsEditorTarget({ reference: '@a1', image: undefined, text: { headline: 'Red light' }, assets, mentions, notebookId: null })).toMatchObject({ ok: true, target: { text: { headline: 'Red light' } } })
     expect(graphicsEditorTarget({ reference: 'video-1', image: undefined, assets, mentions, notebookId: null })).toMatchObject({ ok: true, target: { image: null, address: 'a1' } })
@@ -278,7 +284,7 @@ describe('graphics text from chat and voice', () => {
 
   it('applies an opened image and text as one undo step', () => {
     const start = history(titled())
-    const opened = edited(start, graphicsOpenEdits(start.document, { image: 'logo-1', text: { headline: THAI_TITLE } }), null)
+    const opened = edited(start, graphicsOpenEdits(start.document, { image: 'logo-1', text: { headline: THAI_TITLE }, watermark: null }), null)
     expect(opened.past).toHaveLength(1)
     expect(opened.document.layers.filter((layer) => layer.kind === 'image')).toHaveLength(1)
     expect(graphicsSlotText(opened.document, 'headline')).toBe(THAI_TITLE)
@@ -395,5 +401,95 @@ describe('graphics layer list', () => {
       ],
     })
     expect(document.layers[2]).toMatchObject({ artifactId: 'logo-1', position: { anchor: 'top-left', x: 0, y: 0, space: 'safe' } })
+  })
+})
+
+function profileQr(layer: ReturnType<typeof watermarkLayerInputs>[number] | undefined): GraphicsQrLayerInput {
+  if (layer?.kind !== 'qr') throw new Error('expected the profile QR layer')
+  return layer
+}
+
+describe('graphics watermark mode', () => {
+  const frame = { width: 1080, height: 1920 }
+  const xProfile = { ...watermarkProfileFor('x', null), handle: 'justinwtanner', profileUrl: 'https://x.com/justinwtanner' }
+  const tiktokLook = platformWatermarkDocument(LIGHTNING_WATERMARK_PROFILE, frame, { includeQr: false })
+  const xLook = platformWatermarkDocument(xProfile, frame, { includeQr: false })
+  const tiktokQr = profileQr(watermarkLayerInputs(LIGHTNING_WATERMARK_PROFILE, frame, { includeQr: true, includeHandle: false })[0])
+  const watermarkRead = (platform: 'tiktok' | 'x', overrides: Record<string, unknown> = {}) => read({
+    document: platform === 'tiktok' ? tiktokLook : xLook,
+    fill: platform === 'tiktok'
+      ? { handle: 'jtbkk', profile_url: 'https://www.tiktok.com/@jtbkk', credit: null }
+      : { handle: 'justinwtanner', profile_url: 'https://x.com/justinwtanner', credit: null },
+    watermark: { platform, template_id: null, template_name: null, look: platform === 'tiktok' ? tiktokLook : xLook, qr: tiktokQr },
+    ...overrides,
+  })
+
+  it('opens /watermark on TikTok and a routed plan on its platform with the handle and QR it asks for', () => {
+    expect(graphicsWatermarkTarget()).toEqual({ platform: 'tiktok', handle: null, includeQr: null })
+    expect(graphicsWatermarkTarget({ asset_id: 'video-1', platform: 'x', handle: ' @justinwtanner ', include_qr: true, position: 'top-left' }))
+      .toEqual({ platform: 'x', handle: '@justinwtanner', includeQr: true })
+    expect(graphicsWatermarkTarget({ platform: 'instagram', handle: 4, include_qr: 'yes' })).toEqual({ platform: 'tiktok', handle: null, includeQr: null })
+    const assets = [{ id: 'vid-1', artifactId: 'video-1', label: 'red light', type: 'video', status: 'ready', mediaUrl: '/files/b/video-1/original.mp4' }]
+    expect(graphicsEditorTarget({ reference: '@a1', image: undefined, watermark: graphicsWatermarkTarget(), assets, mentions: [{ artifactId: 'video-1', cellAddress: 'a1' }], notebookId: null }))
+      .toMatchObject({ ok: true, target: { artifactId: 'video-1', watermark: { platform: 'tiktok', handle: null, includeQr: null } } })
+  })
+
+  it('parses the watermark of a get and leaves it out of graphics mode', () => {
+    const parsed = watermarkRead('tiktok', { watermark: { platform: 'tiktok', template_id: 'saved-1', template_name: 'Brand', look: tiktokLook, qr: tiktokQr } })
+    expect(parsed.watermark).toMatchObject({ platform: 'tiktok', template_id: 'saved-1', template_name: 'Brand', qr: { kind: 'qr', slot: 'profile', style: 'tile' } })
+    expect(parsed.watermark?.look).toEqual(tiktokLook)
+    expect(read().watermark).toBeNull()
+    expect(watermarkRead('tiktok', { watermark: { platform: 'tiktok', template_id: null, template_name: null, look: tiktokLook, qr: { kind: 'qr', size: 9 } } }).watermark?.qr).toBeNull()
+    expect(() => watermarkRead('tiktok', { watermark: { platform: 'tiktok', template_id: null, template_name: null, look: { version: 2 }, qr: null } })).toThrow()
+  })
+
+  it('applies the handle and QR a routed plan asks for as one undo step', () => {
+    const parsed = watermarkRead('tiktok')
+    const start = history(tiktokLook)
+    const opened = edited(start, graphicsOpenEdits(tiktokLook, { image: null, text: null, watermark: { platform: 'tiktok', handle: '@creator.name', includeQr: true } }, parsed), null)
+    expect(opened.past).toHaveLength(1)
+    expect(graphicsSlotText(opened.document, 'handle')).toBe('creator.name')
+    expect(opened.document.layers.find((layer) => layer.kind === 'qr')).toMatchObject({ slot: 'profile', url: 'https://www.tiktok.com/@jtbkk', style: 'tile', opacity: LIGHTNING_WATERMARK_PROFILE.qrOpacity })
+    const withoutQr = graphicsOpenEdits(opened.document, { image: null, text: null, watermark: { platform: 'tiktok', handle: null, includeQr: false } }, parsed)
+    expect(withoutQr).toEqual([{ op: 'remove_layer', layer_id: opened.document.layers.find((layer) => layer.kind === 'qr')?.id }])
+    expect(graphicsOpenEdits(tiktokLook, { image: null, text: null, watermark: { platform: 'tiktok', handle: 'jtbkk', includeQr: null } }, parsed)).toEqual([])
+    expect(graphicsOpenEdits(tiktokLook, { image: null, text: null, watermark: null }, parsed)).toEqual([])
+  })
+
+  it('draws the shade only behind a typed title and blocks a watermark with nothing to burn', () => {
+    expect(graphicsDrawnDocument(tiktokLook, true).layers.map((layer) => layer.kind)).toEqual(['text', 'text'])
+    expect(graphicsDrawnDocument(tiktokLook, false)).toBe(tiktokLook)
+    const titledLook = apply(tiktokLook, [{ op: 'set_slot_text', slot: 'headline', text: THAI_TITLE }])
+    expect(graphicsDrawnDocument(titledLook, true).layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    const shadeOnly = graphicsDocumentFromLayers([{ kind: 'scrim', edge: 'bottom' }])
+    expect(graphicsRenderBlocker(shadeOnly, 8, false, true)).toBe('Add the handle, a title, an image or a QR code to render.')
+    expect(graphicsRenderBlocker(shadeOnly, 8, false)).toBeNull()
+    expect(graphicsRenderBlocker(tiktokLook, 8, false, true)).toBeNull()
+  })
+
+  it('switches platform to that platform\'s watermark, keeping the typed title', () => {
+    const draft = apply(tiktokLook, [{ op: 'set_slot_text', slot: 'headline', text: THAI_TITLE }])
+    const edits = graphicsWatermarkSwitchEdits(draft, watermarkRead('x'))
+    expect(edits.map((edit) => edit.op)).toEqual(['apply_template', 'set_slot_text'])
+    const switched = apply(draft, edits)
+    expect(graphicsSlotText(switched, 'handle')).toBe('justinwtanner')
+    expect(graphicsSlotText(switched, 'headline')).toBeNull()
+    const back = apply(switched, graphicsWatermarkSwitchEdits(switched, watermarkRead('tiktok')))
+    expect(graphicsSlotText(back, 'handle')).toBe('jtbkk')
+    expect(back.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    expect(graphicsWatermarkSwitchEdits(draft, read())).toEqual([])
+  })
+
+  it('adds the profile QR, and says what rendering, saving and resetting the watermark did', () => {
+    const added = graphicsAddLayer(tiktokLook, 'qr', { profileUrl: 'https://www.tiktok.com/@jtbkk', qr: tiktokQr })
+    expect(added?.edit).toEqual({ op: 'add_layer', layer: tiktokQr })
+    const watermark = { platform: 'tiktok' as const, handle: null, includeQr: null }
+    expect(graphicsRenderQueuedMessage('replace', { label: 'red light', address: 'a1', watermark })).toBe('Burning the watermark into @a1. The video updates in place when the render finishes.')
+    expect(graphicsRenderQueuedMessage('new', { label: 'red light', address: null, watermark })).toMatch(/watermarked copy of red light/u)
+    const saved = { template: { id: 'w1', name: 'TikTok watermark', updated_at: 'now' }, watermark: { platform: 'tiktok', template_id: 'w1' } }
+    expect(graphicsTemplateMessage('save_watermark', saved, { platform: 'tiktok' }))
+      .toBe('Saved as the default TikTok watermark (“TikTok watermark”). Goal finishing and apply_watermark burn it from now on.')
+    expect(graphicsTemplateMessage('set_watermark_template', { watermark: { platform: 'x', template_id: null } }, { platform: 'x' }))
+      .toBe('Goal finishing and apply_watermark burn the X profile’s watermark again.')
   })
 })

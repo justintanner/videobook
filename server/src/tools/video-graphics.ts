@@ -18,7 +18,8 @@ import {
   GRAPHICS_TEXT_SLOTS,
 } from "../graphics/model.js";
 import { graphicsBurned, latestGraphicsRender, requestGraphicsRender } from "../graphics/render.js";
-import { graphicsForTemplate, readGraphics, updateGraphics } from "../graphics/service.js";
+import type { GraphicsLook } from "../graphics/service.js";
+import { graphicsForTemplate, readGraphics, rememberWatermarkSlots, updateGraphics } from "../graphics/service.js";
 import { DEFAULT_GRAPHICS_STARTER_ID } from "../graphics/starters.js";
 import type { GraphicsTemplate } from "../graphics/templates.js";
 import {
@@ -27,7 +28,9 @@ import {
   readGraphicsTemplates,
   renameGraphicsTemplate,
   saveGraphicsTemplate,
+  saveWatermarkGraphicsTemplate,
   setDefaultGraphicsTemplate,
+  setWatermarkGraphicsTemplate,
 } from "../graphics/templates.js";
 import type { RenderOutput } from "../render-requests.js";
 import { RENDER_OUTPUTS } from "../render-requests.js";
@@ -124,7 +127,7 @@ const editSchema = z.discriminatedUnion("op", [
 ]);
 
 const VIDEO_OPS = ["get", "update", "render"] as const;
-const TEMPLATE_OPS = ["save_template", "rename_template", "delete_template", "set_default_template", "copy_templates"] as const;
+const TEMPLATE_OPS = ["save_template", "rename_template", "delete_template", "set_default_template", "copy_templates", "save_watermark", "set_watermark_template"] as const;
 
 type VideoOp = typeof VIDEO_OPS[number];
 type TemplateOp = typeof TEMPLATE_OPS[number];
@@ -132,12 +135,14 @@ type TemplateOp = typeof TEMPLATE_OPS[number];
 const schema = {
   book_id: z.string().describe("Book id"),
   asset_id: z.string().min(1).optional()
-    .describe("Video artifact UUID or notebook address such as @a1. Required for get, update, render and save_template"),
+    .describe("Video artifact UUID or notebook address such as @a1. Required for get, update, render, save_template and save_watermark"),
   notebook_id: z.string().uuid().optional().describe("Notebook that resolves an @address and reports the video's cell address"),
   op: z.enum([...VIDEO_OPS, ...TEMPLATE_OPS]).optional()
-    .describe("get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here"),
+    .describe("get (default) reads the saved graphics, or the book's default look for a video without any, with fill values, starters, the book's saved templates, the latest render and any graphics already burned in, and never writes; update saves edits or a replacement document against expected_revision; render queues the graphics of exactly that revision as a background job and returns at once; save_template saves the video's current graphics as a named template of this book (slot text such as the headline is left empty), or over template_id; rename_template and delete_template change a saved template; set_default_template makes template_id (a saved template or a starter) the look a video without graphics starts from, or restores the built-in default with null; copy_templates copies from_book's saved templates into this book together with the images their layers use, skipping names already taken here; save_watermark saves the video's current graphics, read in watermark mode, as the platform's watermark template that apply_watermark and goal finishing burn (over the current one, named after the platform unless name is given; slot text such as the title is left empty) and remembers the handle and QR link drawn there; set_watermark_template makes template_id (a saved template) the platform's watermark template, or null goes back to the watermark profile's look"),
   platform: z.enum(WATERMARK_PLATFORMS).optional()
-    .describe("Watermark profile whose handle and profile URL fill the handle and QR slots of the default look and starters (default tiktok)"),
+    .describe("Watermark profile whose handle and profile URL fill the handle and QR slots of the default look and starters, and the watermark that watermark mode works with (default tiktok)"),
+  watermark: z.boolean().optional()
+    .describe("Watermark mode, for editing the platform's watermark: get, update, render and save_template start a video without saved graphics from what apply_watermark burns with no options, the platform's saved watermark template or else the watermark profile's look (for TikTok the handle, an empty Thai title and an English line, no QR code); get also returns watermark with that look, the saved watermark template and the profile's QR layer; render draws a shade only while title text is drawn, as apply_watermark does"),
   expected_revision: z.string().optional().describe("update and render: the revision from get that these changes apply to or that was reviewed"),
   source_hash: z.string().optional().describe("render: source.source_hash from the get that was reviewed"),
   request_id: z.string().uuid().optional().describe("render: stable request UUID; reuse it when retrying the same render"),
@@ -150,8 +155,8 @@ const schema = {
     description: "update: a full replacement document (version, layers, nextId) in the shape get returns",
   }).optional(),
   template_id: z.string().min(1).nullable().optional()
-    .describe("save_template: a saved template to save over; rename_template and delete_template: the template to change; set_default_template: a saved template or starter id, or null for the built-in default"),
-  name: z.string().optional().describe("save_template and rename_template: the template's name"),
+    .describe("save_template: a saved template to save over; rename_template and delete_template: the template to change; set_default_template: a saved template or starter id, or null for the built-in default; set_watermark_template: a saved template, or null for the watermark profile's look"),
+  name: z.string().optional().describe("save_template, save_watermark and rename_template: the template's name"),
   from_book: z.string().min(1).optional().describe("copy_templates: the book id or name to copy saved templates from"),
   template_ids: z.array(z.string().min(1)).max(50).optional().describe("copy_templates: only these templates of from_book (default all)"),
 };
@@ -162,6 +167,7 @@ type VideoGraphicsArgs = {
   notebook_id?: string;
   op?: VideoOp | TemplateOp;
   platform?: WatermarkPlatform;
+  watermark?: boolean;
   expected_revision?: string;
   source_hash?: string;
   request_id?: string;
@@ -185,20 +191,20 @@ function failure(error: unknown): ToolResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify(body) }] };
 }
 
-async function update(engine: Engine, args: VideoGraphicsArgs, artifactId: string, platform: WatermarkPlatform) {
+async function update(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
   if (!args.expected_revision) throw new GraphicsServiceError("invalid", "update needs expected_revision from get.");
   if ((args.edits === undefined) === (args.document === undefined)) {
     throw new GraphicsServiceError("invalid", "update takes exactly one of edits or document.");
   }
   const draft = await updateGraphics(engine, artifactId, {
     expectedRevision: args.expected_revision,
-    platform,
+    look,
     ...(args.edits ? { edits: args.edits } : { document: args.document }),
   });
   return { asset_id: artifactId, status: "saved", saved: true, revision: draft.revision, updated_at: draft.updatedAt, document: draft.document };
 }
 
-async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: string, platform: WatermarkPlatform) {
+async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
   if (!args.expected_revision || !args.source_hash || !args.request_id) {
     throw new GraphicsServiceError("invalid", "render needs expected_revision, source_hash and request_id from the reviewed get.");
   }
@@ -208,17 +214,17 @@ async function render(engine: Engine, args: VideoGraphicsArgs, artifactId: strin
     sourceHash: args.source_hash,
     notebookId: args.notebook_id ?? null,
     output: args.output ?? "new",
-    platform,
+    look,
   });
   return { asset_id: artifactId, job_id: status.job_id, status: status.status, output_artifact_id: status.output_asset_id, render: status };
 }
 
-async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string, platform: WatermarkPlatform) {
-  const model = await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, platform });
+async function read(engine: Engine, args: VideoGraphicsArgs, artifactId: string, look: GraphicsLook) {
+  const model = await readGraphics(engine, artifactId, { notebookId: args.notebook_id ?? null, look });
   return { ...model, render: latestGraphicsRender(engine, artifactId), burned: await graphicsBurned(engine, artifactId) };
 }
 
-function videoArtifactId(engine: Engine, args: VideoGraphicsArgs, op: VideoOp | "save_template"): string {
+function videoArtifactId(engine: Engine, args: VideoGraphicsArgs, op: VideoOp | "save_template" | "save_watermark"): string {
   if (!args.asset_id) throw new GraphicsServiceError("invalid", `${op} needs asset_id, the video whose graphics it uses.`);
   return resolveVideoAssetReference(engine, args.asset_id, args.notebook_id);
 }
@@ -233,6 +239,7 @@ function templateList(engine: Engine) {
   return {
     templates: store.templates.map((template) => ({ id: template.id, name: template.name, updated_at: template.updatedAt })),
     default_template_id: store.defaultId ?? DEFAULT_GRAPHICS_STARTER_ID,
+    watermark_template_ids: store.watermark,
   };
 }
 
@@ -240,14 +247,29 @@ function savedTemplate(template: GraphicsTemplate) {
   return { id: template.id, name: template.name, updated_at: template.updatedAt };
 }
 
-async function saveTemplate(engine: Engine, args: VideoGraphicsArgs, platform: WatermarkPlatform) {
-  const document = await graphicsForTemplate(engine, videoArtifactId(engine, args, "save_template"), platform, args.expected_revision);
+async function saveWatermark(engine: Engine, args: VideoGraphicsArgs, platform: WatermarkPlatform) {
+  const document = await graphicsForTemplate(engine, videoArtifactId(engine, args, "save_watermark"), { platform, watermark: true }, args.expected_revision);
+  const template = await saveWatermarkGraphicsTemplate(engine, platform, { document, ...(args.name === undefined ? {} : { name: args.name }) });
+  await rememberWatermarkSlots(engine, platform, document);
+  return { status: "saved", template: savedTemplate(template), watermark: { platform, template_id: template.id }, ...templateList(engine) };
+}
+
+async function saveTemplate(engine: Engine, args: VideoGraphicsArgs, look: GraphicsLook) {
+  const document = await graphicsForTemplate(engine, videoArtifactId(engine, args, "save_template"), look, args.expected_revision);
   const template = await saveGraphicsTemplate(engine, {
     document,
     ...(args.name === undefined ? {} : { name: args.name }),
     ...(typeof args.template_id === "string" ? { templateId: args.template_id } : {}),
   });
   return { status: "saved", template: savedTemplate(template), ...templateList(engine) };
+}
+
+async function setWatermarkTemplate(engine: Engine, args: VideoGraphicsArgs, platform: WatermarkPlatform) {
+  if (args.template_id === undefined) {
+    throw new GraphicsServiceError("invalid", "set_watermark_template needs template_id: a saved template, or null for the watermark profile's look.");
+  }
+  const templateId = await setWatermarkGraphicsTemplate(engine, platform, args.template_id);
+  return { status: "saved", watermark: { platform, template_id: templateId }, ...templateList(engine) };
 }
 
 async function setDefaultTemplate(engine: Engine, args: VideoGraphicsArgs) {
@@ -278,9 +300,9 @@ async function copyTemplates(engine: Engine, books: BookManager | undefined, arg
   };
 }
 
-async function templateOperation(engine: Engine, books: BookManager | undefined, args: VideoGraphicsArgs, op: TemplateOp, platform: WatermarkPlatform) {
+async function templateOperation(engine: Engine, books: BookManager | undefined, args: VideoGraphicsArgs, op: TemplateOp, look: GraphicsLook) {
   switch (op) {
-    case "save_template": return saveTemplate(engine, args, platform);
+    case "save_template": return saveTemplate(engine, args, look);
     case "rename_template": {
       const template = await renameGraphicsTemplate(engine, requiredTemplateId(args, op), args.name);
       return { status: "renamed", template: savedTemplate(template), ...templateList(engine) };
@@ -291,6 +313,8 @@ async function templateOperation(engine: Engine, books: BookManager | undefined,
     }
     case "set_default_template": return setDefaultTemplate(engine, args);
     case "copy_templates": return copyTemplates(engine, books, args);
+    case "save_watermark": return saveWatermark(engine, args, look.platform);
+    case "set_watermark_template": return setWatermarkTemplate(engine, args, look.platform);
   }
 }
 
@@ -298,27 +322,27 @@ function isTemplateOp(op: VideoOp | TemplateOp): op is TemplateOp {
   return (TEMPLATE_OPS as readonly string[]).includes(op);
 }
 
-async function videoOperation(engine: Engine, args: VideoGraphicsArgs, op: VideoOp, platform: WatermarkPlatform) {
+async function videoOperation(engine: Engine, args: VideoGraphicsArgs, op: VideoOp, look: GraphicsLook) {
   const artifactId = videoArtifactId(engine, args, op);
-  if (op === "get") return read(engine, args, artifactId, platform);
-  if (op === "render") return render(engine, args, artifactId, platform);
-  return update(engine, args, artifactId, platform);
+  if (op === "get") return read(engine, args, artifactId, look);
+  if (op === "render") return render(engine, args, artifactId, look);
+  return update(engine, args, artifactId, look);
 }
 
 export function videoGraphicsDef(engine: Engine, books?: BookManager): ToolDef {
   return {
     name: "video_graphics",
     description:
-      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). Videos only.",
+      "On-screen graphics drawn over a video: text blocks, images, QR codes and shades, each with a position, size, opacity and time window. get reads the saved layers, or the book's default look for a video without any (built in: the TikTok handle, an empty Thai title and an English line, no QR code), with the handle, profile URL and source credit to fill slots, the starter layouts, the book's saved templates, the latest render and any graphics already burned in; update saves edits or a replacement document against the revision from get; render burns the reviewed revision in the background into a new connected video cell (the source is kept) or into the source video in place. Templates are named layouts saved per book: save_template, rename_template, delete_template, set_default_template (the look videos without graphics start from) and copy_templates (from another book, with the images they use). watermark: true edits the platform's watermark, what apply_watermark and goal finishing burn, and save_template then saves it as their default. Videos only.",
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     schema,
     handler: async (input) => {
       const args = input as unknown as VideoGraphicsArgs;
       try {
-        const platform = args.platform ?? "tiktok";
+        const look: GraphicsLook = { platform: args.platform ?? "tiktok", watermark: args.watermark ?? false };
         const op = args.op ?? "get";
-        if (isTemplateOp(op)) return json(await templateOperation(engine, books, args, op, platform));
-        return json(await videoOperation(engine, args, op, platform));
+        if (isTemplateOp(op)) return json(await templateOperation(engine, books, args, op, look));
+        return json(await videoOperation(engine, args, op, look));
       } catch (error) {
         return failure(error);
       }

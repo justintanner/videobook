@@ -16,10 +16,10 @@ import {
   renderRequestStatus,
   writeRenderSetting,
 } from "../render-requests.js";
-import type { WatermarkPlatform } from "../watermark-platform.js";
 import { GraphicsServiceError } from "./errors.js";
 import type { GraphicsDocument, GraphicsImageLayer, GraphicsLayerKind } from "./model.js";
 import { parseGraphicsDocument } from "./model.js";
+import type { GraphicsLook } from "./service.js";
 import { reviewedGraphics } from "./service.js";
 import { graphicsStillGroups } from "./stills.js";
 
@@ -51,7 +51,7 @@ interface GraphicsRenderInput {
   sourceHash: string;
   notebookId: string | null;
   output: RenderOutput;
-  platform: WatermarkPlatform;
+  look: GraphicsLook;
 }
 
 type BurnedLayer = { id: string; kind: GraphicsLayerKind; name: string };
@@ -215,7 +215,7 @@ async function outputArtifact(engine: Engine, label: string | null): Promise<str
 }
 
 function fingerprint(artifactId: string, input: GraphicsRenderInput): string {
-  return renderRequestFingerprint([artifactId, input.notebookId, input.sourceHash, input.expectedRevision, input.output]);
+  return renderRequestFingerprint([artifactId, input.notebookId, input.sourceHash, input.expectedRevision, input.output, ...(input.look.watermark ? ["watermark"] : [])]);
 }
 
 function reusable(engine: Engine, existing: GraphicsRenderRequest, expected: string): RenderRequestStatus | null {
@@ -230,7 +230,7 @@ function reusable(engine: Engine, existing: GraphicsRenderRequest, expected: str
 
 async function reviewedRender(engine: Engine, artifactId: string, input: GraphicsRenderInput) {
   await requireSettledVideo(engine, artifactId);
-  const reviewed = await reviewedGraphics(engine, artifactId, input.platform, input.expectedRevision);
+  const reviewed = await reviewedGraphics(engine, artifactId, input.look, input.expectedRevision);
   if (reviewed.source.mediaHash !== input.sourceHash) {
     throw new GraphicsServiceError("stale_source", "The video changed after these graphics were reviewed. Review them again, then render.");
   }

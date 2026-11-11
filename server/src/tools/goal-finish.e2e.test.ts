@@ -13,6 +13,8 @@ import { readGoal, saveGoal } from "../goal-store.js";
 import { pauseBookQueueForTests, resumeBookQueueForTests } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 import { testBudget } from "../test-budget.js";
+import type { GraphicsDocument } from "../graphics/model.js";
+import { appendGraphicsLayers } from "../graphics/model.js";
 import { goalTestCharacters, goalTestVideo, settleGoalChain } from "../test-goals.js";
 import { saveWatermarkProfile } from "../watermark-config.js";
 import type { GoalSnapshot } from "./goal.js";
@@ -251,6 +253,42 @@ describe("goal finishing burns the saved watermark through the graphics renderer
     expect(coldOpens()).toBe(coldOpensBeforeQr + 1);
     expect(burns()).toBe(burnsBeforeQr + 1);
 
+    const graphics = async <T>(args: Record<string, unknown>): Promise<T> => {
+      const result = await client.callTool({ name: "video_graphics", arguments: { book_id: bookId, asset_id: videoArtifactId, ...args } });
+      expect(result.isError, textOf(result)).toBeFalsy();
+      return JSON.parse(textOf(result)) as T;
+    };
+    const look = await graphics<{ revision: string; document: GraphicsDocument }>({ watermark: true });
+    const branded = await graphics<{ revision: string }>({
+      watermark: true,
+      op: "update",
+      expected_revision: look.revision,
+      document: appendGraphicsLayers(look.document, [{
+        kind: "text",
+        name: "Brand",
+        position: { anchor: "bottom-left", x: 0, y: 1, space: "safe" },
+        width: 0.9,
+        align: "left",
+        plate: { color: "#FF00FF", opacity: 1, radius: 0 },
+        items: [{ text: "Follow for more", size: 0.04, shadow: false }],
+      }]),
+    });
+    expect(await graphics<{ template: { name: string } }>({ op: "save_watermark", expected_revision: branded.revision })).toMatchObject({ template: { name: "TikTok watermark" } });
+    const brandedFinish = await awaitFinish((await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1 })).goalId);
+    const brandedFinal = brandedFinish.finalArtifactId!;
+    expect(brandedFinal).not.toBe(fourthFinal);
+    const magenta = (pixels: Buffer) => {
+      let count = 0;
+      for (let offset = 0; offset < pixels.length; offset += 3) {
+        if (Math.abs(pixels[offset]! - 255) + pixels[offset + 1]! + Math.abs(pixels[offset + 2]! - 255) <= 90) count += 1;
+      }
+      return count;
+    };
+    expect(magenta(await frameAt(brandedFinal, 1))).toBeGreaterThan(40);
+    expect(magenta(await frameAt(fourthFinal, 1))).toBe(0);
+    expect(coldOpens()).toBe(coldOpensBeforeQr + 2);
+    expect(burns()).toBe(burnsBeforeQr + 2);
+
     const cancelling = await invoke({ action: "finish", goal_id: goal.goalId, start_seconds: 0, end_seconds: 1.5 });
     expect(cancelling.finish?.status).toBe("running");
     expect(engine.jobs.queue.get(readGoal(engine, goal.goalId).finish!.jobId!)?.state).toBe("queued");
@@ -260,8 +298,8 @@ describe("goal finishing burns the saved watermark through the graphics renderer
     expect(getChainRun(engine, sceneChainId)?.status).toBe("completed");
     expect(getChainRun(engine, videoChainId)?.status).toBe("completed");
     expect(engine.jobs.queue.list().some(job => job.type.startsWith("generate_") && ["queued", "running", "completing"].includes(job.state))).toBe(false);
-    expect(coldOpens()).toBe(coldOpensBeforeQr + 1);
-    expect(burns()).toBe(burnsBeforeQr + 1);
+    expect(coldOpens()).toBe(coldOpensBeforeQr + 2);
+    expect(burns()).toBe(burnsBeforeQr + 2);
     expect(await mediaHash(thirdFinal)).toBe(thirdHash);
     expect(await mediaHash(fourthFinal)).toBe(fourthHash);
     expect(await mediaHash(videoArtifactId)).toBe(sourceHash);

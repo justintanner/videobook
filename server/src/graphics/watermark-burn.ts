@@ -189,15 +189,19 @@ function drawsTitle(layer: GraphicsLayer): boolean {
   return layer.visible && layer.kind === "text" && layer.items.some((item) => item.slot !== "handle" && item.text.trim().length > 0);
 }
 
-function withoutIdleScrims(document: GraphicsDocument): GraphicsDocument {
+export function watermarkDrawnDocument(document: GraphicsDocument): GraphicsDocument {
   if (document.layers.some(drawsTitle)) return document;
   return { ...document, layers: document.layers.filter((layer) => layer.kind !== "scrim") };
 }
 
-export function watermarkBurnDocument(input: WatermarkBurnInput): GraphicsDocument {
+export function watermarkLookDocument(input: WatermarkBurnInput): GraphicsDocument {
   const base = input.template
     ? patchedTemplate(input.template, input)
     : platformWatermarkDocument(input.profile, input.frame, overrides(input));
   const filled = fillGraphicsSlots(base, input.values, { overwrite: true });
-  return withoutIdleScrims(input.card ? withCard(filled, input, input.card) : filled);
+  return input.card ? withCard(filled, input, input.card) : filled;
+}
+
+export function watermarkBurnDocument(input: WatermarkBurnInput): GraphicsDocument {
+  return watermarkDrawnDocument(watermarkLookDocument(input));
 }

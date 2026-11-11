@@ -24,7 +24,7 @@ import { scoreWatermarkCornersForCanvas, WATERMARK_OPACITY } from "../remotion/o
 import type { OsgPosition } from "../remotion/subtitles/types.js";
 import type { WatermarkHandlePlacement } from "../watermark-handle-position.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
-import { effectiveWatermarkTiming } from "../watermark-timing.js";
+import { watermarkWindow } from "../watermark-timing.js";
 import { analyzeOsgPlacement } from "./osg-placement.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -124,11 +124,6 @@ async function burnProfile(engine: Engine, payload: BurnWatermarkPayload, platfo
   };
 }
 
-function burnWindow(label: string, duration: number, startSeconds?: number, endSeconds?: number): WatermarkWindow {
-  const timing = effectiveWatermarkTiming(label, duration, startSeconds, endSeconds);
-  return { startSeconds: timing.startSeconds ?? null, endSeconds: timing.endSeconds ?? null };
-}
-
 function burnTemplate(template: BurnWatermarkTemplate | null | undefined): GraphicsDocument | null {
   if (!template) return null;
   const parsed = parseGraphicsDocument(template.document);
@@ -181,6 +176,37 @@ async function resolveBurnCorner(
   }
 }
 
+export async function watermarkPayloadDocument(
+  engine: Engine,
+  payload: BurnWatermarkPayload,
+  duration: number,
+  frame: GraphicsFrame,
+  corner: OsgPosition,
+  card: WatermarkCard | null,
+): Promise<GraphicsDocument> {
+  const platform = payload.platform ?? "tiktok";
+  const includeQr = payload.includeQr ?? payload.qrPath !== undefined;
+  const includeHandle = payload.includeHandle ?? payload.handlePath !== undefined;
+  const profile = await burnProfile(engine, payload, platform);
+  return watermarkBurnDocument({
+    profile,
+    frame,
+    includeQr,
+    includeHandle,
+    corner,
+    qrWindow: includeQr
+      ? watermarkWindow("QR watermark", duration, payload.qrStartSeconds ?? payload.startSeconds, payload.qrEndSeconds ?? payload.endSeconds)
+      : WHOLE_CLIP,
+    handleWindow: includeHandle
+      ? watermarkWindow("Handle watermark", duration, payload.handleStartSeconds ?? payload.startSeconds, payload.handleEndSeconds ?? payload.endSeconds)
+      : WHOLE_CLIP,
+    values: { ...watermarkSlotValues(profile), ...(payload.credit ? { credit: payload.credit } : {}) },
+    template: burnTemplate(payload.template),
+    patches: payload.patches ?? [],
+    card,
+  });
+}
+
 async function burnDocument(
   engine: Engine,
   payload: BurnWatermarkPayload,
@@ -189,29 +215,8 @@ async function burnDocument(
   placement: BurnPlacement,
   card: BurnCard | null,
 ): Promise<GraphicsDocument> {
-  const platform = payload.platform ?? "tiktok";
-  const includeQr = payload.includeQr ?? payload.qrPath !== undefined;
-  const includeHandle = payload.includeHandle ?? payload.handlePath !== undefined;
-  const duration = probe.videoDuration;
-  const profile = await burnProfile(engine, payload, platform);
-  const document = watermarkBurnDocument({
-    profile,
-    frame,
-    includeQr,
-    includeHandle,
-    corner: placement.corner,
-    qrWindow: includeQr
-      ? burnWindow("QR watermark", duration, payload.qrStartSeconds ?? payload.startSeconds, payload.qrEndSeconds ?? payload.endSeconds)
-      : WHOLE_CLIP,
-    handleWindow: includeHandle
-      ? burnWindow("Handle watermark", duration, payload.handleStartSeconds ?? payload.startSeconds, payload.handleEndSeconds ?? payload.endSeconds)
-      : WHOLE_CLIP,
-    values: { ...watermarkSlotValues(profile), ...(payload.credit ? { credit: payload.credit } : {}) },
-    template: burnTemplate(payload.template),
-    patches: payload.patches ?? [],
-    card: card?.card ?? null,
-  });
-  if (graphicsStillGroups(document, duration).length === 0) throw new Error(NOTHING_TO_DRAW);
+  const document = await watermarkPayloadDocument(engine, payload, probe.videoDuration, frame, placement.corner, card?.card ?? null);
+  if (graphicsStillGroups(document, probe.videoDuration).length === 0) throw new Error(NOTHING_TO_DRAW);
   return document;
 }
 

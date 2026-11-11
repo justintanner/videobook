@@ -7,7 +7,7 @@ import { resolveBookReference } from "../media-library.js";
 import { withNotebookMutation } from "../notebook-mutations.js";
 import { queue } from "../queue.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
-import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
+import { WATERMARK_PLATFORM_LABELS, WATERMARK_PLATFORMS } from "../watermark-platform.js";
 import { GraphicsServiceError } from "./errors.js";
 import type { GraphicsDocument } from "./model.js";
 import { MAX_GRAPHICS_NAME_LENGTH, parseGraphicsDocument } from "./model.js";
@@ -42,6 +42,7 @@ export type GraphicsTemplateCopy = {
 
 type CopyTemplatesInput = { books: BookManager; fromBook: string; templateIds?: readonly string[] };
 type SaveTemplateInput = { name?: string; templateId?: string; document: GraphicsDocument };
+type SaveWatermarkInput = { name?: string; document: GraphicsDocument };
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -206,6 +207,33 @@ export async function setWatermarkGraphicsTemplate(engine: Engine, platform: Wat
     const watermark = Object.fromEntries(Object.entries(store.watermark).filter(([key]) => key !== platform));
     writeTemplates(engine, { ...store, watermark: templateId === null ? watermark : { ...watermark, [platform]: templateId } });
     return templateId;
+  });
+}
+
+function watermarkTemplateName(platform: WatermarkPlatform): string {
+  return `${WATERMARK_PLATFORM_LABELS[platform]} watermark`;
+}
+
+function watermarkTarget(store: GraphicsTemplateStore, platform: WatermarkPlatform, name: string | undefined): GraphicsTemplate | null {
+  const current = store.templates.find((template) => template.id === store.watermark[platform]);
+  if (current || name !== undefined) return current ?? null;
+  return store.templates.find((template) => sameName(template.name, watermarkTemplateName(platform))) ?? null;
+}
+
+export async function saveWatermarkGraphicsTemplate(engine: Engine, platform: WatermarkPlatform, input: SaveWatermarkInput): Promise<GraphicsTemplate> {
+  return withTemplates(engine, async () => {
+    const store = readGraphicsTemplates(engine);
+    const existing = watermarkTarget(store, platform, input.name);
+    const name = input.name === undefined ? existing?.name ?? watermarkTemplateName(platform) : templateName(input.name);
+    requireFreeName(store, name, existing?.id ?? null);
+    if (!existing) requireRoom(store.templates.length + 1);
+    const template = { id: existing?.id ?? randomUUID(), name, document: templateDocument(input.document), updatedAt: new Date().toISOString() };
+    writeTemplates(engine, {
+      ...store,
+      templates: existing ? replaced(store, template) : [...store.templates, template],
+      watermark: { ...store.watermark, [platform]: template.id },
+    });
+    return template;
   });
 }
 

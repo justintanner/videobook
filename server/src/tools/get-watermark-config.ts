@@ -7,7 +7,7 @@ import { WATERMARK_PLATFORMS } from "../watermark-platform.js";
 import type { WatermarkPlatform } from "../watermark-platform.js";
 
 /**
- * Return the persisted watermark handle preferences so the chat watermark review can
+ * Return the persisted watermark handle preferences so a watermark can
  * default to the saved / last-used X handle and list recent handles to pick from.
  *
  * `authenticatedHandle` is read-through cached: we try @apicity/x's /2/users/me

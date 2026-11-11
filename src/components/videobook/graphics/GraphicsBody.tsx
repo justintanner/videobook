@@ -6,6 +6,7 @@ import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor } from '@/videobook/useGraphicsEditor'
 import {
   graphicsBurnedNotice,
+  graphicsDrawnDocument,
   graphicsImageChoices,
   graphicsLayoutWarnings,
   graphicsNextLayerId,
@@ -21,6 +22,7 @@ import { GraphicsLayers } from './GraphicsLayers'
 import { GraphicsPreview } from './GraphicsPreview'
 import { GraphicsQuickFields, GraphicsWarnings } from './GraphicsQuickFields'
 import { GraphicsTemplates } from './GraphicsTemplates'
+import { GraphicsWatermark } from './GraphicsWatermark'
 import './Graphics.css'
 
 function Banner({ tone = 'info', children }: { tone?: 'info' | 'warning' | 'error'; children: ReactNode }) {
@@ -82,6 +84,9 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const [snapping, setSnapping] = useState(true)
   const read = state.read
   const document = state.document
+  const watermark = state.target?.watermark ?? null
+  const watermarkMode = watermark !== null
+  const drawn = useMemo(() => (document ? graphicsDrawnDocument(document, watermarkMode) : null), [document, watermarkMode])
   const images = useMemo(() => graphicsOverlayImages(read), [read])
   const imageChoices = useMemo(() => graphicsImageChoices(assets, mentions), [assets, mentions])
   const selectedLayer = document?.layers.find((layer) => layer.id === selectedLayerId) ?? null
@@ -136,9 +141,9 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   return (
     <div className="confirm-graphics" onKeyDown={onKeyDown}>
       <div className="graphics-status"><StatusBanners editor={editor} onOpenSource={onOpenSource} /></div>
-      {document && state.target && source && (
+      {drawn && state.target && source && (
         <GraphicsPreview
-          document={document}
+          document={drawn}
           mediaUrl={state.target.mediaUrl}
           source={source}
           images={images}
@@ -155,6 +160,7 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
       )}
       {document && read && (
         <div className="graphics-controls">
+          {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
           <GraphicsQuickFields document={document} read={read} disabled={!editable} onEdit={edit} />
           <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
           <GraphicsWarnings warnings={warnings} />

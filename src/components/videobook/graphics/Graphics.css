@@ -841,3 +841,17 @@ label.graphics-field > span:first-child {
 .command-composer[data-resizable-review='true'] .command-composer-dock-body > .confirm-sheet-graphics {
   flex-basis: var(--confirm-review-height, 84%);
 }
+
+.graphics-watermark {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.graphics-watermark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

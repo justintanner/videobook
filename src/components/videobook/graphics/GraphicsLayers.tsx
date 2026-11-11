@@ -157,7 +157,7 @@ export function GraphicsLayers(props: LayersProps) {
   const [picking, setPicking] = useState(false)
   const full = document.layers.length >= MAX_GRAPHICS_LAYERS
   const add = (kind: GraphicsAddKind, image?: GraphicsImageChoice) => {
-    const added = graphicsAddLayer(document, kind, { image, profileUrl: read.fill.profile_url })
+    const added = graphicsAddLayer(document, kind, { image, profileUrl: read.fill.profile_url, qr: read.watermark?.qr ?? null })
     if (added && onEdit([added.edit])) onSelect(added.layerId)
   }
   const choose = (kind: GraphicsAddKind) => {

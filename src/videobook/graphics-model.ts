@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { applyGraphicsEdits, type GraphicsEdit } from '../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../server/src/graphics/layout'
 import {
+  graphicsDocumentFromLayers,
   isGraphicsUrl,
   MAX_GRAPHICS_NAME_LENGTH,
   nextGraphicsId,
@@ -9,10 +10,16 @@ import {
   type GraphicsDocument,
   type GraphicsLayer,
   type GraphicsLayerKind,
+  type GraphicsQrLayer,
+  type GraphicsQrLayerInput,
+  type GraphicsSlot,
   type GraphicsTextSlot,
 } from '../../server/src/graphics/model'
+import { graphicsSlotValues } from '../../server/src/graphics/slots'
 import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, type GraphicsBlockText } from '../../server/src/graphics/starters'
 import { graphicsStillGroups } from '../../server/src/graphics/stills'
+import { watermarkDrawnDocument } from '../../server/src/graphics/watermark-burn'
+import { isWatermarkPlatform, WATERMARK_PLATFORM_LABELS, WATERMARK_PLATFORMS, type WatermarkPlatform } from '../../server/src/watermark-platform'
 
 const renderSchema = z.object({
   request_id: z.string(),
@@ -48,6 +55,14 @@ const templateSchema = z.object({
   missing_layer_ids: z.array(z.string()),
 })
 
+const watermarkSchema = z.object({
+  platform: z.enum(WATERMARK_PLATFORMS),
+  template_id: z.string().nullable(),
+  template_name: z.string().nullable(),
+  look: z.unknown(),
+  qr: z.record(z.string(), z.unknown()).nullable(),
+})
+
 const readSchema = z.object({
   asset_id: z.string(),
   address: z.string().nullable(),
@@ -64,15 +79,18 @@ const readSchema = z.object({
   images: z.record(z.string(), imageSchema),
   render: renderSchema.nullable(),
   burned: burnedSchema.nullable(),
+  watermark: watermarkSchema.nullable().default(null),
 })
 
 type ReadWire = z.infer<typeof readSchema>
 type GraphicsStarterChoice = { id: string; name: string; document: GraphicsDocument }
 type GraphicsSavedTemplate = Omit<z.infer<typeof templateSchema>, 'document'> & { document: GraphicsDocument }
-export type GraphicsRead = Omit<ReadWire, 'document' | 'starters' | 'templates'> & {
+type GraphicsWatermarkRead = Omit<z.infer<typeof watermarkSchema>, 'look' | 'qr'> & { look: GraphicsDocument; qr: GraphicsQrLayerInput | null }
+export type GraphicsRead = Omit<ReadWire, 'document' | 'starters' | 'templates' | 'watermark'> & {
   document: GraphicsDocument
   starters: GraphicsStarterChoice[]
   templates: GraphicsSavedTemplate[]
+  watermark: GraphicsWatermarkRead | null
 }
 export type GraphicsRenderStatus = z.infer<typeof renderSchema>
 export type GraphicsBurned = z.infer<typeof burnedSchema>
@@ -85,6 +103,12 @@ function documentOf(value: unknown): GraphicsDocument {
   return parsed.document
 }
 
+function qrLayerInput(value: Record<string, unknown> | null): GraphicsQrLayerInput | null {
+  if (!value || value.kind !== 'qr') return null
+  const input = value as GraphicsQrLayerInput
+  return parseGraphicsDocument(graphicsDocumentFromLayers([input])).ok ? input : null
+}
+
 export function parseGraphicsRead(value: unknown): GraphicsRead {
   const read = readSchema.parse(value)
   return {
@@ -92,6 +116,7 @@ export function parseGraphicsRead(value: unknown): GraphicsRead {
     document: documentOf(read.document),
     starters: read.starters.map((starter) => ({ id: starter.id, name: starter.name, document: documentOf(starter.document) })),
     templates: read.templates.map((template) => ({ ...template, document: documentOf(template.document) })),
+    watermark: read.watermark && { ...read.watermark, look: documentOf(read.watermark.look), qr: qrLayerInput(read.watermark.qr) },
   }
 }
 
@@ -110,7 +135,7 @@ export function graphicsTemplateChoices(read: GraphicsRead): GraphicsTemplateCho
   return [...starters, ...saved].map((choice) => ({ ...choice, isDefault: choice.id === read.default_template_id }))
 }
 
-export type GraphicsTemplateOp = 'save_template' | 'rename_template' | 'delete_template' | 'set_default_template' | 'copy_templates'
+export type GraphicsTemplateOp = 'save_template' | 'rename_template' | 'delete_template' | 'set_default_template' | 'copy_templates' | 'save_watermark' | 'set_watermark_template'
 
 const templateResultSchema = z.object({ template: z.object({ name: z.string() }).optional() })
 
@@ -135,8 +160,16 @@ function copyMessage(value: unknown): string {
   return parts.join(' ')
 }
 
-export function graphicsTemplateMessage(op: GraphicsTemplateOp, value: unknown, options: { name?: string; overwrite?: boolean } = {}): string {
+function watermarkMessage(op: 'save_watermark' | 'set_watermark_template', value: unknown, platform: WatermarkPlatform): string {
+  const label = WATERMARK_PLATFORM_LABELS[platform]
+  if (op === 'set_watermark_template') return `Goal finishing and apply_watermark burn the ${label} profile’s watermark again.`
+  const name = templateResultSchema.parse(value).template?.name ?? `${label} watermark`
+  return `Saved as the default ${label} watermark (“${name}”). Goal finishing and apply_watermark burn it from now on.`
+}
+
+export function graphicsTemplateMessage(op: GraphicsTemplateOp, value: unknown, options: { name?: string; overwrite?: boolean; platform?: WatermarkPlatform } = {}): string {
   if (op === 'copy_templates') return copyMessage(value)
+  if (op === 'save_watermark' || op === 'set_watermark_template') return watermarkMessage(op, value, options.platform ?? 'tiktok')
   const name = templateResultSchema.parse(value).template?.name ?? options.name ?? 'The template'
   if (op === 'save_template') return options.overwrite ? `Updated “${name}” with this look.` : `Saved “${name}” as a template.`
   if (op === 'rename_template') return `Renamed the template to “${name}”.`
@@ -170,6 +203,12 @@ export function graphicsToolError(error: unknown): GraphicsToolError {
   }
 }
 
+export interface GraphicsWatermarkTarget {
+  platform: WatermarkPlatform
+  handle: string | null
+  includeQr: boolean | null
+}
+
 export interface GraphicsTarget {
   artifactId: string
   kind: 'video' | 'final'
@@ -179,6 +218,7 @@ export interface GraphicsTarget {
   notebookId: string | null
   image: string | null
   text: GraphicsBlockText | null
+  watermark: GraphicsWatermarkTarget | null
 }
 
 export type GraphicsEditorAsset = { id: string; artifactId: string; label: string; type: string; status: string; mediaUrl: string | null }
@@ -187,9 +227,19 @@ type TargetInput = {
   reference: string | undefined
   image: string | undefined
   text?: GraphicsBlockText | null
+  watermark?: GraphicsWatermarkTarget | null
   assets: readonly GraphicsEditorAsset[]
   mentions: readonly GraphicsEditorMention[]
   notebookId: string | null
+}
+
+export function graphicsWatermarkTarget(params: Record<string, unknown> = {}): GraphicsWatermarkTarget {
+  const handle = typeof params.handle === 'string' ? params.handle.trim() : ''
+  return {
+    platform: isWatermarkPlatform(params.platform) ? params.platform : 'tiktok',
+    handle: handle || null,
+    includeQr: typeof params.include_qr === 'boolean' ? params.include_qr : null,
+  }
 }
 
 export function graphicsBlockText(params: Record<string, unknown>): GraphicsBlockText | null {
@@ -224,6 +274,7 @@ export function graphicsEditorTarget(input: TargetInput): { ok: true; target: Gr
       notebookId: input.notebookId,
       image: image?.artifactId ?? null,
       text: input.text ?? null,
+      watermark: input.watermark ?? null,
     },
   }
 }
@@ -244,8 +295,43 @@ export function graphicsTextEdits(document: GraphicsDocument, text: GraphicsBloc
   return block ? [...edits, { op: 'add_layer', layer: block }] : edits
 }
 
-export function graphicsOpenEdits(document: GraphicsDocument, target: Pick<GraphicsTarget, 'image' | 'text'>): GraphicsEdit[] {
-  return [...graphicsImageEdits(document, target.image), ...graphicsTextEdits(document, target.text)]
+function isProfileQr(layer: GraphicsLayer): layer is GraphicsQrLayer {
+  return layer.kind === 'qr' && layer.slot === 'profile'
+}
+
+function watermarkQrEdits(document: GraphicsDocument, includeQr: boolean | null, qr: GraphicsQrLayerInput | null): GraphicsEdit[] {
+  if (includeQr === false) return document.layers.filter(isProfileQr).map((layer) => ({ op: 'remove_layer', layer_id: layer.id }))
+  if (!includeQr || !qr || document.layers.some(isProfileQr)) return []
+  return [{ op: 'add_layer', layer: qr }]
+}
+
+function watermarkOpenEdits(document: GraphicsDocument, watermark: GraphicsWatermarkTarget | null, read: GraphicsRead | null): GraphicsEdit[] {
+  if (!watermark) return []
+  const handle = watermark.handle?.trim().replace(/^@+/u, '') ?? ''
+  const current = graphicsSlotText(document, 'handle')
+  const handleEdits: GraphicsEdit[] = handle && current !== null && current !== handle ? [{ op: 'set_slot_text', slot: 'handle', text: handle }] : []
+  return [...handleEdits, ...watermarkQrEdits(document, watermark.includeQr, read?.watermark?.qr ?? null)]
+}
+
+export function graphicsOpenEdits(document: GraphicsDocument, target: Pick<GraphicsTarget, 'image' | 'text' | 'watermark'>, read: GraphicsRead | null = null): GraphicsEdit[] {
+  return [...graphicsImageEdits(document, target.image), ...graphicsTextEdits(document, target.text), ...watermarkOpenEdits(document, target.watermark, read)]
+}
+
+export function graphicsWatermarkSwitchEdits(document: GraphicsDocument, read: GraphicsRead): GraphicsEdit[] {
+  const look = read.watermark?.look
+  if (!look) return []
+  const applied = applyGraphicsEdits(document, [{ op: 'apply_template', template: look }])
+  if (!applied.ok) return []
+  const slots = graphicsSlotValues(applied.document)
+  const fills: ReadonlyArray<readonly [GraphicsSlot, string | null]> = [['handle', read.fill.handle], ['profile', read.fill.profile_url]]
+  return [
+    { op: 'apply_template', template: look },
+    ...fills.flatMap(([slot, value]): GraphicsEdit[] => (value && slots[slot] !== undefined && slots[slot] !== value ? [{ op: 'set_slot_text', slot, text: value }] : [])),
+  ]
+}
+
+export function graphicsDrawnDocument(document: GraphicsDocument, watermark: boolean): GraphicsDocument {
+  return watermark ? watermarkDrawnDocument(document) : document
 }
 
 export type GraphicsImageChoice = { artifactId: string; address: string; label: string }
@@ -268,11 +354,12 @@ export function graphicsNextLayerId(document: GraphicsDocument): string {
 export function graphicsAddLayer(
   document: GraphicsDocument,
   kind: GraphicsAddKind,
-  options: { image?: GraphicsImageChoice; profileUrl?: string | null } = {},
+  options: { image?: GraphicsImageChoice; profileUrl?: string | null; qr?: GraphicsQrLayerInput | null } = {},
 ): { edit: GraphicsEdit; layerId: string } | null {
   const layerId = graphicsNextLayerId(document)
   if (kind === 'text') return { layerId, edit: { op: 'add_layer', layer: { kind: 'text', items: [{ text: 'Your text', size: 0.06 }] } } }
   if (kind === 'scrim') return { layerId, edit: { op: 'add_layer', layer: { kind: 'scrim' }, index: 0 } }
+  if (kind === 'qr' && options.qr) return { layerId, edit: { op: 'add_layer', layer: options.qr } }
   if (kind === 'qr') {
     const url = options.profileUrl && isGraphicsUrl(options.profileUrl) ? options.profileUrl : ''
     return { layerId, edit: { op: 'add_layer', layer: { kind: 'qr', slot: 'profile', url } } }
@@ -304,8 +391,13 @@ export function graphicsLayerSummary(layer: GraphicsLayer, images: GraphicsRead[
   return slots.length > 0 ? `Empty ${slots.join(', ').toLowerCase()}` : 'Empty text'
 }
 
-export function graphicsRenderQueuedMessage(output: GraphicsRenderOutput, target: { label: string; address: string | null }): string {
+export function graphicsRenderQueuedMessage(output: GraphicsRenderOutput, target: { label: string; address: string | null; watermark?: GraphicsWatermarkTarget | null }): string {
   const name = target.address ? `@${target.address}` : target.label
+  if (target.watermark) {
+    return output === 'replace'
+      ? `Burning the watermark into ${name}. The video updates in place when the render finishes.`
+      : `Rendering a watermarked copy of ${name}. It appears below it when the render finishes.`
+  }
   return output === 'replace'
     ? `Burning graphics into ${name}. The video updates in place when the render finishes.`
     : `Rendering graphics for ${name}. The copy appears below it when the render finishes.`
@@ -350,11 +442,11 @@ export function graphicsLayoutWarnings(document: GraphicsDocument, layout: reado
   })
 }
 
-export function graphicsRenderBlocker(document: GraphicsDocument | null, durationSeconds: number | null, conflict: boolean): string | null {
+export function graphicsRenderBlocker(document: GraphicsDocument | null, durationSeconds: number | null, conflict: boolean, watermark = false): string | null {
   if (conflict) return 'Reload the graphics or keep your version before rendering.'
   if (!document || durationSeconds === null) return 'The graphics are still loading.'
-  if (graphicsStillGroups(document, durationSeconds).length === 0) return 'Add text, an image, a QR code or a shade to render.'
-  return null
+  if (graphicsStillGroups(graphicsDrawnDocument(document, watermark), durationSeconds).length > 0) return null
+  return watermark ? 'Add the handle, a title, an image or a QR code to render.' : 'Add text, an image, a QR code or a shade to render.'
 }
 
 export function graphicsBurnedNotice(burned: GraphicsBurned | null, artifactId: string): { message: string; sourceId: string | null } | null {

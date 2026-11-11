@@ -53,9 +53,9 @@ import {
   watermarkBadgeAspect,
 } from "../watermark-badge.js";
 import type { WatermarkBadgeVariant } from "../watermark-badge.js";
-import { LIGHTNING_FADE_SECONDS, watermarkProfileToSave, watermarkWindowsFor } from "../lightning-defaults.js";
+import { LIGHTNING_FADE_SECONDS, watermarkProfileToSave } from "../lightning-defaults.js";
 import { effectiveWatermarkProfile, normalizeHandle, readWatermarkConfig, recordHandle, saveWatermarkProfile } from "../watermark-config.js";
-import { effectiveWatermarkTiming } from "../watermark-timing.js";
+import { effectiveWatermarkTiming, profileWatermarkTimes } from "../watermark-timing.js";
 import {
   MAX_HANDLE_VERTICAL_PERCENT,
   MIN_HANDLE_VERTICAL_PERCENT,
@@ -549,10 +549,6 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         || qr_end_seconds !== undefined
         || handle_start_seconds !== undefined
         || handle_end_seconds !== undefined;
-      const storedQrStart = config.profile?.qrStartSeconds;
-      const storedQrEnd = config.profile?.qrEndSeconds;
-      const storedAbsolute = !callerSetTiming
-        && (typeof storedQrStart === "number" || typeof storedQrEnd === "number");
       if (!include_qr && !include_handle && !template) {
         return toolError("include_qr or include_handle must be true");
       }
@@ -582,24 +578,12 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
       const videoPath = join(assetDir, videoFile.name);
       try {
         const video = await probeVideo(videoPath);
-        const profileTimesTheClip = profile.handleEndSeconds != null || profile.qrLeadSeconds != null;
-        if (storedAbsolute) {
-          if (typeof storedQrStart === "number") resolvedQrStartSeconds = storedQrStart;
-          if (typeof storedQrEnd === "number") resolvedQrEndSeconds = storedQrEnd;
-          if (typeof config.profile?.handleStartSeconds === "number") resolvedHandleStartSeconds = config.profile.handleStartSeconds;
-          if (typeof config.profile?.handleEndSeconds === "number") resolvedHandleEndSeconds = config.profile.handleEndSeconds;
-        } else if (
-          profileTimesTheClip
-          && resolvedQrStartSeconds === undefined
-          && resolvedQrEndSeconds === undefined
-          && resolvedHandleStartSeconds === undefined
-          && resolvedHandleEndSeconds === undefined
-        ) {
-          const windows = watermarkWindowsFor(profile, video.videoDuration);
-          resolvedQrStartSeconds = windows.qrStartSeconds;
-          resolvedQrEndSeconds = windows.qrEndSeconds;
-          resolvedHandleStartSeconds = windows.handleStartSeconds;
-          resolvedHandleEndSeconds = windows.handleEndSeconds;
+        if (!callerSetTiming) {
+          const times = profileWatermarkTimes(config.profile, profile, video.videoDuration);
+          resolvedQrStartSeconds = times.qrStartSeconds;
+          resolvedQrEndSeconds = times.qrEndSeconds;
+          resolvedHandleStartSeconds = times.handleStartSeconds;
+          resolvedHandleEndSeconds = times.handleEndSeconds;
         }
         if (include_qr) effectiveWatermarkTiming("QR watermark", video.videoDuration, resolvedQrStartSeconds, resolvedQrEndSeconds);
         if (include_handle) effectiveWatermarkTiming("Handle watermark", video.videoDuration, resolvedHandleStartSeconds, resolvedHandleEndSeconds);
