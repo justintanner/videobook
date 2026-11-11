@@ -1,16 +1,28 @@
-import { createEngineForTest } from "../engine.js";
-import { describe, it, expect } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isUuidV7 } from "videobook-engine";
+import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
-import * as path from "node:path";
-import * as fsp from "node:fs/promises";
-import * as os from "node:os";
 
 describe("Character lifecycle (create + metadata)", () => {
+  let root: string;
+  let fs: Engine;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "vc-char-test-"));
+    fs = createEngineForTest(root);
+  });
+
+  afterEach(async () => {
+    closeEngineForTest(root, fs);
+    await rm(root, { recursive: true, force: true, maxRetries: 3 });
+  });
+
   it("creates a character and writes free-form metadata", async () => {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-"));
-    const fs = createEngineForTest(dir);
     const slug = fs.book.get().bookId;
     
     // Create
@@ -45,8 +57,6 @@ describe("Character lifecycle (create + metadata)", () => {
   });
 
   it("accepts plain-text notes and structured object metadata", async () => {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-meta-"));
-    const fs = createEngineForTest(dir);
     const slug = fs.book.get().bookId;
 
     const createTool = createCharacterDef(fs);
@@ -91,8 +101,6 @@ describe("Character lifecycle (create + metadata)", () => {
   });
 
   it("creates a character seeded from one or more existing image assets", async () => {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-asset-"));
-    const fs = createEngineForTest(dir);
     const slug = fs.book.get().bookId;
 
     // Create dummy image assets to serve as sources
@@ -139,8 +147,6 @@ describe("Character lifecycle (create + metadata)", () => {
   });
 
   it("seeds display_name when creating a named character with no images", async () => {
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-name-only-"));
-    const fs = createEngineForTest(dir);
     const slug = fs.book.get().bookId;
     const createTool = createCharacterDef(fs);
     // The typed name becomes the character's display label; the id is a UUID.
