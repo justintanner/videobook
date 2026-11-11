@@ -9,6 +9,7 @@ import {
   FFMPEG_LINUX_X64_SHA256,
   YTDLP_LINUX_X64_SHA256,
   YTDLP_VERSION,
+  delay,
   ffmpegReleaseUrl,
   releasesBlocked,
   resolveBinary,
@@ -18,6 +19,8 @@ import {
 } from './ci-media-bins.mjs'
 
 const execFileAsync = promisify(execFile)
+const APT_ATTEMPTS = 3
+const APT_RETRY_DELAY_MS = 10_000
 
 function spawnRun(cwd) {
   return (command, args, env) => new Promise((resolve, reject) => {
@@ -51,6 +54,24 @@ async function provideFile(source, dest) {
   await chmod(dest, 0o755)
 }
 
+export async function installAptPackages(packages, env, run, sleep = delay) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await run('sudo', ['apt-get', '-o', 'Acquire::Retries=0', 'update', '--error-on=any'], env)
+      await run('sudo', ['apt-get', 'install', '-y', ...packages], env)
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (attempt === APT_ATTEMPTS) {
+        throw new Error(`apt-get could not install ${packages.join(' ')} after ${APT_ATTEMPTS} attempts: ${message}`)
+      }
+      const wait = APT_RETRY_DELAY_MS * attempt
+      process.stderr.write(`apt-get attempt ${attempt} of ${APT_ATTEMPTS} failed (${message}); retrying in ${wait / 1000}s\n`)
+      await sleep(wait)
+    }
+  }
+}
+
 async function provideYtdlp(dest, env, run) {
   if (env.VIDEOBOOK_CI_YTDLP_BIN) {
     await provideFile(env.VIDEOBOOK_CI_YTDLP_BIN, dest)
@@ -60,8 +81,7 @@ async function provideYtdlp(dest, env, run) {
   try {
     await run('python3', ['-m', 'venv', venv], env)
   } catch {
-    await run('sudo', ['apt-get', 'update'], env)
-    await run('sudo', ['apt-get', 'install', '-y', 'python3-venv'], env)
+    await installAptPackages(['python3-venv'], env, run)
     await run('python3', ['-m', 'venv', venv], env)
   }
   await run(join(venv, 'bin', 'pip'), ['install', '--disable-pip-version-check', `yt-dlp==${YTDLP_VERSION}`], env)
@@ -100,8 +120,7 @@ async function provideFfmpeg(dest, env, run) {
   }
   let source = await which('ffmpeg')
   if (!source) {
-    await run('sudo', ['apt-get', 'update'], env)
-    await run('sudo', ['apt-get', 'install', '-y', 'ffmpeg'], env)
+    await installAptPackages(['ffmpeg'], env, run)
     source = await which('ffmpeg')
   }
   if (!source) throw new Error('ffmpeg was not found after the package install')

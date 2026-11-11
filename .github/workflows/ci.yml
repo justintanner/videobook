@@ -13,6 +13,7 @@ jobs:
   lint-and-build:
     name: Lint, build, and unit test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -43,6 +44,7 @@ jobs:
   install-without-release-downloads:
     name: Install with GitHub release downloads blocked
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

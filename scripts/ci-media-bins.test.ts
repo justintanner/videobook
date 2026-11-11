@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ensureFfmpegBin, installWorkspace, resolvePackage } from './ci-install.mjs'
+import { ensureFfmpegBin, installAptPackages, installWorkspace, resolvePackage } from './ci-install.mjs'
 import {
   FFMPEG_RELEASE,
   YTDLP_VERSION,
@@ -163,6 +163,40 @@ function hiddenPackageJson(name: string): string {
     exports: { '.': './dist/index.js' },
   })}\n`
 }
+
+describe('apt fallback', () => {
+  const UPDATE = ['sudo', 'apt-get', '-o', 'Acquire::Retries=0', 'update', '--error-on=any']
+
+  it('stops an update that cannot reach the mirrors and retries it after a pause before installing', async () => {
+    const calls: string[][] = []
+    const waits: number[] = []
+    let unreachable = 1
+    await installAptPackages(['ffmpeg'], process.env, async (command: string, args: string[]) => {
+      calls.push([command, ...args])
+      if (args.includes('update') && unreachable > 0) {
+        unreachable -= 1
+        throw new Error('sudo apt-get update exited 100')
+      }
+    }, async (ms: number) => {
+      waits.push(ms)
+    })
+    expect(calls).toEqual([UPDATE, UPDATE, ['sudo', 'apt-get', 'install', '-y', 'ffmpeg']])
+    expect(waits).toEqual([10_000])
+  })
+
+  it('gives up after three attempts with growing pauses when the mirrors stay unreachable', async () => {
+    const calls: string[][] = []
+    const waits: number[] = []
+    await expect(installAptPackages(['python3-venv'], process.env, async (command: string, args: string[]) => {
+      calls.push([command, ...args])
+      throw new Error('sudo apt-get update exited 100')
+    }, async (ms: number) => {
+      waits.push(ms)
+    })).rejects.toThrow('apt-get could not install python3-venv after 3 attempts: sudo apt-get update exited 100')
+    expect(calls).toEqual([UPDATE, UPDATE, UPDATE])
+    expect(waits).toEqual([10_000, 20_000])
+  })
+})
 
 describe('CI install with release downloads blocked', () => {
   async function script(path: string, body: string): Promise<void> {
