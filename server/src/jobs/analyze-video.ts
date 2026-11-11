@@ -18,6 +18,7 @@ import {
 import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { readAssetTranscript } from "../transcript-projection.js";
+import { ensureVideoFrames } from "../video-frames.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import { frameVocabularyFor, MAX_AUTOMATIC_TAGS } from "../tag-vocabulary.js";
@@ -174,7 +175,8 @@ function sampleFrames(frames: string[]): string[] {
   return sampleEvenly(frames, MAX_FRAMES);
 }
 
-async function framePrompt(engine: Engine, assetId: string): Promise<{ parts: OpenAiResponseInputContent[]; count: number }> {
+async function framePrompt(engine: Engine, assetId: string, signal: AbortSignal): Promise<{ parts: OpenAiResponseInputContent[]; count: number }> {
+  await ensureVideoFrames(engine, assetId, signal);
   const listResult = await engine.files.listSubdir(assetId, "original_frames");
   const frameFiles = listResult.ok
     ? listResult.value
@@ -183,7 +185,7 @@ async function framePrompt(engine: Engine, assetId: string): Promise<{ parts: Op
     : [];
   const sampled = sampleFrames(frameFiles);
   if (sampled.length === 0) {
-    throw new Error(`No frames to analyze for ${assetId}; process the video before analyzing it`);
+    throw new Error(`No frames to analyze for ${assetId}; none could be read from its video`);
   }
   const parts: OpenAiResponseInputContent[] = [];
   for (const file of sampled) {
@@ -231,7 +233,7 @@ async function requestVideoAnalysis(
   hasTranscription: boolean,
   signal: AbortSignal,
 ): Promise<{ analysis: Record<string, unknown>; failure: string | null }> {
-  const frames = await framePrompt(engine, assetId);
+  const frames = await framePrompt(engine, assetId, signal);
   const userContent: OpenAiResponseInputContent[] = [
     { type: "input_text", text: await contextPrompt(engine, assetId, hasTranscription, frames.count) },
     ...frames.parts,

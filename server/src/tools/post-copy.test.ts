@@ -1,15 +1,27 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { AddressInfo } from "node:net";
+import { promisify } from "node:util";
+import type { Client } from "@modelcontextprotocol/client";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createEngine } from "videobook-engine";
 import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
+import { createEngineForTest } from "../engine.js";
+import { FFMPEG } from "../ffmpeg.js";
+import { writeRenderedVideo } from "../jobs/_render-output.js";
+import { configureProviderEndpoints } from "../media/endpoints.js";
 import { createPost } from "../posts/post-store.js";
 import { buildPostCopyPrompt, draftPostCopy, postAnalysisTarget, postCopyResponses, readPostCopyContext } from "../posts/post-copy.js";
 import { joinCaptionTags, normalizePostTags, splitCaptionTags } from "../posts/post-copy-format.js";
+import { createTestClient } from "../test-client.js";
+import { testBudget } from "../test-budget.js";
 import { VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
+
+const execFileAsync = promisify(execFile);
 
 function value<T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }): T {
   if (!result.ok) throw new Error(result.error.message);
@@ -166,4 +178,124 @@ describe("draft_post_copy with Astra", () => {
     expect(prompt).toContain("VIDEO ANALYSIS: none available");
     expect(prompt).toContain("under 280 characters");
   });
+});
+
+type ModelPart = { type: string; text?: string; image_url?: string };
+type ModelRequest = { input: Array<{ content: string | ModelPart[] }>; text: { format: { name: string } } };
+
+const RENDER_ANALYSIS = {
+  summary: "A rider in a green shirt waits at a red light on a busy city street.",
+  scenes: [{ timestamp: 0, description: "Rider waits at the light", tags: ["traffic"] }],
+  tags: ["traffic", "red light"],
+  editorialTags: [],
+  mood: "patient",
+  subjects: ["rider"],
+  subjectPlacement: "center",
+  actions: ["waiting"],
+  setting: "city street",
+  textOnScreen: ["ไฟแดงก็จก"],
+  burnedInSubtitles: null,
+  onScreenGraphic: null,
+  recommendedSubtitlePosition: "bottom",
+  recommendedOsgPosition: "top-right",
+};
+
+function modelReply(request: ModelRequest): string {
+  if (request.text.format.name === "video_analysis") return JSON.stringify(RENDER_ANALYSIS);
+  return JSON.stringify({ caption: "ไฟแดงก็จก 🚦", tags: ["fyp", "bkk", "traffic", "redlight"] });
+}
+
+function promptText(request: ModelRequest | undefined): string {
+  const content = request?.input[0]?.content;
+  return typeof content === "string" ? content : "";
+}
+
+function imageParts(request: ModelRequest | undefined): ModelPart[] {
+  const content = request?.input[0]?.content;
+  return Array.isArray(content) ? content.filter((part) => part.type === "input_image") : [];
+}
+
+describe("draft_post_copy for a rendered copy", () => {
+  let tempDir: string;
+  let client: Client;
+  let engine: Engine;
+  let model: Server;
+  let restoreEndpoints: () => void = () => undefined;
+  const captured: ModelRequest[] = [];
+
+  beforeAll(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videobook-post-copy-render-"));
+    client = await createTestClient(tempDir);
+    engine = createEngineForTest(tempDir);
+    model = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as ModelRequest;
+        captured.push(body);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(responsesBody(modelReply(body)));
+      });
+    });
+    await new Promise<void>((resolve) => model.listen(0, "127.0.0.1", resolve));
+    process.env.OPENAI_API_KEY = "offline-openai-key";
+    restoreEndpoints = configureProviderEndpoints({ openaiBaseURL: `http://127.0.0.1:${(model.address() as AddressInfo).port}` });
+  }, testBudget(60_000));
+
+  afterAll(async () => {
+    restoreEndpoints();
+    delete process.env.OPENAI_API_KEY;
+    await new Promise<void>((resolve) => {
+      model.closeAllConnections();
+      model.close(() => resolve());
+    });
+    await client?.close();
+    if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  }, testBudget(60_000));
+
+  async function renderedCopy(): Promise<{ notebookId: string; cellId: string; artifactId: string }> {
+    const clip = join(tempDir, "graphics.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y", "-f", "lavfi", "-i", "color=c=teal:s=360x640:r=24:d=3",
+      "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-an", clip,
+    ]);
+    const artifact = value(await engine.artifacts.create("video", "Red light — Graphics"));
+    await writeRenderedVideo(engine, artifact.artifactId, clip, new AbortController().signal);
+    const notebook = value(await engine.notebooks.create("Clips"));
+    const cell = engine.notebooks.createCell({ type: "video", slot: { row: 0, column: 0 }, outputArtifactId: artifact.artifactId, label: "Red light — Graphics" });
+    value(await engine.notebooks.write({ ...notebook, cells: [cell] }));
+    return { notebookId: notebook.id, cellId: cell.id, artifactId: artifact.artifactId };
+  }
+
+  it("analyzes a render that never went through video processing, then rewrites its copy", async () => {
+    const rendered = await renderedCopy();
+    const before = value(await engine.files.manifest(rendered.artifactId)).files.map((file) => file.name);
+    expect(before.filter((name) => name.startsWith("original_frames/"))).toEqual([]);
+    const post = await createPost(engine, { notebookId: rendered.notebookId, sourceCellId: rendered.cellId, platform: "tiktok" });
+
+    const result = await client.callTool({
+      name: "draft_post_copy",
+      arguments: {
+        book_id: engine.book.get().bookId,
+        post_cell_id: post.id,
+        language: "th",
+        platform: "tiktok",
+        instruction: "add tags",
+        caption: "ไฟแดงก็จก 🚦⚪",
+        tags: ["fyp", "bkk"],
+      },
+    });
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+
+    expect(result.isError === true, text).toBe(false);
+    expect(JSON.parse(text)).toMatchObject({ caption: "ไฟแดงก็จก 🚦", tags: ["fyp", "bkk", "traffic", "redlight"], analyzed: true });
+    const analysisRequest = captured.find((request) => request.text.format.name === "video_analysis");
+    expect(imageParts(analysisRequest).length).toBeGreaterThan(0);
+    expect(imageParts(analysisRequest).every((part) => part.image_url?.startsWith("data:image/jpeg;base64,"))).toBe(true);
+    const copyPrompt = promptText(captured.find((request) => request.text.format.name === "post_copy"));
+    expect(copyPrompt).toContain(RENDER_ANALYSIS.summary);
+    expect(copyPrompt).toContain("INSTRUCTION FROM THE CREATOR: add tags");
+    const after = value(await engine.files.manifest(rendered.artifactId)).files.map((file) => file.name);
+    expect(after.filter((name) => name.startsWith("original_frames/")).length).toBe(imageParts(analysisRequest).length);
+  }, testBudget(60_000));
 });
