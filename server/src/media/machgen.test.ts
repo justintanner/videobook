@@ -124,7 +124,7 @@ describe("MachGen catalog", () => {
     });
     expect(options("machgen:MiniMax-H3-Turbo")).toMatchObject({
       resolution: { enumValues: ["480p", "768p"], defaultValue: "768p" },
-      duration: { minimum: 4, maximum: 15, defaultValue: 12 },
+      duration: { minimum: 1, maximum: 15, defaultValue: 12 },
     });
     expect(options("machgen:MiniMax-H3-Omni")).toMatchObject({
       resolution: { enumValues: ["768p"], defaultValue: "768p" },
@@ -203,7 +203,7 @@ describe("MachGen catalog", () => {
       }
     }
     expect(failures).toEqual([]);
-    expect(accepted).toBe(34_903);
+    expect(accepted).toBe(35_407);
     expect(refused).toEqual(EXPECTED_REFUSALS);
   });
 
@@ -238,6 +238,9 @@ describe("MachGen catalog", () => {
     ["machgen:MiniMax-H3-Turbo", { prompt: "a fast car", refUrls: { first_frame: [FRAME], last_frame: [LAST] } }, {
       model: "MiniMax-H3-Turbo", task_type: "I2V", src_image_urls: [FRAME, LAST],
       video_config: { height: 768, duration_secs: 12, aspect_ratio: "9:16", audio: true },
+    }],
+    ["machgen:MiniMax-H3-Turbo", { prompt: "a quick blink", options: { resolution: "480p", duration: 1 } }, {
+      model: "MiniMax-H3-Turbo", task_type: "T2V", video_config: { height: 480, duration_secs: 1 },
     }],
     ["machgen:MiniMax-H3-Omni", { prompt: "the cat walks in", refUrls: { image: [FRAME], video: [CLIP], audio: [SONG] } }, {
       model: "MiniMax-H3-Omni", task_type: "R2V", src_image_urls: [FRAME], src_video_urls: [CLIP], src_audio_urls: [SONG],
@@ -351,6 +354,7 @@ describe("MachGen catalog", () => {
     ["machgen:HappyHorse-1.1", { prompt: "x", options: { resolution: "1080p", duration: 5 } }, {}, 0.85],
     ["machgen:Grok-Imagine-Video-1.5", { refUrls: { first_frame: [FRAME] }, options: { resolution: "480p", duration: 5 } }, {}, 0.475],
     ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "768p", duration: 10 } }, {}, 0.15],
+    ["machgen:MiniMax-H3-Turbo", { prompt: "x", options: { resolution: "480p", duration: 1 } }, {}, 0.015],
     ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { image: [FRAME] }, options: { duration: 5 } }, {}, 0.1],
     ["machgen:MiniMax-H3-Omni", { prompt: "x", refUrls: { video: [CLIP] }, options: { duration: 5 } }, { inputDurationSeconds: 4 }, 0.18],
     ["machgen:Seedance-2.0-Fast", { prompt: "x", options: { resolution: "720p", duration: 5 } }, {}, 0.6],

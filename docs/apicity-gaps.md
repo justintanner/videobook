@@ -7,7 +7,7 @@ schemas, removed obsolete shims). Where Apicity exposes a correct schema or
 registry entry, Videocity derives the corresponding enum, range, default, string
 length, slot count, model slug, or price instead of re-declaring it.
 
-Videobook now uses Apicity 0.27.2 (2026-11-09). Image, video and audio
+Videobook now uses Apicity 0.27.3 (2026-11-11). Image, video and audio
 generation run through the media catalog in `server/src/media/catalog.ts`: each
 entry names one provider endpoint, and its fields, enums, ranges, defaults and
 prices come from the installed `@apicity/*` zod schemas and `@apicity/cost`.
@@ -946,6 +946,7 @@ packages moved version only.
 | **DECIDED**  | §48 MachGen 0.24.0 edit caps and MiniMax H3 Omni                    | 9-image reference ceiling where an R2V grid has none; hidden H3 Omni entry |
 | **DECIDED**  | §50 WaveSpeed 0.27 reference and edit endpoints                     | Aleph 2 keyframe roles; plain-word references for Gemini Omni, Grok and Kling o3 |
 | **DECIDED**  | §51 MachGen native upload for local Topaz sources                   | owned outputs by task id, other book videos under 32 MiB by `@input/` upload |
+| **DECIDED**  | §54 Apicity 0.27.3 fal additions and frontier refresh               | raster-only GPT Image 2.6 output, markup or mask, 10 s Gemini Omni 1.2 end-frame cap |
 | **RESOLVED** | §3, §11, §22–24, §26, §28, §30–32, §34–35                          | adopted upstream contracts; local workarounds deleted  |
 | **RESOLVED** | §1–2, §4–7, §9–10, §12–13, §19–21, §25, §27, §29              | no local shim                                          |
 | **N/A**      | §33 ElevenLabs MCP metadata                                         | `@apicity/mcp-server` not installed                    |
@@ -1209,3 +1210,68 @@ MachGen's free `POST /api/v0/upscale/quote`, which creates no task (vb-jftuj).
   `server/src/media/machgen.test.ts`; no live quote ran for this change. The
   2026-11-09 acceptance in §51 priced a 2 s 1080p `Topaz-Video-Precision`
   upload source at 149,000 micro-USD, which the fixture reuses.
+
+## 54. (decision) Apicity 0.27.3 fal additions and frontier refresh — DECIDED 2026-11-11
+
+All 17 `@apicity` packages resolve 0.27.3 from npm (vb-4glop). Only
+`@apicity/cost`, `@apicity/fal` and `@apicity/machgen` changed beyond their
+version. Every `FAL_ENDPOINT_REQUEST_SCHEMAS` entry 0.27.2 published converts
+to the same JSON schema in 0.27.3. The 13 new fal endpoints are the only
+schema changes, and all of them are catalog entries.
+
+- The frontier registry now holds the 2026-11-11 boards. Seven gaps left the
+  registry and `FRONTIER_CATALOG_GAPS`: fal Muse Image text-to-image and edit,
+  fal Seedream 5 Pro edit, fal MAI Image 2.5 Pro edit, KIE GPT Image 1.5, KIE
+  Gemini Omni Flash 1.1 and OpenAI GPT Image 1.5. The new rows, GPT Image 2.6
+  Sunburst and Flare (text-to-image #1 and #3, editing #1 and #2) and Gemini
+  Omni Flash 1.2 (text-to-video #6, references #4, video editing #2), map to
+  the new entries, so no gap was added. A `hidden` entry is listed only while
+  it is ranked, so KIE and fal GPT Image 2 edit, fal GPT Image 1.5, KIE
+  Seedream 5 Pro edit and fal Wan 3.0 and 3.0 Prime image-to-video leave the
+  picker again. The Kie Grok Imagine Video 1.5 preview is on no board now.
+- GPT Image 2.6 Sunburst and Flare (`fal:openai/gpt-image-2.6/{sunburst,flare}/{text-to-image,edit}`)
+  are visible, since fal is their only host. Their schemas add GIF and SVG
+  output with `frame_count`, `frame_duration_ms` and `svg_model`. A completed
+  generation is stored under a PNG, JPEG or WebP name
+  (`server/src/media/complete.ts`), so a GIF or SVG would be saved as a PNG.
+  `server/src/media/wire.ts` therefore offers `output_format` as `jpeg`,
+  `png` or `webp` and drops the three animation and vector fields from both
+  the input and the request. `markup_image_url`, a transparent PNG of
+  annotations that guides an edit of the first image, is a field slot labelled
+  Markup next to the mask. Its description says it cannot be combined with
+  `mask_url`, which the apicity schema does not enforce, so Videobook refuses
+  the pair locally. `reasoning_effort` is offered with the schema default
+  `high`. `@apicity/cost` prices these endpoints from fal's token card, which
+  no request field fixes, so they are dynamic: the estimate is fal's
+  historical per-call average when `FAL_ADMIN_API_KEY` is set.
+- Gemini Omni Flash 1.2 (`fal:google/gemini-omni-flash/v1.2/*`) mirrors the
+  v1.1 entries for text, frames, references and edits, with clips of 3-15 s
+  where v1.1 stops at 10. References use the `gemini_omni` markers of §52.
+  The new `extend` entry (`extend_video`) continues a connected video by
+  3-10 s; fal returns the source plus the continuation. The new `upscale`
+  entry (`upscale_video`) takes no prompt and re-renders a video at 720p,
+  1080p or 4K. The image-to-video description caps a clip with an end image at
+  10 s, which the schema does not enforce. Videobook refuses a longer one
+  locally and pins that entry's default duration to 10 s instead of the
+  preferred 12, so a default request with both frames is valid. The
+  descriptions also cap edit and upscale sources and each reference video at
+  15 s; like v1.1 and the WaveSpeed entries (§50), Videobook leaves those
+  limits to fal's validation. All six are dynamic: fal bills seconds of output
+  by resolution plus input tokens that no request field measures.
+- Seedance 2.0 Mini (`fal:bytedance/seedance-2.0/mini/*`) has three visible
+  entries that mirror 2.0 Fast. Its schemas are 2.0 Fast's without
+  `bitrate_mode`, at 480p and 720p. `@apicity/cost` prices text-to-video and
+  image-to-video at $0.007 per 1,000 tokens. It prices reference-to-video
+  only when the references are images alone; a video or audio reference leaves
+  the estimate unpriced with Apicity's warning.
+- MachGen `MiniMax-H3-Turbo` takes 1-15 s, read from `MACHGEN_VIDEO_GRIDS`.
+  The combination sweep now builds 37,191 requests and the guards allow
+  35,407. A 1 s 480p clip prices at 0.015 USD under the promotion of §48.
+  The five custom-LoRA adapter endpoints (reserve, commit, retrieve, list and
+  delete) manage LoRA uploads and are not media generation. Videobook does not
+  call them and sends no `adapter` on generate requests.
+
+Evidence is offline: `server/src/media/fal-0273.test.ts`, `frontier.test.ts`,
+`machgen.test.ts`, `fal-dynamic-cost.test.ts`, `prompt-dialects.test.ts`,
+`tests/v2/generation-field-slots.test.ts`, `tests/v2/generation-frontier.test.ts`
+and the regenerated generation-input goldens. No provider was called.

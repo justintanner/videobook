@@ -206,12 +206,50 @@ function lumaRayInput(request: AnyObject): AnyObject {
   }) as unknown as AnyObject;
 }
 
+const GEMINI_OMNI_12_FRAMES = "google/gemini-omni-flash/v1.2/image-to-video";
+const GEMINI_OMNI_12_END_FRAME_SECONDS = 10;
+
+function geminiOmniFramesInput(request: AnyObject): AnyObject {
+  return request.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (present(record.end_image_url) && Number(record.duration) > GEMINI_OMNI_12_END_FRAME_SECONDS) {
+      ctx.addIssue({ code: "custom", path: ["duration"], message: `at most ${GEMINI_OMNI_12_END_FRAME_SECONDS} seconds with a last frame` });
+    }
+  }) as unknown as AnyObject;
+}
+
+const GPT_IMAGE_26 = "openai/gpt-image-2.6/";
+const GPT_IMAGE_26_ANIMATION_FIELDS = ["frame_count", "frame_duration_ms", "svg_model"];
+const STORED_IMAGE_FORMATS = ["jpeg", "png", "webp"] as const;
+
+function gptImage26Request(request: AnyObject): AnyObject {
+  return omitShape(request, GPT_IMAGE_26_ANIMATION_FIELDS).extend({
+    output_format: z.enum(STORED_IMAGE_FORMATS).default("png").describe("Output format for the images"),
+  });
+}
+
+function markupWithoutMask(request: AnyObject): AnyObject {
+  if (!("markup_image_url" in request.shape)) return request;
+  return request.superRefine((value, ctx) => {
+    const record = value as Record<string, unknown>;
+    if (present(record.markup_image_url) && present(record.mask_url)) {
+      ctx.addIssue({ code: "custom", path: ["markup_image_url"], message: "can't be combined with a mask" });
+    }
+  }) as unknown as AnyObject;
+}
+
+function falInput(apiId: string, request: AnyObject): AnyObject {
+  if (LUMA_RAY_32.has(apiId)) return lumaRayInput(request);
+  if (apiId === GEMINI_OMNI_12_FRAMES) return geminiOmniFramesInput(request);
+  return apiId.startsWith(GPT_IMAGE_26) ? markupWithoutMask(request) : request;
+}
+
 function falWire(apiId: string): WireSpec | null {
   const schemas = FAL_ENDPOINT_REQUEST_SCHEMAS as unknown as Record<string, ZodType | undefined>;
-  const request = schemas[apiId];
-  if (!request || !objectShape(request)) return null;
-  const input = LUMA_RAY_32.has(apiId) ? lumaRayInput(request as unknown as AnyObject) : request as unknown as AnyObject;
-  return { input, fixed: {}, wrap: identity, request };
+  const schema = schemas[apiId];
+  if (!schema || !objectShape(schema)) return null;
+  const request = apiId.startsWith(GPT_IMAGE_26) ? gptImage26Request(schema as unknown as AnyObject) : schema as unknown as AnyObject;
+  return { input: falInput(apiId, request), fixed: {}, wrap: identity, request };
 }
 
 export function isXaiImageModel(apiId: string): boolean {

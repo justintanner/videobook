@@ -20,10 +20,16 @@ const DYNAMIC_MODELS = [
   "fal:mirelo-ai/sfx2.0/video-to-video",
   "fal:bytedance/seedance-2.5/us/image-to-video",
   "fal:minimax/h3-max/reframe-video",
+  "fal:openai/gpt-image-2.6/sunburst/text-to-image",
+  "fal:openai/gpt-image-2.6/flare/edit",
+  "fal:google/gemini-omni-flash/v1.2/text-to-video",
+  "fal:google/gemini-omni-flash/v1.2/extend",
+  "fal:google/gemini-omni-flash/v1.2/upscale",
 ] as const;
 
 const FORMULA_GAPS = [
   "fal:bytedance/seedance-2.0/us/reference-to-video",
+  "fal:bytedance/seedance-2.0/mini/reference-to-video",
   "fal:bytedance/seedance-2.5/draft/complete",
 ] as const;
 

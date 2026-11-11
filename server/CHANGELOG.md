@@ -6,6 +6,37 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- fal GPT Image 2.6 Sunburst and Flare, for text-to-image and edits. Edits
+  take up to 16 images plus either a mask or a markup image, a transparent PNG
+  of circles, arrows and notes connected to the new Markup input. A mask and a
+  markup image cannot be combined. Output is PNG, JPEG or WebP; the GIF and
+  SVG formats these endpoints also offer are left out because a book image is
+  stored as one of those three.
+- fal Gemini Omni 1.2 Flash for text, frames, references, edits, extensions
+  and upscales. Clips run up to 15 seconds. Frames with a last frame stop at
+  10 seconds, which is the default length there. Extend continues a connected
+  video by 3-10 seconds, and upscale re-renders one at 720p, 1080p or 4K.
+- fal Seedance 2.0 Mini for text, frames and references at 480p and 720p,
+  priced from the @apicity/cost token formula at $0.007 per 1,000 tokens.
+  References that include a video or audio clip have no published price yet,
+  so their estimate stays unpriced and says why.
+
+### Changed
+
+- Every @apicity package moves to 0.27.3.
+- MachGen MiniMax H3 Turbo takes 1-15 second clips; it used to start at 4.
+- The model pickers rank by the 2026-11-11 top-10 boards. GPT Image 2.6 leads
+  both image boards, Gemini Omni 1.2 Flash is ranked for text-to-video,
+  references and video edits, and HeyGen Video image-to-video is now ranked.
+  The Kie Grok Imagine Video 1.5 preview moves to the unranked group. Hidden
+  models are listed only while they are on a board, so KIE and fal GPT Image 2
+  Edit, fal GPT Image 1.5, KIE Seedream 5 Pro Edit and fal Wan 3.0 and Wan 3.0
+  Prime image-to-video leave the picker again. They can still be called by id.
+  GPT Image 2.6, Gemini Omni 1.2 Flash and the other dynamically priced fal
+  models use fal's historical per-call average when `FAL_ADMIN_API_KEY` is set.
+
 ## [0.6.1] - 2026-11-11
 
 ### Changed

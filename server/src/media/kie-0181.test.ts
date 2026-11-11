@@ -167,9 +167,8 @@ describe("kie 0.18.1 video catalog", () => {
       .toBe("Loop past with reference image 1");
   });
 
-  it("ranks only the Grok preview; Kling 4.0, PixVerse V6 Max and OmniHuman 2.0 are not on a frontier board", () => {
-    expect(modelFrontierRankings("kie:grok-imagine-video-1-5-preview")).toEqual([expect.objectContaining({ type: "i2v", rank: 9, elo: 1067 })]);
-    for (const apiId of ["kling-4.0/reference-to-video", "kling-4.0/keyframe-to-video", "pixverse-v6-max/text-to-video", "pixverse-v6-max/image-to-video", "omnihuman-2-0"]) {
+  it("keeps the Grok preview, Kling 4.0, PixVerse V6 Max and OmniHuman 2.0 off the 2026-11-11 frontier boards", () => {
+    for (const apiId of ["grok-imagine-video-1-5-preview", "kling-4.0/reference-to-video", "kling-4.0/keyframe-to-video", "pixverse-v6-max/text-to-video", "pixverse-v6-max/image-to-video", "omnihuman-2-0"]) {
       expect(modelFrontierRankings(`kie:${apiId}`), apiId).toEqual([]);
     }
   });

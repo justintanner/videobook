@@ -13,12 +13,14 @@ const actions = asNotebookGenerationActions({ actions: listNotebookActions() })
 const nano = actions.find(action => action.model === 'kie:nano-banana-2-1')!
 const sunburst = actions.find(action => action.model === 'kie:gpt-image-2-5-sunburst-text-to-image')!
 const flare = actions.find(action => action.model === 'kie:gpt-image-2-5-flare-text-to-image')!
+const sunburst26 = actions.find(action => action.model === 'fal:openai/gpt-image-2.6/sunburst/text-to-image')!
 
 describe('frontier model picker', () => {
   it('ranks configured models while retaining other model order and default selection', () => {
     const groups = frontierPickerGroups(actions, 't2i')
     const ranked = groups[0]!.rows
-    expect(ranked[0]!.action.id).toBe(sunburst.id)
+    expect(ranked[0]!.action.id).toBe(sunburst26.id)
+    expect(ranked[0]!.ranking).toMatchObject({ type: 't2i', rank: 1 })
     expect(ranked.map(row => row.ranking!.rank)).toEqual(ranked.map(row => row.ranking!.rank).sort((a, b) => a - b))
     expect(groups[1]!.rows.map(row => row.action)).toEqual(actions.filter(action => !action.frontier?.some(row => row.type === 't2i')))
     expect(initialGenerationSelection({ type: 'generate_image' }, actions)?.model).toBe(nano.model)
@@ -36,19 +38,21 @@ describe('frontier model picker', () => {
     }
   })
 
-  it('ranks the Kie Grok 1.5 preview and keeps the apicity 0.18.1 Kie video models in the other group', () => {
+  it('ranks Kie MiniMax H3 on the image-to-video board and keeps the Grok 1.5 preview and the apicity 0.18.1 Kie video models in the other group', () => {
     const videoActions = asNotebookGenerationActions({ actions: listNotebookActions() })
       .filter(action => action.cellTypes.includes('generate_video'))
       .map(action => ({ ...action, available: true }))
     const [ranked, other] = frontierPickerGroups(videoActions, 'i2v')
-    expect(ranked!.rows.find(row => row.action.model === 'kie:grok-imagine-video-1-5-preview')?.ranking).toMatchObject({ type: 'i2v', rank: 9 })
-    for (const model of ['kling-4.0/reference-to-video', 'kling-4.0/keyframe-to-video', 'pixverse-v6-max/text-to-video', 'pixverse-v6-max/image-to-video', 'omnihuman-2-0']) {
+    expect(ranked!.rows.find(row => row.action.model === 'kie:minimax-h3/image-to-video')?.ranking).toMatchObject({ type: 'i2v', rank: 4 })
+    for (const model of ['grok-imagine-video-1-5-preview', 'kling-4.0/reference-to-video', 'kling-4.0/keyframe-to-video', 'pixverse-v6-max/text-to-video', 'pixverse-v6-max/image-to-video', 'omnihuman-2-0']) {
       expect(other!.rows.some(row => row.action.model === `kie:${model}`), model).toBe(true)
     }
     const choices = videoActions.map(action => ({ value: action.model, label: action.title, available: true, frontier: action.frontier }))
     for (const refs of [{ loop: ['@a1'] }, { keyframe: ['@a1', '@a2'] }]) {
-      expect(generationModelChoices(choices, 'video', { refs }).find(choice => choice.value === 'kie:grok-imagine-video-1-5-preview'))
-        .toMatchObject({ group: 'Frontier models', label: expect.stringMatching(/^#9 · /u) })
+      const picked = generationModelChoices(choices, 'video', { refs })
+      expect(picked.find(choice => choice.value === 'kie:minimax-h3/image-to-video'))
+        .toMatchObject({ group: 'Frontier models', label: expect.stringMatching(/^#4 · /u) })
+      expect(picked.find(choice => choice.value === 'kie:grok-imagine-video-1-5-preview')).toMatchObject({ group: 'Other models' })
     }
   })
 
@@ -105,7 +109,7 @@ describe('frontier model picker', () => {
     expect(html).toContain('optgroup label="Frontier models"')
     expect(html).toContain('optgroup label="Other models"')
     expect(html).toContain('Unavailable · provider not configured')
-    expect(html).toContain('Elo 1207')
+    expect(html).toContain('Elo 1210')
     expect(html).toContain('0.03-0.08 USD/image')
     expect(html).toContain(`value="${nano.id}" selected=""`)
     expect(html).toContain(`value="${sunburst.id}" disabled=""`)

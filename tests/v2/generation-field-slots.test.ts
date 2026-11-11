@@ -27,6 +27,10 @@ const INVENTORY = [
   'fal:minimax/h3-max/text-to-video slot:target_audio_url audio 1',
   'fal:minimax/h3/image-to-video/lora slot:target_audio_url audio 1',
   'fal:minimax/h3/text-to-video/lora slot:target_audio_url audio 1',
+  'fal:openai/gpt-image-2.6/flare/edit slot:markup_image_url image 1',
+  'fal:openai/gpt-image-2.6/flare/edit slot:mask_url image 1',
+  'fal:openai/gpt-image-2.6/sunburst/edit slot:markup_image_url image 1',
+  'fal:openai/gpt-image-2.6/sunburst/edit slot:mask_url image 1',
   'fal:openai/gpt-image-2/edit slot:mask_url image 1',
   'kie:omnihuman-1-5 slot:mask_url image 5',
   'kie:qwen2-1/image-to-image slot:mask_url image 1',
@@ -51,6 +55,19 @@ describe('field slots for request fields without a role', () => {
     expect((preview.preview.payload as { input: { mask_url: string } }).input.mask_url).toBe('http://url.resolved.later.for/art-mask')
     const unknown = previewGeneration({ model: model.id, prompt: 'Swap the sky', refs: { image: ['art-photo'] }, field_refs: { target_audio_url: ['art-voice'] } })
     expect(unknown.ok ? null : unknown.error).toContain('has no target_audio_url input')
+  })
+
+  it('offers GPT Image 2.6 edits a markup slot beside the mask and refuses both together', () => {
+    const model = resolveModel('fal:openai/gpt-image-2.6/sunburst/edit')
+    for (const mode of notebookGenerationInputContract(model).modes) {
+      expect(mode.inputs.find((input) => input.target === 'slot:markup_image_url')).toMatchObject({ label: 'Markup', kind: 'image', token: null })
+    }
+    expect(controlsForModel(model).find((control) => control.name === 'markup_image_url')?.hidden).toBe(true)
+    const preview = previewGeneration({ model: model.id, prompt: 'Follow the arrows', refs: { image: ['art-photo'] }, field_refs: { markup_image_url: ['art-notes'] } })
+    if (!preview.ok) throw new Error(preview.error)
+    expect((preview.preview.payload as { input: { markup_image_url: string } }).input.markup_image_url).toBe('http://url.resolved.later.for/art-notes')
+    const both = previewGeneration({ model: model.id, prompt: 'Follow the arrows', refs: { image: ['art-photo'] }, field_refs: { markup_image_url: ['art-notes'], mask_url: ['art-mask'] } })
+    expect(both.ok ? null : both.error).toContain("can't be combined with a mask")
   })
 })
 

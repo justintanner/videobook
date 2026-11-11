@@ -47,7 +47,7 @@ describe("prompt dialects", () => {
   it("binds Gemini Omni, Grok 1.5 and Kling o3 references with each host's documented markers", () => {
     const refs = { image: [IMG_ID, IMG_ID_2], video: [VID_ID] };
     const prompt = "dress @video1 like @image2 and @image1";
-    for (const model of ["fal:google/gemini-omni-flash/v1.1/reference-to-video", "wavespeed:google/gemini-omni-1.1-flash/reference-to-video"]) {
+    for (const model of ["fal:google/gemini-omni-flash/v1.1/reference-to-video", "fal:google/gemini-omni-flash/v1.2/reference-to-video", "wavespeed:google/gemini-omni-1.1-flash/reference-to-video"]) {
       expect(forModel(model, prompt, refs), model).toBe("dress <VIDEO_REF_0> like <IMAGE_REF_1> and <IMAGE_REF_0>");
     }
     expect(forModel("fal:google/gemini-omni-flash/reference-to-video", "@image1 waves", { image: [IMG_ID] })).toBe("<IMAGE_REF_0> waves");
