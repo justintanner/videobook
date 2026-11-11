@@ -279,7 +279,8 @@ describe('graphics editor in the composer', () => {
     await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
     const fresh = await read()
     expect(fresh.saved).toBe(false)
-    expect(fresh.document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
+    expect(fresh.document.layers.map((layer) => layer.name)).toEqual(['Shade', 'Title'])
+    expect(fresh.document.layers[1]!.items?.map((item) => item.slot)).toEqual(['handle', 'headline', 'secondary'])
     expect(slotText(fresh, 'handle')).toBeTruthy()
     expect(slotText(fresh, 'headline')).toBe('')
     const stage = sheet().locator('.graphics-stage')
@@ -311,6 +312,68 @@ describe('graphics editor in the composer', () => {
     expect(await field('Headline').inputValue()).toBe(THAI_TITLE)
     await field('Second line').fill(ENGLISH_LINE)
     await saved()
+    expect(errors).toEqual([])
+  })
+
+  it('fits one header row over the preview, quick text, inspector and a timeline that scrubs and trims, with the handle in the Credit field', async () => {
+    await expect.poll(() => field('Headline').inputValue()).toBe(THAI_TITLE)
+    expect(await page.locator('.command-composer-dock-bar').isVisible()).toBe(false)
+    expect(await sheet().locator('.confirm-sheet-foot').count()).toBe(0)
+    expect((await sheet().locator('.confirm-sheet-head').boundingBox())!.height).toBeLessThanOrEqual(41)
+    expect((await sheet().boundingBox())!.height).toBeLessThanOrEqual(480)
+
+    const preview = (await sheet().locator('.graphics-preview').boundingBox())!
+    const controls = (await sheet().locator('.graphics-controls').boundingBox())!
+    for (const name of ['Play', 'Mute preview']) {
+      const button = (await sheet().getByRole('button', { name, exact: true }).boundingBox())!
+      expect(button.x).toBeGreaterThanOrEqual(preview.x - 0.5)
+      expect(button.x + button.width).toBeLessThanOrEqual(preview.x + preview.width + 0.5)
+    }
+    expect(controls.x).toBeGreaterThanOrEqual(preview.x + preview.width)
+    expect(await sheet().getByLabel('Playback position', { exact: true }).count()).toBe(1)
+
+    const handle = slotText(await read(), 'handle')!
+    expect(await field('Credit').inputValue()).toBe(handle)
+    await field('Credit').focus()
+    const layers = sheet().getByRole('region', { name: 'Layers' })
+    expect(await layers.getByRole('button', { name: 'Select layer Title', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await sheet().locator('.graphics-item-box[data-slot="handle"][data-active="true"]').count()).toBe(1)
+    await field('Credit').fill('pomkondee')
+    await saved()
+    expect(slotText(await read(), 'handle')).toBe('pomkondee')
+    await sheet().getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => field('Credit').inputValue()).toBe(handle)
+
+    for (const column of ['.confirm-sheet-body', '.graphics-controls', '.graphics-quick', '.graphics-side', '.graphics-layers']) {
+      const overflow = await sheet().locator(column).evaluate((node) => node.scrollHeight - node.clientHeight)
+      expect(overflow, `${column} scrolls`).toBeLessThanOrEqual(1)
+    }
+    const titleId = (await layerBox('Title').getAttribute('data-layer-id'))!
+    const bar = sheet().locator(`.graphics-timing-row[data-layer-id="${titleId}"]`)
+    expect(await bar.getAttribute('data-window')).toBe(`0,${DURATION}`)
+    const track = (await bar.boundingBox())!
+    expect(track.height).toBeGreaterThanOrEqual(24)
+    expect(track.width).toBeGreaterThan(500)
+    const grip = (await sheet().locator('.graphics-trim-handle[data-bound="end"]').boundingBox())!
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(track.x + (track.width * 2) / DURATION, grip.y + grip.height / 2, { steps: 8 })
+    await page.mouse.up()
+    await expect.poll(async () => Number((await bar.getAttribute('data-window'))?.split(',')[1]), { timeout: testBudget(15_000) }).toBeCloseTo(2, 1)
+    await saved()
+    const trimmed = (await read()).document.layers.find((layer) => layer.id === titleId) as Layer & { timing?: { start: number | null; end: number | null; tail: number | null } }
+    expect(trimmed.timing).toMatchObject({ start: null, tail: null })
+    expect(trimmed.timing?.end).toBeCloseTo(2, 1)
+    await sheet().getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect.poll(() => bar.getAttribute('data-window'), { timeout: testBudget(15_000) }).toBe(`0,${DURATION}`)
+
+    const seek = sheet().getByLabel('Playback position', { exact: true })
+    await seek.fill('45')
+    await expect.poll(() => sheet().locator('.graphics-time').textContent(), { timeout: testBudget(15_000) }).toContain('0:01.50')
+    await seek.fill('0')
+    await expect.poll(() => sheet().locator('.graphics-time').textContent(), { timeout: testBudget(15_000) }).toContain('0:00.00')
+    await saved()
+    await shot('graphics-compact')
     expect(errors).toEqual([])
   })
 
@@ -385,7 +448,7 @@ describe('graphics editor in the composer', () => {
     await expect.poll(async () => (await read(secondId)).burned?.output ?? null, { timeout: testBudget(180_000) }).toBe('replace')
     await expect.poll(async () => (await read(secondId)).source.source_hash, { timeout: testBudget(60_000) }).not.toBe(before)
     expect((await read(secondId)).saved).toBe(false)
-    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(8)
+    expect((await call<NotebookWire>('get_notebook', { notebook_id: notebookId })).cells).toHaveLength(10)
     expect(errors).toEqual([])
   })
 
@@ -426,11 +489,12 @@ describe('graphics editor in the composer', () => {
     await command('/osg @a3')
     await sheet().waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
-    expect((await read(thirdId)).document.layers.map((entry) => entry.name)).toEqual(['Shade', 'Title', 'Handle'])
+    expect((await read(thirdId)).document.layers.map((entry) => entry.name)).toEqual(['Shade', 'Title'])
+    const section = (name: string) => sheet().getByRole('group', { name: 'Inspector section', exact: true }).getByRole('button', { name, exact: true })
 
-    await layers.getByRole('button', { name: 'Select layer Handle', exact: true }).click()
-    await layers.getByRole('button', { name: 'Delete Handle', exact: true }).click()
     await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    expect(await sheet().getByRole('button', { name: 'Edit item 1, Handle', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await sheet().getByRole('button', { name: 'Remove item', exact: true }).click()
     await sheet().getByLabel('Item text', { exact: true }).fill('How can you look this cool while waiting at a red light?')
     await sheet().getByRole('button', { name: 'Edit item 2, Second line', exact: true }).click()
     await sheet().getByLabel('Item text', { exact: true }).fill(THAI_TITLE)
@@ -461,6 +525,8 @@ describe('graphics editor in the composer', () => {
     await shot('graphics-reference-frame')
 
     await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    expect(await sheet().getByRole('group', { name: 'Align', exact: true }).count()).toBe(0)
+    await section('Block').click()
     await sheet().getByRole('group', { name: 'Align', exact: true }).getByRole('button', { name: 'Center', exact: true }).click()
     await expect.poll(async () => (await itemBox('credit')).x).toBeGreaterThan(credit.x)
     await saved()
@@ -597,13 +663,17 @@ describe('graphics editor in the composer', () => {
 
   it('drags a layer to where the pointer goes on 9:16, 1:1 and 16:9 videos, one undo step per drag, and keeps it after a reload', async () => {
     const cases = [
-      { address: '@a1', assetId: sourceId, size: PORTRAIT, layer: 'Image' },
-      { address: '@a4', assetId: squareId, size: SQUARE, layer: 'Handle' },
-      { address: '@a5', assetId: wideId, size: WIDE, layer: 'Handle' },
+      { address: '@a1', assetId: sourceId, size: PORTRAIT, layer: 'Image', add: false },
+      { address: '@a4', assetId: squareId, size: SQUARE, layer: 'Text', add: true },
+      { address: '@a5', assetId: wideId, size: WIDE, layer: 'Title', add: false },
     ]
     const placed: Array<{ address: string; layerId: string; box: Box }> = []
     for (const entry of cases) {
       await openEditor(entry.address)
+      if (entry.add) {
+        await sheet().getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Add text layer', exact: true }).click()
+        await saved()
+      }
       const locator = layerBox(entry.layer)
       const before = await shownBox(locator)
       const layerId = (await locator.getAttribute('data-layer-id'))!
@@ -639,7 +709,7 @@ describe('graphics editor in the composer', () => {
 
   it('snaps to the centre line near it unless Alt is held, resizes with handles and nudges from the keyboard, each one undo step', async () => {
     await openEditor('@a4')
-    const handle = layerBox('Handle')
+    const handle = layerBox('Text')
     await shownBox(handle)
     const near = { x: SQUARE.width / 2 + 5, y: Math.round(SQUARE.height * 0.3) }
     const snapped = await dragLayerTo(handle, SQUARE, near, false)
@@ -718,8 +788,8 @@ describe('graphics editor in the composer', () => {
     await openEditor('@a5')
     await field('Headline').fill('Late title')
     const layers = sheet().getByRole('region', { name: 'Layers' })
-    await layers.getByRole('button', { name: 'Hide Handle', exact: true }).click()
     await layers.getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    await sheet().getByRole('group', { name: 'Inspector section', exact: true }).getByRole('button', { name: 'Timing', exact: true }).click()
     const timing = sheet().getByRole('region', { name: 'Timing' })
     await timing.getByRole('group', { name: 'Show', exact: true }).getByRole('button', { name: 'Last', exact: true }).click()
     await expect.poll(() => timing.getByLabel('Last seconds', { exact: true }).inputValue(), { timeout: testBudget(15_000) }).toBe('3')
@@ -777,7 +847,7 @@ describe('graphics editor in the composer', () => {
       const controls = (await editor.locator('.graphics-controls').boundingBox())!
       expect(controls.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1)
       expect(controls.height).toBeGreaterThan(200)
-      const locator = editor.locator('.graphics-layer-box[aria-label="Select Handle"]')
+      const locator = editor.locator('.graphics-layer-box[aria-label="Select Text"]')
       await expect.poll(async () => parseBox(await locator.getAttribute('data-box')).width, { timeout: testBudget(15_000) }).toBeGreaterThan(0)
       await locator.scrollIntoViewIfNeeded()
       const before = parseBox(await locator.getAttribute('data-box'))
@@ -858,6 +928,7 @@ describe('graphics editor in the composer', () => {
     expect(image.artifactId).not.toBe(kitLogoId)
     expect(copied.images[image.artifactId!]?.url).toMatch(new RegExp(`^/files/${bookId}/${image.artifactId}/`))
     await close()
+    expect(await call('video_graphics', { asset_id: secondId, op: 'set_default_template', template_id: null })).toMatchObject({ default_template_id: 'tiktok-title' })
     expect(errors).toEqual([])
   })
 
@@ -1068,6 +1139,7 @@ describe('graphics editor in the composer', () => {
     const titleWarning = sheet().getByRole('region', { name: 'Layers', exact: true }).getByRole('note', { name: 'Title: Covers a face', exact: true })
     const inspector = () => sheet().getByRole('group', { name: 'Text layer Title', exact: true })
     const clearSpot = () => inspector().getByRole('group', { name: 'Clear spot', exact: true })
+    const placeTab = () => inspector().getByRole('group', { name: 'Inspector section', exact: true }).getByRole('button', { name: 'Place', exact: true })
     const titleLayer = async (assetId: string) => (await read(assetId)).document.layers.find((layer) => layer.name === 'Title')
     expect(placements).toEqual([])
     await command('/osg @d7')
@@ -1078,6 +1150,7 @@ describe('graphics editor in the composer', () => {
     await saved()
     await expect.poll(() => titleWarning.count(), { timeout: testBudget(15_000) }).toBe(1)
     await sheet().getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    await placeTab().click()
     expect(await inspector().textContent()).toContain('Covers a face while it is shown.')
     expect(await inspector().textContent()).not.toContain('paid model call')
     await shot('graphics-placement-warning')
@@ -1100,6 +1173,7 @@ describe('graphics editor in the composer', () => {
     await sheet().waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
     await sheet().getByRole('button', { name: 'Select layer Title', exact: true }).click()
+    await placeTab().click()
     expect(await inspector().textContent()).toContain('Checks 3 frames for faces and on-screen text first, a paid model call.')
     const before = (await titleLayer(suggestId))?.position
     await inspector().getByRole('button', { name: 'Find clear spot', exact: true }).click()

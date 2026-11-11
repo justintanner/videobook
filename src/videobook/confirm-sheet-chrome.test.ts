@@ -28,6 +28,16 @@ describe('where a confirm sheet keeps its shortcut hints', () => {
     expect(confirmSheetHintsInHeader(chrome({ hasSecondaryActions: true }))).toBe(false)
   })
 
+  it('drops the ready footer and the hints for a sheet that keeps its actions in the header', () => {
+    const inHeader = chrome({ hasHeaderActions: true })
+    expect(confirmSheetHintsInHeader(inHeader)).toBe(false)
+    expect(confirmSheetFooterVisible(inHeader)).toBe(false)
+    expect(confirmSheetFooterVisible(chrome({ hasHeaderActions: true, wideEnough: false }))).toBe(false)
+    for (const state of ['blocking', 'failed', 'busy', 'notice', 'info'] as const) {
+      expect(confirmSheetFooterVisible(chrome({ hasHeaderActions: true, state }))).toBe(true)
+    }
+  })
+
   it('keeps the footer where the header has no room for the hints', () => {
     expect(confirmSheetHintsInHeader(chrome({ wideEnough: false }))).toBe(false)
     expect(confirmSheetFooterVisible(chrome({ wideEnough: false }))).toBe(true)

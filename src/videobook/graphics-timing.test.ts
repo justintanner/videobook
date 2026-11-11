@@ -5,12 +5,14 @@ import { graphicsStillGroups } from '../../server/src/graphics/stills'
 import { layerOpacityAt, resolveLayerTiming } from '../../server/src/graphics/timing'
 import {
   graphicsFadeSeconds,
+  graphicsRuler,
   graphicsTimingBar,
   graphicsTimingMode,
   graphicsTimingPreset,
   graphicsTimingRows,
   graphicsTimingSpan,
   graphicsTimingSummary,
+  graphicsTimingTrim,
   graphicsTimingWithBound,
   graphicsTimingWithSpan,
 } from './graphics-timing'
@@ -111,5 +113,77 @@ describe('timing strip', () => {
     expect(graphicsTimingSummary(WHOLE, 8)).toBe('Shows 0–8 s of 8 s')
     expect(graphicsTimingSummary({ ...WHOLE, start: 1.25, end: 5, fade: 0.3 }, 8)).toBe('Shows 1.25–5 s of 8 s · fades in 0.3 s · fades out 0.3 s')
     expect(graphicsTimingSummary({ ...WHOLE, start: 6, end: 3 }, 8)).toBe('Never shows: the window is empty.')
+  })
+})
+
+describe('graphicsTimingTrim', () => {
+  it('pulls the end of a whole-clip layer in and lets it go back to the clip end', () => {
+    expect(graphicsTimingTrim(WHOLE, 'end', 3.004, 8)).toEqual({ ...WHOLE, end: 3 })
+    expect(graphicsTimingMode(graphicsTimingTrim(WHOLE, 'end', 3, 8))).toBe('first')
+    expect(graphicsTimingTrim({ ...WHOLE, end: 3 }, 'end', 7.999, 8)).toEqual(WHOLE)
+    expect(graphicsTimingTrim({ ...WHOLE, end: 3 }, 'end', 12, 8)).toEqual(WHOLE)
+  })
+
+  it('pushes the start in as a custom window and lets it go back to the clip start', () => {
+    expect(graphicsTimingTrim(WHOLE, 'start', 2.5, 8)).toEqual({ ...WHOLE, start: 2.5 })
+    expect(graphicsTimingTrim({ ...WHOLE, end: 6 }, 'start', 1.237, 8)).toEqual({ ...WHOLE, start: 1.24, end: 6 })
+    expect(graphicsTimingTrim({ ...WHOLE, start: 2.5, end: 6 }, 'start', -1, 8)).toEqual({ ...WHOLE, end: 6 })
+    expect(graphicsTimingMode(graphicsTimingTrim({ ...WHOLE, start: 2.5 }, 'start', 0, 8))).toBe('whole')
+  })
+
+  it('keeps a last-seconds layer counted from the clip end while its start moves', () => {
+    const last = { ...WHOLE, tail: 3, fade: 0.3 }
+    expect(graphicsTimingTrim(last, 'start', 6, 8)).toEqual({ ...last, tail: 2 })
+    expect(graphicsTimingTrim(last, 'start', 0, 8)).toEqual({ ...last, tail: 8 })
+    expect(graphicsTimingTrim(last, 'end', 8, 8)).toBe(last)
+    expect(graphicsTimingTrim(last, 'end', 7, 8)).toEqual({ ...WHOLE, start: 5, end: 7, fade: 0.3 })
+  })
+
+  it('never lets the two ends cross or leave the clip', () => {
+    const window = { ...WHOLE, start: 2, end: 4 }
+    expect(graphicsTimingTrim(window, 'start', 7, 8)).toEqual({ ...WHOLE, start: 3.9, end: 4 })
+    expect(graphicsTimingTrim(window, 'end', 0, 8)).toEqual({ ...WHOLE, start: 2, end: 2.1 })
+    expect(resolveLayerTiming(graphicsTimingTrim(window, 'end', 0, 8), 8)).toMatchObject({ start: 2, end: 2.1 })
+  })
+
+  it('hands back the same timing while the pointer has not moved an edge', () => {
+    const first = { ...WHOLE, end: 3 }
+    expect(graphicsTimingTrim(first, 'end', 3.002, 8)).toBe(first)
+    expect(graphicsTimingTrim(first, 'start', 0, 8)).toBe(first)
+    expect(graphicsTimingTrim(WHOLE, 'end', 8, 8)).toBe(WHOLE)
+    const window = { ...WHOLE, start: 2, end: 4 }
+    expect(graphicsTimingTrim(window, 'start', 2.004, 8)).toBe(window)
+  })
+
+  it('leaves a layer that never shows, or a pointer that is nowhere, alone', () => {
+    const never = { ...WHOLE, start: 9 }
+    expect(graphicsTimingTrim(never, 'end', 3, 8)).toBe(never)
+    expect(graphicsTimingTrim(WHOLE, 'end', Number.NaN, 8)).toBe(WHOLE)
+    expect(graphicsTimingTrim(WHOLE, 'end', 3, 0)).toBe(WHOLE)
+  })
+})
+
+describe('graphicsRuler', () => {
+  it('labels at most eight marks and ticks between them', () => {
+    const short = graphicsRuler(3)
+    expect(short.marks.map((mark) => mark.label)).toEqual(['0:00', '0:01', '0:02', '0:03'])
+    expect(short.marks.map((mark) => mark.at)).toEqual([0, 1 / 3, 2 / 3, 1])
+    expect(short.tick).toBeCloseTo(0.5 / 3)
+    const clip = graphicsRuler(15.08)
+    expect(clip.marks.map((mark) => mark.seconds)).toEqual([0, 2, 4, 6, 8, 10, 12, 14])
+    expect(clip.tick).toBeCloseTo(1 / 15.08)
+    expect(clip.marks.at(-1)?.at).toBeCloseTo(14 / 15.08)
+  })
+
+  it('widens the step for long clips and reads minutes', () => {
+    const long = graphicsRuler(150)
+    expect(long.marks.map((mark) => mark.label)).toEqual(['0:00', '0:30', '1:00', '1:30', '2:00', '2:30'])
+    expect(long.tick).toBeCloseTo(6 / 150)
+    expect(graphicsRuler(7200).marks.length).toBeLessThanOrEqual(9)
+  })
+
+  it('draws nothing for a clip without a duration', () => {
+    expect(graphicsRuler(0)).toEqual({ tick: 0, marks: [] })
+    expect(graphicsRuler(Number.NaN)).toEqual({ tick: 0, marks: [] })
   })
 })

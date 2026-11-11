@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactN
 import type { PlayerRef } from '@remotion/player'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
+import type { GraphicsTextSlot } from '../../../../server/src/graphics/model'
 import { graphicsAvoidBoxes } from '../../../../server/src/graphics/placement'
 import type { GraphicsSuggestKind, GraphicsSuggestLanguage } from '../../../../server/src/graphics/slots'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
@@ -16,15 +17,17 @@ import {
   graphicsNextLayerId,
   graphicsOverlayImages,
   graphicsSelectionAfterRemove,
+  graphicsSlotHolder,
   type GraphicsEditorAsset,
   type GraphicsEditorMention,
   type GraphicsTemplateChoice,
 } from '@/videobook/graphics-model'
 import { graphicsNudgePosition, graphicsShortcut, type GraphicsPoint } from '@/videobook/graphics-pointer'
-import { GraphicsInspector } from './GraphicsInspector'
+import { GraphicsInspector, type GraphicsInspectorTab } from './GraphicsInspector'
 import { GraphicsLayers } from './GraphicsLayers'
 import { GraphicsPreview } from './GraphicsPreview'
 import { GraphicsQuickFields, GraphicsWarnings } from './GraphicsQuickFields'
+import { GraphicsSuggestionTray } from './GraphicsSuggestions'
 import { GraphicsTemplates } from './GraphicsTemplates'
 import { GraphicsWatermark } from './GraphicsWatermark'
 import './Graphics.css'
@@ -84,6 +87,8 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const nudges = useRef(0)
   const [layout, setLayout] = useState<GraphicsLayerLayout[] | null>(null)
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
+  const [activeSlot, setActiveSlot] = useState<GraphicsTextSlot | null>(null)
+  const [inspectorTab, setInspectorTab] = useState<GraphicsInspectorTab | null>(null)
   const [guides, setGuides] = useState(true)
   const [snapping, setSnapping] = useState(true)
   const read = state.read
@@ -112,6 +117,14 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   }, [editor])
   const suggest = useCallback((kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => {
     void editor.suggest(kind, language)
+  }, [editor])
+  const focusSlot = useCallback((slot: GraphicsTextSlot | null) => {
+    setActiveSlot(slot)
+    const holder = slot && document ? graphicsSlotHolder(document, slot) : null
+    if (holder) setSelectedLayerId(holder.layerId)
+  }, [document])
+  const pickSuggestion = useCallback((slot: GraphicsTextSlot, option: string) => {
+    editor.edit([{ op: 'set_slot_text', slot, text: option }])
   }, [editor])
   const selectedPlacement = selectedLayer ? placements[selectedLayer.id] ?? null : null
   const findClearSpot = useCallback(async () => {
@@ -176,62 +189,80 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
           snapping={snapping}
           editable={editable}
           selectedLayerId={selectedLayerId}
+          activeSlot={activeSlot}
           onLayout={onLayout}
           onSelectLayer={setSelectedLayerId}
           onEdit={edit}
         />
       )}
-      {document && read && (
+      {document && drawn && read && (
         <div className="graphics-controls">
           {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
-          <GraphicsQuickFields
-            document={document}
-            read={read}
-            disabled={!editable}
-            suggestions={state.suggestions}
-            onEdit={edit}
-            onSuggest={suggest}
-            onDismissSuggestions={editor.dismissSuggestions}
-          />
-          <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
+          <div className="graphics-toolbar">
+            <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
+            <div className="graphics-toggles" role="group" aria-label="Preview guides">
+              <label className="graphics-toggle" title="Safe-area guides">
+                <input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} />
+                Guides
+              </label>
+              <label className="graphics-toggle" title="Snap to guides. Hold Alt (Option), Ctrl or Command while dragging to move freely once.">
+                <input type="checkbox" checked={snapping} onChange={(event) => setSnapping(event.target.checked)} />
+                Snap
+              </label>
+            </div>
+          </div>
           <GraphicsWarnings warnings={warnings} />
+          <div className="graphics-columns">
+            <GraphicsQuickFields
+              document={document}
+              read={read}
+              disabled={!editable}
+              suggestions={state.suggestions}
+              onEdit={edit}
+              onSuggest={suggest}
+              onFocusSlot={focusSlot}
+            />
+            <div className="graphics-side">
+              <GraphicsSuggestionTray
+                document={document}
+                suggestions={state.suggestions}
+                disabled={!editable}
+                onPick={pickSuggestion}
+                onDismiss={editor.dismissSuggestions}
+              />
+              {selectedLayer
+                ? (
+                  <GraphicsInspector
+                    key={selectedLayer.id}
+                    document={document}
+                    layer={selectedLayer}
+                    read={read}
+                    imageChoices={imageChoices}
+                    box={selectedBox}
+                    placement={selectedPlacement}
+                    playhead={playhead}
+                    disabled={!editable}
+                    tab={inspectorTab}
+                    onTab={setInspectorTab}
+                    onEdit={edit}
+                    onFindClearSpot={findClearSpot}
+                  />
+                )
+                : <p className="graphics-muted graphics-side-hint">Select a layer in the list or the preview to edit it.</p>}
+            </div>
+          </div>
           <GraphicsLayers
             document={document}
+            drawn={drawn}
             read={read}
             imageChoices={imageChoices}
             selectedLayerId={selectedLayer?.id ?? null}
             warnings={coverWarnings}
             disabled={!editable}
+            playerRef={playerRef}
             onEdit={edit}
             onSelect={setSelectedLayerId}
           />
-          {selectedLayer
-            ? (
-              <GraphicsInspector
-                key={selectedLayer.id}
-                document={document}
-                layer={selectedLayer}
-                read={read}
-                imageChoices={imageChoices}
-                box={selectedBox}
-                placement={selectedPlacement}
-                playhead={playhead}
-                disabled={!editable}
-                onEdit={edit}
-                onFindClearSpot={findClearSpot}
-              />
-            )
-            : <p className="graphics-muted">Select a layer in the list or the preview to edit it.</p>}
-          <div className="graphics-toggles">
-            <label className="graphics-toggle">
-              <input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} />
-              Safe-area guides
-            </label>
-            <label className="graphics-toggle" title="Hold Alt (Option), Ctrl or Command while dragging to move freely once.">
-              <input type="checkbox" checked={snapping} onChange={(event) => setSnapping(event.target.checked)} />
-              Snap to guides
-            </label>
-          </div>
         </div>
       )}
     </div>

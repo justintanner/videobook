@@ -36,7 +36,7 @@ const SLOT_OPTIONS: ReadonlyArray<{ value: GraphicsTextSlot | 'none'; label: str
 ]
 const LINE_OPTIONS = ['1', '2', '3', '4', '5', '6'].map((value) => ({ value, label: value }))
 
-function Block({ layer, disabled, onEdit }: { layer: GraphicsTextLayer; disabled: boolean; onEdit: Edit }) {
+export function GraphicsTextBlock({ layer, disabled, onEdit }: { layer: GraphicsTextLayer; disabled: boolean; onEdit: Edit }) {
   const setBlock = (block: BlockPatch, coalesce: string | null = null) => onEdit([{ op: 'set_text_block', layer_id: layer.id, block }], coalesce)
   const setPlate = (plate: PlatePatch, field: string) => setBlock({ plate }, `${layer.id}:plate-${field}`)
   const { plate } = layer
@@ -51,9 +51,7 @@ function Block({ layer, disabled, onEdit }: { layer: GraphicsTextLayer; disabled
       <Toggle label="Backing plate" checked={plate !== null} disabled={disabled} onChange={(on) => setBlock({ plate: on ? {} : null })} />
       {plate && (
         <div className="graphics-subfields">
-          <div className="graphics-colors">
-            <Color label="Plate color" value={plate.color} disabled={disabled} onChange={(color) => setPlate({ color }, 'color')} />
-          </div>
+          <Color label="Plate color" value={plate.color} disabled={disabled} onChange={(color) => setPlate({ color }, 'color')} />
           <Range label="Plate opacity" value={plate.opacity} min={0} max={1} step={0.01} format={graphicsPercent} disabled={disabled}
             onChange={(opacity) => setPlate({ opacity }, 'opacity')} />
           <Range label="Padding across" value={plate.paddingX} min={0} max={0.2} step={0.001} format={graphicsPercent} disabled={disabled}
@@ -75,26 +73,22 @@ function ItemFields({ layer, item, disabled, onEdit }: { layer: GraphicsTextLaye
   }
   return (
     <div className="graphics-item-fields" data-item-id={item.id}>
-      <label className="graphics-field">
+      <label className="graphics-field graphics-item-text">
         <span>Text</span>
-        <textarea aria-label="Item text" rows={2} value={item.text} maxLength={MAX_GRAPHICS_TEXT_LENGTH} disabled={disabled}
+        <textarea aria-label="Item text" rows={1} value={item.text} maxLength={MAX_GRAPHICS_TEXT_LENGTH} disabled={disabled}
           onChange={(event) => set({ text: event.target.value }, 'text')} />
       </label>
-      <div className="graphics-pair">
-        <Select label="Slot" value={item.slot ?? 'none'} options={SLOT_OPTIONS} disabled={disabled} onChange={(slot) => set({ slot: slot === 'none' ? null : slot })} />
-        <Select label="Icon" value={item.icon ?? 'none'} options={ICON_OPTIONS} disabled={disabled} onChange={(icon) => set({ icon: icon === 'none' ? null : icon })} />
-      </div>
+      <Select label="Slot" value={item.slot ?? 'none'} options={SLOT_OPTIONS} disabled={disabled} onChange={(slot) => set({ slot: slot === 'none' ? null : slot })} />
+      <Select label="Icon" value={item.icon ?? 'none'} options={ICON_OPTIONS} disabled={disabled} onChange={(icon) => set({ icon: icon === 'none' ? null : icon })} />
       <Choice label="Font" value={item.font} options={GRAPHICS_FONT_PRESETS} labels={{ heavy: 'Heavy', display: 'Display', text: 'Text' }} disabled={disabled}
         onChange={(font) => set({ font })} />
       <Range label="Text size" value={item.size} min={0.01} max={0.3} step={0.001} format={graphicsPercent} disabled={disabled}
         onChange={(size) => set({ size }, 'size')} />
-      <div className="graphics-pair">
-        <Color label="Text color" value={item.color} disabled={disabled} onChange={(color) => set({ color }, 'color')} />
-        <Select label="Max lines" value={String(item.maxLines)} options={LINE_OPTIONS} disabled={disabled} onChange={(lines) => set({ maxLines: Number(lines) })} />
-      </div>
+      <Color label="Text color" value={item.color} disabled={disabled} onChange={(color) => set({ color }, 'color')} />
+      <Select label="Max lines" value={String(item.maxLines)} options={LINE_OPTIONS} disabled={disabled} onChange={(lines) => set({ maxLines: Number(lines) })} />
       <Choice label="Case" value={item.case} options={GRAPHICS_CASES} labels={{ none: 'As typed', upper: 'UPPERCASE' }} disabled={disabled}
         onChange={(value) => set({ case: value })} />
-      <Choice label="Accent" value={item.accent} options={GRAPHICS_ACCENTS} labels={{ none: 'No accent', underline: 'Underline', brush: 'Brush' }} disabled={disabled}
+      <Choice label="Accent" value={item.accent} options={GRAPHICS_ACCENTS} labels={{ none: 'None', underline: 'Underline', brush: 'Brush' }} disabled={disabled}
         onChange={(accent) => set({ accent })} />
       <div className="graphics-switches">
         <Toggle label="Outline" checked={item.outline} disabled={disabled} onChange={(outline) => set({ outline })} />
@@ -108,7 +102,7 @@ function itemName(item: GraphicsTextItem): string {
   return item.slot ? GRAPHICS_SLOT_LABELS[item.slot] : 'Text'
 }
 
-function Items({ document, layer, disabled, onEdit }: { document: GraphicsDocument; layer: GraphicsTextLayer; disabled: boolean; onEdit: Edit }) {
+export function GraphicsTextItems({ document, layer, disabled, onEdit }: { document: GraphicsDocument; layer: GraphicsTextLayer; disabled: boolean; onEdit: Edit }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const item = layer.items.find((entry) => entry.id === selectedId) ?? layer.items[0]
   const index = layer.items.indexOf(item)
@@ -123,40 +117,34 @@ function Items({ document, layer, disabled, onEdit }: { document: GraphicsDocume
   }
   return (
     <Section title={`Text items ${layer.items.length}/${MAX_GRAPHICS_ITEMS}`}>
-      <ol className="graphics-item-list">
-        {layer.items.map((entry, at) => (
-          <li key={entry.id}>
-            <button type="button" className="graphics-item-name" aria-pressed={entry.id === item.id} aria-label={`Edit item ${at + 1}, ${itemName(entry)}`}
-              onClick={() => setSelectedId(entry.id)}>
-              <span className="graphics-item-index">{at + 1}</span>
-              <span className="graphics-layer-title">{itemName(entry)}</span>
-              <span className="graphics-layer-summary">{entry.text.replace(/\s+/gu, ' ').trim() || 'Empty'}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <div className="graphics-item-actions">
-        <button type="button" aria-label="Add text item" disabled={disabled || layer.items.length >= MAX_GRAPHICS_ITEMS} onClick={add}><Plus size={12} aria-hidden="true" />Item</button>
-        <button type="button" className="graphics-icon-button" aria-label="Move item up" title="Move up" disabled={disabled || index === 0} onClick={() => move(index - 1)}>
-          <ArrowUp size={13} aria-hidden="true" />
-        </button>
-        <button type="button" className="graphics-icon-button" aria-label="Move item down" title="Move down" disabled={disabled || index === layer.items.length - 1} onClick={() => move(index + 1)}>
-          <ArrowDown size={13} aria-hidden="true" />
-        </button>
-        <button type="button" className="graphics-icon-button" aria-label="Remove item" title="Remove item" disabled={disabled || layer.items.length === 1} onClick={remove}>
-          <Trash2 size={13} aria-hidden="true" />
-        </button>
+      <div className="graphics-items">
+        <span className="graphics-cell-label">Items {layer.items.length}/{MAX_GRAPHICS_ITEMS}</span>
+        <ol className="graphics-item-list">
+          {layer.items.map((entry, at) => (
+            <li key={entry.id}>
+              <button type="button" className="graphics-item-name" aria-pressed={entry.id === item.id} aria-label={`Edit item ${at + 1}, ${itemName(entry)}`}
+                onClick={() => setSelectedId(entry.id)}>
+                <span className="graphics-item-index">{at + 1}</span>
+                <span className="graphics-layer-title">{itemName(entry)}</span>
+                <span className="graphics-layer-summary">{entry.text.replace(/\s+/gu, ' ').trim() || 'Empty'}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className="graphics-item-actions">
+          <button type="button" aria-label="Add text item" disabled={disabled || layer.items.length >= MAX_GRAPHICS_ITEMS} onClick={add}><Plus size={12} aria-hidden="true" />Item</button>
+          <button type="button" className="graphics-icon-button" aria-label="Move item up" title="Move up" disabled={disabled || index === 0} onClick={() => move(index - 1)}>
+            <ArrowUp size={13} aria-hidden="true" />
+          </button>
+          <button type="button" className="graphics-icon-button" aria-label="Move item down" title="Move down" disabled={disabled || index === layer.items.length - 1} onClick={() => move(index + 1)}>
+            <ArrowDown size={13} aria-hidden="true" />
+          </button>
+          <button type="button" className="graphics-icon-button" aria-label="Remove item" title="Remove item" disabled={disabled || layer.items.length === 1} onClick={remove}>
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <ItemFields layer={layer} item={item} disabled={disabled} onEdit={onEdit} />
     </Section>
-  )
-}
-
-export function GraphicsTextInspector({ document, layer, disabled, onEdit }: { document: GraphicsDocument; layer: GraphicsTextLayer; disabled: boolean; onEdit: Edit }) {
-  return (
-    <>
-      <Block layer={layer} disabled={disabled} onEdit={onEdit} />
-      <Items key={layer.id} document={document} layer={layer} disabled={disabled} onEdit={onEdit} />
-    </>
   )
 }

@@ -6390,6 +6390,13 @@ textarea:focus-visible {
   background: var(--line);
 }
 
+.confirm-sheet-head-extras {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
 .confirm-sheet-head-hints {
   display: inline-flex;
   flex: 0 1 auto;

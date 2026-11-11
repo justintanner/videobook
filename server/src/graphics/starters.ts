@@ -13,7 +13,7 @@ import type {
 } from "./model.js";
 import { graphicsDocumentFromLayers } from "./model.js";
 import type { WatermarkDocumentOverrides } from "./watermark-profile.js";
-import { watermarkDocumentFromProfile, watermarkLayerInputs } from "./watermark-profile.js";
+import { watermarkDocumentFromProfile, watermarkLayerInputs, watermarkSlotValues } from "./watermark-profile.js";
 
 export type GraphicsStarterId = "tiktok-title" | "lower-third" | "headline" | "credit" | "watermark";
 
@@ -28,6 +28,8 @@ export const DEFAULT_GRAPHICS_STARTER_ID: GraphicsStarterId = "tiktok-title";
 const WHITE = "#FFFFFF";
 const SHADE = "#000000";
 const BLOCK_WIDTH = 0.86;
+const TITLE_GAP = 0.02;
+const HANDLE_SIZE = 0.036;
 const STARTER_FONT: GraphicsFontPreset = "heavy";
 const HEADLINE_ACCENT: GraphicsAccent = "brush";
 
@@ -69,18 +71,34 @@ function bottomLeftBlock(
   };
 }
 
-function tiktokTitleLayers(): GraphicsLayerInput[] {
+function titleItems(): GraphicsTextItemInput[] {
   return [
-    edgeShade("bottom", 0.5, 0.75),
-    bottomLeftBlock("Title", 0.02, [
-      slotItem("headline", 0.09, { maxLines: 3, accent: HEADLINE_ACCENT }),
-      slotItem("secondary", 0.045, { maxLines: 2 }),
-    ]),
+    slotItem("headline", 0.09, { maxLines: 3, accent: HEADLINE_ACCENT }),
+    slotItem("secondary", 0.045, { maxLines: 2 }),
   ];
 }
 
-function tiktokTitle(frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
-  return graphicsDocumentFromLayers([...tiktokTitleLayers(), ...watermarkLayerInputs(profile, frame, { includeQr: false })]);
+function handleItem(profile: LightningWatermarkProfile): GraphicsTextItemInput {
+  return slotItem("handle", HANDLE_SIZE, {
+    text: watermarkSlotValues(profile).handle ?? "",
+    maxLines: 1,
+    icon: profile.includePlatformIcon ? profile.platform : null,
+  });
+}
+
+function titleShade(): GraphicsLayerInput {
+  return edgeShade("bottom", 0.5, 0.75);
+}
+
+function tiktokTitleLayers(): GraphicsLayerInput[] {
+  return [titleShade(), bottomLeftBlock("Title", TITLE_GAP, titleItems())];
+}
+
+function tiktokTitle(_frame: GraphicsFrame, profile: LightningWatermarkProfile = LIGHTNING_WATERMARK_PROFILE): GraphicsDocument {
+  return graphicsDocumentFromLayers([
+    titleShade(),
+    bottomLeftBlock("Title", TITLE_GAP, [handleItem(profile), ...titleItems()]),
+  ]);
 }
 
 export function platformWatermarkDocument(

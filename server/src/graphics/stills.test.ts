@@ -62,13 +62,17 @@ describe("graphicsStillGroups", () => {
     expect(graphicsStillGroups(document([scrim(WHOLE)]), 0)).toEqual([]);
   });
 
-  it("draws the default look as its shade and the handle until a title is typed", () => {
+  it("draws the default look as one still for the whole clip: its shade under the title block's handle", () => {
     const tiktok = GRAPHICS_STARTERS.find((starter) => starter.id === "tiktok-title");
     if (!tiktok) throw new Error("expected the tiktok-title starter");
     const groups = graphicsStillGroups(tiktok.build({ width: 1080, height: 1920 }), 8);
-    expect(groups).toEqual([
-      { layerIds: ["l1"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } },
-      { layerIds: ["l5"], timing: { start: 0, end: 3, fadeIn: 0, fadeOut: LIGHTNING_WATERMARK_PROFILE.fadeSeconds } },
-    ]);
+    expect(groups).toEqual([{ layerIds: ["l1", "l2"], timing: { start: 0, end: 8, fadeIn: 0, fadeOut: 0 } }]);
+  });
+
+  it("still draws the watermark starter's handle only for the profile's first seconds", () => {
+    const watermark = GRAPHICS_STARTERS.find((starter) => starter.id === "watermark");
+    if (!watermark) throw new Error("expected the watermark starter");
+    const groups = graphicsStillGroups(watermark.build({ width: 1080, height: 1920 }), 8);
+    expect(groups).toContainEqual({ layerIds: ["l2"], timing: { start: 0, end: 3, fadeIn: 0, fadeOut: LIGHTNING_WATERMARK_PROFILE.fadeSeconds } });
   });
 });

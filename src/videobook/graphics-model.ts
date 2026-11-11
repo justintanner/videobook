@@ -11,6 +11,7 @@ import {
   parseGraphicsDocument,
   type GraphicsAnchor,
   type GraphicsDocument,
+  type GraphicsIcon,
   type GraphicsLayer,
   type GraphicsLayerKind,
   type GraphicsQrLayer,
@@ -490,7 +491,7 @@ export function graphicsLayerSummary(layer: GraphicsLayer, images: GraphicsRead[
   }
   if (layer.kind === 'qr') return layer.slot === 'profile' ? 'Profile link' : clipped(layer.url)
   if (layer.kind === 'scrim') return `${layer.edge === 'top' ? 'Top' : 'Bottom'} shade`
-  const typed = layer.items.find((item) => item.text.trim())
+  const typed = layer.items.find((item) => item.slot !== 'handle' && item.text.trim()) ?? layer.items.find((item) => item.text.trim())
   if (typed) return clipped(typed.text)
   const slots = layer.items.flatMap((item) => (item.slot ? [GRAPHICS_SLOT_LABELS[item.slot]] : []))
   return slots.length > 0 ? `Empty ${slots.join(', ').toLowerCase()}` : 'Empty text'
@@ -535,19 +536,45 @@ export function graphicsSuggestKind(slot: GraphicsTextSlot): GraphicsSuggestKind
   return GRAPHICS_SUGGEST_KINDS.find((kind) => GRAPHICS_SUGGEST_SLOTS[kind] === slot) ?? null
 }
 
-export const GRAPHICS_QUICK_FIELDS: ReadonlyArray<{ slot: GraphicsTextSlot; label: string; placeholder: string; lines: number }> = [
-  { slot: 'headline', label: 'Headline', placeholder: 'Big title', lines: 2 },
-  { slot: 'secondary', label: 'Second line', placeholder: 'A line under the title', lines: 1 },
-  { slot: 'credit', label: 'Credit', placeholder: 'Platform/@handle', lines: 1 },
-]
+export interface GraphicsQuickField {
+  slot: GraphicsTextSlot
+  label: string
+  placeholder: string
+  lines: number
+}
 
-export function graphicsSlotText(document: GraphicsDocument, slot: GraphicsTextSlot): string | null {
+const HEADLINE_FIELD: GraphicsQuickField = { slot: 'headline', label: 'Headline', placeholder: 'Big title', lines: 2 }
+const SECONDARY_FIELD: GraphicsQuickField = { slot: 'secondary', label: 'Second line', placeholder: 'A line under the title', lines: 1 }
+const CREDIT_FIELD: GraphicsQuickField = { slot: 'credit', label: 'Credit', placeholder: 'Platform/@handle', lines: 1 }
+const HANDLE_FIELD: GraphicsQuickField = { slot: 'handle', label: 'Credit', placeholder: 'Your handle', lines: 1 }
+
+interface GraphicsSlotHolder {
+  layerId: string
+  itemId: string
+  text: string
+  icon: GraphicsIcon | null
+}
+
+export function graphicsSlotHolder(document: GraphicsDocument, slot: GraphicsTextSlot): GraphicsSlotHolder | null {
   for (const layer of document.layers) {
     if (layer.kind !== 'text') continue
     const item = layer.items.find((entry) => entry.slot === slot)
-    if (item) return item.text
+    if (item) return { layerId: layer.id, itemId: item.id, text: item.text, icon: item.icon }
   }
   return null
+}
+
+export function graphicsSlotText(document: GraphicsDocument, slot: GraphicsTextSlot): string | null {
+  return graphicsSlotHolder(document, slot)?.text ?? null
+}
+
+export function graphicsQuickFields(document: GraphicsDocument): GraphicsQuickField[] {
+  const handleOnly = graphicsSlotHolder(document, 'credit') === null && graphicsSlotHolder(document, 'handle') !== null
+  return [HEADLINE_FIELD, SECONDARY_FIELD, handleOnly ? HANDLE_FIELD : CREDIT_FIELD]
+}
+
+export function graphicsSuggestionLabel(slot: GraphicsTextSlot): string {
+  return [HEADLINE_FIELD, SECONDARY_FIELD, CREDIT_FIELD, HANDLE_FIELD].find((field) => field.slot === slot)?.label ?? GRAPHICS_SLOT_LABELS[slot]
 }
 
 export function graphicsFillSuggestion(read: GraphicsRead, slot: GraphicsTextSlot): string | null {

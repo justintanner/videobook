@@ -161,29 +161,30 @@ export function GraphicsTemplates({ editor, read, disabled, books, onApply }: {
   }
   return (
     <section className="graphics-templates" aria-label="Templates">
-      <div className="graphics-layers-head">
+      <div className="graphics-templates-bar">
         <span className="graphics-section-label">Templates</span>
+        <div className="graphics-starter-row" role="group" aria-label="Apply a template">
+          {choices.map((choice) => (
+            <button
+              key={choice.id}
+              type="button"
+              data-template={choice.id}
+              data-saved={choice.saved ? 'true' : undefined}
+              data-default={choice.isDefault ? 'true' : undefined}
+              title={chipTitle(choice)}
+              disabled={disabled}
+              onClick={() => onApply(choice)}
+            >
+              {choice.isDefault && <Star size={11} aria-hidden="true" />}
+              {choice.name}
+              {choice.missingImages > 0 && <TriangleAlert size={11} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+        <SaveTemplate disabled={locked} onSave={(name) => run(() => editor.saveTemplate(name))} />
         <button type="button" aria-expanded={managing} onClick={() => setManaging((current) => !current)}>{managing ? 'Done' : 'Manage templates'}</button>
+        {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
       </div>
-      <div className="graphics-starter-row" role="group" aria-label="Apply a template">
-        {choices.map((choice) => (
-          <button
-            key={choice.id}
-            type="button"
-            data-template={choice.id}
-            data-saved={choice.saved ? 'true' : undefined}
-            data-default={choice.isDefault ? 'true' : undefined}
-            title={chipTitle(choice)}
-            disabled={disabled}
-            onClick={() => onApply(choice)}
-          >
-            {choice.isDefault && <Star size={11} aria-hidden="true" />}
-            {choice.name}
-            {choice.missingImages > 0 && <TriangleAlert size={11} aria-hidden="true" />}
-          </button>
-        ))}
-      </div>
-      <SaveTemplate disabled={locked} onSave={(name) => run(() => editor.saveTemplate(name))} />
       {managing && (
         <>
           <ul className="graphics-template-list" aria-label="Manage templates">
@@ -192,7 +193,6 @@ export function GraphicsTemplates({ editor, read, disabled, books, onApply }: {
           <CopyFromBook books={books} disabled={locked} run={run} editor={editor} />
         </>
       )}
-      {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
     </section>
   )
 }

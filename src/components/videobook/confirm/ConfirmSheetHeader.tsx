@@ -5,6 +5,7 @@ export function ConfirmSheetHeader({
   actions,
   address,
   effect,
+  extras,
   hints,
   hintsId,
   tag,
@@ -14,6 +15,7 @@ export function ConfirmSheetHeader({
   actions: ReactNode
   address: string | null
   effect: ConfirmSheetEffect | null
+  extras: ReactNode
   hints: ReactNode
   hintsId: string | undefined
   tag: string
@@ -30,6 +32,12 @@ export function ConfirmSheetHeader({
         <>
           <span className="confirm-sheet-head-divider" aria-hidden="true" />
           <span id={hintsId} className="confirm-sheet-head-hints">{hints}</span>
+        </>
+      )}
+      {extras && (
+        <>
+          <span className="confirm-sheet-head-divider" aria-hidden="true" />
+          <div className="confirm-sheet-head-extras">{extras}</div>
         </>
       )}
       <div className="confirm-sheet-decisions">

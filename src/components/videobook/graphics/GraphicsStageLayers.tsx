@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import { graphicsSpaceRect, type GraphicsLayerLayout, type GraphicsRect } from '../../../../server/src/graphics/layout'
-import { GRAPHICS_ANCHOR_POINTS, type GraphicsDocument, type GraphicsFrame, type GraphicsLayer } from '../../../../server/src/graphics/model'
+import { GRAPHICS_ANCHOR_POINTS, type GraphicsDocument, type GraphicsFrame, type GraphicsLayer, type GraphicsTextSlot } from '../../../../server/src/graphics/model'
 import { layerOpacityAt, resolveLayerTiming } from '../../../../server/src/graphics/timing'
 import {
   graphicsLayerHandles,
@@ -40,6 +40,7 @@ type StageLayersProps = {
   source: StageSource
   seconds: number
   selectedLayerId: string | null
+  activeSlot: GraphicsTextSlot | null
   editable: boolean
   snapping: boolean
   guides: boolean
@@ -95,7 +96,7 @@ function stageEntries(props: StageLayersProps): StageEntry[] {
   })
 }
 
-function ItemBoxes({ entry, layer }: { entry: GraphicsLayerLayout; layer: GraphicsLayer }) {
+function ItemBoxes({ entry, layer, activeSlot }: { entry: GraphicsLayerLayout; layer: GraphicsLayer; activeSlot: GraphicsTextSlot | null }) {
   if (entry.kind !== 'text' || layer.kind !== 'text') return null
   return entry.items.map((item) => {
     const slot = layer.items.find((candidate) => candidate.id === item.itemId)?.slot ?? undefined
@@ -106,6 +107,7 @@ function ItemBoxes({ entry, layer }: { entry: GraphicsLayerLayout; layer: Graphi
         className="graphics-item-box"
         data-item-id={item.itemId}
         data-slot={slot}
+        data-active={slot && slot === activeSlot ? 'true' : undefined}
         data-box={boxData(item.box)}
         data-overflow={item.overflow ? 'true' : undefined}
         style={stageBoxStyle(relative, { width: entry.box.width, height: entry.box.height })}
@@ -253,7 +255,7 @@ export function GraphicsStageLayers(props: StageLayersProps) {
           onClick={() => onSelectLayer(entry.layerId)}
           {...handlers(layer, entry.box, 'move')}
         >
-          <ItemBoxes entry={entry} layer={layer} />
+          <ItemBoxes entry={entry} layer={layer} activeSlot={props.activeSlot} />
         </button>
       ))}
       {selected && (

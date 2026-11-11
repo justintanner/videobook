@@ -36,21 +36,19 @@ export function GraphicsWatermark({ editor, read, platform, disabled }: {
   }
   return (
     <section className="graphics-watermark" aria-label="Watermark">
-      <div className="graphics-layers-head">
-        <span className="graphics-section-label">Watermark</span>
-        <div className="graphics-segmented" role="group" aria-label="Watermark platform">
-          {PLATFORMS.map((choice) => (
-            <button key={choice} type="button" aria-pressed={choice === platform} disabled={locked} onClick={() => choose(choice)}>
-              {WATERMARK_PLATFORM_LABELS[choice]}
-            </button>
-          ))}
-        </div>
+      <span className="graphics-section-label">Watermark</span>
+      <div className="graphics-segmented" role="group" aria-label="Watermark platform">
+        {PLATFORMS.map((choice) => (
+          <button key={choice} type="button" aria-pressed={choice === platform} disabled={locked} onClick={() => choose(choice)}>
+            {WATERMARK_PLATFORM_LABELS[choice]}
+          </button>
+        ))}
       </div>
-      <p className="graphics-muted">{burnsLine(WATERMARK_PLATFORM_LABELS[platform], saved)}</p>
       <div className="graphics-watermark-actions">
         <button type="button" disabled={locked} onClick={() => void run(editor.saveWatermark)}>Save as default watermark</button>
         {saved && <button type="button" disabled={locked} onClick={() => void run(editor.resetWatermark)}>Use the profile’s look</button>}
       </div>
+      <p className="graphics-muted">{burnsLine(WATERMARK_PLATFORM_LABELS[platform], saved)}</p>
       {notice && <p className="graphics-template-notice" role={notice.ok ? 'status' : 'alert'} data-tone={notice.ok ? 'info' : 'error'}>{notice.message}</p>}
     </section>
   )

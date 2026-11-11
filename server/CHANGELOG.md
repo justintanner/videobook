@@ -6,6 +6,25 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The graphics editor takes less room and shows more of itself at once. One
+  header row carries undo, redo, the save state and the render output beside
+  Render and Close; templates are one toolbar row; the quick fields sit beside
+  an inspector that shows one section of the selected layer at a time; and the
+  layer list and the timing strip are one timeline, with a seconds ruler that
+  scrubs the preview and handles that trim the selected layer. The transport
+  under the preview is play, time and mute, so it no longer runs into the
+  controls. Suggested headlines and translations list beside the fields
+  instead of pushing them down.
+- The Credit field edits the handle a look draws when the look has no credit
+  line, so the field and the preview show the same text.
+- The default look (TikTok title) carries the handle as the first line of the
+  title block, above the headline and for the whole clip, instead of a
+  separate chip at the top for the first seconds. Videos with saved graphics
+  keep theirs, and the watermark that `apply_watermark`, goal finishing and
+  `/watermark` burn is unchanged.
+
 ### Fixed
 
 - The Actions sheet reviews `video_graphics` and `caption_video` by the

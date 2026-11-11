@@ -147,7 +147,7 @@ describe("video_graphics", () => {
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(first.source.source_hash).toBe(manifest.value.files.find((file) => file.name === "original.mp4")?.objectHash);
     expect(first.revision).toMatch(/^default:[0-9a-f]{32}$/u);
-    expect(first.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text", "text"]);
+    expect(first.document.layers.map((layer) => layer.name)).toEqual(["Shade", "Title"]);
     expect(first.document.layers.some((layer) => layer.kind === "qr")).toBe(false);
     expect(slotText(first.document, "handle")).toBe("jtbkk");
     expect(slotText(first.document, "headline")).toBe("");
@@ -190,11 +190,12 @@ describe("video_graphics", () => {
     const stale = await fails({ asset_id: assetId, op: "update", expected_revision: fresh.revision, edits: [{ op: "set_slot_text", slot: "secondary", text: "Late" }] });
     expect(stale).toMatchObject({ status: "conflict", revision: first.revision });
     const title = textLayers(first.document).find((layer) => layer.items.some((item) => item.slot === "headline"));
-    if (!title) throw new Error("expected the title block");
+    const line = title?.items.find((item) => item.slot === "secondary");
+    if (!title || !line) throw new Error("expected the title block with a second line");
     const second = await save(assetId, {
       expected_revision: first.revision,
       edits: [
-        { op: "set_item", layer_id: title.id, item_id: title.items[1].id, item: { text: "How can you look this cool?" } },
+        { op: "set_item", layer_id: title.id, item_id: line.id, item: { text: "How can you look this cool?" } },
         { op: "set_position", layer_id: title.id, position: { anchor: "bottom", x: 0.5 } },
         { op: "add_layer", layer: { kind: "text", name: "Credit", items: [{ text: "TikTok/@pomkondeena", icon: "camera", size: 0.03 }] } },
       ],
@@ -212,7 +213,7 @@ describe("video_graphics", () => {
     const document = { ...fresh.document, layers: fresh.document.layers.filter((layer) => layer.kind !== "scrim") };
     const saved = await save(assetId, { expected_revision: fresh.revision, document });
     expect(saved.document).toEqual(document);
-    expect((await read(assetId)).document.layers.map((layer) => layer.kind)).toEqual(["text", "text"]);
+    expect((await read(assetId)).document.layers.map((layer) => layer.kind)).toEqual(["text"]);
   });
 
   it("returns structured errors for bad input without saving", async () => {
@@ -233,7 +234,7 @@ describe("video_graphics", () => {
     const broken = await fails({ ...base, expected_revision: fresh.revision, document: { ...fresh.document, version: 2 } });
     expect(broken).toMatchObject({ status: "invalid", issues: [expect.stringMatching(/version/u)] });
     const notImage = await fails({ ...base, expected_revision: fresh.revision, edits: [{ op: "add_layer", layer: { kind: "image", artifactId: assetId } }] });
-    expect(notImage).toMatchObject({ status: "invalid", layer_id: "l7" });
+    expect(notImage).toMatchObject({ status: "invalid", layer_id: "l6" });
     expect(notImage.message).toMatch(/not an image artifact in this book/u);
     const unknownOp = await call({ ...base, expected_revision: fresh.revision, edits: [{ op: "explode", layer_id: "l1" }] });
     expect(unknownOp.error).toBe(true);

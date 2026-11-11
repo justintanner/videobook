@@ -67,6 +67,61 @@ export function graphicsTimingWithBound(timing: GraphicsTiming, bound: GraphicsT
   return { ...timing, start: timing.start ?? 0, end: at, tail: null }
 }
 
+const TRIM_STEP_SECONDS = 0.01
+const CLIP_END_SLACK_SECONDS = 0.005
+
+function trimmed(value: number): number {
+  return Math.round(value / TRIM_STEP_SECONDS) * TRIM_STEP_SECONDS
+}
+
+function trimmedStart(timing: GraphicsTiming, value: number, end: number, duration: number): GraphicsTiming {
+  const start = seconds(trimmed(clamp(value, 0, Math.max(0, end - MIN_SPAN_SECONDS))))
+  if (graphicsTimingMode(timing) === 'last') return { ...timing, start: null, end: null, tail: seconds(duration - start) }
+  return { ...timing, start: start > 0 ? start : null, tail: null }
+}
+
+function trimmedEnd(timing: GraphicsTiming, value: number, start: number, duration: number): GraphicsTiming {
+  const end = seconds(trimmed(clamp(value, Math.min(duration, start + MIN_SPAN_SECONDS), duration)))
+  const clipEnd = end >= duration - CLIP_END_SLACK_SECONDS
+  if (graphicsTimingMode(timing) !== 'last') return { ...timing, end: clipEnd ? null : end, tail: null }
+  return clipEnd ? timing : { ...timing, start: seconds(start), end, tail: null }
+}
+
+function sameTiming(left: GraphicsTiming, right: GraphicsTiming): boolean {
+  return left.start === right.start && left.end === right.end && left.tail === right.tail && left.fade === right.fade
+}
+
+export function graphicsTimingTrim(timing: GraphicsTiming, bound: GraphicsTimingBound, value: number, duration: number): GraphicsTiming {
+  const window = resolveLayerTiming(timing, duration)
+  if (!window || !Number.isFinite(value)) return timing
+  const next = bound === 'start' ? trimmedStart(timing, value, window.end, duration) : trimmedEnd(timing, value, window.start, duration)
+  return sameTiming(next, timing) ? timing : next
+}
+
+type GraphicsRulerMark = { seconds: number; at: number; label: string }
+type GraphicsRuler = { tick: number; marks: GraphicsRulerMark[] }
+
+const RULER_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
+const RULER_MAX_MARKS = 8
+
+function clock(value: number): string {
+  const whole = Math.round(value)
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+}
+
+function rulerTick(step: number): number {
+  if (step >= 5) return step / 5
+  return step === 1 ? 0.5 : 1
+}
+
+export function graphicsRuler(duration: number): GraphicsRuler {
+  if (!Number.isFinite(duration) || duration <= 0) return { tick: 0, marks: [] }
+  const step = RULER_STEPS.find((candidate) => duration / candidate <= RULER_MAX_MARKS) ?? Math.ceil(duration / RULER_MAX_MARKS / 600) * 600
+  const count = Math.floor(duration / step + 1e-9)
+  const marks = Array.from({ length: count + 1 }, (_unused, index) => ({ seconds: index * step, at: (index * step) / duration, label: clock(index * step) }))
+  return { tick: rulerTick(step) / duration, marks }
+}
+
 export function graphicsFadeSeconds(value: number): number {
   return Math.round(clamp(value, 0, MAX_GRAPHICS_FADE_SECONDS) * 100) / 100
 }

@@ -16,13 +16,15 @@ export const CONFIRM_SHEET_HINTS_QUERY =
 export interface ConfirmSheetChromeInput {
   state: ConfirmSheetStatus['state']
   hasSecondaryActions: boolean
+  hasHeaderActions?: boolean
   wideEnough: boolean
 }
 
 export function confirmSheetHintsInHeader(input: ConfirmSheetChromeInput): boolean {
-  return input.state === 'ready' && !input.hasSecondaryActions && input.wideEnough
+  return input.state === 'ready' && !input.hasSecondaryActions && !input.hasHeaderActions && input.wideEnough
 }
 
 export function confirmSheetFooterVisible(input: ConfirmSheetChromeInput): boolean {
+  if (input.hasHeaderActions) return input.state !== 'ready'
   return !confirmSheetHintsInHeader(input)
 }

@@ -41,21 +41,26 @@ describe("graphics starters", () => {
     },
   );
 
-  it("builds tiktok-title from the TikTok watermark profile with an empty Thai title and English line and no QR", () => {
+  it("builds tiktok-title as a bottom shade under one title block: the profile's handle over an empty Thai title and English line, with no QR", () => {
     const document = starter("tiktok-title")({ width: 1080, height: 1920 });
-    expect(kinds(document)).toEqual(["scrim", "text", "text"]);
+    expect(kinds(document)).toEqual(["scrim", "text"]);
     expect(document.layers[0]).toMatchObject({ kind: "scrim", edge: "bottom" });
-    const [title, handle] = textLayers(document);
+    const [title] = textLayers(document);
+    expect(title).toMatchObject({ name: "Title", opacity: 1, plate: null, timing: { start: null, end: null, tail: null } });
     expect(title.position).toEqual({ anchor: "bottom-left", x: 0, y: 1, space: "safe" });
     expect(title.items).toMatchObject([
+      { slot: "handle", text: LIGHTNING_WATERMARK_PROFILE.handle, icon: "tiktok", font: "heavy", size: 0.036, maxLines: 1, accent: "none" },
       { slot: "headline", text: "", font: "heavy", size: 0.09, maxLines: 3, accent: "brush" },
       { slot: "secondary", text: "", font: "heavy", size: 0.045 },
     ]);
-    expect(handle.items).toMatchObject([{ slot: "handle", text: LIGHTNING_WATERMARK_PROFILE.handle, icon: "tiktok" }]);
-    expect(handle.plate).toMatchObject({ border: LIGHTNING_WATERMARK_PROFILE.includeHandleBorder, radius: LIGHTNING_WATERMARK_PROFILE.handleRounding / 100 });
-    expect(handle.opacity).toBe(LIGHTNING_WATERMARK_PROFILE.handleOpacity);
-    expect(handle.position).toEqual({ anchor: "center", x: 0.5, y: LIGHTNING_WATERMARK_PROFILE.handleVerticalPercent / 100, space: "frame" });
-    expect(handle.timing).toEqual({ start: null, end: LIGHTNING_WATERMARK_PROFILE.handleEndSeconds, tail: null, fade: LIGHTNING_WATERMARK_PROFILE.fadeSeconds });
+  });
+
+  it("writes the handle the profile carries, without its @, and drops the platform icon when the profile does", () => {
+    const build = GRAPHICS_STARTERS[0].build;
+    const [plain] = textLayers(build({ width: 1080, height: 1920 }, { ...LIGHTNING_WATERMARK_PROFILE, handle: "@kondee", includePlatformIcon: false }));
+    expect(plain.items[0]).toMatchObject({ slot: "handle", text: "kondee", icon: null });
+    const [onX] = textLayers(build({ width: 1080, height: 1920 }, { ...LIGHTNING_WATERMARK_PROFILE, platform: "x", handle: "someone" }));
+    expect(onX.items[0]).toMatchObject({ slot: "handle", text: "someone", icon: "x" });
   });
 
   it("builds lower-third as a bottom scrim and one bottom-left block of headline, second line and credit", () => {

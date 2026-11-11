@@ -3,14 +3,13 @@ import { Player, type PlayerRef } from '@remotion/player'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
-import type { GraphicsDocument } from '../../../../server/src/graphics/model'
+import type { GraphicsDocument, GraphicsTextSlot } from '../../../../server/src/graphics/model'
 import { GraphicsPreviewComposition, type GraphicsPreviewProps } from '../../../../server/src/remotion/graphics/GraphicsPreviewComposition'
 import { CAPTION_FONT_URLS } from '@/remotion/caption-font-urls'
 import type { GraphicsOverlayImages } from '@/videobook/graphics-model'
 import { formatCaptionTime } from '@/videobook/subtitles-model'
 import { usePlayerFrame, useStageSize } from '../preview-stage'
 import { GraphicsStageLayers } from './GraphicsStageLayers'
-import { GRAPHICS_TIMING_MAX_ROWS, GRAPHICS_TIMING_ROW_PX, GraphicsTimingStrip } from './GraphicsTiming'
 
 type GraphicsPreviewSource = { width: number; height: number; durationSeconds: number; fps: number }
 
@@ -25,13 +24,13 @@ type GraphicsPreviewStageProps = {
   snapping: boolean
   editable: boolean
   selectedLayerId: string | null
+  activeSlot: GraphicsTextSlot | null
   onLayout: (layout: GraphicsLayerLayout[]) => void
   onSelectLayer: (layerId: string) => void
   onEdit: (edits: GraphicsEdit[], coalesceKey: string) => boolean
 }
 
 const NO_FRAME_CHANGE = () => undefined
-const STRIP_GAP_PX = 4
 
 export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const { document, mediaUrl, source, images, layout, playerRef, guides } = props
@@ -40,8 +39,7 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
   const time = frame / source.fps
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aspect = useMemo(() => ({ width: source.width, height: source.height }), [source.height, source.width])
-  const stripRows = Math.min(document.layers.length, GRAPHICS_TIMING_MAX_ROWS)
-  const stage = useStageSize(containerRef, aspect, '.confirm-graphics', stripRows > 0 ? stripRows * GRAPHICS_TIMING_ROW_PX + STRIP_GAP_PX : 0)
+  const stage = useStageSize(containerRef, aspect, '.confirm-graphics')
   const { onLayout } = props
 
   const inputProps = useMemo<GraphicsPreviewProps>(() => ({
@@ -100,6 +98,7 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
               source={source}
               seconds={time}
               selectedLayerId={props.selectedLayerId}
+              activeSlot={props.activeSlot}
               editable={props.editable}
               snapping={props.snapping}
               guides={guides}
@@ -113,16 +112,6 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
         <button type="button" className="graphics-icon-button" aria-label={playing ? 'Pause' : 'Play'} onClick={() => playerRef.current?.toggle()}>
           {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
         </button>
-        <input
-          type="range"
-          className="graphics-seek"
-          aria-label="Playback position"
-          min={0}
-          max={Math.max(0, durationInFrames - 1)}
-          step={1}
-          value={Math.min(frame, durationInFrames - 1)}
-          onChange={(event) => seekFrame(Number(event.target.value))}
-        />
         <span className="graphics-time" aria-live="off">{formatCaptionTime(time)} / {formatCaptionTime(source.durationSeconds)}</span>
         <button
           type="button"
@@ -133,13 +122,6 @@ export function GraphicsPreview(props: GraphicsPreviewStageProps) {
         >
           {muted ? <VolumeX size={14} aria-hidden="true" /> : <Volume2 size={14} aria-hidden="true" />}
         </button>
-        <GraphicsTimingStrip
-          document={document}
-          durationSeconds={source.durationSeconds}
-          seconds={time}
-          selectedLayerId={props.selectedLayerId}
-          onSelectLayer={props.onSelectLayer}
-        />
       </div>
     </div>
   )

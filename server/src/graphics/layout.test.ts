@@ -284,7 +284,7 @@ describe("layoutGraphics", () => {
   });
 
   it("fits the starters' handle pill and centres it on the profile's line", () => {
-    const handle = only(layout(starter("tiktok-title", PORTRAIT)), "text", "l5");
+    const handle = only(layout(starter("watermark", PORTRAIT)), "text", "l2");
     expect(handle.overflow).toBe(false);
     expect(handle.items.map((item) => item.lines.map((line) => line.text))).toEqual([["jtbkk"]]);
     expect(Math.abs(handle.box.x + handle.box.width / 2 - 540)).toBeLessThanOrEqual(1);
@@ -298,7 +298,10 @@ describe("layoutGraphics", () => {
     const short = Math.min(frame.width, frame.height);
     expect(title.overflow).toBe(false);
     expect(inside(title.box, graphicsSpaceRect(frame, "safe"))).toBe(true);
-    const [headline, secondary] = title.items;
+    const [handle, headline, secondary] = title.items;
+    expect(handle.lines.map((line) => line.text)).toEqual(["jtbkk"]);
+    expect(handle.icon).not.toBeNull();
+    expect(headline.box.y).toBeGreaterThan(handle.box.y + handle.box.height);
     expect(headline.lines).toHaveLength(3);
     expect(headline.font.size).toBeLessThanOrEqual(0.09 * short);
     expect(headline.font.size).toBeGreaterThanOrEqual(0.09 * short * 0.6);

@@ -3,9 +3,26 @@ import { useState, type ReactNode } from 'react'
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="graphics-section" aria-label={title}>
-      <span className="graphics-section-label">{title}</span>
       {children}
     </section>
+  )
+}
+
+export function Tabs<T extends string>({ label, value, options, labels, onChange }: {
+  label: string
+  value: T
+  options: readonly T[]
+  labels: Record<T, string>
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="graphics-tabs" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option} type="button" data-tab={option} aria-pressed={option === value} onClick={() => onChange(option)}>
+          {labels[option]}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -18,12 +35,15 @@ export function Choice<T extends string>({ label, value, options, labels, disabl
   onChange: (value: T) => void
 }) {
   return (
-    <div className="graphics-choice" role="group" aria-label={label}>
-      {options.map((option) => (
-        <button key={option} type="button" aria-pressed={option === value} disabled={disabled} onClick={() => onChange(option)}>
-          {labels[option]}
-        </button>
-      ))}
+    <div className="graphics-cell">
+      <span className="graphics-cell-label" aria-hidden="true">{label}</span>
+      <div className="graphics-choice" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button key={option} type="button" aria-pressed={option === value} disabled={disabled} onClick={() => onChange(option)}>
+            {labels[option]}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

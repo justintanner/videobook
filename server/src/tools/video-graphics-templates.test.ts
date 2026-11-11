@@ -189,7 +189,7 @@ describe("video_graphics templates", () => {
 
     const downloaded = await video(TIKTOK_SOURCE);
     const before = await read(downloaded);
-    expect(before.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text", "text"]);
+    expect(before.document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text"]);
     const defaulted = await template({ op: "set_default_template", template_id: saved.template.id });
     expect(defaulted).toMatchObject({ status: "saved", default_template_id: saved.template.id });
 
@@ -210,7 +210,7 @@ describe("video_graphics templates", () => {
     const starterDefault = await read(await video());
     expect(starterDefault.document).toEqual(starterDefault.starters.find((starter) => starter.id === "headline")?.document);
     expect(await template({ op: "set_default_template", template_id: null })).toMatchObject({ default_template_id: "tiktok-title" });
-    expect((await read(await video())).document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text", "text"]);
+    expect((await read(await video())).document.layers.map((layer) => layer.kind)).toEqual(["scrim", "text"]);
     expect(await fails({ op: "set_default_template" })).toMatchObject({ status: "invalid", message: expect.stringMatching(/template_id/u) });
     expect(await fails({ op: "set_default_template", template_id: "missing" })).toMatchObject({ status: "not_found", template_id: "missing" });
   });

@@ -6,6 +6,7 @@ import {
   type ConfirmValidation,
 } from '@/videobook/confirm-validation'
 import {
+  confirmSheetFooterVisible,
   confirmSheetHintsInHeader,
 } from '@/videobook/confirm-sheet-chrome'
 import { ConfirmSheetActions } from './ConfirmSheetActions'
@@ -27,6 +28,7 @@ interface ConfirmSheetProps {
   busyLabel?: string
   children: ReactNode
   effect?: ConfirmSheetEffect | null
+  headerActions?: ReactNode
   hints?: ReactNode
   kind: string
   onCancel: () => void
@@ -51,6 +53,7 @@ export function ConfirmSheet({
   cancelLabel = 'Cancel',
   children,
   effect = null,
+  headerActions = null,
   hints = null,
   kind,
   onCancel,
@@ -71,11 +74,14 @@ export function ConfirmSheet({
   const notice = composer && composer.notice !== staleNotice ? composer.notice : null
   const status = confirmSheetStatus({ busy, busyLabel, validation, outcome, notice })
   const wideEnough = useConfirmSheetWideChrome()
-  const hintsInHeader = confirmSheetHintsInHeader({
+  const chrome = {
     state: status.state,
     hasSecondaryActions: Boolean(secondaryActions),
+    hasHeaderActions: Boolean(headerActions),
     wideEnough,
-  })
+  }
+  const hintsInHeader = confirmSheetHintsInHeader(chrome)
+  const footerVisible = confirmSheetFooterVisible(chrome)
   const applyDisabled = validation.blocking !== null
   const { sheetRef, onKeyDown } = useConfirmSheetKeys({
     applyFormId,
@@ -96,7 +102,7 @@ export function ConfirmSheet({
       style={reviewHeight === null ? undefined : { '--confirm-review-height': `${reviewHeight}px` } as CSSProperties}
       role="dialog"
       aria-label={ariaLabel}
-      aria-describedby={statusId}
+      aria-describedby={hintsInHeader || footerVisible ? statusId : undefined}
       aria-keyshortcuts="Escape Meta+Enter Control+Enter"
       onKeyDown={onKeyDown}
     >
@@ -115,6 +121,7 @@ export function ConfirmSheet({
         )}
         address={address}
         effect={effect}
+        extras={headerActions}
         hints={hintsInHeader ? hints ?? <ConfirmSheetReadyHints /> : null}
         hintsId={hintsInHeader ? statusId : undefined}
         tag={tag}
@@ -127,7 +134,7 @@ export function ConfirmSheet({
           <ConfirmSheetInitialFocus sheetRef={sheetRef} />
         </Suspense>
       </div>
-      {!hintsInHeader && (
+      {footerVisible && (
         <ConfirmSheetFooter
           hints={hints}
           onDismissStatus={dismissStatus}

@@ -7,7 +7,8 @@ import {
   type GraphicsSuggestKind,
   type GraphicsSuggestLanguage,
 } from '../../../../server/src/graphics/slots'
-import type { GraphicsSuggestionList } from '@/videobook/graphics-model'
+import { GRAPHICS_TEXT_SLOTS, type GraphicsDocument, type GraphicsTextSlot } from '../../../../server/src/graphics/model'
+import { graphicsSlotText, graphicsSuggestionLabel, type GraphicsSuggestionList, type GraphicsSuggestionLists } from '@/videobook/graphics-model'
 
 type Suggest = (kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => void
 
@@ -75,7 +76,7 @@ function heading(list: GraphicsSuggestionList): string {
   return translate ? `Pick a line in ${language}` : `Pick a headline in ${language}`
 }
 
-export function GraphicsSuggestionPicker({ list, label, value, disabled, onPick, onDismiss }: {
+function GraphicsSuggestionPicker({ list, label, value, disabled, onPick, onDismiss }: {
   list: GraphicsSuggestionList
   label: string
   value: string | null
@@ -101,6 +102,35 @@ export function GraphicsSuggestionPicker({ list, label, value, disabled, onPick,
           ))}
         </ul>
       )}
+    </div>
+  )
+}
+
+export function GraphicsSuggestionTray({ document, suggestions, disabled, onPick, onDismiss }: {
+  document: GraphicsDocument
+  suggestions: GraphicsSuggestionLists
+  disabled: boolean
+  onPick: (slot: GraphicsTextSlot, option: string) => void
+  onDismiss: (slot: GraphicsTextSlot) => void
+}) {
+  const open = GRAPHICS_TEXT_SLOTS.flatMap((slot) => {
+    const list = suggestions[slot]
+    return list ? [{ slot, list, value: graphicsSlotText(document, slot) }] : []
+  })
+  if (open.length === 0) return null
+  return (
+    <div className="graphics-suggestion-tray">
+      {open.map(({ slot, list, value }) => (
+        <GraphicsSuggestionPicker
+          key={slot}
+          list={list}
+          label={graphicsSuggestionLabel(slot)}
+          value={value}
+          disabled={disabled || value === null}
+          onPick={(option) => onPick(slot, option)}
+          onDismiss={() => onDismiss(slot)}
+        />
+      ))}
     </div>
   )
 }

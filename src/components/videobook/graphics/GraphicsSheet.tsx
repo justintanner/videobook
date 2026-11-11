@@ -33,6 +33,18 @@ function OutputChoice({ editor }: { editor: GraphicsEditor }) {
   )
 }
 
+function HeaderActions({ editor }: { editor: GraphicsEditor }) {
+  const { state } = editor
+  return (
+    <div className="graphics-head-actions">
+      <button type="button" className="graphics-icon-button" aria-label="Undo" title="Undo (⌘Z)" disabled={state.past.length === 0 || state.rendering} onClick={editor.undo}><Undo2 size={14} aria-hidden="true" /></button>
+      <button type="button" className="graphics-icon-button" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={state.future.length === 0 || state.rendering} onClick={editor.redo}><Redo2 size={14} aria-hidden="true" /></button>
+      <span className="graphics-save-state" data-state={state.save}>{SAVE_LABELS[state.save]}</span>
+      <OutputChoice editor={editor} />
+    </div>
+  )
+}
+
 export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, onClose, onOpenSource }: {
   editor: GraphicsEditor
   assets: readonly GraphicsEditorAsset[]
@@ -57,17 +69,10 @@ export function GraphicsSheet({ editor, assets, mentions, books, applyFormId, on
       busy={state.rendering}
       busyLabel="Queuing render…"
       effect={OUTPUT_EFFECTS[state.output]}
-      validation={{ blocking, notice: state.save === 'saved' ? null : SAVE_LABELS[state.save] }}
+      validation={{ blocking, notice: null }}
       applyFormId={applyFormId}
       onCancel={onClose}
-      secondaryActions={(
-        <div className="graphics-footer">
-          <OutputChoice editor={editor} />
-          <button type="button" aria-label="Undo" title="Undo (⌘Z)" disabled={state.past.length === 0 || state.rendering} onClick={editor.undo}><Undo2 size={14} aria-hidden="true" /></button>
-          <button type="button" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={state.future.length === 0 || state.rendering} onClick={editor.redo}><Redo2 size={14} aria-hidden="true" /></button>
-          <span className="graphics-save-state" data-state={state.save}>{SAVE_LABELS[state.save]}</span>
-        </div>
-      )}
+      headerActions={<HeaderActions editor={editor} />}
     >
       <GraphicsBody key={state.target?.artifactId ?? 'none'} editor={editor} assets={assets} mentions={mentions} books={books} onOpenSource={onOpenSource} />
     </ConfirmSheet>

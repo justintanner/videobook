@@ -21,9 +21,12 @@ import {
   graphicsOpenEdits,
   graphicsOverlayImages,
   graphicsPercent,
+  graphicsQuickFields,
   graphicsRenderBlocker,
   graphicsRenderQueuedMessage,
   graphicsSelectionAfterRemove,
+  graphicsSlotHolder,
+  graphicsSuggestionLabel,
   graphicsClearSpotMessage,
   graphicsCoverWarning,
   graphicsLayerPlacements,
@@ -562,5 +565,51 @@ describe('graphics placement', () => {
     expect(parseGraphicsPlacement(answer)).toMatchObject({ covers: [{ kind: 'face', time: 0.5 }], clear_spot: { moved: true } })
     expect(parseGraphicsPlacement({ ...answer, clear_spot: null, detected: 1, regions: [{ time: 0.5, regions: [FACE] }] }).regions).toEqual([{ time: 0.5, regions: [FACE] }])
     expect(() => parseGraphicsPlacement({ ...answer, clear_spot: { ...answer.clear_spot, position: { anchor: 'middle', x: 0, y: 0, space: 'safe' } } })).toThrow()
+  })
+})
+
+describe('quick text fields', () => {
+  const tiktokTitle = graphicsDocumentFromLayers([
+    { kind: 'scrim', edge: 'bottom' },
+    { kind: 'text', name: 'Title', items: [{ text: 'jtbkk', slot: 'handle', icon: 'tiktok' }, { text: '', slot: 'headline' }, { text: '', slot: 'secondary' }] },
+  ])
+
+  it('edits the headline, the second line and the credit line of a look that has one', () => {
+    expect(graphicsQuickFields(lowerThird()).map((field) => [field.slot, field.label, field.lines])).toEqual([
+      ['headline', 'Headline', 2],
+      ['secondary', 'Second line', 1],
+      ['credit', 'Credit', 1],
+    ])
+    expect(graphicsQuickFields(graphicsDocumentFromLayers([])).map((field) => field.slot)).toEqual(['headline', 'secondary', 'credit'])
+  })
+
+  it('puts the handle the look draws in the Credit field when there is no credit line', () => {
+    expect(graphicsQuickFields(tiktokTitle).at(-1)).toEqual({ slot: 'handle', label: 'Credit', placeholder: 'Your handle', lines: 1 })
+    expect(graphicsQuickFields(titled()).at(-1)?.slot).toBe('handle')
+    const both = graphicsDocumentFromLayers([{ kind: 'text', items: [{ text: 'jtbkk', slot: 'handle' }, { text: '', slot: 'credit' }] }])
+    expect(graphicsQuickFields(both).at(-1)?.slot).toBe('credit')
+  })
+
+  it('finds the layer, item, text and icon that hold a slot', () => {
+    const [, title] = tiktokTitle.layers
+    const item = title.kind === 'text' ? title.items[0] : null
+    expect(graphicsSlotHolder(tiktokTitle, 'handle')).toEqual({ layerId: title.id, itemId: item?.id, text: 'jtbkk', icon: 'tiktok' })
+    expect(graphicsSlotHolder(tiktokTitle, 'headline')).toMatchObject({ layerId: title.id, text: '', icon: null })
+    expect(graphicsSlotHolder(tiktokTitle, 'credit')).toBeNull()
+    expect(graphicsSlotText(tiktokTitle, 'credit')).toBeNull()
+    expect(graphicsSlotText(tiktokTitle, 'handle')).toBe('jtbkk')
+  })
+
+  it('names a title layer by its headline rather than the handle above it', () => {
+    const images = parseGraphicsRead(wire()).images
+    const [, empty] = tiktokTitle.layers
+    expect(graphicsLayerSummary(empty, images)).toBe('jtbkk')
+    const typed = graphicsDocumentFromLayers([{ kind: 'text', items: [{ text: 'jtbkk', slot: 'handle' }, { text: THAI_TITLE, slot: 'headline' }] }])
+    expect(graphicsLayerSummary(typed.layers[0], images)).toBe(THAI_TITLE)
+  })
+
+  it('labels suggestion lists by the field they fill', () => {
+    expect(graphicsSuggestionLabel('headline')).toBe('Headline')
+    expect(graphicsSuggestionLabel('secondary')).toBe('Second line')
   })
 })
