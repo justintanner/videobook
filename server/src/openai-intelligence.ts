@@ -1,3 +1,4 @@
+import { providerEndpoints } from "./media/endpoints.js";
 import { createOpenAi } from "./usage-providers.js";
 import { withRetry } from "@apicity/openai";
 import type {
@@ -78,11 +79,12 @@ export function buildIntelligenceResponses(
   }
 
   const timeout = options.timeout ?? 180_000;
+  const baseURL = options.baseURL ?? providerEndpoints().openaiBaseURL;
   const provider = createOpenAi({
     apiKey,
     timeout,
     ...(options.fetch ? { fetch: options.fetch } : {}),
-    ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+    ...(baseURL ? { baseURL } : {}),
   });
   const call = withRetry<OpenAiResponseRequest, OpenAiResponseResponse>(
     provider.post.v1.responses,

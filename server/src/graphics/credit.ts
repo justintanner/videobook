@@ -100,14 +100,20 @@ function parentArtifact(engine: Engine, artifactId: string): string | null {
   return null;
 }
 
-export async function sourceCredit(engine: Engine, artifactId: string): Promise<GraphicsCredit | null> {
+export function* sourceChain(engine: Engine, artifactId: string): Generator<string> {
   const seen = new Set<string>();
   let current: string | null = artifactId;
   for (let step = 0; current !== null && step <= MAX_SOURCE_STEPS && !seen.has(current); step += 1) {
     seen.add(current);
-    const credit = creditFrom(await originalSource(engine, current));
-    if (credit) return credit;
+    yield current;
     current = parentArtifact(engine, current);
+  }
+}
+
+export async function sourceCredit(engine: Engine, artifactId: string): Promise<GraphicsCredit | null> {
+  for (const id of sourceChain(engine, artifactId)) {
+    const credit = creditFrom(await originalSource(engine, id));
+    if (credit) return credit;
   }
   return null;
 }

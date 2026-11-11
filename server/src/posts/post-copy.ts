@@ -1,9 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { chatIntelligenceRequestOptions } from "../chat-models.js";
 import { LIGHTNING_POST_TAGS } from "../lightning-defaults.js";
+import { clipAnalysisLines, readClipAnalysis, readClipTranscript, type ClipAnalysis } from "../clip-context.js";
 import { buildIntelligenceResponses, firstResponseText, intelligenceRequest, type ResponsesFn } from "../openai-intelligence.js";
-import { readAssetTranscript } from "../transcript-projection.js";
-import { isAnalyzableVideo, VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
+import { isAnalyzableVideo } from "../video-analysis-projection.js";
 import type { PostPlatform, PostView } from "./post-contract.js";
 import {
   normalizePostTags,
@@ -14,24 +14,11 @@ import {
   type PostCopyLanguage,
 } from "./post-copy-format.js";
 
-const MAX_TRANSCRIPT_CHARS = 4000;
 const MAX_PROMPT_CHARS = 1000;
-const MAX_SCENES = 12;
-
-export type PostCopyAnalysis = {
-  summary: string;
-  mood: string;
-  setting: string;
-  subjects: string[];
-  actions: string[];
-  tags: string[];
-  scenes: string[];
-  textOnScreen: string[];
-};
 
 export type PostCopyContext = {
   label: string;
-  analysis: PostCopyAnalysis | null;
+  analysis: ClipAnalysis | null;
   transcript: string | null;
   prompts: string[];
 };
@@ -73,43 +60,6 @@ function texts(value: unknown): string[] {
   return Array.isArray(value) ? value.map(text).filter(Boolean) : [];
 }
 
-function sceneLines(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, MAX_SCENES).map((scene) => {
-    const record = scene && typeof scene === "object" ? scene as Record<string, unknown> : {};
-    const at = typeof record.timestamp === "number" ? `${record.timestamp.toFixed(1)}s: ` : "";
-    const description = text(record.description);
-    return description ? `${at}${description}` : "";
-  }).filter(Boolean);
-}
-
-function postCopyAnalysisFrom(raw: unknown): PostCopyAnalysis | null {
-  if (!raw || typeof raw !== "object") return null;
-  const record = raw as Record<string, unknown>;
-  const analysis: PostCopyAnalysis = {
-    summary: text(record.summary),
-    mood: text(record.mood),
-    setting: text(record.setting),
-    subjects: texts(record.subjects),
-    actions: texts(record.actions),
-    tags: texts(record.tags),
-    scenes: sceneLines(record.scenes),
-    textOnScreen: texts(record.textOnScreen),
-  };
-  const empty = !analysis.summary && analysis.scenes.length === 0 && analysis.tags.length === 0 && analysis.subjects.length === 0;
-  return empty ? null : analysis;
-}
-
-async function readAnalysis(engine: Engine, assetId: string): Promise<PostCopyAnalysis | null> {
-  const read = await engine.files.read(assetId, VIDEO_ANALYSIS_FILE);
-  if (!read.ok) return null;
-  try {
-    return postCopyAnalysisFrom(JSON.parse(read.value.toString()) as unknown);
-  } catch {
-    return null;
-  }
-}
-
 function sourceArtifactIds(post: PostView): string[] {
   const source = post.definition.source;
   if (!source) return [];
@@ -119,7 +69,7 @@ function sourceArtifactIds(post: PostView): string[] {
 export async function postAnalysisTarget(engine: Engine, post: PostView): Promise<PostAnalysisTarget | null> {
   const ids = sourceArtifactIds(post);
   for (const assetId of ids) {
-    if (await readAnalysis(engine, assetId)) return { assetId, analyzable: true, analyzed: true };
+    if (await readClipAnalysis(engine, assetId)) return { assetId, analyzable: true, analyzed: true };
   }
   const assetId = ids[0];
   if (!assetId) return null;
@@ -127,22 +77,11 @@ export async function postAnalysisTarget(engine: Engine, post: PostView): Promis
   return { assetId, analyzable: artifact.ok && isAnalyzableVideo(artifact.value.kind), analyzed: false };
 }
 
-async function readTranscriptText(engine: Engine, assetIds: readonly string[]): Promise<string | null> {
-  for (const assetId of assetIds) {
-    const transcript = await readAssetTranscript(engine, assetId);
-    if (transcript.kind === "timed" || transcript.kind === "plain") {
-      const value = transcript.text.trim();
-      if (value) return value.slice(0, MAX_TRANSCRIPT_CHARS);
-    }
-  }
-  return null;
-}
-
 export async function readPostCopyContext(engine: Engine, post: PostView): Promise<PostCopyContext> {
   const ids = sourceArtifactIds(post);
-  let analysis: PostCopyAnalysis | null = null;
+  let analysis: ClipAnalysis | null = null;
   for (const assetId of ids) {
-    analysis = await readAnalysis(engine, assetId);
+    analysis = await readClipAnalysis(engine, assetId);
     if (analysis) break;
   }
   const prompts = post.definition.lineage
@@ -150,26 +89,12 @@ export async function readPostCopyContext(engine: Engine, post: PostView): Promi
     .filter(Boolean)
     .slice(-2);
   const label = post.definition.lineage.find((step) => step.cellId === post.definition.source?.cellId)?.label ?? post.label;
-  return { label, analysis, transcript: await readTranscriptText(engine, ids), prompts };
+  return { label, analysis, transcript: await readClipTranscript(engine, ids), prompts };
 }
 
-function listLine(name: string, values: readonly string[]): string | null {
-  return values.length ? `${name}: ${values.join(", ")}` : null;
-}
-
-function analysisSection(analysis: PostCopyAnalysis | null): string {
+function analysisSection(analysis: ClipAnalysis | null): string {
   if (!analysis) return "VIDEO ANALYSIS: none available. Rely only on the clip label and prompts below.";
-  const lines = [
-    analysis.summary ? `Summary: ${analysis.summary}` : null,
-    analysis.mood ? `Mood: ${analysis.mood}` : null,
-    analysis.setting ? `Setting: ${analysis.setting}` : null,
-    listLine("Subjects", analysis.subjects),
-    listLine("Actions", analysis.actions),
-    listLine("Analysis tags", analysis.tags),
-    listLine("Text on screen", analysis.textOnScreen),
-    analysis.scenes.length ? `Scenes:\n${analysis.scenes.map((scene) => `- ${scene}`).join("\n")}` : null,
-  ].filter((line): line is string => line !== null);
-  return `VIDEO ANALYSIS:\n${lines.join("\n")}`;
+  return `VIDEO ANALYSIS:\n${clipAnalysisLines(analysis).join("\n")}`;
 }
 
 function rewriteSection(request: PostCopyRequest): string {

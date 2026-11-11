@@ -76,6 +76,7 @@ function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsR
     coalesceKey: null,
     rendering: false,
     output,
+    suggestions: {},
   }
   const done = async () => ({ ok: true, message: '' })
   return {
@@ -99,6 +100,8 @@ function editorFor(target: GraphicsTarget, read: GraphicsRead, output: GraphicsR
     saveWatermark: done,
     resetWatermark: done,
     setPlatform: async () => undefined,
+    suggest: async () => undefined,
+    dismissSuggestions: () => undefined,
   }
 }
 

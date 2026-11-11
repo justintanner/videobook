@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GraphicsEdit } from '../../server/src/graphics/edits'
-import type { GraphicsDocument } from '../../server/src/graphics/model'
+import type { GraphicsDocument, GraphicsTextSlot } from '../../server/src/graphics/model'
+import { GRAPHICS_SUGGEST_SLOTS, type GraphicsSuggestKind, type GraphicsSuggestLanguage } from '../../server/src/graphics/slots'
 import type { WatermarkPlatform } from '../../server/src/watermark-platform'
 import type { ChatExecution } from './chat-turns'
 import {
   editGraphicsHistory,
   graphicsOpenEdits,
   graphicsRenderQueuedMessage,
+  graphicsSlotText,
   graphicsTemplateMessage,
   graphicsToolError,
   graphicsWatermarkSwitchEdits,
   parseGraphicsRead,
   parseGraphicsRender,
+  parseGraphicsSuggestions,
   stepGraphicsHistory,
   type GraphicsHistory,
   type GraphicsRead,
   type GraphicsRenderOutput,
+  type GraphicsSuggestionList,
+  type GraphicsSuggestionLists,
   type GraphicsTarget,
   type GraphicsTemplateChoice,
   type GraphicsTemplateOp,
@@ -40,6 +45,7 @@ export interface GraphicsEditorState {
   coalesceKey: string | null
   rendering: boolean
   output: GraphicsRenderOutput
+  suggestions: GraphicsSuggestionLists
 }
 
 export interface GraphicsRenderOutcome {
@@ -64,6 +70,7 @@ const EMPTY: GraphicsEditorState = {
   coalesceKey: null,
   rendering: false,
   output: 'new',
+  suggestions: {},
 }
 
 const AUTOSAVE_MS = 700
@@ -105,6 +112,18 @@ function withPlatform(state: GraphicsEditorState, platform: WatermarkPlatform): 
   const target = state.target
   if (!target?.watermark) return state
   return { ...state, target: { ...target, watermark: { ...target.watermark, platform } }, loading: true }
+}
+
+function withSuggestions(state: GraphicsEditorState, slot: GraphicsTextSlot, list: GraphicsSuggestionList | null): GraphicsEditorState {
+  const suggestions = { ...state.suggestions }
+  if (list) suggestions[slot] = list
+  else delete suggestions[slot]
+  return { ...state, suggestions }
+}
+
+function settleSuggestions(state: GraphicsEditorState, slot: GraphicsTextSlot, requestId: string, patch: Pick<GraphicsSuggestionList, 'status' | 'options' | 'message'>): GraphicsEditorState {
+  const list = state.suggestions[slot]
+  return list?.requestId === requestId ? withSuggestions(state, slot, { ...list, ...patch }) : state
 }
 
 function missingImages(state: GraphicsEditorState): boolean {
@@ -359,6 +378,30 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
 
   const resetWatermark = useCallback(() => templateAction('set_watermark_template', () => ({ template_id: null })), [templateAction])
 
+  const suggest = useCallback(async (kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => {
+    const current = stateRef.current
+    if (!ready || !current.target || !current.document) return
+    const slot = GRAPHICS_SUGGEST_SLOTS[kind]
+    const requestId = crypto.randomUUID()
+    const text = kind === 'translate' ? graphicsSlotText(current.document, 'headline')?.trim() ?? '' : ''
+    const list: GraphicsSuggestionList = { requestId, kind, language, status: 'loading', options: [], message: null }
+    if (kind === 'translate' && !text) {
+      commit((value) => withSuggestions(value, slot, { ...list, status: 'error', message: 'Type or pick a headline first.' }))
+      return
+    }
+    commit((value) => withSuggestions(value, slot, list))
+    try {
+      const result = parseGraphicsSuggestions(await call('video_graphics', { ...baseArgs(), op: 'suggest', kind, language, ...(text ? { text } : {}) }))
+      commit((value) => settleSuggestions(value, slot, requestId, { status: 'ready', options: result.options, message: null }))
+    } catch (error) {
+      commit((value) => settleSuggestions(value, slot, requestId, { status: 'error', options: [], message: graphicsToolError(error).message }))
+    }
+  }, [baseArgs, call, commit, ready])
+
+  const dismissSuggestions = useCallback((slot: GraphicsTextSlot) => {
+    commit((value) => withSuggestions(value, slot, null))
+  }, [commit])
+
   const setPlatform = useCallback(async (platform: WatermarkPlatform) => {
     const current = stateRef.current
     if (!current.target?.watermark || current.target.watermark.platform === platform || current.rendering || current.save === 'conflict') return
@@ -396,6 +439,8 @@ export function useGraphicsEditor(options: { bookId: string | null; ready: boole
     saveWatermark,
     resetWatermark,
     setPlatform,
+    suggest,
+    dismissSuggestions,
   }
 }
 

@@ -1,7 +1,24 @@
-import type { GraphicsDocument, GraphicsLayer, GraphicsSlot, GraphicsTextItem } from "./model.js";
+import type { GraphicsDocument, GraphicsLayer, GraphicsSlot, GraphicsTextItem, GraphicsTextSlot } from "./model.js";
 import { isGraphicsUrl, MAX_GRAPHICS_TEXT_LENGTH } from "./model.js";
 
 export type GraphicsSlotValues = Partial<Record<GraphicsSlot, string>>;
+
+export const GRAPHICS_SUGGEST_KINDS = ["headline", "translate"] as const;
+export type GraphicsSuggestKind = typeof GRAPHICS_SUGGEST_KINDS[number];
+
+export const GRAPHICS_SUGGEST_LANGUAGES = ["th", "en"] as const;
+export type GraphicsSuggestLanguage = typeof GRAPHICS_SUGGEST_LANGUAGES[number];
+
+export const GRAPHICS_SUGGEST_LANGUAGE_NAMES: Readonly<Record<GraphicsSuggestLanguage, string>> = { th: "Thai", en: "English" };
+
+export const GRAPHICS_SUGGEST_SLOTS: Readonly<Record<GraphicsSuggestKind, GraphicsTextSlot>> = { headline: "headline", translate: "secondary" };
+
+const THAI_SCRIPT = /\p{Script=Thai}/u;
+
+export function graphicsSuggestLanguage(kind: GraphicsSuggestKind, text: string): GraphicsSuggestLanguage {
+  if (kind === "headline") return "th";
+  return THAI_SCRIPT.test(text) || text.trim() === "" ? "en" : "th";
+}
 
 type SlotHolder = { slot: GraphicsSlot; value: string };
 

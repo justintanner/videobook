@@ -1,6 +1,6 @@
 import type { GraphicsEditError } from "./edits.js";
 
-type GraphicsServiceErrorCode = "conflict" | "invalid" | "not_found" | "not_ready" | "stale_source";
+type GraphicsServiceErrorCode = "conflict" | "invalid" | "no_context" | "not_found" | "not_ready" | "stale_source";
 
 type GraphicsErrorDetails = {
   revision?: string;

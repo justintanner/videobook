@@ -6,6 +6,7 @@ export interface ProviderEndpoints {
   machgenBaseURL?: string;
   wavespeedBaseURL?: string;
   xaiBaseURL?: string;
+  openaiBaseURL?: string;
   pollIntervalMs?: number;
   timeoutMs?: number;
 }

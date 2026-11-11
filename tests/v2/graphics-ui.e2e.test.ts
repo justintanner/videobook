@@ -26,6 +26,10 @@ const DURATION = 3
 const THAI_TITLE = 'ติดไฟแดงยังไงให้เท่ได้ขนาดนี้'
 const ENGLISH_LINE = 'How can you look this cool?'
 const CREDIT = 'TikTok/@pomkondeena'
+const THAI_HEADLINES = ['ไฟแดงนี้ของเรา', 'ฝนตกก็ไม่หยุดเท่', 'ร่มชมพูกลางไฟแดง']
+const ENGLISH_LINES = ['This red light is ours', 'Rain cannot stop the cool', 'A pink umbrella at the red light']
+const ENGLISH_HEADLINES = ['Red light, still cool', 'Too cool for the rain', 'Pink umbrella energy']
+const THAI_LINES = ['ไฟแดงก็ยังเท่', 'เท่เกินกว่าฝน', 'พลังร่มชมพู']
 const TIKTOK_SOURCE = {
   origin: 'download',
   source_url: 'https://www.tiktok.com/@pomkondeena/video/7432100000000000000',
@@ -100,7 +104,9 @@ describe('graphics editor in the composer', () => {
   let squareId = ''
   let wideId = ''
   let watermarkId = ''
+  let suggestId = ''
   const renders: Record<string, unknown>[] = []
+  const suggests: Record<string, unknown>[] = []
   const errors: string[] = []
   const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => resultValue(await client!.callTool({ name, arguments: { book_id: bookId, ...args } })) as T
   const read = (assetId = sourceId) => call<Read>('video_graphics', { asset_id: assetId })
@@ -170,6 +176,7 @@ describe('graphics editor in the composer', () => {
       await video(join(root, 'square.mp4'), 'Square take', undefined, SQUARE),
       await video(join(root, 'wide.mp4'), 'Wide take', undefined, WIDE, WIDE_DURATION),
       await video(join(root, 'watermark.mp4'), 'Watermark take'),
+      await video(join(root, 'suggest.mp4'), 'Suggest take', TIKTOK_SOURCE),
     ]
     const ids: string[] = []
     for (const fixture of fixtures) {
@@ -184,7 +191,7 @@ describe('graphics editor in the composer', () => {
       await engine.files.write(artifact.value.artifactId, 'original.jpg', await extractVideoPoster(fixture.path, fixture.duration))
       ids.push(artifact.value.artifactId)
     }
-    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId] = ids
+    ;[sourceId, secondId, thirdId, squareId, wideId, watermarkId, suggestId] = ids
     const logo = await engine.artifacts.create({ kind: 'image', label: 'Logo' })
     if (!logo.ok) throw new Error(logo.error.message)
     logoId = logo.value.artifactId
@@ -200,6 +207,7 @@ describe('graphics editor in the composer', () => {
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 3 }, outputArtifactId: squareId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 0, column: 4 }, outputArtifactId: wideId }))
     await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 1, column: 2 }, outputArtifactId: watermarkId }))
+    await engine.notebooks.insertCell(notebook.id, engine.notebooks.createCell({ type: 'video', slot: { row: 3, column: 7 }, outputArtifactId: suggestId }))
     const logoCell = engine.notebooks.createCell({ type: 'image', slot: { row: 1, column: 1 }, outputArtifactId: logoId })
     logoCellId = logoCell.id
     await engine.notebooks.insertCell(notebook.id, logoCell)
@@ -239,7 +247,9 @@ describe('graphics editor in the composer', () => {
     page.on('pageerror', error => errors.push(error.message))
     page.on('request', request => {
       if (request.method() !== 'POST' || !request.url().endsWith('/mcp')) return
-      renders.push(...toolCalls(request.postDataJSON()).filter(item => item.name === 'video_graphics' && item.arguments.op === 'render').map(item => item.arguments))
+      const graphics = toolCalls(request.postDataJSON()).filter(item => item.name === 'video_graphics')
+      renders.push(...graphics.filter(item => item.arguments.op === 'render').map(item => item.arguments))
+      suggests.push(...graphics.filter(item => item.arguments.op === 'suggest').map(item => item.arguments))
     })
     await page.addInitScript(id => localStorage.setItem('videobook.active-book', id), bookId)
     await page.goto(appUrl, { timeout: testBudget(60_000) })
@@ -947,6 +957,100 @@ describe('graphics editor in the composer', () => {
     expect((await readWatermark()).document.layers.map((layer) => layer.kind)).toEqual(['scrim', 'text', 'text'])
     await close()
     expect(renders.length).toBe(rendersBefore)
+    expect(errors).toEqual([])
+  })
+
+  it('suggests headlines and translates the headline only when asked, and applies only the option picked', async () => {
+    expect(suggests).toEqual([])
+    const headlines = sheet().getByRole('group', { name: 'Headline suggestions', exact: true })
+    const lines = sheet().getByRole('group', { name: 'Second line suggestions', exact: true })
+    const options = (group: Locator) => group.getByRole('list').getByRole('button')
+    const suggestButton = () => sheet().getByRole('button', { name: 'Suggest', exact: true })
+    await command('/osg @d8')
+    await sheet().waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(() => field('Headline').isEnabled(), { timeout: 30_000 }).toBe(true)
+    expect(await sheet().getByRole('button', { name: 'Translate to English', exact: true }).isDisabled()).toBe(true)
+    expect(await sheet().getByRole('group', { name: 'Headline language', exact: true }).getByRole('button', { name: 'Thai', exact: true }).getAttribute('aria-pressed')).toBe('true')
+
+    await suggestButton().click()
+    await expect.poll(async () => (await headlines.getByRole('alert').textContent()) ?? '', { timeout: testBudget(15_000) }).toContain('nothing to write a headline from')
+    expect(await field('Headline').inputValue()).toBe('')
+    await headlines.getByRole('button', { name: 'Hide headline suggestions', exact: true }).click()
+    await headlines.waitFor({ state: 'hidden', timeout: 10_000 })
+
+    await page.route('**/mcp', async (route) => {
+      const body = await requestBody(route)
+      const envelope = (Array.isArray(body) ? body : [body]).map(record).find((entry) => {
+        const params = record(entry?.params)
+        return entry?.method === 'tools/call' && params?.name === 'video_graphics' && record(params.arguments)?.op === 'suggest'
+      })
+      if (!envelope) return route.continue()
+      const args = record(record(envelope.params)?.arguments) ?? {}
+      const translate = args.kind === 'translate'
+      const english = args.language === 'en'
+      const suggested = {
+        asset_id: suggestId,
+        kind: translate ? 'translate' : 'headline',
+        slot: translate ? 'secondary' : 'headline',
+        language: english ? 'en' : 'th',
+        text: translate ? args.text : null,
+        options: translate ? (english ? ENGLISH_LINES : THAI_LINES) : (english ? ENGLISH_HEADLINES : THAI_HEADLINES),
+        model: 'gpt-6-astra',
+        context: translate ? null : { analysis: true, transcript: false, download: true },
+      }
+      const response = { jsonrpc: '2.0', id: envelope.id, result: { resultType: 'complete', content: [{ type: 'text', text: JSON.stringify(suggested) }], isError: false } }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(Array.isArray(body) ? [response] : response) })
+    })
+    try {
+      await suggestButton().click()
+      await expect.poll(() => options(headlines).allTextContents(), { timeout: testBudget(15_000) }).toEqual(THAI_HEADLINES)
+      expect(await field('Headline').inputValue()).toBe('')
+      await options(headlines).filter({ hasText: THAI_HEADLINES[1] }).click()
+      await expect.poll(() => field('Headline').inputValue()).toBe(THAI_HEADLINES[1])
+      expect(await options(headlines).filter({ hasText: THAI_HEADLINES[1] }).getAttribute('aria-pressed')).toBe('true')
+      await saved()
+      await shot('graphics-suggest-headlines')
+
+      await sheet().getByRole('button', { name: 'Translate to English', exact: true }).click()
+      await expect.poll(() => options(lines).allTextContents(), { timeout: testBudget(15_000) }).toEqual(ENGLISH_LINES)
+      expect(await field('Second line').inputValue()).toBe('')
+      await options(lines).filter({ hasText: ENGLISH_LINES[0] }).click()
+      await expect.poll(() => field('Second line').inputValue()).toBe(ENGLISH_LINES[0])
+      await saved()
+      expect(slotText(await read(suggestId), 'headline')).toBe(THAI_HEADLINES[1])
+      expect(slotText(await read(suggestId), 'secondary')).toBe(ENGLISH_LINES[0])
+
+      await sheet().getByRole('button', { name: 'Undo', exact: true }).click()
+      await expect.poll(() => field('Second line').inputValue()).toBe('')
+      await lines.getByRole('button', { name: 'Hide second line suggestions', exact: true }).click()
+      await lines.waitFor({ state: 'hidden', timeout: 10_000 })
+
+      await sheet().getByRole('group', { name: 'Headline language', exact: true }).getByRole('button', { name: 'English', exact: true }).click()
+      await suggestButton().click()
+      await expect.poll(() => options(headlines).allTextContents(), { timeout: testBudget(15_000) }).toEqual(ENGLISH_HEADLINES)
+      await options(headlines).filter({ hasText: ENGLISH_HEADLINES[0] }).click()
+      await expect.poll(() => field('Headline').inputValue()).toBe(ENGLISH_HEADLINES[0])
+      await sheet().getByRole('button', { name: 'Translate to Thai', exact: true }).click()
+      await expect.poll(() => options(lines).allTextContents(), { timeout: testBudget(15_000) }).toEqual(THAI_LINES)
+      await options(lines).filter({ hasText: THAI_LINES[2] }).click()
+      await expect.poll(() => field('Second line').inputValue()).toBe(THAI_LINES[2])
+      await saved()
+    } finally {
+      await page.unroute('**/mcp')
+    }
+    expect(suggests.map((args) => ({ asset_id: args.asset_id, kind: args.kind, language: args.language, text: args.text }))).toEqual([
+      { asset_id: suggestId, kind: 'headline', language: 'th', text: undefined },
+      { asset_id: suggestId, kind: 'headline', language: 'th', text: undefined },
+      { asset_id: suggestId, kind: 'translate', language: 'en', text: THAI_HEADLINES[1] },
+      { asset_id: suggestId, kind: 'headline', language: 'en', text: undefined },
+      { asset_id: suggestId, kind: 'translate', language: 'th', text: ENGLISH_HEADLINES[0] },
+    ])
+    const current = await read(suggestId)
+    expect(slotText(current, 'headline')).toBe(ENGLISH_HEADLINES[0])
+    expect(slotText(current, 'secondary')).toBe(THAI_LINES[2])
+    expect(current.render).toBeNull()
+    await sheet().getByRole('button', { name: /^Close/ }).click()
+    await sheet().waitFor({ state: 'hidden', timeout: 10_000 })
     expect(errors).toEqual([])
   })
 })

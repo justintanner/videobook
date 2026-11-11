@@ -324,18 +324,18 @@ describe("video_graphics", () => {
     expect(engine.jobs.queue.list({ type: "render_graphics", limit: 50 })).toEqual([]);
   });
 
-  it("is a free, editor-only video tool behind /overlay", () => {
+  it("is an editor-only video tool behind /overlay that spends money only to suggest text", () => {
     const definitions = getAllToolDefs(engine);
     expect(definitions.map((definition) => definition.name)).toContain("video_graphics");
     expect(buildRoutableTools(definitions).map((tool) => tool.name)).not.toContain("video_graphics");
-    expect(toolSpendsMoney("video_graphics")).toBe(false);
     expect(toolSpendsMoney("video_graphics", { op: "update" })).toBe(false);
     expect(toolSpendsMoney("video_graphics", { op: "render" })).toBe(false);
+    expect(toolSpendsMoney("video_graphics", { op: "suggest" })).toBe(true);
     expect(VIDEO_EDITING_TOOL_CONTRACTS.find((contract) => contract.tool === "video_graphics")).toEqual({
       tool: "video_graphics",
       exposure: "ui",
       command: "/overlay",
-      purpose: "Read, save and render a video's on-screen graphics layers",
+      purpose: "Read, save, render and suggest text for a video's on-screen graphics layers",
     });
     expect(VIDEO_EDITING_TOOL_CONTRACTS.find((contract) => contract.tool === "set_video_overlay")).toMatchObject({ exposure: "internal" });
   });

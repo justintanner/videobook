@@ -87,7 +87,7 @@ const VIDEO_KINDS: ReadonlySet<string> = new Set(["video", "final"]);
 const WATERMARK_CORNER: OsgPosition = "bottom-right";
 const WHOLE_CLIP: WatermarkWindow = { startSeconds: null, endSeconds: null };
 
-function requireVideo(engine: Engine, artifactId: string): void {
+export function requireVideo(engine: Engine, artifactId: string): void {
   const artifact = engine.artifacts.get(artifactId);
   if (!artifact.ok) throw new GraphicsServiceError("invalid", artifact.error.message);
   if (!VIDEO_KINDS.has(artifact.value.kind)) {

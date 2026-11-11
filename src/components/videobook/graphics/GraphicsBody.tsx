@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactN
 import type { PlayerRef } from '@remotion/player'
 import type { GraphicsEdit } from '../../../../server/src/graphics/edits'
 import type { GraphicsLayerLayout } from '../../../../server/src/graphics/layout'
+import type { GraphicsSuggestKind, GraphicsSuggestLanguage } from '../../../../server/src/graphics/slots'
 import type { BookProjectSummary } from '@/videobook/book-project-catalog'
 import type { GraphicsEditor } from '@/videobook/useGraphicsEditor'
 import {
@@ -101,6 +102,9 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
   const applyTemplate = useCallback((template: GraphicsTemplateChoice) => {
     editor.edit([{ op: 'apply_template', template: template.document }])
   }, [editor])
+  const suggest = useCallback((kind: GraphicsSuggestKind, language: GraphicsSuggestLanguage) => {
+    void editor.suggest(kind, language)
+  }, [editor])
 
   const nudge = (delta: GraphicsPoint, repeat: boolean) => {
     if (!source || !selectedLayer || selectedLayer.kind === 'scrim' || !selectedBox) return
@@ -161,7 +165,15 @@ export function GraphicsBody({ editor, assets, mentions, books, onOpenSource }: 
       {document && read && (
         <div className="graphics-controls">
           {watermark && <GraphicsWatermark editor={editor} read={read} platform={watermark.platform} disabled={!editable} />}
-          <GraphicsQuickFields document={document} read={read} disabled={!editable} onEdit={edit} />
+          <GraphicsQuickFields
+            document={document}
+            read={read}
+            disabled={!editable}
+            suggestions={state.suggestions}
+            onEdit={edit}
+            onSuggest={suggest}
+            onDismissSuggestions={editor.dismissSuggestions}
+          />
           <GraphicsTemplates editor={editor} read={read} disabled={!editable} books={otherBooks} onApply={applyTemplate} />
           <GraphicsWarnings warnings={warnings} />
           <GraphicsLayers

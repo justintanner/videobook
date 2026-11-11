@@ -25,6 +25,7 @@ import {
   graphicsRenderQueuedMessage,
   graphicsSelectionAfterRemove,
   graphicsSlotText,
+  graphicsSuggestKind,
   graphicsTemplateChoices,
   graphicsTemplateMessage,
   graphicsTextEdits,
@@ -33,6 +34,7 @@ import {
   graphicsWatermarkTarget,
   parseGraphicsRead,
   parseGraphicsRender,
+  parseGraphicsSuggestions,
   stepGraphicsHistory,
   type GraphicsHistory,
   type GraphicsRead,
@@ -491,5 +493,21 @@ describe('graphics watermark mode', () => {
       .toBe('Saved as the default TikTok watermark (“TikTok watermark”). Goal finishing and apply_watermark burn it from now on.')
     expect(graphicsTemplateMessage('set_watermark_template', { watermark: { platform: 'x', template_id: null } }, { platform: 'x' }))
       .toBe('Goal finishing and apply_watermark burn the X profile’s watermark again.')
+  })
+})
+
+describe('graphics suggestions', () => {
+  it('suggests the headline and translates it for the second line, and nothing else', () => {
+    expect(graphicsSuggestKind('headline')).toBe('headline')
+    expect(graphicsSuggestKind('secondary')).toBe('translate')
+    expect(graphicsSuggestKind('credit')).toBeNull()
+    expect(graphicsSuggestKind('handle')).toBeNull()
+  })
+
+  it('parses the options of a suggest result and refuses a result without any', () => {
+    const result = { asset_id: 'v1', kind: 'translate', slot: 'secondary', language: 'en', text: 'ติดไฟแดง', options: ['Red light', 'Stuck at a red light', 'Still cool'], model: 'gpt-6-astra', context: null }
+    expect(parseGraphicsSuggestions(result)).toEqual({ kind: 'translate', language: 'en', options: ['Red light', 'Stuck at a red light', 'Still cool'] })
+    expect(() => parseGraphicsSuggestions({ ...result, options: [] })).toThrow()
+    expect(() => parseGraphicsSuggestions({ ...result, language: 'fr' })).toThrow()
   })
 })

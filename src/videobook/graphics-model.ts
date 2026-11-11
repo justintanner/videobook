@@ -15,7 +15,14 @@ import {
   type GraphicsSlot,
   type GraphicsTextSlot,
 } from '../../server/src/graphics/model'
-import { graphicsSlotValues } from '../../server/src/graphics/slots'
+import {
+  GRAPHICS_SUGGEST_KINDS,
+  GRAPHICS_SUGGEST_LANGUAGES,
+  GRAPHICS_SUGGEST_SLOTS,
+  graphicsSlotValues,
+  type GraphicsSuggestKind,
+  type GraphicsSuggestLanguage,
+} from '../../server/src/graphics/slots'
 import { GRAPHICS_BLOCK_SLOTS, graphicsSlotBlock, type GraphicsBlockText } from '../../server/src/graphics/starters'
 import { graphicsStillGroups } from '../../server/src/graphics/stills'
 import { watermarkDrawnDocument } from '../../server/src/graphics/watermark-burn'
@@ -401,6 +408,33 @@ export function graphicsRenderQueuedMessage(output: GraphicsRenderOutput, target
   return output === 'replace'
     ? `Burning graphics into ${name}. The video updates in place when the render finishes.`
     : `Rendering graphics for ${name}. The copy appears below it when the render finishes.`
+}
+
+const suggestionsSchema = z.object({
+  kind: z.enum(GRAPHICS_SUGGEST_KINDS),
+  language: z.enum(GRAPHICS_SUGGEST_LANGUAGES),
+  options: z.array(z.string()).min(1),
+})
+
+type GraphicsSuggestions = z.infer<typeof suggestionsSchema>
+
+export function parseGraphicsSuggestions(value: unknown): GraphicsSuggestions {
+  return suggestionsSchema.parse(value)
+}
+
+export interface GraphicsSuggestionList {
+  requestId: string
+  kind: GraphicsSuggestKind
+  language: GraphicsSuggestLanguage
+  status: 'loading' | 'ready' | 'error'
+  options: string[]
+  message: string | null
+}
+
+export type GraphicsSuggestionLists = Partial<Record<GraphicsTextSlot, GraphicsSuggestionList>>
+
+export function graphicsSuggestKind(slot: GraphicsTextSlot): GraphicsSuggestKind | null {
+  return GRAPHICS_SUGGEST_KINDS.find((kind) => GRAPHICS_SUGGEST_SLOTS[kind] === slot) ?? null
 }
 
 export const GRAPHICS_QUICK_FIELDS: ReadonlyArray<{ slot: GraphicsTextSlot; label: string; placeholder: string; lines: number }> = [

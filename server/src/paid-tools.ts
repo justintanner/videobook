@@ -20,6 +20,7 @@ export const BILLABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
  */
 export const BILLABLE_TOOL_OPERATIONS: Readonly<Record<string, ReadonlySet<string>>> = {
   caption_video: new Set(["prepare"]),
+  video_graphics: new Set(["suggest"]),
 };
 
 export function toolSpendsMoney(name: string, args?: Record<string, unknown>): boolean {

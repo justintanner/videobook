@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GraphicsDocument, GraphicsLayer } from "./model.js";
 import { graphicsDocumentFromLayers, parseGraphicsDocument } from "./model.js";
-import { fillGraphicsSlots, graphicsSlotValues, writeGraphicsSlot } from "./slots.js";
+import { fillGraphicsSlots, graphicsSlotValues, graphicsSuggestLanguage, writeGraphicsSlot } from "./slots.js";
 
 function document(): GraphicsDocument {
   return graphicsDocumentFromLayers([
@@ -63,5 +63,16 @@ describe("graphics slots", () => {
     const original = document();
     writeGraphicsSlot(original, "secondary", "Changed");
     expect(original).toEqual(document());
+  });
+});
+
+describe("graphicsSuggestLanguage", () => {
+  it("suggests Thai headlines and translates into the other language, English by default", () => {
+    expect(graphicsSuggestLanguage("headline", "")).toBe("th");
+    expect(graphicsSuggestLanguage("headline", "Already English")).toBe("th");
+    expect(graphicsSuggestLanguage("translate", "ติดไฟแดงยังไงให้เท่")).toBe("en");
+    expect(graphicsSuggestLanguage("translate", "TikTok ติดไฟแดง")).toBe("en");
+    expect(graphicsSuggestLanguage("translate", "  ")).toBe("en");
+    expect(graphicsSuggestLanguage("translate", "How cool is this?")).toBe("th");
   });
 });

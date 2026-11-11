@@ -855,3 +855,77 @@ label.graphics-field > span:first-child {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.graphics-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.graphics-assist-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.graphics-assist-row .graphics-segmented {
+  margin-right: 2px;
+}
+
+.graphics-suggestions {
+  display: grid;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.graphics-suggestions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.confirm-graphics button.graphics-suggestions-close {
+  min-width: 26px;
+  padding: 0;
+}
+
+.graphics-suggestions-error {
+  margin: 0;
+  color: #f3c5c5;
+  font-size: 12px;
+}
+
+.graphics-suggestion-options {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.confirm-graphics .graphics-suggestion-options button {
+  width: 100%;
+  min-height: 30px;
+  justify-content: flex-start;
+  padding: 5px 8px;
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: normal;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.confirm-graphics .graphics-suggestion-options button[aria-pressed='true'] {
+  border-color: var(--green);
+}
