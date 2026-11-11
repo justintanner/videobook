@@ -1,9 +1,12 @@
+import { join } from "node:path";
 import type { Engine, NotebookCell, NotebookDocument, NotebookGridSlot } from "videobook-engine";
 import { notebookGridTag } from "videobook-engine/notebook-grid";
 import { probeVideo } from "../ffmpeg.js";
 import type { ProbeResult } from "../ffmpeg.js";
+import { logger } from "../logger.js";
 import { registerMediaProbe } from "../notebook-media-ops.js";
 import { mutateNotebook } from "../notebook-mutations.js";
+import { queue } from "../queue.js";
 import { extractVideoPoster } from "../video-poster.js";
 
 export type RenderedCellPlacement = { cellId: string | null; address: string | null };
@@ -19,6 +22,7 @@ type RenderedCellInput = {
 };
 
 const UNPLACED: RenderedCellPlacement = { cellId: null, address: null };
+const RENDERED_VIDEO = "original.mp4";
 
 function versionedCell(cell: NotebookCell, artifactId: string): NotebookCell {
   const previous = Array.isArray(cell.inputs?.outputVersionArtifactIds)
@@ -69,10 +73,28 @@ export function sourceCellPlacement(engine: Engine, notebookId: string | null, s
 
 export async function writeRenderedVideo(engine: Engine, artifactId: string, path: string, signal: AbortSignal): Promise<ProbeResult> {
   const probe = await probeVideo(path, { signal });
-  const written = await engine.files.writeFromPath(artifactId, "original.mp4", path);
+  const written = await engine.files.writeFromPath(artifactId, RENDERED_VIDEO, path);
   if (!written.ok) throw new Error(written.error.message);
-  await registerMediaProbe(engine, artifactId, "original.mp4", probe);
+  await registerMediaProbe(engine, artifactId, RENDERED_VIDEO, probe);
   const poster = await engine.files.write(artifactId, "original.jpg", await extractVideoPoster(path, probe.videoDuration, signal));
   if (!poster.ok) throw new Error(poster.error.message);
   return probe;
+}
+
+export async function processRenderedVideo(engine: Engine, bookId: string, artifactId: string, provenance: Record<string, unknown>): Promise<void> {
+  try {
+    const manifest = await engine.files.manifest(artifactId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    await queue.enqueue(`process-video-${artifactId}-${Date.now()}`, {
+      type: "process_video",
+      videoPath: join(manifest.value.path, RENDERED_VIDEO),
+      assetId: artifactId,
+      assetDir: manifest.value.path,
+      bookId,
+      provenance,
+      skipDownstreamJobs: true,
+    });
+  } catch (error) {
+    logger.warn("process-video-enqueue-failed", { jobType: "process_video", artifactId, error });
+  }
 }

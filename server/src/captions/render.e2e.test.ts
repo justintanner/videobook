@@ -175,6 +175,13 @@ describe("caption render", () => {
     const content = pixel(await frame(path, 0.5), 100, 960);
     expect(content[2]).toBeGreaterThan(120);
 
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+    const output = await engine.files.manifest(render.output_asset_id);
+    if (!output.ok) throw new Error(output.error.message);
+    const outputFiles = output.value.files.map((file) => file.name);
+    expect(outputFiles).toEqual(expect.arrayContaining(["original.mp4", "original.jpg", "captions.json", "proxy.mp4", "original.mp3"]));
+    expect(outputFiles.filter((name) => name.startsWith("original_frames/")).length).toBeGreaterThan(0);
+
     const snapshot = await engine.files.read(render.output_asset_id, "captions.json");
     expect(snapshot.ok && (JSON.parse(snapshot.value.toString()) as CaptionDocument).positions).toEqual({ "9:16": 0.3 });
     const provenance = await engine.metadata.artifacts.read<Record<string, unknown>>(render.output_asset_id, "captions");

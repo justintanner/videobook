@@ -197,7 +197,10 @@ describe("graphics render", () => {
     const [sourceProbe, outputProbe] = await Promise.all([probeVideo(await videoPath(sourceId)), probeVideo(path)]);
     expect(outputProbe).toMatchObject({ width: WIDTH, height: HEIGHT, hasAudio: true });
     expect(Math.abs(outputProbe.duration - sourceProbe.duration)).toBeLessThan(0.2);
-    expect(await fileNames(render.output_asset_id)).toEqual(expect.arrayContaining(["original.mp4", "original.jpg", "graphics.json"]));
+    await waitForBookQueuesIdleForTests({ budgetMs: testBudget(120_000) });
+    const outputFiles = await fileNames(render.output_asset_id);
+    expect(outputFiles).toEqual(expect.arrayContaining(["original.mp4", "original.jpg", "graphics.json", "proxy.mp4", "original.mp3"]));
+    expect(outputFiles.filter((name) => name.startsWith("original_frames/")).length).toBeGreaterThan(0);
 
     const early = await frame(path, 0.5);
     expect(colorCount(early, MAGENTA, 60)).toBeGreaterThan(500);

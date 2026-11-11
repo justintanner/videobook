@@ -19,7 +19,7 @@ import type { JobHandlerContext } from "../queue.js";
 import { withLocalLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import type { RenderedCellPlacement } from "./_render-output.js";
-import { placeRenderedCell, sourceCellPlacement, writeRenderedVideo } from "./_render-output.js";
+import { placeRenderedCell, processRenderedVideo, sourceCellPlacement, writeRenderedVideo } from "./_render-output.js";
 
 interface RenderCaptionsPayload {
   bookId: string;
@@ -168,6 +168,12 @@ async function renderCaptions(engine: Engine, payload: RenderCaptionsPayload, ct
   }
 }
 
+async function renderCaptionsNew(engine: Engine, payload: RenderCaptionsPayload, ctx: JobHandlerContext) {
+  const rendered = await withLocalLease(engine, payload.assetId, ctx, "render", () => renderCaptions(engine, payload, ctx));
+  await processRenderedVideo(engine, payload.bookId, rendered.output_asset_id, { origin: "captions", request_id: payload.requestId, captioned_at: new Date().toISOString() });
+  return rendered;
+}
+
 async function burnIntoSource(engine: Engine, bookId: string, request: CaptionRenderRequest, source: CaptionMediaSource, signal: AbortSignal): Promise<string> {
   await reviewedSource(engine, request);
   const outputPath = join(source.directory, RENDER_NAME);
@@ -218,6 +224,6 @@ export function registerRenderCaptionsJob(engine: Engine): void {
     if (request?.output === "replace" && request.outputArtifactId === payload.assetId) {
       return renderCaptionsInPlace(engine, payload.bookId, request, ctx);
     }
-    return withLocalLease(engine, payload.assetId, ctx, "render", () => renderCaptions(engine, payload, ctx));
+    return renderCaptionsNew(engine, payload, ctx);
   });
 }

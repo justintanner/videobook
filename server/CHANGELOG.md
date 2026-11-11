@@ -27,6 +27,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Graphics and subtitle renders made as a new video now go through video
+  processing like every other new video. The new cell plays a lighter preview,
+  and the copy gets analysis frames, its audio as MP3 and a waveform, so
+  watermark placement and analysis can read it and `doctor` with `fix: true`
+  reports it healthy instead of rebuilding it. Renders made before this change
+  get the same files from `doctor` with `fix: true` and their `asset_id`.
 - The Actions sheet reviews `video_graphics` and `caption_video` by the
   operation chosen in the form instead of warning about charges for every
   one. Only the paid operations (`suggest` and `detect_regions` for graphics,

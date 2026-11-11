@@ -25,7 +25,7 @@ import type { JobHandlerContext } from "../queue.js";
 import { withLocalLease, withLockedLocalLease } from "./_lease.js";
 import { replaceArtifactFileFromPath } from "./_persist-output.js";
 import type { RenderedCellPlacement } from "./_render-output.js";
-import { placeRenderedCell, sourceCellPlacement, writeRenderedVideo } from "./_render-output.js";
+import { placeRenderedCell, processRenderedVideo, sourceCellPlacement, writeRenderedVideo } from "./_render-output.js";
 
 interface RenderGraphicsPayload {
   bookId: string;
@@ -122,10 +122,9 @@ function placeCell(engine: Engine, request: GraphicsRenderRequest): Promise<Rend
   });
 }
 
-async function renderGraphicsCopy(engine: Engine, payload: RenderGraphicsPayload, ctx: JobHandlerContext) {
+async function renderGraphicsCopy(engine: Engine, payload: RenderGraphicsPayload, renderedAt: string, ctx: JobHandlerContext) {
   const request = requireRequest(engine, payload);
   const source = await reviewedSource(engine, request);
-  const renderedAt = new Date().toISOString();
   const duration = await withRenderedGraphics(engine, request, source, ctx.signal, async ({ outputPath, durationSeconds }) => {
     const probe = await writeRenderedVideo(engine, request.outputArtifactId, outputPath, ctx.signal);
     await writeProvenance(engine, request.outputArtifactId, request, durationSeconds, renderedAt);
@@ -133,6 +132,13 @@ async function renderGraphicsCopy(engine: Engine, payload: RenderGraphicsPayload
   });
   const placement = await placeCell(engine, request);
   return { output_asset_id: request.outputArtifactId, duration, cell_id: placement.cellId, address: placement.address };
+}
+
+async function renderGraphicsNew(engine: Engine, payload: RenderGraphicsPayload, ctx: JobHandlerContext) {
+  const renderedAt = new Date().toISOString();
+  const rendered = await withLocalLease(engine, payload.assetId, ctx, "render", () => renderGraphicsCopy(engine, payload, renderedAt, ctx));
+  await processRenderedVideo(engine, payload.bookId, rendered.output_asset_id, { origin: "graphics", request_id: payload.requestId, rendered_at: renderedAt });
+  return rendered;
 }
 
 async function burnIntoSource(engine: Engine, request: GraphicsRenderRequest, source: CaptionMediaSource, signal: AbortSignal, renderedAt: string): Promise<string> {
@@ -181,6 +187,6 @@ export function registerRenderGraphicsJob(engine: Engine): void {
     if (request?.output === "replace" && request.outputArtifactId === payload.assetId) {
       return renderGraphicsInPlace(engine, payload.bookId, request, ctx);
     }
-    return withLocalLease(engine, payload.assetId, ctx, "render", () => renderGraphicsCopy(engine, payload, ctx));
+    return renderGraphicsNew(engine, payload, ctx);
   });
 }
