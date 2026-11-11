@@ -5,7 +5,7 @@ import type { Command } from "./tools/video-editing-command-contract.js";
 import type { ToolDef } from "./tools/tool-def.js";
 import { buildWorkspaceActionCatalog } from "./workspace-action-catalog.js";
 import { WORKSPACE_ACTION_SURFACES } from "./workspace-action-surfaces.js";
-import type { WorkspaceActionCatalog } from "./workspace-action-contract.js";
+import type { WorkspaceAction, WorkspaceActionCatalog } from "./workspace-action-contract.js";
 
 function oneLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -55,11 +55,22 @@ ${commandLines.join("\n")}
 `;
 }
 
+function actionReview(action: WorkspaceAction): string {
+  const rules = action.confirmationRules ?? [];
+  if (rules.length === 0) return action.confirmation;
+  const conditions = new Map<string, string[]>();
+  for (const rule of rules) {
+    const condition = Object.entries(rule.when).map(([name, value]) => `${name}=${value}`).join(" ");
+    conditions.set(rule.confirmation, [...conditions.get(rule.confirmation) ?? [], condition]);
+  }
+  return [...[...conditions].map(([confirmation, list]) => `${confirmation} (${list.join(", ")})`), `otherwise ${action.confirmation}`].join("; ");
+}
+
 export function renderWorkspaceActionCoverage(catalog: WorkspaceActionCatalog): string {
   const rows = [...catalog.actions].sort((left, right) => left.id.localeCompare(right.id)).map((action) => {
     const target = action.target.argument ? `${action.target.kind}${action.target.multiple ? " selection" : ""}: ${action.target.argument}` : action.target.kind;
     const handler = action.handler.kind === "tool" ? action.handler.tool : action.handler.kind === "ui" ? action.handler.action : action.handler.command;
-    return `| \`${action.id}\` | \`${action.command}\` | ${action.aliases.join(", ")} | ${action.scope} | ${escapeTable(target)} | \`${handler}\` | ${action.surfaces.join(", ")} | ${action.focus} | ${action.confirmation} |`;
+    return `| \`${action.id}\` | \`${action.command}\` | ${action.aliases.join(", ")} | ${action.scope} | ${escapeTable(target)} | \`${handler}\` | ${action.surfaces.join(", ")} | ${action.focus} | ${escapeTable(actionReview(action))} |`;
   });
   const surfaces = Object.entries(WORKSPACE_ACTION_SURFACES).map(([name, entry]) => `| ${name} | [${entry.component}](../${entry.component}) | ${entry.trigger} |`);
   const workflows = catalog.tools.filter((entry) => entry.exposure === "workflow").map((entry) => `| \`${entry.tool}\` | \`${entry.actionId}\` | ${escapeTable(entry.reason)} |`);
@@ -76,6 +87,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 ${surfaces.join("\n")}
 
 ## Actions
+
+Review is what the action sheet asks before Run action. A tool billed per operation is reviewed by its arguments: the first listed condition the form matches applies, and any other call gets the review after "otherwise".
 
 | Stable ID | Command | Aliases | Scope | Target | Handler | Surfaces | Focus | Review |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

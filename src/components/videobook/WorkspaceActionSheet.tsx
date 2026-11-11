@@ -11,6 +11,7 @@ import {
 import {
   effectiveWorkspaceActionValues,
   workspaceActionChoices,
+  workspaceActionConfirmation,
   workspaceActionCropMedia,
   workspaceActionFields,
   workspaceActionRequired,
@@ -67,10 +68,12 @@ type WorkspaceActionBodyProps = Omit<WorkspaceActionSheetProps, 'action' | 'draf
   draft: WorkspaceActionDraft
 }
 
-function workspaceActionEffect(action: WorkspaceAction | null): ConfirmSheetEffect | null {
-  if (action?.confirmation === 'generation') return { label: 'May incur provider charges', tone: 'warning' }
-  if (action?.confirmation === 'external') return { label: 'Leaves workspace', tone: 'warning' }
-  if (action?.confirmation === 'destructive') return { label: 'Changes or removes content', tone: 'warning' }
+function workspaceActionEffect(action: WorkspaceAction | null, draft: WorkspaceActionDraft | null): ConfirmSheetEffect | null {
+  if (!action) return null
+  const confirmation = draft ? workspaceActionConfirmation(action, effectiveWorkspaceActionValues(action, draft)) : action.confirmation
+  if (confirmation === 'generation') return { label: 'May incur provider charges', tone: 'warning' }
+  if (confirmation === 'external') return { label: 'Leaves workspace', tone: 'warning' }
+  if (confirmation === 'destructive') return { label: 'Changes or removes content', tone: 'warning' }
   return null
 }
 
@@ -182,7 +185,7 @@ export function WorkspaceActionSheet(props: WorkspaceActionSheetProps) {
     ariaLabel="Workspace action review"
     tag={action ? `ACTION · ${action.group.toUpperCase()}` : 'ACTION'}
     title={action?.title ?? 'Action'}
-    effect={workspaceActionEffect(action)}
+    effect={workspaceActionEffect(action, draft)}
     validation={validation}
     busy={busy}
     applyLabel="Run action"

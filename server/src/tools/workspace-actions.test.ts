@@ -10,7 +10,7 @@ import { getAllToolDefs } from "./index.js";
 import { WORKSPACE_ACTION_SURFACES } from "../workspace-action-surfaces.js";
 import { WORKSPACE_UI_ROUTES } from "../../../src/videobook/workspace-ui-routes.js";
 import { renderWorkspaceActionCoverage } from "../command-reference.js";
-import { toolSpendsMoney } from "../paid-tools.js";
+import { BILLABLE_TOOL_OPERATIONS, toolSpendsMoney } from "../paid-tools.js";
 import { FULLSCREEN_COMMANDS, PREVIEW_COMMANDS } from "./command-interaction.js";
 
 describe("workspace action exposure contract", () => {
@@ -60,6 +60,42 @@ describe("workspace action exposure contract", () => {
       const command = commands.find((entry) => entry.command === action.command);
       if (command) expect(action.interaction, action.command).toBe(command.interaction);
     }
+  });
+
+  it("reviews tools billed per operation by the chosen operation, as the chain bills them", () => {
+    const catalog = buildWorkspaceActionCatalog(tools, commands);
+    const action = (tool: string) => catalog.actions.find((entry) => entry.id === `tool.${tool}`)!;
+    expect(action("video_graphics")).toMatchObject({
+      confirmation: "none",
+      confirmationRules: [
+        { when: { op: "suggest" }, confirmation: "generation" },
+        { when: { op: "detect_regions" }, confirmation: "generation" },
+        { when: { op: "delete_template" }, confirmation: "destructive" },
+        { when: { op: "render", output: "replace" }, confirmation: "destructive" },
+      ],
+    });
+    expect(action("caption_video")).toMatchObject({
+      confirmation: "none",
+      confirmationRules: [
+        { when: { op: "prepare" }, confirmation: "generation" },
+        { when: { op: "update", resolve: "discard" }, confirmation: "destructive" },
+        { when: { op: "render", output: "replace" }, confirmation: "destructive" },
+      ],
+    });
+    expect(catalog.actions.filter((entry) => entry.confirmationRules).map((entry) => entry.id).sort())
+      .toEqual(Object.keys(BILLABLE_TOOL_OPERATIONS).map((tool) => `tool.${tool}`).sort());
+    for (const tool of Object.keys(BILLABLE_TOOL_OPERATIONS)) {
+      const reviewed = action(tool);
+      const paid = new Set(reviewed.confirmationRules!.filter((rule) => rule.confirmation === "generation").map((rule) => rule.when.op));
+      for (const op of reviewed.inputSchema.properties!.op!.enum as string[]) {
+        expect(toolSpendsMoney(tool, { op }), `${tool} ${op}`).toBe(paid.has(op));
+      }
+      expect(toolSpendsMoney(tool, {}), tool).toBe(reviewed.confirmation === "generation");
+    }
+    const renamed = tools.map((tool) => tool.name === "video_graphics"
+      ? { ...tool, schema: { ...tool.schema, op: z.enum(["get", "render", "suggest", "detect_regions"]).optional() } }
+      : tool);
+    expect(() => buildWorkspaceActionCatalog(renamed, commands)).toThrow("No op delete_template for video_graphics");
   });
 
   it("preserves real nested schemas and distinct command presets across repeated reads", () => {

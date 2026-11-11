@@ -12,7 +12,7 @@ import {
   TIMESTAMP_PARAMS,
 } from "../chat-router.js";
 import { BILLABLE_TOOL_NAMES, BILLABLE_TOOL_OPERATIONS } from "../paid-tools.js";
-import { WORKFLOW_TOOLS } from "../workspace-action-catalog.js";
+import { DESTRUCTIVE_TOOL_OPERATIONS, WORKFLOW_TOOLS } from "../workspace-action-catalog.js";
 import { WORKSPACE_TOOL_GROUPS } from "../workspace-action-groups.js";
 import { getAllToolDefs } from "./index.js";
 import { VIDEO_EDITING_TOOL_CONTRACTS } from "./video-editing-command-contract.js";
@@ -37,6 +37,7 @@ describe("tool name references", () => {
       timestamps: [...Object.keys(TIMESTAMP_PARAMS), ...Object.keys(NESTED_TIMESTAMP_PARAMS)],
       chainSteps: Object.keys(CHAIN_TOOL_CATALOG),
       billable: [...BILLABLE_TOOL_NAMES, ...Object.keys(BILLABLE_TOOL_OPERATIONS)],
+      destructiveOperations: Object.keys(DESTRUCTIVE_TOOL_OPERATIONS),
       editorOnly: [...EDITOR_ONLY_TOOL_NAMES],
       contracts: VIDEO_EDITING_TOOL_CONTRACTS.map((contract) => contract.tool),
       workflows: Object.keys(WORKFLOW_TOOLS),

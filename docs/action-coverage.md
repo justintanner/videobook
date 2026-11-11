@@ -15,6 +15,8 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 
 ## Actions
 
+Review is what the action sheet asks before Run action. A tool billed per operation is reviewed by its arguments: the first listed condition the form matches applies, and any other call gets the review after "otherwise".
+
 | Stable ID | Command | Aliases | Scope | Target | Handler | Surfaces | Focus | Review |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `command.actions` | `/actions` |  | global | none | `open_actions` | slash, launcher, button | dialog | none |
@@ -95,7 +97,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.audio_mix` | `/audio-mix` |  | book | none | `audio_mix` | slash, launcher | dialog | none |
 | `tool.backfill_asset_tags` | `/backfill-asset-tags` |  | book | none | `backfill_asset_tags` | slash, launcher | dialog | generation |
 | `tool.cancel_job` | `/cancel-job` |  | book | asset: asset_id | `cancel_job` | slash, launcher, cell-menu | dialog | none |
-| `tool.caption_video` | `/caption-video` |  | book | asset: asset_id | `caption_video` | slash, launcher, cell-menu | dialog | generation |
+| `tool.caption_video` | `/caption-video` |  | book | asset: asset_id | `caption_video` | slash, launcher, cell-menu | dialog | generation (op=prepare); destructive (op=update resolve=discard, op=render output=replace); otherwise none |
 | `tool.chain` | `/chain` |  | book | notebook: notebook_id | `chain` | slash, launcher | dialog | none |
 | `tool.change_video_speed` | `/speed` |  | book | asset: asset_id | `change_video_speed` | slash, launcher, cell-menu | dialog | none |
 | `tool.chat` | `/chat` |  | book | notebook: notebook_id | `chat` | slash, launcher | dialog | none |
@@ -279,7 +281,7 @@ The browser regression suite checks catalog equality, complete slash traversal, 
 | `tool.update_sequence_rhythm` | `/update-sequence-rhythm` |  | sequence | none | `update_sequence_rhythm` | slash, launcher | dialog | none |
 | `tool.validate_sequence_export` | `/validate-sequence-export` |  | book | none | `validate_sequence_export` | slash, launcher | dialog | none |
 | `tool.verify_x_mentions` | `/verify-x-mentions` |  | book | none | `verify_x_mentions` | slash, launcher | dialog | generation |
-| `tool.video_graphics` | `/video-graphics` |  | book | asset: asset_id | `video_graphics` | slash, launcher, cell-menu | dialog | generation |
+| `tool.video_graphics` | `/video-graphics` |  | book | asset: asset_id | `video_graphics` | slash, launcher, cell-menu | dialog | generation (op=suggest, op=detect_regions); destructive (op=delete_template, op=render output=replace); otherwise none |
 | `tool.wait_for_asset_ready` | `/wait-for-asset-ready` |  | book | asset: asset_id | `wait_for_asset_ready` | slash, launcher, cell-menu | dialog | none |
 
 ## Transport and workflow ownership

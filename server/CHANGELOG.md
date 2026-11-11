@@ -6,6 +6,18 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The Actions sheet reviews `video_graphics` and `caption_video` by the
+  operation chosen in the form instead of warning about charges for every
+  one. Only the paid operations (`suggest` and `detect_regions` for graphics,
+  `prepare` for subtitles) say they may incur provider charges and show a
+  cost estimate; deleting a template, rendering with `output: replace` and
+  discarding a subtitle draft say they change or remove content; every other
+  operation shows neither. A paid action whose cost cannot be estimated shows
+  "Cost estimate unavailable" without the estimator's internal "no cost
+  adapter registered" message.
+
 ## [0.6.0] - 2026-11-11
 
 ### Added

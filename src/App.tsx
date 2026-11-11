@@ -190,6 +190,8 @@ import {
   effectiveWorkspaceActionValues,
   patchWorkspaceActionDraft,
   seedWorkspaceActionDraft,
+  workspaceActionConfirmation,
+  workspaceActionReview,
   workspaceActionVariants,
   type WorkspaceActionDraft,
   type WorkspaceActionResult,
@@ -244,7 +246,6 @@ import {
   generationEstimate,
   historicalAverageEstimate,
   providerPayloadPreviewMentions,
-  workspaceEstimateCost,
 } from '@/videobook/provider-payload-preview'
 import {
   reviseXPostParams,
@@ -4093,7 +4094,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
         const loadedValues = { ...seededValues, ...resources.values }
         const draft = seedWorkspaceActionDraft(action, workspaceActionSheetContext(resources), loadedValues)
-        const review = action.confirmation === 'none' ? undefined : await reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).catch(() => undefined)
+        const review = await reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).catch(() => undefined)
         if (request !== actionCatalogRequestRef.current || (chat && !chat.isCurrent())) return
         setActionSheet((current) => current?.key === request ? { ...current, values: loadedValues, resources, result, draft, review } : current)
       }
@@ -4131,7 +4132,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
     const sheet = currentActionSheet
     const action = workspaceActions.find((entry) => entry.id === sheet?.actionId)
-    if (!sheet?.draft || action?.confirmation !== 'generation') return
+    if (!sheet?.draft || !action || (action.confirmation !== 'generation' && !action.confirmationRules)) return
     const draft = change(sheet.draft, action, workspaceActionSheetContext(sheet.resources))
     const request = ++actionReviewRequestRef.current
     void reviewWorkspaceAction(action, effectiveWorkspaceActionValues(action, draft)).then((review) => {
@@ -8649,20 +8650,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     return { message: completed.message, value }
   }
 
-  const reviewWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<WorkspaceActionReview> => {
-    if (action.confirmation === 'generation' && action.handler.kind === 'tool') {
-      const result = recordValue(await call('estimate_cost', { calls: [{ tool_name: action.handler.tool, input: values }] }))
-      const estimate = recordValue(result?.estimate)
-      const warnings = Array.isArray(estimate?.warnings) ? estimate.warnings.filter((value): value is string => typeof value === 'string') : []
-      const usd = typeof estimate?.usd === 'number' ? estimate.usd : null
-      return {
-        cost: workspaceEstimateCost(usd, warnings),
-        message: `Running this sends your prompt and selected media to a generation provider and may incur charges.${warnings.length ? ` ${warnings.join(' ')}` : ''}`,
-      }
-    }
-    return { message: action.confirmation === 'external'
-      ? `${action.title} sends the selected content outside this workspace.`
-      : `${action.title} changes or removes the selected content.` }
+  const reviewWorkspaceAction = async (action: WorkspaceAction, values: Record<string, unknown>): Promise<WorkspaceActionReview | undefined> => {
+    const confirmation = workspaceActionConfirmation(action, values)
+    const estimate = confirmation === 'generation' && action.handler.kind === 'tool'
+      ? recordValue(await call('estimate_cost', { calls: [{ tool_name: action.handler.tool, input: values }] }))?.estimate
+      : undefined
+    return workspaceActionReview(action, confirmation, estimate)
   }
 
   const applyTimelineClip = async (): Promise<ComposerOutcome> => {

@@ -82,6 +82,13 @@ export type ActionTarget = {
   mediaKinds?: Array<"video" | "audio" | "image" | "script" | "final" | "character">;
 };
 
+export type ActionConfirmation = "none" | "destructive" | "generation" | "external";
+
+export type ActionConfirmationRule = {
+  when: Record<string, string>;
+  confirmation: ActionConfirmation;
+};
+
 export type WorkspaceAction = {
   id: string;
   title: string;
@@ -101,7 +108,8 @@ export type WorkspaceAction = {
   generation?: { provider: string; operation: string; mediaType: string };
   surfaces: ActionSurface[];
   focus: ActionFocusPolicy;
-  confirmation: "none" | "destructive" | "generation" | "external";
+  confirmation: ActionConfirmation;
+  confirmationRules?: ActionConfirmationRule[];
   interaction: "direct" | "preview" | "fullscreen";
 };
 

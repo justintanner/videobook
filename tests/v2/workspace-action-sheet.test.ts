@@ -13,8 +13,10 @@ import {
   effectiveWorkspaceActionValues,
   patchWorkspaceActionDraft,
   seedWorkspaceActionDraft,
+  workspaceActionConfirmation,
   workspaceActionFields,
   workspaceActionRequired,
+  workspaceActionReview,
   workspaceActionValidation,
   workspaceActionVariants,
   type WorkspaceActionDraft,
@@ -127,6 +129,58 @@ describe('workspace action sheet', () => {
     expect(draft).toMatchObject({ 'sfx.timestamp': 2.5, 'sfx.type': 'whoosh', 'sfx.description': 'fast transition' })
     const edited = patchWorkspaceActionDraft(apply, context, draft, 'sfx.timestamp', 4)
     expect(effectiveWorkspaceActionValues(apply, edited).sfx).toEqual([{ timestamp: 4, type: 'whoosh', description: 'fast transition' }])
+  })
+
+  it('marks only the paid and destructive operations of video graphics and subtitles', () => {
+    const effects = (id: string, values: WorkspaceActionDraft) => {
+      const html = renderActionSheet(catalogAction(id), { draft: { book_id: 'book-1', asset_id: 'video-1', ...values } })
+      return ['May incur provider charges', 'Changes or removes content', 'Leaves workspace'].filter((label) => html.includes(label))
+    }
+    const charges = ['May incur provider charges']
+    const changes = ['Changes or removes content']
+    const graphics: [WorkspaceActionDraft, string[]][] = [
+      [{}, []], [{ op: 'get' }, []], [{ op: 'update' }, []], [{ op: 'render' }, []], [{ op: 'render', output: 'new' }, []],
+      [{ op: 'check_placement' }, []], [{ op: 'save_template' }, []], [{ op: 'rename_template' }, []],
+      [{ op: 'set_default_template' }, []], [{ op: 'copy_templates' }, []], [{ op: 'save_watermark' }, []],
+      [{ op: 'set_watermark_template' }, []],
+      [{ op: 'suggest' }, charges], [{ op: 'detect_regions' }, charges],
+      [{ op: 'delete_template' }, changes], [{ op: 'render', output: 'replace' }, changes],
+    ]
+    for (const [values, expected] of graphics) expect(effects('tool.video_graphics', values), JSON.stringify(values)).toEqual(expected)
+    const subtitles: [WorkspaceActionDraft, string[]][] = [
+      [{}, []], [{ op: 'get' }, []], [{ op: 'update' }, []], [{ op: 'update', resolve: 'reseed' }, []], [{ op: 'render' }, []],
+      [{ op: 'prepare' }, charges], [{ op: 'update', resolve: 'discard' }, changes], [{ op: 'render', output: 'replace' }, changes],
+    ]
+    for (const [values, expected] of subtitles) expect(effects('tool.caption_video', values), JSON.stringify(values)).toEqual(expected)
+    expect(effects('tool.generate_image', {}), 'generate_image').toEqual(charges)
+    expect(effects('tool.delete_entity', {}), 'delete_entity').toEqual(changes)
+    expect(effects('tool.post', {}), 'post').toEqual(['Leaves workspace'])
+  })
+
+  it('reviews an operation without the internal cost adapter text', () => {
+    const graphics = catalogAction('tool.video_graphics')
+    const review = (values: WorkspaceActionDraft, estimate?: unknown) =>
+      workspaceActionReview(graphics, workspaceActionConfirmation(graphics, values), estimate)
+    const unpriced = { usd: 0, currency: 'USD', source: 'free', warnings: ["no cost adapter registered for tool 'video_graphics'"] }
+    const paid = review({ op: 'suggest' }, unpriced)
+    expect(paid).toEqual({
+      cost: 'Cost estimate unavailable',
+      message: 'Running this sends your prompt and selected media to a generation provider and may incur charges.',
+    })
+    const html = renderActionSheet(graphics, { draft: { book_id: 'book-1', asset_id: 'video-1', op: 'suggest' }, review: paid })
+    expect(html).toContain('<strong>Cost estimate unavailable</strong>')
+    expect(html).not.toContain('no cost adapter')
+    expect(review({ op: 'get' })).toBeUndefined()
+    expect(review({ op: 'delete_template' })).toEqual({ message: `${graphics.title} changes or removes the selected content.` })
+    const subtitles = catalogAction('tool.caption_video')
+    expect(workspaceActionReview(subtitles, workspaceActionConfirmation(subtitles, { op: 'prepare' }), {
+      usd: 0, warnings: ["no cost adapter registered for tool 'caption_video'"],
+    })?.message).toBe('Running this sends your prompt and selected media to a generation provider and may incur charges.')
+    const source = 'The Seedance edit source must be at most 15 seconds long.'
+    expect(workspaceActionReview(catalogAction('tool.generate_video'), 'generation', { usd: 0, warnings: [source] }))
+      .toEqual({ cost: 'Cost estimate unavailable', message: `Running this sends your prompt and selected media to a generation provider and may incur charges. ${source}` })
+    expect(workspaceActionReview(catalogAction('tool.post'), 'external'))
+      .toEqual({ message: `${catalogAction('tool.post').title} sends the selected content outside this workspace.` })
   })
 
   it('keeps a run result on the sheet and offers Close', () => {

@@ -1,8 +1,10 @@
 import { WORKSPACE_TOOL_GROUPS } from "./workspace-action-groups.js";
-import { toolSpendsMoney } from "./paid-tools.js";
+import { BILLABLE_TOOL_OPERATIONS, toolSpendsMoney } from "./paid-tools.js";
 import { WORKSPACE_ACTION_SURFACES } from "./workspace-action-surfaces.js";
 import { APPLICATION_COMMAND_IDS, UI_ACTION_IDS } from "./workspace-action-contract.js";
 import type {
+  ActionConfirmation,
+  ActionConfirmationRule,
   ActionGroup,
   ActionInputSchema,
   ActionTarget,
@@ -122,7 +124,28 @@ function scopeForSchema(schema: ActionInputSchema): WorkspaceAction["scope"] {
   return "global";
 }
 
-function confirmationForTool(tool: ToolDef): WorkspaceAction["confirmation"] {
+export const DESTRUCTIVE_TOOL_OPERATIONS: Readonly<Record<string, readonly Readonly<Record<string, string>>[]>> = {
+  caption_video: [{ op: "update", resolve: "discard" }, { op: "render", output: "replace" }],
+  video_graphics: [{ op: "delete_template" }, { op: "render", output: "replace" }],
+};
+
+function confirmationRules(tool: ToolDef, schema: ActionInputSchema): ActionConfirmationRule[] | undefined {
+  const paid = BILLABLE_TOOL_OPERATIONS[tool.name];
+  if (!paid) return undefined;
+  const destructive = DESTRUCTIVE_TOOL_OPERATIONS[tool.name];
+  if (!destructive) throw new Error(`No per-operation review for ${tool.name}`);
+  const rules: ActionConfirmationRule[] = [
+    ...[...paid].map((op) => ({ when: { op }, confirmation: "generation" as const })),
+    ...destructive.map((when) => ({ when: { ...when }, confirmation: "destructive" as const })),
+  ];
+  for (const [name, value] of rules.flatMap((rule) => Object.entries(rule.when))) {
+    if (!schema.properties?.[name]?.enum?.includes(value)) throw new Error(`No ${name} ${value} for ${tool.name}`);
+  }
+  return rules;
+}
+
+function confirmationForTool(tool: ToolDef): ActionConfirmation {
+  if (BILLABLE_TOOL_OPERATIONS[tool.name]) return toolSpendsMoney(tool.name, {}) ? "generation" : "none";
   if (toolSpendsMoney(tool.name)) return "generation";
   if (["post", "storage_sync", "archive_clip"].includes(tool.name)) return "external";
   if (tool.name === "enqueue_sequence_export" || tool.annotations?.destructiveHint || /^(?:delete_|remove_|clean_failed|restore_)/u.test(tool.name)) {
@@ -221,6 +244,7 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
   reserved.add(name);
   const target = targetForSchema(schema, group);
   const mediaType = GENERATION_MEDIA[tool.name];
+  const rules = confirmationRules(tool, schema);
   return {
     id: `tool.${tool.name}`,
     title: tool.annotations?.title ?? title(tool.name),
@@ -239,6 +263,7 @@ function toolAction(tool: ToolDef, command: Command | undefined, reserved: Set<s
       ? ["slash", "launcher", "cell-menu"] : ["slash", "launcher"],
     focus: tool.name === "transcribe" ? "composer" : "dialog",
     confirmation: confirmationForTool(tool),
+    ...(rules ? { confirmationRules: rules } : {}),
     interaction: command ? interactionFor(command) : "preview",
   };
 }

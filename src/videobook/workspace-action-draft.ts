@@ -1,8 +1,9 @@
 import { frameAspectRatio } from '../../server/src/media/frame-options'
 import { isSeedanceEdit } from '../../server/src/media/seedance-edit'
-import type { ActionInputSchema, WorkspaceAction } from '../../server/src/workspace-action-contract'
+import type { ActionConfirmation, ActionInputSchema, WorkspaceAction } from '../../server/src/workspace-action-contract'
 import { VALID_CONFIRMATION, type ConfirmValidation } from './confirm-validation'
 import { generationModelChoices } from './generation-frontier'
+import { workspaceEstimateCost } from './provider-payload-preview'
 import {
   actionUnavailableReason,
   initialActionValues,
@@ -19,6 +20,10 @@ type WorkspaceActionMedia = NonNullable<WorkspaceActionContext['media']>[string]
 const HIDDEN_FIELDS = ['book_id', 'actor', 'source_surface']
 
 const SINGLE_ENTRY_ARRAYS: Readonly<Record<string, string>> = { apply_sfx: 'sfx' }
+
+const GENERATION_REVIEW = 'Running this sends your prompt and selected media to a generation provider and may incur charges.'
+
+const MISSING_COST_ADAPTER = /^no cost adapter registered for tool\b/u
 
 function singleEntryArray(action: WorkspaceAction): string | undefined {
   return action.handler.kind === 'tool' ? SINGLE_ENTRY_ARRAYS[action.handler.tool] : undefined
@@ -101,6 +106,25 @@ export function effectiveWorkspaceActionValues(action: WorkspaceAction, entryDra
   if (workspaceActionSeedanceEdit(draft)) return { ...draft, options: { ...options, aspect_ratio: 'adaptive', duration: -1 } }
   const aspectRatio = workspaceActionFrameAspectRatio(action, draft)
   return aspectRatio ? { ...draft, options: { ...options, aspect_ratio: aspectRatio } } : draft
+}
+
+export function workspaceActionConfirmation(action: WorkspaceAction, values: WorkspaceActionDraft): ActionConfirmation {
+  const rule = action.confirmationRules?.find((entry) =>
+    Object.entries(entry.when).every(([name, value]) => values[name] === value))
+  return rule?.confirmation ?? action.confirmation
+}
+
+export function workspaceActionReview(action: WorkspaceAction, confirmation: ActionConfirmation, estimate?: unknown): WorkspaceActionReview | undefined {
+  if (confirmation === 'none') return undefined
+  if (confirmation === 'external') return { message: `${action.title} sends the selected content outside this workspace.` }
+  if (confirmation === 'destructive') return { message: `${action.title} changes or removes the selected content.` }
+  const priced = optionsRecord(estimate)
+  const warnings = stringList(priced.warnings) ?? []
+  const usd = typeof priced.usd === 'number' ? priced.usd : null
+  return {
+    cost: workspaceEstimateCost(usd, warnings),
+    message: [GENERATION_REVIEW, ...warnings.filter((warning) => !MISSING_COST_ADAPTER.test(warning))].join(' '),
+  }
 }
 
 export function workspaceActionCropMedia(
