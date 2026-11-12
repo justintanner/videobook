@@ -86,7 +86,8 @@ approval with its estimate:
    any extra references. Regenerate it, revise it with a short instruction, or
    choose an earlier version.
 3. **Video:** the base clip, made with MiniMax H3 Max from the frame and the
-   character, then each continuation.
+   character, then each continuation. Regenerate any generated clip, revise it
+   with clip feedback, or choose an earlier version.
 4. **Finish:** review the cold open; **Finish** adds it and burns the saved
    watermark into the finished short.
 

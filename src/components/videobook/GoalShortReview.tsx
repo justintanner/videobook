@@ -66,6 +66,7 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const [framePrompt, setFramePrompt] = useState(plan.frame.prompt)
   const [beats, setBeats] = useState(() => plan.segments.map(segment => segment.prompt))
   const [feedback, setFeedback] = useState('')
+  const [clipFeedback, setClipFeedback] = useState<Record<number, string>>({})
   const [beat, setBeat] = useState({ prompt: '', seconds: 5 })
   const [character, setCharacter] = useState<MainCharacterView | null>(null)
   const [characterDraft, setCharacterDraft] = useState({ name: '', description: '', cells: '' })
@@ -102,7 +103,8 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
   const generate = (action: 'approve' | 'regenerate' | 'revise', stage: 'frame' | 'videos', index = 0, note?: string) => onRun(async () => {
     const current = await saved()
     await onAction({ action, revision: current.revision, stage, index, ...(note ? { feedback: note } : {}) })
-    if (note) setFeedback('')
+    if (note && stage === 'frame') setFeedback('')
+    if (note && stage === 'videos') setClipFeedback(current => ({ ...current, [index]: '' }))
   })
   const remember = (next: MainCharacterView) => {
     setCharacter(next)
@@ -188,6 +190,8 @@ export function GoalShortReview({ goal, plan, disabled, resolveAsset, onPreviewC
           {stale && <p role="status" className="goal-panel-warning">{stale}</p>}
           {output && <div className="goal-versions" aria-label={`Clip ${index + 1} versions`}>{versions('videos', index, `Clip ${index + 1}`)}</div>}
           {output && <button type="button" className="goal-panel-button" disabled={!canGenerate} onClick={() => generate('regenerate', 'videos', index)}>Regenerate clip {index + 1}</button>}
+          {output && <label><span>Revise clip {index + 1}</span><textarea aria-label={`Clip ${index + 1} feedback`} value={clipFeedback[index] ?? ''} maxLength={300} rows={2} disabled={!canGenerate} onChange={event => setClipFeedback(current => ({ ...current, [index]: event.target.value }))} /></label>}
+          {output && <button type="button" className="goal-panel-button" disabled={!canGenerate || !clipFeedback[index]?.trim()} onClick={() => generate('revise', 'videos', index, clipFeedback[index]?.trim())}>Revise clip {index + 1} · {shortEstimateText(goal.estimate.segments?.[index])}</button>}
           {output && <RealismCheck name={`clip ${index + 1}`} check={output.realism} disabled={disabled} onCheck={() => onRun(() => onAction({ action: 'check', stage: 'videos', index }))} />}
         </li>
       })}</ol>

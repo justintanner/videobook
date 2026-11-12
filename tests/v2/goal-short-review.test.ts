@@ -61,6 +61,20 @@ describe('GoalShortReview', () => {
     expect(html).toContain(`<p>${SHORT_RULES.video}</p><p>${SHORT_RULES.silence}</p>`)
   })
 
+  it('offers feedback and a priced revise action only for generated clips', () => {
+    const goal = shortGoalFixture({ stage: 'videos', stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a' }, { index: 1, artifactId: 'clip-b' }]) } }, shortPlanFixture([10, 10, 5]))
+    const html = render(goal)
+    for (const index of [1, 2]) {
+      expect(html).toContain(`aria-label="Clip ${index} feedback"`)
+      expect(button(html, `Revise clip ${index}`)).toContain('at least $0.60')
+      expect(button(html, `Revise clip ${index}`)).toContain('disabled=""')
+    }
+    expect(html).not.toContain('Clip 3 feedback')
+    expect(button(html, 'Revise clip 3')).toBe('')
+    const running = render({ ...goal, status: 'running' })
+    expect(running).toMatch(/<textarea aria-label="Clip 1 feedback"[^>]*disabled=""/u)
+  })
+
   it('marks a stale clip and generates it again first', () => {
     const goal = shortGoalFixture({ stage: 'videos', stages: { ...withFrame, videos: shortStage('videos', [{ index: 0, artifactId: 'clip-a', stale: 'The frame or an earlier clip changed after this clip was made.' }]) } })
     const html = render(goal)
