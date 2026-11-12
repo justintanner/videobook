@@ -92,7 +92,7 @@ async function duplicatePlayableVideo(engine: Engine, sourceArtifactId: string, 
 }
 
 async function burnSavedWatermark(engine: Engine, artifactId: string, sourceArtifactId: string): Promise<void> {
-  const apply = applyWatermarkDef(engine);
+  const apply = applyWatermarkDef(engine, { transcribe: false });
   const result = await apply.handler({
     book_id: engine.book.get().bookId,
     asset_id: artifactId,

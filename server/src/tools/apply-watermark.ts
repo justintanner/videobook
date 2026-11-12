@@ -363,7 +363,7 @@ function burnedPosition(includeQr: boolean, placement: { corner: OsgPosition; pl
   return includeQr && placement.placementSource !== "template" ? placement.corner : null;
 }
 
-export function applyWatermarkDef(engine: Engine): ToolDef {
+export function applyWatermarkDef(engine: Engine, options: { transcribe?: false } = {}): ToolDef {
   return {
     name: "apply_watermark",
     description:
@@ -771,6 +771,7 @@ export function applyWatermarkDef(engine: Engine): ToolDef {
         credit,
         template: template ? { id: template.id, document: template.document } : null,
         patches: burnPatches(input),
+        ...(options.transcribe === false ? { transcribe: false as const } : {}),
       };
       const burnSummary = {
         ...summary,

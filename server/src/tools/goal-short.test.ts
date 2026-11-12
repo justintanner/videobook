@@ -247,8 +247,10 @@ describe("video_goal shorts", () => {
     expect(submitted.body).toMatchObject({ duration: 12, resolution: "1080P", aspect_ratio: "9:16", prompt_expansion_mode: "disabled", image_url: expect.stringMatching(/^http/u) });
     expect(submitted.body.reference_image_urls).toHaveLength(1);
     expect(String(submitted.body.prompt)).toContain(`${SHORT_RULES.video}\n\n${SHORT_RULES.silence}`);
-    expect(mediaJobs("fal:minimax/h3-max/reference-to-video")[0]?.payload).toMatchObject({ refs: { first_frame: [frameId], image: [imageIds[0]] } });
+    expect(mediaJobs("fal:minimax/h3-max/reference-to-video")[0]?.payload).toMatchObject({ refs: { first_frame: [frameId], image: [imageIds[0]] }, transcribe: false });
     const clipId = clip.stages.videos!.outputs[0]!.artifactId;
+    const original = await engine.metadata.artifacts.read<Record<string, unknown>>(clipId, "original");
+    expect(original.ok && original.value).toMatchObject({ model: "fal:minimax/h3-max/reference-to-video", hasAudio: true, transcribe: false });
     expect(clip).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: clipId } });
     expect((await invoke({ action: "finish", goal_id: goal.goalId })).finish).toMatchObject({ status: "review", sourceArtifactId: clipId });
     expect(await refusal({ action: "approve", goal_id: goal.goalId, revision: clip.revision })).toBe("Every segment of this short is generated. Finish it, regenerate a segment or add a beat.");

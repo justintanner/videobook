@@ -13,6 +13,8 @@ import { watermarkLayerInputs } from "../graphics/watermark-profile.js";
 import type { BurnWatermarkPayload } from "../jobs/burn-watermark.js";
 import { LIGHTNING_WATERMARK_PROFILE } from "../lightning-defaults.js";
 import { pauseBookQueueForTests } from "../queue.js";
+import { withBookContext } from "../book-context.js";
+import { applyWatermarkDef } from "./apply-watermark.js";
 import type { Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/client";
 import { testBudget } from "../test-budget.js";
@@ -430,6 +432,20 @@ describe("apply_watermark tool", () => {
       profile: { handle: "alice", handleEndSeconds: null, qrLeadSeconds: null, qrStartSeconds: null, qrEndSeconds: null },
     });
   }, testBudget(60_000));
+
+  it("keeps a burned video untranscribed only when the caller declines its transcript", async () => {
+    await pauseBookQueueForTests(fs.book.get().bookId);
+    const assetId = await createRealVideoAsset();
+    const plain = await apply({ asset_id: assetId, platform: "tiktok", wait: false });
+    expect(await queuedPayload(plain.job_id)).not.toHaveProperty("transcribe");
+    const finishing = applyWatermarkDef(fs, { transcribe: false });
+    const engineBookId = fs.book.get().bookId;
+    const result = await withBookContext({ bookId: engineBookId, engine: fs }, () =>
+      finishing.handler({ book_id: engineBookId, asset_id: assetId, platform: "tiktok", wait: false }));
+    expect(result.isError).toBeFalsy();
+    const declined = JSON.parse((result.content as TextContent)[0].text) as ApplyResult;
+    expect(await queuedPayload(declined.job_id)).toMatchObject({ type: "burn_watermark", assetId, platform: "tiktok", transcribe: false });
+  });
 
   it("queues a TikTok burn of the handle alone by default without minting badge images", async () => {
     await pauseBookQueueForTests(fs.book.get().bookId);

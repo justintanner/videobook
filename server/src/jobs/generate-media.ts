@@ -35,6 +35,7 @@ export type GenerateMediaJob = {
   options: Record<string, unknown>;
   mode?: string;
   replaceAudioWith?: string;
+  transcribe?: false;
 };
 
 function storedPayload(model: ResolvedModel, request: Record<string, unknown>): Record<string, unknown> {
@@ -84,6 +85,7 @@ function generationMeta(job: GenerateMediaJob, model: ResolvedModel, refs: Resol
     sourceImageIds: refs.sourceImageIds,
     sourceVideoIds: refs.sourceVideoIds,
     sourceAudioIds: refs.sourceAudioIds,
+    ...(job.transcribe === false ? { transcribe: false } : {}),
   };
 }
 

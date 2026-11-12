@@ -23,6 +23,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
 - `video_goal` action `check` looks at a frame or a clip's new footage for AI
   tells and lists up to five advisory findings. It runs only when asked and
   never blocks a step.
+- `generate_video` takes `transcribe: false` for footage with no speech. The
+  video is processed without the automatic speech-to-text pass, keeps that
+  choice when it is processed again, and `reconcile_project_work` does not
+  backfill a transcript for it. A short's clips, continuations and finished
+  video are made this way. Imported and recorded videos are transcribed as
+  before.
 
 ### Changed
 

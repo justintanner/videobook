@@ -334,6 +334,7 @@ describe("compiled short steps", () => {
         prompt: [BEATS[0], "@image1 and @image2 are Main character: keep the same person in the same clothes.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
         refs: { first_frame: ["@c1"], image: ["@a1", "@a2"] },
         options: { duration: 11, resolution: "1080P", aspect_ratio: "9:16", prompt_expansion_mode: "disabled" },
+        transcribe: false,
       },
     });
     const single = compileShortClipStep(shortPlan({ character: { ...CHARACTER, references: [sheet] } }), "@c2");
@@ -353,6 +354,7 @@ describe("compiled short steps", () => {
         prompt: [BEATS[1], "Continue the same shot: the same person, clothes, place and light.", SHORT_RULES.video, SHORT_RULES.silence].join("\n\n"),
         refs: { video: ["@d1"] },
         options: { duration: 10, resolution: "1080P", aspect_ratio: "auto", output: "extended", enable_prompt_expansion: false },
+        transcribe: false,
       },
     });
     expect(compileShortContinuationStep(plan, 2, "@d2")).toMatchObject({ id: "clip3", params: { prompt: expect.stringMatching(/^He boards the bus\./u), refs: { video: ["@d2"] } } });

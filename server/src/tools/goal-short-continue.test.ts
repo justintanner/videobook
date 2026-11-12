@@ -137,8 +137,10 @@ describe("continuing a short with H3 Max Extend", () => {
     });
     expect(String(extensions()[0]!.body.prompt)).toMatch(/^He boards the bus\.\n\nContinue the same shot/u);
     const job = engine.jobs.queue.list({ type: "generate_media", limit: 100 }).find((item) => item.payload.model === "fal:minimax/h3-max/extend-video");
-    expect(job?.payload).toMatchObject({ refs: { video: [baseId] } });
+    expect(job?.payload).toMatchObject({ refs: { video: [baseId] }, transcribe: false });
     const wholeId = output(extended, 1).artifactId;
+    const original = await engine.metadata.artifacts.read<Record<string, unknown>>(wholeId, "original");
+    expect(original.ok && original.value).toMatchObject({ model: "fal:minimax/h3-max/extend-video", hasAudio: true, transcribe: false });
     expect(extended).toMatchObject({ stage: "videos", status: "review", finish: { status: "review", sourceArtifactId: wholeId } });
     expect((await invoke({ action: "finish", goal_id: extended.goalId })).finish).toMatchObject({ status: "review", sourceArtifactId: wholeId });
     expect(stub.unexpected).toEqual([]);

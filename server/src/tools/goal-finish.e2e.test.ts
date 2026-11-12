@@ -82,6 +82,8 @@ describe("goal finishing burns the saved watermark through the graphics renderer
       expect(done?.finalArtifactId).toEqual(expect.any(String));
       expect(done?.finalArtifactId).not.toBe(clipId);
       expect(engine.jobs.queue.list({ type: "burn_watermark" }).length).toBeGreaterThan(0);
+      const finalOriginal = await engine.metadata.artifacts.read<Record<string, unknown>>(done!.finalArtifactId!, "original");
+      expect(finalOriginal.ok && finalOriginal.value).toMatchObject({ origin: "watermark", transcribe: false });
     } finally {
       await pauseBookQueueForTests(bookId);
       if (oldFal === undefined) delete process.env.FAL_API_KEY; else process.env.FAL_API_KEY = oldFal;

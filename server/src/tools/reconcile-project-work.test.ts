@@ -730,6 +730,28 @@ describe("reconcileProjectWork — auto-transcribe", () => {
     expect(result.auto_transcribe.length).toBe(0);
   });
 
+  it("skips auto-transcribe for a video that declines its transcript, even with dialog", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const createResult = await fs.artifacts.create("vid", "short-clip");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetId = createResult.value.artifactId;
+    const assetDir = createResult.value.path;
+
+    await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
+    await writeNativeFile(fs, join(assetDir, "audio_original.mp3"), "fake-audio-data");
+    await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({
+      summary: "A person speaking about economics",
+    }));
+    await writeNativeFile(fs, join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
+      text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
+    }));
+    const meta = await fs.metadata.artifacts.write(assetId, "original", { hasAudio: true, transcribe: false });
+    if (!meta.ok) throw new Error(meta.error.message);
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_transcribe).toEqual([]);
+  });
+
   it("skips auto-transcribe when no dialog detected", async () => {
     const { reconcileProjectWork } = await import("./reconcile-project-work.js");
     const createResult = await fs.artifacts.create("vid", "no-dialog");
@@ -844,6 +866,24 @@ describe("reconcileProjectWork — OpenAI plain-transcript backfill", () => {
 
     const result = await reconcileProjectWork(fs, fs.book.get().bookId);
     expect(result.auto_plain_transcript).toEqual([]);
+  });
+
+  it("skips a processed video that declines its transcript and keeps backfilling the rest", async () => {
+    const { reconcileProjectWork } = await import("./reconcile-project-work.js");
+    const { assetId: declinedId } = await processedVideo("short-clip");
+    const declined = await fs.metadata.artifacts.write(declinedId, "original", {
+      hasAudio: true,
+      width: 320,
+      height: 240,
+      duration: 1,
+      transcribe: false,
+    });
+    if (!declined.ok) throw new Error(declined.error.message);
+    const { assetId: importedId } = await processedVideo("imported-clip");
+
+    const result = await reconcileProjectWork(fs, fs.book.get().bookId);
+    expect(result.auto_plain_transcript.map((entry) => entry.assetId)).toEqual([importedId]);
+    expect(fs.jobs.queue.list({ type: "transcribe_video_audio", artifactId: declinedId })).toEqual([]);
   });
 
   it("skips silent processed video", async () => {

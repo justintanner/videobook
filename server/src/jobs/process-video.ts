@@ -33,6 +33,7 @@ import {
 import { fileObjectHash } from "../analysis-sidecars.js";
 import {
   DEFAULT_TRANSCRIPT_OPTIONS,
+  declinesTranscription,
   elevenLabsTranscriptKey,
   openAiTranscriptKey,
 } from "../transcript-components.js";
@@ -299,6 +300,7 @@ const RETAINED_SOURCE_FIELDS = [
   "description",
   "thumbnail",
   "downloaded_at",
+  "transcribe",
 ] as const;
 
 async function retainedSourceFields(engine: Engine, assetId: string): Promise<Record<string, unknown>> {
@@ -378,10 +380,10 @@ async function processVideoSnapshot(
     const activeProbe = sourceExt === ".mp4" ? probe : await probeVideo(activeVideoPath, { signal });
     await registerMediaStreams(engine, assetId, activeSourcePath, activeProbe);
     let frameCount = 0;
+    const original = { ...await retainedSourceFields(engine, assetId), ...provenance, width, height, duration, fps: probe.fps, hasAudio: probe.hasAudio };
     {
 
-    const retained = await retainedSourceFields(engine, assetId);
-    await engine.metadata.artifacts.write(assetId, "original", { ...retained, ...provenance, width, height, duration, fps: probe.fps, hasAudio: probe.hasAudio });
+    await engine.metadata.artifacts.write(assetId, "original", original);
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
@@ -576,7 +578,7 @@ async function processVideoSnapshot(
     // re-processed (trimmed/re-downloaded) videos, whose analysis sidecar was
     // just invalidated.
     const research = provenance.research as { downstream?: { transcribe?: boolean } } | undefined;
-    const allowTranscription = research?.downstream?.transcribe !== false;
+    const allowTranscription = research?.downstream?.transcribe !== false && !declinesTranscription(original);
     const transcriptJobs = planVideoTranscriptJobs({
       skipDownstreamJobs: Boolean(skipDownstreamJobs) || !allowTranscription,
       hasAudio: probe.hasAudio,

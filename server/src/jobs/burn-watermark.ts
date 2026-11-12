@@ -91,6 +91,7 @@ export type BurnWatermarkPayload = {
   credit?: string | null;
   template?: BurnWatermarkTemplate | null;
   patches?: WatermarkPatch[];
+  transcribe?: false;
 };
 
 export type BurnWatermarkResult = {
@@ -270,7 +271,11 @@ export function registerBurnWatermarkJob(engine: Engine): void {
       assetId: payload.assetId,
       assetDir: payload.assetDir,
       bookId: payload.bookId,
-      provenance: { origin: "watermark", watermarked_at: new Date().toISOString() },
+      provenance: {
+        origin: "watermark",
+        watermarked_at: new Date().toISOString(),
+        ...(payload.transcribe === false ? { transcribe: false } : {}),
+      },
       force: true,
     } as unknown as Record<string, unknown>);
 

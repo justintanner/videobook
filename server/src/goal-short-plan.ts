@@ -353,6 +353,7 @@ export function compileShortClipStep(plan: GoalShortPlan, frameAddress: string):
         aspect_ratio: plan.aspectRatio,
         prompt_expansion_mode: plan.video.promptExpansion,
       },
+      transcribe: false,
     },
   };
 }
@@ -381,6 +382,7 @@ export function compileShortContinuationStep(plan: GoalShortPlan, index: number,
         output: plan.video.extendOutput,
         enable_prompt_expansion: plan.video.promptExpansion !== "disabled",
       },
+      transcribe: false,
     },
   };
 }

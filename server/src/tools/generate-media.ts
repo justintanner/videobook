@@ -153,6 +153,7 @@ async function enqueueGeneration(engine: Engine, model: ResolvedModel, args: Rec
     options: optionsOf(args.options),
     ...(optionalString(args.mode) ? { mode: optionalString(args.mode)! } : {}),
     ...(optionalString(args.replace_audio_with) ? { replaceAudioWith: optionalString(args.replace_audio_with)! } : {}),
+    ...(model.media === "video" && args.transcribe === false ? { transcribe: false as const } : {}),
   };
   await queue.enqueue(jobId, job);
   return textResult({ asset_id: artifactId, job_id: jobId, model: model.id, status: "enqueued" });
@@ -173,7 +174,10 @@ function generateDef(engine: Engine, media: Media): ToolDef {
       mode: z.string().optional().describe("Input mode id for models with several (for example i2v or r2v)"),
       operation: z.enum(OPERATIONS_BY_MEDIA[media]).optional().describe("Optional check that the model supports this operation"),
       options: z.record(z.string(), z.unknown()).optional().describe("Model options from list_generation_models"),
-      ...(media === "video" ? { replace_audio_with: z.string().optional().describe("Audio artifact to splice over the generated video") } : {}),
+      ...(media === "video" ? {
+        replace_audio_with: z.string().optional().describe("Audio artifact to splice over the generated video"),
+        transcribe: z.boolean().optional().describe("false skips the automatic speech-to-text pass on the generated video, for footage with no speech"),
+      } : {}),
     },
     handler: async (args) => {
       const model = resolveFor(media, args.model);

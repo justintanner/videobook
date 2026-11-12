@@ -1,12 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { readFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "../engine.js";
+import { copyVideoFixture } from "../test-media-fixtures.js";
 import {
   planVideoTranscriptJobs,
+  processVideoFiles,
   type PlanVideoTranscriptJobsInput,
 } from "./process-video.js";
-import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey, openAiTranscriptKey } from "../transcript-components.js";
+import { declinesTranscription, DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey, openAiTranscriptKey } from "../transcript-components.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -118,6 +123,7 @@ describe("process_video transcript scheduling is shared", () => {
     const source = await readFile(join(here, "process-video.ts"), "utf8");
     expect(source).toContain("planVideoTranscriptJobs(");
     expect(source).toContain("enqueueVideoTranscriptJobs(transcriptJobs)");
+    expect(source).toContain("!declinesTranscription(original)");
     expect(source).not.toContain('else if (getApiKey("OPENAI_API_KEY"))');
     expect(source).not.toContain("videoPath: activeVideoPath");
   });
@@ -136,5 +142,64 @@ describe("process_video transcript scheduling is shared", () => {
         .map((match) => match[1]);
       expect(transcriptTypes, file).toEqual([]);
     }
+  });
+});
+
+describe("a video that declines its transcript", () => {
+  let root: string;
+  let bookDir: string;
+  let engine: Engine;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "videobook-declined-transcript-"));
+    bookDir = join(root, "book");
+    engine = createEngineForTest(bookDir);
+  });
+
+  afterEach(async () => {
+    closeEngineForTest(bookDir, engine);
+    await rm(root, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function processed(label: string, provenance: Record<string, unknown>): Promise<{ assetId: string; assetDir: string }> {
+    const incoming = join(root, label);
+    await mkdir(incoming, { recursive: true });
+    const videoPath = await copyVideoFixture({ width: 160, height: 120, durationSec: 1, fps: 12, source: "color", color: "green", audio: { frequency: 330 } }, join(incoming, "original.mp4"));
+    const created = await engine.artifacts.create("video", label);
+    if (!created.ok) throw new Error(created.error.message);
+    const { artifactId: assetId, path: assetDir } = created.value;
+    await processVideoFiles(engine, { type: "process_video", videoPath, assetId, assetDir, bookId: engine.book.get().bookId, provenance });
+    return { assetId, assetDir };
+  }
+
+  async function original(assetId: string): Promise<Record<string, unknown>> {
+    const read = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+    if (!read.ok) throw new Error(read.error.message);
+    return read.value;
+  }
+
+  it("records the decline on a video with sound, keeps it when the video is processed again, and leaves an import transcribable", async () => {
+    const made = await processed("short-clip", { model: "fal:minimax/h3-max/reference-to-video", transcribe: false });
+    expect(await original(made.assetId)).toMatchObject({ model: "fal:minimax/h3-max/reference-to-video", hasAudio: true, transcribe: false });
+    expect(declinesTranscription(await original(made.assetId))).toBe(true);
+
+    await processVideoFiles(engine, {
+      type: "process_video",
+      videoPath: join(made.assetDir, "original.mp4"),
+      assetId: made.assetId,
+      assetDir: made.assetDir,
+      bookId: engine.book.get().bookId,
+      provenance: { origin: "watermark" },
+      force: true,
+    });
+    expect(await original(made.assetId)).toMatchObject({ origin: "watermark", hasAudio: true, transcribe: false });
+
+    const imported = await processed("imported-clip", { origin: "upload" });
+    const importedOriginal = await original(imported.assetId);
+    expect(importedOriginal).toMatchObject({ origin: "upload", hasAudio: true });
+    expect(importedOriginal).not.toHaveProperty("transcribe");
+    expect(declinesTranscription(importedOriginal)).toBe(false);
+    expect(declinesTranscription(null)).toBe(false);
+    expect(declinesTranscription({ transcribe: "false" })).toBe(false);
   });
 });

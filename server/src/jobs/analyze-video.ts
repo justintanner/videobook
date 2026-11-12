@@ -22,7 +22,7 @@ import { ensureVideoFrames } from "../video-frames.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { enqueueAssetTagging } from "./tag-asset.js";
 import { frameVocabularyFor, MAX_AUTOMATIC_TAGS } from "../tag-vocabulary.js";
-import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey } from "../transcript-components.js";
+import { DEFAULT_TRANSCRIPT_OPTIONS, declinesTranscription, elevenLabsTranscriptKey } from "../transcript-components.js";
 import { cachedSidecarAnalysis, recordSidecarAnalysis, STALE_ANALYSIS_INPUTS } from "../analysis-sidecars.js";
 import { VIDEO_ANALYSIS_FILE } from "../video-analysis-projection.js";
 import {
@@ -340,6 +340,8 @@ async function maybeEnqueueAutoTranscribe(
   bookId: string,
 ): Promise<void> {
   if (!getApiKey("ELEVENLABS_API_KEY")) return;
+  const original = await engine.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
+  if (original.ok && declinesTranscription(original.value)) return;
 
   const manifestResult = await engine.files.manifest(assetId);
   if (!manifestResult.ok) return;

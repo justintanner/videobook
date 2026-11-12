@@ -77,6 +77,7 @@ function provenance(meta: Record<string, unknown>, file: Downloaded): Record<str
     ...(file.url ? { download_url: file.url } : {}),
     download_url_content_hash: contentHash(file.bytes),
     generated_at: new Date().toISOString(),
+    ...(meta.transcribe === false ? { transcribe: false } : {}),
   };
 }
 

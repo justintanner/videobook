@@ -83,3 +83,7 @@ export async function audioObjectHash(engine: Engine, artifactId: string, filena
   if (!hash) throw new Error(`${filename} is missing from ${artifactId}; process the media again before transcribing it.`);
   return hash;
 }
+
+export function declinesTranscription(original: Readonly<Record<string, unknown>> | null | undefined): boolean {
+  return original?.transcribe === false;
+}

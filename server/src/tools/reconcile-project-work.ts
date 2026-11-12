@@ -62,7 +62,7 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
 import type { VideoProxyAssessment } from "../video-proxy.js";
-import { DEFAULT_TRANSCRIPT_OPTIONS, elevenLabsTranscriptKey } from "../transcript-components.js";
+import { DEFAULT_TRANSCRIPT_OPTIONS, declinesTranscription, elevenLabsTranscriptKey } from "../transcript-components.js";
 import {
   assetDuration,
   assetMediaUrls,
@@ -1755,12 +1755,14 @@ async function findAutoTranscribeActions(
 
   const candidates = await Promise.all(
     assets.filter((a) => a.kind === "video").map(async (asset): Promise<TranscribeAction | null> => {
-      const [manifestResult, locked, errorRow] = await Promise.all([
+      const [manifestResult, locked, errorRow, originalMeta] = await Promise.all([
         engine.files.manifest(asset.artifactId),
         engine.jobs.locks.isLocked(asset.path),
         engine.jobs.failures.read(asset.artifactId),
+        engine.metadata.artifacts.read<Record<string, unknown>>(asset.artifactId, "original"),
       ]);
       if (!manifestResult.ok) return null;
+      if (originalMeta.ok && declinesTranscription(originalMeta.value)) return null;
 
       const manifest = manifestResult.value;
       const files = manifest.files;
@@ -1816,11 +1818,12 @@ async function findAutoPlainTranscriptActions(
         engine.files.manifest(asset.artifactId),
         engine.jobs.locks.isLocked(asset.path),
         engine.jobs.failures.read(asset.artifactId),
-        engine.metadata.artifacts.read<{ hasAudio?: boolean }>(asset.artifactId, "original"),
+        engine.metadata.artifacts.read<{ hasAudio?: boolean } & Record<string, unknown>>(asset.artifactId, "original"),
       ]);
       if (!manifestResult.ok) return null;
       if (!originalMeta.ok) return null;
       if (originalMeta.value.hasAudio === false) return null;
+      if (declinesTranscription(originalMeta.value)) return null;
       if (errorRow.ok && errorRow.value !== null) return null;
       if (locked) return null;
 
