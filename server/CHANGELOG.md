@@ -6,6 +6,8 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-12
+
 ### Added
 
 - `/goal` makes a short: a real-looking phone video of 5 to 60 seconds starring
@@ -49,6 +51,12 @@ and the package uses [Semantic Versioning](https://semver.org/).
   argument, the `storyboards` stage, and plan versions 2 and 3 in `plan`: Goal
   mode no longer offers styles, storyboards, ending frames, multi-clip
   assembly, combined videos, Nano Banana scenes or Seedance clips.
+
+### Fixed
+
+- A generation step in a notebook chain fails with the provider's message when
+  the generation fails or its output times out. The step and the run used to
+  report completed with an asset that had no media.
 
 ## [0.6.2] - 2026-11-11
 
