@@ -60,59 +60,73 @@ over MCP. See [docs/asset-tags.md](docs/asset-tags.md).
 
 ## Video goals
 
-Enter `/goal @a1 @a2 @a3 interview with a giant microphone`, mentioning a
-scene screenshot and any character or prop images. The planner reads the
-images and suggests each reference's role. Review those roles before generating.
-Adjacent mentions such as `@a1@a2` work; a goal accepts up to eight references.
+`/goal` makes a short: a real-looking phone video of 5 to 60 seconds that
+stars the book's **main character**, who never speaks.
 
-New goals default to **one 20-second portrait video**, with **Nano Banana 2.1
-at 2K** for images and **Seedance 2.5 at 720p with audio and no music**.
-The source screenshot sets the visual style. Choose **Cinematic** or
-**IG Influencer** under **Advanced**, where format, models, resolutions,
-continuity, durations and optional additional clips are also available.
-Explicit requests such as `two 10s clips` still create multiple clips; scene
-or storyboard beat counts alone do not split the video.
+**Main character.** Each book saves one main character, by default "a man in
+a green shirt" with no reference images. In a goal's **Character** tab you can
+rename or describe him, choose image cells as his references (for example
+`@a1 @a2`), or generate a paid GPT Image 2.6 **character sheet** that becomes
+his only reference. He belongs to the book and applies to every new goal: a new
+short copies him, and a short made before he had images takes them when its
+frame is approved.
 
-The review has three stages, each with its own paid approval and estimate:
+**Starting a short.** Enter an idea such as `/goal he waits for a bus in the
+rain`; no @mention is needed. Mention image cells to use them as place or prop
+references for the opening frame, name a length such as `20 seconds` (5 to 60,
+12 by default), or ask for `square` or `landscape` (portrait 9:16 by default).
+The planner writes the title, the frame prompt and one beat per clip. Quote
+them as `frame: "…"` and `beat 1: "…"` to write them yourself and skip planning.
 
-1. **Scene:** review the requested edit and generate the scene. Inspect it,
-   revise it with a short instruction, regenerate it, or choose an earlier version.
-2. **Storyboard:** approve the scene to generate a six-panel sheet, arranged
-   in two columns and three rows. Panels run left to right, top to bottom,
-   with timestamps and brief action/camera notes below the pictures.
-3. **Video:** approve the storyboard to generate one continuous video using
-   the sheet, approved scene and original references. The sheet is a reference,
-   never a literal first frame. Video directions add motion, dialogue and ambience.
+**Review.** The goal panel has four tabs, and every paid step has its own
+approval with its estimate:
 
-You can revisit and revise any stage after completion. Still revisions edit
-the selected image; video revisions rerun Seedance from the selected references
-and updated directions. All attempts remain visible, and stopping or failing a
-revision preserves the prior selection. Nothing regenerates downstream automatically.
+1. **Character:** the main character described above.
+2. **Frame:** the opening still, made with GPT Image 2.6 from the character and
+   any extra references. Regenerate it, revise it with a short instruction, or
+   choose an earlier version.
+3. **Video:** the base clip, made with MiniMax H3 Max from the frame and the
+   character, then each continuation.
+4. **Finish:** review the cold open; **Finish** adds it and burns the saved
+   watermark into the finished short.
 
-Changing an upstream prompt, setting, selected version or source image marks
-its dependent outputs stale. Refresh them before generating video. Changing
-only a video's motion or sound leaves its six-panel storyboard current.
-Clip count and storyboard layout stay fixed once generation begins. Saved
-older goals retain their models, styles, durations and four-panel storyboards.
+**Continuations.** A short longer than 15 seconds is planned as up to four
+clips. Each clip after the first is an H3 Max Extend continuation of the clip
+before it, with its own beat, estimate and approval. **Add a beat** on the
+Video tab appends a clip while the short has fewer than 4 clips and at most 60
+seconds. Changing the frame or an earlier clip marks the later clips out of
+date, and the next approval regenerates from the first stale one.
 
-Goal notebooks use separate rows for **references**, **goal and generators**,
-**generated images**, and **videos**. Groups exceeding eight cells continue on
-additional rows. Multi-clip timelines follow the videos. New output placement
-and **Arrange** use the same layout and preserve identities and connections.
+**Always added.** Three rule lines are appended to every prompt and shown
+read-only under **Always added**: a candid phone photo look for the frame,
+real-time handheld phone footage for the clips, and silence. He never speaks:
+no dialogue, voiceover, narration, singing or music, while natural ambient
+sound stays.
 
-Multiple clips initially append in order using their actual media durations.
-After revising or selecting a different video version, **Assemble selected
-versions** updates the goal's unchanged timeline clips. If those clips were
-edited, assembly preserves the user's edits and asks for manual placement.
-**Combine into one video** renders the selected, assembled clips locally with
-their audio. Changing video selection invalidates an older combined output.
+**AI-tell check.** On request, **Check for AI tells** looks at the frame, or at
+four frames of a clip's new footage, beside the character reference and lists
+up to five findings, warnings first: extra or fused fingers, garbled text, waxy
+skin, warped objects, drift from the reference, or mouth movement that reads as
+speech. It is billed like planning and never blocks a step.
 
-Prompts stay concise: planner ceilings are 6 words for titles, 30 for
-continuity, 20 for the scene, 48 for a six-panel storyboard, and 12 for video
-directions. Longer saved prompts remain editable. Planning uses `OPENAI_API_KEY`
-and is billed separately; generation uses `KIE_API_KEY`. A structured version-2
-plan skips AI planning. Every paid stage or revision requires an explicit action.
-**Stop goal** stops remaining work; already submitted requests may still finish.
+**Models and keys.** Frames, character sheets and clips use GPT Image 2.6 and
+MiniMax H3 Max through fal with `FAL_API_KEY`. Planning and the AI-tell check
+use `OPENAI_API_KEY`; a brief that quotes the frame and every beat needs no
+planning. H3 Max is billed per requested second, so its estimates are lower
+bounds and read "at least". GPT Image 2.6 is priced from fal's historical
+average, which needs `FAL_ADMIN_API_KEY`; without it the frame and the sheet
+show their estimate as unavailable.
+
+**Earlier goals.** Goals saved by earlier versions of `/goal` stay in their
+notebooks as read-only tiles. Their panel lists their images and videos by
+address, opens a cell when you click its address, and plays the finished video
+when there is one. They can be dismissed but not generated again.
+
+Goal notebooks keep separate rows for references, the goal tile and its
+generators, frame versions, and clip versions. **Stop goal** stops the
+remaining work; requests already submitted may still finish.
+
+## Generation models
 
 New image editing sessions also default to **Nano Banana 2.1 Edit**. Explicit
 model choices and saved producer reruns keep their chosen model. Apicity 0.15.0

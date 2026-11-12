@@ -6,6 +6,39 @@ and the package uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `/goal` makes a short: a real-looking phone video of 5 to 60 seconds starring
+  the book's main character, who never speaks. A brief needs no @mention;
+  mentioned image cells become place or prop references for the opening frame.
+  The goal panel reviews it in four steps, Character, Frame, Video and Finish,
+  and every paid step has its own approval and estimate. The frame uses GPT
+  Image 2.6 and the clips MiniMax H3 Max through fal (`FAL_API_KEY`); planning
+  uses `OPENAI_API_KEY`.
+- A main character saved per book, by default "a man in a green shirt", with
+  image cells or a GPT Image 2.6 character sheet as his references
+  (`video_goal` action `character`).
+- Shorts longer than 15 seconds continue in up to four H3 Max Extend clips, one
+  approval each; Add a beat appends one up to 60 seconds.
+- `video_goal` action `check` looks at a frame or a clip's new footage for AI
+  tells and lists up to five advisory findings. It runs only when asked and
+  never blocks a step.
+
+### Changed
+
+- Goals saved by earlier versions are read-only tiles. Their status lists
+  their outputs by address and their finished video; they answer `list`,
+  `status`, `cancel` and `dismiss`, and one still planning, in review or
+  running is stopped on its first read. Nothing in the book is deleted.
+
+### Removed
+
+- The `assemble_goal` tool and the `assemble_goal` and `combine_goal` jobs.
+- The `video_goal` actions `assemble` and `combine`, the `shot_indexes`
+  argument, the `storyboards` stage, and plan versions 2 and 3 in `plan`: Goal
+  mode no longer offers styles, storyboards, ending frames, multi-clip
+  assembly, combined videos, Nano Banana scenes or Seedance clips.
+
 ## [0.6.2] - 2026-11-11
 
 ### Added
