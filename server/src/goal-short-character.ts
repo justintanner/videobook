@@ -131,12 +131,12 @@ function sheetOutput(outputs: Record<string, unknown> | null): string | null {
 }
 
 async function sheetFailure(engine: Engine, artifactId: string | null): Promise<string | null> {
-  if (!artifactId) return "it finished without an image";
-  const artifact = engine.artifacts.get(artifactId);
+  const artifact = artifactId ? engine.artifacts.get(artifactId) : null;
+  if (!artifactId || !artifact?.ok || artifact.value.kind !== "image") return "it finished without an image";
   const status = await engine.status.get(artifactId);
-  if (artifact.ok && artifact.value.kind === "image" && status.ok && status.value === "ready") return null;
+  if (status.ok && status.value !== "error") return null;
   const failure = engine.jobs.failures.read(artifactId);
-  return failure.ok && failure.value ? failure.value.message : "it finished without an image";
+  return failure.ok && failure.value ? failure.value.message : "its image failed";
 }
 
 export async function reconcileMainCharacter(engine: Engine): Promise<MainCharacter> {

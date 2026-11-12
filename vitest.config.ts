@@ -155,6 +155,7 @@ export default defineConfig({
       'server/src/chat-router.test.ts',
       'server/src/chat-models.test.ts',
       'server/src/chain-plan.test.ts',
+      'server/src/chain-generation-outcome.test.ts',
       'server/src/goal-styles.test.ts',
       'server/src/goal-planner-prompt.test.ts',
       'server/src/goal-plan-v3.test.ts',

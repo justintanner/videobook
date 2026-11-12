@@ -402,6 +402,16 @@ type GenerationCompletionContext = {
  * artifact it names is not on the grid and not yet usable. Place it the way a
  * notebook run would, then wait for the same settlement job the notebook uses.
  */
+function awaitedGenerationError(engine: Engine, notebookId: string, cellIds: readonly string[], runId: string): string | null {
+  const notebook = engine.notebooks.read(notebookId);
+  if (!notebook.ok) throw new Error(notebook.error.message);
+  for (const cellId of cellIds) {
+    const execution = notebook.value.execution?.[cellId];
+    if (execution?.runId === runId && execution.status === "error") return execution.error || "The generation failed";
+  }
+  return null;
+}
+
 async function completeGeneration(
   engine: Engine,
   context: GenerationCompletionContext,
@@ -455,6 +465,8 @@ async function completeGeneration(
   }
   await queue.enqueue(awaitJobId, { ...awaiting });
   await waitForNamedJob(awaitJobId, signal, GENERATION_STEP_TIMEOUT_MS);
+  const failure = awaitedGenerationError(engine, context.notebookId, [placement.outputCellId, placement.producerCellId], runId);
+  if (failure) throw new Error(failure);
   return {
     ...outputs,
     asset_id: artifactId,

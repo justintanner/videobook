@@ -271,11 +271,8 @@ describe("video_goal character", () => {
     expect(uploads).toHaveLength(2);
     expect(submissions[0]!.body.image_urls).toEqual(uploads.map((name) => `${baseURL}/files/${name}`));
     const run = await waitForChainRun(engine, chainId, testBudget(60_000));
-    const sheetId = String(run.steps[0]!.outputs?.asset_id);
-    await expect.poll(async () => {
-      const status = await engine.status.get(sheetId);
-      return status.ok ? status.value : status.error.message;
-    }).toBe("error");
+    expect(run.status).toBe("failed");
+    expect(run.steps[0]).toMatchObject({ status: "failed", error: expect.stringContaining(BLOCKED_SHEET) });
     const failed = await character();
     expect(failed.references.map((reference) => reference.artifactId)).toEqual(imageIds);
     expect(failed.sheet.pending).toBeNull();
