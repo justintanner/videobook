@@ -150,6 +150,21 @@ export type GoalShortPlan = z.infer<typeof goalShortPlanSchema>;
 
 type ShortReferenceInput = Omit<GoalShortImageRef, "slot">;
 
+const shortReferenceInputSchema = goalShortImageRefSchema.omit({ slot: true });
+
+export const goalShortDraftSchema = z.object({
+  aspectRatio: z.enum(SHORT_ASPECT_RATIOS),
+  segmentSeconds: z.array(z.number().int().min(2).max(SEGMENT_MAX_SECONDS)).min(1).max(SEGMENT_LIMIT),
+  character: z.object({
+    name: goalShortPlanSchema.shape.character.shape.name,
+    description: goalShortPlanSchema.shape.character.shape.description,
+    references: z.array(shortReferenceInputSchema).max(CHARACTER_REFERENCE_LIMIT),
+  }).strict(),
+  extraReferences: z.array(shortReferenceInputSchema).max(FRAME_REFERENCE_LIMIT),
+}).strict();
+
+export type GoalShortDraft = z.infer<typeof goalShortDraftSchema>;
+
 export type ShortTiming = {
   aspectRatio: ShortAspectRatio;
   totalSeconds: number;

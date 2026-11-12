@@ -57,7 +57,9 @@ export type PromptGuide =
   | "grok_imagine"
   | "grok_image"
   | "seedance2"
-  | "seedance25";
+  | "seedance25"
+  | "gpt_image_26"
+  | "minimax_h3";
 
 export interface ModeSpec {
   id: string;

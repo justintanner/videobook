@@ -27,6 +27,8 @@ const GUIDE_FILES: Record<string, string> = {
   grok_image: "grok_imagine_prompting_guide.md",
   seedance2: "seedance_2_prompting_guide.md",
   seedance25: "seedance_2_prompting_guide.md",
+  gpt_image_26: "gpt_image_2_6_prompting_guide.md",
+  minimax_h3: "minimax_h3_prompting_guide.md",
 };
 
 const SUPPORTED_MODELS = Object.keys(GUIDE_FILES).sort();
@@ -325,7 +327,7 @@ export function rewritePromptDef(engine: Engine): ToolDef {
     schema: {
       prompt: z.string().optional().describe("Prompt to rewrite. In scene mode, serves as optional creative direction."),
       model: z
-        .enum(["nano_banana", "gpt_image", "kling30", "grok_imagine", "grok_image", "seedance2", "seedance25"])
+        .enum(["nano_banana", "gpt_image", "gpt_image_26", "kling30", "grok_imagine", "grok_image", "seedance2", "seedance25", "minimax_h3"])
         .default("kling30")
         .describe("Target model for prompt optimization"),
       image_refs: z

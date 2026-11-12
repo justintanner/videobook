@@ -57,6 +57,11 @@ describe("loadGuide", () => {
     expect(guide.length).toBeGreaterThan(0);
   });
 
+  it("loads the MiniMax H3 and GPT Image 2.6 guides", async () => {
+    expect(await loadGuide("minimax_h3")).toContain("# MiniMax H3 Max Prompting Guide");
+    expect(await loadGuide("gpt_image_26")).toContain("# GPT Image 2.6 Prompting Guide");
+  });
+
   it("throws for unsupported model", () => {
     expect(() => loadGuide("unknown_model")).toThrow("No prompting guide available");
   });

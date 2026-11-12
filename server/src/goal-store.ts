@@ -3,6 +3,7 @@ import type { Engine, NotebookCell, NotebookDocument } from "videobook-engine";
 import { firstEmptyNotebookGridSlot, notebookOccupiedSlots } from "videobook-engine/notebook-grid";
 import { goalMediaRefSchema, goalPlanSchema, goalStyleSchema, legacyGoalPlanSchema, savedGoalPlanV3Schema, type GoalCharacter, type GoalDisplayPlan, type GoalMediaRef, type GoalStage, type GoalGenerationStage } from "./goal-plan.js";
 import type { GoalStyleSelection } from "./goal-styles.js";
+import { goalShortDraftSchema, goalShortPlanSchema, type GoalShortDraft, type GoalShortPlan } from "./goal-short-plan.js";
 import { mutateNotebook } from "./notebook-mutations.js";
 import { arrangeGoalNotebook } from "./notebook-goal-layout.js";
 
@@ -53,7 +54,7 @@ export type GoalFinish = {
 };
 
 export type GoalRecord = {
-  planVersion: 1 | 2 | 3;
+  planVersion: 1 | 2 | 3 | 4;
   stage: GoalStage;
   stages: Partial<Record<GoalGenerationStage, GoalStageRun>>;
   goalId: string;
@@ -86,6 +87,14 @@ export type GoalContent = {
   revision: number;
   plan: GoalDisplayPlan | null;
   requestedStyle?: GoalStyleSelection;
+  estimate: GoalEstimates;
+};
+
+export type GoalShortContent = {
+  brief: string;
+  revision: number;
+  draft: GoalShortDraft | null;
+  plan: GoalShortPlan | null;
   estimate: GoalEstimates;
 };
 
@@ -201,6 +210,25 @@ export function requireGoalContent(engine: Engine, goal: GoalRecord): GoalConten
   return goalContent(cell);
 }
 
+function goalShortContent(cell: NotebookCell): GoalShortContent {
+  const inputs = cell.inputs ?? {};
+  const draft = goalShortDraftSchema.safeParse(inputs.draft);
+  const plan = goalShortPlanSchema.safeParse(inputs.plan);
+  return {
+    brief: cell.prompt ?? "",
+    revision: typeof inputs.revision === "number" && Number.isInteger(inputs.revision) ? inputs.revision : 0,
+    draft: draft.success ? draft.data : null,
+    plan: plan.success ? plan.data : null,
+    estimate: estimatesFrom(inputs.estimate),
+  };
+}
+
+export function requireGoalShortContent(engine: Engine, goal: GoalRecord): GoalShortContent {
+  const cell = readGoalCell(engine, goal);
+  if (!cell) throw new Error(REMOVED_TILE_ERROR);
+  return goalShortContent(cell);
+}
+
 export async function createGoalCell(engine: Engine, notebookId: string, goalId: string, content: GoalContent): Promise<NotebookCell> {
   const created: { cell: NotebookCell | null } = { cell: null };
   const result = await mutateNotebook(engine, notebookId, "goal_create", (document) => {
@@ -223,15 +251,23 @@ export async function createGoalCell(engine: Engine, notebookId: string, goalId:
   return created.cell;
 }
 
-export async function writeGoalContent(engine: Engine, goal: GoalRecord, content: GoalContent): Promise<void> {
+async function writeGoalTile(engine: Engine, goal: GoalRecord, text: { label: string; prompt: string }, inputs: Record<string, unknown>): Promise<void> {
   const result = await mutateNotebook(engine, goal.notebookId, "goal_plan", (document) => {
     if (!findGoalCell(document, goal)) throw new Error(REMOVED_TILE_ERROR);
     return {
       ...document,
-      cells: document.cells.map((cell) => cell.id === goal.cellId
-        ? { ...cell, ...goalCellText(content), inputs: goalCellInputs(goal.goalId, content) }
-        : cell),
+      cells: document.cells.map((cell) => cell.id === goal.cellId ? { ...cell, ...text, inputs } : cell),
     };
   }, { goalId: goal.goalId });
   if (!result.ok) throw new Error(result.error.message);
+}
+
+export async function writeGoalContent(engine: Engine, goal: GoalRecord, content: GoalContent): Promise<void> {
+  await writeGoalTile(engine, goal, goalCellText(content), goalCellInputs(goal.goalId, content));
+}
+
+export async function writeGoalShortContent(engine: Engine, goal: GoalRecord, content: GoalShortContent): Promise<void> {
+  await writeGoalTile(engine, goal, { label: content.plan?.title ?? GOAL_TILE_LABEL, prompt: content.brief }, {
+    goalId: goal.goalId, revision: content.revision, plan: content.plan, draft: content.draft, estimate: content.estimate,
+  });
 }

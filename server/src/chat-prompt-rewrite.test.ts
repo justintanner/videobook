@@ -42,6 +42,11 @@ describe("rewriteGuideForModel", () => {
     expect(rewriteGuideForModel("kie:nano-banana-pro")).toBe("nano_banana");
     expect(rewriteGuideForModel("kie:gpt-image-2-5-flare-text-to-image")).toBe("gpt_image");
     expect(rewriteGuideForModel("kie:gpt-image-2-5-sunburst-image-to-image")).toBe("gpt_image");
+    for (const id of ["sunburst/text-to-image", "sunburst/edit", "flare/text-to-image", "flare/edit"]) {
+      expect(rewriteGuideForModel(`fal:openai/gpt-image-2.6/${id}`), id).toBe("gpt_image_26");
+    }
+    expect(rewriteGuideForModel("fal:minimax/h3-max/reference-to-video")).toBeNull();
+    expect(rewriteGuideForModel("fal:minimax/h3-max/extend-video")).toBeNull();
     expect(rewriteGuideForModel("xai:grok-imagine-video")).toBe("grok_imagine");
     expect(rewriteGuideForModel("kie:grok-imagine/text-to-image")).toBe("grok_image");
   });
